@@ -5,6 +5,7 @@ format:
     orientation: rows
     nav-buttons: [github]
     theme: darkly
+    embed-resources: true
 execute:
   echo: false
   warning: false
