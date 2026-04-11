@@ -6,7 +6,7 @@ format:
     theme: darkly
     embed-resources: true
 execute:
-  echo: true
+  echo: false
   warning: false
   message: false
 ---
@@ -14,34 +14,13 @@ execute:
 ```{r}
 #| label: setup
 #| include: false
-library(DBI)
-library(duckdb)
-library(dplyr)
-library(tidyr)
+library(targets)
 library(ggplot2)
-library(scales)
 library(DT)
 
-BASE <- "https://huggingface.co/datasets/dsfefvx/finance-historical-data/resolve/main"
+source(here::here("docs/vignette_utils.R"))
 
-con <- dbConnect(duckdb())
-invisible(dbExecute(con, "INSTALL httpfs; LOAD httpfs;"))
-
-# Register remote Parquet as views — all subsequent code uses dplyr, not SQL
-invisible(dbExecute(con, sprintf(
-  "CREATE VIEW equity AS SELECT * FROM read_parquet('%s/equity_daily.parquet')", BASE)))
-invisible(dbExecute(con, sprintf(
-  "CREATE VIEW crypto AS SELECT * FROM read_parquet('%s/crypto_daily.parquet')", BASE)))
-invisible(dbExecute(con, sprintf(
-  "CREATE VIEW macro AS SELECT * FROM read_parquet('%s/macro_daily.parquet')", BASE)))
-invisible(dbExecute(con, sprintf(
-  "CREATE VIEW factors AS SELECT * FROM read_parquet('%s/factors.parquet')", BASE)))
-
-eq  <- tbl(con, "equity")
-cr  <- tbl(con, "crypto")
-ma  <- tbl(con, "macro")
-fa  <- tbl(con, "factors")
-
+# Dark theme for all plots
 theme_set(theme_minimal(base_size = 12) + theme(
   plot.background = element_rect(fill = "grey10", colour = NA),
   panel.background = element_rect(fill = "grey10", colour = NA),
@@ -52,27 +31,11 @@ theme_set(theme_minimal(base_size = 12) + theme(
   legend.position = "bottom",
   plot.caption = element_text(size = 8, colour = "grey60", hjust = 0)
 ))
-
-# DT helper: sortable table with caption, compact columns
-hd_dt <- function(df, caption_text, ...) {
-  DT::datatable(
-    df,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; font-size: 1.05em; font-weight: bold; color: #ddd;",
-      caption_text
-    ),
-    rownames = FALSE,
-    filter = "top",
-    options = list(
-      pageLength = 15,
-      scrollX = TRUE,
-      autoWidth = TRUE,
-      dom = "frtip"
-    ),
-    ...
-  )
-}
 ```
+
+::: {.callout-note appearance="minimal"}
+All data is fetched live from [Hugging Face](https://huggingface.co/datasets/dsfefvx/finance-historical-data) via `historicaldata` package functions: `hd_ohlcv()`, `hd_macro()`, `hd_factors()`. Install with: `pak::pak("JohnGavin/historical", subdir = "packages/historicaldata")`.
+:::
 
 # Equity
 
@@ -82,120 +45,75 @@ hd_dt <- function(df, caption_text, ...) {
 
 #### AAPL Moving Averages
 
-AAPL daily close with 50-day and 200-day simple moving averages, computed via DuckDB window functions. The golden cross (50d crosses above 200d) and death cross (50d crosses below 200d) are classic trend-following signals.
+AAPL daily close with 50-day and 200-day simple moving averages. The golden cross (50d crosses above 200d) and death cross (50d crosses below) are classic trend-following signals.
 
 ```{r}
 #| code-fold: true
-#| code-summary: "Show code"
-# DuckDB window functions for moving averages (dplyr can't express ROWS BETWEEN)
-aapl <- dbGetQuery(con, sprintf("
-  SELECT date, close, ma_50, ma_200 FROM (
-    SELECT date, close,
-      AVG(close) OVER (ORDER BY date ROWS BETWEEN 49 PRECEDING AND CURRENT ROW) AS ma_50,
-      AVG(close) OVER (ORDER BY date ROWS BETWEEN 199 PRECEDING AND CURRENT ROW) AS ma_200
-    FROM equity
-    WHERE ticker = 'AAPL' AND date >= '2022-01-01'
-  ) WHERE date >= '2023-01-01'
-  ORDER BY date")) |> as_tibble()
+#| code-summary: "Generating code: hd_ohlcv('AAPL') + moving averages"
+# library(historicaldata)
+# aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
+#   arrange(date) |>
+#   mutate(
+#     cs = cumsum(close),
+#     ma_50  = if_else(row_number() >= 50, (cs - lag(cs, 50)) / 50, NA_real_),
+#     ma_200 = if_else(row_number() >= 200, (cs - lag(cs, 200)) / 200, NA_real_)
+#   )
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(aapl, aes(date)) +
-  geom_line(aes(y = close), colour = "white", linewidth = 0.4) +
-  geom_line(aes(y = ma_50), colour = "#3498db", linewidth = 0.5, linetype = "dashed") +
-  geom_line(aes(y = ma_200), colour = "#e74c3c", linewidth = 0.5, linetype = "dashed") +
-  scale_y_continuous(labels = dollar) +
-  labs(
-    x = NULL, y = "Close (USD)",
-    title = "AAPL daily close with 50d and 200d moving averages",
-    caption = "White = close. Blue dashed = 50d MA. Red dashed = 200d MA. Source: Yahoo Finance via historicaldata."
-  )
+safe_tar_read("vig_eq_aapl_plot")
 ```
 
 #### FAANG Returns
 
-FAANG = Facebook (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Google (GOOGL). Cumulative returns since 2024-01-01, rebased to 0%. Shows relative performance divergence among the five largest US tech companies.
+FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Cumulative returns rebased to 0% on 2024-01-01. Divergence shows which mega-cap tech stocks outperformed.
 
 ```{r}
 #| code-fold: true
-faang_tickers <- c("AAPL", "AMZN", "GOOGL", "META", "NFLX")
-
-faang <- eq |>
-  filter(ticker %in% faang_tickers, date >= "2024-01-01") |>
-  select(ticker, date, adjusted) |>
-  collect() |>
-  group_by(ticker) |>
-  mutate(cum_ret = adjusted / first(adjusted) - 1) |>
-  ungroup()
+#| code-summary: "Generating code: hd_ohlcv() for 5 tickers + cumulative returns"
+# library(historicaldata)
+# faang <- bind_rows(lapply(
+#   c("AAPL", "AMZN", "GOOGL", "META", "NFLX"),
+#   \(t) hd_ohlcv(t, from = "2024-01-01")
+# )) |>
+#   group_by(ticker) |>
+#   mutate(cum_ret = adjusted / first(adjusted) - 1) |>
+#   ungroup()
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(faang, aes(date, cum_ret, colour = ticker)) +
-  geom_line(linewidth = 0.5) +
-  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
-  scale_y_continuous(labels = percent) +
-  labs(
-    x = NULL, y = "Cumulative return", colour = NULL,
-    title = "FAANG cumulative returns rebased to 2024-01-01",
-    caption = "FAANG = META, AAPL, AMZN, NFLX, GOOGL. Adjusted close. Source: Yahoo Finance."
-  )
+safe_tar_read("vig_eq_faang_plot")
 ```
 
 #### Realised Volatility
 
-21-day rolling annualised volatility (standard deviation of log returns, scaled by sqrt(252)). Higher values indicate greater price uncertainty. SPY (S&P 500 ETF) serves as the benchmark.
+21-day rolling annualised volatility (SD of log returns x sqrt(252)). Higher values = greater price uncertainty. SPY (S&P 500 ETF) is the benchmark.
 
 ```{r}
 #| code-fold: true
-vol_raw <- eq |>
-  filter(ticker %in% c("AAPL", "NVDA", "TSLA", "SPY"), date >= "2023-06-01") |>
-  select(ticker, date, adjusted) |>
-  collect() |>
-  group_by(ticker) |>
-  arrange(date) |>
-  mutate(log_ret = log(adjusted / lag(adjusted))) |>
-  filter(!is.na(log_ret)) |>
-  mutate(
-    cum_sq = cumsum(log_ret^2),
-    vol_21d = sqrt(pmax((cum_sq - lag(cum_sq, 21, default = 0)) / 21, 0)) * sqrt(252)
-  ) |>
-  filter(date >= as.Date("2024-01-01"), !is.na(vol_21d)) |>
-  ungroup()
+#| code-summary: "Generating code: hd_ohlcv() + rolling volatility"
+# library(historicaldata)
+# vol <- bind_rows(lapply(
+#   c("AAPL", "NVDA", "TSLA", "SPY"),
+#   \(t) hd_ohlcv(t, from = "2023-06-01")
+# )) |>
+#   group_by(ticker) |>
+#   arrange(date) |>
+#   mutate(log_ret = log(adjusted / lag(adjusted)),
+#          vol_21d = ...) # rolling SD
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(vol_raw, aes(date, vol_21d, colour = ticker)) +
-  geom_line(linewidth = 0.4) +
-  scale_y_continuous(labels = percent) +
-  labs(
-    x = NULL, y = "21d annualised volatility", colour = NULL,
-    title = "Realised volatility: AAPL, NVDA, TSLA vs SPY benchmark",
-    caption = "21-day rolling SD of log returns x sqrt(252). Source: Yahoo Finance."
-  )
+safe_tar_read("vig_eq_vol_plot")
 ```
 
 #### Coverage
 
-All 51 equity tickers with trading day count and date range. Click column headers to sort.
+All 51 equity tickers. Click column headers to sort. Filter by typing in the search boxes below headers.
 
 ```{r}
-#| code-fold: true
-eq_cov <- eq |>
-  group_by(ticker) |>
-  summarise(
-    days = n(),
-    first_date = min(date, na.rm = TRUE),
-    last_date = max(date, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  arrange(desc(days)) |>
-  collect()
-
-hd_dt(eq_cov,
-  "Equity coverage: 51 tickers, daily OHLCV from Yahoo Finance. Click headers to sort.")
+hd_dt(safe_tar_read("vig_eq_coverage"),
+  "Equity: 51 tickers, daily OHLCV. Source: Yahoo Finance via hd_ohlcv(). Click headers to sort.")
 ```
 
 
@@ -207,113 +125,63 @@ hd_dt(eq_cov,
 
 #### Major Coins
 
-BTC, ETH, SOL, and BNB daily close on log scale since 2022. Log scale reveals percentage moves: equal vertical distances represent equal percentage changes regardless of price level.
+BTC, ETH, SOL, BNB daily close on log scale since 2022. Log scale reveals percentage moves — equal vertical distances represent equal percentage changes regardless of price level.
 
 ```{r}
 #| code-fold: true
-major <- cr |>
-  filter(ticker %in% c("BTC", "ETH", "SOL", "BNB"), date >= "2022-01-01") |>
-  select(ticker, date, close) |>
-  collect()
+#| code-summary: "Generating code: hd_ohlcv() for 4 crypto tickers"
+# library(historicaldata)
+# major <- bind_rows(lapply(
+#   c("BTC", "ETH", "SOL", "BNB"),
+#   \(t) hd_ohlcv(t, from = "2022-01-01")
+# ))
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(major, aes(date, close, colour = ticker)) +
-  geom_line(linewidth = 0.4) +
-  scale_y_log10(labels = dollar) +
-  labs(
-    x = NULL, y = "Close USD (log scale)", colour = NULL,
-    title = "BTC, ETH, SOL, BNB daily close prices",
-    caption = "Log scale. Source: Yahoo Finance (BTC-USD, ETH-USD, SOL-USD, BNB-USD)."
-  )
+safe_tar_read("vig_cr_major_plot")
 ```
 
 #### Stablecoin Peg
 
-USDC and USDT should trade at $1.00. Deviations indicate depeg events — potential liquidity crises. The chart zooms to $0.97–$1.03 to make small deviations visible.
+USDC and USDT should trade at \$1.00. Deviations indicate depeg events — potential liquidity crises. Y-axis zoomed to \$0.97–\$1.03 to make small deviations visible.
 
 ```{r}
 #| code-fold: true
-stable <- cr |>
-  filter(ticker %in% c("USDC", "USDT"), date >= "2022-01-01") |>
-  select(ticker, date, close) |>
-  collect()
+#| code-summary: "Generating code: hd_ohlcv('USDC') + hd_ohlcv('USDT')"
+# library(historicaldata)
+# stable <- bind_rows(
+#   hd_ohlcv("USDC", from = "2022-01-01"),
+#   hd_ohlcv("USDT", from = "2022-01-01")
+# )
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(stable, aes(date, close, colour = ticker)) +
-  geom_line(linewidth = 0.4) +
-  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "grey50") +
-  scale_y_continuous(limits = c(0.97, 1.03)) +
-  labs(
-    x = NULL, y = "USD price", colour = NULL,
-    title = "Stablecoin peg: USDC and USDT deviation from $1.00",
-    caption = "Dashed line = $1.00 peg. Y-axis zoomed to $0.97–$1.03. Source: Yahoo Finance."
-  )
+safe_tar_read("vig_cr_stable_plot")
 ```
 
 #### Correlation
 
-Pairwise correlation of daily log returns for 6 major crypto assets since 2023. High correlations (>0.7) indicate assets move together — less diversification benefit.
+Pairwise correlation of daily log returns for 6 major crypto assets since 2023. High correlations (>0.7) mean assets move together — less diversification benefit.
 
 ```{r}
 #| code-fold: true
-wide <- cr |>
-  filter(ticker %in% c("BTC", "ETH", "SOL", "BNB", "ADA", "XRP"),
-         date >= "2023-01-01") |>
-  select(date, ticker, close) |>
-  collect() |>
-  group_by(ticker) |>
-  arrange(date) |>
-  mutate(ret = log(close / lag(close))) |>
-  filter(!is.na(ret)) |>
-  ungroup() |>
-  select(date, ticker, ret) |>
-  pivot_wider(names_from = ticker, values_from = ret) |>
-  filter(if_all(everything(), ~ !is.na(.)))
-
-cor_mat <- cor(wide |> select(-date), use = "complete.obs")
-
-cor_long <- cor_mat |>
-  as.data.frame() |>
-  mutate(row = rownames(cor_mat)) |>
-  pivot_longer(-row, names_to = "col", values_to = "cor")
+#| code-summary: "Generating code: hd_ohlcv() for 6 tokens + cor()"
+# library(historicaldata)
+# wide <- bind_rows(lapply(
+#   c("BTC","ETH","SOL","BNB","ADA","XRP"),
+#   \(t) hd_ohlcv(t, from = "2023-01-01")
+# )) |> ... |> pivot_wider() |> cor()
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(cor_long, aes(row, col, fill = cor)) +
-  geom_tile() +
-  geom_text(aes(label = round(cor, 2)), colour = "white", size = 3.5) +
-  scale_fill_gradient2(low = "#3498db", mid = "grey20", high = "#e74c3c",
-                       midpoint = 0.5, limits = c(0, 1)) +
-  labs(
-    x = NULL, y = NULL, fill = "Corr",
-    title = "Crypto log-return correlation matrix (2023+)",
-    caption = "Daily log returns. All pairs >0.5 = limited diversification. Source: Yahoo Finance."
-  ) +
-  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+safe_tar_read("vig_cr_corr_plot")
 ```
 
 #### Coverage
 
 ```{r}
-#| code-fold: true
-cr_cov <- cr |>
-  group_by(ticker) |>
-  summarise(
-    days = n(),
-    first_date = min(date, na.rm = TRUE),
-    last_date = max(date, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  arrange(desc(days)) |>
-  collect()
-
-hd_dt(cr_cov,
-  "Crypto coverage: 14 tokens, daily OHLCV from Yahoo Finance. Click headers to sort.")
+hd_dt(safe_tar_read("vig_cr_coverage"),
+  "Crypto: 14 tokens, daily OHLCV. Source: Yahoo Finance via hd_ohlcv(). Click headers to sort.")
 ```
 
 
@@ -325,127 +193,61 @@ hd_dt(cr_cov,
 
 #### Interest Rates
 
-US Treasury yields (2Y, 10Y, 30Y) and the effective Federal Funds rate since 2020. The Fed Funds rate (DFF) is the policy rate; Treasury yields reflect market expectations of future rates and inflation.
+US Treasury yields (2Y, 10Y, 30Y) and the effective Federal Funds rate since 2020. DFF is the policy rate set by the Fed; Treasury yields reflect market expectations of future rates and inflation.
 
 ```{r}
 #| code-fold: true
-rates <- ma |>
-  filter(series_id %in% c("DGS2", "DGS10", "DGS30", "DFF"),
-         date >= "2020-01-01", !is.na(value)) |>
-  select(series_id, date, value) |>
-  collect()
+#| code-summary: "Generating code: hd_macro() for DGS2, DGS10, DGS30, DFF"
+# library(historicaldata)
+# rates <- bind_rows(lapply(
+#   c("DGS2", "DGS10", "DGS30", "DFF"),
+#   \(s) hd_macro(s, from = "2020-01-01")
+# ))
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(rates, aes(date, value, colour = series_id)) +
-  geom_line(linewidth = 0.4) +
-  labs(
-    x = NULL, y = "Yield (%)", colour = NULL,
-    title = "US Treasury yields and Fed Funds rate (2020+)",
-    caption = "DGS2/10/30 = constant-maturity Treasury yields. DFF = effective Fed Funds rate. Source: FRED."
-  )
+safe_tar_read("vig_ma_rates_plot")
 ```
 
 #### Yield Curve
 
-The 10Y–2Y Treasury spread is a recession indicator. When negative (inverted), short rates exceed long rates — historically preceding recessions by 6–18 months. Red shading marks the inversion period.
+The 10Y–2Y Treasury spread is a recession indicator. When negative (inverted), short-term rates exceed long-term rates — this has historically preceded recessions by 6–18 months. Red shading marks the inversion period.
 
 ```{r}
 #| code-fold: true
-yc <- ma |>
-  filter(series_id == "T10Y2Y", date >= "2018-01-01", !is.na(value)) |>
-  select(date, value) |>
-  collect()
-
-inv_dates <- yc |> filter(value < 0)
-inv_start <- min(inv_dates$date)
-inv_end <- max(inv_dates$date)
+#| code-summary: "Generating code: hd_macro('T10Y2Y')"
+# library(historicaldata)
+# yc <- hd_macro("T10Y2Y", from = "2018-01-01") |>
+#   filter(!is.na(value))
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(yc, aes(date, value)) +
-  geom_line(linewidth = 0.4, colour = "#e74c3c") +
-  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
-  annotate("rect", xmin = inv_start, xmax = inv_end,
-           ymin = -Inf, ymax = 0, fill = "#e74c3c", alpha = 0.15) +
-  labs(
-    x = NULL, y = "10Y − 2Y spread (%)",
-    title = "Yield curve: 10Y–2Y Treasury spread with inversion shading",
-    caption = paste0("Red shading = inverted (", inv_start, " to ", inv_end,
-                     "). Inversion historically precedes recessions. Source: FRED T10Y2Y.")
-  )
+safe_tar_read("vig_ma_yc_plot")
 ```
 
 #### Credit Spreads
 
-ICE BofA option-adjusted spreads for High Yield (HY) and BBB-rated corporate bonds. Wider spreads indicate higher default risk perception. Spikes correspond to market stress events.
+ICE BofA option-adjusted spreads for High Yield (HY) and BBB-rated corporate bonds. Wider spreads indicate higher perceived default risk. Spikes correspond to market stress events (e.g. COVID March 2020).
 
 ```{r}
 #| code-fold: true
-spreads <- ma |>
-  filter(series_id %in% c("BAMLH0A0HYM2", "BAMLC0A4CBBB"),
-         date >= "2020-01-01", !is.na(value)) |>
-  select(series_id, date, value) |>
-  collect() |>
-  mutate(series_id = recode(series_id,
-    BAMLH0A0HYM2 = "HY Spread", BAMLC0A4CBBB = "BBB Spread"))
+#| code-summary: "Generating code: hd_macro('BAMLH0A0HYM2') + hd_macro('BAMLC0A4CBBB')"
+# library(historicaldata)
+# spreads <- bind_rows(
+#   hd_macro("BAMLH0A0HYM2", from = "2020-01-01"),
+#   hd_macro("BAMLC0A4CBBB", from = "2020-01-01")
+# )
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(spreads, aes(date, value, colour = series_id)) +
-  geom_line(linewidth = 0.4) +
-  labs(
-    x = NULL, y = "OAS (percentage points)", colour = NULL,
-    title = "ICE BofA credit spreads: High Yield vs BBB (2020+)",
-    caption = "Option-adjusted spread over Treasuries. Higher = more default risk. Source: FRED."
-  )
-```
-
-#### VIX vs S&P 500
-
-VIX (CBOE Volatility Index) measures expected 30-day equity volatility — often called the 'fear index'. It typically spikes when the S&P 500 falls, reflecting the negative correlation between returns and volatility.
-
-```{r}
-#| code-fold: true
-vix_sp <- ma |>
-  filter(series_id %in% c("VIXCLS", "SP500"),
-         date >= "2020-01-01", !is.na(value)) |>
-  select(series_id, date, value) |>
-  collect()
-```
-
-```{r}
-#| code-fold: true
-ggplot(vix_sp, aes(date, value)) +
-  geom_line(linewidth = 0.4, colour = "#3498db") +
-  facet_wrap(~series_id, ncol = 1, scales = "free_y") +
-  labs(
-    x = NULL, y = NULL,
-    title = "VIX (fear index) and S&P 500 (2020+)",
-    caption = "VIX = expected 30d vol. SP500 = index level. Negative correlation visible in 2020 crash. Source: FRED."
-  )
+safe_tar_read("vig_ma_spreads_plot")
 ```
 
 #### All Series
 
 ```{r}
-#| code-fold: true
-ma_cov <- ma |>
-  group_by(series_id) |>
-  summarise(
-    obs = n(),
-    first_date = min(date, na.rm = TRUE),
-    last_date = max(date, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  arrange(series_id) |>
-  collect()
-
-hd_dt(ma_cov,
-  "FRED macro series: 19 series at mixed frequencies (daily/monthly/quarterly). Click headers to sort.")
+hd_dt(safe_tar_read("vig_ma_coverage"),
+  "FRED macro: 19 series (daily/monthly/quarterly). Source: FRED via hd_macro(). Click headers to sort.")
 ```
 
 
@@ -461,132 +263,52 @@ The Fama-French 3-factor model decomposes equity returns into: Market excess ret
 
 ```{r}
 #| code-fold: true
-ff3 <- fa |>
-  filter(dataset == "FF3", frequency == "daily", date >= "2020-01-01") |>
-  select(factor_name, date, value) |>
-  collect()
+#| code-summary: "Generating code: hd_factors('FF3', 'daily')"
+# library(historicaldata)
+# ff3 <- hd_factors("FF3", "daily", from = "2020-01-01")
 ```
 
 ```{r}
-#| code-fold: true
-#| fig-height: 7
-ggplot(ff3, aes(date, value, colour = factor_name)) +
-  geom_line(alpha = 0.6, linewidth = 0.3) +
-  geom_hline(yintercept = 0, colour = "grey50", linewidth = 0.2) +
-  facet_wrap(~factor_name, ncol = 1, scales = "free_y") +
-  labs(
-    x = NULL, y = "Return (%)",
-    title = "Fama-French 3 factors: daily returns (2020+)",
-    caption = "Mkt-RF = market excess return. SMB = small minus big. HML = high minus low B/M. RF = risk-free. Source: Ken French Data Library."
-  ) +
-  theme(legend.position = "none")
+safe_tar_read("vig_fa_ff3_plot")
 ```
 
 #### FF5 Cumulative
 
-Cumulative returns for the 5-factor model (adds RMW = Robust Minus Weak profitability, CMA = Conservative Minus Aggressive investment) since 2000. Shows which factors have delivered positive long-run premia and which have not.
+Cumulative returns for the 5-factor model since 2000. Adds RMW (Robust Minus Weak profitability) and CMA (Conservative Minus Aggressive investment) to FF3. Shows which factors delivered positive long-run premia: Mkt-RF dominates; HML (value) struggled post-2010.
 
 ```{r}
 #| code-fold: true
-ff5 <- fa |>
-  filter(dataset == "FF5", frequency == "daily",
-         factor_name != "RF", date >= "2000-01-01") |>
-  select(factor_name, date, value) |>
-  collect() |>
-  group_by(factor_name) |>
-  arrange(date) |>
-  mutate(cum_ret = cumprod(1 + value / 100) - 1) |>
-  ungroup()
+#| code-summary: "Generating code: hd_factors('FF5', 'daily') + cumprod()"
+# library(historicaldata)
+# ff5 <- hd_factors("FF5", "daily", from = "2000-01-01") |>
+#   filter(factor_name != "RF") |>
+#   group_by(factor_name) |>
+#   mutate(cum_ret = cumprod(1 + value/100) - 1)
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(ff5, aes(date, cum_ret, colour = factor_name)) +
-  geom_line(linewidth = 0.5) +
-  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
-  scale_y_continuous(labels = percent) +
-  labs(
-    x = NULL, y = "Cumulative return", colour = NULL,
-    title = "FF5 cumulative factor returns (2000–2026)",
-    caption = "Mkt-RF dominates. HML (value) struggled post-2010. RMW/CMA = profitability/investment. Source: Ken French."
-  )
+safe_tar_read("vig_fa_ff5_plot")
 ```
 
 #### Momentum
 
-Cumulative return of the momentum factor (WML = Winners Minus Losers). Momentum suffered a catastrophic crash in 2009 (March reversal) but recovered over the following decade. Shows the risk of factor concentration.
+Cumulative return of the momentum factor (WML = Winners Minus Losers). Momentum suffered a catastrophic crash in March 2009 (reversal) but recovered over the following decade. Demonstrates the risk of factor concentration — even well-documented premia can experience multi-year drawdowns.
 
 ```{r}
 #| code-fold: true
-mom <- fa |>
-  filter(dataset == "Mom", frequency == "daily", date >= "2000-01-01") |>
-  select(date, value) |>
-  collect() |>
-  arrange(date) |>
-  mutate(cum_ret = cumprod(1 + value / 100) - 1)
+#| code-summary: "Generating code: hd_factors('Mom', 'daily') + cumprod()"
+# library(historicaldata)
+# mom <- hd_factors("Mom", "daily", from = "2000-01-01") |>
+#   mutate(cum_ret = cumprod(1 + value/100) - 1)
 ```
 
 ```{r}
-#| code-fold: true
-ggplot(mom, aes(date, cum_ret)) +
-  geom_line(linewidth = 0.5, colour = "#2ecc71") +
-  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
-  scale_y_continuous(labels = percent) +
-  labs(
-    x = NULL, y = "Cumulative return",
-    title = "Momentum factor cumulative return (2000–2026)",
-    caption = "WML = Winners Minus Losers. Note 2009 crash (momentum reversal) and post-2020 recovery. Source: Ken French."
-  )
-```
-
-#### Distributions
-
-Distribution of daily returns by factor. Fat tails (kurtosis > 3) indicate more extreme events than a normal distribution would predict. All factors show leptokurtic distributions.
-
-```{r}
-#| code-fold: true
-ff5_dist <- fa |>
-  filter(dataset == "FF5", frequency == "daily",
-         factor_name != "RF", date >= "2000-01-01") |>
-  select(factor_name, value) |>
-  collect()
-```
-
-```{r}
-#| code-fold: true
-ggplot(ff5_dist, aes(value, fill = factor_name)) +
-  geom_histogram(bins = 100, alpha = 0.7, show.legend = FALSE) +
-  facet_wrap(~factor_name, scales = "free_y") +
-  geom_vline(xintercept = 0, colour = "grey50", linetype = "dashed") +
-  labs(
-    x = "Daily return (%)", y = "Count",
-    title = "FF5 daily return distributions (2000+)",
-    caption = "All factors show fat tails (leptokurtic). Mkt-RF has widest range. Source: Ken French."
-  )
+safe_tar_read("vig_fa_mom_plot")
 ```
 
 #### Summary
 
 ```{r}
-#| code-fold: true
-fa_cov <- fa |>
-  group_by(dataset, frequency, factor_name) |>
-  summarise(
-    obs = n(),
-    first_date = min(date, na.rm = TRUE),
-    last_date = max(date, na.rm = TRUE),
-    .groups = "drop"
-  ) |>
-  arrange(dataset, frequency, factor_name) |>
-  collect()
-
-hd_dt(fa_cov,
-  "Fama-French factors: FF3, FF5, Momentum. Daily and monthly, back to 1926. Source: Ken French Data Library.")
-```
-
-
-```{r}
-#| label: cleanup
-#| include: false
-dbDisconnect(con, shutdown = TRUE)
+hd_dt(safe_tar_read("vig_fa_coverage"),
+  "Fama-French factors: FF3, FF5, Momentum. Daily + monthly, 1926-2026. Source: Ken French via hd_factors().")
 ```
