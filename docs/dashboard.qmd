@@ -2,7 +2,7 @@
 title: "Historical Finance Data"
 format:
   dashboard:
-    orientation: columns
+    orientation: rows
     nav-buttons: [github]
     theme: darkly
 execute:
@@ -12,6 +12,7 @@ execute:
 
 ```{r}
 #| label: setup
+#| include: false
 library(DBI)
 library(duckdb)
 library(dplyr)
@@ -20,7 +21,7 @@ library(ggplot2)
 BASE <- "https://huggingface.co/datasets/dsfefvx/finance-historical-data/resolve/main"
 
 con <- dbConnect(duckdb())
-dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+invisible(dbExecute(con, "INSTALL httpfs; LOAD httpfs;"))
 
 theme_set(theme_minimal(base_size = 11) + theme(
   plot.background = element_rect(fill = "grey10", colour = NA),
@@ -34,9 +35,9 @@ theme_set(theme_minimal(base_size = 11) + theme(
 
 # Equity
 
-## Column {width=65%}
+## Row {height=70%}
 
-### Row {.tabset}
+### Column {.tabset}
 
 ```{r}
 #| title: Price History
@@ -74,38 +75,12 @@ ggplot(ret, aes(date, ret, colour = ticker)) +
 ```
 
 ```{r}
-#| title: Coverage
+#| title: Top 10
 cov <- dbGetQuery(con, sprintf(
   "SELECT ticker, COUNT(*) as n, MIN(date) as first_date, MAX(date) as last_date
    FROM read_parquet('%s/equity_daily.parquet')
    GROUP BY ticker ORDER BY n DESC", BASE)) |> as_tibble()
 
-knitr::kable(cov, col.names = c("Ticker", "Rows", "From", "To"))
-```
-
-## Column {width=35%}
-
-```{r}
-#| title: Dataset Summary
-eq_meta <- dbGetQuery(con, sprintf(
-  "SELECT COUNT(*) as rows, COUNT(DISTINCT ticker) as tickers,
-          MIN(date) as first_date, MAX(date) as last_date
-   FROM read_parquet('%s/equity_daily.parquet')", BASE))
-
-tibble(
-  Metric = c("Total rows", "Tickers", "First date", "Last date", "Source"),
-  Value = c(
-    format(eq_meta$rows, big.mark = ","),
-    eq_meta$tickers,
-    as.character(eq_meta$first_date),
-    as.character(eq_meta$last_date),
-    "Yahoo Finance"
-  )
-) |> knitr::kable()
-```
-
-```{r}
-#| title: Top 10 by History Length
 top10 <- cov |> slice_max(n, n = 10)
 ggplot(top10, aes(reorder(ticker, n), n)) +
   geom_col(fill = "#3498db") +
@@ -114,12 +89,33 @@ ggplot(top10, aes(reorder(ticker, n), n)) +
   scale_y_continuous(labels = scales::comma)
 ```
 
+## Row {height=30%}
+
+```{r}
+#| title: Summary
+eq_meta <- dbGetQuery(con, sprintf(
+  "SELECT COUNT(*) as rows, COUNT(DISTINCT ticker) as tickers,
+          MIN(date) as first_date, MAX(date) as last_date
+   FROM read_parquet('%s/equity_daily.parquet')", BASE))
+
+tibble(
+  Metric = c("Total rows", "Tickers", "First date", "Last date", "Source"),
+  Value = c(format(eq_meta$rows, big.mark = ","), eq_meta$tickers,
+    as.character(eq_meta$first_date), as.character(eq_meta$last_date), "Yahoo Finance")
+) |> knitr::kable()
+```
+
+```{r}
+#| title: All Tickers
+knitr::kable(cov, col.names = c("Ticker", "Rows", "From", "To"))
+```
+
 
 # Crypto
 
-## Column {width=65%}
+## Row {height=70%}
 
-### Row {.tabset}
+### Column {.tabset}
 
 ```{r}
 #| title: Price History
@@ -153,7 +149,7 @@ ggplot(stable, aes(date, close, colour = ticker)) +
 ```
 
 ```{r}
-#| title: Coverage
+#| title: All Tokens
 cr_cov <- dbGetQuery(con, sprintf(
   "SELECT ticker, COUNT(*) as n, MIN(date) as first_date, MAX(date) as last_date
    FROM read_parquet('%s/crypto_daily.parquet')
@@ -162,10 +158,10 @@ cr_cov <- dbGetQuery(con, sprintf(
 knitr::kable(cr_cov, col.names = c("Token", "Rows", "From", "To"))
 ```
 
-## Column {width=35%}
+## Row {height=30%}
 
 ```{r}
-#| title: Dataset Summary
+#| title: Summary
 cr_meta <- dbGetQuery(con, sprintf(
   "SELECT COUNT(*) as rows, COUNT(DISTINCT ticker) as tokens,
           MIN(date) as first_date, MAX(date) as last_date
@@ -181,9 +177,9 @@ tibble(
 
 # Macro
 
-## Column {width=65%}
+## Row {height=70%}
 
-### Row {.tabset}
+### Column {.tabset}
 
 ```{r}
 #| title: Interest Rates
@@ -214,7 +210,7 @@ ggplot(spreads, aes(date, value, colour = series_id)) +
 ```
 
 ```{r}
-#| title: Yield Curve (10Y-2Y)
+#| title: Yield Curve
 yc <- dbGetQuery(con, sprintf(
   "SELECT date, value FROM read_parquet('%s/macro_daily.parquet')
    WHERE series_id = 'T10Y2Y' AND date >= '2020-01-01'
@@ -242,7 +238,7 @@ ggplot(vix_oil, aes(date, value)) +
   labs(x = NULL, y = NULL, title = "VIX and WTI Crude Oil")
 ```
 
-## Column {width=35%}
+## Row {height=30%}
 
 ```{r}
 #| title: All Series
@@ -257,9 +253,9 @@ knitr::kable(ma_cov, col.names = c("Series", "Rows", "From", "To"))
 
 # Factors
 
-## Column {width=65%}
+## Row {height=70%}
 
-### Row {.tabset}
+### Column {.tabset}
 
 ```{r}
 #| title: FF3 Daily
@@ -311,7 +307,7 @@ ggplot(mom_cum, aes(date, cum_ret)) +
        title = "Momentum factor cumulative return (2000+)")
 ```
 
-## Column {width=35%}
+## Row {height=30%}
 
 ```{r}
 #| title: Factor Summary
