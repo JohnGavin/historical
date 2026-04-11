@@ -1,0 +1,34 @@
+# Data (large, fetched by pipeline)
+data/raw/
+data/clean/
+data/dist/
+
+# T pipeline build artifacts
+_pipeline/
+pipeline-output/
+_extensions/
+
+# targets
+_targets/
+tmp_*.parquet
+
+# Nix
+result
+.direnv/
+
+# R
+.Rhistory
+.Rdata
+.RData
+*.Rproj.user
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# OS
+.DS_Store
+
+# Secrets
+.env

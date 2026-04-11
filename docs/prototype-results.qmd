@@ -1,0 +1,65 @@
+---
+title: "Prototype Results: AAPL + BTC"
+format: html
+execute:
+  echo: true
+  warning: false
+---
+
+## Overview
+
+Prototype validating the historical data pipeline with two tickers
+(AAPL equity, BTC crypto) from four sources (Kaggle + Yahoo, backfill + CoinGecko).
+
+```{r}
+#| label: setup
+library(arrow)
+library(dplyr)
+```
+
+## Cross-Reference Results
+
+```{r}
+#| label: xref
+# Read from pipeline output
+# xref <- arrow::read_ipc_file("pipeline-output/analysis/xref_report.arrow")
+# knitr::kable(xref)
+```
+
+## Data Quality Summary
+
+```{r}
+#| label: quality
+# equity <- arrow::read_ipc_file("pipeline-output/analysis/equity.arrow")
+# crypto <- arrow::read_ipc_file("pipeline-output/analysis/crypto.arrow")
+#
+# tibble(
+#   dataset = c("equity", "crypto"),
+#   n_rows = c(nrow(equity), nrow(crypto)),
+#   n_tickers = c(n_distinct(equity$ticker), n_distinct(crypto$ticker)),
+#   date_from = c(min(equity$date), min(crypto$date)),
+#   date_to = c(max(equity$date), max(crypto$date))
+# ) |> knitr::kable()
+```
+
+## AAPL Stock Split Check (2020-08-31)
+
+```{r}
+#| label: split-check
+# Check that adjusted prices are continuous across the 4:1 split
+# aapl <- equity |> filter(ticker == "AAPL")
+# split_window <- aapl |> filter(date >= "2020-08-25", date <= "2020-09-05")
+# knitr::kable(split_window)
+```
+
+## Lessons Learned
+
+<!-- Fill in after running the prototype -->
+
+1. **Cross-reference discrepancies:** TBD
+2. **Split/dividend handling:** TBD
+3. **DuckDB httpfs latency:** TBD
+4. **T sandbox friction:** TBD
+5. **Schema decisions:** TBD
+6. **Parquet sizing:** TBD
+7. **Plan changes needed:** TBD

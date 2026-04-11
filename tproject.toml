@@ -1,0 +1,18 @@
+[project]
+name = "historical_data"
+description = "Historical finance database: Python fetches + R validates/cleans + Parquet distribution"
+
+[dependencies]
+
+[r-dependencies]
+packages = ["dplyr", "arrow", "duckdb", "duckplyr", "pointblank", "targets", "crew", "geckor", "jsonlite", "knitr", "reticulate", "testthat", "cli", "rlang"]
+
+[py-dependencies]
+version = "python313"
+packages = ["yfinance", "pandas", "pyarrow", "pytest"]
+
+[additional-tools]
+packages = ["quarto"]
+
+[t]
+min_version = "0.51.2"

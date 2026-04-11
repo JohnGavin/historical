@@ -1,0 +1,26 @@
+Package: historicaldata
+Title: Historical Finance Data via DuckDB and Parquet
+Version: 0.0.0.9000
+Authors@R:
+    person("John", "Gavin", role = c("aut", "cre"),
+           email = "john@example.com")
+Description: Code-only R package providing access to historical OHLCV data
+    for equities, crypto, macro series, and factor returns. Data is stored
+    as Parquet on Hugging Face Datasets and queried via DuckDB httpfs with
+    predicate pushdown. No data is bundled — the package ships access
+    functions and a dataset registry.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    arrow (>= 14.0),
+    cli,
+    DBI,
+    dplyr,
+    duckdb (>= 0.9),
+    rlang
+Suggests:
+    duckplyr,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
