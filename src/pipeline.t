@@ -9,22 +9,14 @@
 
 p = pipeline {
 
-  -- 1. R: read AAPL API data (yfinance, pre-fetched)
+  -- 1. R: read equity API data (yfinance, pre-fetched, 50+ tickers)
   equity_api = rn(
     command = <{
       library(arrow)
-      library(dplyr)
-      equity_api <- arrow::read_parquet("data/raw/yfinance_aapl.parquet") |>
-        as_tibble() |>
-        transmute(
-          date = as.Date(Date),
-          open = Open, high = High, low = Low,
-          close = Close, adjusted = `Adj Close`,
-          volume = as.double(Volume),
-          ticker = "AAPL", source = "yahoo", asset_class = "equity"
-        )
+      equity_api <- arrow::read_parquet("data/raw/yfinance_equity.parquet") |>
+        as.data.frame()
     }>,
-    include = ["data/raw/yfinance_aapl.parquet"],
+    include = ["data/raw/yfinance_equity.parquet"],
     serializer = ^arrow
   )
 
