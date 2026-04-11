@@ -31,7 +31,7 @@
             pointblank
             targets
             crew
-            geckor
+            httr2
             jsonlite
             knitr
             reticulate
