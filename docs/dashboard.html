@@ -1,0 +1,1495 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Historical Finance Data</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="dashboard_files/libs/clipboard/clipboard.min.js"></script>
+<script src="dashboard_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="dashboard_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="dashboard_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="dashboard_files/libs/quarto-html/popper.min.js"></script>
+<script src="dashboard_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="dashboard_files/libs/quarto-html/anchor.min.js"></script>
+<link href="dashboard_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="dashboard_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="dashboard_files/libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<link href="dashboard_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" class="quarto-color-scheme-extra" id="quarto-text-highlighting-styles">
+<script src="dashboard_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="dashboard_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="dashboard_files/libs/bootstrap/bootstrap-9f00051270a2dad6ba3d1eafb9b5d99e.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="dark">
+<link href="dashboard_files/libs/bootstrap/bootstrap-dark-9f00051270a2dad6ba3d1eafb9b5d99e.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="dashboard_files/libs/bootstrap/bootstrap-9f00051270a2dad6ba3d1eafb9b5d99e.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme-extra" id="quarto-bootstrap" data-mode="dark">
+<script src="dashboard_files/libs/quarto-dashboard/quarto-dashboard.js"></script>
+<script src="dashboard_files/libs/quarto-dashboard/stickythead.js"></script>
+
+
+
+<script src="dashboard_files/libs/quarto-dashboard/web-components.js" type="module"></script>
+<script src="dashboard_files/libs/quarto-dashboard/components.js"></script>
+
+
+
+</head>
+
+<body class="quarto-dashboard dashboard-fill fullcontent quarto-light">
+
+<header id="quarto-dashboard-header">
+<nav class="navbar navbar-expand-md slim" data-bs-theme="dark">
+  <div class="navbar-container container-fluid">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboard-collapse" aria-controls="dashboard-collapse" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>    
+
+
+    <div class="navbar-brand-container">
+
+
+      <div class="navbar-title">
+        <div class="navbar-title-text"><a href="#">Historical Finance Data</a></div>
+        
+        
+      </div>
+    </div>
+<div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-equity" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#equity" data-scrolling="false" href="#equity" aria-controls="equity" aria-selected="true"><span class="nav-link-text">Equity</span></a></li><li class="nav-item" role="presentation"><a id="tab-crypto" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#crypto" data-scrolling="false" href="#crypto" aria-controls="crypto" aria-selected="false"><span class="nav-link-text">Crypto</span></a></li><li class="nav-item" role="presentation"><a id="tab-macro" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#macro" data-scrolling="false" href="#macro" aria-controls="macro" aria-selected="false"><span class="nav-link-text">Macro</span></a></li><li class="nav-item" role="presentation"><a id="tab-factors" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#factors" data-scrolling="false" href="#factors" aria-controls="factors" aria-selected="false"><span class="nav-link-text">Factors</span></a></li></ul></div></div>
+</nav>
+</header>
+<div class="page-layout-custom quarto-dashboard-content bslib-gap-spacing html-fill-container bslib-page-fill quarto-dashboard-pages">  
+
+<div class="bslib-grid-item html-fill-item tab-content bslib-grid" data-layout="fill" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell bslib-card html-fill-container" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>[1] 0</code></pre>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div id="equity" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="columns" aria-labelledby="tab-equity">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 65fr) minmax(3em, 35fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-2"><li class="nav-item" role="presentation"><a href="#card-tabset-2-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Price History" aria-selected="true" class="nav-link active">Price History</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-2-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Daily Returns" aria-selected="false" class="nav-link">Daily Returns</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-2-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Coverage" aria-selected="false" class="nav-link">Coverage</a></li></ul></div>
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-2"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-1"><div class="card-body html-fill-item html-fill-container" data-title="Price History">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-1-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-2"><div class="card-body html-fill-item html-fill-container" data-title="Daily Returns">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-2-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-3"><div class="card-body html-fill-item html-fill-container" data-title="Coverage">
+<div class="cell-output-display html-fill-item html-fill-container">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Ticker</th>
+<th style="text-align: right;">Rows</th>
+<th style="text-align: left;">From</th>
+<th style="text-align: left;">To</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">DIS</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BA</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">JNJ</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BAC</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">WMT</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">KO</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">CAT</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">CVX</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">MCD</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PFE</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">GE</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">MRK</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">PEP</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">XOM</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">HON</td>
+<td style="text-align: right;">11663</td>
+<td style="text-align: left;">1980-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">INTC</td>
+<td style="text-align: right;">11611</td>
+<td style="text-align: left;">1980-03-17</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">AMD</td>
+<td style="text-align: right;">11611</td>
+<td style="text-align: left;">1980-03-17</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">JPM</td>
+<td style="text-align: right;">11611</td>
+<td style="text-align: left;">1980-03-17</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">CMCSA</td>
+<td style="text-align: right;">11611</td>
+<td style="text-align: left;">1980-03-17</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">AAPL</td>
+<td style="text-align: right;">11423</td>
+<td style="text-align: left;">1980-12-12</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">HD</td>
+<td style="text-align: right;">11228</td>
+<td style="text-align: left;">1981-09-22</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">COP</td>
+<td style="text-align: right;">11158</td>
+<td style="text-align: left;">1981-12-31</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">T</td>
+<td style="text-align: right;">10679</td>
+<td style="text-align: left;">1983-11-21</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">UNH</td>
+<td style="text-align: right;">10450</td>
+<td style="text-align: left;">1984-10-17</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ORCL</td>
+<td style="text-align: right;">10098</td>
+<td style="text-align: left;">1986-03-12</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">MSFT</td>
+<td style="text-align: right;">10097</td>
+<td style="text-align: left;">1986-03-13</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">COST</td>
+<td style="text-align: right;">10016</td>
+<td style="text-align: left;">1986-07-09</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ADBE</td>
+<td style="text-align: right;">9991</td>
+<td style="text-align: left;">1986-08-13</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">QCOM</td>
+<td style="text-align: right;">8641</td>
+<td style="text-align: left;">1991-12-13</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">SPY</td>
+<td style="text-align: right;">8356</td>
+<td style="text-align: left;">1993-01-29</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">MS</td>
+<td style="text-align: right;">8340</td>
+<td style="text-align: left;">1993-02-23</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">AMZN</td>
+<td style="text-align: right;">7271</td>
+<td style="text-align: left;">1997-05-15</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">PLD</td>
+<td style="text-align: right;">7138</td>
+<td style="text-align: left;">1997-11-21</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">DIA</td>
+<td style="text-align: right;">7100</td>
+<td style="text-align: left;">1998-01-20</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">AMT</td>
+<td style="text-align: right;">7073</td>
+<td style="text-align: left;">1998-02-27</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NVDA</td>
+<td style="text-align: right;">6846</td>
+<td style="text-align: left;">1999-01-22</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">QQQ</td>
+<td style="text-align: right;">6814</td>
+<td style="text-align: left;">1999-03-10</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">GS</td>
+<td style="text-align: right;">6776</td>
+<td style="text-align: left;">1999-05-04</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">UPS</td>
+<td style="text-align: right;">6643</td>
+<td style="text-align: left;">1999-11-10</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">IWM</td>
+<td style="text-align: right;">6506</td>
+<td style="text-align: left;">2000-05-26</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NFLX</td>
+<td style="text-align: right;">6009</td>
+<td style="text-align: left;">2002-05-23</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">CRM</td>
+<td style="text-align: right;">5485</td>
+<td style="text-align: left;">2004-06-23</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">GOOGL</td>
+<td style="text-align: right;">5445</td>
+<td style="text-align: left;">2004-08-19</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">MA</td>
+<td style="text-align: right;">5000</td>
+<td style="text-align: left;">2006-05-25</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">V</td>
+<td style="text-align: right;">4544</td>
+<td style="text-align: left;">2008-03-19</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">AVGO</td>
+<td style="text-align: right;">4195</td>
+<td style="text-align: left;">2009-08-06</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">TSLA</td>
+<td style="text-align: right;">3970</td>
+<td style="text-align: left;">2010-06-29</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">VIXY</td>
+<td style="text-align: right;">3839</td>
+<td style="text-align: left;">2011-01-04</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">META</td>
+<td style="text-align: right;">3493</td>
+<td style="text-align: left;">2012-05-18</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NOW</td>
+<td style="text-align: right;">3464</td>
+<td style="text-align: left;">2012-06-29</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">ABBV</td>
+<td style="text-align: right;">3338</td>
+<td style="text-align: left;">2013-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Dataset Summary" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title"><span style="display: inline">
+Dataset Summary
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Metric</th>
+<th style="text-align: left;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Total rows</td>
+<td style="text-align: left;">452,815</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Tickers</td>
+<td style="text-align: left;">51</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">First date</td>
+<td style="text-align: left;">1980-01-02</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Last date</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Source</td>
+<td style="text-align: left;">Yahoo Finance</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Top 10 by History Length" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title"><span style="display: inline">
+Top 10 by History Length
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-5-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="crypto" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="columns" aria-labelledby="tab-crypto">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 65fr) minmax(3em, 35fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-5"><li class="nav-item" role="presentation"><a href="#card-tabset-5-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Price History" aria-selected="true" class="nav-link active">Price History</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Stablecoins" aria-selected="false" class="nav-link">Stablecoins</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Coverage" aria-selected="false" class="nav-link">Coverage</a></li></ul></div>
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-5"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-1"><div class="card-body html-fill-item html-fill-container" data-title="Price History">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-2"><div class="card-body html-fill-item html-fill-container" data-title="Stablecoins">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-3"><div class="card-body html-fill-item html-fill-container" data-title="Coverage">
+<div class="cell-output-display html-fill-item html-fill-container">
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Token</th>
+<th style="text-align: right;">Rows</th>
+<th style="text-align: left;">From</th>
+<th style="text-align: left;">To</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">BTC</td>
+<td style="text-align: right;">4225</td>
+<td style="text-align: left;">2014-09-17</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ADA</td>
+<td style="text-align: right;">3076</td>
+<td style="text-align: left;">2017-11-09</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">DOGE</td>
+<td style="text-align: right;">3076</td>
+<td style="text-align: left;">2017-11-09</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">ETH</td>
+<td style="text-align: right;">3076</td>
+<td style="text-align: left;">2017-11-09</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BNB</td>
+<td style="text-align: right;">3076</td>
+<td style="text-align: left;">2017-11-09</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">USDT</td>
+<td style="text-align: right;">3076</td>
+<td style="text-align: left;">2017-11-09</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">XRP</td>
+<td style="text-align: right;">3076</td>
+<td style="text-align: left;">2017-11-09</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">USDC</td>
+<td style="text-align: right;">2743</td>
+<td style="text-align: left;">2018-10-08</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">SOL</td>
+<td style="text-align: right;">2193</td>
+<td style="text-align: left;">2020-04-10</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">HNT</td>
+<td style="text-align: right;">2134</td>
+<td style="text-align: left;">2020-06-08</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">DOT</td>
+<td style="text-align: right;">2061</td>
+<td style="text-align: left;">2020-08-20</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">RAY</td>
+<td style="text-align: right;">1876</td>
+<td style="text-align: left;">2021-02-21</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BONK</td>
+<td style="text-align: right;">1199</td>
+<td style="text-align: left;">2022-12-30</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PYTH</td>
+<td style="text-align: right;">874</td>
+<td style="text-align: left;">2023-11-20</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Dataset Summary" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title"><span style="display: inline">
+Dataset Summary
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Metric</th>
+<th style="text-align: left;">Value</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Total rows</td>
+<td style="text-align: left;">35,761</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Tokens</td>
+<td style="text-align: left;">14</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">First date</td>
+<td style="text-align: left;">2014-09-17</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Last date</td>
+<td style="text-align: left;">2026-04-11</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Source</td>
+<td style="text-align: left;">Yahoo Finance</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="macro" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="columns" aria-labelledby="tab-macro">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 65fr) minmax(3em, 35fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-7"><li class="nav-item" role="presentation"><a href="#card-tabset-7-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Interest Rates" aria-selected="true" class="nav-link active">Interest Rates</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Credit Spreads" aria-selected="false" class="nav-link">Credit Spreads</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Yield Curve (10Y-2Y)" aria-selected="false" class="nav-link">Yield Curve (10Y-2Y)</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="VIX &amp; Oil" aria-selected="false" class="nav-link">VIX &amp; Oil</a></li></ul></div>
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-7"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-1"><div class="card-body html-fill-item html-fill-container" data-title="Interest Rates">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-10-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-2"><div class="card-body html-fill-item html-fill-container" data-title="Credit Spreads">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-3"><div class="card-body html-fill-item html-fill-container" data-title="Yield Curve (10Y-2Y)">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-4"><div class="card-body html-fill-item html-fill-container" data-title="VIX &amp; Oil">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="All Series" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title"><span style="display: inline">
+All Series
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Series</th>
+<th style="text-align: right;">Rows</th>
+<th style="text-align: left;">From</th>
+<th style="text-align: left;">To</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">BAMLC0A4CBBB</td>
+<td style="text-align: right;">7738</td>
+<td style="text-align: left;">1996-12-31</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BAMLH0A0HYM2</td>
+<td style="text-align: right;">7738</td>
+<td style="text-align: left;">1996-12-31</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">CPIAUCSL</td>
+<td style="text-align: right;">951</td>
+<td style="text-align: left;">1947-01-01</td>
+<td style="text-align: left;">2026-03-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">CSUSHPISA</td>
+<td style="text-align: right;">469</td>
+<td style="text-align: left;">1987-01-01</td>
+<td style="text-align: left;">2026-01-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">DCOILWTICO</td>
+<td style="text-align: right;">10503</td>
+<td style="text-align: left;">1986-01-02</td>
+<td style="text-align: left;">2026-04-06</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">DFF</td>
+<td style="text-align: right;">26216</td>
+<td style="text-align: left;">1954-07-01</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">DGS10</td>
+<td style="text-align: right;">16768</td>
+<td style="text-align: left;">1962-01-02</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">DGS2</td>
+<td style="text-align: right;">13008</td>
+<td style="text-align: left;">1976-06-01</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">DGS30</td>
+<td style="text-align: right;">12823</td>
+<td style="text-align: left;">1977-02-15</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">DTWEXBGS</td>
+<td style="text-align: right;">5285</td>
+<td style="text-align: left;">2006-01-02</td>
+<td style="text-align: left;">2026-04-03</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FEDFUNDS</td>
+<td style="text-align: right;">861</td>
+<td style="text-align: left;">1954-07-01</td>
+<td style="text-align: left;">2026-03-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">GDP</td>
+<td style="text-align: right;">316</td>
+<td style="text-align: left;">1947-01-01</td>
+<td style="text-align: left;">2025-10-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">M2SL</td>
+<td style="text-align: right;">806</td>
+<td style="text-align: left;">1959-01-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">PCEPI</td>
+<td style="text-align: right;">806</td>
+<td style="text-align: left;">1959-01-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">SP500</td>
+<td style="text-align: right;">2610</td>
+<td style="text-align: left;">2016-04-11</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">T10Y2Y</td>
+<td style="text-align: right;">13009</td>
+<td style="text-align: left;">1976-06-01</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">T10YIE</td>
+<td style="text-align: right;">6072</td>
+<td style="text-align: left;">2003-01-02</td>
+<td style="text-align: left;">2026-04-10</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">UNRATE</td>
+<td style="text-align: right;">939</td>
+<td style="text-align: left;">1948-01-01</td>
+<td style="text-align: left;">2026-03-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">VIXCLS</td>
+<td style="text-align: right;">9463</td>
+<td style="text-align: left;">1990-01-02</td>
+<td style="text-align: left;">2026-04-09</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div><div id="factors" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="columns" aria-labelledby="tab-factors">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 65fr) minmax(3em, 35fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-9"><li class="nav-item" role="presentation"><a href="#card-tabset-9-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="FF3 Daily" aria-selected="true" class="nav-link active">FF3 Daily</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-9-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="FF5 Cumulative" aria-selected="false" class="nav-link">FF5 Cumulative</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-9-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Momentum" aria-selected="false" class="nav-link">Momentum</a></li></ul></div>
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-9"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-9-1"><div class="card-body html-fill-item html-fill-container" data-title="FF3 Daily">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-9-2"><div class="card-body html-fill-item html-fill-container" data-title="FF5 Cumulative">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-9-3"><div class="card-body html-fill-item html-fill-container" data-title="Momentum">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="dashboard_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid quarto-dashboard-img-contain">
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-title="Factor Summary" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header"><div class="card-title"><span style="display: inline">
+Factor Summary
+</span></div></div>
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">Dataset</th>
+<th style="text-align: left;">Freq</th>
+<th style="text-align: left;">Factor</th>
+<th style="text-align: right;">Rows</th>
+<th style="text-align: left;">From</th>
+<th style="text-align: left;">To</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">HML</td>
+<td style="text-align: right;">26190</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">Mkt-RF</td>
+<td style="text-align: right;">26190</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">RF</td>
+<td style="text-align: right;">26190</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">SMB</td>
+<td style="text-align: right;">26190</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">HML</td>
+<td style="text-align: right;">1196</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">Mkt-RF</td>
+<td style="text-align: right;">1196</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">RF</td>
+<td style="text-align: right;">1196</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF3</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">SMB</td>
+<td style="text-align: right;">1196</td>
+<td style="text-align: left;">1926-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">CMA</td>
+<td style="text-align: right;">15770</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">HML</td>
+<td style="text-align: right;">15770</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">Mkt-RF</td>
+<td style="text-align: right;">15770</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">RF</td>
+<td style="text-align: right;">15770</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">RMW</td>
+<td style="text-align: right;">15770</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">SMB</td>
+<td style="text-align: right;">15770</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">CMA</td>
+<td style="text-align: right;">752</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">HML</td>
+<td style="text-align: right;">752</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">Mkt-RF</td>
+<td style="text-align: right;">752</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">RF</td>
+<td style="text-align: right;">752</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">RMW</td>
+<td style="text-align: right;">752</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">FF5</td>
+<td style="text-align: left;">monthly</td>
+<td style="text-align: left;">SMB</td>
+<td style="text-align: right;">752</td>
+<td style="text-align: left;">1963-07-01</td>
+<td style="text-align: left;">2026-02-01</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Mom</td>
+<td style="text-align: left;">daily</td>
+<td style="text-align: left;">Mom</td>
+<td style="text-align: right;">26089</td>
+<td style="text-align: left;">1926-11-03</td>
+<td style="text-align: left;">2026-02-27</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div id="3ade8a4a-fb1d-4a6c-8409-ac45482d5fc9" class="hidden html-fill-item html-fill-container">
+
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /container fluid -->
+
+<script type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (_event) {
+  if (window.bslib.Card) {
+    window.bslib.Card.initializeAllCards();
+  }
+}); 
+</script>
+  
+
+
+
+</body></html>

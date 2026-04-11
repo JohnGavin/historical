@@ -12,15 +12,16 @@ Description: Code-only R package providing access to historical OHLCV data
 License: MIT + file LICENSE
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 Imports:
-    arrow (>= 14.0),
     cli,
     DBI,
     dplyr,
     duckdb (>= 0.9),
     rlang
 Suggests:
+    arrow (>= 14.0),
     duckplyr,
+    ggplot2,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

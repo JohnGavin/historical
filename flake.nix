@@ -27,8 +27,14 @@
             dplyr
             arrow
             duckdb
+            devtools
             duckplyr
+            ggplot2
+            pkgload
             pointblank
+            roxygen2
+            scales
+            tidyr
             targets
             crew
             fredr
