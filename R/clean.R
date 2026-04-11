@@ -65,18 +65,27 @@ clean_crypto <- function(api_data, static_data) {
   schema_cols <- c("date", "close", "volume", "market_cap",
                    "ticker", "source", "asset_class")
 
+  coerce_crypto_types <- function(df) {
+    df |>
+      dplyr::mutate(
+        dplyr::across(dplyr::any_of(c("close", "volume", "market_cap")), as.double)
+      )
+  }
+
   api_std <- api_data |>
     ensure_columns(schema_cols) |>
-    dplyr::select(dplyr::any_of(schema_cols))
+    dplyr::select(dplyr::any_of(schema_cols)) |>
+    coerce_crypto_types()
 
   static_std <- static_data |>
     ensure_columns(schema_cols) |>
-    dplyr::select(dplyr::any_of(schema_cols))
+    dplyr::select(dplyr::any_of(schema_cols)) |>
+    coerce_crypto_types()
 
   dplyr::bind_rows(api_std, static_std) |>
     dplyr::mutate(
       source_priority = dplyr::case_when(
-        source == "coingecko" ~ 1L,
+        source %in% c("coingecko", "yahoo") ~ 1L,
         source == "backfill" ~ 2L,
         TRUE ~ 3L
       )

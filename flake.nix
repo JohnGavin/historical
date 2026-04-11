@@ -32,6 +32,7 @@
             targets
             crew
             fredr
+            frenchdata
             httr2
             jsonlite
             knitr

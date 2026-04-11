@@ -26,6 +26,12 @@ hd_datasets <- function() {
       schema = c("date", "value", "series_id", "source"),
       frequency = "mixed",
       description = "FRED macro series (SP500, VIX, rates, GDP, CPI, etc.)"
+    ),
+    factors = list(
+      url = hd_base_url("factors.parquet"),
+      schema = c("date", "factor_name", "value", "dataset", "frequency", "source"),
+      frequency = "daily+monthly",
+      description = "Fama-French factors (FF3, FF5, Momentum, 1926+)"
     )
   )
 }

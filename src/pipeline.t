@@ -20,14 +20,14 @@ p = pipeline {
     serializer = ^arrow
   )
 
-  -- 2. R: read BTC API data (CoinGecko, pre-fetched)
+  -- 2. R: read crypto API data (14 tokens from Yahoo, pre-fetched)
   crypto_api = rn(
     command = <{
       library(arrow)
-      crypto_api <- arrow::read_parquet("data/raw/geckor_btc.parquet") |>
+      crypto_api <- arrow::read_parquet("data/raw/crypto_all.parquet") |>
         as.data.frame()
     }>,
-    include = ["data/raw/geckor_btc.parquet"],
+    include = ["data/raw/crypto_all.parquet"],
     serializer = ^arrow
   )
 
@@ -72,7 +72,18 @@ p = pipeline {
     serializer = ^arrow
   )
 
-  -- 6. R: targets DAG — validate, cross-reference, clean, consolidate
+  -- 6. R: read Ken French factors (pre-fetched)
+  factors_data = rn(
+    command = <{
+      library(arrow)
+      factors_data <- arrow::read_parquet("data/raw/french_factors.parquet") |>
+        as.data.frame()
+    }>,
+    include = ["data/raw/french_factors.parquet"],
+    serializer = ^arrow
+  )
+
+  -- 7. R: targets DAG — validate, cross-reference, clean, consolidate
   analysis = rn(
     command = <{
       library(arrow)
@@ -83,17 +94,20 @@ p = pipeline {
       arrow::write_parquet(equity_static, "tmp_equity_static.parquet")
       arrow::write_parquet(crypto_static, "tmp_crypto_static.parquet")
       arrow::write_parquet(macro_data,    "tmp_macro.parquet")
+      arrow::write_parquet(factors_data,  "tmp_factors.parquet")
 
       tar_make(reporter = "silent")
 
       eq <- tar_read(consolidated_equity)
       cr <- tar_read(consolidated_crypto)
       ma <- tar_read(consolidated_macro)
+      fa <- tar_read(consolidated_factors)
       xref <- tar_read(xref_report)
 
       arrow::write_parquet(eq, "output_equity.parquet")
       arrow::write_parquet(cr, "output_crypto.parquet")
       arrow::write_parquet(ma, "output_macro.parquet")
+      arrow::write_parquet(fa, "output_factors.parquet")
 
       analysis <- xref
     }>,
@@ -102,12 +116,14 @@ p = pipeline {
       crypto_api:    ^arrow,
       equity_static: ^arrow,
       crypto_static: ^arrow,
-      macro_data:    ^arrow
+      macro_data:    ^arrow,
+      factors_data:  ^arrow
     ],
     include = [
       "_targets.R",
       "R/validate.R",
       "R/validate_macro.R",
+      "R/validate_factors.R",
       "R/clean.R",
       "R/cross_reference.R",
       "R/consolidate.R"
@@ -115,7 +131,7 @@ p = pipeline {
     serializer = ^arrow
   )
 
-  -- 6. Quarto report: prototype results
+  -- 8. Quarto report: prototype results
   report = node(script = "docs/prototype-results.qmd", runtime = Quarto)
 }
 

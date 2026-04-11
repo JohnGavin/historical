@@ -153,6 +153,50 @@ hd_macro_series <- function(local = FALSE) {
   ))$series_id
 }
 
+#' Query Fama-French factor returns
+#'
+#' @param dataset Factor dataset: "FF3", "FF5", or "Mom"
+#' @param frequency "daily" or "monthly"
+#' @param from Start date. Default: no filter.
+#' @param to End date. Default: no filter.
+#' @param local If TRUE, query local cache.
+#' @return Tibble with date, factor_name, value columns
+#' @export
+hd_factors <- function(dataset = "FF3", frequency = "daily",
+                       from = NULL, to = NULL, local = FALSE) {
+  ds <- hd_datasets()[["factors"]]
+
+  if (local) {
+    source_path <- file.path(hd_cache_path(), "factors.parquet")
+  } else {
+    source_path <- ds$url
+  }
+
+  con <- hd_connect()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  where_clauses <- c("dataset = ?", "frequency = ?")
+  params <- list(dataset, frequency)
+
+  if (!is.null(from)) {
+    where_clauses <- c(where_clauses, "date >= ?")
+    params <- c(params, list(as.character(from)))
+  }
+  if (!is.null(to)) {
+    where_clauses <- c(where_clauses, "date <= ?")
+    params <- c(params, list(as.character(to)))
+  }
+
+  sql <- sprintf(
+    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY date",
+    source_path,
+    paste(where_clauses, collapse = " AND ")
+  )
+
+  DBI::dbGetQuery(con, sql, params = params) |>
+    dplyr::as_tibble()
+}
+
 #' Auto-detect dataset from ticker symbol
 #' @noRd
 detect_dataset <- function(ticker) {
