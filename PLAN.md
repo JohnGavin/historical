@@ -458,6 +458,95 @@ After the prototype, document in `docs/prototype-results.qmd`:
 | 3 | Month 3 | Binance minute-level crypto, Stooq international indices |
 | 4+ | Quarterly | New asset class (commodities, futures, etc.) |
 
+## Phase 1 Lessons Learned (2026-04-11)
+
+### What Matched Expectations
+
+| Expectation | Reality |
+|-------------|---------|
+| Single R package handles all dataset types | **Confirmed.** 4 schemas (OHLCV, crypto, macro, factors) coexist via registry pattern. Adding a dataset = 1 registry entry + 1 query function. |
+| DuckDB httpfs predicate pushdown works on HF | **Confirmed.** Filters pushed into READ_PARQUET scan node. Single-ticker queries: 0.15s regardless of file size. |
+| T pipeline with targets inside rn node | **Confirmed.** 27 targets, 10.8s, crew parallelism works within sandbox. |
+| Parquet + zstd compression ratios | **Confirmed.** 860K rows → 12 MB total across 4 files. |
+| Python reads same Parquet from HF | **Confirmed.** pandas + pyarrow works (0.2s download + read). |
+
+### What Changed vs Plan
+
+| Plan said | What happened | Impact |
+|-----------|---------------|--------|
+| geckor for CoinGecko | geckor broken in nixpkgs. Used httr2+jsonlite instead. | Low — httr2 is more flexible anyway. |
+| CoinGecko API for crypto | CoinGecko free API rate-limited/auth-required. Used Yahoo BTC-USD tickers. | Medium — no genuine cross-ref for crypto yet (both sources = Yahoo). |
+| yfinance Python package | Yahoo v8 JSON API works directly with urllib (no yfinance needed for basic OHLCV). | Low — yfinance still useful for extras (dividends, options). |
+| frenchdata R package for factors | frenchdata::download_french_data() returned empty strings. Direct CSV download from Ken French website worked. | Low — direct download is simpler anyway. |
+| T pipeline runs fetch nodes | T sandbox blocks network. All fetches run outside sandbox, pipeline reads local Parquet. | **Key architectural lesson** — documented in t-lang wiki. |
+| Static Kaggle datasets | Yahoo v8 API provides equivalent data. Used Yahoo as "static" source (downloaded once). | Low — real Kaggle CSVs can be added later for genuine cross-ref. |
+
+### T Language Sandbox Lessons
+
+1. **Network blocked by design.** T uses `stdenv.mkDerivation` — Nix kernel-level sandbox, not Docker. No `__impure` flag set. Solution: fetch outside, include inside.
+2. **Arrow serializer = one data frame per node.** Can't return R lists of different-sized tibbles. Solution: separate nodes per dataset.
+3. **HOME=/homeless-shelter.** DuckDB and targets need writable HOME. Solution: `export HOME=$TMPDIR` in shellHook or `Sys.setenv(HOME = tempdir())` in R.
+4. **Content-addressed caching works.** Second `t run` with unchanged inputs: instant cache hit on all nodes.
+
+### httpfs Performance at Scale
+
+| File size | First query (cold) | Filtered query | Full scan (COUNT) |
+|-----------|-------------------|----------------|-------------------|
+| 335 KB (1 ticker) | 0.68s | 0.15s | 0.16s |
+| 10 MB (51 tickers) | 1.82s | **0.15s** | 0.16s |
+| 577 KB (19 macro series) | 0.73s | 0.16s | — |
+
+**Key finding:** Filtered queries are constant time (~0.15s) regardless of file size thanks to predicate pushdown. Cold first-query scales with file size (metadata fetch). Projection to 1000 tickers (~200 MB): first query ~3-5s, filtered queries still sub-second.
+
+### Data Quality Observations
+
+- **AAPL cross-ref:** 100% match (both from Yahoo — expected). Real cross-ref needs Kaggle or Tiingo.
+- **BTC cross-ref:** 100% match (both from Yahoo — need genuine CoinGecko data).
+- **integer64 vs double:** Yahoo crypto volume comes as integer64, backfill as double. Fixed with explicit `as.double()` coercion in `clean_crypto()`.
+- **FRED "." values:** FRED CSV uses "." for missing values. `as.numeric()` correctly produces NA.
+- **French factors:** `frenchdata` package broken. Direct CSV + custom parser works. Monthly Momentum had a parsing edge case (single-column CSV).
+- **JUP/RNDR tickers:** Yahoo doesn't have these Solana tokens (14 of 16 fetched).
+
+### File Size Budget
+
+| Dataset | Rows | Parquet (zstd) | Projected at 1000 tickers |
+|---------|------|----------------|--------------------------|
+| Equity (51 tickers) | 452,815 | 10 MB | ~200 MB |
+| Crypto (14 tokens) | 35,761 | 491 KB | ~2 MB (50 tokens) |
+| Macro (19 series) | 136,381 | 577 KB | ~3 MB (100 series) |
+| Factors (7 factors) | 234,765 | 775 KB | ~1 MB (stable) |
+| **Total** | **859,722** | **~12 MB** | **~206 MB** |
+
+206 MB is well within HF free tier. May want to split equity into 2-3 files by history depth for faster cold queries.
+
+### What to Change for Phase 2
+
+1. **Add genuine second source for cross-referencing.** Tiingo (has delisted stocks, free API key) or actual Kaggle NASDAQ CSVs.
+2. **Add `duckdb` to Python flake.nix** for true httpfs predicate pushdown from Python.
+3. **Consider splitting equity by era** (pre-2000, 2000-2020, 2020+) at >500 tickers for faster cold queries.
+4. **Add incremental update logic.** Currently full re-fetch. Need `hd_update()` that fetches only new dates.
+5. **Fix monthly Momentum parsing** in `fetch_factors.R`.
+6. **Add JUP/RNDR** via alternative ticker symbols or CoinGecko API.
+
+## Phase 1 Final State
+
+**GitHub:** https://github.com/JohnGavin/historical
+**HF Dataset:** https://huggingface.co/datasets/dsfefvx/finance-historical-data
+
+| Metric | Value |
+|--------|-------|
+| Commits | 7 |
+| R package functions | 12 exported |
+| R CMD check | 0/0/0 |
+| Tests | 46 pass |
+| Targets | 27 |
+| Pipeline time | 10.8s |
+| Total rows | 859,722 |
+| Date range | 1926–2026 (100 years) |
+| HF Parquet total | ~12 MB |
+| Asset classes | 4 (equity, crypto, macro, factors) |
+| Schemas | 4 different shapes |
+
 ## When to Revisit Single-Package Decision
 
 Split into multiple packages only if:
