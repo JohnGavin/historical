@@ -55,7 +55,7 @@ hd_tickers <- function(dataset = "equity_daily") {
 hd_base_url <- function(filename) {
   # TODO: replace with actual HF dataset repo once published
 
-  repo <- Sys.getenv("HD_HF_REPO", unset = "user/finance-data")
+  repo <- Sys.getenv("HD_HF_REPO", unset = "dsfefvx/finance-historical-data")
   branch <- Sys.getenv("HD_HF_BRANCH", unset = "main")
   sprintf(
     "https://huggingface.co/datasets/%s/resolve/%s/%s",
