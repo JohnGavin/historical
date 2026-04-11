@@ -1,0 +1,546 @@
+---
+title: "historicaldata: Usage Examples"
+subtitle: "Live queries against HF-hosted Parquet via DuckDB httpfs"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    code-summary: "Show code"
+    code-tools: true
+    theme: darkly
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(DBI)
+library(duckdb)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(scales)
+
+BASE <- "https://huggingface.co/datasets/dsfefvx/finance-historical-data/resolve/main"
+
+con <- dbConnect(duckdb())
+invisible(dbExecute(con, "INSTALL httpfs; LOAD httpfs;"))
+
+# Helper: query HF parquet
+hf <- function(file) paste0(BASE, "/", file)
+
+theme_set(theme_minimal(base_size = 12) + theme(
+  plot.background = element_rect(fill = "grey10", colour = NA),
+  panel.background = element_rect(fill = "grey10", colour = NA),
+  text = element_text(colour = "grey80"),
+  axis.text = element_text(colour = "grey70"),
+  panel.grid.minor = element_blank(),
+  panel.grid.major = element_line(colour = "grey25"),
+  legend.position = "bottom"
+))
+```
+
+# Equity {.tabset}
+
+51 US stocks and ETFs, daily OHLCV from 1980, sourced from Yahoo Finance.
+
+## Single Ticker
+
+Retrieve AAPL daily data and compute 50/200-day moving averages.
+
+```{r}
+aapl <- dbGetQuery(con, sprintf("
+  SELECT date, close, adjusted, volume,
+    AVG(close) OVER (ORDER BY date ROWS BETWEEN 49 PRECEDING AND CURRENT ROW) AS ma_50,
+    AVG(close) OVER (ORDER BY date ROWS BETWEEN 199 PRECEDING AND CURRENT ROW) AS ma_200
+  FROM read_parquet('%s')
+  WHERE ticker = 'AAPL' AND date >= '2022-01-01'
+  ORDER BY date", hf("equity_daily.parquet"))) |>
+  as_tibble() |>
+  filter(date >= as.Date("2023-01-01"))
+
+glimpse(aapl)
+```
+
+::: {.callout-note collapse="true" title="Output: AAPL with moving averages"}
+```{r}
+ggplot(aapl, aes(date)) +
+  geom_line(aes(y = close), colour = "white", linewidth = 0.4) +
+  geom_line(aes(y = ma_50), colour = "#3498db", linewidth = 0.5, linetype = "dashed") +
+  geom_line(aes(y = ma_200), colour = "#e74c3c", linewidth = 0.5, linetype = "dashed") +
+  scale_y_continuous(labels = dollar) +
+  labs(x = NULL, y = "Close", title = "AAPL: Close + 50d MA (blue) + 200d MA (red)")
+```
+:::
+
+## Multi-Ticker Comparison
+
+Compare FAANG cumulative returns from 2024.
+
+```{r}
+faang <- dbGetQuery(con, sprintf("
+  SELECT ticker, date, adjusted
+  FROM read_parquet('%s')
+  WHERE ticker IN ('AAPL','AMZN','GOOGL','META','NFLX')
+    AND date >= '2024-01-01'
+  ORDER BY ticker, date", hf("equity_daily.parquet"))) |>
+  as_tibble() |>
+  group_by(ticker) |>
+  mutate(cum_ret = adjusted / first(adjusted) - 1) |>
+  ungroup()
+```
+
+::: {.callout-note collapse="true" title="Output: FAANG cumulative returns"}
+```{r}
+ggplot(faang, aes(date, cum_ret, colour = ticker)) +
+  geom_line(linewidth = 0.5) +
+  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
+  scale_y_continuous(labels = percent) +
+  labs(x = NULL, y = "Cumulative return", colour = NULL,
+       title = "FAANG cumulative returns (2024+)")
+```
+:::
+
+## Sector Rotation
+
+Group tickers by sector and compare recent performance.
+
+```{r}
+sectors <- tribble(
+  ~ticker, ~sector,
+  "AAPL",  "Tech",    "MSFT",  "Tech",    "NVDA", "Tech",    "GOOGL", "Tech",
+  "JPM",   "Finance", "GS",    "Finance", "BAC",  "Finance",
+  "JNJ",   "Health",  "UNH",   "Health",  "PFE",  "Health",
+  "XOM",   "Energy",  "CVX",   "Energy",  "COP",  "Energy",
+  "WMT",   "Consumer","COST",  "Consumer","HD",   "Consumer"
+)
+
+sector_ret <- dbGetQuery(con, sprintf("
+  SELECT ticker, date, adjusted
+  FROM read_parquet('%s')
+  WHERE ticker IN (%s) AND date >= '2025-01-01'
+  ORDER BY ticker, date",
+  hf("equity_daily.parquet"),
+  paste0("'", sectors$ticker, "'", collapse = ","))) |>
+  as_tibble() |>
+  inner_join(sectors, by = "ticker") |>
+  group_by(sector, date) |>
+  summarise(avg_adj = mean(adjusted, na.rm = TRUE), .groups = "drop") |>
+  group_by(sector) |>
+  mutate(cum_ret = avg_adj / first(avg_adj) - 1) |>
+  ungroup()
+```
+
+::: {.callout-note collapse="true" title="Output: Sector rotation"}
+```{r}
+ggplot(sector_ret, aes(date, cum_ret, colour = sector)) +
+  geom_line(linewidth = 0.6) +
+  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
+  scale_y_continuous(labels = percent) +
+  labs(x = NULL, y = "Cumulative equal-weight return", colour = NULL,
+       title = "Sector performance (2025+)")
+```
+:::
+
+## Volatility
+
+Rolling 21-day realised volatility for selected tickers.
+
+```{r}
+vol_data <- dbGetQuery(con, sprintf("
+  SELECT ticker, date, adjusted,
+    LN(adjusted / LAG(adjusted) OVER (PARTITION BY ticker ORDER BY date)) AS log_ret
+  FROM read_parquet('%s')
+  WHERE ticker IN ('AAPL','NVDA','TSLA','SPY') AND date >= '2023-06-01'
+  ORDER BY ticker, date", hf("equity_daily.parquet"))) |>
+  as_tibble() |>
+  filter(!is.na(log_ret), date >= as.Date("2024-01-01")) |>
+  group_by(ticker) |>
+  mutate(
+    cum_var = cumsum(log_ret^2),
+    vol_21d = sqrt(pmax((cum_var - lag(cum_var, 21, default = 0)) / 21, 0)) * sqrt(252)
+  ) |>
+  filter(!is.na(vol_21d)) |>
+  ungroup()
+```
+
+::: {.callout-note collapse="true" title="Output: Realised volatility"}
+```{r}
+ggplot(vol_data, aes(date, vol_21d, colour = ticker)) +
+  geom_line(linewidth = 0.4) +
+  scale_y_continuous(labels = percent) +
+  labs(x = NULL, y = "21d annualised vol", colour = NULL,
+       title = "Realised volatility: AAPL, NVDA, TSLA vs SPY")
+```
+:::
+
+## Coverage Table
+
+```{r}
+eq_cov <- dbGetQuery(con, sprintf("
+  SELECT ticker, COUNT(*) as days, MIN(date) as first_date, MAX(date) as last_date
+  FROM read_parquet('%s')
+  GROUP BY ticker ORDER BY days DESC", hf("equity_daily.parquet"))) |>
+  as_tibble()
+
+knitr::kable(eq_cov, col.names = c("Ticker", "Trading Days", "From", "To"))
+```
+
+
+# Crypto {.tabset}
+
+14 tokens including BTC, ETH, SOL, and stablecoins. Daily data from Yahoo Finance.
+
+## Major Coins
+
+```{r}
+major <- dbGetQuery(con, sprintf("
+  SELECT ticker, date, close, volume
+  FROM read_parquet('%s')
+  WHERE ticker IN ('BTC','ETH','SOL','BNB') AND date >= '2022-01-01'
+  ORDER BY ticker, date", hf("crypto_daily.parquet"))) |>
+  as_tibble()
+```
+
+::: {.callout-note collapse="true" title="Output: Major crypto prices"}
+```{r}
+ggplot(major, aes(date, close, colour = ticker)) +
+  geom_line(linewidth = 0.4) +
+  scale_y_log10(labels = dollar) +
+  labs(x = NULL, y = "Close (log)", colour = NULL,
+       title = "BTC, ETH, SOL, BNB daily close")
+```
+:::
+
+## Stablecoin Depeg Monitor
+
+Check USDC and USDT for deviations from $1.00.
+
+```{r}
+stable <- dbGetQuery(con, sprintf("
+  SELECT ticker, date, close
+  FROM read_parquet('%s')
+  WHERE ticker IN ('USDC','USDT') AND date >= '2022-01-01'
+  ORDER BY ticker, date", hf("crypto_daily.parquet"))) |>
+  as_tibble() |>
+  mutate(depeg = abs(close - 1.0))
+```
+
+::: {.callout-note collapse="true" title="Output: Stablecoin peg"}
+```{r}
+ggplot(stable, aes(date, close, colour = ticker)) +
+  geom_line(linewidth = 0.4) +
+  geom_hline(yintercept = 1.0, linetype = "dashed", colour = "grey50") +
+  scale_y_continuous(limits = c(0.97, 1.03)) +
+  labs(x = NULL, y = "USD price", colour = NULL, title = "Stablecoin peg: USDC vs USDT")
+```
+:::
+
+::: {.callout-note collapse="true" title="Output: Absolute depeg"}
+```{r}
+ggplot(stable, aes(date, depeg, colour = ticker)) +
+  geom_line(linewidth = 0.4) +
+  labs(x = NULL, y = "|price - 1.0|", colour = NULL, title = "Absolute deviation from $1.00")
+```
+:::
+
+## Correlation Matrix
+
+Rolling 90-day correlation between major crypto assets.
+
+```{r}
+wide <- dbGetQuery(con, sprintf("
+  SELECT ticker, date, close
+  FROM read_parquet('%s')
+  WHERE ticker IN ('BTC','ETH','SOL','BNB','ADA','XRP')
+    AND date >= '2023-01-01'
+  ORDER BY ticker, date", hf("crypto_daily.parquet"))) |>
+  as_tibble() |>
+  group_by(ticker) |>
+  mutate(ret = log(close / lag(close))) |>
+  filter(!is.na(ret)) |>
+  ungroup() |>
+  select(date, ticker, ret) |>
+  pivot_wider(names_from = ticker, values_from = ret) |>
+  filter(if_all(everything(), ~ !is.na(.)))
+
+cor_mat <- cor(wide |> select(-date), use = "complete.obs")
+```
+
+::: {.callout-note collapse="true" title="Output: Correlation matrix"}
+```{r}
+cor_long <- cor_mat |>
+  as.data.frame() |>
+  mutate(row = rownames(cor_mat)) |>
+  pivot_longer(-row, names_to = "col", values_to = "cor")
+
+ggplot(cor_long, aes(row, col, fill = cor)) +
+  geom_tile() +
+  geom_text(aes(label = round(cor, 2)), colour = "white", size = 3.5) +
+  scale_fill_gradient2(low = "#3498db", mid = "grey20", high = "#e74c3c", midpoint = 0) +
+  labs(x = NULL, y = NULL, fill = "Corr", title = "Log-return correlations (2023+)") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+:::
+
+## Coverage Table
+
+```{r}
+cr_cov <- dbGetQuery(con, sprintf("
+  SELECT ticker, COUNT(*) as days, MIN(date) as first_date, MAX(date) as last_date
+  FROM read_parquet('%s')
+  GROUP BY ticker ORDER BY days DESC", hf("crypto_daily.parquet"))) |>
+  as_tibble()
+
+knitr::kable(cr_cov, col.names = c("Token", "Days", "From", "To"))
+```
+
+
+# Macro {.tabset}
+
+19 FRED series: yields, spreads, CPI, GDP, VIX, oil, USD index. Mixed frequencies.
+
+## Interest Rates
+
+Treasury yields across maturities + Fed Funds rate.
+
+```{r}
+rates <- dbGetQuery(con, sprintf("
+  SELECT series_id, date, value
+  FROM read_parquet('%s')
+  WHERE series_id IN ('DGS2','DGS10','DGS30','DFF')
+    AND date >= '2020-01-01' AND value IS NOT NULL
+  ORDER BY series_id, date", hf("macro_daily.parquet"))) |>
+  as_tibble()
+```
+
+::: {.callout-note collapse="true" title="Output: Interest rates"}
+```{r}
+ggplot(rates, aes(date, value, colour = series_id)) +
+  geom_line(linewidth = 0.4) +
+  labs(x = NULL, y = "Yield (%)", colour = NULL,
+       title = "US Treasury yields + Fed Funds rate")
+```
+:::
+
+## Yield Curve
+
+10Y-2Y spread with inversion shading.
+
+```{r}
+yc <- dbGetQuery(con, sprintf("
+  SELECT date, value
+  FROM read_parquet('%s')
+  WHERE series_id = 'T10Y2Y' AND date >= '2018-01-01' AND value IS NOT NULL
+  ORDER BY date", hf("macro_daily.parquet"))) |>
+  as_tibble()
+```
+
+::: {.callout-note collapse="true" title="Output: Yield curve spread"}
+```{r}
+inv_start <- min(yc$date[yc$value < 0], na.rm = TRUE)
+inv_end <- max(yc$date[yc$value < 0], na.rm = TRUE)
+
+ggplot(yc, aes(date, value)) +
+  geom_line(linewidth = 0.4, colour = "#e74c3c") +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  annotate("rect", xmin = inv_start, xmax = inv_end,
+           ymin = -Inf, ymax = 0, fill = "#e74c3c", alpha = 0.15) +
+  labs(x = NULL, y = "10Y - 2Y spread (%)",
+       title = "Yield curve: red shading = inversion")
+```
+:::
+
+## Credit Spreads
+
+ICE BofA High Yield and BBB corporate option-adjusted spreads.
+
+```{r}
+spreads <- dbGetQuery(con, sprintf("
+  SELECT series_id, date, value
+  FROM read_parquet('%s')
+  WHERE series_id IN ('BAMLH0A0HYM2','BAMLC0A4CBBB')
+    AND date >= '2020-01-01' AND value IS NOT NULL
+  ORDER BY series_id, date", hf("macro_daily.parquet"))) |>
+  as_tibble() |>
+  mutate(series_id = recode(series_id,
+    BAMLH0A0HYM2 = "HY Spread", BAMLC0A4CBBB = "BBB Spread"))
+```
+
+::: {.callout-note collapse="true" title="Output: Credit spreads"}
+```{r}
+ggplot(spreads, aes(date, value, colour = series_id)) +
+  geom_line(linewidth = 0.4) +
+  labs(x = NULL, y = "OAS (bps)", colour = NULL,
+       title = "ICE BofA credit spreads")
+```
+:::
+
+## VIX vs S&P 500
+
+Overlay VIX (fear index) with S&P 500.
+
+```{r}
+vix_sp <- dbGetQuery(con, sprintf("
+  SELECT series_id, date, value
+  FROM read_parquet('%s')
+  WHERE series_id IN ('VIXCLS','SP500')
+    AND date >= '2020-01-01' AND value IS NOT NULL
+  ORDER BY series_id, date", hf("macro_daily.parquet"))) |>
+  as_tibble()
+```
+
+::: {.callout-note collapse="true" title="Output: VIX vs S&P 500"}
+```{r}
+ggplot(vix_sp, aes(date, value)) +
+  geom_line(linewidth = 0.4, colour = "#3498db") +
+  facet_wrap(~series_id, ncol = 1, scales = "free_y") +
+  labs(x = NULL, y = NULL, title = "VIX and S&P 500")
+```
+:::
+
+## All Series
+
+```{r}
+ma_cov <- dbGetQuery(con, sprintf("
+  SELECT series_id, COUNT(*) as n,
+         MIN(date) as first_date, MAX(date) as last_date
+  FROM read_parquet('%s')
+  GROUP BY series_id ORDER BY series_id", hf("macro_daily.parquet"))) |>
+  as_tibble()
+
+knitr::kable(ma_cov, col.names = c("Series", "Obs", "From", "To"))
+```
+
+
+# Factors {.tabset}
+
+Fama-French 3 and 5 factors plus Momentum. Daily and monthly, back to 1926.
+
+## FF3 Factor Returns
+
+Market, SMB, HML, and risk-free rate.
+
+```{r}
+ff3 <- dbGetQuery(con, sprintf("
+  SELECT factor_name, date, value
+  FROM read_parquet('%s')
+  WHERE dataset = 'FF3' AND frequency = 'daily' AND date >= '2020-01-01'
+  ORDER BY factor_name, date", hf("factors.parquet"))) |>
+  as_tibble()
+```
+
+::: {.callout-note collapse="true" title="Output: FF3 daily returns"}
+```{r}
+#| fig-height: 7
+ggplot(ff3, aes(date, value, colour = factor_name)) +
+  geom_line(alpha = 0.6, linewidth = 0.3) +
+  geom_hline(yintercept = 0, colour = "grey50", linewidth = 0.2) +
+  facet_wrap(~factor_name, ncol = 1, scales = "free_y") +
+  labs(x = NULL, y = "Return (%)", title = "Fama-French 3 factors (daily, 2020+)") +
+  theme(legend.position = "none")
+```
+:::
+
+## FF5 Cumulative
+
+Long-run cumulative returns for all 5 factors since 2000.
+
+```{r}
+ff5 <- dbGetQuery(con, sprintf("
+  SELECT factor_name, date, value
+  FROM read_parquet('%s')
+  WHERE dataset = 'FF5' AND frequency = 'daily'
+    AND factor_name != 'RF' AND date >= '2000-01-01'
+  ORDER BY factor_name, date", hf("factors.parquet"))) |>
+  as_tibble() |>
+  group_by(factor_name) |>
+  mutate(cum_ret = cumprod(1 + value / 100) - 1) |>
+  ungroup()
+```
+
+::: {.callout-note collapse="true" title="Output: FF5 cumulative returns"}
+```{r}
+ggplot(ff5, aes(date, cum_ret, colour = factor_name)) +
+  geom_line(linewidth = 0.5) +
+  scale_y_continuous(labels = percent) +
+  labs(x = NULL, y = "Cumulative return", colour = NULL,
+       title = "FF5 factor cumulative returns (2000+)")
+```
+:::
+
+## Momentum
+
+Cumulative return of the momentum factor — including the 2009 crash and recovery.
+
+```{r}
+mom <- dbGetQuery(con, sprintf("
+  SELECT date, value
+  FROM read_parquet('%s')
+  WHERE dataset = 'Mom' AND frequency = 'daily' AND date >= '2000-01-01'
+  ORDER BY date", hf("factors.parquet"))) |>
+  as_tibble() |>
+  mutate(cum_ret = cumprod(1 + value / 100) - 1)
+```
+
+::: {.callout-note collapse="true" title="Output: Momentum cumulative return"}
+```{r}
+ggplot(mom, aes(date, cum_ret)) +
+  geom_line(linewidth = 0.5, colour = "#2ecc71") +
+  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
+  scale_y_continuous(labels = percent) +
+  labs(x = NULL, y = "Cumulative return",
+       title = "Momentum factor (2000+) — note 2009 crash")
+```
+:::
+
+## Factor Distributions
+
+Distribution of daily returns by factor.
+
+```{r}
+ff5_dist <- dbGetQuery(con, sprintf("
+  SELECT factor_name, value
+  FROM read_parquet('%s')
+  WHERE dataset = 'FF5' AND frequency = 'daily'
+    AND factor_name != 'RF' AND date >= '2000-01-01'",
+  hf("factors.parquet"))) |>
+  as_tibble()
+```
+
+::: {.callout-note collapse="true" title="Output: Return distributions"}
+```{r}
+ggplot(ff5_dist, aes(value, fill = factor_name)) +
+  geom_histogram(bins = 100, alpha = 0.7, show.legend = FALSE) +
+  facet_wrap(~factor_name, scales = "free_y") +
+  geom_vline(xintercept = 0, colour = "grey50", linetype = "dashed") +
+  labs(x = "Daily return (%)", y = "Count",
+       title = "FF5 daily return distributions (2000+)")
+```
+:::
+
+## Summary Table
+
+```{r}
+fa_cov <- dbGetQuery(con, sprintf("
+  SELECT dataset, frequency, factor_name, COUNT(*) as n,
+         MIN(date) as first_date, MAX(date) as last_date
+  FROM read_parquet('%s')
+  GROUP BY dataset, frequency, factor_name
+  ORDER BY dataset, frequency, factor_name", hf("factors.parquet"))) |>
+  as_tibble()
+
+knitr::kable(fa_cov,
+  col.names = c("Dataset", "Freq", "Factor", "Obs", "From", "To"))
+```
+
+
+```{r}
+#| label: cleanup
+#| include: false
+dbDisconnect(con, shutdown = TRUE)
+```
