@@ -20,6 +20,12 @@ hd_datasets <- function() {
                  "ticker", "source", "asset_class"),
       frequency = "daily",
       description = "Cryptocurrency daily prices (CoinGecko)"
+    ),
+    macro_daily = list(
+      url = hd_base_url("macro_daily.parquet"),
+      schema = c("date", "value", "series_id", "source"),
+      frequency = "mixed",
+      description = "FRED macro series (SP500, VIX, rates, GDP, CPI, etc.)"
     )
   )
 }

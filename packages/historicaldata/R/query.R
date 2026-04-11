@@ -86,6 +86,73 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
   duckplyr::read_parquet_duckdb(path)
 }
 
+#' Query FRED macro series
+#'
+#' @param series_id FRED series ID (e.g. "SP500", "VIXCLS", "DGS10")
+#' @param from Start date (character or Date). Default: no filter.
+#' @param to End date (character or Date). Default: no filter.
+#' @param local If TRUE, query local cache instead of remote.
+#' @return Tibble with date, value, series_id columns
+#' @export
+hd_macro <- function(series_id, from = NULL, to = NULL, local = FALSE) {
+  ds <- hd_datasets()[["macro_daily"]]
+
+  if (local) {
+    source_path <- file.path(hd_cache_path(), "macro_daily.parquet")
+    if (!file.exists(source_path)) {
+      cli::cli_abort("Local cache not found. Run {.fn hd_download} first.")
+    }
+  } else {
+    source_path <- ds$url
+  }
+
+  con <- hd_connect()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  where_clauses <- "series_id = ?"
+  params <- list(series_id)
+
+  if (!is.null(from)) {
+    where_clauses <- c(where_clauses, "date >= ?")
+    params <- c(params, list(as.character(from)))
+  }
+  if (!is.null(to)) {
+    where_clauses <- c(where_clauses, "date <= ?")
+    params <- c(params, list(as.character(to)))
+  }
+
+  sql <- sprintf(
+    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY date",
+    source_path,
+    paste(where_clauses, collapse = " AND ")
+  )
+
+  DBI::dbGetQuery(con, sql, params = params) |>
+    dplyr::as_tibble()
+}
+
+#' List available macro series
+#'
+#' @param local If TRUE, query local cache
+#' @return Character vector of series IDs
+#' @export
+hd_macro_series <- function(local = FALSE) {
+  ds <- hd_datasets()[["macro_daily"]]
+  source_path <- if (local) {
+    file.path(hd_cache_path(), "macro_daily.parquet")
+  } else {
+    ds$url
+  }
+
+  con <- hd_connect()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  DBI::dbGetQuery(con, sprintf(
+    "SELECT DISTINCT series_id FROM read_parquet('%s') ORDER BY series_id",
+    source_path
+  ))$series_id
+}
+
 #' Auto-detect dataset from ticker symbol
 #' @noRd
 detect_dataset <- function(ticker) {

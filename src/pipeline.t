@@ -69,7 +69,18 @@ p = pipeline {
     serializer = ^arrow
   )
 
-  -- 5. R: targets DAG — validate, cross-reference, clean, consolidate
+  -- 5. R: read FRED macro data (pre-fetched)
+  macro_data = rn(
+    command = <{
+      library(arrow)
+      macro_data <- arrow::read_parquet("data/raw/fred_macro.parquet") |>
+        as.data.frame()
+    }>,
+    include = ["data/raw/fred_macro.parquet"],
+    serializer = ^arrow
+  )
+
+  -- 6. R: targets DAG — validate, cross-reference, clean, consolidate
   analysis = rn(
     command = <{
       library(arrow)
@@ -79,15 +90,18 @@ p = pipeline {
       arrow::write_parquet(crypto_api,    "tmp_crypto_api.parquet")
       arrow::write_parquet(equity_static, "tmp_equity_static.parquet")
       arrow::write_parquet(crypto_static, "tmp_crypto_static.parquet")
+      arrow::write_parquet(macro_data,    "tmp_macro.parquet")
 
       tar_make(reporter = "silent")
 
       eq <- tar_read(consolidated_equity)
       cr <- tar_read(consolidated_crypto)
+      ma <- tar_read(consolidated_macro)
       xref <- tar_read(xref_report)
 
       arrow::write_parquet(eq, "output_equity.parquet")
       arrow::write_parquet(cr, "output_crypto.parquet")
+      arrow::write_parquet(ma, "output_macro.parquet")
 
       analysis <- xref
     }>,
@@ -95,11 +109,13 @@ p = pipeline {
       equity_api:    ^arrow,
       crypto_api:    ^arrow,
       equity_static: ^arrow,
-      crypto_static: ^arrow
+      crypto_static: ^arrow,
+      macro_data:    ^arrow
     ],
     include = [
       "_targets.R",
       "R/validate.R",
+      "R/validate_macro.R",
       "R/clean.R",
       "R/cross_reference.R",
       "R/consolidate.R"

@@ -5,7 +5,7 @@
 #   2. Calls tar_make()
 #   3. Reads consolidated outputs as node results
 #
-# Prototype scope: AAPL (equity) + BTC (crypto), 2 sources each.
+# Scope: AAPL (equity) + BTC (crypto) + 20 FRED macro series.
 
 library(targets)
 library(crew)
@@ -23,6 +23,7 @@ tar_source("R/validate.R")
 tar_source("R/clean.R")
 tar_source("R/cross_reference.R")
 tar_source("R/consolidate.R")
+tar_source("R/validate_macro.R")
 
 list(
   # --- Inputs (parquet files written by the rn node) ---
@@ -78,5 +79,20 @@ list(
   tar_target(
     consolidated_crypto,
     consolidate_parquet(crypto_clean, "crypto")
-  )
+  ),
+
+  # === MACRO (FRED) ===
+  tar_target(macro_file, "tmp_macro.parquet", format = "file"),
+  tar_target(macro_raw, arrow::read_parquet(macro_file)),
+  tar_target(macro_valid, validate_macro(macro_raw)),
+  tar_target(consolidated_macro, {
+    out <- macro_valid |>
+      dplyr::mutate(updated_at = Sys.time()) |>
+      dplyr::arrange(series_id, date)
+    n_series <- dplyr::n_distinct(out$series_id)
+    cli::cli_inform(c(
+      "v" = "Consolidated macro: {n_series} series, {nrow(out)} rows"
+    ))
+    out
+  })
 )

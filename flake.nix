@@ -31,6 +31,7 @@
             pointblank
             targets
             crew
+            fredr
             httr2
             jsonlite
             knitr
