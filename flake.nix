@@ -27,6 +27,7 @@
             dplyr
             arrow
             duckdb
+            DT
             devtools
             duckplyr
             ggplot2
