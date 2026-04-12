@@ -20,8 +20,12 @@ format:
             color: white !important;
           }
           .navbar .nav-link.active, .navbar .nav-link:hover {
-            color: #00BFFF !important;
+            color: white !important;
+            background-color: black !important;
+            border: 1px solid white !important;
+            border-radius: 4px;
           }
+          .navbar .nav-link { color: #aaa !important; }
           /* Allow navbar tabs to wrap to second line */
           .navbar-nav { flex-wrap: wrap !important; }
           .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
@@ -175,14 +179,7 @@ meta <- hd_ticker_meta(c("TLT", "GLD", "DBC", "UUP", "SPY"))
 hd_dt(meta, "Defense First universe: 4 hedges + SPY benchmark.")
 ```
 
-
-# Regime Map
-
-## Row
-
-### {.tabset}
-
-#### Top Hedge by Month
+#### Regime Map
 
 Which hedge ranked #1 each month based on the expanding-window composite momentum signal.
 
@@ -194,8 +191,8 @@ regime <- tar_read(bt_regime_map) |>
 
 ggplot(regime, aes(date, 1, fill = rank_1)) +
   geom_tile(height = 1) +
-  scale_fill_manual(values = c(TLT = "#00BFFF", GLD = "#FFD700",
-                               DBC = "#FF6347", UUP = "#32CD32"),
+  scale_fill_manual(values = c(TLT = "#6B8DAE", GLD = "#C4A35A",
+                               DBC = "#A67B5B", UUP = "#7A9E7E"),
                     na.value = "grey50") +
   labs(x = NULL, y = NULL, fill = "Top hedge",
        title = "Regime map: which hedge ranked #1 each month (expanding window)") +
@@ -204,7 +201,7 @@ ggplot(regime, aes(date, 1, fill = rank_1)) +
 ```
 
 ::: {.fig-caption}
-**Monthly regime map.** Colour = top-ranked hedge by composite momentum (avg of 1/3/6/12-month returns). TLT (blue) = deflation/easing. GLD (gold) = monetary instability. DBC (red) = inflation/commodities. UUP (green) = USD strength. Expanding window: each month uses all prior data, no lookahead.
+**Monthly regime map.** Colour = top-ranked hedge by composite momentum (avg of 1/3/6/12-month returns). TLT (steel blue) = deflation/easing. GLD (muted gold) = monetary instability. DBC (brown) = inflation/commodities. UUP (sage) = USD strength. Expanding window: each month uses all prior data, no lookahead.
 :::
 
 
@@ -383,8 +380,8 @@ exp <- tar_read(bt_expanding) |>
 
 ggplot(exp, aes(date, weight, fill = ticker)) +
   geom_area(position = "stack") +
-  scale_fill_manual(values = c(TLT = "#00BFFF", GLD = "#FFD700",
-                               DBC = "#FF6347", UUP = "#32CD32"),
+  scale_fill_manual(values = c(TLT = "#6B8DAE", GLD = "#C4A35A",
+                               DBC = "#A67B5B", UUP = "#7A9E7E"),
                     na.value = "grey50") +
   scale_y_continuous(labels = scales::percent) +
   labs(x = NULL, y = "Portfolio weight", fill = NULL,
@@ -393,11 +390,34 @@ ggplot(exp, aes(date, weight, fill = ticker)) +
 ```
 
 ::: {.fig-caption}
-**Monthly weight allocation across TLT/GLD/DBC/UUP.** The strategy rotates emphasis based on momentum — visible regime shifts correspond to macro events (2008 GFC → TLT, 2022 inflation → DBC/UUP). In-sample.
+**Monthly weight allocation across TLT/GLD/DBC/UUP (stacked).** Regime shifts visible: 2008 GFC → TLT, 2022 inflation → DBC/UUP. In-sample.
+:::
+
+#### Individual Weights
+
+Unstacked view — each ETF's weight shown separately.
+
+```{r}
+#| fig-height: 8
+ggplot(exp, aes(date, weight, colour = ticker)) +
+  geom_line(linewidth = 0.5) +
+  facet_wrap(~ticker, ncol = 1) +
+  scale_colour_manual(values = c(TLT = "#6B8DAE", GLD = "#C4A35A",
+                                 DBC = "#A67B5B", UUP = "#7A9E7E"),
+                      na.value = "grey50") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = NULL, y = "Weight", colour = NULL,
+       title = "Individual ETF weights over time (unstacked)") +
+  hd_theme() +
+  theme(legend.position = "none")
+```
+
+::: {.fig-caption}
+**Individual ETF weights (unstacked, faceted).** Each panel shows one ETF's allocation over time. The 40/30/20/10 ranking structure is visible — each ETF cycles between high (40%) and low (10%) allocation as its momentum changes.
 :::
 
 
-# Out-of-Sample
+# Out-of-Sample (2023-2026)
 
 ## Row
 
@@ -432,6 +452,63 @@ ggplot(oos, aes(date)) +
 
 ::: {.fig-caption}
 **Out-of-sample equity curves (2023+).** This period was NOT used for strategy design or tuning. If OOS performance degrades vs in-sample, it may indicate overfitting. Compare Sharpe ratios: IS vs OOS. One-time evaluation — no re-tuning permitted.
+:::
+
+#### Full-Period Scatter (IS + OOS)
+
+Prediction vs actual including the out-of-sample period.
+
+```{r}
+#| fig-height: 7
+# Combine IS expanding + OOS
+exp_is <- tar_read(bt_expanding) |> mutate(date = as.Date(date), period = "In-sample")
+oos_raw <- tar_read(bt_oos) |> mutate(date = as.Date(date), period = "Out-of-sample")
+
+# OOS doesn't have predicted_return — compute from replication data
+rep <- tar_read(bt_replication) |> mutate(date = as.Date(date))
+full <- bind_rows(
+  exp_is |> select(date, actual_return, benchmark_return, period),
+  oos_raw |> select(date, actual_return, benchmark_return, period)
+)
+
+ggplot(full, aes(benchmark_return, actual_return, colour = period)) +
+  geom_point(alpha = 0.5) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_hline(yintercept = 0, colour = "grey30") +
+  geom_vline(xintercept = 0, colour = "grey30") +
+  scale_colour_manual(values = c("In-sample" = "#6B8DAE", "Out-of-sample" = "#C4A35A")) +
+  labs(x = "SPY monthly return", y = "Portfolio monthly return", colour = NULL,
+       title = "Portfolio vs SPY returns: in-sample + out-of-sample") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Full-period scatter: portfolio return vs SPY return.** Steel blue = in-sample (2008-2022). Gold = out-of-sample (2023+). Points below the diagonal = strategy underperformed SPY that month. The strategy clusters closer to zero on both axes — lower vol, smaller losses.
+:::
+
+#### Full-Period Hit Rate
+
+Rolling 12-month fraction of months beating SPY, including OOS.
+
+```{r}
+#| fig-height: 7
+full_hit <- full |>
+  mutate(hit = as.numeric(actual_return > benchmark_return),
+         cs = cumsum(hit),
+         rolling_hit = ifelse(row_number() >= 12, (cs - lag(cs, 12)) / 12, NA_real_))
+
+ggplot(full_hit, aes(date, rolling_hit, colour = period)) +
+  geom_line(linewidth = 0.5) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey50") +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  scale_colour_manual(values = c("In-sample" = "#6B8DAE", "Out-of-sample" = "#C4A35A")) +
+  labs(x = NULL, y = "12-month rolling hit rate", colour = NULL,
+       title = "Rolling hit rate: in-sample + out-of-sample") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Full-period rolling hit rate.** Steel blue = in-sample. Gold = out-of-sample. The strategy beats SPY roughly 35-40% of months — it's a defense strategy, not an alpha strategy. Value comes from limiting drawdowns, not from monthly outperformance.
 :::
 
 
