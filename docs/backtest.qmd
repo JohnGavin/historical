@@ -1,0 +1,419 @@
+---
+title: "Defense First: Macro Rotation Backtest"
+format:
+  dashboard:
+    orientation: rows
+    theme: cosmo
+    embed-resources: true
+    include-in-header:
+      - text: |
+          <style>
+          body { font-size: 1.15em; }
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
+            height: auto !important; min-height: 0 !important;
+            max-height: none !important; overflow: visible !important;
+            flex: none !important;
+          }
+          .cell-output-display { display: block !important; position: relative !important;
+            overflow: visible !important; margin-bottom: 1em; }
+          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
+          .fig-caption { display: block; position: relative; clear: both;
+            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #888; }
+          .datatables, .dataTables_wrapper { display: block !important;
+            position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
+          table.dataTable { white-space: nowrap; }
+          table caption { caption-side: top !important; }
+          details { margin-bottom: 0.5em; }
+          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+          .fullscreen-overlay {
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            z-index: 9999 !important; background: black !important;
+            padding: 10px !important; cursor: zoom-out !important;
+          }
+          .fullscreen-overlay img { width: 100% !important; height: 100% !important;
+            object-fit: contain !important; }
+          .cell-output-display:has(img) { cursor: zoom-in; }
+          </style>
+          <script>
+          document.addEventListener('click', function(e) {
+            var overlay = e.target.closest('.fullscreen-overlay');
+            if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
+            var img = e.target.closest('img');
+            if (!img) return;
+            var div = document.createElement('div');
+            div.className = 'fullscreen-overlay';
+            div.innerHTML = '<img src="' + img.src + '">';
+            div.addEventListener('click', function() { div.remove(); });
+            document.body.appendChild(div);
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+store_path <- if (dir.exists("_targets_backtest")) "_targets_backtest" else
+  file.path(here::here(), "docs/_targets_backtest")
+tar_config_set(store = store_path)
+
+hd_dt <- function(df, caption_text) {
+  if (is.null(df)) return(invisible(NULL))
+  # Format numbers
+  for (col in names(df)) {
+    if (is.numeric(df[[col]]) && col %in% c("cagr", "vol", "max_dd", "hit_rate"))
+      df[[col]] <- paste0(round(df[[col]] * 100, 1), "%")
+    if (is.numeric(df[[col]]) && col %in% c("sharpe", "sortino", "calmar"))
+      df[[col]] <- round(df[[col]], 2)
+  }
+  DT::datatable(df, caption = htmltools::tags$caption(
+    style = "caption-side: top; text-align: left; font-weight: bold; color: #ddd;",
+    caption_text), rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE, dom = "frtip"))
+}
+```
+
+::: {.callout-warning}
+**EXPLORATORY BACKTEST — IN-SAMPLE.** Tabs 2-6 show in-sample results (2008-2022). Tab 7 shows out-of-sample (2023+). This is not investment advice — it is an educational exercise in quantitative backtesting methodology using the `historicaldata` R package.
+:::
+
+# Universe
+
+## Row
+
+### {.tabset}
+
+#### Price History
+
+Normalised price history of the 4 defensive ETFs + SPY benchmark since 2007, rebased to 100.
+
+```{r}
+#| fig-height: 8
+prices <- tar_read(bt_prices) |>
+  filter(ticker != "BIL") |>  # exclude cash proxy from price chart
+  group_by(ticker) |>
+  mutate(normalised = adjusted / first(adjusted) * 100) |>
+  ungroup()
+
+n_tickers <- length(unique(prices$ticker))
+ggplot(prices, aes(as.Date(date), normalised, colour = ticker)) +
+  geom_line(linewidth = 0.5) +
+  scale_y_log10() +
+  scale_colour_manual(values = hd_palette(n_tickers)) +
+  labs(x = NULL, y = "Normalised price (log, base=100)", colour = NULL,
+       title = "Defense First universe: TLT/GLD/DBC/UUP + SPY (2007+)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**TLT (Treasuries), GLD (Gold), DBC (Commodities), UUP (USD Index), SPY (S&P 500).** Y: normalised price (log scale, rebased to 100). Each covers a different macro risk regime. Source: `hd_ohlcv()` via `hd_group("Defense First")`.
+:::
+
+#### Correlation
+
+```{r}
+#| fig-height: 6
+rets <- tar_read(bt_returns) |>
+  filter(as.Date(date) <= as.Date("2022-12-31")) |>
+  select(ticker, date, ret) |>
+  tidyr::pivot_wider(names_from = ticker, values_from = ret) |>
+  filter(if_all(-date, ~ !is.na(.)))
+
+cor_mat <- cor(rets |> select(-date))
+cor_long <- cor_mat |> as.data.frame() |>
+  mutate(row = rownames(cor_mat)) |>
+  tidyr::pivot_longer(-row, names_to = "col", values_to = "cor")
+
+ggplot(cor_long, aes(row, col, fill = cor)) +
+  geom_tile(colour = "grey30") +
+  geom_text(aes(label = round(cor, 2)), colour = "white", size = 4) +
+  scale_fill_gradient2(low = "#00BFFF", mid = "grey30", high = "#FF6347",
+                       midpoint = 0, limits = c(-1, 1)) +
+  labs(x = NULL, y = NULL, fill = "Corr",
+       title = "Monthly return correlation (in-sample, 2007-2022)") +
+  hd_theme() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+::: {.fig-caption}
+**Monthly return correlations for the rotation universe (in-sample).** Low/negative correlations between hedges confirm diversification benefit. GLD-UUP strongly negative (-0.41). SPY-TLT negative (-0.31). Source: `hd_ohlcv()`.
+:::
+
+#### Metadata
+
+```{r}
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+meta <- hd_ticker_meta(c("TLT", "GLD", "DBC", "UUP", "SPY"))
+hd_dt(meta, "Defense First universe: 4 hedges + SPY benchmark.")
+```
+
+
+# Regime Map
+
+## Row
+
+### {.tabset}
+
+#### Top Hedge by Month
+
+Which hedge ranked #1 each month based on the expanding-window composite momentum signal.
+
+```{r}
+#| fig-height: 6
+regime <- tar_read(bt_regime_map) |>
+  mutate(date = as.Date(date),
+         rank_1 = factor(rank_1, levels = c("TLT", "GLD", "DBC", "UUP")))
+
+ggplot(regime, aes(date, 1, fill = rank_1)) +
+  geom_tile(height = 1) +
+  scale_fill_manual(values = c(TLT = "#00BFFF", GLD = "#FFD700",
+                               DBC = "#FF6347", UUP = "#32CD32"),
+                    na.value = "grey50") +
+  labs(x = NULL, y = NULL, fill = "Top hedge",
+       title = "Regime map: which hedge ranked #1 each month (expanding window)") +
+  hd_theme() +
+  theme(axis.text.y = element_blank(), axis.ticks.y = element_blank())
+```
+
+::: {.fig-caption}
+**Monthly regime map.** Colour = top-ranked hedge by composite momentum (avg of 1/3/6/12-month returns). TLT (blue) = deflation/easing. GLD (gold) = monetary instability. DBC (red) = inflation/commodities. UUP (green) = USD strength. Expanding window: each month uses all prior data, no lookahead.
+:::
+
+
+# In-Sample (2008-2022)
+
+## Row
+
+### {.tabset}
+
+#### Equity Curve
+
+**EXPLORATORY / IN-SAMPLE.** Defense First rotation vs SPY buy-and-hold.
+
+```{r}
+#| fig-height: 8
+port <- tar_read(bt_portfolio) |> mutate(date = as.Date(date))
+
+ggplot(port, aes(date)) +
+  geom_line(aes(y = cum_port, colour = "Defense First"), linewidth = 0.6) +
+  geom_line(aes(y = cum_bench, colour = "SPY"), linewidth = 0.6) +
+  scale_y_log10() +
+  scale_colour_manual(values = c("Defense First" = "#00BFFF", "SPY" = "#FF6347")) +
+  labs(x = NULL, y = "Cumulative return (log)", colour = NULL,
+       title = "In-sample equity curve: Defense First vs SPY (2008-2022)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**In-sample equity curves (log scale).** Defense First (blue) vs SPY (red). The strategy sacrifices upside for dramatically lower drawdowns. SPY CAGR higher but max DD -46% vs Defense First -14%. EXPLORATORY — in-sample only.
+:::
+
+#### Drawdowns
+
+```{r}
+#| fig-height: 8
+dd <- tar_read(bt_drawdowns) |> mutate(date = as.Date(date))
+
+ggplot(dd, aes(date)) +
+  geom_area(aes(y = dd_bench), fill = "#FF6347", alpha = 0.3) +
+  geom_line(aes(y = dd_bench, colour = "SPY"), linewidth = 0.4) +
+  geom_area(aes(y = dd_port), fill = "#00BFFF", alpha = 0.3) +
+  geom_line(aes(y = dd_port, colour = "Defense First"), linewidth = 0.4) +
+  scale_y_continuous(labels = scales::percent) +
+  scale_colour_manual(values = c("Defense First" = "#00BFFF", "SPY" = "#FF6347")) +
+  labs(x = NULL, y = "Drawdown", colour = NULL,
+       title = "Drawdown comparison: Defense First vs SPY (in-sample)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Drawdown chart.** SPY (red) suffered -46% in 2008-09 and -34% in 2020. Defense First (blue) max DD -14%. The strategy's primary value is loss mitigation. In-sample only.
+:::
+
+#### Metrics
+
+```{r}
+hd_dt(tar_read(bt_metrics_is),
+  "In-sample performance metrics (2008-2022). EXPLORATORY — no out-of-sample peeking.")
+```
+
+
+# Prediction vs Actual
+
+## Row
+
+### {.tabset}
+
+#### Scatter
+
+Does the composite momentum signal predict next month's return?
+
+```{r}
+#| fig-height: 7
+exp <- tar_read(bt_expanding) |> mutate(date = as.Date(date))
+
+ggplot(exp, aes(predicted_return, actual_return)) +
+  geom_point(alpha = 0.4, colour = "#00BFFF") +
+  geom_smooth(method = "lm", colour = "#FF6347", se = TRUE) +
+  geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
+  geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+  labs(x = "Predicted return (momentum signal)", y = "Actual return (next month)",
+       title = "Prediction vs actual: monthly returns (in-sample)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Predicted vs actual monthly returns.** X: composite momentum signal (weighted trailing returns). Y: realised portfolio return next month. Positive slope = signal has predictive power. Wide scatter = noisy prediction (expected for monthly returns). In-sample.
+:::
+
+#### Hit Rate Over Time
+
+```{r}
+#| fig-height: 7
+exp_roll <- exp |>
+  mutate(hit = as.numeric(beat_benchmark),
+         cs = cumsum(hit),
+         rolling_hit = ifelse(row_number() >= 12,
+           (cs - lag(cs, 12)) / 12, NA_real_))
+
+ggplot(exp_roll, aes(date)) +
+  geom_line(aes(y = rolling_hit), colour = "#00BFFF", linewidth = 0.5) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", colour = "grey50") +
+  scale_y_continuous(labels = scales::percent, limits = c(0, 1)) +
+  labs(x = NULL, y = "12-month rolling hit rate",
+       title = "Rolling hit rate: fraction of months beating SPY") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**12-month rolling hit rate** (fraction of months portfolio beats SPY). Above 50% dashed line = strategy outperforming on a rolling basis. The strategy is designed for defense (reducing losses) not for beating SPY in all regimes. In-sample.
+:::
+
+
+# Strategy Variants
+
+## Row
+
+### {.tabset}
+
+#### Comparison Table
+
+```{r}
+hd_dt(tar_read(bt_comparison),
+  "In-sample strategy variant comparison (2008-2022). All EXPLORATORY.")
+```
+
+#### Equity Curves
+
+```{r}
+#| fig-height: 8
+exp <- tar_read(bt_expanding) |> mutate(date = as.Date(date))
+ewt <- tar_read(bt_equalwt) |> mutate(date = as.Date(date))
+top <- tar_read(bt_topone) |> mutate(date = as.Date(date))
+
+variants <- bind_rows(
+  exp |> transmute(date, ret = actual_return, strategy = "Momentum (40/30/20/10)"),
+  exp |> transmute(date, ret = benchmark_return, strategy = "SPY buy & hold"),
+  ewt |> transmute(date, ret = port_ret, strategy = "Equal weight (25%)"),
+  top |> transmute(date, ret = port_ret, strategy = "Top 1 only (100%)")
+) |>
+  group_by(strategy) |>
+  mutate(cum = cumprod(1 + ret)) |>
+  ungroup()
+
+ggplot(variants, aes(date, cum, colour = strategy)) +
+  geom_line(linewidth = 0.5) +
+  scale_y_log10() +
+  scale_colour_manual(values = hd_palette(4)) +
+  labs(x = NULL, y = "Cumulative return (log)", colour = NULL,
+       title = "Strategy variants: in-sample equity curves (2008-2022)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**4 strategy variants compared.** Momentum rotation (40/30/20/10), equal weight (25% each), top-1 concentrated (100%), and SPY benchmark. All in-sample. Momentum rotation balances return and risk.
+:::
+
+
+# Allocation
+
+## Row
+
+### {.tabset}
+
+#### Weight History
+
+```{r}
+#| fig-height: 8
+exp <- tar_read(bt_expanding) |>
+  mutate(date = as.Date(date)) |>
+  tidyr::pivot_longer(cols = starts_with("w_"), names_to = "rank", values_to = "weight") |>
+  mutate(ticker = case_when(
+    rank == "w_1" ~ rank_1, rank == "w_2" ~ rank_2,
+    rank == "w_3" ~ rank_3, rank == "w_4" ~ rank_4
+  ))
+
+ggplot(exp, aes(date, weight, fill = ticker)) +
+  geom_area(position = "stack") +
+  scale_fill_manual(values = c(TLT = "#00BFFF", GLD = "#FFD700",
+                               DBC = "#FF6347", UUP = "#32CD32"),
+                    na.value = "grey50") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(x = NULL, y = "Portfolio weight", fill = NULL,
+       title = "Monthly allocation history (expanding window)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Monthly weight allocation across TLT/GLD/DBC/UUP.** The strategy rotates emphasis based on momentum — visible regime shifts correspond to macro events (2008 GFC → TLT, 2022 inflation → DBC/UUP). In-sample.
+:::
+
+
+# Out-of-Sample
+
+## Row
+
+### {.tabset}
+
+#### IS vs OOS Metrics
+
+**OUT-OF-SAMPLE (2023-2026).** Run ONCE — no parameter re-tuning after seeing this.
+
+```{r}
+hd_dt(tar_read(bt_oos_vs_is),
+  "In-sample vs out-of-sample comparison. OOS run ONCE with no re-tuning.")
+```
+
+#### OOS Equity Curve
+
+```{r}
+#| fig-height: 8
+oos <- tar_read(bt_oos) |>
+  mutate(date = as.Date(date),
+         cum_port = cumprod(1 + actual_return),
+         cum_bench = cumprod(1 + benchmark_return))
+
+ggplot(oos, aes(date)) +
+  geom_line(aes(y = cum_port, colour = "Defense First"), linewidth = 0.6) +
+  geom_line(aes(y = cum_bench, colour = "SPY"), linewidth = 0.6) +
+  scale_colour_manual(values = c("Defense First" = "#00BFFF", "SPY" = "#FF6347")) +
+  labs(x = NULL, y = "Cumulative return", colour = NULL,
+       title = "Out-of-sample equity curve (2023+)") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Out-of-sample equity curves (2023+).** This period was NOT used for strategy design or tuning. If OOS performance degrades vs in-sample, it may indicate overfitting. Compare Sharpe ratios: IS vs OOS. One-time evaluation — no re-tuning permitted.
+:::
