@@ -38,11 +38,24 @@ format:
           </style>
           <script>
           document.addEventListener('click', function(e) {
+            // Close fullscreen
             var overlay = e.target.closest('.fullscreen-overlay');
-            if (overlay) { overlay.classList.remove('fullscreen-overlay'); return; }
-            var cell = e.target.closest('.cell-output-display');
-            if (!cell || !cell.querySelector('img')) return;
-            cell.classList.add('fullscreen-overlay');
+            if (overlay) {
+              overlay.classList.remove('fullscreen-overlay');
+              overlay.style.cssText = '';
+              return;
+            }
+            // Only zoom the img itself, not the parent (which includes caption)
+            var img = e.target.closest('img');
+            if (!img) return;
+            var cell = img.closest('.cell-output-display');
+            if (!cell) return;
+            // Clone just the img into a temporary overlay div
+            var div = document.createElement('div');
+            div.className = 'fullscreen-overlay';
+            div.innerHTML = '<img src="' + img.src + '">';
+            div.addEventListener('click', function() { div.remove(); });
+            document.body.appendChild(div);
           });
           </script>
 execute:

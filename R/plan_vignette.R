@@ -4,31 +4,10 @@
 #   code_vig_* — R code as character string, parse-validated
 #   vig_*      — result of eval(parse(text=code))
 #
-# Theme: black background, white text/gridlines, high-contrast data colours.
-# Applied via hd_theme() added to every ggplot (theme_set unreliable across eval).
-
-# The theme function — shown to users in Setup, used in every plot
-HD_THEME_CODE <- '
-hd_theme <- function() {
-  theme_minimal(base_size = 14) %+replace% theme(
-    plot.background = element_rect(fill = "black", colour = NA),
-    panel.background = element_rect(fill = "black", colour = NA),
-    text = element_text(colour = "white"),
-    axis.text = element_text(colour = "grey70"),
-    axis.title = element_text(colour = "grey90"),
-    plot.title = element_text(colour = "white", size = 16),
-    panel.grid.minor = element_blank(),
-    panel.grid.major = element_line(colour = "grey30"),
-    legend.background = element_rect(fill = "black", colour = NA),
-    legend.text = element_text(colour = "white"),
-    legend.position = "bottom",
-    strip.text = element_text(colour = "white")
-  )
-}'
-
-# High-contrast palette for black background
-HD_PALETTE <- c("#00BFFF", "#FF6347", "#32CD32", "#FFD700", "#FF69B4", "#00CED1",
-                "#FFA500", "#BA55D3", "#7FFF00", "#FF4500")
+# Theme and palette come from the historicaldata package:
+#   hd_theme()   — black bg, white text, high-contrast
+#   hd_palette() — 10 high-contrast colours for black bg
+# These are exported functions, not duplicated code.
 
 # Helper: create a code+output target pair
 vig_pair <- function(name, code) {
@@ -54,20 +33,22 @@ vig_pair <- function(name, code) {
 plan_vignette <- function() {
   c(
     # ── Setup ─────────────────────────────────────────────────────
-    vig_pair("vig_setup", paste0('
+    vig_pair("vig_setup", '
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
 library(purrr)
 
-', HD_THEME_CODE, '
+# hd_theme() and hd_palette() are provided by the historicaldata package.
+# hd_theme() gives black bg, white text/gridlines, high-contrast.
+# hd_palette(n) returns n high-contrast hex colours for dark backgrounds.
 
-"Setup complete — hd_theme() is now available for all plots."
-')),
+"Setup complete. Use + hd_theme() on any ggplot. Colours: hd_palette(n)."
+'),
 
     # ── Equity: AAPL Moving Averages ──────────────────────────────
-    vig_pair("vig_eq_aapl", paste0(HD_THEME_CODE, '
+    vig_pair("vig_eq_aapl", '
 
 aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
   arrange(date) |>
@@ -86,10 +67,10 @@ ggplot(aapl, aes(date)) +
   labs(x = NULL, y = "Close (USD)",
        title = "AAPL daily close with 50d and 200d moving averages") +
   hd_theme()
-')),
+'),
 
     # ── Equity: FAANG Returns ─────────────────────────────────────
-    vig_pair("vig_eq_faang", paste0(HD_THEME_CODE, '
+    vig_pair("vig_eq_faang", '
 
 faang <- c("AAPL", "AMZN", "GOOGL", "META", "NFLX") |>
   map(\\(t) hd_ohlcv(t, from = "2024-01-01")) |>
@@ -106,10 +87,10 @@ ggplot(faang, aes(date, cum_ret, colour = ticker)) +
   labs(x = NULL, y = "Cumulative return", colour = NULL,
        title = "FAANG cumulative returns rebased to 2024-01-01") +
   hd_theme()
-')),
+'),
 
     # ── Equity: Realised Volatility ───────────────────────────────
-    vig_pair("vig_eq_vol", paste0(HD_THEME_CODE, '
+    vig_pair("vig_eq_vol", '
 
 vol <- c("AAPL", "NVDA", "TSLA", "SPY") |>
   map(\\(t) hd_ohlcv(t, from = "2023-06-01")) |>
@@ -131,7 +112,7 @@ ggplot(vol, aes(date, vol_21d, colour = ticker)) +
   labs(x = NULL, y = "21d annualised volatility", colour = NULL,
        title = "Realised volatility: AAPL, NVDA, TSLA vs SPY") +
   hd_theme()
-')),
+'),
 
     # ── Equity: Coverage (single query, not per-ticker) ───────────
     vig_pair("vig_eq_coverage", '
@@ -144,7 +125,7 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
 '),
 
     # ── Crypto: Major Coins ───────────────────────────────────────
-    vig_pair("vig_cr_major", paste0(HD_THEME_CODE, '
+    vig_pair("vig_cr_major", '
 
 major <- c("BTC", "ETH", "SOL", "BNB") |>
   map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
@@ -157,10 +138,10 @@ ggplot(major, aes(date, close, colour = ticker)) +
   labs(x = NULL, y = "Close USD (log scale)", colour = NULL,
        title = "BTC, ETH, SOL, BNB daily close") +
   hd_theme()
-')),
+'),
 
     # ── Crypto: Stablecoin Peg ────────────────────────────────────
-    vig_pair("vig_cr_stable", paste0(HD_THEME_CODE, '
+    vig_pair("vig_cr_stable", '
 
 stable <- c("USDC", "USDT") |>
   map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
@@ -174,10 +155,10 @@ ggplot(stable, aes(date, close, colour = ticker)) +
   labs(x = NULL, y = "USD price", colour = NULL,
        title = "Stablecoin peg: USDC and USDT vs $1.00") +
   hd_theme()
-')),
+'),
 
     # ── Crypto: Correlation ───────────────────────────────────────
-    vig_pair("vig_cr_corr", paste0(HD_THEME_CODE, '
+    vig_pair("vig_cr_corr", '
 
 wide <- c("BTC", "ETH", "SOL", "BNB", "ADA", "XRP") |>
   map(\\(t) hd_ohlcv(t, from = "2023-01-01")) |>
@@ -203,7 +184,7 @@ ggplot(cor_long, aes(row, col, fill = cor)) +
        title = "Crypto log-return correlation (2023+)") +
   hd_theme() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-')),
+'),
 
     # ── Crypto: Coverage (single query) ───────────────────────────
     vig_pair("vig_cr_coverage", '
@@ -216,7 +197,7 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
 '),
 
     # ── Macro: Interest Rates ─────────────────────────────────────
-    vig_pair("vig_ma_rates", paste0(HD_THEME_CODE, '
+    vig_pair("vig_ma_rates", '
 
 rates <- c("DGS2", "DGS10", "DGS30", "DFF") |>
   map(\\(s) hd_macro(s, from = "2020-01-01")) |>
@@ -229,10 +210,10 @@ ggplot(rates, aes(date, value, colour = series_id)) +
   labs(x = NULL, y = "Yield (%)", colour = NULL,
        title = "US Treasury yields + Fed Funds rate (2020+)") +
   hd_theme()
-')),
+'),
 
     # ── Macro: Yield Curve ────────────────────────────────────────
-    vig_pair("vig_ma_yc", paste0(HD_THEME_CODE, '
+    vig_pair("vig_ma_yc", '
 
 yc <- hd_macro("T10Y2Y", from = "2018-01-01") |> filter(!is.na(value))
 inv <- yc |> filter(value < 0)
@@ -247,10 +228,10 @@ ggplot(yc, aes(date, value)) +
   labs(x = NULL, y = "10Y - 2Y spread (%)",
        title = "Yield curve: 10Y-2Y spread with inversion") +
   hd_theme()
-')),
+'),
 
     # ── Macro: Credit Spreads ─────────────────────────────────────
-    vig_pair("vig_ma_spreads", paste0(HD_THEME_CODE, '
+    vig_pair("vig_ma_spreads", '
 
 spreads <- c("BAMLH0A0HYM2", "BAMLC0A4CBBB") |>
   map(\\(s) hd_macro(s, from = "2020-01-01")) |>
@@ -265,7 +246,7 @@ ggplot(spreads, aes(date, value, colour = series_id)) +
   labs(x = NULL, y = "OAS (pp)", colour = NULL,
        title = "ICE BofA credit spreads: HY vs BBB (2020+)") +
   hd_theme()
-')),
+'),
 
     # ── Macro: Coverage (single query) ────────────────────────────
     vig_pair("vig_ma_coverage", '
@@ -278,7 +259,7 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
 '),
 
     # ── Factors: FF3 Daily ────────────────────────────────────────
-    vig_pair("vig_fa_ff3", paste0(HD_THEME_CODE, '
+    vig_pair("vig_fa_ff3", '
 
 ff3 <- hd_factors("FF3", "daily", from = "2020-01-01")
 
@@ -291,10 +272,10 @@ ggplot(ff3, aes(date, value, colour = factor_name)) +
        title = "Fama-French 3 factors: daily (2020+)") +
   hd_theme() +
   theme(legend.position = "none")
-')),
+'),
 
     # ── Factors: FF5 Cumulative ───────────────────────────────────
-    vig_pair("vig_fa_ff5", paste0(HD_THEME_CODE, '
+    vig_pair("vig_fa_ff5", '
 
 ff5 <- hd_factors("FF5", "daily", from = "2000-01-01") |>
   filter(factor_name != "RF") |>
@@ -311,10 +292,10 @@ ggplot(ff5, aes(date, cum_ret, colour = factor_name)) +
   labs(x = NULL, y = "Cumulative return", colour = NULL,
        title = "FF5 cumulative factor returns (2000-2026)") +
   hd_theme()
-')),
+'),
 
     # ── Factors: Momentum ─────────────────────────────────────────
-    vig_pair("vig_fa_mom", paste0(HD_THEME_CODE, '
+    vig_pair("vig_fa_mom", '
 
 mom <- hd_factors("Mom", "daily", from = "2000-01-01") |>
   arrange(date) |>
@@ -327,7 +308,7 @@ ggplot(mom, aes(date, cum_ret)) +
   labs(x = NULL, y = "Cumulative return",
        title = "Momentum factor cumulative return (2000-2026)") +
   hd_theme()
-')),
+'),
 
     # ── Factors: Coverage (single query) ─────────────────────────
     vig_pair("vig_fa_coverage", '
