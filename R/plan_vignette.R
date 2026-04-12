@@ -4,10 +4,31 @@
 #   code_vig_* — R code as character string, parse-validated
 #   vig_*      — result of eval(parse(text=code))
 #
-# The code targets contain library(historicaldata) so users can copy-paste.
-# The output targets use pkgload::load_all() to actually execute.
-#
-# Theme is set ONCE in code_vig_setup. Every plot code assumes it's already set.
+# Theme: black background, white text/gridlines, high-contrast data colours.
+# Applied via hd_theme() added to every ggplot (theme_set unreliable across eval).
+
+# The theme function — shown to users in Setup, used in every plot
+HD_THEME_CODE <- '
+hd_theme <- function() {
+  theme_minimal(base_size = 14) %+replace% theme(
+    plot.background = element_rect(fill = "black", colour = NA),
+    panel.background = element_rect(fill = "black", colour = NA),
+    text = element_text(colour = "white"),
+    axis.text = element_text(colour = "grey70"),
+    axis.title = element_text(colour = "grey90"),
+    plot.title = element_text(colour = "white", size = 16),
+    panel.grid.minor = element_blank(),
+    panel.grid.major = element_line(colour = "grey30"),
+    legend.background = element_rect(fill = "black", colour = NA),
+    legend.text = element_text(colour = "white"),
+    legend.position = "bottom",
+    strip.text = element_text(colour = "white")
+  )
+}'
+
+# High-contrast palette for black background
+HD_PALETTE <- c("#00BFFF", "#FF6347", "#32CD32", "#FFD700", "#FF69B4", "#00CED1",
+                "#FFA500", "#BA55D3", "#7FFF00", "#FF4500")
 
 # Helper: create a code+output target pair
 vig_pair <- function(name, code) {
@@ -25,16 +46,6 @@ vig_pair <- function(name, code) {
       library(scales)
       library(tidyr)
       library(purrr)
-      # Set theme globally (same as code_vig_setup shows to users)
-      theme_set(theme_minimal(base_size = 14) + theme(
-        plot.background = element_rect(fill = "gray70", colour = NA),
-        panel.background = element_rect(fill = "gray70", colour = NA),
-        text = element_text(colour = "grey20"),
-        axis.text = element_text(colour = "grey30"),
-        panel.grid.minor = element_blank(),
-        panel.grid.major = element_line(colour = "grey60"),
-        legend.position = "bottom"
-      ))
       eval(parse(text = CODEREF))
     }, list(CODEREF = as.symbol(code_name))))
   )
@@ -42,29 +53,22 @@ vig_pair <- function(name, code) {
 
 plan_vignette <- function() {
   c(
-    # ── Setup (shown once at top of vignette) ─────────────────────
-    vig_pair("vig_setup", '
+    # ── Setup ─────────────────────────────────────────────────────
+    vig_pair("vig_setup", paste0('
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
 library(purrr)
 
-theme_set(theme_minimal(base_size = 14) + theme(
-  plot.background = element_rect(fill = "gray70", colour = NA),
-  panel.background = element_rect(fill = "gray70", colour = NA),
-  text = element_text(colour = "grey20"),
-  axis.text = element_text(colour = "grey30"),
-  panel.grid.minor = element_blank(),
-  panel.grid.major = element_line(colour = "grey60"),
-  legend.position = "bottom"
-))
+', HD_THEME_CODE, '
 
-"Setup complete"
-'),
+"Setup complete — hd_theme() is now available for all plots."
+')),
 
     # ── Equity: AAPL Moving Averages ──────────────────────────────
-    vig_pair("vig_eq_aapl", '
+    vig_pair("vig_eq_aapl", paste0(HD_THEME_CODE, '
+
 aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
   arrange(date) |>
   mutate(
@@ -75,16 +79,18 @@ aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
   select(-cs)
 
 ggplot(aapl, aes(date)) +
-  geom_line(aes(y = close), colour = "grey20", linewidth = 0.4) +
-  geom_line(aes(y = ma_50), colour = "#3498db", linewidth = 0.5, linetype = "dashed") +
-  geom_line(aes(y = ma_200), colour = "#e74c3c", linewidth = 0.5, linetype = "dashed") +
+  geom_line(aes(y = close), colour = "white", linewidth = 0.4) +
+  geom_line(aes(y = ma_50), colour = "#00BFFF", linewidth = 0.5, linetype = "dashed") +
+  geom_line(aes(y = ma_200), colour = "#FF6347", linewidth = 0.5, linetype = "dashed") +
   scale_y_continuous(labels = dollar) +
   labs(x = NULL, y = "Close (USD)",
-       title = "AAPL daily close with 50-day and 200-day moving averages")
-'),
+       title = "AAPL daily close with 50d and 200d moving averages") +
+  hd_theme()
+')),
 
     # ── Equity: FAANG Returns ─────────────────────────────────────
-    vig_pair("vig_eq_faang", '
+    vig_pair("vig_eq_faang", paste0(HD_THEME_CODE, '
+
 faang <- c("AAPL", "AMZN", "GOOGL", "META", "NFLX") |>
   map(\\(t) hd_ohlcv(t, from = "2024-01-01")) |>
   list_rbind() |>
@@ -96,12 +102,15 @@ ggplot(faang, aes(date, cum_ret, colour = ticker)) +
   geom_line(linewidth = 0.5) +
   geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
   scale_y_continuous(labels = percent) +
+  scale_colour_manual(values = c("#00BFFF", "#FF6347", "#32CD32", "#FFD700", "#FF69B4")) +
   labs(x = NULL, y = "Cumulative return", colour = NULL,
-       title = "FAANG cumulative returns rebased to 2024-01-01")
-'),
+       title = "FAANG cumulative returns rebased to 2024-01-01") +
+  hd_theme()
+')),
 
     # ── Equity: Realised Volatility ───────────────────────────────
-    vig_pair("vig_eq_vol", '
+    vig_pair("vig_eq_vol", paste0(HD_THEME_CODE, '
+
 vol <- c("AAPL", "NVDA", "TSLA", "SPY") |>
   map(\\(t) hd_ohlcv(t, from = "2023-06-01")) |>
   list_rbind() |>
@@ -116,54 +125,60 @@ vol <- c("AAPL", "NVDA", "TSLA", "SPY") |>
   ungroup()
 
 ggplot(vol, aes(date, vol_21d, colour = ticker)) +
-  geom_line(linewidth = 0.4) +
+  geom_line(linewidth = 0.5) +
   scale_y_continuous(labels = percent) +
+  scale_colour_manual(values = c("#00BFFF", "#FF6347", "#32CD32", "#FFD700")) +
   labs(x = NULL, y = "21d annualised volatility", colour = NULL,
-       title = "Realised volatility: AAPL, NVDA, TSLA vs SPY benchmark")
-'),
+       title = "Realised volatility: AAPL, NVDA, TSLA vs SPY") +
+  hd_theme()
+')),
 
-    # ── Equity: Coverage ──────────────────────────────────────────
+    # ── Equity: Coverage (single query, not per-ticker) ───────────
     vig_pair("vig_eq_coverage", '
-hd_tickers("equity_daily") |>
-  map(\\(t) {
-    d <- hd_ohlcv(t, from = "1900-01-01")
-    tibble(Ticker = t, `Trading Days` = nrow(d),
-           From = as.character(min(d$date)),
-           To = as.character(max(d$date)))
-  }) |>
-  list_rbind() |>
-  arrange(desc(`Trading Days`))
+con <- hd_connect()
+on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+ds <- hd_datasets()[["equity_daily"]]
+sql <- paste0("SELECT ticker, COUNT(*) as days, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY ticker ORDER BY days DESC")
+DBI::dbGetQuery(con, sql) |> as_tibble() |>
+  rename(Ticker = ticker, Days = days, From = first_dt, To = last_dt)
 '),
 
     # ── Crypto: Major Coins ───────────────────────────────────────
-    vig_pair("vig_cr_major", '
+    vig_pair("vig_cr_major", paste0(HD_THEME_CODE, '
+
 major <- c("BTC", "ETH", "SOL", "BNB") |>
   map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
   list_rbind()
 
 ggplot(major, aes(date, close, colour = ticker)) +
-  geom_line(linewidth = 0.4) +
+  geom_line(linewidth = 0.5) +
   scale_y_log10(labels = dollar) +
+  scale_colour_manual(values = c("#00BFFF", "#FF6347", "#32CD32", "#FFD700")) +
   labs(x = NULL, y = "Close USD (log scale)", colour = NULL,
-       title = "BTC, ETH, SOL, BNB daily close prices")
-'),
+       title = "BTC, ETH, SOL, BNB daily close") +
+  hd_theme()
+')),
 
     # ── Crypto: Stablecoin Peg ────────────────────────────────────
-    vig_pair("vig_cr_stable", '
+    vig_pair("vig_cr_stable", paste0(HD_THEME_CODE, '
+
 stable <- c("USDC", "USDT") |>
   map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
   list_rbind()
 
 ggplot(stable, aes(date, close, colour = ticker)) +
-  geom_line(linewidth = 0.4) +
+  geom_line(linewidth = 0.5) +
   geom_hline(yintercept = 1.0, linetype = "dashed", colour = "grey50") +
   scale_y_continuous(limits = c(0.97, 1.03)) +
+  scale_colour_manual(values = c("#00BFFF", "#FF6347")) +
   labs(x = NULL, y = "USD price", colour = NULL,
-       title = "Stablecoin peg: USDC and USDT deviation from $1.00")
-'),
+       title = "Stablecoin peg: USDC and USDT vs $1.00") +
+  hd_theme()
+')),
 
     # ── Crypto: Correlation ───────────────────────────────────────
-    vig_pair("vig_cr_corr", '
+    vig_pair("vig_cr_corr", paste0(HD_THEME_CODE, '
+
 wide <- c("BTC", "ETH", "SOL", "BNB", "ADA", "XRP") |>
   map(\\(t) hd_ohlcv(t, from = "2023-01-01")) |>
   list_rbind() |>
@@ -180,60 +195,64 @@ cor_long <- cor_mat |> as.data.frame() |>
   pivot_longer(-row, names_to = "col", values_to = "cor")
 
 ggplot(cor_long, aes(row, col, fill = cor)) +
-  geom_tile() +
-  geom_text(aes(label = round(cor, 2)), colour = "grey20", size = 3.5) +
-  scale_fill_gradient2(low = "#3498db", mid = "grey80", high = "#e74c3c",
+  geom_tile(colour = "grey30") +
+  geom_text(aes(label = round(cor, 2)), colour = "white", size = 4) +
+  scale_fill_gradient2(low = "#00BFFF", mid = "grey30", high = "#FF6347",
                        midpoint = 0.5, limits = c(0, 1)) +
   labs(x = NULL, y = NULL, fill = "Corr",
-       title = "Crypto log-return correlation matrix (2023+)") +
+       title = "Crypto log-return correlation (2023+)") +
+  hd_theme() +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
-'),
+')),
 
-    # ── Crypto: Coverage ──────────────────────────────────────────
+    # ── Crypto: Coverage (single query) ───────────────────────────
     vig_pair("vig_cr_coverage", '
-hd_tickers("crypto_daily") |>
-  map(\\(t) {
-    d <- hd_ohlcv(t, from = "2010-01-01")
-    tibble(Token = t, Days = nrow(d),
-           From = as.character(min(d$date)),
-           To = as.character(max(d$date)))
-  }) |>
-  list_rbind() |>
-  arrange(desc(Days))
+con <- hd_connect()
+on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+ds <- hd_datasets()[["crypto_daily"]]
+sql <- paste0("SELECT ticker, COUNT(*) as days, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY ticker ORDER BY days DESC")
+DBI::dbGetQuery(con, sql) |> as_tibble() |>
+  rename(Token = ticker, Days = days, From = first_dt, To = last_dt)
 '),
 
     # ── Macro: Interest Rates ─────────────────────────────────────
-    vig_pair("vig_ma_rates", '
+    vig_pair("vig_ma_rates", paste0(HD_THEME_CODE, '
+
 rates <- c("DGS2", "DGS10", "DGS30", "DFF") |>
   map(\\(s) hd_macro(s, from = "2020-01-01")) |>
   list_rbind() |>
   filter(!is.na(value))
 
 ggplot(rates, aes(date, value, colour = series_id)) +
-  geom_line(linewidth = 0.4) +
+  geom_line(linewidth = 0.5) +
+  scale_colour_manual(values = c("#00BFFF", "#FF6347", "#32CD32", "#FFD700")) +
   labs(x = NULL, y = "Yield (%)", colour = NULL,
-       title = "US Treasury yields and Fed Funds rate (2020+)")
-'),
+       title = "US Treasury yields + Fed Funds rate (2020+)") +
+  hd_theme()
+')),
 
     # ── Macro: Yield Curve ────────────────────────────────────────
-    vig_pair("vig_ma_yc", '
+    vig_pair("vig_ma_yc", paste0(HD_THEME_CODE, '
+
 yc <- hd_macro("T10Y2Y", from = "2018-01-01") |> filter(!is.na(value))
 inv <- yc |> filter(value < 0)
 inv_start <- min(inv$date)
 inv_end <- max(inv$date)
 
 ggplot(yc, aes(date, value)) +
-  geom_line(linewidth = 0.4, colour = "#e74c3c") +
+  geom_line(linewidth = 0.5, colour = "#FF6347") +
   geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
   annotate("rect", xmin = inv_start, xmax = inv_end,
-           ymin = -Inf, ymax = 0, fill = "#e74c3c", alpha = 0.15) +
+           ymin = -Inf, ymax = 0, fill = "#FF6347", alpha = 0.2) +
   labs(x = NULL, y = "10Y - 2Y spread (%)",
-       title = "Yield curve: 10Y-2Y Treasury spread with inversion shading")
-'),
+       title = "Yield curve: 10Y-2Y spread with inversion") +
+  hd_theme()
+')),
 
     # ── Macro: Credit Spreads ─────────────────────────────────────
-    vig_pair("vig_ma_spreads", '
-spreads <- list("BAMLH0A0HYM2", "BAMLC0A4CBBB") |>
+    vig_pair("vig_ma_spreads", paste0(HD_THEME_CODE, '
+
+spreads <- c("BAMLH0A0HYM2", "BAMLC0A4CBBB") |>
   map(\\(s) hd_macro(s, from = "2020-01-01")) |>
   list_rbind() |>
   filter(!is.na(value)) |>
@@ -241,39 +260,42 @@ spreads <- list("BAMLH0A0HYM2", "BAMLC0A4CBBB") |>
     BAMLH0A0HYM2 = "HY Spread", BAMLC0A4CBBB = "BBB Spread"))
 
 ggplot(spreads, aes(date, value, colour = series_id)) +
-  geom_line(linewidth = 0.4) +
-  labs(x = NULL, y = "OAS (percentage points)", colour = NULL,
-       title = "ICE BofA credit spreads: High Yield vs BBB (2020+)")
-'),
+  geom_line(linewidth = 0.5) +
+  scale_colour_manual(values = c("#FF6347", "#00BFFF")) +
+  labs(x = NULL, y = "OAS (pp)", colour = NULL,
+       title = "ICE BofA credit spreads: HY vs BBB (2020+)") +
+  hd_theme()
+')),
 
-    # ── Macro: Coverage ───────────────────────────────────────────
+    # ── Macro: Coverage (single query) ────────────────────────────
     vig_pair("vig_ma_coverage", '
-hd_macro_series() |>
-  map(\\(s) {
-    d <- hd_macro(s)
-    tibble(Series = s, Obs = nrow(d),
-           From = as.character(min(d$date)),
-           To = as.character(max(d$date)))
-  }) |>
-  list_rbind() |>
-  arrange(Series)
+con <- hd_connect()
+on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+ds <- hd_datasets()[["macro_daily"]]
+sql <- paste0("SELECT series_id, COUNT(*) as n, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY series_id ORDER BY series_id")
+DBI::dbGetQuery(con, sql) |> as_tibble() |>
+  rename(Series = series_id, Obs = n, From = first_dt, To = last_dt)
 '),
 
     # ── Factors: FF3 Daily ────────────────────────────────────────
-    vig_pair("vig_fa_ff3", '
+    vig_pair("vig_fa_ff3", paste0(HD_THEME_CODE, '
+
 ff3 <- hd_factors("FF3", "daily", from = "2020-01-01")
 
 ggplot(ff3, aes(date, value, colour = factor_name)) +
-  geom_line(alpha = 0.6, linewidth = 0.3) +
+  geom_line(alpha = 0.7, linewidth = 0.4) +
   geom_hline(yintercept = 0, colour = "grey50", linewidth = 0.2) +
   facet_wrap(~factor_name, ncol = 1, scales = "free_y") +
+  scale_colour_manual(values = c("#00BFFF", "#FF6347", "#32CD32", "#FFD700")) +
   labs(x = NULL, y = "Return (%)",
-       title = "Fama-French 3 factors: daily returns (2020+)") +
+       title = "Fama-French 3 factors: daily (2020+)") +
+  hd_theme() +
   theme(legend.position = "none")
-'),
+')),
 
     # ── Factors: FF5 Cumulative ───────────────────────────────────
-    vig_pair("vig_fa_ff5", '
+    vig_pair("vig_fa_ff5", paste0(HD_THEME_CODE, '
+
 ff5 <- hd_factors("FF5", "daily", from = "2000-01-01") |>
   filter(factor_name != "RF") |>
   group_by(factor_name) |>
@@ -285,36 +307,37 @@ ggplot(ff5, aes(date, cum_ret, colour = factor_name)) +
   geom_line(linewidth = 0.5) +
   geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
   scale_y_continuous(labels = percent) +
+  scale_colour_manual(values = c("#FF6347", "#00BFFF", "#32CD32", "#FFD700", "#FF69B4")) +
   labs(x = NULL, y = "Cumulative return", colour = NULL,
-       title = "FF5 cumulative factor returns (2000-2026)")
-'),
+       title = "FF5 cumulative factor returns (2000-2026)") +
+  hd_theme()
+')),
 
     # ── Factors: Momentum ─────────────────────────────────────────
-    vig_pair("vig_fa_mom", '
+    vig_pair("vig_fa_mom", paste0(HD_THEME_CODE, '
+
 mom <- hd_factors("Mom", "daily", from = "2000-01-01") |>
   arrange(date) |>
   mutate(cum_ret = cumprod(1 + value / 100) - 1)
 
 ggplot(mom, aes(date, cum_ret)) +
-  geom_line(linewidth = 0.5, colour = "#2ecc71") +
+  geom_line(linewidth = 0.5, colour = "#00BFFF") +
   geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
   scale_y_continuous(labels = percent) +
   labs(x = NULL, y = "Cumulative return",
-       title = "Momentum factor cumulative return (2000-2026)")
-'),
+       title = "Momentum factor cumulative return (2000-2026)") +
+  hd_theme()
+')),
 
-    # ── Factors: Coverage ─────────────────────────────────────────
+    # ── Factors: Coverage (single query) ─────────────────────────
     vig_pair("vig_fa_coverage", '
 con <- hd_connect()
 on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 ds <- hd_datasets()[["factors"]]
-DBI::dbGetQuery(con, sprintf(
-  "SELECT dataset AS Dataset, frequency AS Freq, factor_name AS Factor,
-          COUNT(*) AS Obs, MIN(date) AS \'From\', MAX(date) AS \'To\'
-   FROM read_parquet(\'%s\')
-   GROUP BY dataset, frequency, factor_name
-   ORDER BY dataset, frequency, factor_name", ds$url
-)) |> dplyr::as_tibble()
+sql <- paste0("SELECT dataset, frequency, factor_name, COUNT(*) as n, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY dataset, frequency, factor_name ORDER BY dataset, frequency, factor_name")
+DBI::dbGetQuery(con, sql) |> as_tibble() |>
+  rename(Dataset = dataset, Freq = frequency, Factor = factor_name,
+         Obs = n, From = first_dt, To = last_dt)
 ')
   )
 }

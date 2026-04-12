@@ -9,12 +9,16 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
+          /* Tab panes scroll vertically */
+          .tab-pane { overflow-y: auto !important; max-height: 85vh; }
+          .tab-pane .cell-output-display { overflow: visible !important; }
+          /* Click-to-zoom: fill entire screen */
           .fullscreen-overlay {
             position: fixed !important;
             top: 0 !important; left: 0 !important;
             width: 100vw !important; height: 100vh !important;
             z-index: 9999 !important;
-            background: rgba(0,0,0,0.95) !important;
+            background: black !important;
             padding: 10px !important;
             overflow: auto !important;
             cursor: zoom-out !important;
@@ -24,6 +28,7 @@ format:
             object-fit: contain !important;
           }
           .cell-output-display:has(img) { cursor: zoom-in; }
+          /* Captions below plots */
           .fig-caption {
             font-size: 0.85em; color: #888; margin-top: 0.4em;
             text-align: left; line-height: 1.5;
@@ -62,82 +67,6 @@ utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
 source(utils_path)
 ```
 
-# Installation
-
-## Row
-
-### {.tabset}
-
-#### R (pak)
-
-```r
-# Install the historicaldata package from GitHub
-pak::pak("JohnGavin/historical", subdir = "packages/historicaldata")
-
-# Load all required libraries
-library(historicaldata)
-library(dplyr)
-library(ggplot2)
-library(scales)
-library(purrr)
-
-# Set plot theme (gray70 background, used by all examples)
-theme_set(theme_minimal(base_size = 14) + theme(
-  plot.background = element_rect(fill = "gray70", colour = NA),
-  panel.background = element_rect(fill = "gray70", colour = NA),
-  text = element_text(colour = "grey20"),
-  axis.text = element_text(colour = "grey30"),
-  panel.grid.minor = element_blank(),
-  panel.grid.major = element_line(colour = "grey60"),
-  legend.position = "bottom"
-))
-```
-
-#### Nix
-
-```bash
-# Enter the reproducible Nix shell (all R + Python packages pre-installed)
-nix develop github:JohnGavin/historical
-```
-
-Then in R:
-
-```r
-# Load the package from source (all dependencies are in the Nix shell)
-pkgload::load_all("packages/historicaldata")
-library(dplyr)
-library(ggplot2)
-library(scales)
-library(purrr)
-
-# Set plot theme (same as R (pak) tab)
-theme_set(theme_minimal(base_size = 14) + theme(
-  plot.background = element_rect(fill = "gray70", colour = NA),
-  panel.background = element_rect(fill = "gray70", colour = NA),
-  text = element_text(colour = "grey20"),
-  axis.text = element_text(colour = "grey30"),
-  panel.grid.minor = element_blank(),
-  panel.grid.major = element_line(colour = "grey60"),
-  legend.position = "bottom"
-))
-```
-
-#### T language
-
-```bash
-# Clone, enter Nix shell, run the full data pipeline
-git clone https://github.com/JohnGavin/historical.git && cd historical
-nix develop
-python scripts/fetch_equity.py     # fetch 51 equity tickers
-Rscript scripts/fetch_crypto.R     # fetch 14 crypto tokens
-Rscript scripts/fetch_macro.R      # fetch 19 FRED series
-Rscript scripts/fetch_factors.R    # fetch Fama-French factors
-t run src/pipeline.t               # run the T pipeline
-```
-
-Then in R (same as Nix tab above).
-
-
 # Equity
 
 ## Row
@@ -146,7 +75,7 @@ Then in R (same as Nix tab above).
 
 #### AAPL Moving Averages
 
-AAPL daily close with 50d and 200d simple moving averages. The [golden cross](https://www.investopedia.com/terms/g/goldencross.asp) (50d crosses above 200d) and death cross (50d crosses below) are classic trend-following signals.
+AAPL daily close with 50d and 200d simple moving averages. The [golden cross](https://www.investopedia.com/terms/g/goldencross.asp) (50d above 200d) and death cross (50d below) are trend-following signals.
 
 ```{r}
 #| results: asis
@@ -158,12 +87,12 @@ safe_tar_read("vig_eq_aapl")
 ```
 
 ::: {.fig-caption}
-**AAPL close + 50d/200d SMA.** Y: USD. Grey = close, blue dashed = 50d, red dashed = 200d. SMA = simple moving average. Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab. [Golden cross](https://www.investopedia.com/terms/g/goldencross.asp). Click to zoom.
+**AAPL close + 50d/200d SMA.** Y: USD. White = close, blue = 50d SMA, red = 200d SMA. Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab. [Golden cross](https://www.investopedia.com/terms/g/goldencross.asp). Click to zoom.
 :::
 
 #### FAANG Returns
 
-FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Cumulative returns rebased to 0% on 2024-01-01.
+FAANG = Meta, Apple, Amazon, Netflix, Alphabet. Cumulative returns from 2024-01-01.
 
 ```{r}
 #| results: asis
@@ -175,12 +104,12 @@ safe_tar_read("vig_eq_faang")
 ```
 
 ::: {.fig-caption}
-**FAANG cumulative returns from 2024-01-01.** Y: cumulative return (%). Colours: ticker. Split-adjusted close. Source: `hd_ohlcv()`. See AAPL tab for single-stock detail.
+**FAANG cumulative returns from 2024-01-01.** Y: cum return (%). Colours: ticker. Split-adjusted close. Source: `hd_ohlcv()`. See AAPL tab.
 :::
 
 #### Realised Volatility
 
-21-day rolling annualised vol (SD of log returns x sqrt(252)). SPY = S&P 500 ETF benchmark.
+21-day rolling annualised vol. SPY = S&P 500 benchmark.
 
 ```{r}
 #| results: asis
@@ -192,7 +121,7 @@ safe_tar_read("vig_eq_vol")
 ```
 
 ::: {.fig-caption}
-**21d realised volatility (annualised).** Y: vol (%). Colours: ticker. Vol = SD(log ret) x sqrt(252). SPY = benchmark. Source: `hd_ohlcv()`. See FAANG tab. [Realised vol](https://www.investopedia.com/terms/r/realizedvolatility.asp).
+**21d realised volatility (annualised).** Y: vol (%). Vol = SD(log ret) x sqrt(252). Source: `hd_ohlcv()`. [Realised vol](https://www.investopedia.com/terms/r/realizedvolatility.asp).
 :::
 
 #### Coverage
@@ -207,7 +136,7 @@ df <- safe_tar_read("vig_eq_coverage")
 if (!is.null(df)) {
   top <- df[1, ]
   hd_dt(df, paste0(
-    nrow(df), " tickers, daily OHLCV. Longest: ", top$Ticker,
+    nrow(df), " tickers. Longest: ", top$Ticker,
     " (", top$`Trading Days`, " days). Source: hd_ohlcv()."
   ))
 }
@@ -234,12 +163,12 @@ safe_tar_read("vig_cr_major")
 ```
 
 ::: {.fig-caption}
-**BTC, ETH, SOL, BNB log-scale close.** Y: USD (log10). Equal vertical distance = equal % change. Source: `hd_ohlcv()`. See Stablecoins tab.
+**BTC, ETH, SOL, BNB log-scale close.** Y: USD (log10). Source: `hd_ohlcv()`. See Stablecoins tab.
 :::
 
 #### Stablecoin Peg
 
-USDC/USDT vs $1.00 peg. Y-axis zoomed to $0.97–$1.03. [Depeg](https://www.investopedia.com/terms/d/depeg.asp) = liquidity crisis signal.
+USDC/USDT vs $1.00 peg. [Depeg](https://www.investopedia.com/terms/d/depeg.asp) = liquidity crisis.
 
 ```{r}
 #| results: asis
@@ -251,12 +180,12 @@ safe_tar_read("vig_cr_stable")
 ```
 
 ::: {.fig-caption}
-**USDC/USDT vs $1.00 peg.** Y: USD, zoomed $0.97–$1.03. Dashed = peg. Source: `hd_ohlcv()`. See Major Coins tab.
+**USDC/USDT vs $1.00 peg.** Y: USD, zoomed $0.97–$1.03. Dashed = peg. Source: `hd_ohlcv()`.
 :::
 
 #### Correlation
 
-Pearson correlation of daily log returns, 6 tokens, 2023+. >0.7 = limited diversification.
+Pearson correlation of daily log returns, 6 tokens, 2023+.
 
 ```{r}
 #| results: asis
@@ -268,7 +197,7 @@ safe_tar_read("vig_cr_corr")
 ```
 
 ::: {.fig-caption}
-**Pairwise log-return correlation, 6 tokens, 2023+.** Fill: correlation 0–1. Source: `hd_ohlcv()`.
+**Log-return correlation, 6 tokens, 2023+.** Fill: 0–1. >0.7 = limited diversification. Source: `hd_ohlcv()`.
 :::
 
 #### Coverage
@@ -281,11 +210,7 @@ show_code("vig_cr_coverage")
 ```{r}
 df <- safe_tar_read("vig_cr_coverage")
 if (!is.null(df)) {
-  top <- df[1, ]
-  hd_dt(df, paste0(
-    nrow(df), " tokens. Longest: ", top$Token,
-    " (", top$Days, " days). Source: hd_ohlcv()."
-  ))
+  hd_dt(df, paste0(nrow(df), " tokens. Source: hd_ohlcv()."))
 }
 ```
 
@@ -298,7 +223,7 @@ if (!is.null(df)) {
 
 #### Interest Rates
 
-Treasury yields (2Y, 10Y, 30Y) + Fed Funds rate (DFF) since 2020.
+Treasury yields (2Y, 10Y, 30Y) + Fed Funds rate since 2020.
 
 ```{r}
 #| results: asis
@@ -315,7 +240,7 @@ safe_tar_read("vig_ma_rates")
 
 #### Yield Curve
 
-10Y–2Y spread. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp), precedes recessions by 6–18 months.
+10Y–2Y spread. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp), precedes recessions.
 
 ```{r}
 #| results: asis
@@ -327,12 +252,12 @@ safe_tar_read("vig_ma_yc")
 ```
 
 ::: {.fig-caption}
-**10Y–2Y spread with inversion shading.** Y: spread (pp). Red = inverted. Source: FRED T10Y2Y via `hd_macro()`. See Rates tab.
+**10Y–2Y spread with inversion shading.** Y: spread (pp). Red = inverted. Source: FRED T10Y2Y via `hd_macro()`.
 :::
 
 #### Credit Spreads
 
-ICE BofA OAS: HY (junk) + BBB (investment grade). Wider = more default risk.
+ICE BofA OAS: HY (junk) + BBB (investment grade).
 
 ```{r}
 #| results: asis
@@ -344,7 +269,7 @@ safe_tar_read("vig_ma_spreads")
 ```
 
 ::: {.fig-caption}
-**ICE BofA OAS over Treasuries.** Y: spread (pp). HY = High Yield. BBB = investment grade. Source: FRED via `hd_macro()`.
+**ICE BofA OAS over Treasuries.** Y: spread (pp). Wider = more default risk. Source: FRED via `hd_macro()`.
 :::
 
 #### All Series
@@ -357,11 +282,7 @@ show_code("vig_ma_coverage")
 ```{r}
 df <- safe_tar_read("vig_ma_coverage")
 if (!is.null(df)) {
-  top <- df |> dplyr::slice_max(Obs, n = 1)
-  hd_dt(df, paste0(
-    nrow(df), " series. Most obs: ", top$Series,
-    " (", format(top$Obs, big.mark = ","), "). Source: hd_macro()."
-  ))
+  hd_dt(df, paste0(nrow(df), " FRED series. Source: hd_macro()."))
 }
 ```
 
@@ -387,7 +308,7 @@ safe_tar_read("vig_fa_ff3")
 ```
 
 ::: {.fig-caption}
-**FF3 daily returns.** Y: return (%). Faceted. Mkt-RF = market excess. SMB = size. HML = value. RF = T-bill. Source: Ken French via `hd_factors()`. See FF5 tab.
+**FF3 daily returns.** Y: return (%). Mkt-RF = market excess. SMB = size. HML = value. RF = T-bill. Source: Ken French via `hd_factors()`.
 :::
 
 #### FF5 Cumulative
@@ -404,7 +325,7 @@ safe_tar_read("vig_fa_ff5")
 ```
 
 ::: {.fig-caption}
-**FF5 cumulative returns (2000–2026).** Y: cum return (%). RMW = Robust Minus Weak. CMA = Conservative Minus Aggressive. Mkt-RF dominates. HML weak post-2010. Source: Ken French via `hd_factors()`.
+**FF5 cumulative returns (2000–2026).** Y: cum return (%). Mkt-RF dominates. HML weak post-2010. Source: Ken French via `hd_factors()`.
 :::
 
 #### Momentum
@@ -421,7 +342,7 @@ safe_tar_read("vig_fa_mom")
 ```
 
 ::: {.fig-caption}
-**Momentum (WML) cumulative return (2000–2026).** WML = long winners, short losers. 2009 = reversal crash. Source: Ken French via `hd_factors()`.
+**Momentum (WML) cumulative return (2000–2026).** 2009 = reversal crash. Source: Ken French via `hd_factors()`.
 :::
 
 #### Summary
@@ -436,8 +357,58 @@ df <- safe_tar_read("vig_fa_coverage")
 if (!is.null(df)) {
   hd_dt(df, paste0(
     dplyr::n_distinct(df$Factor), " factors, ",
-    dplyr::n_distinct(df$Dataset), " datasets. Total: ",
     format(sum(df$Obs), big.mark = ","), " obs. Source: hd_factors()."
   ))
 }
 ```
+
+
+# Installation
+
+## Row
+
+### {.tabset}
+
+#### Setup (run first)
+
+After installing via any method below, run this once:
+
+```{r}
+#| results: asis
+show_code("vig_setup")
+```
+
+This defines `hd_theme()` used by all plots. All subsequent code assumes these libraries are loaded.
+
+#### R (pak)
+
+```r
+# Install from GitHub
+pak::pak("JohnGavin/historical", subdir = "packages/historicaldata")
+
+# Then run the Setup tab code above
+```
+
+#### Nix
+
+```bash
+# Enter reproducible Nix shell (all R + Python packages included)
+nix develop github:JohnGavin/historical
+```
+
+Then start R and run the Setup tab code above. All dependencies (dplyr, ggplot2, scales, purrr, DT, arrow, duckdb) are pre-installed in the Nix shell.
+
+#### T language
+
+```bash
+# Clone, enter Nix shell, fetch data, run pipeline
+git clone https://github.com/JohnGavin/historical.git && cd historical
+nix develop
+python scripts/fetch_equity.py     # 51 equity tickers
+Rscript scripts/fetch_crypto.R     # 14 crypto tokens
+Rscript scripts/fetch_macro.R      # 19 FRED series
+Rscript scripts/fetch_factors.R    # Fama-French factors
+t run src/pipeline.t               # T pipeline
+```
+
+Then start R and run the Setup tab code above.
