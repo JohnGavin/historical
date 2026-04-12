@@ -1,16 +1,14 @@
 ---
-title: "historicaldata: Usage Examples"
+title: "historicaldata"
 format:
-  html:
-    theme: darkly
+  dashboard:
+    orientation: rows
+    theme: cosmo
     embed-resources: true
-    toc: false
     include-in-header:
       - text: |
           <style>
-          /* Bigger base font */
           body { font-size: 1.15em; }
-          /* Click-to-zoom: fill entire screen */
           .fullscreen-overlay {
             position: fixed !important;
             top: 0 !important; left: 0 !important;
@@ -26,11 +24,12 @@ format:
             object-fit: contain !important;
           }
           .cell-output-display:has(img) { cursor: zoom-in; }
-          /* Captions */
           .fig-caption {
-            font-size: 0.85em; color: #aaa; margin-top: 0.4em;
+            font-size: 0.85em; color: #888; margin-top: 0.4em;
             text-align: left; line-height: 1.5;
           }
+          details { margin-bottom: 0.5em; }
+          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
           </style>
           <script>
           document.addEventListener('click', function(e) {
@@ -65,49 +64,89 @@ source(utils_path)
 
 # Installation
 
-::: {.panel-tabset}
+## Row
 
-## R (pak)
+### {.tabset}
+
+#### R (pak)
 
 ```r
+# Install the historicaldata package from GitHub
 pak::pak("JohnGavin/historical", subdir = "packages/historicaldata")
+
+# Load all required libraries
 library(historicaldata)
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(purrr)
+
+# Set plot theme (gray70 background, used by all examples)
+theme_set(theme_minimal(base_size = 14) + theme(
+  plot.background = element_rect(fill = "gray70", colour = NA),
+  panel.background = element_rect(fill = "gray70", colour = NA),
+  text = element_text(colour = "grey20"),
+  axis.text = element_text(colour = "grey30"),
+  panel.grid.minor = element_blank(),
+  panel.grid.major = element_line(colour = "grey60"),
+  legend.position = "bottom"
+))
 ```
 
-## Nix
+#### Nix
 
 ```bash
+# Enter the reproducible Nix shell (all R + Python packages pre-installed)
 nix develop github:JohnGavin/historical
-# All R + Python packages available in the Nix shell
-Rscript -e 'pkgload::load_all("packages/historicaldata")'
 ```
 
-## T language
+Then in R:
+
+```r
+# Load the package from source (all dependencies are in the Nix shell)
+pkgload::load_all("packages/historicaldata")
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(purrr)
+
+# Set plot theme (same as R (pak) tab)
+theme_set(theme_minimal(base_size = 14) + theme(
+  plot.background = element_rect(fill = "gray70", colour = NA),
+  panel.background = element_rect(fill = "gray70", colour = NA),
+  text = element_text(colour = "grey20"),
+  axis.text = element_text(colour = "grey30"),
+  panel.grid.minor = element_blank(),
+  panel.grid.major = element_line(colour = "grey60"),
+  legend.position = "bottom"
+))
+```
+
+#### T language
 
 ```bash
+# Clone, enter Nix shell, run the full data pipeline
 git clone https://github.com/JohnGavin/historical.git && cd historical
-nix develop              # enter Nix shell with T + R + Python
-t run src/pipeline.t     # run the full data pipeline
+nix develop
+python scripts/fetch_equity.py     # fetch 51 equity tickers
+Rscript scripts/fetch_crypto.R     # fetch 14 crypto tokens
+Rscript scripts/fetch_macro.R      # fetch 19 FRED series
+Rscript scripts/fetch_factors.R    # fetch Fama-French factors
+t run src/pipeline.t               # run the T pipeline
 ```
 
-:::
+Then in R (same as Nix tab above).
 
-# Setup
-
-Run this once at the start of your session. All subsequent code assumes these libraries and theme are loaded.
-
-```{r}
-#| results: asis
-show_code("vig_setup")
-```
 
 # Equity
 
-::: {.panel-tabset}
+## Row
 
-## AAPL Moving Averages
+### {.tabset}
 
-AAPL daily close with 50-day and 200-day simple moving averages. The [golden cross](https://www.investopedia.com/terms/g/goldencross.asp) (50d crosses above 200d) and death cross (50d crosses below) are classic trend-following signals.
+#### AAPL Moving Averages
+
+AAPL daily close with 50d and 200d simple moving averages. The [golden cross](https://www.investopedia.com/terms/g/goldencross.asp) (50d crosses above 200d) and death cross (50d crosses below) are classic trend-following signals.
 
 ```{r}
 #| results: asis
@@ -119,12 +158,12 @@ safe_tar_read("vig_eq_aapl")
 ```
 
 ::: {.fig-caption}
-**AAPL close with 50d and 200d simple moving averages (SMA).** Y-axis: USD. Grey = close, blue dashed = 50d SMA, red dashed = 200d SMA. MA = simple moving average (trailing, equal-weighted). Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab for risk-adjusted view. Click plot to zoom fullscreen.
+**AAPL close + 50d/200d SMA.** Y: USD. Grey = close, blue dashed = 50d, red dashed = 200d. SMA = simple moving average. Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab. [Golden cross](https://www.investopedia.com/terms/g/goldencross.asp). Click to zoom.
 :::
 
-## FAANG Returns
+#### FAANG Returns
 
-FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Cumulative returns rebased to 0% on 2024-01-01 show relative performance divergence.
+FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Cumulative returns rebased to 0% on 2024-01-01.
 
 ```{r}
 #| results: asis
@@ -136,12 +175,12 @@ safe_tar_read("vig_eq_faang")
 ```
 
 ::: {.fig-caption}
-**FAANG cumulative returns from 2024-01-01 (0% baseline).** Y-axis: cumulative return (%). Colours: ticker. FAANG = Meta, Apple, Amazon, Netflix, Alphabet. Split-adjusted close. Source: `hd_ohlcv()`. See AAPL MA tab for single-stock detail.
+**FAANG cumulative returns from 2024-01-01.** Y: cumulative return (%). Colours: ticker. Split-adjusted close. Source: `hd_ohlcv()`. See AAPL tab for single-stock detail.
 :::
 
-## Realised Volatility
+#### Realised Volatility
 
-21-day rolling annualised volatility (SD of log returns x sqrt(252)). Higher values = greater price uncertainty. SPY (S&P 500 ETF) is the benchmark.
+21-day rolling annualised vol (SD of log returns x sqrt(252)). SPY = S&P 500 ETF benchmark.
 
 ```{r}
 #| results: asis
@@ -153,12 +192,10 @@ safe_tar_read("vig_eq_vol")
 ```
 
 ::: {.fig-caption}
-**21-day rolling realised volatility (annualised).** Y-axis: vol (%). Colours: ticker. Vol = SD(log returns) x sqrt(252). SPY = S&P 500 ETF. Source: `hd_ohlcv()`. See FAANG tab for returns. [Realised volatility](https://www.investopedia.com/terms/r/realizedvolatility.asp).
+**21d realised volatility (annualised).** Y: vol (%). Colours: ticker. Vol = SD(log ret) x sqrt(252). SPY = benchmark. Source: `hd_ohlcv()`. See FAANG tab. [Realised vol](https://www.investopedia.com/terms/r/realizedvolatility.asp).
 :::
 
-## Coverage
-
-Click column headers to sort. Type in filter boxes to search.
+#### Coverage
 
 ```{r}
 #| results: asis
@@ -170,22 +207,22 @@ df <- safe_tar_read("vig_eq_coverage")
 if (!is.null(df)) {
   top <- df[1, ]
   hd_dt(df, paste0(
-    "Equity: ", nrow(df), " tickers, daily OHLCV. ",
-    "Longest: ", top$Ticker, " (", top$`Trading Days`, " days). ",
-    "Source: Yahoo Finance via hd_ohlcv(). See AAPL MA tab."
+    nrow(df), " tickers, daily OHLCV. Longest: ", top$Ticker,
+    " (", top$`Trading Days`, " days). Source: hd_ohlcv()."
   ))
 }
 ```
 
-:::
 
 # Crypto
 
-::: {.panel-tabset}
+## Row
 
-## Major Coins
+### {.tabset}
 
-BTC, ETH, SOL, BNB daily close on log scale since 2022. Log scale: equal vertical distances = equal percentage changes.
+#### Major Coins
+
+BTC, ETH, SOL, BNB daily close on log scale since 2022.
 
 ```{r}
 #| results: asis
@@ -197,12 +234,12 @@ safe_tar_read("vig_cr_major")
 ```
 
 ::: {.fig-caption}
-**BTC, ETH, SOL, BNB daily close on log scale.** Y-axis: USD (log10). Colours: token. Source: Yahoo Finance via `hd_ohlcv()`. See Stablecoins tab for peg analysis.
+**BTC, ETH, SOL, BNB log-scale close.** Y: USD (log10). Equal vertical distance = equal % change. Source: `hd_ohlcv()`. See Stablecoins tab.
 :::
 
-## Stablecoin Peg
+#### Stablecoin Peg
 
-USDC and USDT should trade at $1.00. Deviations = [depeg](https://www.investopedia.com/terms/d/depeg.asp) events. Y-axis zoomed to $0.97–$1.03.
+USDC/USDT vs $1.00 peg. Y-axis zoomed to $0.97–$1.03. [Depeg](https://www.investopedia.com/terms/d/depeg.asp) = liquidity crisis signal.
 
 ```{r}
 #| results: asis
@@ -214,12 +251,12 @@ safe_tar_read("vig_cr_stable")
 ```
 
 ::: {.fig-caption}
-**USDC and USDT daily close vs $1.00 peg.** Y-axis: USD, zoomed $0.97–$1.03. Dashed = $1.00. Source: `hd_ohlcv()`. See Major Coins tab.
+**USDC/USDT vs $1.00 peg.** Y: USD, zoomed $0.97–$1.03. Dashed = peg. Source: `hd_ohlcv()`. See Major Coins tab.
 :::
 
-## Correlation
+#### Correlation
 
-Pairwise Pearson correlation of daily log returns for 6 crypto assets since 2023. Correlation >0.7 = limited diversification.
+Pearson correlation of daily log returns, 6 tokens, 2023+. >0.7 = limited diversification.
 
 ```{r}
 #| results: asis
@@ -231,10 +268,10 @@ safe_tar_read("vig_cr_corr")
 ```
 
 ::: {.fig-caption}
-**Pairwise Pearson correlation of daily log returns, 6 tokens, 2023+.** Fill: correlation 0–1. High (>0.7) = limited diversification. Source: `hd_ohlcv()`. See Major Coins tab.
+**Pairwise log-return correlation, 6 tokens, 2023+.** Fill: correlation 0–1. Source: `hd_ohlcv()`.
 :::
 
-## Coverage
+#### Coverage
 
 ```{r}
 #| results: asis
@@ -246,21 +283,22 @@ df <- safe_tar_read("vig_cr_coverage")
 if (!is.null(df)) {
   top <- df[1, ]
   hd_dt(df, paste0(
-    "Crypto: ", nrow(df), " tokens. Longest: ", top$Token,
+    nrow(df), " tokens. Longest: ", top$Token,
     " (", top$Days, " days). Source: hd_ohlcv()."
   ))
 }
 ```
 
-:::
 
 # Macro
 
-::: {.panel-tabset}
+## Row
 
-## Interest Rates
+### {.tabset}
 
-US Treasury yields (2Y, 10Y, 30Y) + Fed Funds rate. DFF = policy rate; Treasury yields = market expectations.
+#### Interest Rates
+
+Treasury yields (2Y, 10Y, 30Y) + Fed Funds rate (DFF) since 2020.
 
 ```{r}
 #| results: asis
@@ -272,12 +310,12 @@ safe_tar_read("vig_ma_rates")
 ```
 
 ::: {.fig-caption}
-**US constant-maturity Treasury yields + Fed Funds rate (DFF).** Y-axis: yield (%). DGS = daily constant-maturity. Source: FRED via `hd_macro()`. See Yield Curve tab.
+**Treasury yields + Fed Funds rate.** Y: yield (%). DGS = constant-maturity. DFF = Fed Funds. Source: FRED via `hd_macro()`. See Yield Curve tab.
 :::
 
-## Yield Curve
+#### Yield Curve
 
-10Y–2Y spread: recession indicator. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp), historically precedes recessions by 6–18 months. Red shading = inversion.
+10Y–2Y spread. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp), precedes recessions by 6–18 months.
 
 ```{r}
 #| results: asis
@@ -289,12 +327,12 @@ safe_tar_read("vig_ma_yc")
 ```
 
 ::: {.fig-caption}
-**10Y minus 2Y Treasury spread.** Y-axis: spread (pp). Red shading = inverted. Source: FRED T10Y2Y via `hd_macro()`. See Interest Rates tab.
+**10Y–2Y spread with inversion shading.** Y: spread (pp). Red = inverted. Source: FRED T10Y2Y via `hd_macro()`. See Rates tab.
 :::
 
-## Credit Spreads
+#### Credit Spreads
 
-ICE BofA option-adjusted spreads: HY (High Yield) and BBB (lowest investment grade). Wider = more default risk.
+ICE BofA OAS: HY (junk) + BBB (investment grade). Wider = more default risk.
 
 ```{r}
 #| results: asis
@@ -306,10 +344,10 @@ safe_tar_read("vig_ma_spreads")
 ```
 
 ::: {.fig-caption}
-**ICE BofA OAS over Treasuries.** Y-axis: spread (pp). HY = junk bonds. BBB = investment grade. OAS = option-adjusted spread. Source: FRED via `hd_macro()`.
+**ICE BofA OAS over Treasuries.** Y: spread (pp). HY = High Yield. BBB = investment grade. Source: FRED via `hd_macro()`.
 :::
 
-## All Series
+#### All Series
 
 ```{r}
 #| results: asis
@@ -321,21 +359,22 @@ df <- safe_tar_read("vig_ma_coverage")
 if (!is.null(df)) {
   top <- df |> dplyr::slice_max(Obs, n = 1)
   hd_dt(df, paste0(
-    "FRED: ", nrow(df), " series. Most obs: ", top$Series,
+    nrow(df), " series. Most obs: ", top$Series,
     " (", format(top$Obs, big.mark = ","), "). Source: hd_macro()."
   ))
 }
 ```
 
-:::
 
 # Factors
 
-::: {.panel-tabset}
+## Row
 
-## FF3 Daily
+### {.tabset}
 
-[Fama-French 3-factor model](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp): Mkt-RF (market), SMB (size), HML (value), RF (risk-free). Daily since 2020.
+#### FF3 Daily
+
+[Fama-French 3 factors](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp): Mkt-RF, SMB, HML, RF. Daily since 2020.
 
 ```{r}
 #| results: asis
@@ -348,12 +387,12 @@ safe_tar_read("vig_fa_ff3")
 ```
 
 ::: {.fig-caption}
-**FF3 daily returns (2020+).** Y-axis: return (%). Faceted. Mkt-RF = market excess. SMB = small minus big. HML = high minus low B/M. RF = T-bill. Source: Ken French via `hd_factors()`. See FF5 tab.
+**FF3 daily returns.** Y: return (%). Faceted. Mkt-RF = market excess. SMB = size. HML = value. RF = T-bill. Source: Ken French via `hd_factors()`. See FF5 tab.
 :::
 
-## FF5 Cumulative
+#### FF5 Cumulative
 
-5-factor model cumulative returns since 2000. Adds RMW (profitability) and CMA (investment). Mkt-RF dominates; HML underperformed post-2010.
+5-factor cumulative returns since 2000. RMW = profitability, CMA = investment.
 
 ```{r}
 #| results: asis
@@ -365,12 +404,12 @@ safe_tar_read("vig_fa_ff5")
 ```
 
 ::: {.fig-caption}
-**FF5 cumulative factor returns (2000–2026).** Y-axis: cum return (%). RMW = Robust Minus Weak. CMA = Conservative Minus Aggressive. Source: Ken French via `hd_factors()`. See [Momentum](https://www.investopedia.com/terms/m/momentum.asp) tab.
+**FF5 cumulative returns (2000–2026).** Y: cum return (%). RMW = Robust Minus Weak. CMA = Conservative Minus Aggressive. Mkt-RF dominates. HML weak post-2010. Source: Ken French via `hd_factors()`.
 :::
 
-## Momentum
+#### Momentum
 
-[Momentum](https://www.investopedia.com/terms/m/momentum.asp) (WML = Winners Minus Losers). Catastrophic March 2009 crash, post-2020 recovery. Risk of factor concentration.
+[Momentum](https://www.investopedia.com/terms/m/momentum.asp) (WML). March 2009 crash, post-2020 recovery.
 
 ```{r}
 #| results: asis
@@ -382,10 +421,10 @@ safe_tar_read("vig_fa_mom")
 ```
 
 ::: {.fig-caption}
-**Momentum (WML) cumulative return (2000–2026).** Y-axis: cum return (%). WML = long winners, short losers. Note 2009 reversal. Source: Ken French via `hd_factors()`. See FF5 tab.
+**Momentum (WML) cumulative return (2000–2026).** WML = long winners, short losers. 2009 = reversal crash. Source: Ken French via `hd_factors()`.
 :::
 
-## Summary
+#### Summary
 
 ```{r}
 #| results: asis
@@ -397,11 +436,8 @@ df <- safe_tar_read("vig_fa_coverage")
 if (!is.null(df)) {
   hd_dt(df, paste0(
     dplyr::n_distinct(df$Factor), " factors, ",
-    dplyr::n_distinct(df$Dataset), " datasets. ",
-    "Total: ", format(sum(df$Obs), big.mark = ","), " obs from ", min(df$From),
-    ". Source: Ken French via hd_factors()."
+    dplyr::n_distinct(df$Dataset), " datasets. Total: ",
+    format(sum(df$Obs), big.mark = ","), " obs. Source: hd_factors()."
   ))
 }
 ```
-
-:::
