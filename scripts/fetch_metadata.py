@@ -97,7 +97,14 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
             "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
             # ETF-specific
             "expense_ratio": info.get("annualReportExpenseRatio"),
-            "yield_pct": info.get("yield"),
+            # Yield: use trailingAnnualDividendYield if available, else yield
+            # Flag yields > 20% as "synthetic" (likely options premium, not dividends)
+            "yield_pct": info.get("trailingAnnualDividendYield") or info.get("yield"),
+            "yield_type": (
+                "synthetic" if (info.get("yield") or 0) > 0.20 else
+                "trailing" if info.get("trailingAnnualDividendYield") else
+                "reported" if info.get("yield") else None
+            ),
             "category": info.get("category") or info.get("legalType"),
             "fund_family": info.get("fundFamily"),
             "nav_price": info.get("navPrice"),
@@ -182,6 +189,7 @@ def main():
                 "fifty_two_week_low": info.get("fifty_two_week_low"),
                 "expense_ratio": info.get("expense_ratio"),
                 "yield_pct": info.get("yield_pct"),
+                "yield_type": info.get("yield_type"),
                 "category": info.get("category"),
                 "fund_family": info.get("fund_family"),
                 "nav_price": info.get("nav_price"),
