@@ -9,6 +9,19 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
+          /* Black navbar/header strip */
+          .navbar, .quarto-dashboard-header, .navbar-dark,
+          .bslib-page-dashboard > .navbar {
+            background-color: black !important;
+            color: white !important;
+          }
+          .navbar .navbar-brand, .navbar .nav-link, .navbar-text,
+          .navbar .navbar-nav .nav-link {
+            color: white !important;
+          }
+          .navbar .nav-link.active, .navbar .nav-link:hover {
+            color: #00BFFF !important;
+          }
           .bslib-page-fill, .html-fill-container, .html-fill-item,
           .bslib-card, .card, .tab-pane, .tab-content, .card-body,
           .bslib-grid, .bslib-grid-item {
@@ -417,3 +430,164 @@ ggplot(oos, aes(date)) +
 ::: {.fig-caption}
 **Out-of-sample equity curves (2023+).** This period was NOT used for strategy design or tuning. If OOS performance degrades vs in-sample, it may indicate overfitting. Compare Sharpe ratios: IS vs OOS. One-time evaluation — no re-tuning permitted.
 :::
+
+
+# Replication
+
+## Row
+
+### {.tabset}
+
+#### Article vs Our Results
+
+To replicate the article's exact numbers: (1) fixed lookback windows (not expanding), (2) start Jan 2009 (not 2008), (3) full period including 2023-2026 (no OOS holdout).
+
+```{r}
+hd_dt(tar_read(bt_replication_metrics),
+  "Article claims vs our replication. Fixed lookback, 2009-2026, no OOS holdout.")
+```
+
+::: {.fig-caption}
+**Replication comparison.** "Article claims" = numbers from the source. "Our replication" = same methodology (fixed lookback) on our data. Differences may arise from: data source (yfinance vs article's source), exact month-end dates, dividend/split adjustments.
+:::
+
+#### Replication Equity Curve
+
+```{r}
+#| fig-height: 8
+rep <- tar_read(bt_replication) |>
+  mutate(date = as.Date(date),
+         cum_port = cumprod(1 + actual_return),
+         cum_bench = cumprod(1 + benchmark_return))
+
+ggplot(rep, aes(date)) +
+  geom_line(aes(y = cum_port, colour = "Defense First (fixed)"), linewidth = 0.6) +
+  geom_line(aes(y = cum_bench, colour = "SPY"), linewidth = 0.6) +
+  scale_y_log10() +
+  scale_colour_manual(values = c("Defense First (fixed)" = "#00BFFF", "SPY" = "#FF6347")) +
+  labs(x = NULL, y = "Cumulative return (log)", colour = NULL,
+       title = "Article replication: fixed lookback, 2009-2026") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Replication of article methodology.** Fixed 1/3/6/12-month lookback (not expanding window). Jan 2009 start. Full period including 2023+. Compare CAGR, Sharpe, max DD with article's claims above.
+:::
+
+#### Expanding vs Fixed
+
+```{r}
+#| fig-height: 8
+exp <- tar_read(bt_expanding) |> mutate(date = as.Date(date))
+rep <- tar_read(bt_replication) |> mutate(date = as.Date(date))
+
+# Align to common dates
+both <- bind_rows(
+  exp |> transmute(date, ret = actual_return, method = "Expanding window (our)"),
+  rep |> transmute(date, ret = actual_return, method = "Fixed lookback (article)")
+) |>
+  group_by(method) |>
+  mutate(cum = cumprod(1 + ret)) |>
+  ungroup()
+
+ggplot(both, aes(date, cum, colour = method)) +
+  geom_line(linewidth = 0.5) +
+  scale_y_log10() +
+  scale_colour_manual(values = c("Expanding window (our)" = "#00BFFF",
+                                  "Fixed lookback (article)" = "#FFD700")) +
+  labs(x = NULL, y = "Cumulative return (log)", colour = NULL,
+       title = "Expanding window vs fixed lookback comparison") +
+  hd_theme()
+```
+
+::: {.fig-caption}
+**Methodological comparison.** Expanding window (blue, our approach) vs fixed lookback (gold, article's approach). Fixed lookback is more responsive but more prone to whipsaws. Expanding window is more conservative but reduces overfitting risk.
+:::
+
+
+# Details
+
+## Row
+
+### {.tabset}
+
+#### Strategy Summary
+
+**Defense First** is a macro rotation strategy that rotates among 4 defensive ETFs, each covering a different risk regime:
+
+| ETF | Asset Class | Hedges Against | Regime |
+|-----|------------|----------------|--------|
+| TLT | Long-duration US Treasuries | Deflation, Fed easing | Rates falling |
+| GLD | Gold | Monetary instability, falling real rates | Currency debasement |
+| DBC | Broad commodities | Stagflation, supply shocks | Inflation rising |
+| UUP | US Dollar index | Global stress, funding crises | Flight to USD |
+
+**Benchmark:** SPY (S&P 500 ETF). The strategy aims to protect against drawdowns, not necessarily beat SPY in bull markets.
+
+**Source:** [Defense First: When Not Losing is Winning](https://notfinancial.substack.com/p/defense-first-when-not-losing-is)
+
+#### Implementation
+
+**Signal:** Composite momentum — equal-weighted average of 1, 3, 6, and 12-month simple returns for each ETF.
+
+**Allocation by rank:**
+
+| Rank | Weight |
+|------|--------|
+| 1st (strongest momentum) | 40% |
+| 2nd | 30% |
+| 3rd | 20% |
+| 4th (weakest) | 10% |
+
+**Fallback:** If all 4 hedge ETFs score below BIL (1-3 month T-bills = cash proxy), allocate 100% to SPY instead.
+
+**Rebalance:** Monthly at month-end close.
+
+**Our modification:** We use an **expanding window** (all available history) instead of the article's fixed lookback. This is more conservative — the signal adapts more slowly but reduces overfitting risk. See the Replication tab for the fixed-lookback comparison.
+
+**Transaction costs:** Not modelled. Article estimates ~0.60% annual drag at 25bps per trade, reducing CAGR from 10.83% to 10.17%.
+
+#### Notes
+
+**Expanding window vs fixed lookback:**
+
+- **Fixed lookback** (article): each month, compute 1/3/6/12-month returns using only those trailing months. More responsive to regime changes. Risk: whipsaws in volatile periods.
+- **Expanding window** (our approach): each month, compute momentum using ALL data from start to current month. More conservative. Risk: slower to adapt to new regimes.
+
+**In-sample vs out-of-sample:**
+
+- **In-sample (2008-2022):** Used for strategy development and variant comparison. All results in tabs 2-6 are in-sample. Labelled EXPLORATORY.
+- **Out-of-sample (2023-2026):** Held out during development. Run ONCE at the end. No parameter re-tuning permitted after seeing OOS results.
+
+**Caveats:**
+
+- This is educational, not investment advice
+- No transaction costs modelled
+- Survivorship bias: we only test ETFs that exist today
+- Data source differences may cause replication gaps
+- Monthly rebalancing assumes month-end execution at close price
+
+#### Glossary
+
+| Term | Definition |
+|------|-----------|
+| CAGR | Compound Annual Growth Rate — annualised return |
+| Sharpe Ratio | (Return - Risk-free rate) / Volatility. Higher = better risk-adjusted return |
+| Calmar Ratio | CAGR / Max Drawdown. Higher = better drawdown-adjusted return |
+| Sortino Ratio | Like Sharpe but uses downside deviation only |
+| Max Drawdown | Largest peak-to-trough decline |
+| Hit Rate | Fraction of months portfolio beats benchmark |
+| Expanding Window | Uses all data from start to current date (grows each month) |
+| Fixed Lookback | Uses only the last N months (window size stays constant) |
+| OOS | Out-of-sample — data not used during strategy development |
+| Momentum | Tendency for assets that performed well recently to continue |
+
+#### References
+
+1. **Source article:** [Defense First: When Not Losing is Winning](https://notfinancial.substack.com/p/defense-first-when-not-losing-is) — Not Financial Advice (Substack)
+2. **Data source:** [historicaldata](https://huggingface.co/datasets/dsfefvx/finance-historical-data) R package via DuckDB `hf://` protocol
+3. **TLT:** [iShares 20+ Year Treasury Bond ETF](https://www.ishares.com/us/products/239454/)
+4. **GLD:** [SPDR Gold Shares](https://www.spdrgoldshares.com/)
+5. **DBC:** [Invesco DB Commodity Index Tracking Fund](https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&productId=ETF-DBC)
+6. **UUP:** [Invesco DB US Dollar Index Bullish Fund](https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&productId=ETF-UUP)
+7. **Backtesting methodology:** Expanding window to avoid lookahead bias. See [Advances in Financial Machine Learning](https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482086) (de Prado, 2018) for methodology.

@@ -345,6 +345,100 @@ plan_backtest <- function() {
       bind_rows(results)
     }),
 
+    # ── Article replication: fixed lookback, 2009-2026, no OOS ──
+    targets::tar_target(bt_replication, {
+      library(dplyr)
+
+      tickers <- bt_params$tickers
+      benchmark <- bt_params$benchmark
+      cash <- bt_params$cash_proxy
+      lookbacks <- bt_params$lookback_months
+      wts <- bt_params$weights
+
+      wide <- bt_returns |>
+        select(ticker, date, ret) |>
+        tidyr::pivot_wider(names_from = ticker, values_from = ret) |>
+        arrange(date) |>
+        filter(as.Date(date) >= as.Date("2009-01-01"))  # article starts 2009
+
+      dates <- wide$date
+      results <- list()
+
+      for (i in (max(lookbacks) + 1):length(dates)) {
+        scores <- numeric(length(tickers))
+        names(scores) <- tickers
+        for (j in seq_along(tickers)) {
+          tkr <- tickers[j]
+          if (!tkr %in% names(wide)) next
+          # FIXED lookback: only use last N months (not expanding)
+          mom <- numeric(length(lookbacks))
+          for (k in seq_along(lookbacks)) {
+            lb <- lookbacks[k]
+            start_idx <- max(1, i - lb)
+            rets_window <- wide[[tkr]][start_idx:(i - 1)]
+            mom[k] <- prod(1 + rets_window) - 1
+          }
+          scores[j] <- mean(mom)
+        }
+
+        # Cash proxy score (fixed lookback)
+        cash_score <- 0
+        if (cash %in% names(wide)) {
+          cash_mom <- numeric(length(lookbacks))
+          for (k in seq_along(lookbacks)) {
+            lb <- lookbacks[k]
+            start_idx <- max(1, i - lb)
+            cash_mom[k] <- prod(1 + wide[[cash]][start_idx:(i-1)]) - 1
+          }
+          cash_score <- mean(cash_mom)
+        }
+
+        scores[is.na(scores)] <- -Inf
+        ranked <- sort(scores, decreasing = TRUE)
+        if (all(scores < cash_score, na.rm = TRUE)) {
+          port_ret <- if (benchmark %in% names(wide)) wide[[benchmark]][i] else 0
+        } else {
+          port_ret <- sum(wts * sapply(names(ranked)[1:4], \(t) {
+            if (t %in% names(wide)) wide[[t]][i] else 0
+          }))
+        }
+        bench_ret <- if (benchmark %in% names(wide)) wide[[benchmark]][i] else NA
+
+        results[[length(results) + 1]] <- tibble(
+          date = dates[i], actual_return = port_ret, benchmark_return = bench_ret
+        )
+      }
+
+      bind_rows(results)
+    }),
+
+    # ── Replication metrics ───────────────────────────────────────
+    targets::tar_target(bt_replication_metrics, {
+      library(dplyr)
+      rf <- 0.02
+      m <- function(rets, label) {
+        rets <- rets[!is.na(rets)]
+        n <- length(rets); years <- n/12
+        cum <- prod(1+rets); cagr <- cum^(1/years)-1
+        vol <- sd(rets)*sqrt(12)
+        sharpe <- (mean(rets)*12-rf)/vol
+        cum_s <- cumprod(1+rets)
+        max_dd <- min((cum_s-cummax(cum_s))/cummax(cum_s))
+        calmar <- cagr / abs(max_dd)
+        tibble(source=label, months=n, years=round(years,1),
+               cagr=round(cagr,4), vol=round(vol,4), sharpe=round(sharpe,2),
+               max_dd=round(max_dd,4), calmar=round(calmar,2))
+      }
+      bind_rows(
+        tibble(source="Article claims", months=207, years=17.2,
+               cagr=0.1083, vol=NA, sharpe=1.01, max_dd=-0.10, calmar=1.33),
+        m(bt_replication$actual_return, "Our replication (fixed lookback, 2009+)"),
+        m(bt_replication$benchmark_return, "SPY (our data, 2009+)"),
+        tibble(source="Article SPY", months=207, years=17.2,
+               cagr=0.1399, vol=NA, sharpe=NA, max_dd=NA, calmar=0.58)
+      )
+    }),
+
     # ── OOS vs IS comparison ──────────────────────────────────────
     targets::tar_target(bt_oos_vs_is, {
       library(dplyr)
