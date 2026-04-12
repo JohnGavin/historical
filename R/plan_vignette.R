@@ -433,6 +433,52 @@ hd_search(".*[.]L$") |>
   select(ticker, long_name, currency, fund_family, volume_avg,
          yield_pct, beta_3yr, start_date, end_date, total_obs) |>
   arrange(desc(volume_avg))
+'),
+
+    # ══ METADATA TABLES (companion to each plot) ═════════════════
+
+    vig_pair("vig_meta_eq_aapl", '
+top_ticker <- hd_top_by("equity_daily", "market_cap", 1)$ticker
+hd_ticker_meta(top_ticker)
+'),
+    vig_pair("vig_meta_eq_faang", '
+hd_ticker_meta(hd_group("FAANG"))
+'),
+    vig_pair("vig_meta_eq_vol", '
+vol_tickers <- c(hd_most_volatile("equity_daily", 3)$ticker, "SPY")
+hd_ticker_meta(vol_tickers)
+'),
+    vig_pair("vig_meta_cr_major", '
+hd_ticker_meta(hd_group("Major Crypto"))
+'),
+    vig_pair("vig_meta_cr_stable", '
+hd_ticker_meta(hd_group("Stablecoins"))
+'),
+    vig_pair("vig_meta_cr_corr", '
+corr_tickers <- hd_top_by("crypto_daily", "volume_avg", 6)$ticker
+hd_ticker_meta(corr_tickers)
+'),
+    vig_pair("vig_meta_lse_liquid", '
+hd_ticker_meta(
+  hd_search(".*[.]L$") |>
+    filter(!is.na(volume_avg)) |>
+    slice_max(volume_avg, n = 5) |>
+    pull(ticker)
+)
+'),
+    vig_pair("vig_meta_lse_currency", '
+lse <- hd_search(".*[.]L$")
+gbp_t <- lse |> filter(currency %in% c("GBP", "GBp")) |> slice_max(volume_avg, n = 3) |> pull(ticker)
+usd_t <- lse |> filter(currency == "USD") |> slice_max(volume_avg, n = 3) |> pull(ticker)
+hd_ticker_meta(c(gbp_t, usd_t))
+'),
+    vig_pair("vig_meta_lse_yield", '
+hd_ticker_meta(
+  hd_search(".*[.]L$") |>
+    filter(!is.na(yield_pct), yield_pct > 0) |>
+    slice_max(yield_pct, n = 10) |>
+    pull(ticker)
+)
 ')
   )
 }

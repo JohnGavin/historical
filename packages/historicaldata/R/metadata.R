@@ -94,6 +94,37 @@ hd_exchanges <- function(dataset = NULL) {
   )) |> dplyr::as_tibble()
 }
 
+#' Compact metadata table for a vector of tickers
+#'
+#' Returns key metadata columns for display below plots. Accepts single or
+#' multiple tickers. Uses batch `IN (...)` query.
+#'
+#' @param tickers Character vector of ticker symbols
+#' @return Tibble with: ticker, long_name, currency, exchange, market_cap,
+#'   volume_avg, yield_pct, beta_3yr
+#' @export
+#' @examples
+#' hd_ticker_meta(c("AAPL", "MSFT"))
+#' hd_ticker_meta(hd_group("FAANG"))
+hd_ticker_meta <- function(tickers) {
+  tickers <- as.character(tickers)
+  con <- hd_connect()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  ds <- hd_datasets()[["metadata"]]
+  placeholders <- paste(rep("?", length(tickers)), collapse = ", ")
+  sql <- sprintf(
+    "SELECT ticker, long_name, currency, exchange, market_cap, volume_avg,
+            yield_pct, beta_3yr, start_date, end_date, total_obs
+     FROM read_parquet('%s') WHERE ticker IN (%s)
+     ORDER BY ticker",
+    ds$url, placeholders
+  )
+
+  DBI::dbGetQuery(con, sql, params = as.list(tickers)) |>
+    dplyr::as_tibble()
+}
+
 #' Full metadata for one ticker
 #'
 #' @param ticker Ticker symbol (e.g. "AAPL", "BTC")

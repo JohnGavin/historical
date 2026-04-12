@@ -103,6 +103,11 @@ safe_tar_read("vig_eq_aapl")
 **AAPL close + 50d/200d SMA.** Y: USD. White = close, blue = 50d SMA, red = 200d SMA. Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab. [Golden cross](https://www.investopedia.com/terms/g/goldencross.asp). Click to zoom.
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_eq_aapl")
+if (!is.null(df)) hd_dt(df, "Ticker metadata for the plot above.")
+```
+
 #### FAANG Returns
 
 FAANG = Meta, Apple, Amazon, Netflix, Alphabet. Cumulative returns from 2024-01-01.
@@ -120,6 +125,11 @@ safe_tar_read("vig_eq_faang")
 **FAANG cumulative returns from 2024-01-01.** Y: cum return (%). Colours: ticker. Split-adjusted close. Source: `hd_ohlcv()`. See AAPL tab.
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_eq_faang")
+if (!is.null(df)) hd_dt(df, "FAANG ticker metadata.")
+```
+
 #### Realised Volatility
 
 21-day rolling annualised vol. SPY = S&P 500 benchmark.
@@ -136,6 +146,11 @@ safe_tar_read("vig_eq_vol")
 ::: {.fig-caption}
 **21d realised volatility (annualised).** Y: vol (%). Vol = SD(log ret) x sqrt(252). Source: `hd_ohlcv()`. [Realised vol](https://www.investopedia.com/terms/r/realizedvolatility.asp).
 :::
+
+```{r}
+df <- safe_tar_read("vig_meta_eq_vol")
+if (!is.null(df)) hd_dt(df, "Volatility ticker metadata.")
+```
 
 #### Coverage
 
@@ -179,6 +194,11 @@ safe_tar_read("vig_cr_major")
 **BTC, ETH, SOL, BNB log-scale close.** Y: USD (log10). Source: `hd_ohlcv()`. See Stablecoins tab.
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_cr_major")
+if (!is.null(df)) hd_dt(df, "Major crypto metadata.")
+```
+
 #### Stablecoin Peg
 
 USDC/USDT vs $1.00 peg. [Depeg](https://www.investopedia.com/terms/d/depeg.asp) = liquidity crisis.
@@ -196,6 +216,11 @@ safe_tar_read("vig_cr_stable")
 **USDC/USDT vs $1.00 peg.** Y: USD, zoomed $0.97–$1.03. Dashed = peg. Source: `hd_ohlcv()`.
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_cr_stable")
+if (!is.null(df)) hd_dt(df, "Stablecoin metadata.")
+```
+
 #### Correlation
 
 Pearson correlation of daily log returns, 6 tokens, 2023+.
@@ -212,6 +237,11 @@ safe_tar_read("vig_cr_corr")
 ::: {.fig-caption}
 **Log-return correlation, 6 tokens, 2023+.** Fill: 0–1. >0.7 = limited diversification. Source: `hd_ohlcv()`.
 :::
+
+```{r}
+df <- safe_tar_read("vig_meta_cr_corr")
+if (!is.null(df)) hd_dt(df, "Correlation ticker metadata.")
+```
 
 #### Coverage
 
@@ -399,6 +429,11 @@ safe_tar_read("vig_lse_liquid")
 **Top 5 LSE ETFs by average daily volume.** Y: close (log scale, local currency). Tickers selected dynamically from metadata — not hardcoded. Source: Yahoo Finance via `hd_ohlcv()`. See Coverage tab for full list.
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_lse_liquid")
+if (!is.null(df)) hd_dt(df, "Most liquid LSE ETF metadata.")
+```
+
 #### FTSE vs Global
 
 Comparison of FTSE 100 tracking ETFs vs Global equity ETFs, both listed on LSE. Uses curated groups: `hd_group("FTSE 100 ETFs")` and `hd_group("Global Equity ETFs (LSE)")`.
@@ -433,6 +468,11 @@ safe_tar_read("vig_lse_currency")
 **GBP vs USD denominated LSE ETFs.** Y: cumulative return (%). Faceted by currency. Top 3 each by volume. Source: `hd_ohlcv()` + metadata currency filter.
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_lse_currency")
+if (!is.null(df)) hd_dt(df, "GBP vs USD ticker metadata.")
+```
+
 #### Fund Families
 
 Distribution of LSE ETFs by fund family (iShares/BlackRock, Vanguard, Xtrackers, etc.) from metadata `fund_family` field.
@@ -466,6 +506,11 @@ safe_tar_read("vig_lse_yield")
 ::: {.fig-caption}
 **Top 10 LSE ETFs by dividend yield.** X: annualised yield (%). Source: metadata via `hd_search()`. Yield = most recent trailing distribution. See [Dividend yield](https://www.investopedia.com/terms/d/dividendyield.asp).
 :::
+
+```{r}
+df <- safe_tar_read("vig_meta_lse_yield")
+if (!is.null(df)) hd_dt(df, "Highest yield ETF metadata.")
+```
 
 #### Coverage
 
