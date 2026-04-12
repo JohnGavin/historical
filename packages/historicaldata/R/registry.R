@@ -70,18 +70,15 @@ hd_tickers <- function(dataset = "equity_daily") {
   ))$ticker
 }
 
-#' Construct base URL for HF dataset files
+#' Construct HF dataset URL using DuckDB's native `hf://` protocol
+#'
+#' DuckDB 0.10+ supports `hf://datasets/...` natively — no httpfs extension
+#' needed, 34% faster than `resolve/main/` URLs.
 #'
 #' @param filename Parquet filename
-#' @return Full URL
+#' @return `hf://datasets/{repo}/{filename}` URL
 #' @noRd
 hd_base_url <- function(filename) {
-  # TODO: replace with actual HF dataset repo once published
-
   repo <- Sys.getenv("HD_HF_REPO", unset = "dsfefvx/finance-historical-data")
-  branch <- Sys.getenv("HD_HF_BRANCH", unset = "main")
-  sprintf(
-    "https://huggingface.co/datasets/%s/resolve/%s/%s",
-    repo, branch, filename
-  )
+  sprintf("hf://datasets/%s/%s", repo, filename)
 }

@@ -1,13 +1,19 @@
-#' Create a DuckDB connection with httpfs enabled
+#' Create a DuckDB connection for remote Parquet access
 #'
-#' Returns a DBI connection to an ephemeral DuckDB instance
-#' with the httpfs extension loaded for remote Parquet access.
+#' Returns a DBI connection to an ephemeral DuckDB instance.
+#' DuckDB 0.10+ supports `hf://datasets/...` URLs natively — no httpfs needed.
+#' httpfs is loaded as a fallback for non-HF HTTPS URLs.
 #'
 #' @return DBI connection object
 #' @export
 hd_connect <- function() {
   con <- DBI::dbConnect(duckdb::duckdb())
-  DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")
+  # hf:// protocol built into DuckDB 0.10+ — no extension needed
+  # Load httpfs as fallback for non-HF HTTPS URLs (e.g. local servers)
+  tryCatch(
+    invisible(DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")),
+    error = function(e) NULL
+  )
   con
 }
 

@@ -2,7 +2,7 @@
 % Please edit documentation in R/connect.R
 \name{hd_connect}
 \alias{hd_connect}
-\title{Create a DuckDB connection with httpfs enabled}
+\title{Create a DuckDB connection for remote Parquet access}
 \usage{
 hd_connect()
 }
@@ -10,6 +10,7 @@ hd_connect()
 DBI connection object
 }
 \description{
-Returns a DBI connection to an ephemeral DuckDB instance
-with the httpfs extension loaded for remote Parquet access.
+Returns a DBI connection to an ephemeral DuckDB instance.
+DuckDB 0.10+ supports \verb{hf://datasets/...} URLs natively — no httpfs needed.
+httpfs is loaded as a fallback for non-HF HTTPS URLs.
 }
