@@ -23,20 +23,47 @@ try:
 except ImportError:
     sys.exit("yfinance required. In Nix shell: already available.")
 
-# 51 major US stocks + ETFs
+# Major US stocks + ETFs + macro hedge ETFs
 DEFAULT_TICKERS = [
+    # Mega-cap tech
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+    # Semiconductors
     "AMD", "INTC", "AVGO", "QCOM",
+    # Software/cloud
     "CRM", "ORCL", "ADBE", "NOW",
+    # Financials
     "JPM", "BAC", "GS", "MS", "V", "MA",
+    # Healthcare
     "JNJ", "UNH", "PFE", "ABBV", "MRK",
+    # Consumer
     "WMT", "COST", "HD", "MCD", "KO", "PEP",
+    # Industrials
     "CAT", "BA", "GE", "HON", "UPS",
+    # Energy
     "XOM", "CVX", "COP",
+    # Telecom/Media
     "DIS", "NFLX", "CMCSA", "T",
+    # REITs
     "PLD", "AMT",
+    # US index ETFs
     "SPY", "QQQ", "IWM", "DIA",
+    # Volatility
     "VIXY",
+    # === Defense First rotation strategy ETFs ===
+    "TLT",   # Long-duration Treasuries (deflation hedge)
+    "GLD",   # Gold (monetary instability hedge)
+    "DBC",   # Broad commodities (stagflation hedge)
+    "UUP",   # US dollar index (global stress hedge)
+    # === Extended macro ETFs (cross-checking / alternatives) ===
+    "IEF",   # 7-10yr Treasuries (intermediate duration)
+    "SHY",   # 1-3yr Treasuries (short duration)
+    "TIP",   # TIPS (inflation-protected)
+    "IAU",   # Gold (alternative to GLD, lower expense)
+    "PDBC",  # Commodities (no K-1 tax form)
+    "BIL",   # T-bills (cash proxy)
+    "AGG",   # US Aggregate Bond
+    "EFA",   # International developed equities
+    "EEM",   # Emerging market equities
 ]
 
 
