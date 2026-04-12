@@ -1,6 +1,6 @@
-#' Get data amendments (Point-in-Time tracking)
+#' Get price data amendments (Point-in-Time tracking)
 #'
-#' Returns the amendment log showing corrections made to historical data.
+#' Returns the amendment log showing corrections made to historical price data.
 #' Each row records: what was changed, when, why, and the original value.
 #'
 #' @param ticker Filter to one ticker. NULL = all.
@@ -12,21 +12,55 @@ hd_amendments <- function(ticker = NULL) {
 
   ds <- hd_datasets()[["amendments"]]
   if (is.null(ds)) {
-    cli::cli_inform("No amendments.parquet found — no corrections recorded yet.")
-    return(dplyr::tibble(
-      ticker = character(), date = as.Date(character()),
-      amendment_type = character(), description = character(),
-      original_close = double(), corrected_close = double(),
-      adjustment_factor = double(), source = character(),
-      amended_at = as.POSIXct(character()), amended_by = character()
-    ))
+    cli::cli_inform("No price amendments recorded yet.")
+    return(dplyr::tibble())
   }
 
   sql <- sprintf("SELECT * FROM read_parquet('%s')", ds$url)
   if (!is.null(ticker)) {
     sql <- paste0(sql, sprintf(" WHERE ticker = '%s'", ticker))
   }
-  sql <- paste(sql, "ORDER BY ticker, date")
+
+  DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()
+}
+
+#' Get metadata amendments (Point-in-Time tracking)
+#'
+#' Returns the PIT log of all metadata changes: computed fields, enrichments,
+#' corrections. Every change to metadata.parquet is tracked with old/new values,
+#' source, method, and timestamp.
+#'
+#' @param ticker Filter to one ticker. NULL = all.
+#' @param field Filter to one field (e.g. "beta_3yr"). NULL = all.
+#' @return Tibble with: ticker, field, old_value, new_value, source, method,
+#'   amended_at, amended_by, reversible
+#' @export
+#' @examples
+#' hd_metadata_amendments("AAPL")
+#' hd_metadata_amendments(field = "beta_3yr")
+hd_metadata_amendments <- function(ticker = NULL, field = NULL) {
+  con <- hd_connect()
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  ds <- hd_datasets()[["metadata_amendments"]]
+  if (is.null(ds)) {
+    cli::cli_inform("No metadata amendments recorded yet.")
+    return(dplyr::tibble(
+      ticker = character(), field = character(),
+      old_value = character(), new_value = character(),
+      source = character(), method = character(),
+      amended_at = character(), amended_by = character(),
+      reversible = logical()
+    ))
+  }
+
+  wheres <- character()
+  if (!is.null(ticker)) wheres <- c(wheres, sprintf("ticker = '%s'", ticker))
+  if (!is.null(field)) wheres <- c(wheres, sprintf("field = '%s'", field))
+
+  sql <- sprintf("SELECT * FROM read_parquet('%s')", ds$url)
+  if (length(wheres) > 0) sql <- paste(sql, "WHERE", paste(wheres, collapse = " AND "))
+  sql <- paste(sql, "ORDER BY amended_at DESC, ticker, field")
 
   DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()
 }

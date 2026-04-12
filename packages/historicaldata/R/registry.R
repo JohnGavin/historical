@@ -43,6 +43,13 @@ hd_datasets <- function() {
                  "start_date", "end_date", "total_obs", "missing_pct"),
       frequency = "static",
       description = "Per-ticker metadata: exchange, sector, market cap, ETF fees/yield/returns, coverage stats"
+    ),
+    metadata_amendments = list(
+      url = hd_base_url("metadata_amendments.parquet"),
+      schema = c("ticker", "field", "old_value", "new_value",
+                 "source", "method", "amended_at", "amended_by", "reversible"),
+      frequency = "append-only",
+      description = "PIT log of all metadata changes: computed fields, enrichments, corrections"
     )
   )
 }

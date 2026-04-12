@@ -2,7 +2,7 @@ test_that("hd_datasets returns expected structure", {
   ds <- hd_datasets()
   expect_type(ds, "list")
   expect_true(length(ds) >= 2)
-  expect_named(ds, c("equity_daily", "crypto_daily", "macro_daily", "factors", "metadata"), ignore.order = TRUE)
+  expect_named(ds, c("equity_daily", "crypto_daily", "macro_daily", "factors", "metadata", "metadata_amendments"), ignore.order = TRUE)
 
   # Each dataset has required fields
   for (nm in names(ds)) {

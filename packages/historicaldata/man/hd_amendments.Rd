@@ -2,7 +2,7 @@
 % Please edit documentation in R/amendments.R
 \name{hd_amendments}
 \alias{hd_amendments}
-\title{Get data amendments (Point-in-Time tracking)}
+\title{Get price data amendments (Point-in-Time tracking)}
 \usage{
 hd_amendments(ticker = NULL)
 }
@@ -13,6 +13,6 @@ hd_amendments(ticker = NULL)
 Tibble with amendment records
 }
 \description{
-Returns the amendment log showing corrections made to historical data.
+Returns the amendment log showing corrections made to historical price data.
 Each row records: what was changed, when, why, and the original value.
 }
