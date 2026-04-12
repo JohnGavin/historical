@@ -9,11 +9,16 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
-          /* Dashboard cards: don't constrain height, let content flow */
+          /* Kill dashboard fill layout — content flows like a normal page */
           .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card { height: auto !important; min-height: 0 !important; }
-          /* Tab content: visible overflow, no internal scrollbars */
-          .tab-pane, .tab-content, .card-body { overflow: visible !important; }
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
+            height: auto !important;
+            min-height: 0 !important;
+            max-height: none !important;
+            overflow: visible !important;
+            flex: none !important;
+          }
           /* Each cell output: block layout, no overlap */
           .cell-output-display { display: block !important; position: relative !important;
             overflow: visible !important; margin-bottom: 1em; }
