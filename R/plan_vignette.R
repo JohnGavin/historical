@@ -47,10 +47,12 @@ library(purrr)
 "Setup complete. Use + hd_theme() on any ggplot. Colours: hd_palette(n)."
 '),
 
-    # ── Equity: AAPL Moving Averages ──────────────────────────────
+    # ── Equity: Top Market Cap Moving Averages ──────────────────
     vig_pair("vig_eq_aapl", '
 
-aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
+# Dynamically pick the largest equity by market cap
+top_ticker <- hd_top_by("equity_daily", "market_cap", 1)$ticker
+aapl <- hd_ohlcv(top_ticker, from = "2023-01-01") |>
   arrange(date) |>
   mutate(
     cs = cumsum(close),
@@ -65,14 +67,15 @@ ggplot(aapl, aes(date)) +
   geom_line(aes(y = ma_200), colour = "#FF6347", linewidth = 0.5, linetype = "dashed") +
   scale_y_continuous(labels = dollar) +
   labs(x = NULL, y = "Close (USD)",
-       title = "AAPL daily close with 50d and 200d moving averages") +
+       title = paste(top_ticker, "daily close with 50d and 200d moving averages")) +
   hd_theme()
 '),
 
     # ── Equity: FAANG Returns ─────────────────────────────────────
     vig_pair("vig_eq_faang", '
 
-faang <- c("AAPL", "AMZN", "GOOGL", "META", "NFLX") |>
+# Use the curated FAANG group from hd_group()
+faang <- hd_group("FAANG") |>
   map(\\(t) hd_ohlcv(t, from = "2024-01-01")) |>
   list_rbind() |>
   group_by(ticker) |>
@@ -92,7 +95,9 @@ ggplot(faang, aes(date, cum_ret, colour = ticker)) +
     # ── Equity: Realised Volatility ───────────────────────────────
     vig_pair("vig_eq_vol", '
 
-vol <- c("AAPL", "NVDA", "TSLA", "SPY") |>
+# Top 3 most volatile equities + SPY benchmark
+vol_tickers <- c(hd_most_volatile("equity_daily", 3)$ticker, "SPY")
+vol <- vol_tickers |>
   map(\\(t) hd_ohlcv(t, from = "2023-06-01")) |>
   list_rbind() |>
   group_by(ticker) |>
@@ -108,9 +113,9 @@ vol <- c("AAPL", "NVDA", "TSLA", "SPY") |>
 ggplot(vol, aes(date, vol_21d, colour = ticker)) +
   geom_line(linewidth = 0.5) +
   scale_y_continuous(labels = percent) +
-  scale_colour_manual(values = c("#00BFFF", "#FF6347", "#32CD32", "#FFD700")) +
+  scale_colour_manual(values = hd_palette(length(vol_tickers))) +
   labs(x = NULL, y = "21d annualised volatility", colour = NULL,
-       title = "Realised volatility: AAPL, NVDA, TSLA vs SPY") +
+       title = paste("Realised volatility:", paste(vol_tickers, collapse = ", "))) +
   hd_theme()
 '),
 
@@ -127,7 +132,8 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
     # ── Crypto: Major Coins ───────────────────────────────────────
     vig_pair("vig_cr_major", '
 
-major <- c("BTC", "ETH", "SOL", "BNB") |>
+# Use the curated "Major Crypto" group
+major <- hd_group("Major Crypto") |>
   map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
   list_rbind()
 
@@ -143,7 +149,8 @@ ggplot(major, aes(date, close, colour = ticker)) +
     # ── Crypto: Stablecoin Peg ────────────────────────────────────
     vig_pair("vig_cr_stable", '
 
-stable <- c("USDC", "USDT") |>
+# Use the curated "Stablecoins" group
+stable <- hd_group("Stablecoins") |>
   map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
   list_rbind()
 
@@ -160,7 +167,9 @@ ggplot(stable, aes(date, close, colour = ticker)) +
     # ── Crypto: Correlation ───────────────────────────────────────
     vig_pair("vig_cr_corr", '
 
-wide <- c("BTC", "ETH", "SOL", "BNB", "ADA", "XRP") |>
+# Top 6 crypto by average volume for correlation analysis
+corr_tickers <- hd_top_by("crypto_daily", "volume_avg", 6)$ticker
+wide <- corr_tickers |>
   map(\\(t) hd_ohlcv(t, from = "2023-01-01")) |>
   list_rbind() |>
   group_by(ticker) |> arrange(date) |>

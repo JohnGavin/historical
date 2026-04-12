@@ -32,6 +32,15 @@ hd_datasets <- function() {
       schema = c("date", "factor_name", "value", "dataset", "frequency", "source"),
       frequency = "daily+monthly",
       description = "Fama-French factors (FF3, FF5, Momentum, 1926+)"
+    ),
+    metadata = list(
+      url = hd_base_url("metadata.parquet"),
+      schema = c("ticker", "dataset", "long_name", "exchange", "currency",
+                 "instrument_type", "sector", "industry", "country",
+                 "market_cap", "volume_avg", "start_date", "end_date",
+                 "total_obs", "missing_pct"),
+      frequency = "static",
+      description = "Per-ticker metadata: exchange, sector, market cap, coverage stats"
     )
   )
 }
