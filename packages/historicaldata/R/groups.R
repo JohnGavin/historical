@@ -48,7 +48,19 @@ hd_ticker_groups <- function() {
          c("SOL", "RAY", "HNT", "BONK", "PYTH")),
     list("DeFi Altcoins",
          "Alternative cryptocurrencies outside top 4",
-         c("XRP", "ADA", "DOGE", "DOT"))
+         c("XRP", "ADA", "DOGE", "DOT")),
+    list("FTSE 100 ETFs",
+         "ETFs tracking the FTSE 100 index on LSE",
+         c("ISF.L", "VUKE.L", "MIDD.L", "CUKX.L")),
+    list("UK Bond ETFs",
+         "UK government and corporate bond ETFs on LSE",
+         c("IGLT.L", "VGOV.L", "SLXX.L", "IGLS.L")),
+    list("Global Equity ETFs (LSE)",
+         "World/global equity ETFs listed on LSE",
+         c("VWRL.L", "SWDA.L", "CSPX.L", "VUSA.L", "HMWO.L")),
+    list("LSE Sector ETFs",
+         "Sector-specific ETFs on LSE (tech, healthcare, clean energy)",
+         c("IITU.L", "WDOC.L", "INRG.L", "ISPY.L"))
   )
 
   dplyr::tibble(

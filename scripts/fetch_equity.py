@@ -4,9 +4,10 @@ Downloads full history for all tickers in a single yf.download() call
 (yfinance handles internal parallelism and rate limiting).
 
 Usage:
-    python scripts/fetch_equity.py                    # All default tickers
+    python scripts/fetch_equity.py                    # All US default tickers
+    python scripts/fetch_equity.py --lse              # Add ~929 LSE ETFs
+    python scripts/fetch_equity.py --lse --batch-size 50  # LSE in batches of 50
     python scripts/fetch_equity.py AAPL MSFT GOOGL    # Specific tickers
-    python scripts/fetch_equity.py --batch-size 20    # Download in chunks of 20
 """
 
 import sys
@@ -58,11 +59,11 @@ def fetch_batch(tickers: list[str], batch_size: int = 0) -> pd.DataFrame:
     for batch_idx, batch in enumerate(batches, 1):
         print(f"Batch {batch_idx}/{len(batches)}: {len(batch)} tickers ({batch[0]}...{batch[-1]})")
 
-        # yf.download handles parallelism internally (threads=True by default)
+        # yf.download: always use group_by="ticker" for consistent multi-level output
         raw = yf.download(
             batch,
             period="max",
-            group_by="ticker" if len(batch) > 1 else "column",
+            group_by="ticker",
             auto_adjust=False,
             threads=True,
             progress=True,
@@ -72,26 +73,34 @@ def fetch_batch(tickers: list[str], batch_size: int = 0) -> pd.DataFrame:
             print(f"  WARNING: empty result for batch {batch_idx}")
             continue
 
-        # Reshape: yf.download returns multi-level columns when group_by="ticker"
-        if len(batch) == 1:
-            # Single ticker: flat columns (Date index, Open, High, Low, Close, ...)
-            df = raw.reset_index()
-            df.columns = [c.lower().replace(" ", "_") for c in df.columns]
-            df["ticker"] = batch[0]
-        else:
-            # Multiple tickers: (ticker, column) multi-level
-            frames = []
-            for tkr in batch:
-                try:
+        # yf.download returns multi-level columns: (Ticker, OHLCV) or (Price, OHLCV)
+        # Extract per-ticker DataFrames
+        frames = []
+        for tkr in batch:
+            try:
+                if len(batch) == 1:
+                    # Single ticker: columns are (Price, Open), (Price, Close), etc.
+                    sub = raw.copy()
+                    # Flatten: take second level of multi-index columns
+                    if hasattr(sub.columns, 'get_level_values'):
+                        sub.columns = sub.columns.get_level_values(-1)
+                    sub = sub.reset_index()
+                else:
+                    # Multi-ticker: columns are (AAPL, Open), (MSFT, Open), etc.
+                    if tkr not in raw.columns.get_level_values(0):
+                        continue
                     sub = raw[tkr].copy()
                     sub = sub.reset_index()
-                    sub.columns = [c.lower().replace(" ", "_") for c in sub.columns]
-                    sub["ticker"] = tkr
-                    sub = sub.dropna(subset=["close"])
+
+                sub.columns = [str(c).lower().replace(" ", "_") for c in sub.columns]
+                sub["ticker"] = tkr
+                sub = sub.dropna(subset=["close"])
+                if len(sub) > 0:
                     frames.append(sub)
-                except KeyError:
-                    print(f"  WARNING: {tkr} not in batch result")
-            df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+            except (KeyError, Exception) as e:
+                print(f"  WARNING: {tkr}: {e}")
+
+        df = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
         if not df.empty:
             all_dfs.append(df)
@@ -128,10 +137,36 @@ def fetch_batch(tickers: list[str], batch_size: int = 0) -> pd.DataFrame:
     return combined.sort_values(["ticker", "date"]).reset_index(drop=True)
 
 
+def load_lse_tickers() -> list[str]:
+    """Load LSE ETF tickers from the pre-built list."""
+    lse_file = Path("lse_etf_tickers_yahoo.txt")
+    if not lse_file.exists():
+        lse_file = Path(__file__).parent.parent / "lse_etf_tickers_yahoo.txt"
+    if not lse_file.exists():
+        print("WARNING: lse_etf_tickers_yahoo.txt not found. Run research to generate it.")
+        return []
+    return [line.strip() for line in lse_file.read_text().splitlines() if line.strip()]
+
+
+def log_telemetry(log_entries: list[dict], output_dir: Path):
+    """Write download telemetry to Parquet."""
+    if not log_entries:
+        return
+    df = pd.DataFrame(log_entries)
+    out = output_dir / "download_log.parquet"
+    # Append if exists
+    if out.exists():
+        existing = pq.read_table(out).to_pandas()
+        df = pd.concat([existing, df], ignore_index=True)
+    pq.write_table(pa.Table.from_pandas(df), out, compression="zstd")
+    print(f"Telemetry: {len(log_entries)} batches logged to {out}")
+
+
 def main():
     # Parse args
     tickers = []
     batch_size = 0
+    include_lse = False
 
     args = sys.argv[1:]
     i = 0
@@ -139,12 +174,22 @@ def main():
         if args[i] == "--batch-size" and i + 1 < len(args):
             batch_size = int(args[i + 1])
             i += 2
+        elif args[i] == "--lse":
+            include_lse = True
+            i += 1
         else:
             tickers.append(args[i])
             i += 1
 
     if not tickers:
-        tickers = DEFAULT_TICKERS
+        tickers = list(DEFAULT_TICKERS)
+
+    if include_lse:
+        lse = load_lse_tickers()
+        print(f"Adding {len(lse)} LSE ETF tickers")
+        tickers.extend(lse)
+        if batch_size == 0:
+            batch_size = 50  # Default batch size for large downloads
 
     output_dir = Path("data/raw")
     output_dir.mkdir(parents=True, exist_ok=True)
