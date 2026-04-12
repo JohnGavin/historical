@@ -1,0 +1,17 @@
+name|type|data|command|depend|seed|path|time|size|bytes|format|repository|iteration|parent|children|seconds|warnings|error
+plan_backtest|function|bfb60a5a1f44dce9
+bt_params|stem|6334b21319ec6ff3|b2def08b6516aee5|2c530c1562a7fbd1|-5837308||t20555.82444192s|s272b|272|rds|local|vector|||0.325||
+bt_prices|stem|170948b34fc60687|58644f87e7319158|a47e29b0f667b295|-1621107017||t20555.8245064642s|s9985b|9985|rds|local|vector|||5.517||
+bt_returns|stem|e9d76fdeba297adb|b753f2d933d5e491|68c8e0d0044824ab|-514291055||t20555.82450748s|s21504b|21504|rds|local|vector|||0.003||
+bt_equalwt|stem|0f115276b6335f13|8e4a7b2147f72a0c|703b7955a2931749|-1201177904||t20555.8245086343s|s2437b|2437|rds|local|vector|||0.037||
+bt_expanding|stem|491bdba2e11e6ea3|fa7f847945947a0a|703b7955a2931749|2111677298||t20555.8245116888s|s6204b|6204|rds|local|vector|||0.205||
+bt_replication|stem|3d9a2dad55517ffc|f99f67c17f3f1ccc|703b7955a2931749|1416695050||t20555.824513388s|s4015b|4015|rds|local|vector|||0.084||
+bt_oos|stem|59dfcdd8b9c81687|79c26f1fc380d821|703b7955a2931749|926860145||t20555.8245144259s|s1099b|1099|rds|local|vector|||0.025||
+bt_topone|stem|a8d0688b924c3a39|a8df5e2bc7c5314a|06bd551c92f4bcf0|1435773846||t20555.824515196s|s2304b|2304|rds|local|vector|||0.005||
+bt_portfolio|stem|27b947f6fbdc4293|36459d9994cf0ad5|8ccffb232e7d94f0|1607275718||t20555.8245160126s|s8988b|8988|rds|local|vector|||0.001||
+bt_metrics_is|stem|0031b8106ae2e126|8e77e67a32c54259|8ccffb232e7d94f0|39393792||t20555.8245168401s|s378b|378|rds|local|vector|||0.012||
+bt_regime_map|stem|bdd6eacfcbe7dcd1|da11a7b52f59220b|8ccffb232e7d94f0|-232091679||t20555.8245175082s|s1064b|1064|rds|local|vector|||0.001||
+bt_replication_metrics|stem|f71f9208306c5530|a4fe58478775203f|13c08002b8e005b9|898592883||t20555.8245182376s|s427b|427|rds|local|vector|||0.009||
+bt_oos_vs_is|stem|4178f1992145495d|5405a5af4622147a|77d79bab944a93b1|-295831050||t20555.8245190432s|s377b|377|rds|local|vector|||0.008||
+bt_comparison|stem|c6845318d6d82f6a|6802b8a8899be0f1|04b571f9fb167f46|177675284||t20555.8245198006s|s464b|464|rds|local|vector|||0.01||
+bt_drawdowns|stem|1d4e91ca464fced8|eb37453adc0e86d4|908ee0f3db359809|1299986394||t20555.8245204685s|s11100b|11100|rds|local|vector|||0.001||

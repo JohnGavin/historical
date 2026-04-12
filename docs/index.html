@@ -1,11 +1,142 @@
 <!DOCTYPE html>
-<html>
-<head><meta http-equiv="refresh" content="0; url=examples.html"></head>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>historicaldata — Historical Finance Database</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+         background: #111; color: #ddd; line-height: 1.6; }
+  .container { max-width: 900px; margin: 0 auto; padding: 2em; }
+  h1 { font-size: 2.2em; margin-bottom: 0.3em; color: white; }
+  h2 { font-size: 1.4em; margin-top: 2em; margin-bottom: 0.5em; color: #aaa;
+       border-bottom: 1px solid #333; padding-bottom: 0.3em; }
+  p { margin-bottom: 1em; }
+  a { color: #6B8DAE; text-decoration: none; }
+  a:hover { color: #9BC; text-decoration: underline; }
+  .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px;
+           font-size: 0.8em; margin-right: 0.5em; }
+  .badge-blue { background: #1a3a5c; color: #6B8DAE; }
+  .badge-green { background: #1a3c1a; color: #7A9E7E; }
+  .badge-gold { background: #3c3520; color: #C4A35A; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; margin-top: 1em; }
+  .card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+          padding: 1.5em; transition: border-color 0.2s; }
+  .card:hover { border-color: #6B8DAE; }
+  .card h3 { margin-bottom: 0.5em; color: white; }
+  .card p { color: #999; font-size: 0.95em; }
+  .stats { display: flex; gap: 2em; flex-wrap: wrap; margin: 1em 0; }
+  .stat { text-align: center; }
+  .stat .num { font-size: 1.8em; font-weight: bold; color: white; }
+  .stat .label { font-size: 0.85em; color: #888; }
+  code { background: #222; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.9em; }
+  pre { background: #1a1a1a; padding: 1em; border-radius: 6px; overflow-x: auto;
+        margin: 1em 0; border: 1px solid #333; }
+  pre code { background: none; padding: 0; }
+  .footer { margin-top: 3em; padding-top: 1em; border-top: 1px solid #333;
+            color: #666; font-size: 0.85em; }
+  @media (max-width: 600px) { .cards { grid-template-columns: 1fr; } }
+</style>
+</head>
 <body>
-<ul>
-<li><a href="examples.html">Usage Examples (code + output)</a></li>
-<li><a href="dashboard.html">Dashboard (summary charts)</a></li>
-<li><a href="backtest.html">Backtest: Defense First rotation strategy</a></li>
-</ul>
+<div class="container">
+
+<h1>historicaldata</h1>
+<p>
+  <span class="badge badge-blue">R package</span>
+  <span class="badge badge-green">DuckDB + Parquet</span>
+  <span class="badge badge-gold">Hugging Face</span>
+</p>
+<p>Historical finance database for backtesting: equities, crypto, macro, and factors.
+Code-only R package — data hosted on
+<a href="https://huggingface.co/datasets/dsfefvx/finance-historical-data">Hugging Face</a>,
+queried via DuckDB <code>hf://</code> protocol with predicate pushdown.</p>
+
+<div class="stats">
+  <div class="stat"><div class="num">1,053</div><div class="label">tickers</div></div>
+  <div class="stat"><div class="num">2.3M</div><div class="label">rows</div></div>
+  <div class="stat"><div class="num">6</div><div class="label">datasets</div></div>
+  <div class="stat"><div class="num">100yr</div><div class="label">history</div></div>
+  <div class="stat"><div class="num">30</div><div class="label">functions</div></div>
+</div>
+
+<h2>Articles</h2>
+
+<div class="cards">
+  <a href="examples.html" class="card">
+    <h3>Usage Examples</h3>
+    <p>Interactive dashboard with code examples for all 6 datasets: equity (1000 US + LSE tickers),
+    crypto (14 tokens), macro (19 FRED series), factors (FF3/FF5/Momentum),
+    LSE ETFs (Vanguard, iShares, SPDR), and metadata queries.</p>
+  </a>
+  <a href="macro-defense-rotation.html" class="card">
+    <h3>Macro Defense Rotation</h3>
+    <p>Backtesting vignette: rotating among TLT/GLD/DBC/UUP to hedge macro risk.
+    Expanding window methodology, in-sample vs out-of-sample holdout,
+    strategy variant comparison, article replication.</p>
+  </a>
+</div>
+
+<h2>Installation</h2>
+
+<pre><code># R (pak)
+pak::pak("JohnGavin/historical", subdir = "packages/historicaldata")
+
+# Then:
+library(historicaldata)
+hd_ohlcv("AAPL", from = "2024-01-01")
+hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")  # batch query
+hd_macro(c("SP500", "VIXCLS"), from = "2024-01-01")
+hd_search("vanguard")  # search metadata
+</code></pre>
+
+<pre><code># Python (DuckDB, no R needed)
+import duckdb
+df = duckdb.sql("""
+  SELECT * FROM 'hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet'
+  WHERE ticker = 'AAPL' AND date >= '2024-01-01'
+""").df()
+</code></pre>
+
+<h2>Datasets</h2>
+
+<div class="cards">
+  <div class="card">
+    <h3>Equity</h3>
+    <p>1,013 tickers (51 US + 949 LSE ETFs + 13 macro ETFs). Daily OHLCV from 1980.
+    Includes Vanguard, iShares, SPDR UCITS ETFs. 44 MB Parquet.</p>
+  </div>
+  <div class="card">
+    <h3>Crypto</h3>
+    <p>14 tokens (BTC, ETH, SOL, BNB, stablecoins, Solana DeFi). Daily from 2014. 1.1 MB.</p>
+  </div>
+  <div class="card">
+    <h3>Macro</h3>
+    <p>19 FRED series: SP500, VIX, Treasury yields, credit spreads, GDP, CPI, oil, USD. From 1947.</p>
+  </div>
+  <div class="card">
+    <h3>Factors</h3>
+    <p>Fama-French FF3, FF5, Momentum. Daily + monthly. Back to 1926. Ken French Data Library.</p>
+  </div>
+</div>
+
+<h2>Links</h2>
+<p>
+  <a href="https://github.com/JohnGavin/historical">GitHub</a> &middot;
+  <a href="https://huggingface.co/datasets/dsfefvx/finance-historical-data">Hugging Face Dataset</a> &middot;
+  <a href="examples.html">Examples</a> &middot;
+  <a href="macro-defense-rotation.html">Macro Defense Rotation</a>
+</p>
+
+<div class="footer">
+  <p>Built with the <a href="https://github.com/b-rodrigues/tlang">T language</a> pipeline,
+  <a href="https://docs.ropensci.org/targets/">targets</a>,
+  <a href="https://duckdb.org/">DuckDB</a>, and
+  <a href="https://quarto.org/">Quarto</a>.
+  Data from Yahoo Finance, FRED, and Ken French Data Library.</p>
+</div>
+
+</div>
 </body>
 </html>
