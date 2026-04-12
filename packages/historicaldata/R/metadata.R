@@ -10,8 +10,12 @@
 #' hd_search("^APP")     # regex: tickers starting with APP
 #' hd_search("*coin*")   # glob: names containing "coin"
 hd_search <- function(pattern, dataset = NULL) {
-  # Convert glob to regex if pattern contains * or ?
-  if (grepl("[*?]", pattern)) {
+
+  # Convert glob to regex if pattern contains unescaped * or ?
+  # (but NOT inside character classes like [.])
+  is_glob <- grepl("\\*|(?<!\\[)\\?", pattern, perl = TRUE) &&
+    !grepl("\\[.*\\]", pattern)
+  if (is_glob) {
     pattern <- utils::glob2rx(pattern, trim.head = TRUE, trim.tail = TRUE)
   }
 
@@ -19,18 +23,25 @@ hd_search <- function(pattern, dataset = NULL) {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
   ds <- hd_datasets()[["metadata"]]
-  sql <- sprintf(
-    "SELECT * FROM read_parquet('%s') WHERE regexp_matches(ticker, ?) OR regexp_matches(LOWER(long_name), LOWER(?))",
-    ds$url
+
+  # DuckDB parameterised binding doesn't work with regexp_matches
+  # Use direct interpolation (pattern is a regex, not user SQL)
+  escaped_pattern <- gsub("'", "''", pattern)
+  where <- sprintf(
+    "regexp_matches(ticker, '%s') OR regexp_matches(LOWER(long_name), LOWER('%s'))",
+    escaped_pattern, escaped_pattern
   )
 
-  params <- list(pattern, pattern)
   if (!is.null(dataset)) {
-    sql <- paste(sql, "AND dataset = ?")
-    params <- c(params, list(dataset))
+    where <- paste0("(", where, ") AND dataset = '", gsub("'", "''", dataset), "'")
   }
 
-  DBI::dbGetQuery(con, paste(sql, "ORDER BY dataset, ticker"), params = params) |>
+  sql <- sprintf(
+    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY dataset, ticker",
+    ds$url, where
+  )
+
+  DBI::dbGetQuery(con, sql) |>
     dplyr::as_tibble()
 }
 

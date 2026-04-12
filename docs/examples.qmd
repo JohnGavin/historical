@@ -376,6 +376,117 @@ if (!is.null(df)) {
 ```
 
 
+# LSE ETFs
+
+## Row
+
+### {.tabset}
+
+#### Most Liquid
+
+Top 5 LSE ETFs by average daily volume, selected dynamically from metadata via `hd_search(".*[.]L$") |> slice_max(volume_avg, n = 5)`.
+
+```{r}
+#| results: asis
+show_code("vig_lse_liquid")
+```
+
+```{r}
+safe_tar_read("vig_lse_liquid")
+```
+
+::: {.fig-caption}
+**Top 5 LSE ETFs by average daily volume.** Y: close (log scale, local currency). Tickers selected dynamically from metadata — not hardcoded. Source: Yahoo Finance via `hd_ohlcv()`. See Coverage tab for full list.
+:::
+
+#### FTSE vs Global
+
+Comparison of FTSE 100 tracking ETFs vs Global equity ETFs, both listed on LSE. Uses curated groups: `hd_group("FTSE 100 ETFs")` and `hd_group("Global Equity ETFs (LSE)")`.
+
+```{r}
+#| results: asis
+show_code("vig_lse_ftse_vs_global")
+```
+
+```{r}
+safe_tar_read("vig_lse_ftse_vs_global")
+```
+
+::: {.fig-caption}
+**FTSE 100 vs Global Equity ETFs.** Y: cumulative return (%). Solid/dashed = group. Source: `hd_ohlcv()` via `hd_group()`. See [FTSE 100](https://www.investopedia.com/terms/f/ftse.asp).
+:::
+
+#### GBP vs USD
+
+Most liquid GBP-denominated vs USD-denominated LSE ETFs, selected by querying metadata currency field: `hd_search(".*[.]L$") |> filter(currency == "GBP")`.
+
+```{r}
+#| results: asis
+show_code("vig_lse_currency")
+```
+
+```{r}
+safe_tar_read("vig_lse_currency")
+```
+
+::: {.fig-caption}
+**GBP vs USD denominated LSE ETFs.** Y: cumulative return (%). Faceted by currency. Top 3 each by volume. Source: `hd_ohlcv()` + metadata currency filter.
+:::
+
+#### Fund Families
+
+Distribution of LSE ETFs by fund family (iShares/BlackRock, Vanguard, Xtrackers, etc.) from metadata `fund_family` field.
+
+```{r}
+#| results: asis
+show_code("vig_lse_families")
+```
+
+```{r}
+safe_tar_read("vig_lse_families")
+```
+
+::: {.fig-caption}
+**LSE ETF count by fund family (top 15).** X: number of ETFs. Source: metadata via `hd_search()`. [ETF](https://www.investopedia.com/terms/e/etf.asp) = Exchange Traded Fund.
+:::
+
+#### Highest Yield
+
+Top 10 LSE ETFs by dividend yield, from metadata `yield_pct` field: `hd_search(".*[.]L$") |> slice_max(yield_pct, n = 10)`.
+
+```{r}
+#| results: asis
+show_code("vig_lse_yield")
+```
+
+```{r}
+safe_tar_read("vig_lse_yield")
+```
+
+::: {.fig-caption}
+**Top 10 LSE ETFs by dividend yield.** X: annualised yield (%). Source: metadata via `hd_search()`. Yield = most recent trailing distribution. See [Dividend yield](https://www.investopedia.com/terms/d/dividendyield.asp).
+:::
+
+#### Coverage
+
+Full sortable table of all ~930 LSE ETFs with metadata. Click column headers to sort, type in filter boxes to search.
+
+```{r}
+#| results: asis
+show_code("vig_lse_coverage")
+```
+
+```{r}
+df <- safe_tar_read("vig_lse_coverage")
+if (!is.null(df)) {
+  hd_dt(df, paste0(
+    nrow(df), " LSE ETFs. Columns: ticker, name, currency, fund family, ",
+    "volume, yield, beta, date range. Source: metadata via hd_search()."
+  ))
+}
+```
+
+
 # Installation
 
 ## Row

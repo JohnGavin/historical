@@ -316,6 +316,123 @@ sql <- paste0("SELECT dataset, frequency, factor_name, COUNT(*) as n, MIN(date):
 DBI::dbGetQuery(con, sql) |> as_tibble() |>
   rename(Dataset = dataset, Freq = frequency, Factor = factor_name,
          Obs = n, From = first_dt, To = last_dt)
+'),
+
+    # ══ LSE ETFs ═════════════════════════════════════════════════
+
+    # ── LSE: Most Liquid ──────────────────────────────────────────
+    vig_pair("vig_lse_liquid", '
+# Top 5 LSE ETFs by average daily volume (from metadata)
+liquid <- hd_search(".*[.]L$") |>
+  filter(!is.na(volume_avg)) |>
+  slice_max(volume_avg, n = 5)
+
+liquid_data <- hd_ohlcv(liquid$ticker, from = "2022-01-01")
+
+ggplot(liquid_data, aes(date, close, colour = ticker)) +
+  geom_line(linewidth = 0.5) +
+  scale_y_log10(labels = dollar) +
+  scale_colour_manual(values = hd_palette(5)) +
+  labs(x = NULL, y = "Close (log scale)", colour = NULL,
+       title = paste("Top 5 LSE ETFs by volume:",
+                     paste(liquid$ticker, collapse = ", "))) +
+  hd_theme()
+'),
+
+    # ── LSE: FTSE 100 vs Global ───────────────────────────────────
+    vig_pair("vig_lse_ftse_vs_global", '
+# Compare curated FTSE 100 ETF group vs Global Equity ETF group
+ftse_tickers <- hd_group("FTSE 100 ETFs")
+global_tickers <- hd_group("Global Equity ETFs (LSE)")
+
+combined <- bind_rows(
+  hd_ohlcv(ftse_tickers, from = "2022-01-01") |> mutate(group = "FTSE 100"),
+  hd_ohlcv(global_tickers, from = "2022-01-01") |> mutate(group = "Global")
+) |>
+  group_by(ticker) |>
+  mutate(cum_ret = close / first(close) - 1) |>
+  ungroup()
+
+ggplot(combined, aes(date, cum_ret, colour = ticker, linetype = group)) +
+  geom_line(linewidth = 0.5) +
+  geom_hline(yintercept = 0, colour = "grey50", linetype = "dashed") +
+  scale_y_continuous(labels = percent) +
+  scale_colour_manual(values = hd_palette(length(c(ftse_tickers, global_tickers)))) +
+  labs(x = NULL, y = "Cumulative return", colour = NULL, linetype = NULL,
+       title = "FTSE 100 ETFs vs Global Equity ETFs (LSE)") +
+  hd_theme()
+'),
+
+    # ── LSE: GBP vs USD denominated ───────────────────────────────
+    vig_pair("vig_lse_currency", '
+# Top 3 GBP and top 3 USD LSE ETFs by volume
+lse_meta <- hd_search(".*[.]L$")
+gbp <- lse_meta |> filter(currency %in% c("GBP", "GBp")) |>
+  slice_max(volume_avg, n = 3)
+usd <- lse_meta |> filter(currency == "USD") |>
+  slice_max(volume_avg, n = 3)
+
+combined <- bind_rows(
+  hd_ohlcv(gbp$ticker, from = "2023-01-01") |> mutate(ccy = "GBP"),
+  hd_ohlcv(usd$ticker, from = "2023-01-01") |> mutate(ccy = "USD")
+) |>
+  group_by(ticker) |>
+  mutate(cum_ret = close / first(close) - 1) |>
+  ungroup()
+
+ggplot(combined, aes(date, cum_ret, colour = ticker)) +
+  geom_line(linewidth = 0.5) +
+  facet_wrap(~ccy, ncol = 1) +
+  scale_y_continuous(labels = percent) +
+  scale_colour_manual(values = hd_palette(6)) +
+  labs(x = NULL, y = "Cumulative return", colour = NULL,
+       title = paste("GBP-denominated:", paste(gbp$ticker, collapse = ", "),
+                     "| USD:", paste(usd$ticker, collapse = ", "))) +
+  hd_theme()
+'),
+
+    # ── LSE: Fund Families ────────────────────────────────────────
+    vig_pair("vig_lse_families", '
+# Distribution of LSE ETFs by fund family
+lse_meta <- hd_search(".*[.]L$") |>
+  filter(!is.na(fund_family))
+
+family_counts <- lse_meta |>
+  count(fund_family, sort = TRUE) |>
+  slice_head(n = 15)
+
+ggplot(family_counts, aes(reorder(fund_family, n), n)) +
+  geom_col(fill = "#00BFFF") +
+  coord_flip() +
+  labs(x = NULL, y = "Number of ETFs",
+       title = paste(nrow(lse_meta), "LSE ETFs by fund family (top 15)")) +
+  hd_theme()
+'),
+
+    # ── LSE: Highest Yield ────────────────────────────────────────
+    vig_pair("vig_lse_yield", '
+# Top 10 LSE ETFs by dividend yield
+high_yield <- hd_search(".*[.]L$") |>
+  filter(!is.na(yield_pct), yield_pct > 0) |>
+  slice_max(yield_pct, n = 10) |>
+  mutate(yield_label = paste0(round(yield_pct * 100, 1), "%"))
+
+ggplot(high_yield, aes(reorder(ticker, yield_pct), yield_pct * 100)) +
+  geom_col(fill = "#32CD32") +
+  geom_text(aes(label = yield_label), hjust = -0.1, colour = "white", size = 3.5) +
+  coord_flip() +
+  labs(x = NULL, y = "Dividend yield (%)",
+       title = "Top 10 LSE ETFs by dividend yield") +
+  hd_theme()
+'),
+
+    # ── LSE: Coverage ─────────────────────────────────────────────
+    vig_pair("vig_lse_coverage", '
+# Full metadata table for all LSE ETFs
+hd_search(".*[.]L$") |>
+  select(ticker, long_name, currency, fund_family, volume_avg,
+         yield_pct, beta_3yr, start_date, end_date, total_obs) |>
+  arrange(desc(volume_avg))
 ')
   )
 }
