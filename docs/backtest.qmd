@@ -22,6 +22,9 @@ format:
           .navbar .nav-link.active, .navbar .nav-link:hover {
             color: #00BFFF !important;
           }
+          /* Allow navbar tabs to wrap to second line */
+          .navbar-nav { flex-wrap: wrap !important; }
+          .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
           .bslib-page-fill, .html-fill-container, .html-fill-item,
           .bslib-card, .card, .tab-pane, .tab-content, .card-body,
           .bslib-grid, .bslib-grid-item {
