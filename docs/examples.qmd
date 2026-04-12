@@ -486,6 +486,11 @@ safe_tar_read("vig_lse_ftse_vs_global")
 **FTSE 100 vs Global Equity ETFs.** Y: cumulative return (%). Solid/dashed = group. Source: `hd_ohlcv()` via `hd_group()`. See [FTSE 100](https://www.investopedia.com/terms/f/ftse.asp).
 :::
 
+```{r}
+df <- safe_tar_read("vig_meta_lse_ftse_global")
+if (!is.null(df)) hd_dt(df, "FTSE 100 + Global ETF metadata.")
+```
+
 #### GBP vs USD
 
 Most liquid GBP-denominated vs USD-denominated LSE ETFs, selected by querying metadata currency field: `hd_search(".*[.]L$") |> filter(currency == "GBP")`.

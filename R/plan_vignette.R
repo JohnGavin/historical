@@ -479,6 +479,9 @@ hd_ticker_meta(
     slice_max(yield_pct, n = 10) |>
     pull(ticker)
 )
+'),
+    vig_pair("vig_meta_lse_ftse_global", '
+hd_ticker_meta(c(hd_group("FTSE 100 ETFs"), hd_group("Global Equity ETFs (LSE)")))
 ')
   )
 }
