@@ -8,24 +8,28 @@ format:
     include-in-header:
       - text: |
           <style>
-          /* Click-to-zoom: plots expand to fullscreen */
+          /* Bigger base font */
+          body { font-size: 1.15em; }
+          /* Click-to-zoom: fill entire screen */
           .fullscreen-overlay {
             position: fixed !important;
             top: 0 !important; left: 0 !important;
             width: 100vw !important; height: 100vh !important;
             z-index: 9999 !important;
             background: rgba(0,0,0,0.95) !important;
-            padding: 20px !important;
+            padding: 10px !important;
             overflow: auto !important;
             cursor: zoom-out !important;
-            display: flex; align-items: center; justify-content: center;
           }
-          .fullscreen-overlay img { max-width: 95vw; max-height: 95vh; object-fit: contain; }
+          .fullscreen-overlay img {
+            width: 100% !important; height: 100% !important;
+            object-fit: contain !important;
+          }
           .cell-output-display:has(img) { cursor: zoom-in; }
           /* Captions */
-          figcaption, .fig-caption {
-            font-size: 0.85em; color: #aaa; margin-top: 0.3em;
-            text-align: left; line-height: 1.4;
+          .fig-caption {
+            font-size: 0.85em; color: #aaa; margin-top: 0.4em;
+            text-align: left; line-height: 1.5;
           }
           </style>
           <script>
@@ -59,7 +63,9 @@ utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
 source(utils_path)
 ```
 
-# Installation {.panel-tabset}
+# Installation
+
+::: {.panel-tabset}
 
 ## R (pak)
 
@@ -72,25 +78,32 @@ library(historicaldata)
 
 ```bash
 nix develop github:JohnGavin/historical
-# R packages available: dplyr, arrow, duckdb, duckplyr, ggplot2, ...
+# All R + Python packages available in the Nix shell
 Rscript -e 'pkgload::load_all("packages/historicaldata")'
 ```
 
 ## T language
 
 ```bash
-# Clone and enter the T pipeline environment
-git clone https://github.com/JohnGavin/historical.git
-cd historical
-nix develop
-t run src/pipeline.t
+git clone https://github.com/JohnGavin/historical.git && cd historical
+nix develop              # enter Nix shell with T + R + Python
+t run src/pipeline.t     # run the full data pipeline
 ```
 
-#
+:::
 
----
+# Setup
 
-# Equity {.panel-tabset}
+Run this once at the start of your session. All subsequent code assumes these libraries and theme are loaded.
+
+```{r}
+#| results: asis
+show_code("vig_setup")
+```
+
+# Equity
+
+::: {.panel-tabset}
 
 ## AAPL Moving Averages
 
@@ -106,12 +119,12 @@ safe_tar_read("vig_eq_aapl")
 ```
 
 ::: {.fig-caption}
-**AAPL close with 50d and 200d simple moving averages (SMA).** Y-axis: USD. Grey = close, blue dashed = 50d SMA, red dashed = 200d SMA. MA = simple moving average (trailing, equal-weighted). Source: Yahoo Finance via `historicaldata::hd_ohlcv()`. See Volatility tab for risk-adjusted view. Click plot to zoom.
+**AAPL close with 50d and 200d simple moving averages (SMA).** Y-axis: USD. Grey = close, blue dashed = 50d SMA, red dashed = 200d SMA. MA = simple moving average (trailing, equal-weighted). Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab for risk-adjusted view. Click plot to zoom fullscreen.
 :::
 
 ## FAANG Returns
 
-FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Cumulative returns rebased to 0% on 2024-01-01 show relative performance divergence among the five largest US tech companies.
+FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Cumulative returns rebased to 0% on 2024-01-01 show relative performance divergence.
 
 ```{r}
 #| results: asis
@@ -123,12 +136,12 @@ safe_tar_read("vig_eq_faang")
 ```
 
 ::: {.fig-caption}
-**FAANG cumulative returns from 2024-01-01 (0% baseline).** Y-axis: cumulative return (%). Colours: ticker symbol. FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). Split-adjusted close prices. Source: Yahoo Finance via `historicaldata::hd_ohlcv()`. See AAPL MA tab for single-stock detail.
+**FAANG cumulative returns from 2024-01-01 (0% baseline).** Y-axis: cumulative return (%). Colours: ticker. FAANG = Meta, Apple, Amazon, Netflix, Alphabet. Split-adjusted close. Source: `hd_ohlcv()`. See AAPL MA tab for single-stock detail.
 :::
 
 ## Realised Volatility
 
-21-day rolling annualised volatility (standard deviation of log returns, scaled by sqrt(252)). Higher values indicate greater price uncertainty. SPY (S&P 500 ETF) serves as the benchmark.
+21-day rolling annualised volatility (SD of log returns x sqrt(252)). Higher values = greater price uncertainty. SPY (S&P 500 ETF) is the benchmark.
 
 ```{r}
 #| results: asis
@@ -140,12 +153,12 @@ safe_tar_read("vig_eq_vol")
 ```
 
 ::: {.fig-caption}
-**21-day rolling realised volatility (annualised).** Y-axis: annualised vol (%). Colours: ticker. Vol = SD(log returns) x sqrt(252). SPY = S&P 500 ETF benchmark. Source: `historicaldata::hd_ohlcv()`. See FAANG tab for return comparison. [Realised volatility](https://www.investopedia.com/terms/r/realizedvolatility.asp).
+**21-day rolling realised volatility (annualised).** Y-axis: vol (%). Colours: ticker. Vol = SD(log returns) x sqrt(252). SPY = S&P 500 ETF. Source: `hd_ohlcv()`. See FAANG tab for returns. [Realised volatility](https://www.investopedia.com/terms/r/realizedvolatility.asp).
 :::
 
 ## Coverage
 
-All 51 equity tickers with trading day count and date range. Click column headers to sort. Type in filter boxes to search.
+Click column headers to sort. Type in filter boxes to search.
 
 ```{r}
 #| results: asis
@@ -157,20 +170,22 @@ df <- safe_tar_read("vig_eq_coverage")
 if (!is.null(df)) {
   top <- df[1, ]
   hd_dt(df, paste0(
-    "Equity coverage: ", nrow(df), " tickers, daily OHLCV. ",
-    "Columns: ticker, trading days, first/last date. ",
+    "Equity: ", nrow(df), " tickers, daily OHLCV. ",
     "Longest: ", top$Ticker, " (", top$`Trading Days`, " days). ",
     "Source: Yahoo Finance via hd_ohlcv(). See AAPL MA tab."
   ))
 }
 ```
 
+:::
 
-# Crypto {.panel-tabset}
+# Crypto
+
+::: {.panel-tabset}
 
 ## Major Coins
 
-BTC, ETH, SOL, and BNB daily close on log scale since 2022. Log scale reveals percentage moves — equal vertical distances represent equal percentage changes regardless of price level.
+BTC, ETH, SOL, BNB daily close on log scale since 2022. Log scale: equal vertical distances = equal percentage changes.
 
 ```{r}
 #| results: asis
@@ -182,12 +197,12 @@ safe_tar_read("vig_cr_major")
 ```
 
 ::: {.fig-caption}
-**BTC, ETH, SOL, BNB daily close on log scale.** Y-axis: USD (log10). Colours: token symbol. Log scale: equal vertical distances = equal % changes. Source: Yahoo Finance via `historicaldata::hd_ohlcv()`. See Stablecoins tab for peg analysis.
+**BTC, ETH, SOL, BNB daily close on log scale.** Y-axis: USD (log10). Colours: token. Source: Yahoo Finance via `hd_ohlcv()`. See Stablecoins tab for peg analysis.
 :::
 
 ## Stablecoin Peg
 
-USDC and USDT should trade at $1.00. Deviations indicate [depeg](https://www.investopedia.com/terms/d/depeg.asp) events — potential liquidity crises. Y-axis zoomed to $0.97–$1.03 to make small deviations visible.
+USDC and USDT should trade at $1.00. Deviations = [depeg](https://www.investopedia.com/terms/d/depeg.asp) events. Y-axis zoomed to $0.97–$1.03.
 
 ```{r}
 #| results: asis
@@ -199,12 +214,12 @@ safe_tar_read("vig_cr_stable")
 ```
 
 ::: {.fig-caption}
-**USDC and USDT daily close vs $1.00 peg.** Y-axis: USD, zoomed to $0.97–$1.03. Dashed line = $1.00 peg. Colours: token. Source: Yahoo Finance via `historicaldata::hd_ohlcv()`. See Major Coins tab for price comparison.
+**USDC and USDT daily close vs $1.00 peg.** Y-axis: USD, zoomed $0.97–$1.03. Dashed = $1.00. Source: `hd_ohlcv()`. See Major Coins tab.
 :::
 
 ## Correlation
 
-Pairwise Pearson correlation of daily log returns for 6 major crypto assets since 2023. High correlations (>0.7) indicate assets move together — less diversification benefit.
+Pairwise Pearson correlation of daily log returns for 6 crypto assets since 2023. Correlation >0.7 = limited diversification.
 
 ```{r}
 #| results: asis
@@ -216,7 +231,7 @@ safe_tar_read("vig_cr_corr")
 ```
 
 ::: {.fig-caption}
-**Pairwise Pearson correlation of daily log returns, 6 tokens, 2023+.** Fill: correlation coefficient 0–1. High correlation (>0.7) = limited diversification benefit. Source: `historicaldata::hd_ohlcv()`. See Major Coins tab.
+**Pairwise Pearson correlation of daily log returns, 6 tokens, 2023+.** Fill: correlation 0–1. High (>0.7) = limited diversification. Source: `hd_ohlcv()`. See Major Coins tab.
 :::
 
 ## Coverage
@@ -231,20 +246,21 @@ df <- safe_tar_read("vig_cr_coverage")
 if (!is.null(df)) {
   top <- df[1, ]
   hd_dt(df, paste0(
-    "Crypto coverage: ", nrow(df), " tokens, daily OHLCV. ",
-    "Columns: token, days, first/last date. ",
-    "Longest: ", top$Token, " (", top$Days, " days). ",
-    "Source: Yahoo Finance via hd_ohlcv(). See Major Coins tab."
+    "Crypto: ", nrow(df), " tokens. Longest: ", top$Token,
+    " (", top$Days, " days). Source: hd_ohlcv()."
   ))
 }
 ```
 
+:::
 
-# Macro {.panel-tabset}
+# Macro
+
+::: {.panel-tabset}
 
 ## Interest Rates
 
-US Treasury yields (2Y, 10Y, 30Y) and the effective Federal Funds rate since 2020. DFF is the policy rate set by the Fed; Treasury yields reflect market expectations of future rates and inflation.
+US Treasury yields (2Y, 10Y, 30Y) + Fed Funds rate. DFF = policy rate; Treasury yields = market expectations.
 
 ```{r}
 #| results: asis
@@ -256,12 +272,12 @@ safe_tar_read("vig_ma_rates")
 ```
 
 ::: {.fig-caption}
-**US constant-maturity Treasury yields (2Y, 10Y, 30Y) and effective Fed Funds rate (DFF).** Y-axis: yield (%). Colours: FRED series ID. DGS = daily constant-maturity yield. DFF = effective Federal Funds rate. Source: FRED via `historicaldata::hd_macro()`. See Yield Curve tab for inversion analysis.
+**US constant-maturity Treasury yields + Fed Funds rate (DFF).** Y-axis: yield (%). DGS = daily constant-maturity. Source: FRED via `hd_macro()`. See Yield Curve tab.
 :::
 
 ## Yield Curve
 
-The 10Y–2Y Treasury spread is a recession indicator. When negative (inverted), short-term rates exceed long-term rates — historically preceding recessions by 6–18 months. Red shading marks the [inversion](https://www.investopedia.com/terms/i/invertedyieldcurve.asp) period.
+10Y–2Y spread: recession indicator. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp), historically precedes recessions by 6–18 months. Red shading = inversion.
 
 ```{r}
 #| results: asis
@@ -273,12 +289,12 @@ safe_tar_read("vig_ma_yc")
 ```
 
 ::: {.fig-caption}
-**10-year minus 2-year US Treasury yield spread.** Y-axis: spread (percentage points). Red line = spread. Dashed = zero. Red shading = yield curve inversion (short rates > long rates). Inversion historically precedes recessions by 6–18 months. Source: FRED T10Y2Y via `historicaldata::hd_macro()`. See Interest Rates tab.
+**10Y minus 2Y Treasury spread.** Y-axis: spread (pp). Red shading = inverted. Source: FRED T10Y2Y via `hd_macro()`. See Interest Rates tab.
 :::
 
 ## Credit Spreads
 
-ICE BofA option-adjusted spreads for High Yield (HY) and BBB-rated corporate bonds. Wider spreads indicate higher perceived default risk. Spikes correspond to market stress events (e.g. COVID March 2020).
+ICE BofA option-adjusted spreads: HY (High Yield) and BBB (lowest investment grade). Wider = more default risk.
 
 ```{r}
 #| results: asis
@@ -290,7 +306,7 @@ safe_tar_read("vig_ma_spreads")
 ```
 
 ::: {.fig-caption}
-**ICE BofA option-adjusted spreads (OAS) over US Treasuries.** Y-axis: spread (percentage points). HY = High Yield (junk bonds). BBB = lowest investment-grade rating. OAS = option-adjusted spread, accounts for embedded options. Wider = more default risk. Source: FRED via `historicaldata::hd_macro()`. See Interest Rates tab.
+**ICE BofA OAS over Treasuries.** Y-axis: spread (pp). HY = junk bonds. BBB = investment grade. OAS = option-adjusted spread. Source: FRED via `hd_macro()`.
 :::
 
 ## All Series
@@ -305,20 +321,21 @@ df <- safe_tar_read("vig_ma_coverage")
 if (!is.null(df)) {
   top <- df |> dplyr::slice_max(Obs, n = 1)
   hd_dt(df, paste0(
-    "FRED macro: ", nrow(df), " series (daily/monthly/quarterly). ",
-    "Columns: FRED series ID, obs count, first/last date. ",
-    "Most obs: ", top$Series, " (", format(top$Obs, big.mark = ","), "). ",
-    "Source: FRED via hd_macro(). See Interest Rates tab."
+    "FRED: ", nrow(df), " series. Most obs: ", top$Series,
+    " (", format(top$Obs, big.mark = ","), "). Source: hd_macro()."
   ))
 }
 ```
 
+:::
 
-# Factors {.panel-tabset}
+# Factors
+
+::: {.panel-tabset}
 
 ## FF3 Daily
 
-The [Fama-French 3-factor model](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp) decomposes equity returns into: Market excess return (Mkt-RF), Size (SMB = Small Minus Big), and Value (HML = High Minus Low book-to-market). RF = risk-free rate.
+[Fama-French 3-factor model](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp): Mkt-RF (market), SMB (size), HML (value), RF (risk-free). Daily since 2020.
 
 ```{r}
 #| results: asis
@@ -331,12 +348,12 @@ safe_tar_read("vig_fa_ff3")
 ```
 
 ::: {.fig-caption}
-**Fama-French 3-factor model daily returns (2020+).** Y-axis: daily return (%). Faceted by factor. Mkt-RF = market excess return. SMB = small minus big (size). HML = high minus low B/M (value). RF = risk-free rate (1-month T-bill). Source: Ken French Data Library via `historicaldata::hd_factors()`. See FF5 tab.
+**FF3 daily returns (2020+).** Y-axis: return (%). Faceted. Mkt-RF = market excess. SMB = small minus big. HML = high minus low B/M. RF = T-bill. Source: Ken French via `hd_factors()`. See FF5 tab.
 :::
 
 ## FF5 Cumulative
 
-Cumulative returns for the 5-factor model since 2000. Adds RMW (Robust Minus Weak profitability) and CMA (Conservative Minus Aggressive investment). Shows which factors delivered positive long-run premia.
+5-factor model cumulative returns since 2000. Adds RMW (profitability) and CMA (investment). Mkt-RF dominates; HML underperformed post-2010.
 
 ```{r}
 #| results: asis
@@ -348,12 +365,12 @@ safe_tar_read("vig_fa_ff5")
 ```
 
 ::: {.fig-caption}
-**FF5 cumulative factor returns (2000–2026).** Y-axis: cumulative return (%). Colours: factor name. RF excluded. RMW = Robust Minus Weak (profitability). CMA = Conservative Minus Aggressive (investment). Mkt-RF dominates. HML (value) underperformed post-2010. Source: Ken French via `historicaldata::hd_factors()`. See [Momentum](https://www.investopedia.com/terms/m/momentum.asp) tab.
+**FF5 cumulative factor returns (2000–2026).** Y-axis: cum return (%). RMW = Robust Minus Weak. CMA = Conservative Minus Aggressive. Source: Ken French via `hd_factors()`. See [Momentum](https://www.investopedia.com/terms/m/momentum.asp) tab.
 :::
 
 ## Momentum
 
-Cumulative return of the momentum factor (WML = Winners Minus Losers). [Momentum](https://www.investopedia.com/terms/m/momentum.asp) suffered a catastrophic crash in March 2009 (reversal) but recovered over the following decade. Demonstrates the risk of factor concentration.
+[Momentum](https://www.investopedia.com/terms/m/momentum.asp) (WML = Winners Minus Losers). Catastrophic March 2009 crash, post-2020 recovery. Risk of factor concentration.
 
 ```{r}
 #| results: asis
@@ -365,7 +382,7 @@ safe_tar_read("vig_fa_mom")
 ```
 
 ::: {.fig-caption}
-**Momentum (WML = Winners Minus Losers) cumulative return (2000–2026).** Y-axis: cumulative return (%). Green line. WML = long past winners, short past losers (12-1 month formation). Note 2009 crash (momentum reversal) and post-2020 recovery. Source: Ken French via `historicaldata::hd_factors()`. See FF5 tab.
+**Momentum (WML) cumulative return (2000–2026).** Y-axis: cum return (%). WML = long winners, short losers. Note 2009 reversal. Source: Ken French via `hd_factors()`. See FF5 tab.
 :::
 
 ## Summary
@@ -379,12 +396,12 @@ show_code("vig_fa_coverage")
 df <- safe_tar_read("vig_fa_coverage")
 if (!is.null(df)) {
   hd_dt(df, paste0(
-    "Fama-French factors: ", dplyr::n_distinct(df$Factor), " factors, ",
+    dplyr::n_distinct(df$Factor), " factors, ",
     dplyr::n_distinct(df$Dataset), " datasets. ",
-    "Cols: dataset, freq, factor, obs, date range. ",
-    "Daily data from ", min(df$From), ". Total: ",
-    format(sum(df$Obs), big.mark = ","), " obs. ",
-    "Source: Ken French via hd_factors(). See FF3 tab."
+    "Total: ", format(sum(df$Obs), big.mark = ","), " obs from ", min(df$From),
+    ". Source: Ken French via hd_factors()."
   ))
 }
 ```
+
+:::
