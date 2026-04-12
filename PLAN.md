@@ -454,9 +454,17 @@ After the prototype, document in `docs/prototype-results.qmd`:
 | 1e | Week 3 | R targets DAG: validate, clean, consolidate |
 | 1f | Week 4 | R package: registry, connect, query, cache |
 | 1g | Week 4 | Publish to HF, test httpfs queries, cross-reference verification |
-| 2 | Month 2 | Scale to 1000 tickers, add Tiingo (delisted), Kaggle verification |
-| 3 | Month 3 | Binance minute-level crypto, Stooq international indices |
-| 4+ | Quarterly | New asset class (commodities, futures, etc.) |
+| 2a | Month 2 | Batch downloads: multi-ticker fetch from Yahoo + multi-ticker HF queries (#1) |
+| 2b | Month 2 | Scale US equity to 500+ tickers (S&P 500 constituents) |
+| 2c | Month 2 | Add Tiingo (delisted stocks for survivorship bias), Kaggle verification |
+| 3a | Month 3 | LSE ETFs: all ETFs on London Stock Exchange (#5) |
+| 3b | Month 3 | European equities: STOXX 600 / top 50 (#6) |
+| 3c | Month 3 | Asian equities: Nifty 50, Nikkei 225, Hang Seng (#6) |
+| 3d | Month 3 | Binance minute-level crypto |
+| 4a | Quarter 2 | Public HTTP API for data + metadata queries (#2) |
+| 4b | Quarter 2 | Commodities, futures (new asset class) |
+| 4c | Quarter 2 | Alternative metadata sources: CoinGecko, FRED meta, SEC (#4) |
+| 5+ | Ongoing | Quarterly new asset classes + source expansion |
 
 ## Phase 1 Lessons Learned (2026-04-11)
 

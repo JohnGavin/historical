@@ -7,7 +7,8 @@
 hd_macro(series_id, from = NULL, to = NULL, local = FALSE)
 }
 \arguments{
-\item{series_id}{FRED series ID (e.g. "SP500", "VIXCLS", "DGS10")}
+\item{series_id}{FRED series ID(s). Scalar or vector.
+Single: \code{"SP500"}. Batch: \code{c("SP500", "VIXCLS", "DGS10")}.}
 
 \item{from}{Start date (character or Date). Default: no filter.}
 
@@ -19,5 +20,9 @@ hd_macro(series_id, from = NULL, to = NULL, local = FALSE)
 Tibble with date, value, series_id columns
 }
 \description{
-Query FRED macro series
+Accepts a single series ID or a character vector for batch queries.
+}
+\examples{
+hd_macro("SP500", from = "2024-01-01")
+hd_macro(c("SP500", "VIXCLS", "DGS10"), from = "2024-01-01")
 }

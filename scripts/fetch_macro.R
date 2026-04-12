@@ -64,13 +64,41 @@ fetch_fred_csv <- function(series_id) {
 
 cli::cli_h1("Fetching {length(series_list)} FRED series")
 
-all_data <- lapply(series_list, function(sid) {
-  Sys.sleep(0.5)  # Be polite
-  fetch_fred_csv(sid)
+# Try batch download first (single HTTP request for all series)
+cli::cli_inform("Attempting batch download (1 request for all {length(series_list)} series)...")
+batch_url <- paste0("https://fred.stlouisfed.org/graph/fredgraph.csv?id=",
+                     paste(series_list, collapse = ","))
+batch_result <- tryCatch({
+  df <- read.csv(batch_url, stringsAsFactors = FALSE, check.names = FALSE)
+  names(df)[1] <- "date"
+  df$date <- as.Date(df$date)
+  # Pivot wide to long
+  long <- df |>
+    tidyr::pivot_longer(-date, names_to = "series_id", values_to = "value") |>
+    mutate(
+      value = suppressWarnings(as.numeric(as.character(value))),
+      source = "fred"
+    ) |>
+    filter(!is.na(date)) |>
+    as_tibble()
+  cli::cli_inform(c("v" = "Batch OK: {nrow(long)} obs, {n_distinct(long$series_id)} series"))
+  long
+}, error = function(e) {
+  cli::cli_warn("Batch failed ({conditionMessage(e)}), falling back to per-series...")
+  NULL
 })
 
-combined <- dplyr::bind_rows(Filter(Negate(is.null), all_data)) |>
-  as_tibble()
+# Fallback: per-series download if batch failed
+if (is.null(batch_result)) {
+  all_data <- lapply(series_list, function(sid) {
+    Sys.sleep(0.5)
+    fetch_fred_csv(sid)
+  })
+  combined <- dplyr::bind_rows(Filter(Negate(is.null), all_data)) |>
+    as_tibble()
+} else {
+  combined <- batch_result
+}
 
 dir.create("data/raw", recursive = TRUE, showWarnings = FALSE)
 out_path <- "data/raw/fred_macro.parquet"

@@ -99,7 +99,7 @@ for (i in seq_along(TOKENS)) {
   } else {
     cli::cli_warn("    FAILED")
   }
-  Sys.sleep(1)
+  Sys.sleep(0.3)
 }
 
 combined <- bind_rows(all_data)

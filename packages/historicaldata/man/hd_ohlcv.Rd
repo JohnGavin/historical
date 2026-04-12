@@ -2,25 +2,32 @@
 % Please edit documentation in R/query.R
 \name{hd_ohlcv}
 \alias{hd_ohlcv}
-\title{Query OHLCV data for a ticker}
+\title{Query OHLCV data for one or more tickers}
 \usage{
 hd_ohlcv(ticker, from = NULL, to = NULL, dataset = NULL, local = FALSE)
 }
 \arguments{
-\item{ticker}{Ticker symbol (e.g. "AAPL", "BTC")}
+\item{ticker}{Ticker symbol(s). Character scalar or vector.
+Single: \code{"AAPL"}. Batch: \code{c("AAPL", "MSFT", "GOOGL")}.}
 
 \item{from}{Start date (character or Date). Default: no filter.}
 
 \item{to}{End date (character or Date). Default: no filter.}
 
-\item{dataset}{Dataset name from registry. If NULL, auto-detected from ticker.}
+\item{dataset}{Dataset name from registry. If NULL, auto-detected from first ticker.}
 
 \item{local}{If TRUE, query local cache instead of remote.}
 }
 \value{
-Tibble of OHLCV data
+Tibble of OHLCV data (multiple tickers stacked by ticker + date)
 }
 \description{
 Fetches data from HF-hosted Parquet via DuckDB httpfs.
 Only the matching rows are transferred (predicate pushdown).
+Accepts a single ticker or a character vector for batch queries.
+}
+\examples{
+hd_ohlcv("AAPL", from = "2024-01-01")
+hd_ohlcv(c("AAPL", "MSFT", "GOOGL"), from = "2024-01-01")
+hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")
 }

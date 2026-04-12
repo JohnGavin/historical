@@ -1,19 +1,26 @@
-#' Query OHLCV data for a ticker
+#' Query OHLCV data for one or more tickers
 #'
 #' Fetches data from HF-hosted Parquet via DuckDB httpfs.
 #' Only the matching rows are transferred (predicate pushdown).
+#' Accepts a single ticker or a character vector for batch queries.
 #'
-#' @param ticker Ticker symbol (e.g. "AAPL", "BTC")
+#' @param ticker Ticker symbol(s). Character scalar or vector.
+#'   Single: `"AAPL"`. Batch: `c("AAPL", "MSFT", "GOOGL")`.
 #' @param from Start date (character or Date). Default: no filter.
 #' @param to End date (character or Date). Default: no filter.
-#' @param dataset Dataset name from registry. If NULL, auto-detected from ticker.
+#' @param dataset Dataset name from registry. If NULL, auto-detected from first ticker.
 #' @param local If TRUE, query local cache instead of remote.
-#' @return Tibble of OHLCV data
+#' @return Tibble of OHLCV data (multiple tickers stacked by ticker + date)
 #' @export
+#' @examples
+#' hd_ohlcv("AAPL", from = "2024-01-01")
+#' hd_ohlcv(c("AAPL", "MSFT", "GOOGL"), from = "2024-01-01")
+#' hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")
 hd_ohlcv <- function(ticker, from = NULL, to = NULL,
                      dataset = NULL, local = FALSE) {
+  ticker <- as.character(ticker)
   if (is.null(dataset)) {
-    dataset <- detect_dataset(ticker)
+    dataset <- detect_dataset(ticker[1])
   }
 
   ds <- hd_datasets()[[dataset]]
@@ -36,10 +43,16 @@ hd_ohlcv <- function(ticker, from = NULL, to = NULL,
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
-  # Build parameterised query
-  where_clauses <- "ticker = ?"
-  params <- list(ticker)
+  # Build parameterised query — single ticker or batch
 
+  if (length(ticker) == 1L) {
+    where_clauses <- "ticker = ?"
+    params <- list(ticker)
+  } else {
+    placeholders <- paste(rep("?", length(ticker)), collapse = ", ")
+    where_clauses <- paste0("ticker IN (", placeholders, ")")
+    params <- as.list(ticker)
+  }
 
   if (!is.null(from)) {
     where_clauses <- c(where_clauses, "date >= ?")
@@ -51,7 +64,7 @@ hd_ohlcv <- function(ticker, from = NULL, to = NULL,
   }
 
   sql <- sprintf(
-    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY date",
+    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY ticker, date",
     source_path,
     paste(where_clauses, collapse = " AND ")
   )
@@ -88,13 +101,20 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
 
 #' Query FRED macro series
 #'
-#' @param series_id FRED series ID (e.g. "SP500", "VIXCLS", "DGS10")
+#' Accepts a single series ID or a character vector for batch queries.
+#'
+#' @param series_id FRED series ID(s). Scalar or vector.
+#'   Single: `"SP500"`. Batch: `c("SP500", "VIXCLS", "DGS10")`.
 #' @param from Start date (character or Date). Default: no filter.
 #' @param to End date (character or Date). Default: no filter.
 #' @param local If TRUE, query local cache instead of remote.
 #' @return Tibble with date, value, series_id columns
 #' @export
+#' @examples
+#' hd_macro("SP500", from = "2024-01-01")
+#' hd_macro(c("SP500", "VIXCLS", "DGS10"), from = "2024-01-01")
 hd_macro <- function(series_id, from = NULL, to = NULL, local = FALSE) {
+  series_id <- as.character(series_id)
   ds <- hd_datasets()[["macro_daily"]]
 
   if (local) {
@@ -109,8 +129,14 @@ hd_macro <- function(series_id, from = NULL, to = NULL, local = FALSE) {
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
-  where_clauses <- "series_id = ?"
-  params <- list(series_id)
+  if (length(series_id) == 1L) {
+    where_clauses <- "series_id = ?"
+    params <- list(series_id)
+  } else {
+    placeholders <- paste(rep("?", length(series_id)), collapse = ", ")
+    where_clauses <- paste0("series_id IN (", placeholders, ")")
+    params <- as.list(series_id)
+  }
 
   if (!is.null(from)) {
     where_clauses <- c(where_clauses, "date >= ?")
@@ -122,7 +148,7 @@ hd_macro <- function(series_id, from = NULL, to = NULL, local = FALSE) {
   }
 
   sql <- sprintf(
-    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY date",
+    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY series_id, date",
     source_path,
     paste(where_clauses, collapse = " AND ")
   )

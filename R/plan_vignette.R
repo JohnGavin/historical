@@ -74,10 +74,8 @@ ggplot(aapl, aes(date)) +
     # ── Equity: FAANG Returns ─────────────────────────────────────
     vig_pair("vig_eq_faang", '
 
-# Use the curated FAANG group from hd_group()
-faang <- hd_group("FAANG") |>
-  map(\\(t) hd_ohlcv(t, from = "2024-01-01")) |>
-  list_rbind() |>
+# Batch query: all FAANG tickers in one DuckDB request
+faang <- hd_ohlcv(hd_group("FAANG"), from = "2024-01-01") |>
   group_by(ticker) |>
   mutate(cum_ret = adjusted / first(adjusted) - 1) |>
   ungroup()
@@ -95,11 +93,9 @@ ggplot(faang, aes(date, cum_ret, colour = ticker)) +
     # ── Equity: Realised Volatility ───────────────────────────────
     vig_pair("vig_eq_vol", '
 
-# Top 3 most volatile equities + SPY benchmark
+# Top 3 most volatile equities + SPY benchmark — single batch query
 vol_tickers <- c(hd_most_volatile("equity_daily", 3)$ticker, "SPY")
-vol <- vol_tickers |>
-  map(\\(t) hd_ohlcv(t, from = "2023-06-01")) |>
-  list_rbind() |>
+vol <- hd_ohlcv(vol_tickers, from = "2023-06-01") |>
   group_by(ticker) |>
   arrange(date) |>
   mutate(
@@ -132,10 +128,8 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
     # ── Crypto: Major Coins ───────────────────────────────────────
     vig_pair("vig_cr_major", '
 
-# Use the curated "Major Crypto" group
-major <- hd_group("Major Crypto") |>
-  map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
-  list_rbind()
+# Batch query: Major Crypto group in one request
+major <- hd_ohlcv(hd_group("Major Crypto"), from = "2022-01-01")
 
 ggplot(major, aes(date, close, colour = ticker)) +
   geom_line(linewidth = 0.5) +
@@ -149,10 +143,8 @@ ggplot(major, aes(date, close, colour = ticker)) +
     # ── Crypto: Stablecoin Peg ────────────────────────────────────
     vig_pair("vig_cr_stable", '
 
-# Use the curated "Stablecoins" group
-stable <- hd_group("Stablecoins") |>
-  map(\\(t) hd_ohlcv(t, from = "2022-01-01")) |>
-  list_rbind()
+# Batch query: Stablecoins in one request
+stable <- hd_ohlcv(hd_group("Stablecoins"), from = "2022-01-01")
 
 ggplot(stable, aes(date, close, colour = ticker)) +
   geom_line(linewidth = 0.5) +
@@ -167,11 +159,9 @@ ggplot(stable, aes(date, close, colour = ticker)) +
     # ── Crypto: Correlation ───────────────────────────────────────
     vig_pair("vig_cr_corr", '
 
-# Top 6 crypto by average volume for correlation analysis
+# Top 6 crypto by average volume — single batch query
 corr_tickers <- hd_top_by("crypto_daily", "volume_avg", 6)$ticker
-wide <- corr_tickers |>
-  map(\\(t) hd_ohlcv(t, from = "2023-01-01")) |>
-  list_rbind() |>
+wide <- hd_ohlcv(corr_tickers, from = "2023-01-01") |>
   group_by(ticker) |> arrange(date) |>
   mutate(ret = log(close / lag(close))) |>
   filter(!is.na(ret)) |> ungroup() |>
