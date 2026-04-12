@@ -9,9 +9,12 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
-          /* Remove ALL internal scrollbars — let content flow naturally */
-          .tab-pane, .card-body, .cell-output-display, .datatables,
-          .dataTables_wrapper { overflow: visible !important; }
+          /* Remove ALL internal scrollbars — MUST override Bootstrap/bslib */
+          .tab-pane, .tab-content, .card, .card-body, .card-header,
+          .cell-output, .cell-output-display, .cell-output-stdout,
+          .datatables, .dataTables_wrapper, .dataTables_scroll,
+          .bslib-card, .bslib-page-fill, .html-fill-container,
+          .html-fill-item { overflow: visible !important; max-height: none !important; height: auto !important; }
           /* Plots: ensure visible size */
           .cell-output-display img { min-height: 500px; width: 100%; }
           /* Tables: no wrapping so columns stay readable */
