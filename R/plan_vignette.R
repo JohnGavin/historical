@@ -198,9 +198,8 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
     # ── Macro: Interest Rates ─────────────────────────────────────
     vig_pair("vig_ma_rates", '
 
-rates <- c("DGS2", "DGS10", "DGS30", "DFF") |>
-  map(\\(s) hd_macro(s, from = "2020-01-01")) |>
-  list_rbind() |>
+# Batch query: 4 macro series in one DuckDB request
+rates <- hd_macro(c("DGS2", "DGS10", "DGS30", "DFF"), from = "2020-01-01") |>
   filter(!is.na(value))
 
 ggplot(rates, aes(date, value, colour = series_id)) +
@@ -232,9 +231,8 @@ ggplot(yc, aes(date, value)) +
     # ── Macro: Credit Spreads ─────────────────────────────────────
     vig_pair("vig_ma_spreads", '
 
-spreads <- c("BAMLH0A0HYM2", "BAMLC0A4CBBB") |>
-  map(\\(s) hd_macro(s, from = "2020-01-01")) |>
-  list_rbind() |>
+# Batch query: 2 credit spread series in one request
+spreads <- hd_macro(c("BAMLH0A0HYM2", "BAMLC0A4CBBB"), from = "2020-01-01") |>
   filter(!is.na(value)) |>
   mutate(series_id = recode(series_id,
     BAMLH0A0HYM2 = "HY Spread", BAMLC0A4CBBB = "BBB Spread"))
