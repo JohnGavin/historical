@@ -44,7 +44,9 @@ library(purrr)
 # hd_theme() gives black bg, white text/gridlines, high-contrast.
 # hd_palette(n) returns n high-contrast hex colours for dark backgrounds.
 
-"Setup complete. Use + hd_theme() on any ggplot. Colours: hd_palette(n)."
+# Vignette parameters — change these and tar_make() to update all plots
+MIN_MARKET_CAP <- 250e6  # GBP 250M minimum for LSE ETF filters
+MAX_YIELD_PCT  <- 0.20   # 20% cap — yields above this are likely synthetic
 '),
 
     # ── Equity: Top Market Cap Moving Averages ──────────────────
@@ -327,9 +329,10 @@ DBI::dbGetQuery(con, sql) |> as_tibble() |>
 
     # ── LSE: Most Liquid ──────────────────────────────────────────
     vig_pair("vig_lse_liquid", '
-# Top 5 LSE ETFs by average daily volume (from metadata)
+# Top 5 LSE ETFs by volume, filtered by market cap > MIN_MARKET_CAP
+MIN_MARKET_CAP <- 250e6
 liquid <- hd_search(".*[.]L$") |>
-  filter(!is.na(volume_avg)) |>
+  filter(!is.na(volume_avg), !is.na(market_cap), market_cap > MIN_MARKET_CAP) |>
   slice_max(volume_avg, n = 5)
 
 liquid_data <- hd_ohlcv(liquid$ticker, from = "2022-01-01")
@@ -339,7 +342,7 @@ ggplot(liquid_data, aes(date, close, colour = ticker)) +
   scale_y_log10(labels = dollar) +
   scale_colour_manual(values = hd_palette(5)) +
   labs(x = NULL, y = "Close (log scale)", colour = NULL,
-       title = paste("Top 5 LSE ETFs by volume:",
+       title = paste("Top 5 LSE ETFs by volume (market cap > GBP 250M):",
                      paste(liquid$ticker, collapse = ", "))) +
   hd_theme()
 '),
@@ -370,12 +373,14 @@ ggplot(combined, aes(date, cum_ret, colour = ticker, linetype = group)) +
 
     # ── LSE: GBP vs USD denominated ───────────────────────────────
     vig_pair("vig_lse_currency", '
-# Top 3 GBP and top 3 USD LSE ETFs by volume
-lse_meta <- hd_search(".*[.]L$")
+# Top 3 GBP and top 3 USD LSE ETFs by market cap (> GBP 250M)
+MIN_MARKET_CAP <- 250e6
+lse_meta <- hd_search(".*[.]L$") |>
+  filter(!is.na(market_cap), market_cap > MIN_MARKET_CAP)
 gbp <- lse_meta |> filter(currency %in% c("GBP", "GBp")) |>
-  slice_max(volume_avg, n = 3)
+  slice_max(market_cap, n = 3)
 usd <- lse_meta |> filter(currency == "USD") |>
-  slice_max(volume_avg, n = 3)
+  slice_max(market_cap, n = 3)
 
 combined <- bind_rows(
   hd_ohlcv(gbp$ticker, from = "2023-01-01") |> mutate(ccy = "GBP"),
@@ -387,20 +392,22 @@ combined <- bind_rows(
 
 ggplot(combined, aes(date, cum_ret, colour = ticker)) +
   geom_line(linewidth = 0.5) +
-  facet_wrap(~ccy, ncol = 1) +
+  facet_wrap(~ccy, ncol = 1, scales = "free_y") +
   scale_y_continuous(labels = percent) +
   scale_colour_manual(values = hd_palette(6)) +
   labs(x = NULL, y = "Cumulative return", colour = NULL,
-       title = paste("GBP-denominated:", paste(gbp$ticker, collapse = ", "),
+       title = paste("Top 3 by market cap (>GBP 250M). GBP:",
+                     paste(gbp$ticker, collapse = ", "),
                      "| USD:", paste(usd$ticker, collapse = ", "))) +
   hd_theme()
 '),
 
     # ── LSE: Fund Families ────────────────────────────────────────
     vig_pair("vig_lse_families", '
-# Distribution of LSE ETFs by fund family
+# Distribution of LSE ETFs by fund family (market cap > GBP 250M)
+MIN_MARKET_CAP <- 250e6
 lse_meta <- hd_search(".*[.]L$") |>
-  filter(!is.na(fund_family))
+  filter(!is.na(fund_family), !is.na(market_cap), market_cap > MIN_MARKET_CAP)
 
 family_counts <- lse_meta |>
   count(fund_family, sort = TRUE) |>
@@ -410,15 +417,18 @@ ggplot(family_counts, aes(reorder(fund_family, n), n)) +
   geom_col(fill = "#00BFFF") +
   coord_flip() +
   labs(x = NULL, y = "Number of ETFs",
-       title = paste(nrow(lse_meta), "LSE ETFs by fund family (top 15)")) +
+       title = paste(nrow(lse_meta), "LSE ETFs by fund family (market cap > GBP 250M, top 15)")) +
   hd_theme()
 '),
 
     # ── LSE: Highest Yield ────────────────────────────────────────
     vig_pair("vig_lse_yield", '
-# Top 10 LSE ETFs by dividend yield
+# Top 10 LSE ETFs by yield (market cap > GBP 250M, yield < 20%)
+MIN_MARKET_CAP <- 250e6
+MAX_YIELD_PCT  <- 0.20  # exclude synthetic/leveraged yields
 high_yield <- hd_search(".*[.]L$") |>
-  filter(!is.na(yield_pct), yield_pct > 0) |>
+  filter(!is.na(yield_pct), yield_pct > 0, yield_pct <= MAX_YIELD_PCT,
+         !is.na(market_cap), market_cap > MIN_MARKET_CAP) |>
   slice_max(yield_pct, n = 10) |>
   mutate(yield_label = paste0(round(yield_pct * 100, 1), "%"))
 
@@ -427,7 +437,7 @@ ggplot(high_yield, aes(reorder(ticker, yield_pct), yield_pct * 100)) +
   geom_text(aes(label = yield_label), hjust = -0.1, colour = "white", size = 3.5) +
   coord_flip() +
   labs(x = NULL, y = "Dividend yield (%)",
-       title = "Top 10 LSE ETFs by dividend yield") +
+       title = "Top 10 LSE ETFs by yield (market cap > GBP 250M, yield < 20%)") +
   hd_theme()
 '),
 

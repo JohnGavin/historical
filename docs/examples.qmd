@@ -580,9 +580,9 @@ if (!is.null(df)) {
 
 ### {.tabset}
 
-#### Setup (run first)
+#### R Setup (run first)
 
-After installing via any method below, run this once:
+After installing via any method below, run this once in R:
 
 ```{r}
 #| results: asis
