@@ -37,10 +37,12 @@ hd_datasets <- function() {
       url = hd_base_url("metadata.parquet"),
       schema = c("ticker", "dataset", "long_name", "exchange", "currency",
                  "instrument_type", "sector", "industry", "country",
-                 "market_cap", "volume_avg", "start_date", "end_date",
-                 "total_obs", "missing_pct"),
+                 "market_cap", "volume_avg", "fifty_two_week_high", "fifty_two_week_low",
+                 "expense_ratio", "yield_pct", "category", "fund_family",
+                 "nav_price", "beta_3yr", "ytd_return", "three_yr_return",
+                 "start_date", "end_date", "total_obs", "missing_pct"),
       frequency = "static",
-      description = "Per-ticker metadata: exchange, sector, market cap, coverage stats"
+      description = "Per-ticker metadata: exchange, sector, market cap, ETF fees/yield/returns, coverage stats"
     )
   )
 }

@@ -22,27 +22,50 @@ try:
 except ImportError:
     sys.exit("yfinance required: pip install yfinance")
 
-# All tickers by dataset (must match what's in the Parquet files)
-DATASETS = {
-    "equity_daily": [
-        "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
-        "AMD", "INTC", "AVGO", "QCOM",
-        "CRM", "ORCL", "ADBE", "NOW",
-        "JPM", "BAC", "GS", "MS", "V", "MA",
-        "JNJ", "UNH", "PFE", "ABBV", "MRK",
-        "WMT", "COST", "HD", "MCD", "KO", "PEP",
-        "CAT", "BA", "GE", "HON", "UPS",
-        "XOM", "CVX", "COP",
-        "DIS", "NFLX", "CMCSA", "T",
-        "PLD", "AMT",
-        "SPY", "QQQ", "IWM", "DIA",
-        "VIXY",
-    ],
-    "crypto_daily": [
-        "BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "DOT",
-        "USDC", "USDT", "RAY", "HNT", "BONK", "PYTH",
-    ],
-}
+# US equity tickers
+US_EQUITY = [
+    "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
+    "AMD", "INTC", "AVGO", "QCOM",
+    "CRM", "ORCL", "ADBE", "NOW",
+    "JPM", "BAC", "GS", "MS", "V", "MA",
+    "JNJ", "UNH", "PFE", "ABBV", "MRK",
+    "WMT", "COST", "HD", "MCD", "KO", "PEP",
+    "CAT", "BA", "GE", "HON", "UPS",
+    "XOM", "CVX", "COP",
+    "DIS", "NFLX", "CMCSA", "T",
+    "PLD", "AMT",
+    "SPY", "QQQ", "IWM", "DIA",
+    "VIXY",
+]
+
+CRYPTO = [
+    "BTC", "ETH", "BNB", "SOL", "XRP", "ADA", "DOGE", "DOT",
+    "USDC", "USDT", "RAY", "HNT", "BONK", "PYTH",
+]
+
+
+def load_lse_tickers() -> list[str]:
+    """Load LSE ETF tickers from the pre-built list."""
+    for path in [Path("lse_etf_tickers_yahoo.txt"),
+                 Path(__file__).parent.parent / "lse_etf_tickers_yahoo.txt"]:
+        if path.exists():
+            return [l.strip() for l in path.read_text().splitlines() if l.strip()]
+    print("WARNING: lse_etf_tickers_yahoo.txt not found — skipping LSE tickers")
+    return []
+
+
+def build_datasets() -> dict:
+    """Build DATASETS dict including LSE tickers."""
+    lse = load_lse_tickers()
+    equity = US_EQUITY + lse
+    print(f"Equity tickers: {len(US_EQUITY)} US + {len(lse)} LSE = {len(equity)}")
+    return {
+        "equity_daily": equity,
+        "crypto_daily": CRYPTO,
+    }
+
+
+DATASETS = build_datasets()
 
 # Yahoo ticker mapping (crypto uses {SYMBOL}-USD)
 def yahoo_ticker(ticker: str, dataset: str) -> str:
@@ -56,6 +79,9 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
     try:
         t = yf.Ticker(yahoo_sym)
         info = t.info or {}
+        # ETF-specific fields (from fundProfile if available)
+        fund_profile = info.get("fundProfile", {}) or {}
+
         return {
             "long_name": info.get("longName") or info.get("shortName", ""),
             "exchange": info.get("exchange", ""),
@@ -65,10 +91,19 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
             "sector": info.get("sector"),
             "industry": info.get("industry"),
             "country": info.get("country"),
-            "market_cap": info.get("marketCap"),
+            "market_cap": info.get("marketCap") or info.get("totalAssets"),
             "volume_avg": info.get("averageVolume"),
             "fifty_two_week_high": info.get("fiftyTwoWeekHigh"),
             "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
+            # ETF-specific
+            "expense_ratio": info.get("annualReportExpenseRatio"),
+            "yield_pct": info.get("yield"),
+            "category": info.get("category") or info.get("legalType"),
+            "fund_family": info.get("fundFamily"),
+            "nav_price": info.get("navPrice"),
+            "beta_3yr": info.get("beta3Year"),
+            "ytd_return": info.get("ytdReturn"),
+            "three_yr_return": info.get("threeYearAverageReturn"),
         }
     except Exception as e:
         print(f"    WARN: {yahoo_sym}: {e}")
@@ -145,6 +180,14 @@ def main():
                 "volume_avg": info.get("volume_avg"),
                 "fifty_two_week_high": info.get("fifty_two_week_high"),
                 "fifty_two_week_low": info.get("fifty_two_week_low"),
+                "expense_ratio": info.get("expense_ratio"),
+                "yield_pct": info.get("yield_pct"),
+                "category": info.get("category"),
+                "fund_family": info.get("fund_family"),
+                "nav_price": info.get("nav_price"),
+                "beta_3yr": info.get("beta_3yr"),
+                "ytd_return": info.get("ytd_return"),
+                "three_yr_return": info.get("three_yr_return"),
                 "start_date": stats.get("start_date"),
                 "end_date": stats.get("end_date"),
                 "total_obs": stats.get("total_obs"),
@@ -159,7 +202,9 @@ def main():
     for col in ["start_date", "end_date"]:
         df[col] = pd.to_datetime(df[col]).dt.date
     # Ensure numeric columns
-    for col in ["market_cap", "volume_avg", "fifty_two_week_high", "fifty_two_week_low", "missing_pct"]:
+    for col in ["market_cap", "volume_avg", "fifty_two_week_high", "fifty_two_week_low",
+                 "missing_pct", "expense_ratio", "yield_pct", "nav_price",
+                 "beta_3yr", "ytd_return", "three_yr_return"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
     df["total_obs"] = pd.to_numeric(df["total_obs"], errors="coerce").astype("Int64")
 

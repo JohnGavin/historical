@@ -13,7 +13,8 @@
 #' hd_top_by("crypto_daily", "volume_avg", 3)
 hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
   valid_metrics <- c("market_cap", "volume_avg", "total_obs", "missing_pct",
-                     "fifty_two_week_high", "fifty_two_week_low")
+                     "fifty_two_week_high", "fifty_two_week_low", "expense_ratio",
+                     "yield_pct", "beta_3yr", "ytd_return", "three_yr_return")
   if (!metric %in% valid_metrics) {
     cli::cli_abort("Invalid metric: {metric}. Valid: {paste(valid_metrics, collapse = ', ')}")
   }
