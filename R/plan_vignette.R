@@ -28,16 +28,15 @@ vig_pair <- function(name, code) {
 }
 
 plan_vignette <- function() {
-  dark_theme <- '
+  plot_theme <- '
 theme_set(theme_minimal(base_size = 12) + theme(
-  plot.background = element_rect(fill = "grey10", colour = NA),
-  panel.background = element_rect(fill = "grey10", colour = NA),
-  text = element_text(colour = "grey80"),
-  axis.text = element_text(colour = "grey70"),
+  plot.background = element_rect(fill = "gray70", colour = NA),
+  panel.background = element_rect(fill = "gray70", colour = NA),
+  text = element_text(colour = "grey20"),
+  axis.text = element_text(colour = "grey30"),
   panel.grid.minor = element_blank(),
-  panel.grid.major = element_line(colour = "grey25"),
-  legend.position = "bottom",
-  plot.caption = element_text(size = 7, colour = "grey60", hjust = 0)
+  panel.grid.major = element_line(colour = "grey60"),
+  legend.position = "bottom"
 ))'
 
   c(
@@ -47,7 +46,7 @@ library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
-', dark_theme, '
+', plot_theme, '
 
 aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
   arrange(date) |>
@@ -59,22 +58,13 @@ aapl <- hd_ohlcv("AAPL", from = "2023-01-01") |>
   select(-cs)
 
 ggplot(aapl, aes(date)) +
-  geom_line(aes(y = close), colour = "white", linewidth = 0.4) +
+  geom_line(aes(y = close), colour = "grey20", linewidth = 0.4) +
   geom_line(aes(y = ma_50), colour = "#3498db", linewidth = 0.5, linetype = "dashed") +
   geom_line(aes(y = ma_200), colour = "#e74c3c", linewidth = 0.5, linetype = "dashed") +
   scale_y_continuous(labels = dollar) +
   labs(
     x = NULL, y = "Close (USD)",
-    title = "AAPL daily close with 50-day and 200-day moving averages",
-    caption = paste0(
-      "AAPL close with 50d and 200d simple moving averages (SMA). ",
-      "Y-axis: USD. White = close, blue dashed = 50d SMA, red dashed = 200d SMA. ",
-      "MA = simple moving average (trailing, equal-weighted). ",
-      nrow(aapl), " trading days from ", min(aapl$date), " to ", max(aapl$date), ". ",
-      "Source: Yahoo Finance via historicaldata::hd_ohlcv(). ",
-      "See Volatility tab for risk-adjusted view. ",
-      "Golden/death cross: https://www.investopedia.com/terms/g/goldencross.asp"
-    )
+    title = "AAPL daily close with 50-day and 200-day moving averages"
   )
 ')),
 
@@ -84,7 +74,7 @@ library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
-', dark_theme, '
+', plot_theme, '
 
 faang <- bind_rows(lapply(
   c("AAPL", "AMZN", "GOOGL", "META", "NFLX"),
@@ -102,15 +92,7 @@ ggplot(faang, aes(date, cum_ret, colour = ticker)) +
   scale_y_continuous(labels = percent) +
   labs(
     x = NULL, y = "Cumulative return", colour = NULL,
-    title = "FAANG cumulative returns rebased to 2024-01-01",
-    caption = paste0(
-      "FAANG cumulative returns from 2024-01-01 (0% baseline). ",
-      "Y-axis: cumulative return (%). Colours: ticker symbol. ",
-      "FAANG = Meta (META), Apple (AAPL), Amazon (AMZN), Netflix (NFLX), Alphabet (GOOGL). ",
-      "Best performer: ", best$ticker, " at ", round(best$cum_ret * 100, 1), "%. ",
-      "Source: Yahoo Finance split-adjusted close via historicaldata::hd_ohlcv(). ",
-      "See AAPL MA tab for single-stock detail."
-    )
+    title = "FAANG cumulative returns rebased to 2024-01-01"
   )
 ')),
 
@@ -120,7 +102,7 @@ library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
-', dark_theme, '
+', plot_theme, '
 
 vol <- bind_rows(lapply(
   c("AAPL", "NVDA", "TSLA", "SPY"),
@@ -144,16 +126,7 @@ ggplot(vol, aes(date, vol_21d, colour = ticker)) +
   scale_y_continuous(labels = percent) +
   labs(
     x = NULL, y = "21d annualised volatility", colour = NULL,
-    title = "Realised volatility: AAPL, NVDA, TSLA vs SPY benchmark",
-    caption = paste0(
-      "21-day rolling realised volatility (annualised). ",
-      "Y-axis: annualised vol (%). Colours: ticker. Vol = SD(log returns) x sqrt(252). ",
-      "Highest current: ", max_vol$ticker, " at ", round(max_vol$vol_21d * 100, 1), "%. ",
-      "Lowest: ", min_vol$ticker, " at ", round(min_vol$vol_21d * 100, 1), "%. ",
-      "SPY = S&P 500 ETF benchmark. Source: historicaldata::hd_ohlcv(). ",
-      "See FAANG tab for return comparison. ",
-      "Realised vol: https://www.investopedia.com/terms/r/realizedvolatility.asp"
-    )
+    title = "Realised volatility: AAPL, NVDA, TSLA vs SPY benchmark"
   )
 ')),
 
@@ -179,7 +152,7 @@ library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
-', dark_theme, '
+', plot_theme, '
 
 major <- bind_rows(lapply(
   c("BTC", "ETH", "SOL", "BNB"),
@@ -191,15 +164,7 @@ ggplot(major, aes(date, close, colour = ticker)) +
   scale_y_log10(labels = dollar) +
   labs(
     x = NULL, y = "Close USD (log scale)", colour = NULL,
-    title = "BTC, ETH, SOL, BNB daily close prices",
-    caption = paste0(
-      "Major cryptocurrency daily close on log scale. ",
-      "Y-axis: USD (log10). Colours: token symbol. ",
-      "Log scale: equal vertical distances = equal percentage changes. ",
-      nrow(major), " total observations from ", min(major$date), " to ", max(major$date), ". ",
-      "Source: Yahoo Finance via historicaldata::hd_ohlcv(). ",
-      "See Stablecoins tab for peg analysis."
-    )
+    title = "BTC, ETH, SOL, BNB daily close prices"
   )
 ')),
 
@@ -208,7 +173,7 @@ ggplot(major, aes(date, close, colour = ticker)) +
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
-', dark_theme, '
+', plot_theme, '
 
 stable <- bind_rows(
   hd_ohlcv("USDC", from = "2022-01-01"),
@@ -223,16 +188,7 @@ ggplot(stable, aes(date, close, colour = ticker)) +
   scale_y_continuous(limits = c(0.97, 1.03)) +
   labs(
     x = NULL, y = "USD price", colour = NULL,
-    title = "Stablecoin peg: USDC and USDT deviation from $1.00",
-    caption = paste0(
-      "USDC and USDT daily close vs $1.00 peg. ",
-      "Y-axis: USD, zoomed to $0.97-$1.03. Dashed line = $1.00 peg. Colours: token. ",
-      "Max depeg: ", max_depeg$ticker, " at $", round(max_depeg$close, 4),
-      " on ", max_depeg$date, ". ",
-      "Source: Yahoo Finance via historicaldata::hd_ohlcv(). ",
-      "See Major Coins tab for price comparison. ",
-      "Depeg: https://www.investopedia.com/terms/d/depeg.asp"
-    )
+    title = "Stablecoin peg: USDC and USDT deviation from $1.00"
   )
 ')),
 
@@ -242,7 +198,7 @@ library(historicaldata)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-', dark_theme, '
+', plot_theme, '
 
 tokens <- c("BTC", "ETH", "SOL", "BNB", "ADA", "XRP")
 wide <- bind_rows(lapply(tokens, \\(t) hd_ohlcv(t, from = "2023-01-01"))) |>
@@ -263,20 +219,12 @@ min_pair <- cor_long |> filter(row != col) |> slice_min(cor, n = 1)
 
 ggplot(cor_long, aes(row, col, fill = cor)) +
   geom_tile() +
-  geom_text(aes(label = round(cor, 2)), colour = "white", size = 3.5) +
-  scale_fill_gradient2(low = "#3498db", mid = "grey20", high = "#e74c3c",
+  geom_text(aes(label = round(cor, 2)), colour = "grey20", size = 3.5) +
+  scale_fill_gradient2(low = "#3498db", mid = "grey80", high = "#e74c3c",
                        midpoint = 0.5, limits = c(0, 1)) +
   labs(
     x = NULL, y = NULL, fill = "Corr",
-    title = "Crypto log-return correlation matrix (2023+)",
-    caption = paste0(
-      "Pairwise Pearson correlation of daily log returns, 6 tokens, 2023+. ",
-      "Fill: correlation coefficient 0-1. Text: rounded to 2dp. ",
-      "Highest: ", max_pair$row, "-", max_pair$col, " at ", round(max_pair$cor, 2), ". ",
-      "Lowest: ", min_pair$row, "-", min_pair$col, " at ", round(min_pair$cor, 2), ". ",
-      "High correlation (>0.7) = limited diversification benefit. ",
-      "Source: historicaldata::hd_ohlcv(). See Major Coins tab."
-    )
+    title = "Crypto log-return correlation matrix (2023+)"
   ) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 ')),
@@ -300,7 +248,7 @@ bind_rows(lapply(tickers, \\(t) {
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
-', dark_theme, '
+', plot_theme, '
 
 rates <- bind_rows(lapply(
   c("DGS2", "DGS10", "DGS30", "DFF"),
@@ -314,14 +262,7 @@ ggplot(rates, aes(date, value, colour = series_id)) +
   geom_line(linewidth = 0.4) +
   labs(
     x = NULL, y = "Yield (%)", colour = NULL,
-    title = "US Treasury yields and Fed Funds rate (2020+)",
-    caption = paste0(
-      "US constant-maturity Treasury yields (2Y, 10Y, 30Y) and effective Fed Funds rate (DFF). ",
-      "Y-axis: yield (%). Colours: FRED series ID. ",
-      "DGS = daily constant-maturity yield. DFF = effective Federal Funds rate. ",
-      "Current 10Y-2Y spread: ", round(spread * 100), " basis points. ",
-      "Source: FRED via historicaldata::hd_macro(). See Yield Curve tab for inversion analysis."
-    )
+    title = "US Treasury yields and Fed Funds rate (2020+)"
   )
 ')),
 
@@ -330,7 +271,7 @@ ggplot(rates, aes(date, value, colour = series_id)) +
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
-', dark_theme, '
+', plot_theme, '
 
 yc <- hd_macro("T10Y2Y", from = "2018-01-01") |> filter(!is.na(value))
 inv <- yc |> filter(value < 0)
@@ -345,16 +286,7 @@ ggplot(yc, aes(date, value)) +
            ymin = -Inf, ymax = 0, fill = "#e74c3c", alpha = 0.15) +
   labs(
     x = NULL, y = "10Y - 2Y spread (%)",
-    title = "Yield curve: 10Y-2Y Treasury spread with inversion shading",
-    caption = paste0(
-      "10-year minus 2-year US Treasury yield spread. ",
-      "Y-axis: spread (percentage points). Red line = spread. Dashed = zero. ",
-      "Red shading = yield curve inversion (short rates > long rates). ",
-      "Inverted from ", inv_start, " to ", inv_end, " (", inv_days, " days). ",
-      "Inversion historically precedes recessions by 6-18 months. ",
-      "Source: FRED T10Y2Y via historicaldata::hd_macro(). See Interest Rates tab. ",
-      "Yield curve inversion: https://www.investopedia.com/terms/i/invertedyieldcurve.asp"
-    )
+    title = "Yield curve: 10Y-2Y Treasury spread with inversion shading"
   )
 ')),
 
@@ -363,7 +295,7 @@ ggplot(yc, aes(date, value)) +
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
-', dark_theme, '
+', plot_theme, '
 
 spreads <- bind_rows(
   hd_macro("BAMLH0A0HYM2", from = "2020-01-01"),
@@ -379,17 +311,7 @@ ggplot(spreads, aes(date, value, colour = series_id)) +
   geom_line(linewidth = 0.4) +
   labs(
     x = NULL, y = "OAS (percentage points)", colour = NULL,
-    title = "ICE BofA credit spreads: High Yield vs BBB (2020+)",
-    caption = paste0(
-      "ICE BofA option-adjusted spreads (OAS) over US Treasuries. ",
-      "Y-axis: spread (percentage points). Colours: credit quality tier. ",
-      "HY = High Yield (junk bonds). BBB = lowest investment-grade rating. ",
-      "OAS = option-adjusted spread, accounts for embedded options. ",
-      "Current HY: ", round(latest$value[latest$series_id == "HY Spread"], 2), "pp. ",
-      "Current BBB: ", round(latest$value[latest$series_id == "BBB Spread"], 2), "pp. ",
-      "Wider spreads = higher perceived default risk. ",
-      "Source: FRED via historicaldata::hd_macro(). See Interest Rates tab."
-    )
+    title = "ICE BofA credit spreads: High Yield vs BBB (2020+)"
   )
 ')),
 
@@ -412,7 +334,7 @@ bind_rows(lapply(series, \\(s) {
 library(historicaldata)
 library(dplyr)
 library(ggplot2)
-', dark_theme, '
+', plot_theme, '
 
 ff3 <- hd_factors("FF3", "daily", from = "2020-01-01")
 mktrf <- ff3 |> filter(factor_name == "Mkt-RF")
@@ -423,17 +345,7 @@ ggplot(ff3, aes(date, value, colour = factor_name)) +
   facet_wrap(~factor_name, ncol = 1, scales = "free_y") +
   labs(
     x = NULL, y = "Return (%)",
-    title = "Fama-French 3 factors: daily returns (2020+)",
-    caption = paste0(
-      "Fama-French 3-factor model daily returns. ",
-      "Y-axis: daily return (%). Faceted by factor. ",
-      "Mkt-RF = market excess return over risk-free rate. ",
-      "SMB = Small Minus Big (size premium). HML = High Minus Low book-to-market (value premium). ",
-      "RF = risk-free rate (1-month T-bill). ",
-      "Mkt-RF range: ", round(min(mktrf$value), 1), "% to ", round(max(mktrf$value), 1), "%. ",
-      "Source: Ken French Data Library via historicaldata::hd_factors(). See FF5 tab. ",
-      "Fama-French: https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp"
-    )
+    title = "Fama-French 3 factors: daily returns (2020+)"
   ) +
   theme(legend.position = "none")
 ')),
@@ -444,7 +356,7 @@ library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
-', dark_theme, '
+', plot_theme, '
 
 ff5 <- hd_factors("FF5", "daily", from = "2000-01-01") |>
   filter(factor_name != "RF") |>
@@ -463,16 +375,7 @@ ggplot(ff5, aes(date, cum_ret, colour = factor_name)) +
   scale_y_continuous(labels = percent) +
   labs(
     x = NULL, y = "Cumulative return", colour = NULL,
-    title = "FF5 cumulative factor returns (2000-2026)",
-    caption = paste0(
-      "Fama-French 5-factor cumulative returns since 2000-01-01. ",
-      "Y-axis: cumulative return (%). Colours: factor name. RF excluded. ",
-      "RMW = Robust Minus Weak (profitability). CMA = Conservative Minus Aggressive (investment). ",
-      "Best: ", best$factor_name, " at ", round(best$cum_ret * 100, 0), "%. ",
-      "Worst: ", worst$factor_name, " at ", round(worst$cum_ret * 100, 0), "%. ",
-      "HML (value) underperformed post-2010. ",
-      "Source: Ken French via historicaldata::hd_factors(). See Momentum tab."
-    )
+    title = "FF5 cumulative factor returns (2000-2026)"
   )
 ')),
 
@@ -482,7 +385,7 @@ library(historicaldata)
 library(dplyr)
 library(ggplot2)
 library(scales)
-', dark_theme, '
+', plot_theme, '
 
 mom <- hd_factors("Mom", "daily", from = "2000-01-01") |>
   arrange(date) |>
@@ -497,17 +400,7 @@ ggplot(mom, aes(date, cum_ret)) +
   scale_y_continuous(labels = percent) +
   labs(
     x = NULL, y = "Cumulative return",
-    title = "Momentum factor cumulative return (2000-2026)",
-    caption = paste0(
-      "Momentum (WML = Winners Minus Losers) cumulative return since 2000. ",
-      "Y-axis: cumulative return (%). Green line. ",
-      "WML = long past winners, short past losers (12-1 month formation). ",
-      "Peak: ", round(peak$cum_ret * 100, 0), "% on ", peak$date, ". ",
-      "Trough: ", round(trough$cum_ret * 100, 0), "% on ", trough$date, " (2009 crash). ",
-      "Momentum suffered catastrophic reversal in March 2009 but recovered post-2020. ",
-      "Source: Ken French via historicaldata::hd_factors(). See FF5 tab. ",
-      "Momentum: https://www.investopedia.com/terms/m/momentum.asp"
-    )
+    title = "Momentum factor cumulative return (2000-2026)"
   )
 ')),
 
