@@ -140,3 +140,35 @@ hd_ticker_info <- function(ticker) {
   ), params = list(ticker)) |>
     dplyr::as_tibble()
 }
+
+#' FRED series metadata (frequency, units)
+#'
+#' Returns known metadata for FRED macro series.
+#' These are hardcoded since the FRED API requires an API key.
+#'
+#' @return Tibble with series_id, frequency, units, title
+#' @export
+hd_fred_meta <- function() {
+  dplyr::tribble(
+    ~series_id,       ~frequency,  ~units,              ~title,
+    "SP500",          "Daily",     "Index",             "S&P 500",
+    "VIXCLS",         "Daily",     "Index",             "CBOE Volatility Index (VIX)",
+    "DGS2",           "Daily",     "Percent",           "2-Year Treasury Constant Maturity Rate",
+    "DGS10",          "Daily",     "Percent",           "10-Year Treasury Constant Maturity Rate",
+    "DGS30",          "Daily",     "Percent",           "30-Year Treasury Constant Maturity Rate",
+    "DFF",            "Daily",     "Percent",           "Effective Federal Funds Rate",
+    "FEDFUNDS",       "Monthly",   "Percent",           "Federal Funds Effective Rate",
+    "BAMLH0A0HYM2",   "Daily",     "Percent",           "ICE BofA US High Yield OAS",
+    "BAMLC0A4CBBB",   "Daily",     "Percent",           "ICE BofA BBB US Corporate OAS",
+    "GDP",            "Quarterly", "Billions USD",      "Gross Domestic Product",
+    "UNRATE",         "Monthly",   "Percent",           "Unemployment Rate",
+    "CPIAUCSL",       "Monthly",   "Index (1982=100)",  "Consumer Price Index (All Urban)",
+    "PCEPI",          "Monthly",   "Index (2017=100)",  "Personal Consumption Expenditure Price Index",
+    "DCOILWTICO",     "Daily",     "USD/Barrel",        "WTI Crude Oil Price",
+    "DTWEXBGS",       "Daily",     "Index (2006=100)",  "Trade-Weighted USD Index (Broad)",
+    "CSUSHPISA",      "Monthly",   "Index (2000=100)",  "Case-Shiller US Home Price Index",
+    "M2SL",           "Monthly",   "Billions USD",      "M2 Money Supply",
+    "T10Y2Y",         "Daily",     "Percent",           "10Y-2Y Treasury Spread",
+    "T10YIE",         "Daily",     "Percent",           "10-Year Breakeven Inflation Rate"
+  )
+}

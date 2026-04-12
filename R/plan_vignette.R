@@ -247,12 +247,17 @@ ggplot(spreads, aes(date, value, colour = series_id)) +
 
     # ── Macro: Coverage (single query) ────────────────────────────
     vig_pair("vig_ma_coverage", '
+# Join data stats with FRED metadata (frequency, units, title)
 con <- hd_connect()
 on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 ds <- hd_datasets()[["macro_daily"]]
 sql <- paste0("SELECT series_id, COUNT(*) as n, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY series_id ORDER BY series_id")
-DBI::dbGetQuery(con, sql) |> as_tibble() |>
-  rename(Series = series_id, Obs = n, From = first_dt, To = last_dt)
+stats <- DBI::dbGetQuery(con, sql) |> as_tibble()
+meta <- hd_fred_meta()
+stats |>
+  left_join(meta, by = "series_id") |>
+  select(Series = series_id, Title = title, Freq = frequency,
+         Units = units, Obs = n, From = first_dt, To = last_dt)
 '),
 
     # ── Factors: FF3 Daily ────────────────────────────────────────
