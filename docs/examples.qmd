@@ -9,9 +9,13 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
-          /* Tab panes scroll vertically */
-          .tab-pane { overflow-y: auto !important; max-height: 85vh; }
-          .tab-pane .cell-output-display { overflow: visible !important; }
+          /* Tab panes: single scrollbar for entire tab content */
+          .tab-pane { overflow-y: auto !important; overflow-x: hidden !important; }
+          /* Plots: force minimum height so they don't collapse */
+          .cell-output-display img { min-height: 500px; width: 100%; }
+          /* Tables: horizontal scroll when wider than viewport */
+          .datatables { overflow-x: auto !important; width: 100% !important; }
+          table.dataTable { white-space: nowrap; }
           /* Click-to-zoom: fill entire screen */
           .fullscreen-overlay {
             position: fixed !important;
@@ -96,6 +100,7 @@ show_code("vig_eq_aapl")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_eq_aapl")
 ```
 
@@ -118,6 +123,7 @@ show_code("vig_eq_faang")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_eq_faang")
 ```
 
@@ -140,6 +146,7 @@ show_code("vig_eq_vol")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_eq_vol")
 ```
 
@@ -187,6 +194,7 @@ show_code("vig_cr_major")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_cr_major")
 ```
 
@@ -209,6 +217,7 @@ show_code("vig_cr_stable")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_cr_stable")
 ```
 
@@ -231,6 +240,7 @@ show_code("vig_cr_corr")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_cr_corr")
 ```
 
@@ -274,6 +284,7 @@ show_code("vig_ma_rates")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_ma_rates")
 ```
 
@@ -291,6 +302,7 @@ show_code("vig_ma_yc")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_ma_yc")
 ```
 
@@ -308,6 +320,7 @@ show_code("vig_ma_spreads")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_ma_spreads")
 ```
 
@@ -364,6 +377,7 @@ show_code("vig_fa_ff5")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_fa_ff5")
 ```
 
@@ -381,6 +395,7 @@ show_code("vig_fa_mom")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_fa_mom")
 ```
 
@@ -422,6 +437,7 @@ show_code("vig_lse_liquid")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_lse_liquid")
 ```
 
@@ -444,6 +460,7 @@ show_code("vig_lse_ftse_vs_global")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_lse_ftse_vs_global")
 ```
 
@@ -461,6 +478,7 @@ show_code("vig_lse_currency")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_lse_currency")
 ```
 
@@ -500,6 +518,7 @@ show_code("vig_lse_yield")
 ```
 
 ```{r}
+#| fig-height: 8
 safe_tar_read("vig_lse_yield")
 ```
 

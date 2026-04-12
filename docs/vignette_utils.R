@@ -43,9 +43,45 @@ safe_tar_read <- function(name) {
   )
 }
 
-#' DT table with caption, sortable, compact
+#' Format large numbers as human-readable (1.2T, 345M, 12K)
+human_number <- function(x) {
+  ifelse(is.na(x), "",
+    ifelse(abs(x) >= 1e12, paste0(round(x / 1e12, 1), "T"),
+    ifelse(abs(x) >= 1e9, paste0(round(x / 1e9, 1), "B"),
+    ifelse(abs(x) >= 1e6, paste0(round(x / 1e6, 1), "M"),
+    ifelse(abs(x) >= 1e3, paste0(round(x / 1e3, 1), "K"),
+    as.character(round(x, 1)))))))
+}
+
+#' Format dates: strip 00:00:00 timestamps
+clean_dates <- function(x) {
+  if (inherits(x, c("POSIXct", "POSIXlt"))) return(as.Date(x))
+  if (is.character(x)) return(sub(" 00:00:00$", "", x))
+  x
+}
+
+#' DT table with caption, sortable, human-readable formatting
 hd_dt <- function(df, caption_text) {
   if (is.null(df)) return(invisible(NULL))
+
+  # Format large numbers
+  for (col in names(df)) {
+    if (is.numeric(df[[col]]) && col %in% c("market_cap", "volume_avg", "total_obs",
+                                              "Obs", "Days", "Trading Days", "n")) {
+      df[[col]] <- human_number(df[[col]])
+    }
+    # Format percentages
+    if (is.numeric(df[[col]]) && col %in% c("yield_pct", "missing_pct", "expense_ratio")) {
+      df[[col]] <- ifelse(is.na(df[[col]]), "", paste0(round(df[[col]] * 100, 2), "%"))
+    }
+    # Format beta/returns to 2dp
+    if (is.numeric(df[[col]]) && col %in% c("beta_3yr", "ytd_return", "three_yr_return")) {
+      df[[col]] <- ifelse(is.na(df[[col]]), "", round(df[[col]], 2))
+    }
+    # Clean dates
+    df[[col]] <- clean_dates(df[[col]])
+  }
+
   DT::datatable(
     df,
     caption = htmltools::tags$caption(
@@ -57,7 +93,7 @@ hd_dt <- function(df, caption_text) {
     options = list(
       pageLength = 15,
       scrollX = TRUE,
-      autoWidth = TRUE,
+      autoWidth = FALSE,
       dom = "frtip"
     )
   )
