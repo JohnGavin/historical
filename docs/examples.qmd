@@ -9,12 +9,12 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
-          /* Tab panes: single scrollbar for entire tab content */
-          .tab-pane { overflow-y: auto !important; overflow-x: hidden !important; }
-          /* Plots: force minimum height so they don't collapse */
+          /* Remove ALL internal scrollbars — let content flow naturally */
+          .tab-pane, .card-body, .cell-output-display, .datatables,
+          .dataTables_wrapper { overflow: visible !important; }
+          /* Plots: ensure visible size */
           .cell-output-display img { min-height: 500px; width: 100%; }
-          /* Tables: horizontal scroll when wider than viewport */
-          .datatables { overflow-x: auto !important; width: 100% !important; }
+          /* Tables: no wrapping so columns stay readable */
           table.dataTable { white-space: nowrap; }
           /* Click-to-zoom: fill entire screen */
           .fullscreen-overlay {
