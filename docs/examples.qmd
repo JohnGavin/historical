@@ -9,16 +9,26 @@ format:
       - text: |
           <style>
           body { font-size: 1.15em; }
-          /* Remove ALL internal scrollbars — MUST override Bootstrap/bslib */
-          .tab-pane, .tab-content, .card, .card-body, .card-header,
-          .cell-output, .cell-output-display, .cell-output-stdout,
-          .datatables, .dataTables_wrapper, .dataTables_scroll,
-          .bslib-card, .bslib-page-fill, .html-fill-container,
-          .html-fill-item { overflow: visible !important; max-height: none !important; height: auto !important; }
-          /* Plots: ensure visible size */
-          .cell-output-display img { min-height: 500px; width: 100%; }
-          /* Tables: no wrapping so columns stay readable */
+          /* Dashboard cards: don't constrain height, let content flow */
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card { height: auto !important; min-height: 0 !important; }
+          /* Tab content: visible overflow, no internal scrollbars */
+          .tab-pane, .tab-content, .card-body { overflow: visible !important; }
+          /* Each cell output: block layout, no overlap */
+          .cell-output-display { display: block !important; position: relative !important;
+            overflow: visible !important; margin-bottom: 1em; }
+          /* Plots: fixed height so they don't collapse */
+          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
+          /* Fig captions: below the plot, not overlaid */
+          .fig-caption { display: block; position: relative; clear: both;
+            margin-top: 0.5em; margin-bottom: 1em; }
+          /* Tables: block, no overlap, horizontal scroll via wrapper */
+          .datatables, .dataTables_wrapper { display: block !important;
+            position: relative !important; overflow-x: auto !important;
+            margin-top: 0.5em; margin-bottom: 1em; }
           table.dataTable { white-space: nowrap; }
+          /* Table captions above table */
+          table caption, .dataTables_wrapper caption { caption-side: top !important; }
           /* Click-to-zoom: fill entire screen */
           .fullscreen-overlay {
             position: fixed !important;
