@@ -240,7 +240,11 @@ STOXX600_MAJORS = [
 
 
 def load_stoxx600_tickers() -> list[str]:
-    """Return major STOXX Europe 600 tickers with Yahoo suffixes."""
+    """Return major STOXX Europe 600 tickers with Yahoo suffixes.
+
+    Covers ~150 of the largest constituents (~70% by market cap).
+    Full STOXX 600 constituent list requires a paid data subscription.
+    """
     return list(STOXX600_MAJORS)
 
 

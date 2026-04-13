@@ -89,9 +89,9 @@ source(utils_path)
 ::: {.callout-note}
 ## Daily Return Information Factor (DRIF)
 
-Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-returns/): an elastic net regression on the **full distribution of past 21 daily returns** — both chronological order and rank order — predicts next-month returns. This captures more information than single-signal approaches like MAX or momentum.
+Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-returns/): a regression on the **full distribution of past 21 daily returns** — both chronological order and rank order — predicts next-month returns. The original paper uses elastic net; this implementation uses PCA-OLS (5 principal components) as `glmnet` is not in the current Nix shell. This captures more information than single-signal approaches like MAX or momentum.
 
-**Factor-level implementation:** Each month, use an expanding-window elastic net to predict next month's factor return from the past 21 daily returns. Go long the top-2 predicted factors. Monthly rebalance.
+**Factor-level implementation:** Each month, use an expanding-window PCA-OLS model to predict next month's factor return from 42 features (21 chronological + 21 rank daily returns). Go long the top-2 predicted factors. Monthly rebalance.
 
 **Key insight from the paper:** Chronological order (when returns occurred) is more predictive than rank order (how extreme they were). Timing > magnitude. The DRIF signal subsumes many existing anomalies including short-term reversal, volatility effects, and the MAX signal.
 :::

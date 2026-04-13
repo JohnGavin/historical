@@ -94,9 +94,17 @@ hd_dt <- function(df, caption_text) {
       pageLength = 15,
       scrollX = TRUE,
       autoWidth = FALSE,
-      dom = "frtip"
+      dom = "frtip",
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "}"
+      )
     )
-  )
+  ) |>
+    DT::formatStyle(columns = names(df), color = "#ddd", backgroundColor = "#1a1a1a")
 }
 
 #' Emit build-info footer with linked version, SHA, R version
