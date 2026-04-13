@@ -649,14 +649,19 @@ df = con.sql("""
     WHERE ticker = 'AAPL' AND date >= '2024-01-01'
     ORDER BY date
 """).df()
-
-# All datasets available:
-# hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet   (958 tickers)
-# hf://datasets/dsfefvx/finance-historical-data/crypto_daily.parquet   (14 tokens)
-# hf://datasets/dsfefvx/finance-historical-data/macro_daily.parquet    (19 FRED series)
-# hf://datasets/dsfefvx/finance-historical-data/factors.parquet        (7 FF factors)
-# hf://datasets/dsfefvx/finance-historical-data/metadata.parquet       (994 ticker metadata)
 ```
+
+#### Datasets
+
+All Parquet files are hosted on [Hugging Face](https://huggingface.co/datasets/dsfefvx/finance-historical-data) and queryable via DuckDB `hf://` protocol (R or Python, no download needed):
+
+| Dataset | URL | Contents |
+|---------|-----|----------|
+| Equity daily | `hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet` | 958 tickers |
+| Crypto daily | `hf://datasets/dsfefvx/finance-historical-data/crypto_daily.parquet` | 14 tokens |
+| Macro daily | `hf://datasets/dsfefvx/finance-historical-data/macro_daily.parquet` | 19 FRED series |
+| Factors | `hf://datasets/dsfefvx/finance-historical-data/factors.parquet` | 7 FF factors |
+| Metadata | `hf://datasets/dsfefvx/finance-historical-data/metadata.parquet` | 994 ticker metadata |
 
 #### T language
 
@@ -672,3 +677,49 @@ t run src/pipeline.t               # T pipeline
 ```
 
 Then start R and run the Setup tab code above.
+
+# Build Info
+
+## Row
+
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+gh_url <- tryCatch({
+  remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+  sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+}, error = function(e) NULL)
+
+git_sha_short <- tryCatch(
+  system("git rev-parse --short HEAD 2>/dev/null", intern = TRUE),
+  error = function(e) "N/A"
+)
+git_sha_full <- tryCatch(
+  system("git rev-parse HEAD 2>/dev/null", intern = TRUE),
+  error = function(e) git_sha_short
+)
+
+pkg_ver <- tryCatch(
+  as.character(packageVersion("historicaldata")),
+  error = function(e) "0.1.0"
+)
+
+r_ver <- as.character(getRversion())
+build_time <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+
+ver_link <- if (!is.null(gh_url)) {
+  sprintf("[%s](%s/releases/tag/v%s)", pkg_ver, gh_url, pkg_ver)
+} else pkg_ver
+
+sha_link <- if (!is.null(gh_url) && git_sha_short != "N/A") {
+  sprintf("[`%s`](%s/commit/%s)", git_sha_short, gh_url, git_sha_full)
+} else sprintf("`%s`", git_sha_short)
+
+r_link <- sprintf("[%s](https://cran.r-project.org/doc/manuals/r-release/NEWS.html)", r_ver)
+
+cat(sprintf(
+  "**historicaldata** %s | **Git** %s | **R** %s | **Built** %s",
+  ver_link, sha_link, r_link, build_time
+))
+```

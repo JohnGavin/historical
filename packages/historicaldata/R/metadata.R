@@ -41,8 +41,17 @@ hd_search <- function(pattern, dataset = NULL) {
     ds$url, where
   )
 
-  DBI::dbGetQuery(con, sql) |>
+  result <- DBI::dbGetQuery(con, sql) |>
     dplyr::as_tibble()
+
+  # Sanitise strings: yfinance long_name can contain embedded NUL bytes
+
+  chr_cols <- names(result)[vapply(result, is.character, logical(1))]
+  for (col in chr_cols) {
+    result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
+  }
+
+  result
 }
 
 #' Summary of all datasets
