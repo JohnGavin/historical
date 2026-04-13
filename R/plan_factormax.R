@@ -206,29 +206,38 @@ plan_factormax <- function() {
         hd_theme()
     }),
 
-    # ── MAX signal heatmap ────────────────────────────────────────
+    # ── MAX signal bump chart ─────────────────────────────────────
     targets::tar_target(fm_heatmap, {
       library(ggplot2)
       library(dplyr)
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
-      # Last 5 years of signal for readability
+      # Last 3 years for readability
       recent <- fm_signal |>
-        filter(ym >= format(fm_params$oos_start - 365*2, "%Y-%m")) |>
-        mutate(
-          year = substr(ym, 1, 4),
-          month = substr(ym, 6, 7)
-        )
+        filter(ym >= format(fm_params$oos_start - 365, "%Y-%m")) |>
+        mutate(date = as.Date(paste0(ym, "-15")))
 
-      ggplot(recent, aes(month, factor_name, fill = max_rank)) +
-        geom_tile(colour = "grey20") +
-        facet_wrap(~year, ncol = 1) +
-        scale_fill_gradient(low = "#32CD32", high = "#333333",
-                            breaks = 1:5, labels = paste0("#", 1:5)) +
-        labs(x = "Month", y = NULL, fill = "Rank",
-             title = "Factor MAX signal rankings (1 = highest MAX)") +
+      # Colours per factor
+      factor_cols <- setNames(hd_palette(5), sort(unique(recent$factor_name)))
+
+      # Label first and last points
+      first_last <- recent |>
+        group_by(factor_name) |>
+        filter(date == min(date) | date == max(date)) |>
+        ungroup()
+
+      ggplot(recent, aes(date, max_rank, colour = factor_name, group = factor_name)) +
+        geom_line(linewidth = 0.8, alpha = 0.7) +
+        geom_point(size = 2) +
+        geom_text(data = first_last |> filter(date == max(date)),
+                  aes(label = factor_name), hjust = -0.2, size = 4, fontface = "bold") +
+        scale_y_reverse(breaks = 1:5, labels = paste0("#", 1:5)) +
+        scale_colour_manual(values = factor_cols) +
+        labs(x = NULL, y = "MAX Rank", colour = NULL,
+             title = "Factor MAX signal rankings over time (1 = highest MAX)") +
         hd_theme() +
-        theme(axis.text.x = element_text(size = 9))
+        theme(legend.position = "none",
+              plot.margin = margin(5, 40, 5, 5))  # right margin for labels
     }),
 
     # ── ETF comparison: real-world factor ETFs ────────────────────

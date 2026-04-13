@@ -58,7 +58,7 @@ ul.task-list li input[type="checkbox"] {
 <link href="factor-max_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
 <script src="factor-max_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
 <style>
-body { font-size: 1.15em; }
+body { font-size: 1.45em; }
 .bslib-page-fill, .html-fill-container, .html-fill-item,
 .bslib-card, .card, .tab-pane, .tab-content, .card-body,
 .bslib-grid, .bslib-grid-item {
@@ -70,12 +70,41 @@ body { font-size: 1.15em; }
   overflow: visible !important; margin-bottom: 1em; }
 .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
 .datatables, .dataTables_wrapper { display: block !important;
-  position: relative !important; overflow-x: auto !important; }
+  position: relative !important; overflow-x: auto !important;
+  margin-top: 0.5em; margin-bottom: 1em; }
 table.dataTable { white-space: nowrap; }
-table caption { caption-side: top !important; }
+table caption, .dataTables_wrapper caption { caption-side: top !important; }
+/* Click-to-zoom */
+.fullscreen-overlay {
+  position: fixed !important; top: 0 !important; left: 0 !important;
+  width: 100vw !important; height: 100vh !important;
+  z-index: 9999 !important; background: black !important;
+  padding: 10px !important; overflow: auto !important; cursor: zoom-out !important;
+}
+.fullscreen-overlay img {
+  width: 100% !important; height: 100% !important; object-fit: contain !important;
+}
+.cell-output-display:has(img) { cursor: zoom-in; }
 .fig-caption { display: block; font-size: 0.85em; color: #888;
   margin-top: 0.4em; text-align: left; line-height: 1.5; }
+details { margin-bottom: 0.5em; }
+details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
 </style>
+<script>
+document.addEventListener('click', function(e) {
+  var overlay = e.target.closest('.fullscreen-overlay');
+  if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
+  var img = e.target.closest('img');
+  if (!img) return;
+  var cell = img.closest('.cell-output-display');
+  if (!cell) return;
+  var div = document.createElement('div');
+  div.className = 'fullscreen-overlay';
+  div.innerHTML = '<img src="' + img.src + '">';
+  div.addEventListener('click', function() { div.remove(); });
+  document.body.appendChild(div);
+});
+</script>
 
 
 </head>
@@ -174,8 +203,8 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-2fdefecbb06bf449a714" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-2fdefecbb06bf449a714">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Factor MAX strategy metrics: in-sample (1963-2019), out-of-sample (2020+), and full period.<\/caption>","data":[["In-Sample","Out-of-Sample","Full Period"],[666,74,740],["5.1%","-0.6%","4.5%"],["8.8%","9.6%","8.9%"],[0.06,-0.36,0.01],["-35.6%","-18.7%","-35.6%"],["49.7%","43.2%","49.1%"],["5.3%","11.4%","5.9%"],["15.3%","17.5%","15.5%"],[0.05,0.49,0.1]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>period<\/th>\n      <th>months<\/th>\n      <th>cagr<\/th>\n      <th>vol<\/th>\n      <th>sharpe<\/th>\n      <th>max_dd<\/th>\n      <th>hit_rate<\/th>\n      <th>bench_cagr<\/th>\n      <th>bench_vol<\/th>\n      <th>bench_sharpe<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[1,4,9]},{"name":"period","targets":0},{"name":"months","targets":1},{"name":"cagr","targets":2},{"name":"vol","targets":3},{"name":"sharpe","targets":4},{"name":"max_dd","targets":5},{"name":"hit_rate","targets":6},{"name":"bench_cagr","targets":7},{"name":"bench_vol","targets":8},{"name":"bench_sharpe","targets":9}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-843ad0cb5db7f8f17bf6" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-843ad0cb5db7f8f17bf6">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Factor MAX strategy metrics: in-sample (1963-2019), out-of-sample (2020+), and full period.<\/caption>","data":[["In-Sample","Out-of-Sample","Full Period"],[666,74,740],["5.1%","-0.6%","4.5%"],["8.8%","9.6%","8.9%"],[0.06,-0.36,0.01],["-35.6%","-18.7%","-35.6%"],["49.7%","43.2%","49.1%"],["5.3%","11.4%","5.9%"],["15.3%","17.5%","15.5%"],[0.05,0.49,0.1]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>period<\/th>\n      <th>months<\/th>\n      <th>cagr<\/th>\n      <th>vol<\/th>\n      <th>sharpe<\/th>\n      <th>max_dd<\/th>\n      <th>hit_rate<\/th>\n      <th>bench_cagr<\/th>\n      <th>bench_vol<\/th>\n      <th>bench_sharpe<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[1,4,9]},{"name":"period","targets":0},{"name":"months","targets":1},{"name":"cagr","targets":2},{"name":"vol","targets":3},{"name":"sharpe","targets":4},{"name":"max_dd","targets":5},{"name":"hit_rate","targets":6},{"name":"bench_cagr","targets":7},{"name":"bench_vol","targets":8},{"name":"bench_sharpe","targets":9}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -202,8 +231,8 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-d2272ac9c30efd95c2ef" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-d2272ac9c30efd95c2ef">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">How often each factor is selected by the MAX signal. Momentum dominates.<\/caption>","data":[["Mom","SMB","HML","RMW","CMA"],[502,394,356,126,120],["67.8%","53.2%","48.1%","17%","16.2%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>factor<\/th>\n      <th>months_selected<\/th>\n      <th>pct<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":1},{"name":"factor","targets":0},{"name":"months_selected","targets":1},{"name":"pct","targets":2}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-9d4cb9ddd726b1ff5505" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-9d4cb9ddd726b1ff5505">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">How often each factor is selected by the MAX signal. Momentum dominates.<\/caption>","data":[["Mom","SMB","HML","RMW","CMA"],[502,394,356,126,120],["67.8%","53.2%","48.1%","17%","16.2%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>factor<\/th>\n      <th>months_selected<\/th>\n      <th>pct<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":1},{"name":"factor","targets":0},{"name":"months_selected","targets":1},{"name":"pct","targets":2}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -365,8 +394,8 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-44cbe0e53f5c44a480eb" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-44cbe0e53f5c44a480eb">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Correlation between factor ETFs and academic factors (monthly returns, 2013-2026). Low correlations show ETFs capture different exposures than academic factors.<\/caption>","data":[["VLUE","MTUM","QUAL","USMV","VTV","IWD"],["HML","Mom","RMW","Mkt-RF","HML","HML"],["Value (VLUE vs HML)","Momentum (MTUM vs Mom)","Quality (QUAL vs RMW)","Low Vol (USMV vs Market)","Value alt (VTV vs HML)","Value R1000 (IWD vs HML)"],[153,153,151,153,153,153],[0.342,-0.08799999999999999,0.108,0.857,0.338,0.317],["11.1%","14.6%","13.5%","11%","11.8%","10.4%"],["-2.1%","2.3%","2.7%","11.8%","-2.1%","-2.1%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>ETF<\/th>\n      <th>Factor<\/th>\n      <th>Label<\/th>\n      <th>Months<\/th>\n      <th>Correlation<\/th>\n      <th>ETF_CAGR<\/th>\n      <th>Factor_CAGR<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[3,4]},{"name":"ETF","targets":0},{"name":"Factor","targets":1},{"name":"Label","targets":2},{"name":"Months","targets":3},{"name":"Correlation","targets":4},{"name":"ETF_CAGR","targets":5},{"name":"Factor_CAGR","targets":6}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-8b78cd76e8494acb9eba" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-8b78cd76e8494acb9eba">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Correlation between factor ETFs and academic factors (monthly returns, 2013-2026). Low correlations show ETFs capture different exposures than academic factors.<\/caption>","data":[["VLUE","MTUM","QUAL","USMV","VTV","IWD"],["HML","Mom","RMW","Mkt-RF","HML","HML"],["Value (VLUE vs HML)","Momentum (MTUM vs Mom)","Quality (QUAL vs RMW)","Low Vol (USMV vs Market)","Value alt (VTV vs HML)","Value R1000 (IWD vs HML)"],[153,153,151,153,153,153],[0.342,-0.08799999999999999,0.108,0.857,0.338,0.317],["11.1%","14.6%","13.5%","11%","11.8%","10.4%"],["-2.1%","2.3%","2.7%","11.8%","-2.1%","-2.1%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>ETF<\/th>\n      <th>Factor<\/th>\n      <th>Label<\/th>\n      <th>Months<\/th>\n      <th>Correlation<\/th>\n      <th>ETF_CAGR<\/th>\n      <th>Factor_CAGR<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"className":"dt-right","targets":[3,4]},{"name":"ETF","targets":0},{"name":"Factor","targets":1},{"name":"Label","targets":2},{"name":"Months","targets":3},{"name":"Correlation","targets":4},{"name":"ETF_CAGR","targets":5},{"name":"Factor_CAGR","targets":6}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -496,8 +525,8 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-ed461bb69b917332feab" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-ed461bb69b917332feab">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Strategy parameters. Change fm_params target and tar_make() to update all.<\/caption>","data":[["Factors","Top N","Start Date","IS End","OOS Start","Benchmark"],["HML, SMB, RMW, CMA, Mom","2","1963-07-01","2019-12-31","2020-01-01","Mkt-RF"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Parameter<\/th>\n      <th>Value<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"name":"Parameter","targets":0},{"name":"Value","targets":1}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-27c751da417b5acaa72b" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-27c751da417b5acaa72b">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Strategy parameters. Change fm_params target and tar_make() to update all.<\/caption>","data":[["Factors","Top N","Start Date","IS End","OOS Start","Benchmark"],["HML, SMB, RMW, CMA, Mom","2","1963-07-01","2019-12-31","2020-01-01","Mkt-RF"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Parameter<\/th>\n      <th>Value<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"columnDefs":[{"name":"Parameter","targets":0},{"name":"Value","targets":1}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -528,7 +557,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/1f68571f24fe894dbcea59664e45b8a3bf84570f"><code>1f68571</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.2</a> | <strong>Built</strong> 2026-04-13 15:10:00</p>
+<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/600ba8acd7a894fff8e03b87fef8ed73d06c3c09"><code>600ba8a</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.2</a> | <strong>Built</strong> 2026-04-13 15:21:07</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>

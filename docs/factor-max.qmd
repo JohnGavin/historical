@@ -8,7 +8,7 @@ format:
     include-in-header:
       - text: |
           <style>
-          body { font-size: 1.15em; }
+          body { font-size: 1.45em; }
           .bslib-page-fill, .html-fill-container, .html-fill-item,
           .bslib-card, .card, .tab-pane, .tab-content, .card-body,
           .bslib-grid, .bslib-grid-item {
@@ -20,12 +20,41 @@ format:
             overflow: visible !important; margin-bottom: 1em; }
           .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
           .datatables, .dataTables_wrapper { display: block !important;
-            position: relative !important; overflow-x: auto !important; }
+            position: relative !important; overflow-x: auto !important;
+            margin-top: 0.5em; margin-bottom: 1em; }
           table.dataTable { white-space: nowrap; }
-          table caption { caption-side: top !important; }
+          table caption, .dataTables_wrapper caption { caption-side: top !important; }
+          /* Click-to-zoom */
+          .fullscreen-overlay {
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            z-index: 9999 !important; background: black !important;
+            padding: 10px !important; overflow: auto !important; cursor: zoom-out !important;
+          }
+          .fullscreen-overlay img {
+            width: 100% !important; height: 100% !important; object-fit: contain !important;
+          }
+          .cell-output-display:has(img) { cursor: zoom-in; }
           .fig-caption { display: block; font-size: 0.85em; color: #888;
             margin-top: 0.4em; text-align: left; line-height: 1.5; }
+          details { margin-bottom: 0.5em; }
+          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
           </style>
+          <script>
+          document.addEventListener('click', function(e) {
+            var overlay = e.target.closest('.fullscreen-overlay');
+            if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
+            var img = e.target.closest('img');
+            if (!img) return;
+            var cell = img.closest('.cell-output-display');
+            if (!cell) return;
+            var div = document.createElement('div');
+            div.className = 'fullscreen-overlay';
+            div.innerHTML = '<img src="' + img.src + '">';
+            div.addEventListener('click', function() { div.remove(); });
+            document.body.appendChild(div);
+          });
+          </script>
 execute:
   echo: false
   warning: false
