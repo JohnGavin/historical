@@ -3,37 +3,57 @@ title: "historicaldata"
 format:
   dashboard:
     orientation: rows
-    theme: cosmo
+    theme:
+      dark: darkly
+      light: cosmo
     nav-buttons: [github]
     embed-resources: false
     include-in-header:
       - text: |
           <style>
-          body { font-size: 1.1em; }
+          body { font-size: 1.2em; }
+          /* Kill dashboard fill layout */
           .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body {
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
             height: auto !important; min-height: 0 !important;
             max-height: none !important; overflow: visible !important;
             flex: none !important;
           }
-          .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; }
-          .info-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
-                       padding: 1.5em; text-decoration: none; color: inherit;
-                       transition: border-color 0.2s; display: block; }
+          .card-grid { display: grid !important; grid-template-columns: 1fr 1fr !important;
+                       gap: 1.2em !important; width: 100% !important; }
+          .info-card { background: var(--bs-card-bg, #1a1a1a); border: 1px solid var(--bs-border-color, #333);
+                       border-radius: 8px; padding: 1.2em; text-decoration: none;
+                       color: inherit; transition: border-color 0.2s; display: block; }
           .info-card:hover { border-color: #6B8DAE; text-decoration: none; color: inherit; }
-          .info-card h4 { margin: 0 0 0.5em; color: white; }
-          .info-card p { color: #999; font-size: 0.95em; margin: 0; }
-          .stats-row { display: flex; gap: 2em; flex-wrap: nowrap; justify-content: center; margin: 1em 0; }
-          .stat { text-align: center; }
-          .stat .num { font-size: 1.8em; font-weight: bold; color: white; }
-          .stat .label { font-size: 0.85em; color: #888; }
+          .info-card h4 { margin: 0 0 0.4em; }
+          .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
+          .stats-row { display: flex !important; flex-direction: row !important;
+                       flex-wrap: nowrap !important; gap: 2.5em !important;
+                       justify-content: center !important; align-items: center !important;
+                       margin: 1em 0 !important; width: 100% !important; }
+          .stat { text-align: center; flex-shrink: 0; }
+          .stat .num { font-size: 1.8em; font-weight: bold; }
+          .stat .label { font-size: 0.8em; opacity: 0.6; }
           .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px;
                    font-size: 0.8em; margin-right: 0.5em; }
           .badge-blue { background: #1a3a5c; color: #6B8DAE; }
           .badge-green { background: #1a3c1a; color: #7A9E7E; }
           .badge-gold { background: #3c3520; color: #C4A35A; }
-          @media (max-width: 600px) { .card-grid { grid-template-columns: 1fr; } }
+          /* Smaller page titles */
+          .navbar .navbar-title, h1.title { font-size: 1.4em !important; }
+          .nav-link { font-size: 0.95em !important; }
+          @media (max-width: 600px) {
+            .card-grid { grid-template-columns: 1fr !important; }
+            .stats-row { flex-wrap: wrap !important; gap: 1em !important; }
+          }
           </style>
+          <script>
+          // Default to dark mode
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          </script>
 execute:
   echo: false
 ---

@@ -3,12 +3,19 @@ title: "Macro Defense Rotation"
 format:
   dashboard:
     orientation: rows
-    theme: cosmo
+    theme:
+      dark: darkly
+      light: cosmo
     embed-resources: true
     include-in-header:
       - text: |
           <style>
-          body { font-size: 1.15em; }
+          body { font-size: 1.3em; }
+          /* Smaller page titles */
+          .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
+          .nav-link { font-size: 0.95em !important; }
+          /* Plot height: constrain to reasonable aspect ratio */
+          .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
           /* Black navbar/header strip */
           .navbar, .quarto-dashboard-header, .navbar-dark,
           .bslib-page-dashboard > .navbar {
@@ -58,6 +65,10 @@ format:
           .cell-output-display:has(img) { cursor: zoom-in; }
           </style>
           <script>
+          // Default to dark mode
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
           document.addEventListener('click', function(e) {
             var overlay = e.target.closest('.fullscreen-overlay');
             if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
