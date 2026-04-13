@@ -117,14 +117,15 @@ ggplot(vol, aes(date, vol_21d, colour = ticker)) +
   hd_theme()
 '),
 
-    # ── Equity: Coverage (single query, not per-ticker) ───────────
+    # ── Equity: Coverage (duckplyr, zero SQL) ───────────────────
     vig_pair("vig_eq_coverage", '
-con <- hd_connect()
-on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 ds <- hd_datasets()[["equity_daily"]]
-sql <- paste0("SELECT ticker, COUNT(*) as days, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY ticker ORDER BY days DESC")
-DBI::dbGetQuery(con, sql) |> as_tibble() |>
-  rename(Ticker = ticker, Days = days, From = first_dt, To = last_dt)
+duckplyr::read_parquet_duckdb(ds$url) |>
+  summarise(Days = n(), From = min(date), To = max(date), .by = ticker) |>
+  arrange(desc(Days)) |>
+  collect() |>
+  mutate(From = as.character(From), To = as.character(To)) |>
+  rename(Ticker = ticker)
 '),
 
     # ── Crypto: Major Coins ───────────────────────────────────────
@@ -187,14 +188,15 @@ ggplot(cor_long, aes(row, col, fill = cor)) +
   theme(axis.text.x = element_text(angle = 45, hjust = 1))
 '),
 
-    # ── Crypto: Coverage (single query) ───────────────────────────
+    # ── Crypto: Coverage (duckplyr, zero SQL) ───────────────────
     vig_pair("vig_cr_coverage", '
-con <- hd_connect()
-on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 ds <- hd_datasets()[["crypto_daily"]]
-sql <- paste0("SELECT ticker, COUNT(*) as days, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY ticker ORDER BY days DESC")
-DBI::dbGetQuery(con, sql) |> as_tibble() |>
-  rename(Token = ticker, Days = days, From = first_dt, To = last_dt)
+duckplyr::read_parquet_duckdb(ds$url) |>
+  summarise(Days = n(), From = min(date), To = max(date), .by = ticker) |>
+  arrange(desc(Days)) |>
+  collect() |>
+  mutate(From = as.character(From), To = as.character(To)) |>
+  rename(Token = ticker)
 '),
 
     # ── Macro: Interest Rates ─────────────────────────────────────
@@ -247,19 +249,20 @@ ggplot(spreads, aes(date, value, colour = series_id)) +
   hd_theme()
 '),
 
-    # ── Macro: Coverage (single query) ────────────────────────────
+    # ── Macro: Coverage (duckplyr, zero SQL) ────────────────────
     vig_pair("vig_ma_coverage", '
 # Join data stats with FRED metadata (frequency, units, title)
-con <- hd_connect()
-on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 ds <- hd_datasets()[["macro_daily"]]
-sql <- paste0("SELECT series_id, COUNT(*) as n, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY series_id ORDER BY series_id")
-stats <- DBI::dbGetQuery(con, sql) |> as_tibble()
+stats <- duckplyr::read_parquet_duckdb(ds$url) |>
+  summarise(Obs = n(), From = min(date), To = max(date), .by = series_id) |>
+  arrange(series_id) |>
+  collect() |>
+  mutate(From = as.character(From), To = as.character(To))
 meta <- hd_fred_meta()
 stats |>
   left_join(meta, by = "series_id") |>
   select(Series = series_id, Title = title, Freq = frequency,
-         Units = units, Obs = n, From = first_dt, To = last_dt)
+         Units = units, Obs, From, To)
 '),
 
     # ── Factors: FF3 Daily ────────────────────────────────────────
@@ -314,15 +317,15 @@ ggplot(mom, aes(date, cum_ret)) +
   hd_theme()
 '),
 
-    # ── Factors: Coverage (single query) ─────────────────────────
+    # ── Factors: Coverage (duckplyr, zero SQL) ──────────────────
     vig_pair("vig_fa_coverage", '
-con <- hd_connect()
-on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 ds <- hd_datasets()[["factors"]]
-sql <- paste0("SELECT dataset, frequency, factor_name, COUNT(*) as n, MIN(date)::VARCHAR as first_dt, MAX(date)::VARCHAR as last_dt FROM read_parquet(\'", ds$url, "\') GROUP BY dataset, frequency, factor_name ORDER BY dataset, frequency, factor_name")
-DBI::dbGetQuery(con, sql) |> as_tibble() |>
-  rename(Dataset = dataset, Freq = frequency, Factor = factor_name,
-         Obs = n, From = first_dt, To = last_dt)
+duckplyr::read_parquet_duckdb(ds$url) |>
+  summarise(Obs = n(), From = min(date), To = max(date), .by = c(dataset, frequency, factor_name)) |>
+  arrange(dataset, frequency, factor_name) |>
+  collect() |>
+  mutate(From = as.character(From), To = as.character(To)) |>
+  rename(Dataset = dataset, Freq = frequency, Factor = factor_name)
 '),
 
     # ══ LSE ETFs ═════════════════════════════════════════════════
@@ -394,7 +397,7 @@ ggplot(combined, aes(date, cum_ret, colour = ticker)) +
   geom_line(linewidth = 0.5) +
   facet_wrap(~ccy, ncol = 1, scales = "free_y") +
   scale_y_continuous(labels = percent) +
-  scale_colour_manual(values = hd_palette(6)) +
+  scale_colour_manual(values = hd_palette(n_distinct(combined$ticker))) +
   labs(x = NULL, y = "Cumulative return", colour = NULL,
        title = paste("Top 3 by market cap (>GBP 250M). GBP:",
                      paste(gbp$ticker, collapse = ", "),

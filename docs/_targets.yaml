@@ -1,3 +1,2 @@
 main:
-  store: _targets_backtest
-  script: _targets_backtest.R
+  store: _targets

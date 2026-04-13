@@ -13,15 +13,26 @@
 
 library(targets)
 
+# Ensure duckplyr is available (may not be on default .libPaths in some nix shells)
+if (!requireNamespace("duckplyr", quietly = TRUE)) {
+  duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
+  duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
+  if (length(duckplyr_path) > 0) {
+    .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+  }
+}
+
 tar_option_set(
-  packages = c("dplyr", "ggplot2", "tidyr", "scales", "DT", "rlang", "cli"),
+  packages = c("dplyr", "duckplyr", "ggplot2", "tidyr", "scales", "DT", "rlang", "cli"),
   memory = "transient",
   garbage_collection = TRUE,
+  error = "continue",  # Don't let one broken target block all others
   format = "rds"
 )
 
-# Source the vignette plan
+# Source plans
 source(here::here("R/plan_vignette.R"))
+source(here::here("R/plan_qa_vignette.R"))
 
-# Combine: all vig_* targets
-plan_vignette()
+# Combine: vignette targets + QA validation targets
+c(plan_vignette(), plan_qa_vignette())

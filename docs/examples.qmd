@@ -93,6 +93,30 @@ library(targets)
 library(ggplot2)
 library(DT)
 
+# Define hd_theme/hd_palette directly (pkgload::load_all conflicts with base::palette)
+hd_palette <- function(n = 10) {
+  pal <- c("#00BFFF", "#FF6347", "#32CD32", "#FFD700", "#FF69B4",
+           "#00CED1", "#FFA500", "#BA55D3", "#7FFF00", "#FF4500")
+  pal[seq_len(min(n, length(pal)))]
+}
+hd_theme <- function(base_size = 14) {
+  ggplot2::theme_minimal(base_size = base_size) +
+    ggplot2::theme(
+      plot.background = ggplot2::element_rect(fill = "black", colour = NA),
+      panel.background = ggplot2::element_rect(fill = "black", colour = NA),
+      text = ggplot2::element_text(colour = "white"),
+      axis.text = ggplot2::element_text(colour = "grey70"),
+      axis.title = ggplot2::element_text(colour = "grey90"),
+      plot.title = ggplot2::element_text(colour = "white", size = base_size + 2),
+      panel.grid.minor = ggplot2::element_blank(),
+      panel.grid.major = ggplot2::element_line(colour = "grey30"),
+      legend.background = ggplot2::element_rect(fill = "black", colour = NA),
+      legend.text = ggplot2::element_text(colour = "white"),
+      legend.position = "bottom",
+      strip.text = ggplot2::element_text(colour = "white")
+    )
+}
+
 store_path <- if (dir.exists("_targets")) "_targets" else
   file.path(here::here(), "docs/_targets")
 tar_config_set(store = store_path)
@@ -118,7 +142,7 @@ show_code("vig_eq_aapl")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_eq_aapl")
 ```
 
@@ -141,7 +165,7 @@ show_code("vig_eq_faang")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_eq_faang")
 ```
 
@@ -164,7 +188,7 @@ show_code("vig_eq_vol")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_eq_vol")
 ```
 
@@ -212,7 +236,7 @@ show_code("vig_cr_major")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_cr_major")
 ```
 
@@ -235,7 +259,7 @@ show_code("vig_cr_stable")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_cr_stable")
 ```
 
@@ -258,7 +282,7 @@ show_code("vig_cr_corr")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_cr_corr")
 ```
 
@@ -302,7 +326,7 @@ show_code("vig_ma_rates")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_ma_rates")
 ```
 
@@ -320,7 +344,7 @@ show_code("vig_ma_yc")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_ma_yc")
 ```
 
@@ -338,7 +362,7 @@ show_code("vig_ma_spreads")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_ma_spreads")
 ```
 
@@ -395,7 +419,7 @@ show_code("vig_fa_ff5")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_fa_ff5")
 ```
 
@@ -413,7 +437,7 @@ show_code("vig_fa_mom")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_fa_mom")
 ```
 
@@ -455,7 +479,7 @@ show_code("vig_lse_liquid")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_lse_liquid")
 ```
 
@@ -478,7 +502,7 @@ show_code("vig_lse_ftse_vs_global")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_lse_ftse_vs_global")
 ```
 
@@ -501,7 +525,7 @@ show_code("vig_lse_currency")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_lse_currency")
 ```
 
@@ -541,7 +565,7 @@ show_code("vig_lse_yield")
 ```
 
 ```{r}
-#| fig-height: 8
+#| fig-height: 6
 safe_tar_read("vig_lse_yield")
 ```
 

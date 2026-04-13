@@ -1,6 +1,6 @@
 Package: historicaldata
 Title: Historical Finance Data via DuckDB and Parquet
-Version: 0.0.0.9000
+Version: 0.1.0
 Authors@R:
     person("John", "Gavin", role = c("aut", "cre"),
            email = "john@example.com")
