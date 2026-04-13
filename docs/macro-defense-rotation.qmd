@@ -86,8 +86,8 @@ library(dplyr)
 
 pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
-store_path <- if (dir.exists("_targets_backtest")) "_targets_backtest" else
-  file.path(here::here(), "docs/_targets_backtest")
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
 tar_config_set(store = store_path)
 
 hd_dt <- function(df, caption_text) {

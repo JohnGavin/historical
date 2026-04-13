@@ -1,15 +1,11 @@
-# Vignette targets: pre-compute all data and plots for examples.qmd
+# Unified vignette targets: pre-compute all data and plots
 #
-# This is a SEPARATE targets project from the main pipeline _targets.R.
-# It runs OUTSIDE the T sandbox and uses the historicaldata package API
-# to fetch data from HF via DuckDB httpfs.
+# Covers: examples.qmd (66 targets) + macro-defense-rotation.qmd (15 targets)
+# + QA validation (1 target). Total: 82 targets in one pipeline.
 #
 # Usage:
 #   cd docs/
 #   Rscript -e 'targets::tar_make()'
-#
-# Or from project root:
-#   Rscript -e 'targets::tar_make(store = "docs/_targets")'
 
 library(targets)
 
@@ -32,7 +28,8 @@ tar_option_set(
 
 # Source plans
 source(here::here("R/plan_vignette.R"))
+source(here::here("R/plan_backtest.R"))
 source(here::here("R/plan_qa_vignette.R"))
 
-# Combine: vignette targets + QA validation targets
-c(plan_vignette(), plan_qa_vignette())
+# Combine: all vignette targets + backtest targets + QA
+c(plan_vignette(), plan_backtest(), plan_qa_vignette())
