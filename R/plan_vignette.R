@@ -9,6 +9,10 @@
 #   hd_palette() — 10 high-contrast colours for black bg
 # These are exported functions, not duplicated code.
 
+# Shared vignette constants — single source of truth
+VIG_MIN_MARKET_CAP <- 250e6   # GBP 250M minimum for LSE ETF filters
+VIG_MAX_YIELD_PCT  <- 0.20    # 20% cap — yields above this are likely synthetic
+
 # Helper: create a code+output target pair
 vig_pair <- function(name, code) {
   code_name <- paste0("code_", name)
@@ -25,6 +29,9 @@ vig_pair <- function(name, code) {
       library(scales)
       library(tidyr)
       library(purrr)
+      # Inject shared constants
+      MIN_MARKET_CAP <- VIG_MIN_MARKET_CAP
+      MAX_YIELD_PCT  <- VIG_MAX_YIELD_PCT
       eval(parse(text = CODEREF))
     }, list(CODEREF = as.symbol(code_name))))
   )
@@ -333,7 +340,6 @@ duckplyr::read_parquet_duckdb(ds$url) |>
     # ── LSE: Most Liquid ──────────────────────────────────────────
     vig_pair("vig_lse_liquid", '
 # Top 5 LSE ETFs by volume, filtered by market cap > MIN_MARKET_CAP
-MIN_MARKET_CAP <- 250e6
 liquid <- hd_search(".*[.]L$") |>
   filter(!is.na(volume_avg), !is.na(market_cap), market_cap > MIN_MARKET_CAP) |>
   slice_max(volume_avg, n = 5)
@@ -377,7 +383,6 @@ ggplot(combined, aes(date, cum_ret, colour = ticker, linetype = group)) +
     # ── LSE: GBP vs USD denominated ───────────────────────────────
     vig_pair("vig_lse_currency", '
 # Top 3 GBP and top 3 USD LSE ETFs by market cap (> GBP 250M)
-MIN_MARKET_CAP <- 250e6
 lse_meta <- hd_search(".*[.]L$") |>
   filter(!is.na(market_cap), market_cap > MIN_MARKET_CAP)
 gbp <- lse_meta |> filter(currency %in% c("GBP", "GBp")) |>
@@ -408,7 +413,6 @@ ggplot(combined, aes(date, cum_ret, colour = ticker)) +
     # ── LSE: Fund Families ────────────────────────────────────────
     vig_pair("vig_lse_families", '
 # Distribution of LSE ETFs by fund family (market cap > GBP 250M)
-MIN_MARKET_CAP <- 250e6
 lse_meta <- hd_search(".*[.]L$") |>
   filter(!is.na(fund_family), !is.na(market_cap), market_cap > MIN_MARKET_CAP)
 
@@ -427,8 +431,6 @@ ggplot(family_counts, aes(reorder(fund_family, n), n)) +
     # ── LSE: Highest Yield ────────────────────────────────────────
     vig_pair("vig_lse_yield", '
 # Top 10 LSE ETFs by yield (market cap > GBP 250M, yield < 20%)
-MIN_MARKET_CAP <- 250e6
-MAX_YIELD_PCT  <- 0.20  # exclude synthetic/leveraged yields
 high_yield <- hd_search(".*[.]L$") |>
   filter(!is.na(yield_pct), yield_pct > 0, yield_pct <= MAX_YIELD_PCT,
          !is.na(market_cap), market_cap > MIN_MARKET_CAP) |>

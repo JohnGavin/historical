@@ -132,8 +132,16 @@ hd_ticker_meta <- function(tickers) {
     ds$url, placeholders
   )
 
-  DBI::dbGetQuery(con, sql, params = as.list(tickers)) |>
+  result <- DBI::dbGetQuery(con, sql, params = as.list(tickers)) |>
     dplyr::as_tibble()
+
+  # Sanitise strings from yfinance (may contain embedded NUL bytes)
+  chr_cols <- names(result)[vapply(result, is.character, logical(1))]
+  for (col in chr_cols) {
+    result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
+  }
+
+  result
 }
 
 #' Full metadata for one ticker
@@ -146,10 +154,17 @@ hd_ticker_info <- function(ticker) {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
   ds <- hd_datasets()[["metadata"]]
-  DBI::dbGetQuery(con, sprintf(
+  result <- DBI::dbGetQuery(con, sprintf(
     "SELECT * FROM read_parquet('%s') WHERE ticker = ?", ds$url
   ), params = list(ticker)) |>
     dplyr::as_tibble()
+
+  chr_cols <- names(result)[vapply(result, is.character, logical(1))]
+  for (col in chr_cols) {
+    result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
+  }
+
+  result
 }
 
 #' FRED series metadata (frequency, units)

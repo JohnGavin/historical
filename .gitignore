@@ -10,7 +10,9 @@ _extensions/
 
 # targets
 _targets/
+_targets.yaml
 tmp_*.parquet
+Rplots.pdf
 
 # Nix
 result
