@@ -119,6 +119,10 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <h4>Factor MAX Rotation</h4>
 <p>Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025).</p>
 </a>
+<a href="drif.html" class="info-card">
+<h4>DRIF: Daily Return Information</h4>
+<p>Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals.</p>
+</a>
 <a href="pkg/index.html" class="info-card">
 <h4>API Reference</h4>
 <p>Full function documentation for all 30 exported functions, grouped by: Data Access, Discovery, Curated Groups, Quality &amp; Audit, Infrastructure, Visualisation.</p>
@@ -135,6 +139,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [Examples](examples.html) — interactive dashboard with all datasets
 - [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
 - [Factor MAX](factor-max.html) — factor rotation strategy
+- [DRIF](drif.html) — daily return information factor
 
 ## Row
 
