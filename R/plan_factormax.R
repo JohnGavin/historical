@@ -229,6 +229,117 @@ plan_factormax <- function() {
              title = "Factor MAX signal rankings (1 = highest MAX)") +
         hd_theme() +
         theme(axis.text.x = element_text(size = 9))
+    }),
+
+    # ── ETF comparison: real-world factor ETFs ────────────────────
+    targets::tar_target(fm_etf_data, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      # Factor ETFs mapped to academic factors
+      etf_map <- dplyr::tribble(
+        ~etf,   ~factor,       ~label,
+        "VLUE", "HML",         "Value (VLUE vs HML)",
+        "MTUM", "Mom",         "Momentum (MTUM vs Mom)",
+        "QUAL", "RMW",         "Quality (QUAL vs RMW)",
+        "USMV", "Mkt-RF",     "Low Vol (USMV vs Market)",
+        "VTV",  "HML",         "Value alt (VTV vs HML)",
+        "IWD",  "HML",         "Value R1000 (IWD vs HML)"
+      )
+
+      # Get ETF monthly returns
+      etf_tickers <- unique(etf_map$etf)
+      etf_raw <- hd_ohlcv(etf_tickers, from = "2013-05-01")
+
+      if (nrow(etf_raw) == 0) return(NULL)
+
+      etf_monthly <- etf_raw |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        group_by(ticker, ym) |>
+        filter(date == max(date)) |>
+        ungroup() |>
+        group_by(ticker) |>
+        arrange(date) |>
+        mutate(ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        filter(!is.na(ret)) |>
+        ungroup() |>
+        select(ticker, date, ym, ret)
+
+      # Get academic factor monthly returns for same period
+      factor_monthly <- fm_monthly |>
+        filter(factor_name %in% unique(etf_map$factor),
+               ym >= min(etf_monthly$ym), ym <= max(etf_monthly$ym))
+
+      list(etf_monthly = etf_monthly, factor_monthly = factor_monthly, etf_map = etf_map)
+    }),
+
+    # ── ETF vs Academic: correlation table ────────────────────────
+    targets::tar_target(fm_etf_corr, {
+      library(dplyr)
+      if (is.null(fm_etf_data)) return(NULL)
+
+      etf_m <- fm_etf_data$etf_monthly
+      fac_m <- fm_etf_data$factor_monthly
+      emap <- fm_etf_data$etf_map
+
+      results <- lapply(seq_len(nrow(emap)), function(i) {
+        e <- emap$etf[i]
+        f <- emap$factor[i]
+        etf_ret <- etf_m |> filter(ticker == e) |> select(ym, etf_ret = ret)
+        fac_ret <- fac_m |> filter(factor_name == f) |> select(ym, fac_ret = monthly_ret)
+        joined <- inner_join(etf_ret, fac_ret, by = "ym")
+        if (nrow(joined) < 12) return(NULL)
+        tibble(
+          ETF = e, Factor = f, Label = emap$label[i],
+          Months = nrow(joined),
+          Correlation = round(cor(joined$etf_ret, joined$fac_ret), 3),
+          ETF_CAGR = round((prod(1 + joined$etf_ret)^(12/nrow(joined)) - 1) * 100, 1),
+          Factor_CAGR = round((prod(1 + joined$fac_ret)^(12/nrow(joined)) - 1) * 100, 1)
+        )
+      })
+
+      dplyr::bind_rows(Filter(Negate(is.null), results))
+    }),
+
+    # ── ETF vs Academic: cumulative return plot ───────────────────
+    targets::tar_target(fm_etf_plot, {
+      library(ggplot2)
+      library(dplyr)
+      library(scales)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      if (is.null(fm_etf_data)) return(NULL)
+
+      # Plot VLUE vs HML and MTUM vs Mom (most interesting pair)
+      etf_m <- fm_etf_data$etf_monthly
+      fac_m <- fm_etf_data$factor_monthly
+
+      vlue <- etf_m |> filter(ticker == "VLUE") |>
+        transmute(ym, strategy = "VLUE (ETF)", ret)
+      hml <- fac_m |> filter(factor_name == "HML") |>
+        transmute(ym, strategy = "HML (Academic)", ret = monthly_ret)
+      mtum <- etf_m |> filter(ticker == "MTUM") |>
+        transmute(ym, strategy = "MTUM (ETF)", ret)
+      mom <- fac_m |> filter(factor_name == "Mom") |>
+        transmute(ym, strategy = "Mom (Academic)", ret = monthly_ret)
+
+      combined <- bind_rows(vlue, hml, mtum, mom) |>
+        filter(ym >= "2013-05") |>
+        group_by(strategy) |>
+        arrange(ym) |>
+        mutate(cum = cumprod(1 + ret)) |>
+        ungroup()
+
+      # Get dates for x-axis from etf data
+      date_lookup <- etf_m |> distinct(ym, date)
+      combined <- combined |> left_join(date_lookup, by = "ym")
+
+      ggplot(combined, aes(date, cum, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        scale_y_log10(labels = dollar) +
+        scale_colour_manual(values = hd_palette(4)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = "Factor ETFs vs Academic Factors (2013-2026)") +
+        hd_theme()
     })
   )
 }

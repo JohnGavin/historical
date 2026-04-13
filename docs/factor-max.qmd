@@ -158,6 +158,58 @@ For each factor, each month:
 **Key distinction from momentum:** Factor momentum uses average or cumulative returns. MAX uses only the single best day. The Alpha Architect study shows these capture different information — MAX remains predictive even after controlling for momentum.
 :::
 
+# ETF Comparison
+
+## Row
+
+### {.tabset}
+
+#### ETFs vs Academic Factors
+
+Academic factors (HML, Mom) are long-short portfolios constructed from individual stocks. Factor ETFs (VLUE, MTUM) are tradeable products that attempt to capture the same premiums but differ in construction, costs, and tracking.
+
+```{r}
+#| fig-height: 6
+safe_tar_read("fm_etf_plot")
+```
+
+::: {.fig-caption}
+**Factor ETFs vs academic factors.** Y: growth of $1 (log scale). VLUE (iShares Value) vs HML (Fama-French value factor), MTUM (iShares Momentum) vs Mom (Fama-French momentum). ETFs include market beta exposure; academic factors are market-neutral. Source: `hd_ohlcv()` + `hd_factors()`.
+:::
+
+#### Correlation Table
+
+```{r}
+corr <- safe_tar_read("fm_etf_corr")
+if (!is.null(corr)) {
+  display <- corr |>
+    dplyr::mutate(
+      ETF_CAGR = paste0(ETF_CAGR, "%"),
+      Factor_CAGR = paste0(Factor_CAGR, "%")
+    )
+  hd_dt(display, "Correlation between factor ETFs and academic factors (monthly returns, 2013-2026). Low correlations show ETFs capture different exposures than academic factors.")
+}
+```
+
+::: {.fig-caption}
+**ETF-factor correlations.** VLUE/HML = 0.34 (low), MTUM/Mom = -0.09 (near zero). Factor ETFs include market beta and sector tilts that academic factors strip out. USMV/Market = 0.86 (expected — low-vol ETFs are long-only equity). ETF CAGRs are total returns; academic factor CAGRs are long-short returns (typically lower). Source: `hd_ohlcv()` + `hd_factors(dataset = "FF5")`.
+:::
+
+#### Key Insight
+
+::: {.callout-warning}
+## ETFs ≠ Academic Factors
+
+The low correlation between factor ETFs and their academic counterparts (VLUE/HML = 0.34, MTUM/Mom = -0.09) means:
+
+1. **Factor MAX applied to ETFs would produce different results** than the academic backtest shown on the Strategy page
+2. **ETFs include market beta** — academic factors are market-neutral long-short portfolios
+3. **ETFs have tracking error, fees, and capacity constraints** that academic factors ignore
+4. **MTUM and Mom are negatively correlated** — the iShares momentum ETF does not track the Fama-French momentum factor
+
+A practical implementation would need to decide: rotate among ETFs using ETF-derived MAX signals, or use academic factor signals to select ETFs?
+:::
+
 # Details
 
 ## Row

@@ -1,0 +1,179 @@
+---
+title: "historicaldata"
+format:
+  dashboard:
+    orientation: rows
+    theme: cosmo
+    nav-buttons: [github]
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <style>
+          body { font-size: 1.1em; }
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body {
+            height: auto !important; min-height: 0 !important;
+            max-height: none !important; overflow: visible !important;
+            flex: none !important;
+          }
+          .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5em; }
+          .info-card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px;
+                       padding: 1.5em; text-decoration: none; color: inherit;
+                       transition: border-color 0.2s; display: block; }
+          .info-card:hover { border-color: #6B8DAE; text-decoration: none; color: inherit; }
+          .info-card h4 { margin: 0 0 0.5em; color: white; }
+          .info-card p { color: #999; font-size: 0.95em; margin: 0; }
+          .stats-row { display: flex; gap: 2em; flex-wrap: wrap; margin: 1em 0; }
+          .stat { text-align: center; }
+          .stat .num { font-size: 1.8em; font-weight: bold; color: white; }
+          .stat .label { font-size: 0.85em; color: #888; }
+          .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px;
+                   font-size: 0.8em; margin-right: 0.5em; }
+          .badge-blue { background: #1a3a5c; color: #6B8DAE; }
+          .badge-green { background: #1a3c1a; color: #7A9E7E; }
+          .badge-gold { background: #3c3520; color: #C4A35A; }
+          @media (max-width: 600px) { .card-grid { grid-template-columns: 1fr; } }
+          </style>
+execute:
+  echo: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+```
+
+# Datasets
+
+## Row
+
+Historical finance database for backtesting: equities, crypto, macro, and factors. Code-only R package — data hosted on [Hugging Face](https://huggingface.co/datasets/dsfefvx/finance-historical-data), queried via DuckDB `hf://` protocol with predicate pushdown.
+
+<span class="badge badge-blue">R package</span>
+<span class="badge badge-green">DuckDB + Parquet</span>
+<span class="badge badge-gold">Hugging Face</span>
+
+<div class="stats-row">
+<div class="stat"><div class="num">1,022</div><div class="label">tickers</div></div>
+<div class="stat"><div class="num">2.3M</div><div class="label">rows</div></div>
+<div class="stat"><div class="num">6</div><div class="label">datasets</div></div>
+<div class="stat"><div class="num">100yr</div><div class="label">history</div></div>
+<div class="stat"><div class="num">30</div><div class="label">functions</div></div>
+</div>
+
+## Row
+
+<div class="card-grid">
+<a href="examples.html#equity" class="info-card">
+<h4>Equity</h4>
+<p>1,022 tickers (51 US + 949 LSE ETFs + 13 macro ETFs + 9 factor ETFs). Daily OHLCV from 1980. Includes Vanguard, iShares, SPDR UCITS ETFs. 44 MB Parquet.</p>
+</a>
+<a href="examples.html#crypto" class="info-card">
+<h4>Crypto</h4>
+<p>14 tokens (BTC, ETH, SOL, BNB, stablecoins, Solana DeFi). Daily from 2014. 1.1 MB.</p>
+</a>
+<a href="examples.html#macro" class="info-card">
+<h4>Macro</h4>
+<p>19 FRED series: SP500, VIX, Treasury yields, credit spreads, GDP, CPI, oil, USD. From 1947.</p>
+</a>
+<a href="examples.html#factors" class="info-card">
+<h4>Factors</h4>
+<p>Fama-French FF3, FF5, Momentum. Daily + monthly. Back to 1926. Ken French Data Library.</p>
+</a>
+</div>
+
+# Articles
+
+## Row
+
+<div class="card-grid">
+<a href="examples.html" class="info-card">
+<h4>Usage Examples</h4>
+<p>Interactive dashboard with code examples for all 6 datasets: equity, crypto, macro, factors, LSE ETFs, and metadata queries.</p>
+</a>
+<a href="macro-defense-rotation.html" class="info-card">
+<h4>Macro Defense Rotation</h4>
+<p>Backtesting vignette: rotating among TLT/GLD/DBC/UUP to hedge macro risk. Expanding window methodology, in-sample vs out-of-sample holdout.</p>
+</a>
+<a href="factor-max.html" class="info-card">
+<h4>Factor MAX Rotation</h4>
+<p>Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025).</p>
+</a>
+<a href="pkg/index.html" class="info-card">
+<h4>API Reference</h4>
+<p>Full function documentation for all 30 exported functions, grouped by: Data Access, Discovery, Curated Groups, Quality &amp; Audit, Infrastructure, Visualisation.</p>
+</a>
+</div>
+
+# Links
+
+## Row
+
+- [GitHub](https://github.com/JohnGavin/historical) — source code, issues, CI
+- [Hugging Face Dataset](https://huggingface.co/datasets/dsfefvx/finance-historical-data) — Parquet files, dataset card
+- [API Reference](pkg/index.html) — pkgdown function docs
+- [Examples](examples.html) — interactive dashboard with all datasets
+- [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
+- [Factor MAX](factor-max.html) — factor rotation strategy
+
+## Row
+
+Built with the [T language](https://github.com/b-rodrigues/tlang) pipeline, [targets](https://docs.ropensci.org/targets/), [DuckDB](https://duckdb.org/), and [Quarto](https://quarto.org/). Data from Yahoo Finance, FRED, and Ken French Data Library.
+
+# Installation
+
+## Row
+
+### {.tabset}
+
+#### R (pak)
+
+```r
+# Install from GitHub
+pak::pak("JohnGavin/historical", subdir = "packages/historicaldata")
+
+# Then:
+library(historicaldata)
+hd_ohlcv("AAPL", from = "2024-01-01")
+hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")  # batch query
+hd_macro(c("SP500", "VIXCLS"), from = "2024-01-01")
+hd_search("vanguard")  # search metadata
+```
+
+#### Python (DuckDB)
+
+No R needed — query the same data directly from Python using DuckDB's native `hf://` protocol:
+
+```python
+import duckdb
+
+con = duckdb.connect()
+df = con.sql("""
+    SELECT date, close, volume
+    FROM 'hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet'
+    WHERE ticker = 'AAPL' AND date >= '2024-01-01'
+    ORDER BY date
+""").df()
+```
+
+#### Nix
+
+```bash
+# Enter reproducible Nix shell (all R + Python packages included)
+nix develop github:JohnGavin/historical
+```
+
+Then start R and load the package. All dependencies (dplyr, ggplot2, scales, DT, arrow, duckdb) are pre-installed in the Nix shell.
+
+#### T language
+
+```bash
+# Clone, enter Nix shell, fetch data, run pipeline
+git clone https://github.com/JohnGavin/historical.git && cd historical
+nix develop
+python scripts/fetch_equity.py     # 51 equity tickers
+Rscript scripts/fetch_crypto.R     # 14 crypto tokens
+Rscript scripts/fetch_macro.R      # 19 FRED series
+Rscript scripts/fetch_factors.R    # Fama-French factors
+t run src/pipeline.t               # T pipeline
+```
