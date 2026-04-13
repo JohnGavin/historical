@@ -16,3 +16,8 @@ Tibble with amendment records
 Returns the amendment log showing corrections made to historical price data.
 Each row records: what was changed, when, why, and the original value.
 }
+\seealso{
+Other quality-audit: 
+\code{\link{hd_quality}()}
+}
+\concept{quality-audit}

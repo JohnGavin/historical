@@ -81,6 +81,7 @@ hd_ohlcv <- function(ticker, from = NULL, to = NULL,
 #' @param dataset Dataset name from registry
 #' @param local If TRUE, use local cache
 #' @return Lazy duckplyr frame
+#' @family data-access
 #' @export
 hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
   rlang::check_installed("duckplyr", reason = "for lazy queries")
@@ -161,6 +162,8 @@ hd_macro <- function(series_id, from = NULL, to = NULL, local = FALSE) {
 #'
 #' @param local If TRUE, query local cache
 #' @return Character vector of series IDs
+#' @family data-access
+#' @family discovery
 #' @export
 hd_macro_series <- function(local = FALSE) {
   ds <- hd_datasets()[["macro_daily"]]

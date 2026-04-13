@@ -5,6 +5,7 @@
 #'
 #' @param ticker Filter to one ticker. NULL = all.
 #' @return Tibble with amendment records
+#' @family quality-audit
 #' @export
 hd_amendments <- function(ticker = NULL) {
   con <- hd_connect()

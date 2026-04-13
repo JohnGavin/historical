@@ -15,3 +15,15 @@ Character vector of series IDs
 \description{
 List available macro series
 }
+\seealso{
+Other data-access: 
+\code{\link{hd_lazy}()}
+
+Other discovery: 
+\code{\link{hd_datasets}()},
+\code{\link{hd_exchanges}()},
+\code{\link{hd_summary}()},
+\code{\link{hd_tickers}()}
+}
+\concept{data-access}
+\concept{discovery}

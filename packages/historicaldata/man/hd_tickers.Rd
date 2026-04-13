@@ -16,3 +16,11 @@ Character vector of tickers
 Queries the remote Parquet file for distinct tickers.
 Uses DuckDB httpfs — only fetches the ticker column.
 }
+\seealso{
+Other discovery: 
+\code{\link{hd_datasets}()},
+\code{\link{hd_exchanges}()},
+\code{\link{hd_macro_series}()},
+\code{\link{hd_summary}()}
+}
+\concept{discovery}

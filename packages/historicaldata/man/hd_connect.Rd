@@ -14,3 +14,11 @@ Returns a DBI connection to an ephemeral DuckDB instance.
 DuckDB 0.10+ supports \verb{hf://datasets/...} URLs natively — no httpfs needed.
 httpfs is loaded as a fallback for non-HF HTTPS URLs.
 }
+\seealso{
+Other infrastructure: 
+\code{\link{hd_cache_clear}()},
+\code{\link{hd_cache_path}()},
+\code{\link{hd_connect_local}()},
+\code{\link{hd_download}()}
+}
+\concept{infrastructure}

@@ -49,6 +49,7 @@ hd_jumps <- function(dataset = "equity_daily", threshold = 0.4, n = 100) {
 #' @param dataset Dataset name (default "equity_daily")
 #' @param jump_threshold Log return threshold for counting jumps (default 0.4)
 #' @return Tibble with quality metrics per ticker
+#' @family quality-audit
 #' @export
 hd_quality <- function(dataset = "equity_daily", jump_threshold = 0.4) {
   con <- hd_connect()

@@ -4,6 +4,7 @@
 #' Adding a new asset class = adding an entry here.
 #'
 #' @return Named list of dataset metadata
+#' @family discovery
 #' @export
 hd_datasets <- function() {
   list(
@@ -61,6 +62,7 @@ hd_datasets <- function() {
 #'
 #' @param dataset Name of dataset (from `hd_datasets()`)
 #' @return Character vector of tickers
+#' @family discovery
 #' @export
 hd_tickers <- function(dataset = "equity_daily") {
   ds <- hd_datasets()[[dataset]]

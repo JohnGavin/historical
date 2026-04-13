@@ -15,3 +15,4 @@ Character vector of hex colours
 \description{
 10 colours chosen for visibility on black backgrounds.
 }
+\concept{visualisation}

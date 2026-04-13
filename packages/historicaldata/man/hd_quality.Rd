@@ -18,3 +18,8 @@ Tibble with quality metrics per ticker
 Returns per-ticker stats: row count, date range, number of jumps,
 max absolute jump, number of gaps > 5 days.
 }
+\seealso{
+Other quality-audit: 
+\code{\link{hd_amendments}()}
+}
+\concept{quality-audit}

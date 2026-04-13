@@ -12,3 +12,11 @@ Path to cache directory
 \description{
 Uses \code{tools::R_user_dir()} for platform-appropriate caching.
 }
+\seealso{
+Other infrastructure: 
+\code{\link{hd_cache_clear}()},
+\code{\link{hd_connect}()},
+\code{\link{hd_connect_local}()},
+\code{\link{hd_download}()}
+}
+\concept{infrastructure}

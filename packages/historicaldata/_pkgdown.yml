@@ -1,0 +1,75 @@
+url: https://johngavin.github.io/historical/pkg/
+
+template:
+  bootstrap: 5
+  bslib:
+    preset: shiny
+
+navbar:
+  structure:
+    left: [reference, articles]
+    right: [github]
+  components:
+    github:
+      icon: fab fa-github
+      href: https://github.com/JohnGavin/historical
+    articles:
+      text: Articles
+      menu:
+        - text: Usage Examples
+          href: https://johngavin.github.io/historical/examples.html
+        - text: Macro Defense Rotation
+          href: https://johngavin.github.io/historical/macro-defense-rotation.html
+
+reference:
+  - title: Data Access
+    desc: Fetch OHLCV, macro, and factor data from HF-hosted Parquet
+    contents:
+      - hd_ohlcv
+      - hd_macro
+      - hd_factors
+      - hd_lazy
+
+  - title: Discovery
+    desc: Search, explore, and summarise available datasets and tickers
+    contents:
+      - hd_search
+      - hd_summary
+      - hd_exchanges
+      - hd_tickers
+      - hd_macro_series
+      - hd_ticker_info
+      - hd_ticker_meta
+      - hd_fred_meta
+      - hd_datasets
+
+  - title: Curated Groups & Ranking
+    desc: Pre-defined ticker groups and ranked ticker lists
+    contents:
+      - hd_ticker_groups
+      - hd_group
+      - hd_top_by
+      - hd_most_volatile
+
+  - title: Quality & Audit
+    desc: Data quality checks and Point-in-Time amendment tracking
+    contents:
+      - hd_jumps
+      - hd_quality
+      - hd_amendments
+      - hd_metadata_amendments
+
+  - title: Infrastructure
+    desc: DuckDB connections, caching, and downloads
+    contents:
+      - hd_connect
+      - hd_connect_local
+      - hd_download
+      - hd_cache_path
+      - hd_cache_clear
+
+  - title: Visualisation
+    desc: Plot theme and colour palette for dark backgrounds
+    contents:
+      - hd_theme
+      - hd_palette

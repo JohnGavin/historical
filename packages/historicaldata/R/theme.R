@@ -33,6 +33,7 @@ hd_theme <- function(base_size = 14) {
 #'
 #' @param n Number of colours (max 10)
 #' @return Character vector of hex colours
+#' @family visualisation
 #' @export
 hd_palette <- function(n = 10) {
   pal <- c("#00BFFF", "#FF6347", "#32CD32", "#FFD700", "#FF69B4",

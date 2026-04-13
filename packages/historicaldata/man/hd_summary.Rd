@@ -12,3 +12,11 @@ Tibble with dataset, n_tickers, total_obs, min_date, max_date, description
 \description{
 Returns one row per dataset with ticker count, row count, and date range.
 }
+\seealso{
+Other discovery: 
+\code{\link{hd_datasets}()},
+\code{\link{hd_exchanges}()},
+\code{\link{hd_macro_series}()},
+\code{\link{hd_tickers}()}
+}
+\concept{discovery}

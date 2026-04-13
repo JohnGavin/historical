@@ -5,6 +5,7 @@
 #' httpfs is loaded as a fallback for non-HF HTTPS URLs.
 #'
 #' @return DBI connection object
+#' @family infrastructure
 #' @export
 hd_connect <- function() {
   con <- DBI::dbConnect(duckdb::duckdb())
@@ -21,6 +22,7 @@ hd_connect <- function() {
 #'
 #' @param cache_dir Path to local cache directory
 #' @return DBI connection with views registered
+#' @family infrastructure
 #' @export
 hd_connect_local <- function(cache_dir = hd_cache_path()) {
 

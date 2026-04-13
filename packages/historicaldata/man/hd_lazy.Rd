@@ -18,3 +18,8 @@ Lazy duckplyr frame
 Returns an unevaluated duckplyr lazy frame. Chain dplyr verbs
 then call \code{collect()} to execute.
 }
+\seealso{
+Other data-access: 
+\code{\link{hd_macro_series}()}
+}
+\concept{data-access}

@@ -15,3 +15,11 @@ DBI connection with views registered
 \description{
 Create a DuckDB connection over local cached Parquet files
 }
+\seealso{
+Other infrastructure: 
+\code{\link{hd_cache_clear}()},
+\code{\link{hd_cache_path}()},
+\code{\link{hd_connect}()},
+\code{\link{hd_download}()}
+}
+\concept{infrastructure}

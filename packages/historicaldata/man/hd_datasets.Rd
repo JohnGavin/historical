@@ -13,3 +13,11 @@ Named list of dataset metadata
 Maps dataset names to HF URLs, schemas, and metadata.
 Adding a new asset class = adding an entry here.
 }
+\seealso{
+Other discovery: 
+\code{\link{hd_exchanges}()},
+\code{\link{hd_macro_series}()},
+\code{\link{hd_summary}()},
+\code{\link{hd_tickers}()}
+}
+\concept{discovery}

@@ -50,6 +50,7 @@ hd_search <- function(pattern, dataset = NULL) {
 #' Returns one row per dataset with ticker count, row count, and date range.
 #'
 #' @return Tibble with dataset, n_tickers, total_obs, min_date, max_date, description
+#' @family discovery
 #' @export
 hd_summary <- function() {
   con <- hd_connect()
@@ -78,6 +79,7 @@ hd_summary <- function() {
 #'
 #' @param dataset Filter to one dataset. NULL = all.
 #' @return Tibble with exchange, full_exchange, n_tickers
+#' @family discovery
 #' @export
 hd_exchanges <- function(dataset = NULL) {
   con <- hd_connect()

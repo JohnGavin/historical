@@ -17,3 +17,11 @@ Invisibly, paths to cached files.
 \description{
 Downloads Parquet files from HF for offline use.
 }
+\seealso{
+Other infrastructure: 
+\code{\link{hd_cache_clear}()},
+\code{\link{hd_cache_path}()},
+\code{\link{hd_connect}()},
+\code{\link{hd_connect_local}()}
+}
+\concept{infrastructure}

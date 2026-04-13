@@ -3,6 +3,7 @@
 #' Uses `tools::R_user_dir()` for platform-appropriate caching.
 #'
 #' @return Path to cache directory
+#' @family infrastructure
 #' @export
 hd_cache_path <- function() {
   path <- Sys.getenv("HD_CACHE_DIR", unset = "")
@@ -17,6 +18,7 @@ hd_cache_path <- function() {
 #' @param dataset Dataset name(s). If NULL, downloads all registered datasets.
 #' @param force If TRUE, re-download even if cached file exists.
 #' @return Invisibly, paths to cached files.
+#' @family infrastructure
 #' @export
 hd_download <- function(dataset = NULL, force = FALSE) {
   cache_dir <- hd_cache_path()
@@ -64,6 +66,7 @@ hd_download <- function(dataset = NULL, force = FALSE) {
 #' Clear the local cache
 #'
 #' @param dataset If NULL, clears all cached datasets.
+#' @family infrastructure
 #' @export
 hd_cache_clear <- function(dataset = NULL) {
   cache_dir <- hd_cache_path()

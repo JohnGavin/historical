@@ -12,3 +12,11 @@ hd_cache_clear(dataset = NULL)
 \description{
 Clear the local cache
 }
+\seealso{
+Other infrastructure: 
+\code{\link{hd_cache_path}()},
+\code{\link{hd_connect}()},
+\code{\link{hd_connect_local}()},
+\code{\link{hd_download}()}
+}
+\concept{infrastructure}
