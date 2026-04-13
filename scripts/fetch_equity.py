@@ -7,7 +7,9 @@ Usage:
     python scripts/fetch_equity.py                    # All US default tickers
     python scripts/fetch_equity.py --lse              # Add ~929 LSE ETFs
     python scripts/fetch_equity.py --lse --batch-size 50  # LSE in batches of 50
-    python scripts/fetch_equity.py AAPL MSFT GOOGL    # Specific tickers
+    python scripts/fetch_equity.py --sp500             # Add ~500 S&P 500 tickers
+    python scripts/fetch_equity.py --stoxx600          # Add ~150 STOXX Europe 600 majors
+    python scripts/fetch_equity.py AAPL MSFT GOOGL     # Specific tickers
 """
 
 import sys
@@ -185,6 +187,63 @@ def load_lse_tickers() -> list[str]:
     return [line.strip() for line in lse_file.read_text().splitlines() if line.strip()]
 
 
+def load_sp500_tickers() -> list[str]:
+    """Load S&P 500 tickers from GitHub datasets repo."""
+    import urllib.request, csv, io
+    try:
+        req = urllib.request.Request(
+            "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv",
+            headers={"User-Agent": "Mozilla/5.0"},
+        )
+        response = urllib.request.urlopen(req, timeout=30)
+        reader = csv.DictReader(io.TextIOWrapper(response))
+        tickers = [row["Symbol"].replace(".", "-") for row in reader]
+        print(f"  Loaded {len(tickers)} S&P 500 tickers from GitHub")
+        return tickers
+    except Exception as e:
+        print(f"  WARNING: Failed to load S&P 500: {e}")
+        return []
+
+
+# Major European stocks with Yahoo Finance exchange suffixes
+STOXX600_MAJORS = [
+    # Germany (.DE) - DAX 40
+    "SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "BAS.DE", "MBG.DE", "BMW.DE",
+    "MRK.DE", "IFX.DE", "ADS.DE", "MUV2.DE", "HEN3.DE", "BAYN.DE", "VOW3.DE",
+    "AIR.DE", "SHL.DE", "DB1.DE", "DPW.DE", "RWE.DE", "FRE.DE", "CON.DE",
+    "HEI.DE", "BEI.DE", "ENR.DE", "FME.DE", "SY1.DE", "MTX.DE", "VNA.DE",
+    "PUM.DE", "LEG.DE", "QIA.DE", "DTG.DE", "PAH3.DE", "RHM.DE", "DBK.DE", "CBK.DE",
+    # France (.PA) - CAC 40
+    "MC.PA", "OR.PA", "TTE.PA", "SAN.PA", "AI.PA", "SU.PA", "BN.PA", "CS.PA",
+    "AIR.PA", "DG.PA", "BNP.PA", "GLE.PA", "ACA.PA", "CAP.PA", "RI.PA", "DSY.PA",
+    "KER.PA", "VIE.PA", "EL.PA", "HO.PA", "EN.PA", "ORA.PA", "SGO.PA", "STM.PA",
+    "VIV.PA", "ML.PA", "PUB.PA", "RMS.PA", "LR.PA", "SAF.PA", "CA.PA",
+    # Netherlands (.AS)
+    "ASML.AS", "SHELL.AS", "UNA.AS", "INGA.AS", "PHIA.AS", "AD.AS", "WKL.AS",
+    "HEIA.AS", "ABN.AS", "NN.AS", "RAND.AS", "AKZA.AS", "KPN.AS", "IMCD.AS",
+    # Switzerland (.SW)
+    "NESN.SW", "ROG.SW", "NOVN.SW", "ZURN.SW", "UBSG.SW", "ABBN.SW", "SREN.SW",
+    "GIVN.SW", "LONN.SW", "SGSN.SW", "GEBN.SW", "SLHN.SW", "SCMN.SW", "BALN.SW",
+    # Spain (.MC)
+    "SAN.MC", "IBE.MC", "ITX.MC", "BBVA.MC", "TEF.MC", "REP.MC", "AMS.MC",
+    "FER.MC", "ENG.MC", "IAG.MC",
+    # Italy (.MI)
+    "ISP.MI", "ENI.MI", "ENEL.MI", "UCG.MI", "G.MI", "STM.MI", "RACE.MI",
+    "MONC.MI", "TEN.MI", "MB.MI",
+    # Sweden (.ST)
+    "VOLV-B.ST", "ERIC-B.ST", "ATCO-A.ST", "SEB-A.ST", "SAND.ST", "ASSA-B.ST",
+    "HM-B.ST", "SWED-A.ST", "INVE-B.ST",
+    # Denmark (.CO)
+    "NOVO-B.CO", "MAERSK-B.CO", "CARL-B.CO", "DSV.CO", "NZYM-B.CO", "VWS.CO",
+    "PNDORA.CO", "COLO-B.CO", "ORSTED.CO", "GN.CO",
+]
+
+
+def load_stoxx600_tickers() -> list[str]:
+    """Return major STOXX Europe 600 tickers with Yahoo suffixes."""
+    return list(STOXX600_MAJORS)
+
+
 def log_telemetry(log_entries: list[dict], output_dir: Path):
     """Write download telemetry to Parquet."""
     if not log_entries:
@@ -205,6 +264,9 @@ def main():
     batch_size = 0
     include_lse = False
 
+    include_sp500 = False
+    include_stoxx600 = False
+
     args = sys.argv[1:]
     i = 0
     while i < len(args):
@@ -213,6 +275,12 @@ def main():
             i += 2
         elif args[i] == "--lse":
             include_lse = True
+            i += 1
+        elif args[i] == "--sp500":
+            include_sp500 = True
+            i += 1
+        elif args[i] == "--stoxx600":
+            include_stoxx600 = True
             i += 1
         else:
             tickers.append(args[i])
@@ -226,7 +294,21 @@ def main():
         print(f"Adding {len(lse)} LSE ETF tickers")
         tickers.extend(lse)
         if batch_size == 0:
-            batch_size = 50  # Default batch size for large downloads
+            batch_size = 50
+
+    if include_sp500:
+        sp500 = load_sp500_tickers()
+        print(f"Adding {len(sp500)} S&P 500 tickers")
+        tickers.extend(sp500)
+        if batch_size == 0:
+            batch_size = 100
+
+    if include_stoxx600:
+        stoxx = load_stoxx600_tickers()
+        print(f"Adding {len(stoxx)} STOXX 600 tickers")
+        tickers.extend(stoxx)
+        if batch_size == 0:
+            batch_size = 100
 
     output_dir = Path("data/raw")
     output_dir.mkdir(parents=True, exist_ok=True)
