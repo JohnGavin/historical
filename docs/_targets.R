@@ -29,7 +29,8 @@ tar_option_set(
 # Source plans
 source(here::here("R/plan_vignette.R"))
 source(here::here("R/plan_backtest.R"))
+source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_qa_vignette.R"))
 
-# Combine: all vignette targets + backtest targets + QA
-c(plan_vignette(), plan_backtest(), plan_qa_vignette())
+# Combine: all vignette + backtest + factor max + QA
+c(plan_vignette(), plan_backtest(), plan_factormax(), plan_qa_vignette())

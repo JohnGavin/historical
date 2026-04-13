@@ -1,0 +1,247 @@
+---
+title: "Factor MAX Rotation"
+format:
+  dashboard:
+    orientation: rows
+    theme: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <style>
+          body { font-size: 1.15em; }
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
+            height: auto !important; min-height: 0 !important;
+            max-height: none !important; overflow: visible !important;
+            flex: none !important;
+          }
+          .cell-output-display { display: block !important; position: relative !important;
+            overflow: visible !important; margin-bottom: 1em; }
+          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
+          .datatables, .dataTables_wrapper { display: block !important;
+            position: relative !important; overflow-x: auto !important; }
+          table.dataTable { white-space: nowrap; }
+          table caption { caption-side: top !important; }
+          .fig-caption { display: block; font-size: 0.85em; color: #888;
+            margin-top: 0.4em; text-align: left; line-height: 1.5; }
+          </style>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+safe_tar_read <- function(name) {
+  tryCatch(
+    targets::tar_read_raw(name),
+    error = function(e) {
+      rds_dirs <- c("../inst/extdata/vignettes", "inst/extdata/vignettes")
+      for (d in rds_dirs) {
+        rds <- file.path(d, paste0(name, ".rds"))
+        if (file.exists(rds)) return(readRDS(rds))
+      }
+      NULL
+    }
+  )
+}
+
+hd_dt <- function(df, caption_text) {
+  if (is.null(df)) return(invisible(NULL))
+  DT::datatable(df, caption = htmltools::tags$caption(
+    style = "caption-side: top; text-align: left; font-weight: bold; color: #ddd;",
+    caption_text), rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "frtip"))
+}
+```
+
+# Strategy
+
+## Row
+
+::: {.callout-note}
+## Factor MAX Rotation
+
+Based on [Alpha Architect research](https://alphaarchitect.com/factor-max/) (Dec 2025): the **maximum daily return within a month** predicts next-month factor returns. This signal captures investor underreaction to factor-level news and is distinct from factor momentum.
+
+**Implementation:** Each month, rank Fama-French factors by their MAX signal (highest single-day return that month). Go long the top 2 factors next month with equal weights. Rebalance monthly.
+:::
+
+## Row
+
+### {.tabset}
+
+#### Performance
+
+```{r}
+#| fig-height: 6
+safe_tar_read("fm_cumret_plot")
+```
+
+::: {.fig-caption}
+**Factor MAX vs Market.** Y: growth of $1 (log scale). Blue = Factor MAX (top-2 factors by MAX signal, equal weight). Red = Market factor (Mkt-RF). Dashed line = OOS start (2020). Source: Fama-French via `hd_factors()`. Log scale shows compounding differences.
+:::
+
+#### Metrics
+
+```{r}
+metrics <- safe_tar_read("fm_metrics")
+if (!is.null(metrics)) {
+  display <- metrics |>
+    mutate(across(c(cagr, vol, max_dd, hit_rate, bench_cagr, bench_vol),
+                  ~ paste0(round(. * 100, 1), "%"))) |>
+    mutate(across(c(sharpe, bench_sharpe), ~ round(., 2)))
+  hd_dt(display, "Factor MAX strategy metrics: in-sample (1963-2019), out-of-sample (2020+), and full period.")
+}
+```
+
+::: {.fig-caption}
+**Performance metrics.** CAGR, volatility, Sharpe ratio, max drawdown, and hit rate (fraction of months beating the market). Benchmark is the market factor (Mkt-RF). In-sample: 1963-2019. Out-of-sample: 2020+.
+:::
+
+#### Factor Selection
+
+```{r}
+sf <- safe_tar_read("fm_selection_freq")
+if (!is.null(sf)) {
+  sf <- sf |> mutate(pct = paste0(round(pct * 100, 1), "%"))
+  hd_dt(sf, "How often each factor is selected by the MAX signal. Momentum dominates.")
+}
+```
+
+::: {.fig-caption}
+**Factor selection frequency.** Shows how many months (out of total) each factor was ranked in the top 2 by MAX signal. Momentum (Mom) is selected most frequently, consistent with the Alpha Architect finding that MAX captures momentum-adjacent but distinct information.
+:::
+
+# Signal
+
+## Row
+
+### {.tabset}
+
+#### Heatmap
+
+```{r}
+#| fig-height: 8
+safe_tar_read("fm_heatmap")
+```
+
+::: {.fig-caption}
+**MAX signal rank heatmap.** Green = rank 1 (highest MAX, strongest buy signal). Dark = rank 5 (lowest). Rows: Fama-French factors (HML, SMB, RMW, CMA, Mom). Columns: calendar months. Faceted by year. Source: `hd_factors(dataset = "FF5")` + `hd_factors(dataset = "Mom")`.
+:::
+
+#### How It Works
+
+::: {.callout-tip}
+## The MAX Signal
+
+For each factor, each month:
+
+1. **Compute MAX:** the single highest daily return in that month
+2. **Rank factors** by MAX (1 = highest)
+3. **Next month:** go long the top-2 ranked factors with equal weights
+
+**Intuition:** A factor with a high MAX day signals that the factor's underlying theme (value, momentum, etc.) is receiving positive attention. Investors underreact to this signal, creating predictable returns.
+
+**Key distinction from momentum:** Factor momentum uses average or cumulative returns. MAX uses only the single best day. The Alpha Architect study shows these capture different information — MAX remains predictive even after controlling for momentum.
+:::
+
+# Details
+
+## Row
+
+### {.tabset}
+
+#### Universe
+
+The strategy rotates among 5 Fama-French factors (daily data from 1963):
+
+| Factor | Description | Source |
+|--------|-------------|--------|
+| **HML** | High Minus Low (value) | FF5 |
+| **SMB** | Small Minus Big (size) | FF5 |
+| **RMW** | Robust Minus Weak (profitability) | FF5 |
+| **CMA** | Conservative Minus Aggressive (investment) | FF5 |
+| **Mom** | Momentum (winners minus losers) | Ken French |
+
+Benchmark: **Mkt-RF** (market excess return).
+
+#### Parameters
+
+```{r}
+params <- safe_tar_read("fm_params")
+if (!is.null(params)) {
+  param_df <- tibble(
+    Parameter = c("Factors", "Top N", "Start Date", "IS End", "OOS Start", "Benchmark"),
+    Value = c(paste(params$factors, collapse = ", "),
+              as.character(params$top_n),
+              as.character(params$start_date),
+              as.character(params$is_end),
+              as.character(params$oos_start),
+              params$benchmark_factor)
+  )
+  hd_dt(param_df, "Strategy parameters. Change fm_params target and tar_make() to update all.")
+}
+```
+
+#### References
+
+1. **Research:** [Factor MAX: A New Signal for Predicting Factor Returns](https://alphaarchitect.com/factor-max/) — Alpha Architect (Dec 2025)
+2. **Data:** Fama-French factors via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html), accessed through `hd_factors()`
+3. **Methodology:** Expanding window backtest with OOS holdout, same pattern as [Macro Defense Rotation](macro-defense-rotation.html)
+
+#### Build Info
+
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+gh_url <- tryCatch({
+  remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+  sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+}, error = function(e) NULL)
+
+git_sha_short <- tryCatch(
+  system("git rev-parse --short HEAD 2>/dev/null", intern = TRUE),
+  error = function(e) "N/A"
+)
+git_sha_full <- tryCatch(
+  system("git rev-parse HEAD 2>/dev/null", intern = TRUE),
+  error = function(e) git_sha_short
+)
+
+pkg_ver <- tryCatch(
+  as.character(packageVersion("historicaldata")),
+  error = function(e) "0.1.0"
+)
+
+r_ver <- as.character(getRversion())
+build_time <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
+
+ver_link <- if (!is.null(gh_url)) {
+  sprintf("[%s](%s/releases/tag/v%s)", pkg_ver, gh_url, pkg_ver)
+} else pkg_ver
+
+sha_link <- if (!is.null(gh_url) && git_sha_short != "N/A") {
+  sprintf("[`%s`](%s/commit/%s)", git_sha_short, gh_url, git_sha_full)
+} else sprintf("`%s`", git_sha_short)
+
+r_link <- sprintf("[%s](https://cran.r-project.org/doc/manuals/r-release/NEWS.html)", r_ver)
+
+cat(sprintf(
+  "**historicaldata** %s | **Git** %s | **R** %s | **Built** %s",
+  ver_link, sha_link, r_link, build_time
+))
+```

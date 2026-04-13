@@ -64,6 +64,16 @@ DEFAULT_TICKERS = [
     "AGG",   # US Aggregate Bond
     "EFA",   # International developed equities
     "EEM",   # Emerging market equities
+    # === Factor ETFs (Factor Max strategy) ===
+    "VLUE",  # iShares MSCI USA Value Factor (value)
+    "MTUM",  # iShares MSCI USA Momentum Factor (momentum)
+    "QUAL",  # iShares MSCI USA Quality Factor (quality/profitability)
+    "USMV",  # iShares MSCI USA Minimum Volatility (low-vol)
+    "SIZE",  # iShares MSCI USA Size Factor (small-cap tilt)
+    "VTV",   # Vanguard Value ETF (value, longer history)
+    "VUG",   # Vanguard Growth ETF (growth, complement to value)
+    "IWD",   # iShares Russell 1000 Value
+    "IWF",   # iShares Russell 1000 Growth
 ]
 
 
