@@ -5,7 +5,7 @@ description = "Historical finance database: Python fetches + R validates/cleans 
 [dependencies]
 
 [r-dependencies]
-packages = ["dplyr", "arrow", "duckdb", "duckplyr", "pointblank", "targets", "crew", "fredr", "frenchdata", "httr2", "jsonlite", "knitr", "reticulate", "testthat", "cli", "rlang"]
+packages = ["dplyr", "arrow", "duckdb", "duckplyr", "ggplot2", "glmnet", "pointblank", "scales", "targets", "crew", "DT", "fredr", "frenchdata", "httr2", "jsonlite", "knitr", "reticulate", "testthat", "tidyr", "cli", "rlang"]
 
 [py-dependencies]
 version = "python313"
