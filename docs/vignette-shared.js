@@ -24,6 +24,21 @@ document.addEventListener('click', function(e) {
   document.body.appendChild(div);
 });
 
+// Add home link to navbar (left of dark mode toggle)
+document.addEventListener('DOMContentLoaded', function() {
+  var navbar = document.querySelector('.navbar-nav, .navbar-collapse, .navbar');
+  if (navbar && !document.querySelector('.navbar-home-link')) {
+    // Find the right spot — before the light switch or at the start of nav
+    var navContainer = document.querySelector('.navbar-nav');
+    if (navContainer) {
+      var homeItem = document.createElement('li');
+      homeItem.className = 'nav-item navbar-home-link';
+      homeItem.innerHTML = '<a class="nav-link" href="index.html" title="Home">Home</a>';
+      navContainer.insertBefore(homeItem, navContainer.firstChild);
+    }
+  }
+});
+
 // Prevent tab clicks from jumping to page top
 document.addEventListener('DOMContentLoaded', function() {
   document.querySelectorAll('.nav-link[data-bs-toggle="tab"]').forEach(function(tab) {

@@ -40,7 +40,9 @@ Tibble of OHLCV data (multiple tickers stacked by ticker + date)
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_ohlcv("AAPL", from = "2024-01-01")
 hd_ohlcv(c("AAPL", "MSFT", "GOOGL"), from = "2024-01-01")
 hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")
+}
 ```

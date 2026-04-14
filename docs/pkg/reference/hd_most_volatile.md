@@ -31,5 +31,7 @@ Tibble with ticker, vol_21d, sorted by vol descending
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_most_volatile("equity_daily", 3)
+}
 ```

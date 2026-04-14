@@ -31,5 +31,7 @@ Tibble with: ticker, date, prev_close, close, log_ret, pct_change
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_jumps("equity_daily", threshold = 0.5, n = 20)
+}
 ```

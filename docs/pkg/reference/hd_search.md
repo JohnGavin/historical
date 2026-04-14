@@ -25,6 +25,8 @@ Tibble of matching tickers with metadata
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_search("^APP")     # regex: tickers starting with APP
 hd_search("*coin*")   # glob: names containing "coin"
+}
 ```

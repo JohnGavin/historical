@@ -34,6 +34,8 @@ Tibble with ticker + metadata columns, sorted by metric
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_top_by("equity_daily", "market_cap", 5)
 hd_top_by("crypto_daily", "volume_avg", 3)
+}
 ```

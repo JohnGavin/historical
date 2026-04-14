@@ -7,19 +7,31 @@ template:
 
 navbar:
   structure:
-    left: [reference, articles]
+    left: [home, reference, articles]
     right: [github]
   components:
     github:
       icon: fab fa-github
       href: https://github.com/JohnGavin/historical
+    home:
+      icon: fas fa-home
+      href: https://johngavin.github.io/historical/
     articles:
       text: Articles
       menu:
+        - text: "── Data ──"
         - text: Usage Examples
           href: https://johngavin.github.io/historical/examples.html
+        - text: "── Factor-Level Backtests ──"
         - text: Macro Defense Rotation
           href: https://johngavin.github.io/historical/macro-defense-rotation.html
+        - text: Factor MAX Rotation
+          href: https://johngavin.github.io/historical/factor-max.html
+        - text: "DRIF: Daily Return Information"
+          href: https://johngavin.github.io/historical/drif.html
+        - text: "── Stock-Level Backtests ──"
+        - text: "Stock-Level: 4-Strategy Comparison"
+          href: https://johngavin.github.io/historical/stock-backtest.html
 
 reference:
   - title: Data Access

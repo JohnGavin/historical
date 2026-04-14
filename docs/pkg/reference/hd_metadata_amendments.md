@@ -28,6 +28,8 @@ amended_at, amended_by, reversible
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_metadata_amendments("AAPL")
 hd_metadata_amendments(field = "beta_3yr")
+}
 ```

@@ -17,11 +17,18 @@ multiple tickers. Uses batch IN (...) query."></head><body>
     </button>
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
-      <ul class="navbar-nav me-auto"><li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
+      <ul class="navbar-nav me-auto"><li class="nav-item"><a class="external-link nav-link" href="https://johngavin.github.io/historical/"><span class="fa fas fa-home"></span></a></li>
+<li class="active nav-item"><a class="nav-link" href="../reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
-  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><a class="external-link dropdown-item" href="https://johngavin.github.io/historical/examples.html">Usage Examples</a></li>
+  <ul class="dropdown-menu" aria-labelledby="dropdown-articles"><li><h6 class="dropdown-header" data-toc-skip>── Data ──</h6></li>
+    <li><a class="external-link dropdown-item" href="https://johngavin.github.io/historical/examples.html">Usage Examples</a></li>
+    <li><h6 class="dropdown-header" data-toc-skip>── Factor-Level Backtests ──</h6></li>
     <li><a class="external-link dropdown-item" href="https://johngavin.github.io/historical/macro-defense-rotation.html">Macro Defense Rotation</a></li>
+    <li><a class="external-link dropdown-item" href="https://johngavin.github.io/historical/factor-max.html">Factor MAX Rotation</a></li>
+    <li><a class="external-link dropdown-item" href="https://johngavin.github.io/historical/drif.html">DRIF: Daily Return Information</a></li>
+    <li><h6 class="dropdown-header" data-toc-skip>── Stock-Level Backtests ──</h6></li>
+    <li><a class="external-link dropdown-item" href="https://johngavin.github.io/historical/stock-backtest.html">Stock-Level: 4-Strategy Comparison</a></li>
   </ul></li>
       </ul><ul class="navbar-nav"><li class="nav-item"><a class="external-link nav-link" href="https://github.com/JohnGavin/historical"><span class="fa fab fa-github"></span></a></li>
       </ul></div>
@@ -63,8 +70,10 @@ volume_avg, yield_pct, beta_3yr</p>
 
     <div class="section level2">
     <h2 id="ref-examples">Examples<a class="anchor" aria-label="anchor" href="#ref-examples"></a></h2>
-    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="fu">hd_ticker_meta</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"AAPL"</span>, <span class="st">"MSFT"</span><span class="op">)</span><span class="op">)</span></span>
-<span><span class="fu">hd_ticker_meta</span><span class="op">(</span><span class="fu"><a href="hd_group.html">hd_group</a></span><span class="op">(</span><span class="st">"FAANG"</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+    <div class="sourceCode"><pre class="sourceCode r"><code><span><span class="kw">if</span> <span class="op">(</span><span class="cn">FALSE</span><span class="op">)</span> <span class="op">{</span> <span class="co"># interactive()</span></span>
+<span><span class="fu">hd_ticker_meta</span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"AAPL"</span>, <span class="st">"MSFT"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu">hd_ticker_meta</span><span class="op">(</span><span class="fu"><a href="hd_group.html">hd_group</a></span><span class="op">(</span><span class="st">"FAANG"</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span></code></pre></div>
     </div>
   </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
     </nav></aside></div>

@@ -34,6 +34,8 @@ Tibble with date, value, series_id columns
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_macro("SP500", from = "2024-01-01")
 hd_macro(c("SP500", "VIXCLS", "DGS10"), from = "2024-01-01")
+}
 ```

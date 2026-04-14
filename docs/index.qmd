@@ -207,3 +207,17 @@ Rscript scripts/fetch_macro.R      # 19 FRED series
 Rscript scripts/fetch_factors.R    # Fama-French factors
 t run src/pipeline.t               # T pipeline
 ```
+
+# Build Info
+
+## Row
+
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+build_info()
+```

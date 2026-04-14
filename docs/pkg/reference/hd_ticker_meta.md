@@ -23,6 +23,8 @@ volume_avg, yield_pct, beta_3yr
 ## Examples
 
 ``` r
+if (FALSE) { # interactive()
 hd_ticker_meta(c("AAPL", "MSFT"))
 hd_ticker_meta(hd_group("FAANG"))
+}
 ```
