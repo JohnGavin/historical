@@ -22,6 +22,7 @@ Imports:
     rlang
 Suggests:
     arrow (>= 14.0),
+    curl,
     DT,
     duckplyr,
     glmnet,
