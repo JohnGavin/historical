@@ -1,0 +1,282 @@
+# Stock-level backtesting: shared infrastructure + Factor MAX + DRIF
+#
+# Cross-sectional strategies applied to 660+ individual stocks
+# (S&P 500 + STOXX 600 majors, excluding LSE ETFs).
+#
+# Group 1: shared infrastructure (universe, features, helpers)
+# Group 2: stock-level Factor MAX
+# Group 3: stock-level DRIF (TODO — compute intensive)
+
+# ── Helpers (not targets) ─────────────────────────────────────────
+
+#' Assign decile ranks within each month
+#' @param df Data frame with ym and signal columns
+#' @param signal_col Name of signal column (unquoted)
+#' @param n_groups Number of groups (default 10 = deciles)
+#' @return df with added `decile` column (1 = highest signal)
+assign_decile <- function(df, signal_col, n_groups = 10L) {
+  df |>
+    dplyr::group_by(ym) |>
+    dplyr::mutate(
+      decile = dplyr::ntile(dplyr::desc({{ signal_col }}), n_groups)
+    ) |>
+    dplyr::ungroup()
+}
+
+#' Compute long-short portfolio returns from decile assignments
+#' @param df Data frame with ym, decile, and monthly_ret columns
+#' @param long_decile Which decile to go long (default 1 = top)
+#' @param short_decile Which decile to short (default 10 = bottom). NULL = long only.
+#' @return Tibble with ym, port_ret, long_ret, short_ret, n_long, n_short
+portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L) {
+  long <- df |>
+    dplyr::filter(decile == long_decile) |>
+    dplyr::group_by(ym) |>
+    dplyr::summarise(long_ret = mean(monthly_ret, na.rm = TRUE),
+                     n_long = dplyr::n(), .groups = "drop")
+
+  if (is.null(short_decile)) {
+    return(long |> dplyr::mutate(port_ret = long_ret, short_ret = 0, n_short = 0L))
+  }
+
+  short <- df |>
+    dplyr::filter(decile == short_decile) |>
+    dplyr::group_by(ym) |>
+    dplyr::summarise(short_ret = mean(monthly_ret, na.rm = TRUE),
+                     n_short = dplyr::n(), .groups = "drop")
+
+  dplyr::inner_join(long, short, by = "ym") |>
+    dplyr::mutate(port_ret = long_ret - short_ret)
+}
+
+#' Standard backtest metrics
+calc_backtest_metrics <- function(df, label, rf_col = "rf_ret") {
+  n <- nrow(df)
+  if (n < 12) return(NULL)
+  ann_ret <- prod(1 + df$port_ret)^(12/n) - 1
+  ann_vol <- sd(df$port_ret) * sqrt(12)
+  rf_ann <- if (rf_col %in% names(df)) mean(df[[rf_col]], na.rm = TRUE) * 12 else 0
+  sharpe <- (ann_ret - rf_ann) / ann_vol
+  cum <- cumprod(1 + df$port_ret)
+  max_dd <- min(cum / cummax(cum) - 1)
+
+  dplyr::tibble(
+    period = label, months = n,
+    cagr = ann_ret, vol = ann_vol, sharpe = sharpe, max_dd = max_dd,
+    avg_long = mean(df$n_long), avg_short = mean(df$n_short, na.rm = TRUE)
+  )
+}
+
+
+plan_stock_backtest <- function() {
+  list(
+    # ── Parameters ────────────────────────────────────────────────
+    targets::tar_target(stk_params, {
+      list(
+        min_history_days = 252L,     # 1 year minimum to enter universe
+        lookback_days = 21L,         # trading days for MAX / DRIF features
+        n_deciles = 10L,
+        start_date = as.Date("2005-01-01"),  # most stocks have data from here
+        is_end = as.Date("2019-12-31"),
+        oos_start = as.Date("2020-01-01")
+      )
+    }),
+
+    # ── Group 1: Universe — all non-ETF stocks with sufficient history ──
+    targets::tar_target(stk_universe, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
+      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
+      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+
+      ds <- hd_datasets()[["equity_daily"]]
+
+      # All daily data for non-LSE-ETF tickers
+      all_data <- duckplyr::read_parquet_duckdb(ds$url) |>
+        filter(!grepl("\\.L$", ticker)) |>
+        select(date, ticker, close, adjusted, volume) |>
+        collect()
+
+      # Filter to tickers with enough history
+      ticker_stats <- all_data |>
+        group_by(ticker) |>
+        summarise(n_days = n(), first_date = min(date), last_date = max(date),
+                  .groups = "drop") |>
+        filter(n_days >= stk_params$min_history_days)
+
+      # Keep only qualifying tickers, from start_date onward
+      all_data |>
+        filter(ticker %in% ticker_stats$ticker,
+               date >= stk_params$start_date) |>
+        arrange(ticker, date)
+    }),
+
+    # ── Group 1: Monthly returns for all stocks ───────────────────
+    targets::tar_target(stk_monthly, {
+      library(dplyr)
+
+      stk_universe |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        group_by(ticker, ym) |>
+        filter(date == max(date)) |>
+        ungroup() |>
+        group_by(ticker) |>
+        arrange(date) |>
+        mutate(monthly_ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        filter(!is.na(monthly_ret)) |>
+        ungroup() |>
+        select(ticker, date, ym, monthly_ret)
+    }),
+
+    # ── Group 1: Daily returns (for MAX signal + DRIF features) ───
+    targets::tar_target(stk_daily_ret, {
+      library(dplyr)
+
+      stk_universe |>
+        group_by(ticker) |>
+        arrange(date) |>
+        mutate(daily_ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        filter(!is.na(daily_ret)) |>
+        ungroup() |>
+        select(ticker, date, daily_ret)
+    }),
+
+    # ── Group 1: Risk-free rate (monthly) ─────────────────────────
+    targets::tar_target(stk_rf, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      hd_factors(dataset = "FF3", frequency = "daily",
+                 from = as.character(stk_params$start_date)) |>
+        filter(factor_name == "RF") |>
+        mutate(value = value / 100, ym = format(date, "%Y-%m")) |>
+        group_by(ym) |>
+        summarise(rf_ret = prod(1 + value) - 1, .groups = "drop")
+    }),
+
+    # ── Group 2: Stock-level Factor MAX signal ────────────────────
+    targets::tar_target(stk_max_signal, {
+      library(dplyr)
+
+      stk_daily_ret |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        group_by(ticker, ym) |>
+        summarise(
+          max_ret = max(daily_ret, na.rm = TRUE),
+          n_days = n(),
+          .groups = "drop"
+        ) |>
+        filter(n_days >= 15)  # need most of the month's trading days
+    }),
+
+    # ── Group 2: Stock MAX decile portfolios ──────────────────────
+    targets::tar_target(stk_max_portfolio, {
+      library(dplyr)
+
+      # Signal: use PREVIOUS month's MAX to predict NEXT month's return
+      signal <- stk_max_signal |>
+        group_by(ticker) |>
+        arrange(ym) |>
+        mutate(signal_ym = ym, ym = dplyr::lead(ym)) |>
+        filter(!is.na(ym)) |>
+        ungroup()
+
+      # Merge signal with next month's actual return
+      merged <- signal |>
+        select(ticker, ym, max_ret) |>
+        inner_join(stk_monthly, by = c("ticker", "ym"))
+
+      # Assign deciles and compute portfolio returns
+      deciled <- assign_decile(merged, max_ret, stk_params$n_deciles)
+      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L)
+
+      # Add risk-free rate
+      port |>
+        left_join(stk_rf, by = "ym") |>
+        mutate(
+          date = as.Date(paste0(ym, "-15")),
+          port_cum = cumprod(1 + port_ret),
+          long_cum = cumprod(1 + long_ret)
+        )
+    }),
+
+    # ── Group 2: Stock MAX metrics ────────────────────────────────
+    targets::tar_target(stk_max_metrics, {
+      library(dplyr)
+
+      p <- stk_max_portfolio
+      bind_rows(
+        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "In-Sample"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$oos_start), "Out-of-Sample"),
+        calc_backtest_metrics(p, "Full Period")
+      )
+    }),
+
+    # ── Group 2: Stock MAX cumulative return plot ─────────────────
+    targets::tar_target(stk_max_plot, {
+      library(ggplot2)
+      library(dplyr)
+      library(scales)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      p <- stk_max_portfolio
+      plot_data <- p |>
+        select(date,
+               `Long-Short (D1-D10)` = port_cum,
+               `Long Only (D1)` = long_cum) |>
+        tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
+
+      ggplot(plot_data, aes(date, growth, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        geom_vline(xintercept = stk_params$oos_start, linetype = "dashed",
+                   colour = "grey50", linewidth = 0.4) +
+        annotate("text", x = stk_params$oos_start, y = max(plot_data$growth) * 0.9,
+                 label = "OOS", colour = "grey60", hjust = -0.1, size = 3) +
+        scale_y_log10(labels = dollar) +
+        scale_colour_manual(values = hd_palette(2)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = paste0("Stock-Level Factor MAX (",
+                            round(mean(stk_max_portfolio$n_long)), " stocks/decile)")) +
+        hd_theme()
+    }),
+
+    # ── Group 2: Stock MAX vs Factor MAX comparison ───────────────
+    targets::tar_target(stk_max_vs_factor, {
+      library(dplyr)
+
+      stock <- stk_max_portfolio |> select(ym, stock_ret = port_ret)
+      factor <- fm_portfolio |> select(ym, factor_ret = portfolio_ret)
+
+      inner_join(stock, factor, by = "ym") |>
+        mutate(
+          stock_cum = cumprod(1 + stock_ret),
+          factor_cum = cumprod(1 + factor_ret),
+          date = as.Date(paste0(ym, "-15"))
+        )
+    }),
+
+    targets::tar_target(stk_max_vs_factor_plot, {
+      library(ggplot2)
+      library(dplyr)
+      library(scales)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      comp <- stk_max_vs_factor
+      plot_data <- comp |>
+        select(date,
+               `Stock-Level MAX (D1-D10)` = stock_cum,
+               `Factor-Level MAX (top 2)` = factor_cum) |>
+        tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
+
+      ggplot(plot_data, aes(date, growth, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        scale_y_log10(labels = dollar) +
+        scale_colour_manual(values = hd_palette(2)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = "Factor MAX: Stock-Level vs Factor-Level") +
+        hd_theme()
+    })
+  )
+}

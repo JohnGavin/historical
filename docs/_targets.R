@@ -42,7 +42,9 @@ source(here::here("R/plan_vignette.R"))
 source(here::here("R/plan_backtest.R"))
 source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_drif.R"))
+source(here::here("R/plan_stock_backtest.R"))
 source(here::here("R/plan_qa_vignette.R"))
 
-# Combine: all vignette + backtest + factor max + DRIF + QA
-c(plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(), plan_qa_vignette())
+# Combine: all targets
+c(plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
+  plan_stock_backtest(), plan_qa_vignette())
