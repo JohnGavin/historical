@@ -22,7 +22,11 @@ Imports:
     rlang
 Suggests:
     arrow (>= 14.0),
+    DT,
     duckplyr,
     glmnet,
-    testthat (>= 3.0.0)
+    scales,
+    targets,
+    testthat (>= 3.0.0),
+    tidyr
 Config/testthat/edition: 3
