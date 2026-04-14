@@ -19,8 +19,11 @@ plan_qa_vignette <- function() {
     # Checks that every ticker in OHLCV parquets has a metadata row
     targets::tar_target(qa_metadata_sync, {
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
-      con <- hd_connect()
-      on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+      library(dplyr)
+
+      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
+      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
+      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
 
       datasets <- c("equity_daily", "crypto_daily")
       meta_ds <- hd_datasets()[["metadata"]]
@@ -30,11 +33,11 @@ plan_qa_vignette <- function() {
         ds <- hd_datasets()[[ds_name]]
         if (is.null(ds)) next
 
-        ohlcv_tickers <- DBI::dbGetQuery(con, sprintf(
-          "SELECT DISTINCT ticker FROM read_parquet('%s')", ds$url))$ticker
-        meta_tickers <- DBI::dbGetQuery(con, sprintf(
-          "SELECT DISTINCT ticker FROM read_parquet('%s') WHERE dataset = '%s'",
-          meta_ds$url, ds_name))$ticker
+        ohlcv_tickers <- duckplyr::read_parquet_duckdb(ds$url) |>
+          distinct(ticker) |> collect() |> pull(ticker)
+        meta_tickers <- duckplyr::read_parquet_duckdb(meta_ds$url) |>
+          filter(dataset == ds_name) |>
+          distinct(ticker) |> collect() |> pull(ticker)
 
         missing <- setdiff(ohlcv_tickers, meta_tickers)
         orphans <- setdiff(meta_tickers, ohlcv_tickers)
@@ -67,47 +70,42 @@ plan_qa_vignette <- function() {
     # Flag tickers with suspiciously high dollar volume
     targets::tar_target(qa_volume_sanity, {
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
-      con <- hd_connect()
-      on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+      library(dplyr)
 
       ds <- hd_datasets()[["equity_daily"]]
+      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
+      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
+      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
 
-      # Per-exchange median dollar volume and outlier detection
-      stats <- DBI::dbGetQuery(con, sprintf("
-        WITH ticker_stats AS (
-          SELECT ticker,
-            CASE
-              WHEN ticker LIKE '%%.DE' THEN 'DE'
-              WHEN ticker LIKE '%%.PA' THEN 'PA'
-              WHEN ticker LIKE '%%.AS' THEN 'AS'
-              WHEN ticker LIKE '%%.SW' THEN 'SW'
-              WHEN ticker LIKE '%%.MC' THEN 'MC'
-              WHEN ticker LIKE '%%.MI' THEN 'MI'
-              WHEN ticker LIKE '%%.ST' THEN 'ST'
-              WHEN ticker LIKE '%%.CO' THEN 'CO'
-              WHEN ticker LIKE '%%.L'  THEN 'L'
-              ELSE 'US'
-            END as exchange,
-            AVG(close * volume) as avg_dollar_vol
-          FROM read_parquet('%s')
-          GROUP BY ticker
-        ),
-        exchange_stats AS (
-          SELECT exchange,
-            MEDIAN(avg_dollar_vol) as median_vol,
-            COUNT(*) as n_tickers
-          FROM ticker_stats
-          GROUP BY exchange
-        )
-        SELECT t.ticker, t.exchange, t.avg_dollar_vol,
-          e.median_vol as exchange_median,
-          t.avg_dollar_vol / NULLIF(e.median_vol, 0) as ratio_to_median
-        FROM ticker_stats t
-        JOIN exchange_stats e ON t.exchange = e.exchange
-        WHERE t.avg_dollar_vol / NULLIF(e.median_vol, 0) > 50
-           OR t.avg_dollar_vol > 5e9
-        ORDER BY ratio_to_median DESC
-      ", ds$url))
+      # Per-ticker dollar volume
+      ticker_stats <- duckplyr::read_parquet_duckdb(ds$url) |>
+        mutate(dollar_vol = close * volume) |>
+        summarise(avg_dollar_vol = mean(dollar_vol, na.rm = TRUE), .by = ticker) |>
+        collect() |>
+        mutate(exchange = case_when(
+          grepl("\\.DE$", ticker) ~ "DE",
+          grepl("\\.PA$", ticker) ~ "PA",
+          grepl("\\.AS$", ticker) ~ "AS",
+          grepl("\\.SW$", ticker) ~ "SW",
+          grepl("\\.MC$", ticker) ~ "MC",
+          grepl("\\.MI$", ticker) ~ "MI",
+          grepl("\\.ST$", ticker) ~ "ST",
+          grepl("\\.CO$", ticker) ~ "CO",
+          grepl("\\.L$",  ticker) ~ "L",
+          TRUE ~ "US"
+        ))
+
+      # Per-exchange median
+      exchange_stats <- ticker_stats |>
+        summarise(median_vol = median(avg_dollar_vol, na.rm = TRUE),
+                  n_tickers = n(), .by = exchange)
+
+      # Flag outliers: >50x exchange median or >$5B/day
+      stats <- ticker_stats |>
+        left_join(exchange_stats, by = "exchange") |>
+        mutate(ratio_to_median = avg_dollar_vol / pmax(median_vol, 1)) |>
+        filter(ratio_to_median > 50 | avg_dollar_vol > 5e9) |>
+        arrange(desc(ratio_to_median))
 
       if (nrow(stats) > 0) {
         cli::cli_warn(c(
