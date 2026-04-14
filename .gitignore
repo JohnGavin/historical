@@ -38,3 +38,5 @@ packages/historicaldata/docs/
 # Large target cache files (rebuild via tar_make)
 inst/extdata/vignettes/stk_universe.rds
 inst/extdata/vignettes/stk_daily_ret.rds
+inst/extdata/vignettes/stk_drif_features.rds
+inst/extdata/vignettes/stk_drif_signal.rds
