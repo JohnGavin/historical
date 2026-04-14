@@ -72,13 +72,18 @@ plan_stock_backtest <- function() {
   list(
     # ── Parameters ────────────────────────────────────────────────
     targets::tar_target(stk_params, {
+      p <- bt_partitions$equity
       list(
-        min_history_days = 252L,     # 1 year minimum to enter universe
-        lookback_days = 21L,         # trading days for MAX / DRIF features
+        min_history_days = 252L,
+        lookback_days = 21L,
         n_deciles = 10L,
-        start_date = as.Date("2005-01-01"),  # most stocks have data from here
-        is_end = as.Date("2019-12-31"),
-        oos_start = as.Date("2020-01-01")
+        start_date = p$train_start,
+        is_end = p$train_end,
+        test_start = p$test_start,
+        test_end = p$test_end,
+        val_start = p$val_start,
+        val_end = p$val_end,
+        oos_start = p$test_start
       )
     }),
 
@@ -208,8 +213,9 @@ plan_stock_backtest <- function() {
 
       p <- stk_max_portfolio
       bind_rows(
-        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "In-Sample"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$oos_start), "Out-of-Sample"),
+        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
       )
     }),
@@ -427,8 +433,9 @@ plan_stock_backtest <- function() {
       library(dplyr)
       p <- stk_drif_portfolio
       bind_rows(
-        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "In-Sample"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$oos_start), "Out-of-Sample"),
+        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
       )
     }),

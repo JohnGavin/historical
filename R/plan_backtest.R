@@ -10,15 +10,20 @@ plan_backtest <- function() {
   list(
     # ── Parameters ────────────────────────────────────────────────
     targets::tar_target(bt_params, {
+      p <- bt_partitions$macro
       list(
         tickers = c("TLT", "GLD", "DBC", "UUP"),
         benchmark = "SPY",
         cash_proxy = "BIL",
         lookback_months = c(1, 3, 6, 12),
         weights = c(0.4, 0.3, 0.2, 0.1),
-        start_date = as.Date("2007-04-01"),
-        is_end = as.Date("2022-12-31"),     # in-sample end
-        oos_start = as.Date("2023-01-01")   # out-of-sample start
+        start_date = p$train_start,
+        is_end = p$train_end,          # training end
+        test_start = p$test_start,     # testing period
+        test_end = p$test_end,
+        val_start = p$val_start,       # validation (sealed)
+        val_end = p$val_end,
+        oos_start = p$test_start       # backwards compat
       )
     }),
 

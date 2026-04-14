@@ -10,14 +10,18 @@ plan_factormax <- function() {
   list(
     # ── Parameters ────────────────────────────────────────────────
     targets::tar_target(fm_params, {
+      p <- bt_partitions$factor
       list(
-        # Academic factors to rotate among
         factors = c("HML", "SMB", "RMW", "CMA", "Mom"),
         benchmark_factor = "Mkt-RF",
-        top_n = 2L,             # hold top N factors by MAX signal
-        start_date = as.Date("1963-07-01"),  # FF5 start
-        is_end = as.Date("2019-12-31"),      # in-sample end
-        oos_start = as.Date("2020-01-01")    # out-of-sample start
+        top_n = 2L,
+        start_date = as.Date("1963-07-01"),  # FF5 data start
+        is_end = p$train_end,
+        test_start = p$test_start,
+        test_end = p$test_end,
+        val_start = p$val_start,
+        val_end = p$val_end,
+        oos_start = p$test_start       # backwards compat
       )
     }),
 
@@ -160,12 +164,14 @@ plan_factormax <- function() {
         )
       }
 
-      is_data <- fm_portfolio |> filter(date <= fm_params$is_end)
-      oos_data <- fm_portfolio |> filter(date >= fm_params$oos_start)
+      train_data <- fm_portfolio |> filter(date <= fm_params$is_end)
+      test_data <- fm_portfolio |> filter(date >= fm_params$test_start, date <= fm_params$test_end)
+      val_data <- fm_portfolio |> filter(date >= fm_params$val_start)
 
       bind_rows(
-        calc_metrics(is_data, "In-Sample"),
-        calc_metrics(oos_data, "Out-of-Sample"),
+        calc_metrics(train_data, "Training"),
+        calc_metrics(test_data, "Testing"),
+        calc_metrics(val_data, "Validation"),
         calc_metrics(fm_portfolio, "Full Period")
       )
     }),

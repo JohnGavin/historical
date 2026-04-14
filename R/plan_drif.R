@@ -10,16 +10,21 @@ plan_drif <- function() {
   list(
     # ── Parameters ────────────────────────────────────────────────
     targets::tar_target(drif_params, {
+      p <- bt_partitions$factor
       list(
         factors = c("HML", "SMB", "RMW", "CMA", "Mom"),
         benchmark_factor = "Mkt-RF",
-        lookback_days = 21L,        # trading days per month
-        top_n = 2L,                 # long top N predicted factors
-        alpha = 0.5,                # elastic net mixing (0=ridge, 1=lasso)
-        min_train_months = 60L,     # minimum expanding window
+        lookback_days = 21L,
+        top_n = 2L,
+        alpha = 0.5,
+        min_train_months = 60L,
         start_date = as.Date("1963-07-01"),
-        is_end = as.Date("2019-12-31"),
-        oos_start = as.Date("2020-01-01")
+        is_end = p$train_end,
+        test_start = p$test_start,
+        test_end = p$test_end,
+        val_start = p$val_start,
+        val_end = p$val_end,
+        oos_start = p$test_start
       )
     }),
 
@@ -247,8 +252,9 @@ plan_drif <- function() {
       }
 
       bind_rows(
-        calc_metrics(drif_portfolio |> filter(date <= drif_params$is_end), "In-Sample"),
-        calc_metrics(drif_portfolio |> filter(date >= drif_params$oos_start), "Out-of-Sample"),
+        calc_metrics(drif_portfolio |> filter(date <= drif_params$is_end), "Training"),
+        calc_metrics(drif_portfolio |> filter(date >= drif_params$test_start, date <= drif_params$test_end), "Testing"),
+        calc_metrics(drif_portfolio |> filter(date >= drif_params$val_start), "Validation"),
         calc_metrics(drif_portfolio, "Full Period")
       )
     }),
