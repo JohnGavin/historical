@@ -23,5 +23,6 @@ Imports:
 Suggests:
     arrow (>= 14.0),
     duckplyr,
+    glmnet,
     testthat (>= 3.0.0)
 Config/testthat/edition: 3

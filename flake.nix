@@ -46,6 +46,7 @@
             reticulate
             testthat
             cli
+            glmnet
             rlang
           ];
         };
