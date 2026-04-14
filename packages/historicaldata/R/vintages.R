@@ -1,3 +1,6 @@
+# Silence R CMD check NOTEs for dplyr NSE
+utils::globalVariables(c("pub_date", ".release_n", "value", "final_value"))
+
 #' Query macro data vintages (revision history)
 #'
 #' Returns the value of macro series as it was known at each publication date.
