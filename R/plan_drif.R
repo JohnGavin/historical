@@ -115,13 +115,7 @@ plan_drif <- function() {
       months <- sort(unique(features$ym))
       min_train <- drif_params$min_train_months
 
-      # Check glmnet availability
-      if (!requireNamespace("glmnet", quietly = TRUE)) {
-        cli::cli_warn("glmnet not installed — falling back to OLS")
-        use_enet <- FALSE
-      } else {
-        use_enet <- TRUE
-      }
+      rlang::check_installed("glmnet")
 
       # Feature column names
       chrono_cols <- paste0("c", seq_len(drif_params$lookback_days))
@@ -152,24 +146,14 @@ plan_drif <- function() {
 
         if (length(y_train) < 50) return(NULL)
 
-        if (use_enet) {
-          fit <- tryCatch({
-            glmnet::cv.glmnet(X_train, y_train,
-                              alpha = drif_params$alpha,
-                              nfolds = 5, type.measure = "mse")
-          }, error = function(e) NULL)
+        fit <- tryCatch({
+          glmnet::cv.glmnet(X_train, y_train,
+                            alpha = drif_params$alpha,
+                            nfolds = 5, type.measure = "mse")
+        }, error = function(e) NULL)
 
-          if (is.null(fit)) return(NULL)
-          pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))
-        } else {
-          # OLS fallback: use first 5 PCs to avoid overfitting
-          pca <- prcomp(X_train, center = TRUE, scale. = TRUE)
-          n_pc <- min(5, ncol(pca$x))
-          pc_train <- pca$x[, 1:n_pc, drop = FALSE]
-          pc_test <- predict(pca, X_test)[, 1:n_pc, drop = FALSE]
-          ols <- lm(y_train ~ pc_train)
-          pred <- as.numeric(cbind(1, pc_test) %*% coef(ols))
-        }
+        if (is.null(fit)) return(NULL)
+        pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))
 
         tibble(
           factor_name = test$factor_name,

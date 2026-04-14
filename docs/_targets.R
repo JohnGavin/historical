@@ -9,12 +9,23 @@
 
 library(targets)
 
-# Ensure duckplyr is available (may not be on default .libPaths in some nix shells)
-if (!requireNamespace("duckplyr", quietly = TRUE)) {
-  duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
-  duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
-  if (length(duckplyr_path) > 0) {
-    .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+# Ensure project nix shell packages are on .libPaths
+# (Claude's dev shell may not include all project deps)
+for (pkg in c("duckplyr", "glmnet")) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    pkg_paths <- Sys.glob(sprintf("/nix/store/*-r-%s-*/library", pkg))
+    pkg_paths <- pkg_paths[file.exists(file.path(pkg_paths, pkg))]
+    if (length(pkg_paths) > 0) {
+      # Add full closure (transitive deps) not just the package itself
+      closure <- system2("nix-store", c("-qR", dirname(pkg_paths[[1]])),
+                         stdout = TRUE, stderr = FALSE)
+      r_libs <- closure[file.exists(file.path(closure, "library"))]
+      r_libs <- r_libs[vapply(r_libs, function(p) {
+        any(file.exists(list.files(file.path(p, "library"), full.names = TRUE,
+                                   pattern = "DESCRIPTION", recursive = TRUE)))
+      }, logical(1))]
+      .libPaths(c(.libPaths(), file.path(r_libs, "library")))
+    }
   }
 }
 
