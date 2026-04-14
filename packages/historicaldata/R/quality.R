@@ -10,7 +10,9 @@
 #' @return Tibble with: ticker, date, prev_close, close, log_ret, pct_change
 #' @export
 #' @examples
+#' \donttest{
 #' hd_jumps("equity_daily", threshold = 0.5, n = 20)
+#' }
 hd_jumps <- function(dataset = "equity_daily", threshold = 0.4, n = 100) {
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))

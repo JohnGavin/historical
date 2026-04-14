@@ -18,6 +18,8 @@ Returns key metadata columns for display below plots. Accepts single or
 multiple tickers. Uses batch \code{IN (...)} query.
 }
 \examples{
+\donttest{
 hd_ticker_meta(c("AAPL", "MSFT"))
 hd_ticker_meta(hd_group("FAANG"))
+}
 }

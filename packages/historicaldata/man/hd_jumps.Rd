@@ -22,5 +22,7 @@ Large jumps may indicate: missing split adjustments, share consolidations,
 currency redenominations, or genuine market events.
 }
 \examples{
+\donttest{
 hd_jumps("equity_daily", threshold = 0.5, n = 20)
+}
 }
