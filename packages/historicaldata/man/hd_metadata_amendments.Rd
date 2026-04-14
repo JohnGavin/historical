@@ -21,8 +21,8 @@ corrections. Every change to metadata.parquet is tracked with old/new values,
 source, method, and timestamp.
 }
 \examples{
-\donttest{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_metadata_amendments("AAPL")
 hd_metadata_amendments(field = "beta_3yr")
-}
+\dontshow{\}) # examplesIf}
 }

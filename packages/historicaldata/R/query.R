@@ -12,12 +12,10 @@
 #' @param local If TRUE, query local cache instead of remote.
 #' @return Tibble of OHLCV data (multiple tickers stacked by ticker + date)
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_ohlcv("AAPL", from = "2024-01-01")
 #' hd_ohlcv(c("AAPL", "MSFT", "GOOGL"), from = "2024-01-01")
 #' hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")
-#' }
 hd_ohlcv <- function(ticker, from = NULL, to = NULL,
                      dataset = NULL, local = FALSE) {
   ticker <- as.character(ticker)
@@ -113,11 +111,9 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
 #' @param local If TRUE, query local cache instead of remote.
 #' @return Tibble with date, value, series_id columns
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_macro("SP500", from = "2024-01-01")
 #' hd_macro(c("SP500", "VIXCLS", "DGS10"), from = "2024-01-01")
-#' }
 hd_macro <- function(series_id, from = NULL, to = NULL, local = FALSE) {
   series_id <- as.character(series_id)
   ds <- hd_datasets()[["macro_daily"]]

@@ -23,8 +23,8 @@ Tibble with date, value, series_id columns
 Accepts a single series ID or a character vector for batch queries.
 }
 \examples{
-\donttest{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_macro("SP500", from = "2024-01-01")
 hd_macro(c("SP500", "VIXCLS", "DGS10"), from = "2024-01-01")
-}
+\dontshow{\}) # examplesIf}
 }

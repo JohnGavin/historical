@@ -22,8 +22,8 @@ Tibble with ticker + metadata columns, sorted by metric
 Queries the metadata Parquet for tickers ranked by the specified metric.
 }
 \examples{
-\donttest{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_top_by("equity_daily", "market_cap", 5)
 hd_top_by("crypto_daily", "volume_avg", 3)
-}
+\dontshow{\}) # examplesIf}
 }

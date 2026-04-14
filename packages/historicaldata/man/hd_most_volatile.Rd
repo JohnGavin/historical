@@ -21,7 +21,7 @@ Computes 21-day rolling annualised volatility for all tickers in a dataset
 and returns the top N. Uses a single DuckDB window query over the full Parquet.
 }
 \examples{
-\donttest{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_most_volatile("equity_daily", 3)
-}
+\dontshow{\}) # examplesIf}
 }

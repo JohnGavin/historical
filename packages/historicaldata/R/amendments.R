@@ -36,11 +36,9 @@ hd_amendments <- function(ticker = NULL) {
 #' @return Tibble with: ticker, field, old_value, new_value, source, method,
 #'   amended_at, amended_by, reversible
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_metadata_amendments("AAPL")
 #' hd_metadata_amendments(field = "beta_3yr")
-#' }
 hd_metadata_amendments <- function(ticker = NULL, field = NULL) {
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))

@@ -18,8 +18,8 @@ Tibble of matching tickers with metadata
 Searches ticker symbols and long names using regex or glob patterns.
 }
 \examples{
-\donttest{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_search("^APP")     # regex: tickers starting with APP
 hd_search("*coin*")   # glob: names containing "coin"
-}
+\dontshow{\}) # examplesIf}
 }

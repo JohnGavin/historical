@@ -27,9 +27,9 @@ Only the matching rows are transferred (predicate pushdown).
 Accepts a single ticker or a character vector for batch queries.
 }
 \examples{
-\donttest{
+\dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_ohlcv("AAPL", from = "2024-01-01")
 hd_ohlcv(c("AAPL", "MSFT", "GOOGL"), from = "2024-01-01")
 hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")
-}
+\dontshow{\}) # examplesIf}
 }

@@ -6,11 +6,9 @@
 #' @param dataset Filter to one dataset (e.g. "equity_daily"). NULL = all.
 #' @return Tibble of matching tickers with metadata
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_search("^APP")     # regex: tickers starting with APP
 #' hd_search("*coin*")   # glob: names containing "coin"
-#' }
 hd_search <- function(pattern, dataset = NULL) {
 
   # Convert glob to regex if pattern contains unescaped * or ?
@@ -116,11 +114,9 @@ hd_exchanges <- function(dataset = NULL) {
 #' @return Tibble with: ticker, long_name, currency, exchange, market_cap,
 #'   volume_avg, yield_pct, beta_3yr
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_ticker_meta(c("AAPL", "MSFT"))
 #' hd_ticker_meta(hd_group("FAANG"))
-#' }
 hd_ticker_meta <- function(tickers) {
   tickers <- as.character(tickers)
   con <- hd_connect()

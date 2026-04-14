@@ -8,11 +8,9 @@
 #' @param desc Sort descending? (default TRUE = largest first)
 #' @return Tibble with ticker + metadata columns, sorted by metric
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_top_by("equity_daily", "market_cap", 5)
 #' hd_top_by("crypto_daily", "volume_avg", 3)
-#' }
 hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
   valid_metrics <- c("market_cap", "volume_avg", "total_obs", "missing_pct",
                      "fifty_two_week_high", "fifty_two_week_low", "expense_ratio",
@@ -46,10 +44,8 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
 #' @param window_days Rolling window in trading days (default 21)
 #' @return Tibble with ticker, vol_21d, sorted by vol descending
 #' @export
-#' @examples
-#' \donttest{
+#' @examplesIf interactive()
 #' hd_most_volatile("equity_daily", 3)
-#' }
 hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) {
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
