@@ -277,6 +277,234 @@ plan_stock_backtest <- function() {
         labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
              title = "Factor MAX: Stock-Level vs Factor-Level") +
         hd_theme()
+    }),
+
+    # ══ Group 3: Stock-Level DRIF ═════════════════════════════════
+
+    # ── DRIF features: 42 features per stock-month (vectorised) ───
+    targets::tar_target(stk_drif_features, {
+      library(dplyr)
+
+      lb <- stk_params$lookback_days
+      daily <- stk_daily_ret |> mutate(ym = format(date, "%Y-%m"))
+
+      # For each stock-month, get the prior month's daily returns
+      # Strategy: pivot wide by day-of-month rank, then compute features
+      all_months <- sort(unique(daily$ym))
+
+      # Pre-compute: for each stock, the last `lb` trading days before each month
+      # Using a rolling join approach for efficiency
+      features_list <- lapply(seq_along(all_months)[-1], function(i) {
+        m <- all_months[i]
+        prev_m <- all_months[i - 1]
+
+        # Get prior month's trading days for all stocks
+        prior <- daily |>
+          filter(ym == prev_m) |>
+          group_by(ticker) |>
+          filter(n() >= 15) |>  # need most of month
+          mutate(day_rank = row_number()) |>
+          ungroup()
+
+        if (nrow(prior) == 0) return(NULL)
+
+        # Chronological features: pad/trim to exactly lb days
+        chrono <- prior |>
+          filter(day_rank <= lb) |>
+          tidyr::pivot_wider(
+            id_cols = ticker,
+            names_from = day_rank,
+            names_prefix = "c",
+            values_from = daily_ret
+          )
+
+        # Rank features: sort within each stock, then pivot
+        ranked <- prior |>
+          group_by(ticker) |>
+          arrange(daily_ret) |>
+          mutate(rank_idx = row_number()) |>
+          ungroup() |>
+          filter(rank_idx <= lb) |>
+          tidyr::pivot_wider(
+            id_cols = ticker,
+            names_from = rank_idx,
+            names_prefix = "r",
+            values_from = daily_ret
+          )
+
+        # Get next month's return as target
+        target <- stk_monthly |> filter(ym == m) |> select(ticker, target_ret = monthly_ret)
+
+        # Combine
+        result <- chrono |>
+          inner_join(ranked, by = "ticker") |>
+          inner_join(target, by = "ticker") |>
+          mutate(ym = m)
+
+        result
+      })
+
+      bind_rows(Filter(Negate(is.null), features_list))
+    }),
+
+    # ── DRIF signal: pooled elastic net, expanding window ─────────
+    targets::tar_target(stk_drif_signal, {
+      library(dplyr)
+      rlang::check_installed("glmnet")
+
+      features <- stk_drif_features
+      lb <- stk_params$lookback_days
+      chrono_cols <- paste0("c", seq_len(lb))
+      rank_cols <- paste0("r", seq_len(lb))
+      feat_cols <- intersect(c(chrono_cols, rank_cols), names(features))
+
+      months <- sort(unique(features$ym))
+      min_train <- 60L  # 60 months minimum expanding window
+
+      trade_months <- months[(min_train + 1):length(months)]
+      cli::cli_inform(c("i" = "DRIF stock-level: {length(trade_months)} months to process"))
+
+      predictions <- lapply(seq_along(trade_months), function(j) {
+        m <- trade_months[j]
+        if (j %% 24 == 0) cli::cli_inform(c("i" = "  Month {j}/{length(trade_months)}: {m}"))
+        m_idx <- which(months == m)
+        train_months <- months[1:(m_idx - 1)]
+
+        train <- features |> filter(ym %in% train_months)
+        test <- features |> filter(ym == m)
+
+        if (nrow(test) == 0) return(NULL)
+
+        X_train <- as.matrix(train[, feat_cols])
+        y_train <- train$target_ret
+        X_test <- as.matrix(test[, feat_cols])
+
+        # Remove incomplete rows
+        complete <- complete.cases(X_train, y_train)
+        X_train <- X_train[complete, , drop = FALSE]
+        y_train <- y_train[complete]
+
+        if (length(y_train) < 200) return(NULL)  # need decent sample
+
+        fit <- tryCatch({
+          glmnet::cv.glmnet(X_train, y_train, alpha = 0.5,
+                            nfolds = 5, type.measure = "mse")
+        }, error = function(e) NULL)
+
+        if (is.null(fit)) return(NULL)
+        pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))
+
+        tibble(
+          ticker = test$ticker, ym = m,
+          predicted_ret = pred, actual_ret = test$target_ret
+        )
+      })
+
+      bind_rows(Filter(Negate(is.null), predictions))
+    }),
+
+    # ── DRIF decile portfolios ────────────────────────────────────
+    targets::tar_target(stk_drif_portfolio, {
+      library(dplyr)
+
+      signal <- stk_drif_signal |>
+        inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
+
+      deciled <- assign_decile(signal, predicted_ret, stk_params$n_deciles)
+      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L)
+
+      port |>
+        left_join(stk_rf, by = "ym") |>
+        mutate(
+          date = as.Date(paste0(ym, "-15")),
+          port_cum = cumprod(1 + port_ret),
+          long_cum = cumprod(1 + long_ret)
+        )
+    }),
+
+    # ── DRIF metrics ──────────────────────────────────────────────
+    targets::tar_target(stk_drif_metrics, {
+      library(dplyr)
+      p <- stk_drif_portfolio
+      bind_rows(
+        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "In-Sample"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$oos_start), "Out-of-Sample"),
+        calc_backtest_metrics(p, "Full Period")
+      )
+    }),
+
+    # ── DRIF cumulative return plot ───────────────────────────────
+    targets::tar_target(stk_drif_plot, {
+      library(ggplot2)
+      library(dplyr)
+      library(scales)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      p <- stk_drif_portfolio
+      plot_data <- p |>
+        select(date,
+               `Long-Short (D1-D10)` = port_cum,
+               `Long Only (D1)` = long_cum) |>
+        tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
+
+      ggplot(plot_data, aes(date, growth, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        geom_vline(xintercept = stk_params$oos_start, linetype = "dashed",
+                   colour = "grey50", linewidth = 0.4) +
+        scale_y_log10(labels = dollar) +
+        scale_colour_manual(values = hd_palette(2)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = paste0("Stock-Level DRIF (",
+                            round(mean(p$n_long)), " stocks/decile)")) +
+        hd_theme()
+    }),
+
+    # ── All strategies comparison ─────────────────────────────────
+    targets::tar_target(stk_all_comparison, {
+      library(dplyr)
+
+      stk_max <- stk_max_portfolio |> select(ym, stk_max = port_ret)
+      stk_drif <- stk_drif_portfolio |> select(ym, stk_drif = port_ret)
+      fac_max <- fm_portfolio |> select(ym, fac_max = portfolio_ret)
+      fac_drif <- drif_portfolio |> select(ym, fac_drif = portfolio_ret)
+
+      stk_max |>
+        inner_join(stk_drif, by = "ym") |>
+        inner_join(fac_max, by = "ym") |>
+        inner_join(fac_drif, by = "ym") |>
+        mutate(
+          date = as.Date(paste0(ym, "-15")),
+          stk_max_cum = cumprod(1 + stk_max),
+          stk_drif_cum = cumprod(1 + stk_drif),
+          fac_max_cum = cumprod(1 + fac_max),
+          fac_drif_cum = cumprod(1 + fac_drif)
+        )
+    }),
+
+    targets::tar_target(stk_all_comparison_plot, {
+      library(ggplot2)
+      library(dplyr)
+      library(scales)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      comp <- stk_all_comparison
+      plot_data <- comp |>
+        select(date,
+               `Stock MAX (D1-D10)` = stk_max_cum,
+               `Stock DRIF (D1-D10)` = stk_drif_cum,
+               `Factor MAX (top 2)` = fac_max_cum,
+               `Factor DRIF (top 2)` = fac_drif_cum) |>
+        tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
+
+      ggplot(plot_data, aes(date, growth, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        geom_vline(xintercept = stk_params$oos_start, linetype = "dashed",
+                   colour = "grey50", linewidth = 0.4) +
+        scale_y_log10(labels = dollar) +
+        scale_colour_manual(values = hd_palette(4)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = "All Strategies: Stock-Level vs Factor-Level") +
+        hd_theme()
     })
   )
 }
