@@ -35,3 +35,6 @@ __pycache__/
 # Secrets
 .env
 packages/historicaldata/docs/
+# Large target cache files (rebuild via tar_make)
+inst/extdata/vignettes/stk_universe.rds
+inst/extdata/vignettes/stk_daily_ret.rds
