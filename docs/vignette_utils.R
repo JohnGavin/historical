@@ -107,6 +107,29 @@ hd_dt <- function(df, caption_text) {
     DT::formatStyle(columns = names(df), color = "#ddd", backgroundColor = "#1a1a1a")
 }
 
+#' DT table transposed: few rows + many columns → columns become rows
+#' @param df Data frame with few rows (<= 5) and many columns
+#' @param caption_text Caption string
+hd_dt_wide <- function(df, caption_text) {
+  if (is.null(df) || nrow(df) == 0) return(invisible(NULL))
+
+  # Transpose: column names become first column, row values become columns
+  row_labels <- if ("period" %in% names(df)) df$period else paste0("Row ", seq_len(nrow(df)))
+  t_df <- data.frame(
+    Metric = setdiff(names(df), "period"),
+    stringsAsFactors = FALSE
+  )
+  for (i in seq_len(nrow(df))) {
+    vals <- vapply(t_df$Metric, function(col) {
+      v <- df[[col]][i]
+      if (is.numeric(v)) format(v, digits = 3) else as.character(v)
+    }, character(1))
+    t_df[[row_labels[i]]] <- vals
+  }
+
+  hd_dt(t_df, caption_text)
+}
+
 #' Emit build-info footer with linked version, SHA, R version
 #' @param pkg_name Package name (default: "historicaldata")
 build_info <- function(pkg_name = "historicaldata") {

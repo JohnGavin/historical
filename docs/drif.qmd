@@ -9,56 +9,8 @@ format:
     embed-resources: false
     include-in-header:
       - text: |
-          <style>
-          body { font-size: 1.3em; }
-          .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
-          .nav-link { font-size: 0.95em !important; }
-          .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
-          .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
-          .bslib-grid, .bslib-grid-item {
-            height: auto !important; min-height: 0 !important;
-            max-height: none !important; overflow: visible !important;
-            flex: none !important;
-          }
-          .cell-output-display { display: block !important; position: relative !important;
-            overflow: visible !important; margin-bottom: 1em; }
-          .datatables, .dataTables_wrapper { display: block !important;
-            position: relative !important; overflow-x: auto !important;
-            margin-top: 0.5em; margin-bottom: 1em; }
-          table.dataTable { white-space: nowrap; }
-          table caption, .dataTables_wrapper caption { caption-side: top !important; }
-          .fullscreen-overlay {
-            position: fixed !important; top: 0 !important; left: 0 !important;
-            width: 100vw !important; height: 100vh !important;
-            z-index: 9999 !important; background: black !important;
-            padding: 10px !important; overflow: auto !important; cursor: zoom-out !important;
-          }
-          .fullscreen-overlay img {
-            width: 100% !important; height: 100% !important; object-fit: contain !important;
-          }
-          .cell-output-display:has(img) { cursor: zoom-in; }
-          .fig-caption { display: block; font-size: 0.85em; color: #888;
-            margin-top: 0.4em; text-align: left; line-height: 1.5; }
-          </style>
-          <script>
-          if (!localStorage.getItem('quarto-color-scheme')) {
-            document.documentElement.setAttribute('data-bs-theme', 'dark');
-          }
-          document.addEventListener('click', function(e) {
-            var overlay = e.target.closest('.fullscreen-overlay');
-            if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
-            var img = e.target.closest('img');
-            if (!img) return;
-            var cell = img.closest('.cell-output-display');
-            if (!cell) return;
-            var div = document.createElement('div');
-            div.className = 'fullscreen-overlay';
-            div.innerHTML = '<img src="' + img.src + '">';
-            div.addEventListener('click', function() { div.remove(); });
-            document.body.appendChild(div);
-          });
-          </script>
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
 execute:
   echo: false
   warning: false
@@ -120,7 +72,7 @@ if (!is.null(metrics)) {
     dplyr::mutate(across(c(cagr, vol, max_dd, hit_rate, bench_cagr, bench_vol),
                   ~ paste0(round(. * 100, 1), "%"))) |>
     dplyr::mutate(across(c(sharpe, bench_sharpe), ~ round(., 2)))
-  hd_dt(display, "DRIF strategy metrics: in-sample (1968-2019), out-of-sample (2020+), and full period. Uses 60-month minimum expanding window.")
+  hd_dt_wide(display, "DRIF strategy metrics: in-sample (1968-2019), out-of-sample (2020+), and full period. Uses 60-month minimum expanding window.")
 }
 ```
 

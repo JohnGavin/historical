@@ -9,6 +9,8 @@ format:
     embed-resources: true
     include-in-header:
       - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
           <style>
           body { font-size: 1.3em; }
           /* Smaller page titles to match tab label size */

@@ -1,0 +1,82 @@
+/* Shared CSS for all historicaldata vignettes */
+
+/* Base font: consistent across all tabs, pages, tables, captions */
+body { font-size: 1.1em; }
+
+/* Page titles smaller to match tab labels */
+.navbar .navbar-title, h1.title { font-size: 1.2em !important; }
+.nav-link { font-size: 0.95em !important; }
+
+/* Light mode: ensure text is visible on white background */
+[data-bs-theme="light"] body,
+[data-bs-theme="light"] .card-body,
+[data-bs-theme="light"] .tab-pane,
+[data-bs-theme="light"] p,
+[data-bs-theme="light"] li,
+[data-bs-theme="light"] td,
+[data-bs-theme="light"] th,
+[data-bs-theme="light"] .callout-body,
+[data-bs-theme="light"] .fig-caption {
+  color: #1a1a1a !important;
+}
+[data-bs-theme="light"] .fig-caption { color: #555 !important; }
+
+/* Kill dashboard fill layout — content flows like a normal page */
+.bslib-page-fill, .html-fill-container, .html-fill-item,
+.bslib-card, .card, .tab-pane, .tab-content, .card-body,
+.bslib-grid, .bslib-grid-item {
+  height: auto !important; min-height: 0 !important;
+  max-height: none !important; overflow: visible !important;
+  flex: none !important;
+}
+
+/* Cell outputs: block layout, no overlap */
+.cell-output-display {
+  display: block !important; position: relative !important;
+  overflow: visible !important; margin-bottom: 1em;
+}
+
+/* Plot height: constrain to reasonable aspect ratio */
+.cell-output-display img {
+  display: block; width: 100%; height: auto;
+  min-height: auto; max-height: 500px; object-fit: contain;
+}
+
+/* Tables: block, scrollable */
+.datatables, .dataTables_wrapper {
+  display: block !important; position: relative !important;
+  overflow-x: auto !important; margin-top: 0.5em; margin-bottom: 1em;
+}
+table.dataTable { white-space: nowrap; }
+table caption, .dataTables_wrapper caption { caption-side: top !important; }
+
+/* Captions: wrap text to window width */
+.fig-caption {
+  display: block; font-size: 0.85em; color: #888;
+  margin-top: 0.4em; text-align: left; line-height: 1.5;
+  word-wrap: break-word; overflow-wrap: break-word;
+  max-width: 100%;
+}
+table caption, .dataTables_wrapper caption {
+  word-wrap: break-word; overflow-wrap: break-word;
+  white-space: normal !important; max-width: 100%;
+}
+
+/* Click-to-zoom overlay */
+.fullscreen-overlay {
+  position: fixed !important; top: 0 !important; left: 0 !important;
+  width: 100vw !important; height: 100vh !important;
+  z-index: 9999 !important; background: black !important;
+  padding: 10px !important; overflow: auto !important; cursor: zoom-out !important;
+}
+.fullscreen-overlay img {
+  width: 100% !important; height: 100% !important; object-fit: contain !important;
+}
+.cell-output-display:has(img) { cursor: zoom-in; }
+
+/* Code details toggle */
+details { margin-bottom: 0.5em; }
+details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+
+/* Prevent tab click from scrolling to top */
+.nav-link[data-bs-toggle="tab"] { scroll-behavior: auto; }
