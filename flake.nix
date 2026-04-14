@@ -1,5 +1,5 @@
 {
-  description = "historical_data — Historical finance database with T pipeline";
+  description = "historical_data — a T data analysis project";
 
   inputs = {
     nixpkgs.url = "github:rstats-on-nix/nixpkgs/2026-04-04";
@@ -27,17 +27,14 @@
             dplyr
             arrow
             duckdb
-            DT
-            devtools
             duckplyr
             ggplot2
-            pkgload
+            glmnet
             pointblank
-            roxygen2
             scales
-            tidyr
             targets
             crew
+            DT
             fredr
             frenchdata
             httr2
@@ -45,21 +42,21 @@
             knitr
             reticulate
             testthat
+            tidyr
             cli
-            glmnet
             rlang
           ];
         };
 
         # Python environment
-        py-env = pkgs.python313.withPackages (ps: with ps; [
+        py-env = pkgs.python313.withPackages (python-pkgs: with python-pkgs; [
           yfinance
           pandas
           pyarrow
           pytest
         ]);
 
-        # Additional tools
+        # Additional Tools
         additionalTools = with pkgs; [
           quarto
         ];
@@ -77,19 +74,15 @@
             echo "T Project: historical_data"
             echo "=================================================="
             echo ""
-            echo "Prototype: AAPL (equity) + BTC (crypto)"
+            echo "Available commands:"
+            echo "  t repl              - Start T REPL"
+            echo "  t run <file>        - Run a T file"
+            echo "  t test              - Run tests"
             echo ""
-            echo "Commands:"
-            echo "  t run src/pipeline.t   - Run the pipeline"
-            echo "  t repl                 - Interactive REPL"
+            echo "To add dependencies:"
+            echo "  * Add them to tproject.toml"
+            echo "  * Run 't update' to sync flake.nix"
             echo ""
-
-            # DuckDB sandbox fix: ensure HOME is writable
-            if [ ! -w "$HOME" ]; then
-              export HOME=$TMPDIR
-            fi
-
-            # Provision T Quarto extension
             mkdir -p _extensions
             expected_quarto_ext="${t-lang.packages.${system}.default}/share/tlang/quarto/tlang"
             quarto_ext_path="_extensions/tlang"
@@ -113,6 +106,8 @@
             else
               provision_quarto_ext
             fi
+            echo "Quarto is enabled via [additional-tools]. Render {t} chunks with filters: [tlang]."
+            echo ""
           '';
         };
       }
