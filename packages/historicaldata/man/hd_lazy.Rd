@@ -20,6 +20,7 @@ then call \code{collect()} to execute.
 }
 \seealso{
 Other data-access: 
-\code{\link{hd_macro_series}()}
+\code{\link{hd_macro_series}()},
+\code{\link{hd_macro_vintages}()}
 }
 \concept{data-access}

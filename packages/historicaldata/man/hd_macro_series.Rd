@@ -17,7 +17,8 @@ List available macro series
 }
 \seealso{
 Other data-access: 
-\code{\link{hd_lazy}()}
+\code{\link{hd_lazy}()},
+\code{\link{hd_macro_vintages}()}
 
 Other discovery: 
 \code{\link{hd_datasets}()},

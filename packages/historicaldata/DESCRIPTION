@@ -26,6 +26,7 @@ Suggests:
     DT,
     duckplyr,
     glmnet,
+    reviser,
     scales,
     targets,
     testthat (>= 3.0.0),

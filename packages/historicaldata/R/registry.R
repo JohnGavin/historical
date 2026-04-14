@@ -45,6 +45,12 @@ hd_datasets <- function() {
       frequency = "static",
       description = "Per-ticker metadata: exchange, sector, market cap, ETF fees/yield/returns, coverage stats"
     ),
+    macro_vintages = list(
+      url = hd_base_url("macro_vintages.parquet"),
+      schema = c("series_id", "date", "pub_date", "value"),
+      frequency = "vintage",
+      description = "FRED macro revision history: value as known at each publication date (ALFRED API)"
+    ),
     metadata_amendments = list(
       url = hd_base_url("metadata_amendments.parquet"),
       schema = c("ticker", "field", "old_value", "new_value",
