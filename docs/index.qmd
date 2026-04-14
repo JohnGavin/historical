@@ -123,6 +123,10 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <h4>DRIF: Daily Return Information</h4>
 <p>Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals.</p>
 </a>
+<a href="stock-backtest.html" class="info-card">
+<h4>Stock-Level Backtests</h4>
+<p>MAX and DRIF signals applied to 660 individual stocks (S&P 500 + STOXX 600). Decile long-short portfolios. 4-strategy comparison: stock vs factor, MAX vs DRIF.</p>
+</a>
 <a href="pkg/index.html" class="info-card">
 <h4>API Reference</h4>
 <p>Full function documentation for all 30 exported functions, grouped by: Data Access, Discovery, Curated Groups, Quality &amp; Audit, Infrastructure, Visualisation.</p>
@@ -140,6 +144,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
 - [Factor MAX](factor-max.html) — factor rotation strategy
 - [DRIF](drif.html) — daily return information factor
+- [Stock-Level Backtests](stock-backtest.html) — 660 stocks, 4-strategy comparison
 
 ## Row
 

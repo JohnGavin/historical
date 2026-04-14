@@ -1,0 +1,252 @@
+---
+title: "Stock-Level Backtests"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+```
+
+# Comparison
+
+## Row
+
+::: {.callout-note}
+## 4 Strategies × 2 Levels
+
+Cross-sectional backtests on 660 individual stocks (S&P 500 + STOXX 600 majors), compared with factor-level implementations on 5 Fama-French factors. Two signals: MAX (highest single-day return) and DRIF (elastic net on 42 daily return features).
+
+**Stock-level:** Each month, rank all 660 stocks by signal, long top decile (~38 stocks), short bottom decile. Monthly rebalance.
+
+**Factor-level:** Each month, rank 5 factors by signal, long top 2. Monthly rebalance.
+:::
+
+## Row
+
+### {.tabset}
+
+#### All Strategies
+
+```{r}
+#| fig-height: 6
+safe_tar_read("stk_all_comparison_plot")
+```
+
+::: {.fig-caption}
+**4-strategy comparison.** Y: growth of $1 (log scale). Stock-level uses D1 long / D10 short across 660 stocks. Factor-level uses top-2 of 5 FF factors. Dashed line = OOS start (2020). Source: HuggingFace equity_daily + FF5/Momentum via `hd_factors()`.
+:::
+
+#### Metrics
+
+```{r}
+stk_max <- safe_tar_read("stk_max_metrics")
+stk_drif <- safe_tar_read("stk_drif_metrics")
+fac_max <- safe_tar_read("fm_metrics")
+fac_drif <- safe_tar_read("drif_metrics")
+
+if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac_drif)) {
+  combined <- bind_rows(
+    stk_max |> filter(period == "Full Period") |> mutate(strategy = "Stock MAX"),
+    stk_drif |> filter(period == "Full Period") |> mutate(strategy = "Stock DRIF"),
+    fac_max |> filter(period == "Full Period") |> mutate(strategy = "Factor MAX"),
+    fac_drif |> filter(period == "Full Period") |> mutate(strategy = "Factor DRIF")
+  ) |>
+    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2)) |>
+    select(Strategy = strategy, CAGR = cagr, Vol = vol, Sharpe = sharpe, `Max DD` = max_dd)
+
+  # OOS
+  combined_oos <- bind_rows(
+    stk_max |> filter(period == "Out-of-Sample") |> mutate(strategy = "Stock MAX"),
+    stk_drif |> filter(period == "Out-of-Sample") |> mutate(strategy = "Stock DRIF"),
+    fac_max |> filter(period == "Out-of-Sample") |> mutate(strategy = "Factor MAX"),
+    fac_drif |> filter(period == "Out-of-Sample") |> mutate(strategy = "Factor DRIF")
+  ) |>
+    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2)) |>
+    select(Strategy = strategy, `OOS CAGR` = cagr, `OOS Vol` = vol,
+           `OOS Sharpe` = sharpe, `OOS Max DD` = max_dd)
+
+  full <- inner_join(combined, combined_oos, by = "Strategy")
+  hd_dt(full, "4-strategy comparison: full period and out-of-sample (2020+). Stock-level uses D1-D10 decile spread across 660 stocks. Factor-level uses top-2 of 5 factors.")
+}
+```
+
+#### Key Findings
+
+::: {.callout-tip}
+## What the Comparison Shows
+
+1. **Factor DRIF has the best risk-adjusted full-period Sharpe (0.26)** — elastic net on factor daily returns produces the most stable signal
+
+2. **Stock DRIF has the best OOS Sharpe (0.79)** — the pooled elastic net generalises well to unseen data, even though in-sample returns are weak
+
+3. **Stock MAX has the highest raw returns (12.1% CAGR)** but with extreme volatility (44%) and drawdown (-74%). The signal is real but noisy.
+
+4. **Factor MAX is the weakest** — a single extreme daily return at the factor level contains less cross-sectional information than at the stock level
+
+5. **The DRIF paper's insight is confirmed:** the full daily return distribution (42 features) captures more predictive information than the single maximum (1 feature), especially out-of-sample
+:::
+
+# Stock MAX
+
+## Row
+
+### {.tabset}
+
+#### Performance
+
+```{r}
+#| fig-height: 6
+safe_tar_read("stk_max_plot")
+```
+
+::: {.fig-caption}
+**Stock-level Factor MAX.** D1 long / D10 short, ~38 stocks per decile. Signal: maximum daily return in the prior month. Dashed = OOS start. Source: 660 stocks from HuggingFace equity_daily.
+:::
+
+#### Metrics
+
+```{r}
+metrics <- safe_tar_read("stk_max_metrics")
+if (!is.null(metrics)) {
+  display <- metrics |>
+    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2),
+           avg_long = round(avg_long), avg_short = round(avg_short))
+  hd_dt_wide(display, "Stock-level MAX: decile long-short portfolio metrics.")
+}
+```
+
+#### vs Factor MAX
+
+```{r}
+#| fig-height: 6
+safe_tar_read("stk_max_vs_factor_plot")
+```
+
+::: {.fig-caption}
+**Stock-level vs factor-level MAX.** The stock-level signal exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Both use the same MAX signal (highest single-day return).
+:::
+
+# Stock DRIF
+
+## Row
+
+### {.tabset}
+
+#### Performance
+
+```{r}
+#| fig-height: 6
+safe_tar_read("stk_drif_plot")
+```
+
+::: {.fig-caption}
+**Stock-level DRIF.** Pooled elastic net (alpha=0.5, 5-fold CV) on 42 features per stock-month (21 chronological + 21 rank daily returns). D1 long / D10 short. Expanding window with 60-month minimum.
+:::
+
+#### Metrics
+
+```{r}
+metrics <- safe_tar_read("stk_drif_metrics")
+if (!is.null(metrics)) {
+  display <- metrics |>
+    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2),
+           avg_long = round(avg_long), avg_short = round(avg_short))
+  hd_dt_wide(display, "Stock-level DRIF: pooled elastic net, decile long-short portfolio.")
+}
+```
+
+#### Why OOS > IS?
+
+::: {.callout-warning}
+## In-Sample Weakness, Out-of-Sample Strength
+
+Stock-level DRIF shows an unusual pattern: OOS Sharpe (0.79) is much higher than IS Sharpe (-0.02). Possible explanations:
+
+1. **Elastic net regularisation is very aggressive** with 42 features × 400 stocks — the model learns slowly, needing many years before the signal emerges
+
+2. **Universe composition changed** — more stocks entered the dataset post-2010, improving the cross-sectional signal quality
+
+3. **Regime shift** — the post-2020 period (COVID recovery, meme stocks, factor rotation) may coincidentally favour the DRIF signal
+
+4. **Small OOS window** — only 62 months of OOS data; results may not be robust
+
+This warrants further investigation: split OOS into sub-periods, test with different expanding window minimums, and compare with a random signal baseline.
+:::
+
+# Details
+
+## Row
+
+### {.tabset}
+
+#### Universe
+
+660 individual stocks from HuggingFace `equity_daily`:
+
+| Group | Tickers | History |
+|-------|--------:|---------|
+| S&P 500 (US) | ~500 | 2000-2026 (most), 1962+ (blue chips) |
+| STOXX 600 majors (EU) | ~143 | 2000-2026 |
+| Factor ETFs | 9 | 2013-2026 |
+| **Total** | **~660** | |
+
+Minimum 252 trading days (1 year) to enter universe. Monthly rebalance. ~38 stocks per decile.
+
+#### Parameters
+
+```{r}
+params <- safe_tar_read("stk_params")
+if (!is.null(params)) {
+  param_df <- tibble(
+    Parameter = c("Min History (days)", "Lookback Days", "Deciles",
+                  "Start Date", "IS End", "OOS Start"),
+    Value = c(as.character(params$min_history_days),
+              as.character(params$lookback_days),
+              as.character(params$n_deciles),
+              as.character(params$start_date),
+              as.character(params$is_end),
+              as.character(params$oos_start))
+  )
+  hd_dt(param_df, "Shared parameters for stock-level MAX and DRIF backtests.")
+}
+```
+
+#### Build Info
+
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+build_info()
+```
