@@ -38,21 +38,22 @@ source(utils_path)
 
 ## Row
 
-::: {.callout-note}
-## 4 Strategies × 2 Levels
-
-Cross-sectional backtests on 660 individual stocks (S&P 500 + STOXX 600 majors), compared with factor-level implementations on 5 Fama-French factors. Two signals: MAX (highest single-day return) and DRIF (elastic net on 42 daily return features).
-
-**Stock-level:** Each month, rank all 660 stocks by signal, long top decile (~38 stocks), short bottom decile. Monthly rebalance.
-
-**Factor-level:** Each month, rank 5 factors by signal, long top 2. Monthly rebalance.
-:::
-
-## Row
-
 ### {.tabset}
 
-#### All Strategies
+#### Summary
+
+Two signals applied at two levels, producing four strategies:
+
+| | Signal | Stock-Level (660 stocks, D1-D10) | Factor-Level (5 FF factors, top 2) |
+|--|--------|----------------------------------|-------------------------------------|
+| **MAX** | Highest single-day return in prior month | [Stock MAX](#stock-max) | [Factor MAX](factor-max.html) |
+| **DRIF** | Elastic net on 42 daily return features | [Stock DRIF](#stock-drif) | [Factor DRIF](drif.html) |
+
+**Stock-level:** Each month, rank all 660 stocks by signal. Long top decile (~38 stocks), short bottom decile. Monthly rebalance. Equal weight within each decile.
+
+**Factor-level:** Each month, rank 5 Fama-French factors (HML, SMB, RMW, CMA, Mom) by signal. Long top 2. Monthly rebalance. Equal weight.
+
+#### Equity Curves
 
 ```{r}
 #| fig-height: 6
@@ -60,7 +61,7 @@ safe_tar_read("stk_all_comparison_plot")
 ```
 
 ::: {.fig-caption}
-**4-strategy comparison.** Y: growth of $1 (log scale). Stock-level uses D1 long / D10 short across 660 stocks. Factor-level uses top-2 of 5 FF factors. Dashed line = OOS start (2020). Source: HuggingFace equity_daily + FF5/Momentum via `hd_factors()`.
+**Equity curves: 4 strategies, growth of $1 (log scale).** These curves should be interpreted with caution: (1) stock-level strategies have ~44% annual volatility, (2) a 150x return over 20 years requires ~30% CAGR which is unstable, (3) the stock MAX curve's spike is driven by a few extreme months. Dashed line = test period start (2020). Source: HuggingFace equity_daily + FF5/Momentum.
 :::
 
 #### Metrics
@@ -72,54 +73,88 @@ fac_max <- safe_tar_read("fm_metrics")
 fac_drif <- safe_tar_read("drif_metrics")
 
 if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac_drif)) {
-  combined <- bind_rows(
-    stk_max |> filter(period == "Full Period") |> mutate(strategy = "Stock MAX"),
-    stk_drif |> filter(period == "Full Period") |> mutate(strategy = "Stock DRIF"),
-    fac_max |> filter(period == "Full Period") |> mutate(strategy = "Factor MAX"),
-    fac_drif |> filter(period == "Full Period") |> mutate(strategy = "Factor DRIF")
-  ) |>
-    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
-           sharpe = round(sharpe, 2)) |>
-    select(Strategy = strategy, CAGR = cagr, Vol = vol, Sharpe = sharpe, `Max DD` = max_dd)
+  make_row <- function(m, name) {
+    m |> mutate(
+      Strategy = name,
+      CAGR = paste0(round(cagr * 100, 1), "%"),
+      Vol = paste0(round(vol * 100, 1), "%"),
+      Sharpe = round(sharpe, 2),
+      `Max DD` = paste0(round(max_dd * 100, 1), "%")
+    ) |> select(Strategy, Period = period, CAGR, Vol, Sharpe, `Max DD`)
+  }
 
-  # OOS
-  combined_oos <- bind_rows(
-    stk_max |> filter(period == "Out-of-Sample") |> mutate(strategy = "Stock MAX"),
-    stk_drif |> filter(period == "Out-of-Sample") |> mutate(strategy = "Stock DRIF"),
-    fac_max |> filter(period == "Out-of-Sample") |> mutate(strategy = "Factor MAX"),
-    fac_drif |> filter(period == "Out-of-Sample") |> mutate(strategy = "Factor DRIF")
-  ) |>
-    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
-           sharpe = round(sharpe, 2)) |>
-    select(Strategy = strategy, `OOS CAGR` = cagr, `OOS Vol` = vol,
-           `OOS Sharpe` = sharpe, `OOS Max DD` = max_dd)
+  all_metrics <- bind_rows(
+    make_row(stk_max, "Stock MAX"),
+    make_row(stk_drif, "Stock DRIF"),
+    make_row(fac_max, "Factor MAX"),
+    make_row(fac_drif, "Factor DRIF")
+  )
 
-  full <- inner_join(combined, combined_oos, by = "Strategy")
-  hd_dt(full, "4-strategy comparison: full period and out-of-sample (2020+). Stock-level uses D1-D10 decile spread across 660 stocks. Factor-level uses top-2 of 5 factors.")
+  hd_dt(all_metrics, "All strategies by partition (Training / Testing / Validation / Full). Factor-level links: Factor MAX, Factor DRIF.")
 }
 ```
 
 #### Key Findings
 
-::: {.callout-tip}
-## What the Comparison Shows
+**P&L**
 
-1. **Factor DRIF has the best risk-adjusted full-period Sharpe (0.26)** — elastic net on factor daily returns produces the most stable signal
+| Finding | Evidence |
+|---------|----------|
+| Stock MAX has the highest raw CAGR (12.1%) | But with 44% vol — risk-adjusted Sharpe is modest (0.23) |
+| Factor DRIF has the best full-period Sharpe (0.26) | Stable signal from elastic net on 6 academic factors |
+| Stock DRIF full-period CAGR is only 1.3% | Elastic net regularisation is very aggressive at stock level |
 
-2. **Stock DRIF has the best OOS Sharpe (0.79)** — the pooled elastic net generalises well to unseen data, even though in-sample returns are weak
+**Out-of-Sample / Validation**
 
-3. **Stock MAX has the highest raw returns (12.1% CAGR)** but with extreme volatility (44%) and drawdown (-74%). The signal is real but noisy.
+| Finding | Evidence |
+|---------|----------|
+| Stock DRIF has the best OOS Sharpe (0.79) | Elastic net generalises well — low IS Sharpe but high OOS |
+| Factor MAX degrades OOS (Sharpe -0.36) | Single-signal approach overfits at factor level |
+| Stock MAX OOS looks extreme (45% CAGR) | Driven by COVID recovery + meme stocks — not stable |
 
-4. **Factor MAX is the weakest** — a single extreme daily return at the factor level contains less cross-sectional information than at the stock level
+**Risk**
 
-5. **The DRIF paper's insight is confirmed:** the full daily return distribution (42 features) captures more predictive information than the single maximum (1 feature), especially out-of-sample
-:::
+| Finding | Evidence |
+|---------|----------|
+| Stock-level strategies have 2-5x higher vol than factor-level | 44% vol (stock MAX) vs 9% (factor MAX) |
+| Stock MAX max drawdown is -74% | Unacceptable for most allocators |
+| Factor strategies have drawdowns <36% | Lower risk but lower return |
+
+**Robustness**
+
+| Finding | Evidence |
+|---------|----------|
+| DRIF > MAX at both levels (Sharpe, OOS) | Full daily return distribution captures more signal than single extreme |
+| Factor-level is more stable, stock-level has more upside | Classic diversification vs concentration tradeoff |
 
 # Stock MAX
 
 ## Row
 
 ### {.tabset}
+
+#### Definition
+
+::: {.callout-note}
+## Strategy: Stock-Level Factor MAX
+
+**What:** Each month, sort all stocks by the maximum daily return observed in the prior month. Go long the top decile, short the bottom decile.
+
+**Rationale (Market Dynamics):** A stock with an unusually high single-day return signals that new information arrived — an earnings surprise, an upgrade, a sector rotation. Markets underreact to this information at the individual stock level because:
+
+1. **Attention limitation** — investors can't monitor 660 stocks daily; extreme returns in small/mid caps go unnoticed
+2. **Anchoring** — after a large daily move, investors anchor to the pre-move price, underweighting the new information
+3. **Liquidity friction** — the initial move is partially driven by liquidity demand, not fully by information. The price continues to adjust over the following month.
+
+**Step-by-step example (one month):**
+
+1. Collect daily returns for all 660 stocks in March 2024
+2. For each stock, find the single highest daily return in March (the "MAX")
+3. Rank all stocks by MAX: stock with the biggest single-day gain ranks #1
+4. Divide into 10 deciles (~66 stocks each). D1 = highest MAX, D10 = lowest
+5. April 2024: go long D1, short D10, equal weight within each decile
+6. End of April: close all positions, repeat
+:::
 
 #### Performance
 
@@ -129,7 +164,7 @@ safe_tar_read("stk_max_plot")
 ```
 
 ::: {.fig-caption}
-**Stock-level Factor MAX.** D1 long / D10 short, ~38 stocks per decile. Signal: maximum daily return in the prior month. Dashed = OOS start. Source: 660 stocks from HuggingFace equity_daily.
+**Stock-level MAX: D1 long / D10 short, ~38 stocks per decile.** Blue = long-short spread, red = long-only (D1). Signal: maximum daily return in prior month. Source: 660 stocks from HuggingFace equity_daily.
 :::
 
 #### Metrics
@@ -141,7 +176,7 @@ if (!is.null(metrics)) {
     mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2),
            avg_long = round(avg_long), avg_short = round(avg_short))
-  hd_dt_wide(display, "Stock-level MAX: decile long-short portfolio metrics.")
+  hd_dt_wide(display, "Stock MAX metrics by partition.")
 }
 ```
 
@@ -153,14 +188,50 @@ safe_tar_read("stk_max_vs_factor_plot")
 ```
 
 ::: {.fig-caption}
-**Stock-level vs factor-level MAX.** The stock-level signal exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Both use the same MAX signal (highest single-day return).
+**Stock vs Factor MAX.** Stock-level exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Same MAX signal, different universes. Factor-level definition: [Factor MAX](factor-max.html).
 :::
+
+#### Pros & Cons
+
+| | Detail |
+|--|--------|
+| **Pros** | Simple signal (one number per stock-month). High raw returns. Works across markets. |
+| **Cons** | Very high volatility (44%). Max drawdown -74%. Sensitive to extreme events. High turnover (~monthly full rebalance). |
+| **Works well** | High-volatility regimes (VIX > 25). Small/mid-cap stocks with less analyst coverage. |
+| **Works badly** | Low-volatility, trending markets where MAX signals are noise. |
+| **Factor exposure** | Loads on size (small-cap tilt in D1), volatility, and short-term reversal. Partially explained by these factors — not pure alpha. |
 
 # Stock DRIF
 
 ## Row
 
 ### {.tabset}
+
+#### Definition
+
+::: {.callout-note}
+## Strategy: Stock-Level DRIF (Daily Return Information Factor)
+
+**What:** Each month, use an elastic net regression on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.
+
+**Rationale (Market Dynamics):** The full sequence of daily returns contains more predictive information than any single summary statistic (mean, max, volatility). Specifically:
+
+1. **Chronological features** (c1...c21) capture when returns occurred — recent price pressure and liquidity effects carry more weight than older ones
+2. **Rank features** (r1...r21) capture how extreme returns were — behavioral biases cause investors to overweight tail events
+3. **Elastic net** combines these 42 features with regularisation, avoiding overfitting while capturing non-obvious interactions
+
+**Step-by-step example (one month):**
+
+1. For each of 660 stocks, collect the 21 daily returns in March 2024
+2. Create 42 features: c1...c21 (chronological order) + r1...r21 (sorted by magnitude)
+3. Train elastic net (alpha=0.5, 5-fold CV) on all prior stock-months (expanding window, 60-month minimum)
+4. Predict each stock's April return from its March features
+5. Rank stocks by predicted return. D1 = highest predicted, D10 = lowest
+6. April: long D1, short D10, equal weight
+7. End of April: close, repeat
+
+**Key distinction from MAX:** MAX uses 1 feature (the single highest daily return). DRIF uses 42 features (the full daily return distribution). The Alpha Architect paper shows DRIF subsumes MAX — MAX is a special case of DRIF.
+:::
 
 #### Performance
 
@@ -170,7 +241,7 @@ safe_tar_read("stk_drif_plot")
 ```
 
 ::: {.fig-caption}
-**Stock-level DRIF.** Pooled elastic net (alpha=0.5, 5-fold CV) on 42 features per stock-month (21 chronological + 21 rank daily returns). D1 long / D10 short. Expanding window with 60-month minimum.
+**Stock-level DRIF: pooled elastic net, D1/D10 decile spread.** Blue = long-short, red = long-only (D1). Expanding window with 60-month minimum training. Source: 660 stocks, 42 features per stock-month.
 :::
 
 #### Metrics
@@ -182,27 +253,27 @@ if (!is.null(metrics)) {
     mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2),
            avg_long = round(avg_long), avg_short = round(avg_short))
-  hd_dt_wide(display, "Stock-level DRIF: pooled elastic net, decile long-short portfolio.")
+  hd_dt_wide(display, "Stock DRIF metrics by partition.")
 }
 ```
 
-#### Why OOS > IS?
+#### Pros & Cons
 
-::: {.callout-warning}
-## In-Sample Weakness, Out-of-Sample Strength
+| | Detail |
+|--|--------|
+| **Pros** | Uses full daily return information (42 features). Best OOS Sharpe (0.79). Elastic net prevents overfitting. |
+| **Cons** | Weak in-sample (1.3% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. |
+| **Works well** | When the cross-section is large (more stocks = better elastic net training). Post-2020 period. |
+| **Works badly** | Small universes (<100 stocks). When feature matrix is rank-deficient. |
+| **Factor exposure** | Lower factor loading than MAX (elastic net regularises out common factors). More likely to represent genuine alpha. |
+| **OOS > IS anomaly** | Possible explanations: universe composition change post-2010, elastic net needs many years to learn, or OOS window (62 months) is too short to be conclusive. |
 
-Stock-level DRIF shows an unusual pattern: OOS Sharpe (0.79) is much higher than IS Sharpe (-0.02). Possible explanations:
+#### References
 
-1. **Elastic net regularisation is very aggressive** with 42 features × 400 stocks — the model learns slowly, needing many years before the signal emerges
-
-2. **Universe composition changed** — more stocks entered the dataset post-2010, improving the cross-sectional signal quality
-
-3. **Regime shift** — the post-2020 period (COVID recovery, meme stocks, factor rotation) may coincidentally favour the DRIF signal
-
-4. **Small OOS window** — only 62 months of OOS data; results may not be robust
-
-This warrants further investigation: split OOS into sub-periods, test with different expanding window minimums, and compare with a random signal baseline.
-:::
+1. [DRIF: factor-level implementation](drif.html) — same methodology on 5 FF factors
+2. [Factor MAX](factor-max.html) — simpler signal, comparison benchmark
+3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/) — original research
+4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/) — MAX signal research
 
 # Details
 
@@ -223,22 +294,24 @@ This warrants further investigation: split OOS into sub-periods, test with diffe
 
 Minimum 252 trading days (1 year) to enter universe. Monthly rebalance. ~38 stocks per decile.
 
-#### Parameters
+#### Partitions
 
 ```{r}
 params <- safe_tar_read("stk_params")
 if (!is.null(params)) {
   param_df <- tibble(
-    Parameter = c("Min History (days)", "Lookback Days", "Deciles",
-                  "Start Date", "IS End", "OOS Start"),
-    Value = c(as.character(params$min_history_days),
-              as.character(params$lookback_days),
-              as.character(params$n_deciles),
-              as.character(params$start_date),
-              as.character(params$is_end),
-              as.character(params$oos_start))
+    Parameter = c("Training", "Testing", "Validation",
+                  "Min History", "Lookback Days", "Deciles"),
+    Value = c(
+      paste(params$start_date, "to", params$is_end),
+      paste(params$test_start, "to", params$test_end),
+      paste(params$val_start, "to", params$val_end),
+      paste(params$min_history_days, "days"),
+      as.character(params$lookback_days),
+      as.character(params$n_deciles)
+    )
   )
-  hd_dt(param_df, "Shared parameters for stock-level MAX and DRIF backtests.")
+  hd_dt(param_df, "Shared parameters. Training: model fitting. Testing: calibration. Validation: sealed one-shot evaluation.")
 }
 ```
 

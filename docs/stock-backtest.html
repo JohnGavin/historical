@@ -252,26 +252,48 @@ ul.task-list li input[type="checkbox"] {
 
 <div class="bslib-grid-item html-fill-item tab-content bslib-grid" data-layout="fill" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div id="comparison" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-comparison">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-1"><li class="nav-item" role="presentation"><a href="#card-tabset-1-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Summary" aria-selected="true" class="nav-link active">Summary</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-1-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Equity Curves" aria-selected="false" class="nav-link">Equity Curves</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-1-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-1-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Key Findings" aria-selected="false" class="nav-link">Key Findings</a></li></ul></div>
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-1"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-1"><div class="card-body html-fill-item html-fill-container" data-title="Summary">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
-<div class="callout-icon-container html-fill-item html-fill-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill html-fill-item html-fill-container">
-<span class="screen-reader-only">Note</span>4 Strategies × 2 Levels
-</div>
-</div>
-<div class="callout-body-container callout-body html-fill-item html-fill-container">
-<p>Cross-sectional backtests on 660 individual stocks (S&amp;P 500 + STOXX 600 majors), compared with factor-level implementations on 5 Fama-French factors. Two signals: MAX (highest single-day return) and DRIF (elastic net on 42 daily return features).</p>
-<p><strong>Stock-level:</strong> Each month, rank all 660 stocks by signal, long top decile (~38 stocks), short bottom decile. Monthly rebalance.</p>
-<p><strong>Factor-level:</strong> Each month, rank 5 factors by signal, long top 2. Monthly rebalance.</p>
-</div>
-</div>
+<p>Two signals applied at two levels, producing four strategies:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th></th>
+<th>Signal</th>
+<th>Stock-Level (660 stocks, D1-D10)</th>
+<th>Factor-Level (5 FF factors, top 2)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>MAX</strong></td>
+<td>Highest single-day return in prior month</td>
+<td><a href="#stock-max">Stock MAX</a></td>
+<td><a href="factor-max.html">Factor MAX</a></td>
+</tr>
+<tr class="even">
+<td><strong>DRIF</strong></td>
+<td>Elastic net on 42 daily return features</td>
+<td><a href="#stock-drif">Stock DRIF</a></td>
+<td><a href="drif.html">Factor DRIF</a></td>
+</tr>
+</tbody>
+</table>
+<p><strong>Stock-level:</strong> Each month, rank all 660 stocks by signal. Long top decile (~38 stocks), short bottom decile. Monthly rebalance. Equal weight within each decile.</p>
+<p><strong>Factor-level:</strong> Each month, rank 5 Fama-French factors (HML, SMB, RMW, CMA, Mom) by signal. Long top 2. Monthly rebalance. Equal weight.</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -280,16 +302,7 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
-grid-auto-rows: minmax(0, 1fr);">
-<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-header dashboard-card-no-title bslib-navs-card-title">
-
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-2"><li class="nav-item" role="presentation"><a href="#card-tabset-2-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="All Strategies" aria-selected="true" class="nav-link active">All Strategies</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-2-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-2-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Key Findings" aria-selected="false" class="nav-link">Key Findings</a></li></ul></div>
-
-
-
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-2"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-1"><div class="card-body html-fill-item html-fill-container" data-title="All Strategies">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-2"><div class="card-body html-fill-item html-fill-container" data-title="Equity Curves">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -306,7 +319,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="fig-caption html-fill-item html-fill-container">
-<p><strong>4-strategy comparison.</strong> Y: growth of $1 (log scale). Stock-level uses D1 long / D10 short across 660 stocks. Factor-level uses top-2 of 5 FF factors. Dashed line = OOS start (2020). Source: HuggingFace equity_daily + FF5/Momentum via <code>hd_factors()</code>.</p>
+<p><strong>Equity curves: 4 strategies, growth of $1 (log scale).</strong> These curves should be interpreted with caution: (1) stock-level strategies have ~44% annual volatility, (2) a 150x return over 20 years requires ~30% CAGR which is unstable, (3) the stock MAX curve’s spike is driven by a few extreme months. Dashed line = test period start (2020). Source: HuggingFace equity_daily + FF5/Momentum.</p>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -316,13 +329,13 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-2"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-3"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-253ddb9e4c1777fb7251" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-253ddb9e4c1777fb7251">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"number\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n    <div style=\"display: none;position: absolute;width: 200px;opacity: 1\">\n      <div data-min=\"-0.02\" data-max=\"0.26\" data-scale=\"2\"><\/div>\n      <span style=\"float: left;\"><\/span>\n      <span style=\"float: right;\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"number\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n    <div style=\"display: none;position: absolute;width: 200px;opacity: 1\">\n      <div data-min=\"-0.36\" data-max=\"0.79\" data-scale=\"2\"><\/div>\n      <span style=\"float: left;\"><\/span>\n      <span style=\"float: right;\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">4-strategy comparison: full period and out-of-sample (2020+). Stock-level uses D1-D10 decile spread across 660 stocks. Factor-level uses top-2 of 5 factors.<\/caption>","data":[["Stock MAX","Stock DRIF","Factor MAX","Factor DRIF"],["12.1%","1.3%","4.5%","7%"],["44.4%","24%","8.9%","10.3%"],[0.23,-0.02,0.01,0.26],["-74.3%","-76.5%","-35.6%","-22%"],["45.3%","16.7%","-0.6%","2.6%"],["108.7%","17.5%","9.6%","10.4%"],[0.39,0.79,-0.36,-0.02],["-23.9%","-10%","-18.7%","-22%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Strategy<\/th>\n      <th>CAGR<\/th>\n      <th>Vol<\/th>\n      <th>Sharpe<\/th>\n      <th>Max DD<\/th>\n      <th>OOS CAGR<\/th>\n      <th>OOS Vol<\/th>\n      <th>OOS Sharpe<\/th>\n      <th>OOS Max DD<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"className":"dt-right","targets":[3,7]},{"name":"Strategy","targets":0},{"name":"CAGR","targets":1},{"name":"Vol","targets":2},{"name":"Sharpe","targets":3},{"name":"Max DD","targets":4},{"name":"OOS CAGR","targets":5},{"name":"OOS Vol","targets":6},{"name":"OOS Sharpe","targets":7},{"name":"OOS Max DD","targets":8}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[2]; $(this.api().cell(row, 2).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[3]; $(this.api().cell(row, 3).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[4]; $(this.api().cell(row, 4).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[5]; $(this.api().cell(row, 5).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[6]; $(this.api().cell(row, 6).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[7]; $(this.api().cell(row, 7).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[8]; $(this.api().cell(row, 8).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-8bebe733e03a217ed55a" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-8bebe733e03a217ed55a">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"number\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n    <div style=\"display: none;position: absolute;width: 200px;opacity: 1\">\n      <div data-min=\"-1.12\" data-max=\"1.13\" data-scale=\"2\"><\/div>\n      <span style=\"float: left;\"><\/span>\n      <span style=\"float: right;\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">All strategies by partition (Training / Testing / Validation / Full). Factor-level links: Factor MAX, Factor DRIF.<\/caption>","data":[["Stock MAX","Stock MAX","Stock MAX","Stock MAX","Stock DRIF","Stock DRIF","Stock DRIF","Stock DRIF","Factor MAX","Factor MAX","Factor MAX","Factor MAX","Factor DRIF","Factor DRIF","Factor DRIF","Factor DRIF"],["Training","Testing","Validation","Full Period","Training","Testing","Validation","Full Period","Training","Testing","Validation","Full Period","Training","Testing","Validation","Full Period"],["8.5%","9.9%","88.1%","12.1%","-0.8%","9.6%","23.8%","1.3%","5.1%","1.3%","-2.3%","4.5%","7.6%","11.7%","-5.3%","7%"],["27%","22.1%","149%","44.4%","24.8%","18.4%","16.7%","24%","8.8%","10.5%","8.7%","8.9%","10.3%","11.1%","9.2%","10.3%"],[0.27,0.42,0.5600000000000001,0.23,-0.08,0.48,1.13,-0.02,0.06,0.06,-0.84,0.01,0.29,1,-1.11,0.26],["-74.3%","-23.9%","-10.1%","-74.3%","-77.6%","-8.6%","-8.3%","-76.5%","-35.6%","-18.7%","-8.2%","-35.6%","-16.4%","-5.3%","-17.7%","-22%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Strategy<\/th>\n      <th>Period<\/th>\n      <th>CAGR<\/th>\n      <th>Vol<\/th>\n      <th>Sharpe<\/th>\n      <th>Max DD<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"className":"dt-right","targets":4},{"name":"Strategy","targets":0},{"name":"Period","targets":1},{"name":"CAGR","targets":2},{"name":"Vol","targets":3},{"name":"Sharpe","targets":4},{"name":"Max DD","targets":5}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[2]; $(this.api().cell(row, 2).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[3]; $(this.api().cell(row, 3).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[4]; $(this.api().cell(row, 4).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[5]; $(this.api().cell(row, 5).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -332,29 +345,114 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-3"><div class="card-body html-fill-item html-fill-container" data-title="Key Findings">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-4"><div class="card-body html-fill-item html-fill-container" data-title="Key Findings">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<div class="callout callout-style-default callout-tip callout-titled">
-<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
-<div class="callout-icon-container html-fill-item html-fill-container">
-<i class="callout-icon"></i>
-</div>
-<div class="callout-title-container flex-fill html-fill-item html-fill-container">
-<span class="screen-reader-only">Tip</span>What the Comparison Shows
-</div>
-</div>
-<div class="callout-body-container callout-body html-fill-item html-fill-container">
-<ol type="1">
-<li><p><strong>Factor DRIF has the best risk-adjusted full-period Sharpe (0.26)</strong> — elastic net on factor daily returns produces the most stable signal</p></li>
-<li><p><strong>Stock DRIF has the best OOS Sharpe (0.79)</strong> — the pooled elastic net generalises well to unseen data, even though in-sample returns are weak</p></li>
-<li><p><strong>Stock MAX has the highest raw returns (12.1% CAGR)</strong> but with extreme volatility (44%) and drawdown (-74%). The signal is real but noisy.</p></li>
-<li><p><strong>Factor MAX is the weakest</strong> — a single extreme daily return at the factor level contains less cross-sectional information than at the stock level</p></li>
-<li><p><strong>The DRIF paper’s insight is confirmed:</strong> the full daily return distribution (42 features) captures more predictive information than the single maximum (1 feature), especially out-of-sample</p></li>
-</ol>
-</div>
-</div>
+<strong>P&amp;L</strong>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Finding</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Stock MAX has the highest raw CAGR (12.1%)</td>
+<td>But with 44% vol — risk-adjusted Sharpe is modest (0.23)</td>
+</tr>
+<tr class="even">
+<td>Factor DRIF has the best full-period Sharpe (0.26)</td>
+<td>Stable signal from elastic net on 6 academic factors</td>
+</tr>
+<tr class="odd">
+<td>Stock DRIF full-period CAGR is only 1.3%</td>
+<td>Elastic net regularisation is very aggressive at stock level</td>
+</tr>
+</tbody>
+</table>
+<strong>Out-of-Sample / Validation</strong>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Finding</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Stock DRIF has the best OOS Sharpe (0.79)</td>
+<td>Elastic net generalises well — low IS Sharpe but high OOS</td>
+</tr>
+<tr class="even">
+<td>Factor MAX degrades OOS (Sharpe -0.36)</td>
+<td>Single-signal approach overfits at factor level</td>
+</tr>
+<tr class="odd">
+<td>Stock MAX OOS looks extreme (45% CAGR)</td>
+<td>Driven by COVID recovery + meme stocks — not stable</td>
+</tr>
+</tbody>
+</table>
+<strong>Risk</strong>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Finding</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Stock-level strategies have 2-5x higher vol than factor-level</td>
+<td>44% vol (stock MAX) vs 9% (factor MAX)</td>
+</tr>
+<tr class="even">
+<td>Stock MAX max drawdown is -74%</td>
+<td>Unacceptable for most allocators</td>
+</tr>
+<tr class="odd">
+<td>Factor strategies have drawdowns &lt;36%</td>
+<td>Lower risk but lower return</td>
+</tr>
+</tbody>
+</table>
+<strong>Robustness</strong>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Finding</th>
+<th>Evidence</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>DRIF &gt; MAX at both levels (Sharpe, OOS)</td>
+<td>Full daily return distribution captures more signal than single extreme</td>
+</tr>
+<tr class="even">
+<td>Factor-level is more stable, stock-level has more upside</td>
+<td>Classic diversification vs concentration tradeoff</td>
+</tr>
+</tbody>
+</table>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -379,11 +477,53 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header dashboard-card-no-title bslib-navs-card-title">
 
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-7"><li class="nav-item" role="presentation"><a href="#card-tabset-7-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Performance" aria-selected="true" class="nav-link active">Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="vs Factor MAX" aria-selected="false" class="nav-link">vs Factor MAX</a></li></ul></div>
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-7"><li class="nav-item" role="presentation"><a href="#card-tabset-7-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Definition" aria-selected="true" class="nav-link active">Definition</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Performance" aria-selected="false" class="nav-link">Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="vs Factor MAX" aria-selected="false" class="nav-link">vs Factor MAX</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Pros &amp; Cons" aria-selected="false" class="nav-link">Pros &amp; Cons</a></li></ul></div>
 
 
 
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-7"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-1"><div class="card-body html-fill-item html-fill-container" data-title="Performance">
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-7"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-1"><div class="card-body html-fill-item html-fill-container" data-title="Definition">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
+<span class="screen-reader-only">Note</span>Strategy: Stock-Level Factor MAX
+</div>
+</div>
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
+<p><strong>What:</strong> Each month, sort all stocks by the maximum daily return observed in the prior month. Go long the top decile, short the bottom decile.</p>
+<p><strong>Rationale (Market Dynamics):</strong> A stock with an unusually high single-day return signals that new information arrived — an earnings surprise, an upgrade, a sector rotation. Markets underreact to this information at the individual stock level because:</p>
+<ol type="1">
+<li><strong>Attention limitation</strong> — investors can’t monitor 660 stocks daily; extreme returns in small/mid caps go unnoticed</li>
+<li><strong>Anchoring</strong> — after a large daily move, investors anchor to the pre-move price, underweighting the new information</li>
+<li><strong>Liquidity friction</strong> — the initial move is partially driven by liquidity demand, not fully by information. The price continues to adjust over the following month.</li>
+</ol>
+<strong>Step-by-step example (one month):</strong>
+<ol type="1">
+<li>Collect daily returns for all 660 stocks in March 2024</li>
+<li>For each stock, find the single highest daily return in March (the “MAX”)</li>
+<li>Rank all stocks by MAX: stock with the biggest single-day gain ranks #1</li>
+<li>Divide into 10 deciles (~66 stocks each). D1 = highest MAX, D10 = lowest</li>
+<li>April 2024: go long D1, short D10, equal weight within each decile</li>
+<li>End of April: close all positions, repeat</li>
+</ol>
+</div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-2"><div class="card-body html-fill-item html-fill-container" data-title="Performance">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -400,7 +540,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="fig-caption html-fill-item html-fill-container">
-<p><strong>Stock-level Factor MAX.</strong> D1 long / D10 short, ~38 stocks per decile. Signal: maximum daily return in the prior month. Dashed = OOS start. Source: 660 stocks from HuggingFace equity_daily.</p>
+<p><strong>Stock-level MAX: D1 long / D10 short, ~38 stocks per decile.</strong> Blue = long-short spread, red = long-only (D1). Signal: maximum daily return in prior month. Source: 660 stocks from HuggingFace equity_daily.</p>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -410,13 +550,13 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-2"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-3"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-95f7cf76f92a8e9017d1" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-95f7cf76f92a8e9017d1">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Stock-level MAX: decile long-short portfolio metrics.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short"],["599","8.5%","27%","0.27","-74.3%","35","34"],["75","45.3%","108.7%","0.39","-23.9%","67","66"],["674","12.1%","44.4%","0.23","-74.3%","38","37"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>In-Sample<\/th>\n      <th>Out-of-Sample<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"name":"Metric","targets":0},{"name":"In-Sample","targets":1},{"name":"Out-of-Sample","targets":2},{"name":"Full Period","targets":3}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[2]; $(this.api().cell(row, 2).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[3]; $(this.api().cell(row, 3).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-b1550a82302b754e0b00" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-b1550a82302b754e0b00">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Stock MAX metrics by partition.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short"],["599","8.5%","27%","0.27","-74.3%","35","34"],["36","9.9%","22.1%","0.42","-23.9%","67","66"],["39","88.1%","149%","0.56","-10.1%","68","67"],["674","12.1%","44.4%","0.23","-74.3%","38","37"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Validation<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Validation","targets":3},{"name":"Full Period","targets":4}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[2]; $(this.api().cell(row, 2).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[3]; $(this.api().cell(row, 3).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[4]; $(this.api().cell(row, 4).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -426,7 +566,7 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-3"><div class="card-body html-fill-item html-fill-container" data-title="vs Factor MAX">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-4"><div class="card-body html-fill-item html-fill-container" data-title="vs Factor MAX">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -443,8 +583,54 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="fig-caption html-fill-item html-fill-container">
-<p><strong>Stock-level vs factor-level MAX.</strong> The stock-level signal exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Both use the same MAX signal (highest single-day return).</p>
+<p><strong>Stock vs Factor MAX.</strong> Stock-level exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Same MAX signal, different universes. Factor-level definition: <a href="factor-max.html">Factor MAX</a>.</p>
 </div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-5"><div class="card-body html-fill-item html-fill-container" data-title="Pros &amp; Cons">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 80%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Pros</strong></td>
+<td>Simple signal (one number per stock-month). High raw returns. Works across markets.</td>
+</tr>
+<tr class="even">
+<td><strong>Cons</strong></td>
+<td>Very high volatility (44%). Max drawdown -74%. Sensitive to extreme events. High turnover (~monthly full rebalance).</td>
+</tr>
+<tr class="odd">
+<td><strong>Works well</strong></td>
+<td>High-volatility regimes (VIX &gt; 25). Small/mid-cap stocks with less analyst coverage.</td>
+</tr>
+<tr class="even">
+<td><strong>Works badly</strong></td>
+<td>Low-volatility, trending markets where MAX signals are noise.</td>
+</tr>
+<tr class="odd">
+<td><strong>Factor exposure</strong></td>
+<td>Loads on size (small-cap tilt in D1), volatility, and short-term reversal. Partially explained by these factors — not pure alpha.</td>
+</tr>
+</tbody>
+</table>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -469,11 +655,55 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header dashboard-card-no-title bslib-navs-card-title">
 
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-13"><li class="nav-item" role="presentation"><a href="#card-tabset-13-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Performance" aria-selected="true" class="nav-link active">Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-13-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-13-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Why OOS > IS?" aria-selected="false" class="nav-link">Why OOS &gt; IS?</a></li></ul></div>
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-15"><li class="nav-item" role="presentation"><a href="#card-tabset-15-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Definition" aria-selected="true" class="nav-link active">Definition</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Performance" aria-selected="false" class="nav-link">Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Pros &amp; Cons" aria-selected="false" class="nav-link">Pros &amp; Cons</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="References" aria-selected="false" class="nav-link">References</a></li></ul></div>
 
 
 
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-13"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-13-1"><div class="card-body html-fill-item html-fill-container" data-title="Performance">
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-15"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-1"><div class="card-body html-fill-item html-fill-container" data-title="Definition">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
+<span class="screen-reader-only">Note</span>Strategy: Stock-Level DRIF (Daily Return Information Factor)
+</div>
+</div>
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
+<p><strong>What:</strong> Each month, use an elastic net regression on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.</p>
+<p><strong>Rationale (Market Dynamics):</strong> The full sequence of daily returns contains more predictive information than any single summary statistic (mean, max, volatility). Specifically:</p>
+<ol type="1">
+<li><strong>Chronological features</strong> (c1…c21) capture when returns occurred — recent price pressure and liquidity effects carry more weight than older ones</li>
+<li><strong>Rank features</strong> (r1…r21) capture how extreme returns were — behavioral biases cause investors to overweight tail events</li>
+<li><strong>Elastic net</strong> combines these 42 features with regularisation, avoiding overfitting while capturing non-obvious interactions</li>
+</ol>
+<strong>Step-by-step example (one month):</strong>
+<ol type="1">
+<li>For each of 660 stocks, collect the 21 daily returns in March 2024</li>
+<li>Create 42 features: c1…c21 (chronological order) + r1…r21 (sorted by magnitude)</li>
+<li>Train elastic net (alpha=0.5, 5-fold CV) on all prior stock-months (expanding window, 60-month minimum)</li>
+<li>Predict each stock’s April return from its March features</li>
+<li>Rank stocks by predicted return. D1 = highest predicted, D10 = lowest</li>
+<li>April: long D1, short D10, equal weight</li>
+<li>End of April: close, repeat</li>
+</ol>
+<p><strong>Key distinction from MAX:</strong> MAX uses 1 feature (the single highest daily return). DRIF uses 42 features (the full daily return distribution). The Alpha Architect paper shows DRIF subsumes MAX — MAX is a special case of DRIF.</p>
+</div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-2"><div class="card-body html-fill-item html-fill-container" data-title="Performance">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -490,7 +720,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="fig-caption html-fill-item html-fill-container">
-<p><strong>Stock-level DRIF.</strong> Pooled elastic net (alpha=0.5, 5-fold CV) on 42 features per stock-month (21 chronological + 21 rank daily returns). D1 long / D10 short. Expanding window with 60-month minimum.</p>
+<p><strong>Stock-level DRIF: pooled elastic net, D1/D10 decile spread.</strong> Blue = long-short, red = long-only (D1). Expanding window with 60-month minimum training. Source: 660 stocks, 42 features per stock-month.</p>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -500,13 +730,13 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-13-2"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-3"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-ae21344494405a64f2c0" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-ae21344494405a64f2c0">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Stock-level DRIF: pooled elastic net, decile long-short portfolio.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short"],["436","-0.8%","24.8%","-0.08","-77.6%","36","35"],["62","16.7%","17.5%","0.79","-10%","54","53"],["498","1.3%","24%","-0.02","-76.5%","38","37"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>In-Sample<\/th>\n      <th>Out-of-Sample<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"name":"Metric","targets":0},{"name":"In-Sample","targets":1},{"name":"Out-of-Sample","targets":2},{"name":"Full Period","targets":3}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[2]; $(this.api().cell(row, 2).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[3]; $(this.api().cell(row, 3).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-e3334a8aba1aee7f0401" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-e3334a8aba1aee7f0401">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Stock DRIF metrics by partition.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short"],["436","-0.8%","24.8%","-0.08","-77.6%","36","35"],["30","9.6%","18.4%","0.48","-8.6%","58","57"],["32","23.8%","16.7%","1.13","-8.3%","51","50"],["498","1.3%","24%","-0.02","-76.5%","38","37"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Validation<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Validation","targets":3},{"name":"Full Period","targets":4}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[2]; $(this.api().cell(row, 2).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[3]; $(this.api().cell(row, 3).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[4]; $(this.api().cell(row, 4).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -516,30 +746,66 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-13-3"><div class="card-body html-fill-item html-fill-container" data-title="Why OOS > IS?">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-4"><div class="card-body html-fill-item html-fill-container" data-title="Pros &amp; Cons">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
-<div class="callout-icon-container html-fill-item html-fill-container">
-<i class="callout-icon"></i>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 20%">
+<col style="width: 80%">
+</colgroup>
+<thead>
+<tr class="header">
+<th></th>
+<th>Detail</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Pros</strong></td>
+<td>Uses full daily return information (42 features). Best OOS Sharpe (0.79). Elastic net prevents overfitting.</td>
+</tr>
+<tr class="even">
+<td><strong>Cons</strong></td>
+<td>Weak in-sample (1.3% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover.</td>
+</tr>
+<tr class="odd">
+<td><strong>Works well</strong></td>
+<td>When the cross-section is large (more stocks = better elastic net training). Post-2020 period.</td>
+</tr>
+<tr class="even">
+<td><strong>Works badly</strong></td>
+<td>Small universes (&lt;100 stocks). When feature matrix is rank-deficient.</td>
+</tr>
+<tr class="odd">
+<td><strong>Factor exposure</strong></td>
+<td>Lower factor loading than MAX (elastic net regularises out common factors). More likely to represent genuine alpha.</td>
+</tr>
+<tr class="even">
+<td><strong>OOS &gt; IS anomaly</strong></td>
+<td>Possible explanations: universe composition change post-2010, elastic net needs many years to learn, or OOS window (62 months) is too short to be conclusive.</td>
+</tr>
+</tbody>
+</table>
 </div>
-<div class="callout-title-container flex-fill html-fill-item html-fill-container">
-<span class="screen-reader-only">Warning</span>In-Sample Weakness, Out-of-Sample Strength
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div>
-<div class="callout-body-container callout-body html-fill-item html-fill-container">
-<p>Stock-level DRIF shows an unusual pattern: OOS Sharpe (0.79) is much higher than IS Sharpe (-0.02). Possible explanations:</p>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-5"><div class="card-body html-fill-item html-fill-container" data-title="References">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <ol type="1">
-<li><p><strong>Elastic net regularisation is very aggressive</strong> with 42 features × 400 stocks — the model learns slowly, needing many years before the signal emerges</p></li>
-<li><p><strong>Universe composition changed</strong> — more stocks entered the dataset post-2010, improving the cross-sectional signal quality</p></li>
-<li><p><strong>Regime shift</strong> — the post-2020 period (COVID recovery, meme stocks, factor rotation) may coincidentally favour the DRIF signal</p></li>
-<li><p><strong>Small OOS window</strong> — only 62 months of OOS data; results may not be robust</p></li>
+<li><a href="drif.html">DRIF: factor-level implementation</a> — same methodology on 5 FF factors</li>
+<li><a href="factor-max.html">Factor MAX</a> — simpler signal, comparison benchmark</li>
+<li><a href="https://alphaarchitect.com/daily-stock-returns/">Alpha Architect: Daily Stock Returns</a> — original research</li>
+<li><a href="https://alphaarchitect.com/factor-max/">Alpha Architect: Factor MAX</a> — MAX signal research</li>
 </ol>
-<p>This warrants further investigation: split OOS into sub-periods, test with different expanding window minimums, and compare with a random signal baseline.</p>
-</div>
-</div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -564,11 +830,11 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header dashboard-card-no-title bslib-navs-card-title">
 
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-18"><li class="nav-item" role="presentation"><a href="#card-tabset-18-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Universe" aria-selected="true" class="nav-link active">Universe</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-18-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Parameters" aria-selected="false" class="nav-link">Parameters</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-18-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Build Info" aria-selected="false" class="nav-link">Build Info</a></li></ul></div>
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-22"><li class="nav-item" role="presentation"><a href="#card-tabset-22-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Universe" aria-selected="true" class="nav-link active">Universe</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-22-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Partitions" aria-selected="false" class="nav-link">Partitions</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-22-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Build Info" aria-selected="false" class="nav-link">Build Info</a></li></ul></div>
 
 
 
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-18"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-18-1"><div class="card-body html-fill-item html-fill-container" data-title="Universe">
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-22"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-1"><div class="card-body html-fill-item html-fill-container" data-title="Universe">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -613,13 +879,13 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-18-2"><div class="card-body html-fill-item html-fill-container" data-title="Parameters">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-2"><div class="card-body html-fill-item html-fill-container" data-title="Partitions">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-c55746a8ab48228ec082" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-c55746a8ab48228ec082">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Shared parameters for stock-level MAX and DRIF backtests.<\/caption>","data":[["Min History (days)","Lookback Days","Deciles","Start Date","IS End","OOS Start"],["252","21","10","2005-01-01","2019-12-31","2020-01-01"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Parameter<\/th>\n      <th>Value<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"name":"Parameter","targets":0},{"name":"Value","targets":1}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-ad0ee8f8a65377f2dc35" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-ad0ee8f8a65377f2dc35">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #ddd;\">Shared parameters. Training: model fitting. Testing: calibration. Validation: sealed one-shot evaluation.<\/caption>","data":[["Training","Testing","Validation","Min History","Lookback Days","Deciles"],["2005-01-01 to 2019-12-31","2020-01-01 to 2022-12-31","2023-01-01 to 2026-12-31","252 days","21","10"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Parameter<\/th>\n      <th>Value<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"initComplete":"function(settings, json) {\n  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n}","columnDefs":[{"name":"Parameter","targets":0},{"name":"Value","targets":1}],"order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[0]; $(this.api().cell(row, 0).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'color':'#ddd','background-color':'#1a1a1a'});\n}"}},"evals":["options.initComplete","options.rowCallback"],"jsHooks":[]}</script>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -629,11 +895,11 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-18-3"><div class="card-body html-fill-item html-fill-container" data-title="Build Info">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-3"><div class="card-body html-fill-item html-fill-container" data-title="Build Info">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/vdev">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/85c1f2c9cbcbf5065d4edd6d213c40964b7365d2"><code>85c1f2c</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.2</a> | <strong>Built</strong> 2026-04-14 13:35:25</p>
+<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/vdev">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/2e71a88564f3419efd5f4937fa60bdb6877287cf"><code>2e71a88</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.2</a> | <strong>Built</strong> 2026-04-17 23:12:25</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
