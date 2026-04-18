@@ -30,5 +30,6 @@ Suggests:
     scales,
     targets,
     testthat (>= 3.0.0),
-    tidyr
+    tidyr,
+    xgboost
 Config/testthat/edition: 3
