@@ -58,17 +58,21 @@ plan_portfolio_opt <- function() {
 
       ret_matrix <- as.matrix(train[, strat_cols])
       rf_vec <- train$rf_ret
+      # Remove rows with NA
+      complete <- complete.cases(ret_matrix, rf_vec)
+      ret_matrix <- ret_matrix[complete, , drop = FALSE]
+      rf_vec <- rf_vec[complete]
 
       # Objective: maximise Sharpe ratio
       neg_sharpe <- function(w) {
         w <- w / sum(w)  # normalise to sum=1
-        port_ret <- ret_matrix %*% w
-        excess <- port_ret - rf_vec
-        ann_ret <- prod(1 + port_ret)^(12/length(port_ret)) - 1
+        port_ret <- as.numeric(ret_matrix %*% w)
+        n <- length(port_ret)
+        ann_ret <- prod(1 + port_ret)^(12/n) - 1
         ann_vol <- sd(port_ret) * sqrt(12)
-        rf_ann <- mean(rf_vec) * 12
+        rf_ann <- mean(rf_vec, na.rm = TRUE) * 12
         if (ann_vol < 1e-8) return(1e6)
-        -((ann_ret - rf_ann) / ann_vol)  # negative because PSO minimises
+        -((ann_ret - rf_ann) / ann_vol)
       }
 
       # PSO or grid search (PSO needs pso package, fallback to grid)
@@ -94,10 +98,18 @@ plan_portfolio_opt <- function() {
           w3 = seq(0, 0.5, 0.1),
           w4 = seq(0, 0.5, 0.1)
         )
-        grid <- grid[abs(rowSums(grid) - 1) < 0.01, ]
-        sharpes <- apply(grid, 1, function(w) -neg_sharpe(w))
-        best <- grid[which.max(sharpes), ]
-        weights <- as.numeric(best) / sum(as.numeric(best))
+        grid <- grid[abs(rowSums(grid) - 1) < 0.05, ]  # allow small tolerance
+        if (nrow(grid) == 0) {
+          # Fallback: equal weight
+          weights <- rep(0.25, 4)
+        } else {
+          sharpes <- apply(grid, 1, function(w) {
+            w <- w / sum(w)
+            -neg_sharpe(w)
+          })
+          best <- grid[which.max(sharpes), ]
+          weights <- as.numeric(best) / sum(as.numeric(best))
+        }
       }
 
       setNames(weights, strat_cols)
