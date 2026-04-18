@@ -107,6 +107,10 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 ## Row
 
 <div class="card-grid">
+<a href="leaderboard.html" class="info-card">
+<h4>Strategy Leaderboard</h4>
+<p>Rankings, equity curves, and feature importance across all 6 strategies. Transposed metrics table, PSO optimal portfolio weights, XGBoost feature analysis.</p>
+</a>
 <a href="examples.html" class="info-card">
 <h4>Usage Examples</h4>
 <p>Interactive dashboard with code examples for all 6 datasets: equity, crypto, macro, factors, LSE ETFs, and metadata queries.</p>

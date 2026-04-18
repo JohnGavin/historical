@@ -1,0 +1,224 @@
+---
+title: "Strategy Leaderboard"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+library(tidyr)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+```
+
+# Rankings
+
+## Row
+
+### {.tabset}
+
+#### Full Period
+
+```{r}
+lb <- safe_tar_read("leaderboard")
+if (!is.null(lb)) {
+  full <- lb |>
+    filter(period == "Full Period") |>
+    select(strategy, level, signal, cagr, vol, sharpe, max_dd) |>
+    arrange(desc(sharpe))
+
+  # Transpose: metrics as rows, strategies as columns
+  metrics_long <- full |>
+    mutate(
+      CAGR = paste0(round(cagr * 100, 1), "%"),
+      Vol = paste0(round(vol * 100, 1), "%"),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
+      `Max DD` = paste0(round(max_dd * 100, 1), "%"),
+      Level = level,
+      Signal = signal
+    ) |>
+    select(strategy, Level, Signal, CAGR, Vol, Sharpe, `Max DD`) |>
+    pivot_longer(-strategy, names_to = "Metric", values_to = "value") |>
+    pivot_wider(names_from = strategy, values_from = value)
+
+  hd_dt(metrics_long, "Full-period rankings sorted by Sharpe. Each column is a strategy — click the header to sort. Links: Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF.")
+}
+```
+
+#### By Partition
+
+```{r}
+if (!is.null(lb)) {
+  by_part <- lb |>
+    mutate(
+      CAGR = paste0(round(cagr * 100, 1), "%"),
+      Vol = paste0(round(vol * 100, 1), "%"),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
+      `Max DD` = paste0(round(max_dd * 100, 1), "%")
+    ) |>
+    select(Strategy = strategy, Period = period, CAGR, Vol, Sharpe, `Max DD`)
+
+  hd_dt(by_part, "All strategies × all partitions (Training / Testing / Validation / Full). Sort by any column to compare strategies within a partition.")
+}
+```
+
+#### Strategy Details
+
+Each strategy links to its full definition, implementation, and backtest:
+
+| Strategy | Level | Signal | Definition |
+|----------|-------|--------|------------|
+| [Factor MAX](factor-max.html) | Factor (5 FF) | Max daily return in prior month | Ranks factors by single-day extreme |
+| [Factor DRIF](drif.html) | Factor (5 FF) | Elastic net on 42 daily return features | Full daily return distribution |
+| [Stock MAX](stock-backtest.html#stock-max) | Stock (660) | Max daily return, D1-D10 decile spread | Cross-sectional stock sorting |
+| [Stock DRIF](stock-backtest.html#stock-drif) | Stock (660) | Elastic net, D1-D10 decile spread | Pooled cross-sectional elastic net |
+| [XGB DRIF](stock-backtest.html#stock-drif) | Stock (660) | XGBoost monotonic on 42 features | Non-linear signal with monotonic constraints |
+| PSO Optimal | Combined | Weighted portfolio of above | Grid search on training Sharpe |
+
+```{r}
+# Show PSO weights
+w <- safe_tar_read("port_optimal_weights")
+if (!is.null(w)) {
+  w_df <- tibble(
+    Strategy = names(w),
+    Weight = paste0(round(w * 100), "%")
+  ) |> filter(Weight != "0%")
+  hd_dt(w_df, "PSO optimal weights (trained on Training partition Sharpe). Strategies with 0% weight omitted.")
+}
+```
+
+# Performance
+
+## Row
+
+### {.tabset}
+
+#### Equity Curves
+
+```{r}
+#| fig-height: 6
+safe_tar_read("stk_all_comparison_plot")
+```
+
+::: {.fig-caption}
+**Equity curves (4 factor/stock strategies).** Growth of $1, log scale. These curves should be interpreted with caution: stock-level strategies have 20-44% annual vol. Extreme returns (150x over 20 years) require ~30% sustained CAGR which is unstable. Dashed line = test partition start (2020).
+:::
+
+#### Portfolio
+
+```{r}
+#| fig-height: 6
+safe_tar_read("port_comparison_plot")
+```
+
+::: {.fig-caption}
+**PSO optimal vs equal-weight portfolio.** Combines all 4 strategies with weights optimised on training partition Sharpe. The PSO optimal tilts toward strategies with better risk-adjusted returns (Factor DRIF + Stock MAX).
+:::
+
+#### XGBoost vs Elastic Net
+
+```{r}
+#| fig-height: 6
+safe_tar_read("xgb_vs_enet_plot")
+```
+
+::: {.fig-caption}
+**XGBoost (monotonic constraints) vs Elastic Net** on same 42 DRIF features, stock-level D1-D10. XGBoost underperforms in-sample but captures non-linear relationships.
+:::
+
+# Features
+
+## Row
+
+### {.tabset}
+
+#### XGBoost Feature Importance
+
+```{r}
+fi <- safe_tar_read("xgb_feature_importance")
+if (!is.null(fi)) {
+  fi_display <- fi |>
+    head(15) |>
+    mutate(
+      Gain = paste0(round(Gain * 100, 1), "%"),
+      Type = type,
+      Day = day
+    ) |>
+    select(Feature, Gain, Type, Day)
+  hd_dt(fi_display, "Top 15 features by XGBoost gain. Chronological features (c*) capture WHEN returns occurred. Rank features (r*) capture HOW EXTREME. The paper predicts chronological > rank — confirmed here.")
+}
+```
+
+#### Interpretation
+
+::: {.callout-tip}
+## What Feature Importance Tells Us
+
+The XGBoost feature importance confirms the Alpha Architect paper's key finding:
+
+1. **Chronological features dominate** — c13 (day 13) alone accounts for ~48% of gain
+2. **Mid-month timing matters most** — days 10-17 are the most predictive window
+3. **Rank extremes add signal** — r5 (5th lowest) and r21 (highest) contribute
+4. **Recent days are NOT the most important** — c20, c21 have low importance, contradicting simple momentum
+
+This suggests the signal is driven by **institutional rebalancing patterns** (mid-month flows) rather than simple recency or momentum.
+:::
+
+# Details
+
+## Row
+
+### {.tabset}
+
+#### Partitions
+
+```{r}
+params <- safe_tar_read("stk_params")
+if (!is.null(params)) {
+  param_df <- tibble(
+    Partition = c("Training", "Testing", "Validation"),
+    Period = c(
+      paste(params$start_date, "to", params$is_end),
+      paste(params$test_start, "to", params$test_end),
+      paste(params$val_start, "to", params$val_end)
+    ),
+    Purpose = c("Model fitting, expanding window signal estimation",
+                "Calibration, hyperparameter tuning, strategy comparison",
+                "Final one-shot evaluation (sealed envelope)")
+  )
+  hd_dt(param_df, "Shared partitions across all strategies. Validation is not used until ready for production.")
+}
+```
+
+#### Build Info
+
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+build_info()
+```
