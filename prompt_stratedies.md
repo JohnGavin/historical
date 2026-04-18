@@ -4,39 +4,27 @@
 	+ using the previous strategy as a template 
 	+ e.g. https://johngavin.github.io/historical/macro-defense-rotation.html
 
+
 # Potential strategies to be backtested
-+ one or more project datasets must cater for the asset classes mentioned in the urls below each of which explains a potential strategy to be backtested.
++ each url below explains a potential strategy to be backtested.
++ one or more historical project datasets must cater for the asset classes mentioned in the urls below. 
 + map which datasets are candidates for which strategies
 	+ can we cross check a strategy between two or more sources?
 	+ does history, frequency, other metadata from source first need enhancements or to be extended in order to be able to backtest a specific strategy
 
-# Strategies to be considered now
-## macro-defense-rotation (already done)
-+ https://notfinancial.substack.com/p/defense-first-when-not-losing-is
-	+ ETFs for index and defensive ETF tickers.
-	+ Defense First is not a single hedge. It rotates among four:
-		+ TLT — long-duration Treasuries (deflation / Fed easing)
-		+ GLD — gold (monetary instability, falling real rates)
-		+ DBC — broad commodities (stagflation, supply shocks)
-		+ UUP — U.S. dollar index (global stress, funding crises)
-		+ Each covers a different macro risk regime. 
-		+ Idea: one or more does something useful at any given time
-+ macro-defense-rotation strategy alread implemented
-	+ https://johngavin.github.io/historical/macro-defense-rotation.html
-	+ use as a template for other incomplete strategies
 
-## Factor-max
-+ https://alphaarchitect.com/factor-max/
-	+ predict factor returns by focusing on extreme within-month performance rather than cumulative returns
-	+ investors systematically underreact to factor-level news embedded in these extreme returns
-		+ creating exploitable return predictability.
-	+ factors offer meaningful performance enhancement opportunities
-		+ especially with factor MAX signals
-		+ particularly during low-attention environments 
-			+ and for systematic factors
-	+ factor MAX strategy works best when applied to
-		+ well-established, liquid factors 
-		+ rather than niche anomalies
+====
+
+# Strategies to be considered now
+## Beat the Stock Market by Avoiding Its Worst Days
++ https://www.morningstar.com/funds/you-can-beat-stock-market-by-avoiding-its-worst-days-you-wont
++ make more by avoiding market’s biggest losses 
+	+ than you gave up by being out of the market on the days it notched its biggest gains
++ Replicate for S&P500
+	+ extend to other indices in our datasets by asset category
+	+ Ditto for Distance Between 10 Worst and 10 Best Days 
++ rolling v cumulative returns
++ Rolling Returns vs. _Net_ Reward of Avoiding 10 Worst Days
 
 ## Daily Return Information Factor (DRIF) (implemented — factor-level)
 + https://johngavin.github.io/historical/drif.html
@@ -94,10 +82,10 @@
 	+ profitable after accounting for _institutional_ trading costs.
 		+ Breakeven cost: ~36–42 bps
 	+ survived 2,000+ variations of tests
-+ Recency Matters:
++ Recency Matters
 	+ most recent _daily_ price movements carry most weight for
 		+ predicting next _month’s_ performance.
-+ Market Dynamics: 
++ Market Dynamics
 	+ short-term prices driven by 
 		+ temporary price pressure and liquidity needs 
 		+ rather than just random noise
@@ -113,9 +101,45 @@
 		+ Small caps
 		+ Illiquid stocks
 
+## Factor-max
++ https://alphaarchitect.com/factor-max/
++ predict factor returns by focusing on extreme within-month performance rather than cumulative returns
++ investors systematically underreact to factor-level news embedded in these extreme returns
+	+ creating exploitable return predictability.
++ factors offer meaningful performance enhancement opportunities
+	+ especially with factor MAX signals
+	+ particularly during low-attention environments 
+		+ and for systematic factors
++ factor MAX strategy works best when applied to
+	+ well-established, liquid factors 
+	+ rather than niche anomalies
+
+## macro-defense-rotation (already done)
++ https://notfinancial.substack.com/p/defense-first-when-not-losing-is
+	+ ETFs for index and defensive ETF tickers.
+	+ Defense First is not a single hedge. It rotates among four:
+		+ TLT — long-duration Treasuries (deflation / Fed easing)
+		+ GLD — gold (monetary instability, falling real rates)
+		+ DBC — broad commodities (stagflation, supply shocks)
+		+ UUP — U.S. dollar index (global stress, funding crises)
+		+ Each covers a different macro risk regime. 
+		+ Idea: one or more does something useful at any given time
++ macro-defense-rotation strategy alread implemented
+	+ https://johngavin.github.io/historical/macro-defense-rotation.html
+	+ use as a template for other incomplete strategies
+
+
+
+
 
 # References to future potential strategies
 + these are excluded for now.
++ https://www.quantitativo.com/p/learning-to-rank?open=false#%C2%A7the-strategy-our-implementation
 + https://substack.com/@quantitativo/p-188964115
 + https://substack.com/@quantitativo/p-193265385
 + https://www.quantitativo.com/p/informational-edge
+
++ Samir Varma
+	+ https://medium.com/@samirvarma
+	+ https://algoadvantage.substack.com/p/051-samir-varma-prediction-fails
+	+ https://www.algoadvantage.io/podcast/050-samir-varma/
