@@ -45,8 +45,9 @@ source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_drif.R"))
 source(here::here("R/plan_stock_backtest.R"))
 source(here::here("R/plan_xgb_signal.R"))
+source(here::here("R/plan_portfolio_opt.R"))
 source(here::here("R/plan_qa_vignette.R"))
 
-# Combine: partitions first, then all strategies, then QA
+# Combine: partitions first, strategies, optimisation, then QA
 c(plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
-  plan_stock_backtest(), plan_xgb_signal(), plan_qa_vignette())
+  plan_stock_backtest(), plan_xgb_signal(), plan_portfolio_opt(), plan_qa_vignette())
