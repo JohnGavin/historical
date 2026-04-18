@@ -26,11 +26,16 @@
           packages = with pkgs.rPackages; [
             dplyr
             arrow
+            curl
             duckdb
             duckplyr
+            devtools
             ggplot2
             glmnet
+            pkgload
             pointblank
+            reviser
+            roxygen2
             scales
             targets
             crew
@@ -40,9 +45,11 @@
             httr2
             jsonlite
             knitr
+            purrr
             reticulate
             testthat
             tidyr
+            xgboost
             cli
             rlang
           ];
