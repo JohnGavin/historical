@@ -76,7 +76,7 @@ plan_xgb_signal <- function() {
               eta = xgb_params$eta,
               subsample = xgb_params$subsample,
               colsample_bytree = xgb_params$colsample_bytree,
-              monotone_constraints = paste(mono, collapse = ",")
+              monotone_constraints = paste0("(", paste(mono, collapse = ","), ")")
             ),
             data = dtrain,
             nrounds = xgb_params$nrounds,
@@ -193,7 +193,7 @@ plan_xgb_signal <- function() {
         params = list(
           objective = "reg:squarederror",
           max_depth = 3L, eta = 0.1,
-          monotone_constraints = paste(mono, collapse = ",")
+          monotone_constraints = paste0("(", paste(mono, collapse = ","), ")")
         ),
         data = dtrain, nrounds = 100L, verbose = 0
       )
