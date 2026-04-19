@@ -23,30 +23,94 @@ assign_decile <- function(df, signal_col, n_groups = 10L) {
     dplyr::ungroup()
 }
 
-#' Compute long-short portfolio returns from decile assignments
-#' @param df Data frame with ym, decile, and monthly_ret columns
+#' Compute long-short portfolio returns with costs
+#' @param df Data frame with ym, ticker, decile, and monthly_ret columns
 #' @param long_decile Which decile to go long (default 1 = top)
 #' @param short_decile Which decile to short (default 10 = bottom). NULL = long only.
-#' @return Tibble with ym, port_ret, long_ret, short_ret, n_long, n_short
-portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L) {
-  long <- df |>
+#' @param cost_per_trade Cost per trade as fraction (default 0.005 = 0.50%)
+#' @param borrow_rate_annual Annual borrow cost for short positions (default 0.03 = 3%)
+#' @param max_monthly_ret Winsorise monthly returns at ±this (default 0.20 = 20%)
+#' @return Tibble with ym, port_ret, long_ret, short_ret, n_long, n_short, turnover, costs
+portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L,
+                                cost_per_trade = 0.005,
+                                borrow_rate_annual = 0.03,
+                                max_monthly_ret = 0.20) {
+  # Option 2: Winsorise extreme monthly returns
+  df <- df |>
+    dplyr::mutate(monthly_ret = pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret))
+
+  # Long leg
+  long_by_month <- df |>
     dplyr::filter(decile == long_decile) |>
     dplyr::group_by(ym) |>
-    dplyr::summarise(long_ret = mean(monthly_ret, na.rm = TRUE),
-                     n_long = dplyr::n(), .groups = "drop")
+    dplyr::summarise(
+      long_ret = mean(monthly_ret, na.rm = TRUE),
+      n_long = dplyr::n(),
+      long_tickers = list(sort(unique(ticker))),
+      .groups = "drop"
+    )
 
   if (is.null(short_decile)) {
-    return(long |> dplyr::mutate(port_ret = long_ret, short_ret = 0, n_short = 0L))
+    # Option 4: Turnover = fraction of tickers that changed
+    long_by_month <- long_by_month |>
+      dplyr::mutate(
+        prev_tickers = dplyr::lag(long_tickers),
+        turnover = purrr::map2_dbl(long_tickers, prev_tickers, function(curr, prev) {
+          if (is.null(prev)) return(1)
+          1 - length(intersect(curr, prev)) / max(length(union(curr, prev)), 1)
+        }),
+        # Cost = turnover × cost_per_trade × 2 (buy + sell)
+        trade_cost = turnover * cost_per_trade * 2,
+        port_ret = long_ret - trade_cost,
+        short_ret = 0, n_short = 0L
+      ) |>
+      dplyr::select(-long_tickers, -prev_tickers)
+    return(long_by_month)
   }
 
-  short <- df |>
+  # Short leg
+  short_by_month <- df |>
     dplyr::filter(decile == short_decile) |>
     dplyr::group_by(ym) |>
-    dplyr::summarise(short_ret = mean(monthly_ret, na.rm = TRUE),
-                     n_short = dplyr::n(), .groups = "drop")
+    dplyr::summarise(
+      short_ret = mean(monthly_ret, na.rm = TRUE),
+      n_short = dplyr::n(),
+      short_tickers = list(sort(unique(ticker))),
+      .groups = "drop"
+    )
 
-  dplyr::inner_join(long, short, by = "ym") |>
-    dplyr::mutate(port_ret = long_ret - short_ret)
+  result <- dplyr::inner_join(long_by_month, short_by_month, by = "ym") |>
+    dplyr::mutate(
+      # Option 4: Turnover for both legs
+      prev_long = dplyr::lag(long_tickers),
+      prev_short = dplyr::lag(short_tickers),
+      long_turnover = purrr::map2_dbl(long_tickers, prev_long, function(curr, prev) {
+        if (is.null(prev)) return(1)
+        1 - length(intersect(curr, prev)) / max(length(union(curr, prev)), 1)
+      }),
+      short_turnover = purrr::map2_dbl(short_tickers, prev_short, function(curr, prev) {
+        if (is.null(prev)) return(1)
+        1 - length(intersect(curr, prev)) / max(length(union(curr, prev)), 1)
+      }),
+      turnover = (long_turnover + short_turnover) / 2,
+      # Option 4: Transaction costs proportional to turnover
+      trade_cost = turnover * cost_per_trade * 2,  # buy + sell both legs
+      # Option 5: Borrow cost for short leg (monthly)
+      borrow_cost = borrow_rate_annual / 12,
+      # Net returns
+      long_ret_net = long_ret - long_turnover * cost_per_trade * 2,
+      short_ret_net = short_ret,  # short gains are reduced by borrow cost
+      port_ret = (long_ret_net) - (short_ret_net) - borrow_cost - trade_cost * 0  # avoid double-counting
+    ) |>
+    dplyr::select(-long_tickers, -short_tickers, -prev_long, -prev_short,
+                  -long_turnover, -short_turnover)
+
+  # Simplify: port_ret = long_ret - short_ret - total_costs
+  result |>
+    dplyr::mutate(
+      total_cost = trade_cost + borrow_cost,
+      port_ret = long_ret - short_ret - total_cost
+    )
 }
 
 #' Standard backtest metrics
@@ -83,7 +147,11 @@ plan_stock_backtest <- function() {
         test_end = p$test_end,
         val_start = p$val_start,
         val_end = p$val_end,
-        oos_start = p$test_start
+        oos_start = p$test_start,
+        # Cost model (Options 1, 4, 5)
+        cost_per_trade = 0.005,       # 0.50% per trade (Option 1: higher than 0.10%)
+        borrow_rate_annual = 0.03,    # 3% annualised borrow cost for shorts (Option 5)
+        max_monthly_ret = 0.20        # Winsorise at ±20% (Option 2)
       )
     }),
 
@@ -195,7 +263,10 @@ plan_stock_backtest <- function() {
 
       # Assign deciles and compute portfolio returns
       deciled <- assign_decile(merged, max_ret, stk_params$n_deciles)
-      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L)
+      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L,
+                                   cost_per_trade = stk_params$cost_per_trade,
+                                   borrow_rate_annual = stk_params$borrow_rate_annual,
+                                   max_monthly_ret = stk_params$max_monthly_ret)
 
       # Add risk-free rate
       port |>
@@ -417,7 +488,10 @@ plan_stock_backtest <- function() {
         inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
 
       deciled <- assign_decile(signal, predicted_ret, stk_params$n_deciles)
-      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L)
+      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L,
+                                   cost_per_trade = stk_params$cost_per_trade,
+                                   borrow_rate_annual = stk_params$borrow_rate_annual,
+                                   max_monthly_ret = stk_params$max_monthly_ret)
 
       port |>
         left_join(stk_rf, by = "ym") |>

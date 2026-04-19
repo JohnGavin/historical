@@ -104,7 +104,10 @@ plan_xgb_signal <- function() {
         inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
 
       deciled <- assign_decile(signal, predicted_ret, stk_params$n_deciles)
-      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L)
+      port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L,
+                                   cost_per_trade = stk_params$cost_per_trade,
+                                   borrow_rate_annual = stk_params$borrow_rate_annual,
+                                   max_monthly_ret = stk_params$max_monthly_ret)
 
       port |>
         left_join(stk_rf, by = "ym") |>
