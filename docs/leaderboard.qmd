@@ -50,22 +50,29 @@ if (!is.null(lb)) {
     filter(period == "Full Period") |>
     arrange(max_dd)
 
-  # Transpose: risk first, then return, then cost-adjusted
+  # Transpose: risk first, then return (net only — no gross)
   metrics_long <- full |>
     mutate(
       `Max DD` = paste0(round(max_dd * 100, 1), "%"),
       `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%")),
       Vol = paste0(round(vol * 100, 1), "%"),
-      `Gross CAGR` = paste0(round(cagr * 100, 1), "%"),
       `Net CAGR` = ifelse(is.na(net_cagr), "—", paste0(round(net_cagr * 100, 1), "%")),
-      `Cum P&L` = ifelse(is.na(cum_pnl), "—", paste0(round(cum_pnl * 100, 0), "%")),
-      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2)))
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
+      Credible = ifelse(is.na(credible) | !credible, "NO", "yes")
     ) |>
-    select(strategy, `Max DD`, `CVaR 95%`, Vol, `Gross CAGR`, `Net CAGR`, `Cum P&L`, Sharpe) |>
+    select(strategy, `Max DD`, `CVaR 95%`, Vol, `Net CAGR`, Sharpe, Credible) |>
     pivot_longer(-strategy, names_to = "Metric", values_to = "value") |>
     pivot_wider(names_from = strategy, values_from = value)
 
-  hd_dt(metrics_long, "Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Gross/Net CAGR (net = after 0.20% round-trip/month), Cum P&L. Sharpe secondary. Links: Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF.")
+  # Flag non-credible strategies
+  n_flagged <- sum(!full$credible, na.rm = TRUE)
+  flag_note <- if (n_flagged > 0) {
+    flagged <- full$strategy[!full$credible]
+    paste0(" WARNING: ", paste(flagged, collapse=", "),
+           " flagged as non-credible (>20% CAGR or >50x cum P&L — likely unrealistic).")
+  } else ""
+
+  hd_dt(metrics_long, paste0("Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Net CAGR (after 0.20% round-trip/month), Cum P&L (net). Sharpe secondary.", flag_note))
 }
 ```
 

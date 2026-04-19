@@ -54,10 +54,13 @@ plan_leaderboard <- function() {
         }
         net_ret <- ret * (1 - COST_PER_MONTH)
         net_cagr <- prod(1 + net_ret)^(12 / n) - 1
-        cum_pnl  <- prod(1 + ret) - 1
+        cum_pnl_net <- prod(1 + net_ret) - 1  # net of costs, not gross
         q05      <- quantile(ret, 0.05)
         cvar_95  <- mean(ret[ret <= q05])
-        tibble(net_cagr = net_cagr, cum_pnl = cum_pnl, cvar_95 = cvar_95)
+        # Credibility flag: >20% CAGR or >50x cum P&L is suspect
+        credible <- abs(net_cagr) < 0.20 & abs(cum_pnl_net) < 50
+        tibble(net_cagr = net_cagr, cum_pnl = cum_pnl_net, cvar_95 = cvar_95,
+               credible = credible)
       }
 
       # Each portfolio target and its return column (as string) and period slicing params
