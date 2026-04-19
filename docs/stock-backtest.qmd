@@ -275,6 +275,76 @@ if (!is.null(metrics)) {
 3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/) — original research
 4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/) — MAX signal research
 
+# ETF Replication
+
+## Row
+
+### {.tabset}
+
+#### Definition
+
+::: {.callout-note}
+## Why ETFs?
+
+Stock-level long-short strategies lose ~20%/yr after realistic costs (1.85%/month for 660-stock decile sort). Factor ETFs (VLUE, MTUM, QUAL, etc.) offer institutional liquidity at ~0.20%/month — 10x cheaper.
+
+**Two approaches tested:**
+
+| | A: DRIF on ETF Returns | B: Academic Signal → ETFs |
+|--|----------------------|--------------------------|
+| **Signal** | Elastic net on ETF daily prices | Factor-level DRIF (FF5+Mom) mapped to ETFs |
+| **Execution** | Trade the predicted ETFs directly | Map HML→VLUE, Mom→MTUM, etc. |
+| **Training data** | 2013-2026 (ETF inception) | 1963-2026 (academic factors) |
+| **Key risk** | Short history (10 ETFs × 10 years) | Weak mapping (VLUE/HML cor = 0.34) |
+
+**Result:** Long-short fails for both. **Long-only works:** 13.4% CAGR (A) and 12.6% CAGR (B). The signal identifies winners, not losers.
+:::
+
+#### Equity Curves
+
+```{r}
+#| fig-height: 6
+safe_tar_read("etf_comparison_plot")
+```
+
+::: {.fig-caption}
+**ETF replication: Approach A vs B (long-short, net of costs).** Both approaches struggle as long-short because all factor ETFs have positive market beta — shorting one while longing another is mostly a bet on relative factor performance. The long-only legs (not shown) return 13%+ CAGR.
+:::
+
+#### Approach A Metrics
+
+```{r}
+metrics_a <- safe_tar_read("etf_a_metrics")
+if (!is.null(metrics_a)) {
+  display <- metrics_a |>
+    mutate(across(c(cagr, long_cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2))
+  hd_dt_wide(display, "Approach A: DRIF applied directly to 9 factor ETF daily returns. Long-short (L/S) and long-only metrics. Cost: 0.10%/trade, 0.5%/yr borrow.")
+}
+```
+
+#### Approach B Metrics
+
+```{r}
+metrics_b <- safe_tar_read("etf_b_metrics")
+if (!is.null(metrics_b)) {
+  display <- metrics_b |>
+    mutate(across(c(cagr, long_cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2))
+  hd_dt_wide(display, "Approach B: Academic factor DRIF signal mapped to ETFs via ETF_FACTOR_MAP. Mapping: HML→VLUE/VTV/IWD, Mom→MTUM, RMW→QUAL, etc.")
+}
+```
+
+#### Key Findings
+
+| Finding | Evidence |
+|---------|----------|
+| **Long-only is the practical strategy** | A long-only: 13.4% CAGR. B long-only: 12.6%. Compare S&P 500 ~10%. |
+| **Short leg is unprofitable** | A long-short: -0.8%. B long-short: -1.9%. ETFs all have market beta — shorting one is mostly shorting the market. |
+| **A > B** | Approach A (direct ETF signal) has higher Sharpe (-0.11 vs -0.31) and lower DD (-23.7% vs -29.0%). The VLUE/HML mapping (cor=0.34) in B adds noise. |
+| **Cost advantage is real** | ETF costs ~0.20%/month vs 1.85%/month stock-level. The long-only gross returns survive after costs. |
+| **Validation is strong** | Both show ~20% long-only CAGR in 2023-2026. Caveat: overlaps a bull market. |
+
 # Details
 
 ## Row

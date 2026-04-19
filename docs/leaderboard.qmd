@@ -104,6 +104,8 @@ Each strategy links to its full definition, implementation, and backtest:
 | [Stock MAX](stock-backtest.html#stock-max) | Stock (660) | Max daily return, D1-D10 decile spread | Cross-sectional stock sorting |
 | [Stock DRIF](stock-backtest.html#stock-drif) | Stock (660) | Elastic net, D1-D10 decile spread | Pooled cross-sectional elastic net |
 | [XGB DRIF](stock-backtest.html#stock-drif) | Stock (660) | XGBoost monotonic on 42 features | Non-linear signal with monotonic constraints |
+| [ETF DRIF A](stock-backtest.html#etf-replication) | ETF (9) | Elastic net on ETF daily returns | Direct ETF signal, long-only 13.4% CAGR |
+| [ETF DRIF B](stock-backtest.html#etf-replication) | ETF (9) | Academic factor signal → ETF execution | Mapped via ETF_FACTOR_MAP, long-only 12.6% |
 | PSO Optimal | Combined | Weighted portfolio of above | Grid search on training Sharpe |
 
 ```{r}
