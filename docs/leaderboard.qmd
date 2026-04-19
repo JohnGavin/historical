@@ -48,24 +48,25 @@ lb <- safe_tar_read("leaderboard")
 if (!is.null(lb)) {
   full <- lb |>
     filter(period == "Full Period") |>
-    select(strategy, level, signal, cagr, vol, sharpe, max_dd) |>
-    arrange(desc(sharpe))
+    select(strategy, level, signal, max_dd, vol, cagr, sharpe) |>
+    arrange(max_dd)  # sort by risk (lowest DD = best)
 
   # Transpose: metrics as rows, strategies as columns
+  # Risk metrics FIRST (DD, Vol), then return metrics (CAGR, Sharpe)
   metrics_long <- full |>
     mutate(
-      CAGR = paste0(round(cagr * 100, 1), "%"),
-      Vol = paste0(round(vol * 100, 1), "%"),
-      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
       `Max DD` = paste0(round(max_dd * 100, 1), "%"),
+      Vol = paste0(round(vol * 100, 1), "%"),
+      CAGR = paste0(round(cagr * 100, 1), "%"),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
       Level = level,
       Signal = signal
     ) |>
-    select(strategy, Level, Signal, CAGR, Vol, Sharpe, `Max DD`) |>
+    select(strategy, `Max DD`, Vol, CAGR, Sharpe, Level, Signal) |>
     pivot_longer(-strategy, names_to = "Metric", values_to = "value") |>
     pivot_wider(names_from = strategy, values_from = value)
 
-  hd_dt(metrics_long, "Full-period rankings sorted by Sharpe. Each column is a strategy — click the header to sort. Links: Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF.")
+  hd_dt(metrics_long, "Risk-first rankings (sorted by max drawdown). Columns = strategies. Risk metrics (DD, Vol) before return metrics (CAGR, Sharpe). Links: Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF.")
 }
 ```
 
@@ -138,6 +139,16 @@ safe_tar_read("port_comparison_plot")
 ::: {.fig-caption}
 **PSO optimal vs equal-weight portfolio.** Combines all 4 strategies with weights optimised on training partition Sharpe. The PSO optimal tilts toward strategies with better risk-adjusted returns (Factor DRIF + Stock MAX).
 :::
+
+#### Monthly Returns
+
+```{r}
+monthly <- safe_tar_read("port_monthly_returns")
+if (!is.null(monthly)) {
+  # Colour-code: green for positive, red for negative
+  hd_dt(monthly, "Monthly returns (PSO optimal portfolio) by year. Green = positive, red = negative. Annual column = compounded full-year return. Use for regime analysis: consecutive red months signal drawdown periods.")
+}
+```
 
 #### XGBoost vs Elastic Net
 

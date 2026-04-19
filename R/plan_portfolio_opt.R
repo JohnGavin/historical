@@ -193,6 +193,43 @@ plan_portfolio_opt <- function() {
              title = "Portfolio: PSO Optimal vs Equal Weight",
              subtitle = paste("Weights:", w_label)) +
         hd_theme()
+    }),
+
+    # ── Monthly returns heatmap table ─────────────────────────────
+    targets::tar_target(port_monthly_returns, {
+      library(dplyr)
+      library(tidyr)
+
+      port_combined |>
+        mutate(
+          year = lubridate::year(date),
+          month = lubridate::month(date),
+          return_pct = optimal_ret * 100
+        ) |>
+        select(year, month, return_pct) |>
+        pivot_wider(
+          names_from = month,
+          values_from = return_pct,
+          names_sort = FALSE
+        ) |>
+        arrange(year) |>
+        mutate(across(-year, ~if_else(is.na(.), NA_real_, .))) |>
+        # Calculate annual return
+        rowwise() |>
+        mutate(
+          Annual = (prod(1 + c_across(-year) / 100, na.rm = TRUE) - 1) * 100
+        ) |>
+        ungroup() |>
+        # Rename month columns to month abbreviations
+        rename(
+          Year = year,
+          Jan = `1`, Feb = `2`, Mar = `3`, Apr = `4`,
+          May = `5`, Jun = `6`, Jul = `7`, Aug = `8`,
+          Sep = `9`, Oct = `10`, Nov = `11`, Dec = `12`
+        ) |>
+        # Format all numeric columns to 1 decimal place
+        mutate(across(-Year, ~format(round(., 1), nsmall = 1))) |>
+        as_tibble()
     })
   )
 }
