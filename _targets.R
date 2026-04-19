@@ -12,7 +12,7 @@ library(crew)
 
 tar_option_set(
   packages = c("dplyr", "arrow", "pointblank", "rlang", "cli"),
-  controller = crew_controller_local(workers = 2L),
+  controller = crew_controller_local(workers = 2L, seconds_wall = 3600),
   memory = "transient",
   garbage_collection = TRUE,
   format = "rds"
