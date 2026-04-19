@@ -48,25 +48,24 @@ lb <- safe_tar_read("leaderboard")
 if (!is.null(lb)) {
   full <- lb |>
     filter(period == "Full Period") |>
-    select(strategy, level, signal, max_dd, vol, cagr, sharpe) |>
-    arrange(max_dd)  # sort by risk (lowest DD = best)
+    arrange(max_dd)
 
-  # Transpose: metrics as rows, strategies as columns
-  # Risk metrics FIRST (DD, Vol), then return metrics (CAGR, Sharpe)
+  # Transpose: risk first, then return, then cost-adjusted
   metrics_long <- full |>
     mutate(
       `Max DD` = paste0(round(max_dd * 100, 1), "%"),
+      `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%")),
       Vol = paste0(round(vol * 100, 1), "%"),
-      CAGR = paste0(round(cagr * 100, 1), "%"),
-      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
-      Level = level,
-      Signal = signal
+      `Gross CAGR` = paste0(round(cagr * 100, 1), "%"),
+      `Net CAGR` = ifelse(is.na(net_cagr), "—", paste0(round(net_cagr * 100, 1), "%")),
+      `Cum P&L` = ifelse(is.na(cum_pnl), "—", paste0(round(cum_pnl * 100, 0), "%")),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2)))
     ) |>
-    select(strategy, `Max DD`, Vol, CAGR, Sharpe, Level, Signal) |>
+    select(strategy, `Max DD`, `CVaR 95%`, Vol, `Gross CAGR`, `Net CAGR`, `Cum P&L`, Sharpe) |>
     pivot_longer(-strategy, names_to = "Metric", values_to = "value") |>
     pivot_wider(names_from = strategy, values_from = value)
 
-  hd_dt(metrics_long, "Risk-first rankings (sorted by max drawdown). Columns = strategies. Risk metrics (DD, Vol) before return metrics (CAGR, Sharpe). Links: Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF.")
+  hd_dt(metrics_long, "Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Gross/Net CAGR (net = after 0.20% round-trip/month), Cum P&L. Sharpe secondary. Links: Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF.")
 }
 ```
 
@@ -204,6 +203,31 @@ This suggests the signal is driven by **institutional rebalancing patterns** (mi
 ## Row
 
 ### {.tabset}
+
+#### Correlations
+
+```{r}
+corr <- safe_tar_read("strategy_correlation")
+if (!is.null(corr)) {
+  hd_dt(corr, "Strategy correlation matrix (monthly returns). Low/negative correlations indicate diversification benefit. Use for portfolio construction: anti-correlated pairs offset each other's drawdowns.")
+}
+```
+
+#### Assumptions
+
+Per `backtesting-assumptions` rule, all strategies use:
+
+| Assumption | Value |
+|------------|-------|
+| Execution | Market close (4 PM ET) |
+| Transaction cost | 0.10% per trade (0.20% round-trip) |
+| Turnover | 100% monthly (full rebalance) |
+| Cash return | 3-month US Treasury rate (RF from FF3) |
+| Dividends | Reinvested (total return basis) |
+| Taxes | Excluded (pre-tax) |
+| Expense ratio | Not deducted (gross of fees) |
+
+**Net CAGR** in the Rankings table deducts 0.20% per month from gross returns before compounding. This is a conservative estimate assuming full monthly turnover.
 
 #### Partitions
 
