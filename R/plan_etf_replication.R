@@ -238,11 +238,11 @@ plan_etf_replication <- function() {
       library(dplyr)
 
       # Get factor-level DRIF predictions (already computed)
-      drif_signal <- drif_signal |>
+      fac_signals <- drif_signal |>
         filter(factor_name %in% names(ETF_FACTOR_MAP))
 
       # Map factor predictions to ETFs
-      months <- sort(unique(drif_signal$ym))
+      months <- sort(unique(fac_signals$ym))
       # Only months where ETF data exists
       etf_months <- sort(unique(etf_monthly$ym))
       shared_months <- intersect(months, etf_months)
@@ -253,7 +253,7 @@ plan_etf_replication <- function() {
 
       results <- lapply(shared_months, function(m) {
         # Factor predictions for this month
-        fac_pred <- drif_signal |>
+        fac_pred <- fac_signals |>
           filter(ym == m) |>
           arrange(desc(predicted_ret))
 
