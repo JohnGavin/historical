@@ -205,7 +205,7 @@ plan_stock_backtest <- function() {
           n_days = n(),
           .groups = "drop"
         ) |>
-        filter(n_days >= 15)  # need most of the month's trading days
+        filter(n_days >= 10)  # 10 days minimum (was 15 — dropped March due to holidays, see #43)
     }),
 
     # ── Group 2: Stock MAX decile portfolios ──────────────────────
@@ -343,7 +343,7 @@ plan_stock_backtest <- function() {
         prior <- daily |>
           filter(ym == prev_m) |>
           group_by(ticker) |>
-          filter(n() >= 15) |>  # need most of month
+          filter(n() >= 10) |>  # 10 days minimum (was 15 — see #43)
           mutate(day_rank = row_number()) |>
           ungroup()
 
