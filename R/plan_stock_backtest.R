@@ -225,6 +225,11 @@ plan_stock_backtest <- function() {
         select(ticker, ym, max_ret) |>
         inner_join(stk_monthly, by = c("ticker", "ym"))
 
+      # Drop months with too few stocks for meaningful deciles (#43)
+      stocks_per_month <- merged |> count(ym, name = "n_stocks")
+      valid_months <- stocks_per_month |> filter(n_stocks >= stk_params$n_deciles * 5) |> pull(ym)
+      merged <- merged |> filter(ym %in% valid_months)
+
       # Assign deciles and compute portfolio returns
       deciled <- assign_decile(merged, max_ret, stk_params$n_deciles)
       port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L,
@@ -449,7 +454,13 @@ plan_stock_backtest <- function() {
       library(dplyr)
 
       signal <- stk_drif_signal |>
+        filter(!is.na(predicted_ret)) |>
         inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
+
+      # Drop months with too few stocks for meaningful deciles (#43)
+      stocks_per_month <- signal |> count(ym, name = "n_stocks")
+      valid_months <- stocks_per_month |> filter(n_stocks >= stk_params$n_deciles * 5) |> pull(ym)
+      signal <- signal |> filter(ym %in% valid_months)
 
       deciled <- assign_decile(signal, predicted_ret, stk_params$n_deciles)
       port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L,
