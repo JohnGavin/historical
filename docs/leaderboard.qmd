@@ -80,7 +80,9 @@ if (!is.null(lb)) {
 
 ```{r}
 if (!is.null(lb)) {
+  # NEVER show Validation data — sealed envelope (backtest-partitions rule)
   by_part <- lb |>
+    filter(period != "Validation") |>
     mutate(
       CAGR = paste0(round(cagr * 100, 1), "%"),
       Vol = paste0(round(vol * 100, 1), "%"),
@@ -89,7 +91,7 @@ if (!is.null(lb)) {
     ) |>
     select(Strategy = strategy, Period = period, CAGR, Vol, Sharpe, `Max DD`)
 
-  hd_dt(by_part, "All strategies × all partitions (Training / Testing / Validation / Full). Sort by any column to compare strategies within a partition.")
+  hd_dt(by_part, "All strategies × Training and Testing partitions. Validation partition is sealed — not shown until production deployment.")
 }
 ```
 
@@ -106,7 +108,7 @@ Each strategy links to its full definition, implementation, and backtest:
 | [XGB DRIF](stock-backtest.html#stock-drif) | Stock (660) | XGBoost monotonic on 42 features | Non-linear signal with monotonic constraints |
 | [ETF DRIF A](stock-backtest.html#etf-replication) | ETF (9) | Elastic net on ETF daily returns | Direct ETF signal, long-only 13.4% CAGR |
 | [ETF DRIF B](stock-backtest.html#etf-replication) | ETF (9) | Academic factor signal → ETF execution | Mapped via ETF_FACTOR_MAP, long-only 12.6% |
-| PSO Optimal | Combined | Weighted portfolio of above | Grid search on training Sharpe |
+| [PSO Optimal](stock-backtest.html#comparison) | Combined | Weighted portfolio of above | [Grid search](stock-backtest.html#comparison) on training Sharpe |
 
 ```{r}
 # Show PSO weights
@@ -153,8 +155,37 @@ safe_tar_read("port_comparison_plot")
 ```{r}
 monthly <- safe_tar_read("port_monthly_returns")
 if (!is.null(monthly)) {
-  # Colour-code: green for positive, red for negative
-  hd_dt(monthly, "Monthly returns (PSO optimal portfolio) by year. Green = positive, red = negative. Annual column = compounded full-year return. Use for regime analysis: consecutive red months signal drawdown periods.")
+  # Most recent year first, columns Jan-Dec + Annual
+  col_order <- c("Year", "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+                 "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Annual")
+  monthly <- monthly |>
+    select(any_of(col_order)) |>
+    arrange(desc(Year))
+
+  # Add marginal row (mean across years)
+  num_cols <- setdiff(col_order, "Year")
+  marginal <- monthly |>
+    summarise(across(all_of(num_cols), ~ format(round(mean(as.numeric(.), na.rm = TRUE), 1), nsmall = 1))) |>
+    mutate(Year = "Mean")
+  monthly <- bind_rows(monthly, marginal)
+
+  DT::datatable(
+    monthly,
+    rownames = FALSE, filter = "none",
+    options = list(
+      pageLength = 25, scrollX = TRUE, dom = "t",
+      columnDefs = list(list(className = "dt-right", targets = seq_len(length(col_order) - 1)))
+    ),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      "Monthly returns (PSO optimal portfolio) by year, most recent first. Annual = compounded. Mean row = average across years. Cell borders: green = positive, red = negative."
+    )
+  ) |>
+    DT::formatStyle(
+      columns = num_cols,
+      color = DT::styleInterval(0, c("#e74c3c", "#2ecc71")),
+      border = DT::styleInterval(0, c("2px solid #e74c3c", "2px solid #2ecc71"))
+    )
 }
 ```
 
@@ -166,45 +197,7 @@ safe_tar_read("xgb_vs_enet_plot")
 ```
 
 ::: {.fig-caption}
-**XGBoost (monotonic constraints) vs Elastic Net** on same 42 DRIF features, stock-level D1-D10. XGBoost underperforms in-sample but captures non-linear relationships.
-:::
-
-# Features
-
-## Row
-
-### {.tabset}
-
-#### XGBoost Feature Importance
-
-```{r}
-fi <- safe_tar_read("xgb_feature_importance")
-if (!is.null(fi)) {
-  fi_display <- fi |>
-    head(15) |>
-    mutate(
-      Gain = paste0(round(Gain * 100, 1), "%"),
-      Type = type,
-      Day = day
-    ) |>
-    select(Feature, Gain, Type, Day)
-  hd_dt(fi_display, "Top 15 features by XGBoost gain. Chronological features (c*) capture WHEN returns occurred. Rank features (r*) capture HOW EXTREME. The paper predicts chronological > rank — confirmed here.")
-}
-```
-
-#### Interpretation
-
-::: {.callout-tip}
-## What Feature Importance Tells Us
-
-The XGBoost feature importance confirms the Alpha Architect paper's key finding:
-
-1. **Chronological features dominate** — c13 (day 13) alone accounts for ~48% of gain
-2. **Mid-month timing matters most** — days 10-17 are the most predictive window
-3. **Rank extremes add signal** — r5 (5th lowest) and r21 (highest) contribute
-4. **Recent days are NOT the most important** — c20, c21 have low importance, contradicting simple momentum
-
-This suggests the signal is driven by **institutional rebalancing patterns** (mid-month flows) rather than simple recency or momentum.
+**XGBoost (monotonic constraints) vs Elastic Net** on same 42 DRIF features, stock-level D1-D10. XGBoost underperforms elastic net (-6.3% vs +1.3% full-period CAGR). Monotonic constraints may be too restrictive for cross-sectional returns. See [Stock-Level Backtests](stock-backtest.html#stock-drif) for full analysis.
 :::
 
 # Details
@@ -218,7 +211,10 @@ This suggests the signal is driven by **institutional rebalancing patterns** (mi
 ```{r}
 corr <- safe_tar_read("strategy_correlation")
 if (!is.null(corr)) {
-  hd_dt(corr, "Strategy correlation matrix (monthly returns). Low/negative correlations indicate diversification benefit. Use for portfolio construction: anti-correlated pairs offset each other's drawdowns.")
+  # Round to 2 decimal places — no spurious precision
+  corr_display <- corr |>
+    mutate(across(-strategy, ~ round(as.numeric(.), 2)))
+  hd_dt(corr_display, "Pairwise correlation of monthly returns (Pearson). Values near 0 = diversification benefit.")
 }
 ```
 
@@ -229,14 +225,15 @@ Per `backtesting-assumptions` rule, all strategies use:
 | Assumption | Value |
 |------------|-------|
 | Execution | Market close (4 PM ET) |
-| Transaction cost | 0.10% per trade (0.20% round-trip) |
-| Turnover | 100% monthly (full rebalance) |
+| Transaction cost | 0.50% per trade (1.00% round-trip) |
+| Estimated turnover | 80% per month (decile sort) |
+| Short borrow cost | 3% per annum (0.25%/month) |
+| Return winsorisation | ±20% per month |
 | Cash return | 3-month US Treasury rate (RF from FF3) |
 | Dividends | Reinvested (total return basis) |
 | Taxes | Excluded (pre-tax) |
-| Expense ratio | Not deducted (gross of fees) |
 
-**Net CAGR** in the Rankings table deducts 0.20% per month from gross returns before compounding. This is a conservative estimate assuming full monthly turnover.
+**Total monthly cost for L/S:** turnover × cost × 2 legs × 2 (buy+sell) + borrow = 0.80 × 0.005 × 4 + 0.0025 = **~1.85%/month**. This is why most stock-level L/S strategies are unprofitable after costs.
 
 #### Partitions
 
@@ -248,13 +245,13 @@ if (!is.null(params)) {
     Period = c(
       paste(params$start_date, "to", params$is_end),
       paste(params$test_start, "to", params$test_end),
-      paste(params$val_start, "to", params$val_end)
+      paste(params$val_start, "to", "present")
     ),
     Purpose = c("Model fitting, expanding window signal estimation",
                 "Calibration, hyperparameter tuning, strategy comparison",
-                "Final one-shot evaluation (sealed envelope)")
+                "SEALED — not computed or shown until production deployment")
   )
-  hd_dt(param_df, "Shared partitions across all strategies. Validation is not used until ready for production.")
+  hd_dt(param_df, "Shared partitions across all strategies. Validation is sealed: metrics are NOT computed until a one-shot production decision.")
 }
 ```
 

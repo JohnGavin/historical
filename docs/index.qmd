@@ -143,6 +143,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 
 - [GitHub](https://github.com/JohnGavin/historical) — source code, issues, CI
 - [Hugging Face Dataset](https://huggingface.co/datasets/dsfefvx/finance-historical-data) — Parquet files, dataset card
+- [Strategy Leaderboard](leaderboard.html) — rankings, equity curves, cost-adjusted metrics
 - [API Reference](pkg/index.html) — pkgdown function docs
 - [Examples](examples.html) — interactive dashboard with all datasets
 - [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette

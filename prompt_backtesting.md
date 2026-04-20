@@ -16,7 +16,10 @@
 		+ Academic papers Often reproducible in-sample (training)
 		+ It is out of sample that matters (testing)
 	+ Simplicity
-
++ Judge backtest forecast via P&L
+	+ e.g. adjusting strategy weights to optimise portfolio P&L
+	+ do not rely on standard deviation/volatility cos returns nor normal.
+		+ so you cannot rely on sharpe
 
 # Vignette format
 + use the most recent existing strategy vignette (.qmd) file in this project as a template.
@@ -39,9 +42,19 @@
 		+ https://perspective-dev.github.io/block.html?example=market
 		+ https://eydlinilya.github.io/perspectiveR/articles/introduction.html
 
+# Risk
++ focus on managing exposure based on **risk regimes**
+	+ allocation risk is about position sizing
+	+ adjust portfolio weights agressively when risk regime changes
+		+ e.g. best and worst trading days cluster
+			+ worst - best days are net negative on average
+				+ so better to be out of market during high risk regimes
+					+ but only if there is an automated reentry point
++ use risk resampling as a measurement tool
+	+ i.e. bootstrapping or n-fold cross-validation
+
 # Robustness
-+ focus on managing exposure based on risk regimes
-+ build edge through relentless testing and experience.
++ **know how to know when things (risk, portfolios, models) are not working and have precomputed what to do about it**
 + Trading is about allocating risk correctly
 	+ not about predicting well
 	+ allocation risk is about position sizing
@@ -50,6 +63,11 @@
 		+ Scalable wins
 	+ not perfect predictions
 + Robustness over optimisation
+	+ long quiet P&L periods with short violently volatile drawdown periods
+	+ MUST survive the short volatile drawdown periods
+		+ e.g. reduce exposure via reweighting
+			+ so perhaps give up the best up days
+			+ but pre-automated and pre-calibrated method to reenter market
 + Prefer:
 	+ Broad stable regions (“plateaus”)
 	+ Models that survive variation
@@ -58,8 +76,8 @@
 	+ sharp backtest peaks
 + signals that are hard to explain and Don’t fit neat theory
 	+ 👉 May persist longer cos less crowded, less overexploited
-+ trade on t+1, t+2, ..., T+10 to measure 
-	+ alpha decay
++ **alpha decay**
+	+ trade on t+1, t+2, ..., T+10 to measure 
 	+ look-forward errors
 		+ use Point in Time data to avoid revisions to data
 			+ e.g. macro announcements
@@ -150,11 +168,18 @@
 		+ Reality:
 			+ Markets are messy, noisy, and behavioural
 
-# Edge
+# Edge / alpha
++ alpha is not as predictable as risk
+	+ if alpha is exploitable then it decays / disappears
+		+ i.e. hard to detect/predict a weak signal
+	+ risk does to disappear so cant be exploited
+		+ it can be transferred 
+		+ e.g. an option to hedge risk transform it into counterparty risk
++ build edge through relentless testing and experience.
 + True edge / alpha tends to come from:
 	+ 👉 Edge comes from:
 		+ Risk management, not prediction
-		+ Assume: we don’t have superior forecasting ability
+		+ Assume: we do _not_ have superior forecasting ability
 	+ Execution
 		+ e.g. is our backtesting data identical to the data used for execution? 
 	+ constraints others face create opportunity
@@ -186,8 +211,11 @@
 	+ trade at the market close (4 pm ET). 
 	+ design strategies to capture broad market trends
 	+ strategies have to be robust to reasonable delays in execution. e.g. delay trades by 1 to 5 days to measure impact on performance.
-+ Transaction fees plus slippage = 0.10% per trade 
-	+ i.e. (0.20% round-trip). 
++ Transaction fees plus slippage = 0.50% per trade 
+	+ i.e. (1.00% round-trip).
+	+ Short borrow cost = 3% per annum
+	+ Estimated portfolio turnover = 80% per month
+	+ Winsorise monthly returns at ±20% 
 + Both dividends and gains are reinvested.
 + Return on cash (uninvested funds) = 3-month US Treasury rate.
 + Exclude taxes
@@ -210,23 +238,3 @@
 			+ monthly data from 1972
 
 
-# Rules
-• *Follow* these rules:
-  - *Use* English only
-  - *Provide* bullet points only  
-  - *Reformat* each bullet for memorization
-      • *Place* action word in italics first
-      • *Remove* adverbs, adjectives, prepositions
-  - *Highlight* key **nouns** in _bold red_  
-  - *Emphasize* key _verbs_ in italic light-blue 
-  - Underline other keywords
-  - *Break down* clauses into sub-bullets
-      • *Nest* details in sub/sub-sub points
-  - *Aid* memorization  
-      • *Provide* mnemonics, quirky facts
-+ output 
-	- prefer clauses instead of complete sentences
-	- key words in bold, 
-	- key phrases in italics
-	- output format as markdown, inside a pair of triple quotes
-		- so output can be copied/pasted to a markdown aware editor

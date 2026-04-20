@@ -275,6 +275,88 @@ if (!is.null(metrics)) {
 3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/) — original research
 4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/) — MAX signal research
 
+# XGBoost DRIF
+
+## Row
+
+### {.tabset}
+
+#### Definition
+
+::: {.callout-note}
+## Strategy: XGBoost DRIF (Monotonic Constraints)
+
+**What:** Replace elastic net with XGBoost (gradient boosted trees) on the same 42 DRIF features. All features are constrained to be monotonically increasing — higher feature value must always predict higher return.
+
+**Hypothesis:** XGBoost can capture non-linear relationships (interaction effects, threshold effects) that elastic net misses, while monotonic constraints preserve economic intuition.
+
+**Result:** XGBoost **underperforms** elastic net (-6.3% vs +1.3% full-period CAGR). The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.
+:::
+
+#### XGBoost vs Elastic Net
+
+```{r}
+#| fig-height: 6
+safe_tar_read("xgb_vs_enet_plot")
+```
+
+::: {.fig-caption}
+**XGBoost (monotonic) vs Elastic Net** on same 42 DRIF features, stock-level D1-D10. The XGBoost curve shows occasional extreme monthly spikes — these are months where monotonic constraints force all 42 features into the same direction, creating artificially concentrated decile predictions. The two large jumps likely reflect months where the constrained model's predictions became highly correlated across stocks, amplifying the D1-D10 spread beyond what the underlying signal supports.
+:::
+
+#### Feature Importance
+
+```{r}
+fi <- safe_tar_read("xgb_feature_importance")
+if (!is.null(fi)) {
+  fi_display <- fi |>
+    head(15) |>
+    mutate(
+      Gain = paste0(round(Gain * 100, 1), "%"),
+      Type = type,
+      Day = day
+    ) |>
+    select(Feature, Gain, Type, Day)
+  hd_dt(fi_display, "Top 15 features by XGBoost gain. Trained on a single full-training-period model (not the rolling expanding window). Gain concentration in one feature (c13 = 48%) is a red flag for model instability, not a meaningful finding.")
+}
+```
+
+::: {.callout-warning}
+## Feature Importance Caveats
+
+The apparent dominance of a single feature (c13 ≈ 48% of gain) should NOT be interpreted as "day 13 of a month is special." This is an artifact of:
+
+1. **Monotonic constraints** — with all 42 features forced monotonically increasing, XGBoost must route most splits through whichever feature best separates the training data. This creates artificial concentration.
+2. **Single model snapshot** — this is ONE model trained on ALL training data. The rolling expanding-window models (used for actual predictions) likely have different dominant features each month.
+3. **Shallow trees (depth=3)** — with only 3 splits per tree, the first split dominates gain. A deeper tree would distribute importance more evenly.
+
+The correct interpretation: XGBoost with monotonic constraints is **not well-suited** for this cross-sectional prediction task. The constraints are too restrictive and the feature importance is unreliable.
+:::
+
+#### Metrics
+
+```{r}
+metrics <- safe_tar_read("xgb_drif_metrics")
+if (!is.null(metrics)) {
+  display <- metrics |>
+    filter(period != "Validation") |>
+    mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
+           sharpe = round(sharpe, 2),
+           avg_long = round(avg_long), avg_short = round(avg_short))
+  hd_dt_wide(display, "XGBoost DRIF metrics. Underperforms elastic net across all periods. Negative Sharpe confirms monotonic constraints are too restrictive for cross-sectional stock returns.")
+}
+```
+
+#### Pros & Cons
+
+| | Detail |
+|--|--------|
+| **Pros** | Captures non-linear interactions. Monotonic constraints preserve economic intuition. Feature importance is interpretable. |
+| **Cons** | Underperforms elastic net at stock level. Monotonic constraints too restrictive for 42 features. Occasional extreme monthly predictions. Compute-intensive (7+ minutes). |
+| **Works well** | Unknown — does not outperform simpler model in any tested regime. |
+| **Works badly** | Cross-sectional stock prediction where features have non-monotonic relationships with returns. |
+| **Verdict** | **Not recommended.** Elastic net is simpler, faster, and more accurate for this application. |
+
 # ETF Replication
 
 ## Row

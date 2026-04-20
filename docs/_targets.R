@@ -47,10 +47,13 @@ source(here::here("R/plan_stock_backtest.R"))
 source(here::here("R/plan_xgb_signal.R"))
 source(here::here("R/plan_portfolio_opt.R"))
 source(here::here("R/plan_etf_replication.R"))
+source(here::here("R/plan_kelly.R"))
+source(here::here("R/plan_bootstrap_ci.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_qa_vignette.R"))
 
 # Combine: partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
   plan_stock_backtest(), plan_xgb_signal(), plan_portfolio_opt(),
-  plan_etf_replication(), plan_leaderboard(), plan_qa_vignette())
+  plan_etf_replication(), plan_kelly(), plan_bootstrap_ci(),
+  plan_leaderboard(), plan_qa_vignette())
