@@ -173,7 +173,8 @@ if (!is.null(monthly)) {
     monthly,
     rownames = FALSE, filter = "none",
     options = list(
-      pageLength = 25, scrollX = TRUE, dom = "t",
+      pageLength = 60, scrollX = TRUE, dom = "t",
+      order = list(list(0, "desc")),
       columnDefs = list(list(className = "dt-right", targets = seq_len(length(col_order) - 1)))
     ),
     caption = htmltools::tags$caption(
