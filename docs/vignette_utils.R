@@ -95,6 +95,7 @@ hd_dt <- function(df, caption_text) {
       scrollX = TRUE,
       autoWidth = FALSE,
       dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
       initComplete = DT::JS(
         "function(settings, json) {",
         "  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
