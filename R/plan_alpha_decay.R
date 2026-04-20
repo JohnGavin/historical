@@ -135,9 +135,9 @@ plan_alpha_decay <- function() {
 
         if (nrow(merged) < 100) return(NULL)
 
-        # Assign deciles using the signal column
-        sig_sym   <- rlang::sym(signal_col_name)
-        deciled   <- assign_decile(merged, !!sig_sym, stk_params$n_deciles)
+        # Rename signal column to fixed name for assign_decile (no rlang::sym — breaks targets static analysis)
+        names(merged)[names(merged) == signal_col_name] <- "signal_value"
+        deciled   <- assign_decile(merged, signal_value, stk_params$n_deciles)
         port      <- portfolio_longshort(
           deciled,
           long_decile         = 1L,

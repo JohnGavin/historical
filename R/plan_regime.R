@@ -170,12 +170,15 @@ plan_regime <- function() {
       library(dplyr)
 
       calc_regime_metrics <- function(df, label) {
+        # Drop rows with NA returns
+        df <- df |> filter(!is.na(regime_ret), !is.na(base_ret))
         n <- nrow(df)
         if (n < 12) return(NULL)
 
         calc_one <- function(ret_col, name_prefix) {
           r  <- df[[ret_col]]
           rf <- if ("rf_ret" %in% names(df)) df$rf_ret else rep(0, n)
+          rf[is.na(rf)] <- 0
           ann_ret  <- prod(1 + r)^(12/n) - 1
           ann_vol  <- sd(r) * sqrt(12)
           rf_ann   <- mean(rf, na.rm = TRUE) * 12
@@ -202,7 +205,6 @@ plan_regime <- function() {
       bind_rows(
         calc_regime_metrics(regime_portfolio |> filter(date <= stk_params$is_end), "Training"),
         calc_regime_metrics(regime_portfolio |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
-        calc_regime_metrics(regime_portfolio |> filter(date >= stk_params$val_start), "Validation"),
         calc_regime_metrics(regime_portfolio, "Full Period")
       )
     }),
