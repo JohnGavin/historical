@@ -106,6 +106,20 @@ plan_leaderboard <- function() {
       all_metrics <- all_metrics |>
         left_join(cost_rows, by = c("strategy", "period"))
 
+      # Join bootstrap CI columns (Sharpe CI, crosses-zero flag)
+      if (!is.null(boot_ci_summary) && nrow(boot_ci_summary) > 0) {
+        # Map internal names to strategy labels
+        boot_join <- boot_ci_summary |>
+          transmute(
+            strategy = strategy_label,
+            sharpe_ci_lo = round(sharpe_lo, 2),
+            sharpe_ci_hi = round(sharpe_hi, 2),
+            ci_crosses_zero = ci_crosses_zero
+          )
+        all_metrics <- all_metrics |>
+          left_join(boot_join, by = "strategy")
+      }
+
       all_metrics
     }),
 

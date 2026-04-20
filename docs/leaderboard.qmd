@@ -200,6 +200,99 @@ safe_tar_read("xgb_vs_enet_plot")
 **XGBoost (monotonic constraints) vs Elastic Net** on same 42 DRIF features, stock-level D1-D10. XGBoost underperforms elastic net (-6.3% vs +1.3% full-period CAGR). Monotonic constraints may be too restrictive for cross-sectional returns. See [Stock-Level Backtests](stock-backtest.html#stock-drif) for full analysis.
 :::
 
+# Robustness
+
+## Row
+
+### {.tabset}
+
+#### Bootstrap CI
+
+```{r}
+#| fig-height: 6
+safe_tar_read("boot_sharpe_plot")
+```
+
+```{r}
+boot_ci <- safe_tar_read("boot_ci_summary")
+if (!is.null(boot_ci)) {
+  display <- boot_ci |>
+    transmute(
+      Strategy = strategy_label,
+      `Sharpe [5%, 95%]` = paste0(round(sharpe_mean, 2), " [", round(sharpe_lo, 2), ", ", round(sharpe_hi, 2), "]"),
+      `CAGR [5%, 95%]` = paste0(round(cagr_mean * 100, 1), "% [", round(cagr_lo * 100, 1), "%, ", round(cagr_hi * 100, 1), "%]"),
+      `Max DD [5%, 95%]` = paste0(round(dd_mean * 100, 1), "% [", round(dd_lo * 100, 1), "%, ", round(dd_hi * 100, 1), "%]"),
+      `CI Crosses Zero` = ifelse(ci_crosses_zero, "YES — may be noise", "No")
+    )
+  hd_dt(display, "Block bootstrap (1000 draws, block=3m). If Sharpe CI crosses zero, strategy may be indistinguishable from noise.")
+}
+```
+
+#### Alpha Decay
+
+```{r}
+#| fig-height: 6
+safe_tar_read("decay_plot")
+```
+
+```{r}
+decay_hl <- safe_tar_read("decay_half_life")
+if (!is.null(decay_hl)) {
+  display <- decay_hl |>
+    transmute(
+      Strategy = dplyr::recode(strategy, stk_max = "Stock MAX", stk_drif = "Stock DRIF"),
+      `Base Sharpe (t+1)` = round(base_sharpe, 2),
+      `Half-Life (days)` = ifelse(is.na(half_life_days), ">10 (robust)", paste0(half_life_days))
+    )
+  hd_dt(display, "Alpha decay: days until Sharpe drops to 50% of t+1 baseline. >10 = signal persists; <3 = fragile, execution-dependent.")
+}
+```
+
+#### Regime
+
+```{r}
+#| fig-height: 6
+safe_tar_read("regime_plot")
+```
+
+```{r}
+regime_m <- safe_tar_read("regime_metrics")
+if (!is.null(regime_m)) {
+  display <- regime_m |>
+    filter(period == "Full Period") |>
+    transmute(
+      Strategy = strategy,
+      CAGR = paste0(round(cagr * 100, 1), "%"),
+      Vol = paste0(round(vol * 100, 1), "%"),
+      Sharpe = round(sharpe, 2),
+      `Max DD` = paste0(round(max_dd * 100, 1), "%")
+    )
+  hd_dt(display, "Regime-adjusted vs base portfolio (full period). Regime scaling: low=1.0, med=0.7, high=0.4. High-risk months shaded red in plot.")
+}
+```
+
+#### Kelly Sizing
+
+```{r}
+#| fig-height: 6
+safe_tar_read("kelly_comparison_plot")
+```
+
+```{r}
+kelly_t <- safe_tar_read("kelly_sizing_table")
+if (!is.null(kelly_t)) {
+  display <- kelly_t |>
+    transmute(
+      Strategy = strategy,
+      `Mean Monthly Edge` = paste0(round(edge * 100, 2), "%"),
+      `Monthly Variance` = round(variance, 4),
+      `Full Kelly` = paste0(round(kelly_full * 100, 1), "%"),
+      `Quarter Kelly` = paste0(round(kelly_frac * 100, 2), "%")
+    )
+  hd_dt(display, "Kelly criterion edge estimates (training data only). Quarter Kelly = 25% of full Kelly, capped at 5%. Negative edge = do not trade.")
+}
+```
+
 # Details
 
 ## Row
