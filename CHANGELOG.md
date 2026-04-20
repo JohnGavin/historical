@@ -3,26 +3,38 @@
 ## 2026-04-20
 
 ### Completed
-- Robustness batch: 4 new plan files, 24 targets (#34 #36 #37 #38)
+- Robustness batch: 4 new plan files, 24 targets (#34 #36 #37 #38) — all built and verified
   - plan_kelly.R: fractional Kelly vs flat 1%/2% sizing (6 targets)
   - plan_bootstrap_ci.R: block bootstrap CI on Sharpe/DD (6 targets)
   - plan_regime.R: regime-aware portfolio reweighting via VIX/realized vol (7 targets)
   - plan_alpha_decay.R: signal decay t+1..t+10 execution delay (5 targets)
-- Leaderboard audit (#41): assumptions 0.50%/trade, validation sealed, correlations trimmed
-- XGBoost section moved from leaderboard to stock-backtest.qmd (#40)
-- XGBoost documented as failed experiment (underperforms elastic net, monotonic constraints too restrictive)
+- Leaderboard vignette: new Robustness page with 4 tabs (Bootstrap CI, Alpha Decay, Regime, Kelly)
+- Leaderboard audit (#41): assumptions 0.50%/trade, validation sealed, correlations kable, PSO links
+- Leaderboard: bootstrap CI columns joined onto leaderboard target (sharpe_ci_lo/hi, ci_crosses_zero)
+- Leaderboard: equity curves caption explains stock vs factor cost divergence (~22%/yr vs ~2%/yr)
+- XGBoost section moved from leaderboard to stock-backtest.qmd (#40), documented as failed experiment
+- XGBoost feature importance table removed entirely (c13=48% was artifact, not credible)
+- Monthly returns: color-coded borders, DT order descending (#42), marginal means, pageLength=60
+- DT tables: regex search enabled globally via hd_dt()
 - Index page: leaderboard added to Links section
-- Monthly returns: color-coded borders, descending year, marginal means
 - prompt_backtesting.md: costs updated to 0.50%/trade + borrow/turnover/winsor
+- Min trading days lowered 15→10 (#43), min 50 stocks per month for decile formation
 
 ### Failed Approaches
 - XGBoost c13=48% feature importance: artifact of monotonic constraints + shallow trees, not meaningful
 - XGBoost equity curve jumps: monotonic constraints force concentrated predictions in certain months
+- 15→10 trading day threshold: only recovered 1 March (13→14). Root cause is elastic net complete.cases()
+- DT negative lookahead regex `^(?!.*Validation)`: not supported by DataTables JS engine
+
+### Accuracy / Metrics
+- Pipeline: 175 targets (15 plan files), 0 errors
+- 10 commits this session, 8 issues closed (#34 #36 #37 #38 #40 #41 #42 #43)
+- 2 issues remain open: #2 (Public API), #33 (perspectiveR)
 
 ### Known Limitations
-- 24 new targets not yet run (need nix develop pipeline rebuild)
-- Worktree cleaned up — all 4 plan files on main branch
-- BURN CRITICAL: throttle to haiku/sonnet for remaining work
+- stk_drif_portfolio has uneven month coverage (Mar=14/52, Sep=51/52) — structural, elastic net needs 200+ complete training rows
+- port_returns inner_join propagates stk_drif gaps → 127 NAs in monthly heatmap (20% cells)
+- Monthly returns "Mean" row sorts to top with DT desc order (cosmetic)
 
 ## 2026-04-18
 
