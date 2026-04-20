@@ -304,10 +304,9 @@ if (!is.null(kelly_t)) {
 ```{r}
 corr <- safe_tar_read("strategy_correlation")
 if (!is.null(corr)) {
-  # Round to 2 decimal places — no spurious precision
   corr_display <- corr |>
     mutate(across(-strategy, ~ round(as.numeric(.), 2)))
-  hd_dt(corr_display, "Pairwise correlation of monthly returns (Pearson). Values near 0 = diversification benefit.")
+  knitr::kable(corr_display, caption = "Pairwise correlation (Pearson, monthly returns).")
 }
 ```
 

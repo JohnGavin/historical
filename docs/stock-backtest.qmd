@@ -304,33 +304,12 @@ safe_tar_read("xgb_vs_enet_plot")
 **XGBoost (monotonic) vs Elastic Net** on same 42 DRIF features, stock-level D1-D10. The XGBoost curve shows occasional extreme monthly spikes — these are months where monotonic constraints force all 42 features into the same direction, creating artificially concentrated decile predictions. The two large jumps likely reflect months where the constrained model's predictions became highly correlated across stocks, amplifying the D1-D10 spread beyond what the underlying signal supports.
 :::
 
-#### Feature Importance
-
-```{r}
-fi <- safe_tar_read("xgb_feature_importance")
-if (!is.null(fi)) {
-  fi_display <- fi |>
-    head(15) |>
-    mutate(
-      Gain = paste0(round(Gain * 100, 1), "%"),
-      Type = type,
-      Day = day
-    ) |>
-    select(Feature, Gain, Type, Day)
-  hd_dt(fi_display, "Top 15 features by XGBoost gain. Trained on a single full-training-period model (not the rolling expanding window). Gain concentration in one feature (c13 = 48%) is a red flag for model instability, not a meaningful finding.")
-}
-```
+#### Why It Fails
 
 ::: {.callout-warning}
-## Feature Importance Caveats
+## XGBoost Feature Importance Is Unreliable Here
 
-The apparent dominance of a single feature (c13 ≈ 48% of gain) should NOT be interpreted as "day 13 of a month is special." This is an artifact of:
-
-1. **Monotonic constraints** — with all 42 features forced monotonically increasing, XGBoost must route most splits through whichever feature best separates the training data. This creates artificial concentration.
-2. **Single model snapshot** — this is ONE model trained on ALL training data. The rolling expanding-window models (used for actual predictions) likely have different dominant features each month.
-3. **Shallow trees (depth=3)** — with only 3 splits per tree, the first split dominates gain. A deeper tree would distribute importance more evenly.
-
-The correct interpretation: XGBoost with monotonic constraints is **not well-suited** for this cross-sectional prediction task. The constraints are too restrictive and the feature importance is unreliable.
+Feature importance from this model is **not shown** because it is misleading. With all 42 features forced monotonically increasing and depth=3 trees, XGBoost routes most splits through whichever single feature best separates training data. The result (one feature appearing to explain ~50% of variation) is an artifact of the constraints, not a real finding. Different training windows produce different "dominant" features. The elastic net — which can assign negative coefficients — is better suited for this cross-sectional task.
 :::
 
 #### Metrics
