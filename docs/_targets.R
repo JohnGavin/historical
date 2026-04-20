@@ -49,6 +49,8 @@ source(here::here("R/plan_portfolio_opt.R"))
 source(here::here("R/plan_etf_replication.R"))
 source(here::here("R/plan_kelly.R"))
 source(here::here("R/plan_bootstrap_ci.R"))
+source(here::here("R/plan_regime.R"))
+source(here::here("R/plan_alpha_decay.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_qa_vignette.R"))
 
@@ -56,4 +58,5 @@ source(here::here("R/plan_qa_vignette.R"))
 c(plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
   plan_stock_backtest(), plan_xgb_signal(), plan_portfolio_opt(),
   plan_etf_replication(), plan_kelly(), plan_bootstrap_ci(),
+  plan_regime(), plan_alpha_decay(),
   plan_leaderboard(), plan_qa_vignette())

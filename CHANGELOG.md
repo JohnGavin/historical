@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-04-20
+
+### Completed
+- Robustness batch: 4 new plan files, 24 targets (#34 #36 #37 #38)
+  - plan_kelly.R: fractional Kelly vs flat 1%/2% sizing (6 targets)
+  - plan_bootstrap_ci.R: block bootstrap CI on Sharpe/DD (6 targets)
+  - plan_regime.R: regime-aware portfolio reweighting via VIX/realized vol (7 targets)
+  - plan_alpha_decay.R: signal decay t+1..t+10 execution delay (5 targets)
+- Leaderboard audit (#41): assumptions 0.50%/trade, validation sealed, correlations trimmed
+- XGBoost section moved from leaderboard to stock-backtest.qmd (#40)
+- XGBoost documented as failed experiment (underperforms elastic net, monotonic constraints too restrictive)
+- Index page: leaderboard added to Links section
+- Monthly returns: color-coded borders, descending year, marginal means
+- prompt_backtesting.md: costs updated to 0.50%/trade + borrow/turnover/winsor
+
+### Failed Approaches
+- XGBoost c13=48% feature importance: artifact of monotonic constraints + shallow trees, not meaningful
+- XGBoost equity curve jumps: monotonic constraints force concentrated predictions in certain months
+
+### Known Limitations
+- 24 new targets not yet run (need nix develop pipeline rebuild)
+- Worktree cleaned up — all 4 plan files on main branch
+- BURN CRITICAL: throttle to haiku/sonnet for remaining work
+
 ## 2026-04-18
 
 ### Completed
