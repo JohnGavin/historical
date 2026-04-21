@@ -67,15 +67,22 @@ format:
             document.documentElement.setAttribute('data-bs-theme', 'dark');
           }
           document.addEventListener('click', function(e) {
+            // Exit fullscreen: click anywhere on overlay or its img
             var overlay = e.target.closest('.fullscreen-overlay');
-            if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
-            var img = e.target.closest('img');
+            if (overlay) { overlay.remove(); return; }
+            var img = e.target.closest('.cell-output-display img');
             if (!img) return;
             var div = document.createElement('div');
             div.className = 'fullscreen-overlay';
-            div.innerHTML = '<img src="' + img.src + '">';
-            div.addEventListener('click', function() { div.remove(); });
+            var clone = document.createElement('img');
+            clone.src = img.src;
+            div.appendChild(clone);
             document.body.appendChild(div);
+          });
+          // Scroll to top when clicking a tab
+          document.addEventListener('shown.bs.tab', function(e) {
+            var pane = document.querySelector(e.target.getAttribute('data-bs-target') || e.target.getAttribute('href'));
+            if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
           });
           </script>
 execute:
@@ -287,7 +294,7 @@ safe_tar_read("aw_net_benefit_plot")
 ```
 
 ::: {.fig-caption}
-Rolling 1-year net benefit (in percentage points) of perfectly avoiding the 10 worst days. Spikes during crisis periods when the worst days are most extreme.
+Rolling 1-year net benefit = gain from avoiding 10 worst days minus loss from also missing 10 best days (since they cluster together). Green = gain from avoiding worst, red = loss from missing best, blue = net. Positive net means the asymmetry favours downside protection even accounting for missed upside.
 :::
 
 # Cross-Asset
@@ -314,21 +321,9 @@ if (!is.null(mi)) {
 
 #### Long History (Mkt-RF)
 
-```{r}
-asym <- safe_tar_read("aw_asymmetry_table")
-if (!is.null(asym)) {
-  ff_asym <- asym |> filter(ticker == "Mkt-RF")
-  if (nrow(ff_asym) > 0) {
-    DT::datatable(ff_asym,
-      caption = htmltools::tags$caption(
-        style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
-        "Fama-French Mkt-RF (1926+): same asymmetry pattern over nearly a century of data."
-      ),
-      rownames = FALSE,
-      options = list(pageLength = 15, scrollX = TRUE, dom = "t")
-    )
-  }
-}
+The asymmetry table on the **S&P 500 Analysis** tab includes Mkt-RF rows (Fama-French market factor, 1926+). The same pattern holds over nearly a century: the asymmetry ratio exceeds 1 at every N, confirming this is not a recent or data-period-specific phenomenon.
+
+Mkt-RF is not identical to the S&P 500 — it is the value-weighted CRSP market return minus the risk-free rate. The longer history (1926 vs 1993 for SPY) provides stronger evidence that return asymmetry is a persistent structural feature of equity markets.
 ```
 
 # Assumptions

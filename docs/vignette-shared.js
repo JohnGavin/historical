@@ -7,20 +7,19 @@ if (!localStorage.getItem('quarto-color-scheme')) {
 
 // Click-to-zoom on plots (not captions, not tables)
 document.addEventListener('click', function(e) {
+  // Exit fullscreen: click anywhere on overlay or its child img
   var overlay = e.target.closest('.fullscreen-overlay');
   if (overlay) {
-    overlay.classList.remove('fullscreen-overlay');
-    overlay.style.cssText = '';
+    overlay.remove();
     return;
   }
-  var img = e.target.closest('img');
+  var img = e.target.closest('.cell-output-display img');
   if (!img) return;
-  var cell = img.closest('.cell-output-display');
-  if (!cell) return;
   var div = document.createElement('div');
   div.className = 'fullscreen-overlay';
-  div.innerHTML = '<img src="' + img.src + '">';
-  div.addEventListener('click', function() { div.remove(); });
+  var clone = document.createElement('img');
+  clone.src = img.src;
+  div.appendChild(clone);
   document.body.appendChild(div);
 });
 

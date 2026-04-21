@@ -355,12 +355,19 @@ plan_avoid_worst <- function() {
         cum_no_worst <- prod(1 + w_ret[-worst_idx]) - 1
         cum_no_best <- prod(1 + w_ret[-best_idx]) - 1
 
+        # Net benefit = gain from avoiding worst - loss from also missing best
+        gain_avoid_worst <- cum_no_worst - cum_all
+        loss_miss_best <- cum_all - cum_no_best
+        net <- gain_avoid_worst - loss_miss_best
+
         tibble::tibble(
           date = dates[i],
           ret_all = round(cum_all * 100, 1),
           ret_no_worst = round(cum_no_worst * 100, 1),
           ret_no_best = round(cum_no_best * 100, 1),
-          net_benefit = round((cum_no_worst - cum_all) * 100, 1)
+          gain_avoid_worst = round(gain_avoid_worst * 100, 1),
+          loss_miss_best = round(loss_miss_best * 100, 1),
+          net_benefit = round(net * 100, 1)
         )
       })
     }),
@@ -392,12 +399,25 @@ plan_avoid_worst <- function() {
       library(dplyr)
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
-      ggplot(aw_rolling, aes(date, net_benefit)) +
-        geom_line(linewidth = 0.5, colour = hd_palette(1)) +
+      plot_data <- aw_rolling |>
+        select(date,
+               `Gain (avoid worst)` = gain_avoid_worst,
+               `Loss (miss best)` = loss_miss_best,
+               `Net benefit` = net_benefit) |>
+        tidyr::pivot_longer(-date, names_to = "component", values_to = "pp")
+
+      ggplot(plot_data, aes(date, pp, colour = component)) +
+        geom_line(linewidth = 0.5, alpha = 0.8) +
         geom_hline(yintercept = 0, linetype = "dotted", colour = "grey50") +
+        scale_colour_manual(values = c(
+          "Gain (avoid worst)" = "#2ecc71",
+          "Loss (miss best)" = "#e74c3c",
+          "Net benefit" = hd_palette(1)
+        )) +
         labs(x = NULL,
-             y = "Net Benefit of Avoiding 10 Worst Days (pp)",
-             title = "Rolling 1-Year Net Benefit of Perfect Worst-Day Avoidance") +
+             y = "Rolling 1-Year Effect (pp)",
+             colour = NULL,
+             title = "Net Benefit = Gain from Avoiding Worst - Loss from Missing Best") +
         hd_theme()
     }),
 
