@@ -561,6 +561,53 @@ plan_stock_backtest <- function() {
         labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
              title = "All Strategies: Stock-Level vs Factor-Level") +
         hd_theme()
+    }),
+
+    targets::tar_target(stk_all_caption, {
+      library(dplyr)
+      comp <- stk_all_comparison
+      years <- as.numeric(difftime(max(comp$date), min(comp$date),
+                                   units = "days")) / 365.25
+      last <- tail(comp, 1)
+
+      # Final growth of $1
+      fmt_growth <- function(x) {
+        if (x < 0.01) return("~$0")
+        if (x >= 10) return(paste0("$", round(x, 0)))
+        paste0("$", round(x, 2))
+      }
+
+      # Annualised volatility
+      fmt_vol <- function(ret_col) paste0(round(sd(ret_col, na.rm = TRUE) * sqrt(12) * 100), "%")
+
+      # CAGR
+      fmt_cagr <- function(cum_val) {
+        if (cum_val <= 0) return("N/A")
+        paste0(round((cum_val^(1 / years) - 1) * 100, 1), "%")
+      }
+
+      paste0(
+        "**Equity curves (4 factor/stock strategies).** Growth of $1, log scale, ",
+        round(years), " years (",
+        format(min(comp$date), "%Y"), "\u2013", format(max(comp$date), "%Y"), "). ",
+        "Stock-level strategies lose money net of costs: ",
+        "Stock MAX ends at ", fmt_growth(last$stk_max_cum),
+        " (vol ", fmt_vol(comp$stk_max), "), ",
+        "Stock DRIF at ", fmt_growth(last$stk_drif_cum),
+        " (vol ", fmt_vol(comp$stk_drif), "). ",
+        "Factor-level strategies survive costs: ",
+        "Factor MAX at ", fmt_growth(last$fac_max_cum),
+        " (CAGR ", fmt_cagr(last$fac_max_cum), ", vol ", fmt_vol(comp$fac_max), "), ",
+        "Factor DRIF at ", fmt_growth(last$fac_drif_cum),
+        " (CAGR ", fmt_cagr(last$fac_drif_cum), ", vol ", fmt_vol(comp$fac_drif), "). ",
+        "The difference is execution cost, not diversification: ",
+        "stock-level decile sorts produce ~80% monthly turnover across ~130 positions ",
+        "at 0.50%/trade = ~1.85%/month (~22%/yr). ",
+        "Factor-level trades 2\u20134 positions with ~40% turnover at 0.10%/trade = ",
+        "~0.16%/month (~2%/yr). ",
+        "Dashed line = test partition start (",
+        format(stk_params$oos_start, "%Y"), ")."
+      )
     })
   )
 }

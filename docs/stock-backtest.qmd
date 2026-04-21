@@ -61,7 +61,12 @@ safe_tar_read("stk_all_comparison_plot")
 ```
 
 ::: {.fig-caption}
-**Equity curves: 4 strategies, growth of $1 (log scale).** These curves should be interpreted with caution: (1) stock-level strategies have ~44% annual volatility, (2) a 150x return over 20 years requires ~30% CAGR which is unstable, (3) the stock MAX curve's spike is driven by a few extreme months. Dashed line = test period start (2020). Source: HuggingFace equity_daily + FF5/Momentum.
+```{r}
+#| echo: false
+#| results: asis
+cap <- safe_tar_read("stk_all_caption")
+if (!is.null(cap)) cat(cap) else cat("*Caption not available — run tar_make() to generate.*")
+```
 :::
 
 #### Metrics

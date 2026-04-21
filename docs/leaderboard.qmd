@@ -136,7 +136,12 @@ safe_tar_read("stk_all_comparison_plot")
 ```
 
 ::: {.fig-caption}
-**Equity curves (4 factor/stock strategies).** Growth of $1, log scale. Stock-level strategies (MAX, DRIF) lose money net of costs despite the same signal being profitable at factor level. The difference is execution cost, not diversification: stock-level decile sorts produce ~80% monthly turnover across 130 positions at 0.50%/trade = ~1.85%/month total cost (~22%/yr). Factor-level trades 2-4 positions with ~40% turnover at 0.10%/trade = ~0.16%/month (~2%/yr). A 7% gross spread survives 2% cost drag (factor) but not 22% (stock). Dashed line = test partition start (2020).
+```{r}
+#| echo: false
+#| results: asis
+cap <- safe_tar_read("stk_all_caption")
+if (!is.null(cap)) cat(cap) else cat("*Caption not available — run tar_make() to generate.*")
+```
 :::
 
 #### Portfolio
