@@ -1,0 +1,369 @@
+---
+title: "Beat the Market by Avoiding Its Worst Days"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+          <style>
+          body { font-size: 1.3em; }
+          .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
+          .nav-link { font-size: 0.95em !important; }
+          .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
+          .navbar, .quarto-dashboard-header, .navbar-dark,
+          .bslib-page-dashboard > .navbar {
+            background-color: black !important;
+            color: white !important;
+          }
+          .navbar .navbar-brand, .navbar .nav-link, .navbar-text,
+          .navbar .navbar-nav .nav-link {
+            color: white !important;
+          }
+          .navbar .nav-link.active, .navbar .nav-link:hover {
+            color: white !important;
+            background-color: black !important;
+            border: 1px solid white !important;
+            border-radius: 4px;
+          }
+          .navbar .nav-link { color: #aaa !important; }
+          .navbar-nav { flex-wrap: wrap !important; }
+          .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
+            height: auto !important; min-height: 0 !important;
+            max-height: none !important; overflow: visible !important;
+            flex: none !important;
+          }
+          .cell-output-display { display: block !important; position: relative !important;
+            overflow: visible !important; margin-bottom: 1em; }
+          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
+          .fig-caption { display: block; position: relative; clear: both;
+            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #e0e0e0; }
+          .datatables, .dataTables_wrapper { display: block !important;
+            position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
+          table.dataTable { white-space: nowrap; }
+          table caption { caption-side: top !important; }
+          details { margin-bottom: 0.5em; }
+          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+          .fullscreen-overlay {
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            z-index: 9999 !important; background: black !important;
+            padding: 10px !important; cursor: zoom-out !important;
+          }
+          .fullscreen-overlay img { width: 100% !important; height: 100% !important;
+            object-fit: contain !important; }
+          .cell-output-display:has(img) { cursor: zoom-in; }
+          </style>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          document.addEventListener('click', function(e) {
+            var overlay = e.target.closest('.fullscreen-overlay');
+            if (overlay) { overlay.classList.remove('fullscreen-overlay'); overlay.style.cssText = ''; return; }
+            var img = e.target.closest('img');
+            if (!img) return;
+            var div = document.createElement('div');
+            div.className = 'fullscreen-overlay';
+            div.innerHTML = '<img src="' + img.src + '">';
+            div.addEventListener('click', function() { div.remove(); });
+            document.body.appendChild(div);
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+```
+
+::: {.callout-warning}
+**THEORETICAL EXERCISE.** This vignette examines the asymmetry of daily returns -- removing the worst days improves performance more than removing the best days hurts it. You cannot know which days to avoid in advance. This is not investment advice.
+:::
+
+# Definition
+
+## Row
+
+### {.tabset}
+
+#### What
+
+**Beat the Market by Avoiding Its Worst Days.** A thought experiment demonstrating that returns are asymmetric: losses compound more destructively than gains compound constructively.
+
+If you could magically skip the market's N worst days each year, your returns would improve dramatically. But if you also missed the N best days, you'd lose far less. The asymmetry arises from the mathematics of compounding:
+
+- Lose 10% and you need +11.1% to recover
+- Lose 20% and you need +25% to recover
+- Lose 50% and you need +100% to recover
+
+This is why downside protection matters more than upside capture.
+
+Source: [Morningstar -- "You Can Beat the Stock Market by Avoiding Its Worst Days. You Won't."](https://www.morningstar.com/funds/you-can-beat-stock-market-by-avoiding-its-worst-days-you-wont)
+
+#### Key Distinction
+
+This is **not a tradeable strategy**. The clustering analysis (Tab 3) shows why: the worst and best days occur near each other in crisis periods. Any scheme to avoid the worst days would almost certainly also miss the best days.
+
+The practical implication: strategies with built-in downside protection (like [Macro Defense Rotation](macro-defense-rotation.html)) have a structural advantage because they reduce exposure before crashes, not after.
+
+#### Worked Example
+
+Consider \$100 invested in the S&P 500 over one year with 252 trading days:
+
+1. **All days**: \$100 grows to \$112 (+12% annual return)
+2. **Remove 10 worst days** (just 4% of days): \$100 grows to \$165 (+65%)
+3. **Remove 10 best days**: \$100 grows to \$75 (-25%)
+4. **Asymmetry**: Removing worst days adds \$53; removing best days costs \$37. The downside matters more.
+
+These are illustrative numbers -- the actual analysis with real data follows.
+
+# S&P 500 Analysis
+
+## Row
+
+### {.tabset}
+
+#### Equity Curves
+
+```{r}
+#| fig-height: 6
+safe_tar_read("aw_cumret_plot")
+```
+
+::: {.fig-caption}
+```{r}
+#| echo: false
+#| results: asis
+cap <- safe_tar_read("aw_cumret_caption")
+if (!is.null(cap)) cat(cap) else cat("*Caption not available -- run tar_make() to generate.*")
+```
+:::
+
+#### Asymmetry Table
+
+```{r}
+asym <- safe_tar_read("aw_asymmetry_table")
+if (!is.null(asym)) {
+  DT::datatable(asym,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "Asymmetry of removing N worst vs N best days. Ratio > 1 means avoiding losses matters more than capturing gains."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+#### Metrics by Period
+
+```{r}
+met <- safe_tar_read("aw_metrics")
+if (!is.null(met)) {
+  DT::datatable(met,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "SPY metrics by scenario and partition. Training: pre-2020, Testing: 2020+."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+# Temporal Clustering
+
+## Row
+
+### {.tabset}
+
+#### Timeline
+
+```{r}
+#| fig-height: 6
+safe_tar_read("aw_clustering_plot")
+```
+
+::: {.fig-caption}
+```{r}
+#| echo: false
+#| results: asis
+cap <- safe_tar_read("aw_clustering_caption")
+if (!is.null(cap)) cat(cap) else cat("*Caption not available.*")
+```
+:::
+
+#### Worst Days Detail
+
+```{r}
+cl <- safe_tar_read("aw_clustering")
+if (!is.null(cl)) {
+  worst <- cl$worst |> select(date, ret_pct, nearest_best, days_to_nearest_best)
+  DT::datatable(worst,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "SPY's 10 worst days and distance to the nearest best day. Short distances confirm clustering."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+#### Best Days Detail
+
+```{r}
+cl <- safe_tar_read("aw_clustering")
+if (!is.null(cl)) {
+  best <- cl$best |> select(date, ret_pct, nearest_worst, days_to_nearest_worst)
+  DT::datatable(best,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "SPY's 10 best days and distance to the nearest worst day."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+#### Implications
+
+The clustering of worst and best days in the same periods (2008-2009, March 2020) means any practical scheme to avoid worst days would also miss best days.
+
+This is why the "remove both" scenario in the asymmetry table is informative: it shows the net effect of missing both extremes, which is closer to what a real risk-reduction strategy achieves.
+
+The practical takeaway: instead of trying to time individual days, use systematic risk reduction (trend following, momentum, or defensive rotation) that reduces exposure during high-volatility regimes.
+
+# Rolling Analysis
+
+## Row
+
+### {.tabset}
+
+#### Rolling 1-Year Returns
+
+```{r}
+#| fig-height: 6
+safe_tar_read("aw_rolling_plot")
+```
+
+::: {.fig-caption}
+Rolling 1-year returns for SPY under three scenarios: all days, remove 10 worst, remove 10 best. The gap between "all days" and "remove worst" varies over time but is consistently positive.
+:::
+
+#### Net Benefit
+
+```{r}
+#| fig-height: 6
+safe_tar_read("aw_net_benefit_plot")
+```
+
+::: {.fig-caption}
+Rolling 1-year net benefit (in percentage points) of perfectly avoiding the 10 worst days. Spikes during crisis periods when the worst days are most extreme.
+:::
+
+# Cross-Asset
+
+## Row
+
+### {.tabset}
+
+#### Index Comparison
+
+```{r}
+mi <- safe_tar_read("aw_multi_index")
+if (!is.null(mi)) {
+  DT::datatable(mi,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "Asymmetry analysis across US index ETFs. Ratio > 1 = avoiding worst days matters more."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+#### Long History (Mkt-RF)
+
+```{r}
+asym <- safe_tar_read("aw_asymmetry_table")
+if (!is.null(asym)) {
+  ff_asym <- asym |> filter(ticker == "Mkt-RF")
+  if (nrow(ff_asym) > 0) {
+    DT::datatable(ff_asym,
+      caption = htmltools::tags$caption(
+        style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+        "Fama-French Mkt-RF (1926+): same asymmetry pattern over nearly a century of data."
+      ),
+      rownames = FALSE,
+      options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+    )
+  }
+}
+```
+
+# Assumptions
+
+## Row
+
+### {.tabset}
+
+#### Assumptions
+
+| Assumption | Value |
+|------------|-------|
+| Returns | Daily close-to-close, adjusted for splits and dividends |
+| Transaction costs | None modelled (theoretical exercise) |
+| Execution | Perfect foresight (impossible in practice) |
+| Data source | SPY via HuggingFace equity_daily; Mkt-RF via Fama-French |
+| Cash return | Not modelled (days "removed" earn 0%) |
+
+#### Caveats
+
+- **You cannot know in advance** which days will be worst or best
+- **Worst and best days cluster** in the same crisis periods (see Temporal Clustering tab)
+- **Survivorship bias**: SPY exists today because the US market survived; other markets did not
+- **Mkt-RF is not S&P 500**: it is the value-weighted CRSP market return minus risk-free rate
+- **This is not a strategy**: it is a demonstration of return asymmetry
+
+# References
+
+## Row
+
+### {.tabset}
+
+#### References
+
+- [Morningstar: "You Can Beat the Stock Market by Avoiding Its Worst Days. You Won't."](https://www.morningstar.com/funds/you-can-beat-stock-market-by-avoiding-its-worst-days-you-wont)
+- [Macro Defense Rotation](macro-defense-rotation.html) -- a practical downside-protection strategy
+- [Strategy Leaderboard](leaderboard.html) -- comparison of all strategies
+- Data: [`historicaldata` R package](https://johngavin.github.io/historical/examples.html)
