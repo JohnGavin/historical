@@ -672,6 +672,330 @@ plan_avoid_worst <- function() {
       baseline <- tibble::as_tibble(c(list(variant = "Buy & Hold"), bh))
 
       bind_rows(baseline, vix_results, shock_results)
+    }),
+
+    # ── Walk-forward: yearly expanding-window optimisation (#46) ─
+    targets::tar_target(aw_walkforward, {
+      library(dplyr)
+
+      d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
+
+      # Helper: run strategy and return annual metrics
+      run_strat <- function(data, shock_t, vix_h, vix_r, cooloff) {
+        n <- nrow(data)
+        if (n < 20) return(list(cagr = NA_real_, sharpe = NA_real_, max_dd = NA_real_))
+        in_mkt <- rep(TRUE, n)
+        cool <- 0L
+        for (i in 2:n) {
+          if (cool > 0) cool <- cool - 1L
+          if (abs(data$ret[i - 1]) > shock_t ||
+              (!is.na(data$vix[i]) && data$vix[i] > vix_h)) {
+            in_mkt[i] <- FALSE
+            cool <- max(cool, cooloff)
+          } else if (cool > 0 || (!is.na(data$vix[i]) && data$vix[i] > vix_r)) {
+            in_mkt[i] <- FALSE
+          }
+        }
+        sr <- ifelse(in_mkt, data$ret, 0)
+        yrs <- n / 252
+        cum <- prod(1 + sr)
+        cum_dd <- cumprod(1 + sr)
+        list(
+          cagr = (cum^(1 / yrs) - 1) * 100,
+          sharpe = mean(sr) / sd(sr) * sqrt(252),
+          max_dd = min((cum_dd - cummax(cum_dd)) / cummax(cum_dd)) * 100,
+          n_switches = sum(diff(as.integer(in_mkt)) != 0),
+          pct_cash = sum(!in_mkt) / n * 100
+        )
+      }
+
+      # Walk-forward: for each year, optimise on all prior data
+      years <- seq(2000L, as.integer(format(max(d$date), "%Y")) - 1L)
+      vix_grid <- seq(20, 45, by = 5)
+
+      wf_results <- purrr::map_dfr(years, function(yr) {
+        train <- d |> filter(as.Date(date) < as.Date(paste0(yr, "-01-01")))
+        test <- d |> filter(as.Date(date) >= as.Date(paste0(yr, "-01-01")),
+                            as.Date(date) < as.Date(paste0(yr + 1, "-01-01")))
+        if (nrow(train) < 252 || nrow(test) < 20) return(NULL)
+
+        # Find best VIX threshold on training data (maximise Sharpe)
+        train_results <- purrr::map_dfr(vix_grid, function(vh) {
+          r <- run_strat(train, 0.03, vh, vh - 5, 5L)
+          tibble::tibble(vix_high = vh, sharpe = r$sharpe)
+        })
+        best_vix <- train_results$vix_high[which.max(train_results$sharpe)]
+
+        # Apply to test year
+        test_r <- run_strat(test, 0.03, best_vix, best_vix - 5, 5L)
+
+        # Also compute buy-and-hold for test year
+        bh_cum <- prod(1 + test$ret)
+        bh_cagr <- (bh_cum^(252 / nrow(test)) - 1) * 100
+
+        tibble::tibble(
+          year = yr,
+          chosen_vix = best_vix,
+          oos_cagr = round(test_r$cagr * 252 / nrow(test), 1),  # annualised
+          oos_sharpe = round(test_r$sharpe, 2),
+          oos_max_dd = round(test_r$max_dd, 1),
+          bh_cagr = round(bh_cagr, 1),
+          n_switches = test_r$n_switches,
+          pct_cash = round(test_r$pct_cash, 1)
+        )
+      })
+
+      wf_results
+    }),
+
+    # ── Walk-forward equity curve ───────────────────────────────
+    targets::tar_target(aw_walkforward_curve, {
+      library(dplyr)
+      library(ggplot2)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
+      wf <- aw_walkforward
+
+      # Build walk-forward equity curve by applying each year's chosen threshold
+      years <- wf$year
+      curves <- purrr::map_dfr(seq_along(years), function(idx) {
+        yr <- years[idx]
+        vh <- wf$chosen_vix[idx]
+        chunk <- d |> filter(as.Date(date) >= as.Date(paste0(yr, "-01-01")),
+                             as.Date(date) < as.Date(paste0(yr + 1, "-01-01")))
+        if (nrow(chunk) < 2) return(NULL)
+
+        n <- nrow(chunk)
+        in_mkt <- rep(TRUE, n)
+        cool <- 0L
+        for (i in 2:n) {
+          if (cool > 0) cool <- cool - 1L
+          if (abs(chunk$ret[i - 1]) > 0.03 ||
+              (!is.na(chunk$vix[i]) && chunk$vix[i] > vh)) {
+            in_mkt[i] <- FALSE
+            cool <- max(cool, 5L)
+          } else if (cool > 0 || (!is.na(chunk$vix[i]) && chunk$vix[i] > (vh - 5))) {
+            in_mkt[i] <- FALSE
+          }
+        }
+        tibble::tibble(date = chunk$date,
+                       ret_wf = ifelse(in_mkt, chunk$ret, 0),
+                       ret_bh = chunk$ret)
+      })
+
+      if (nrow(curves) == 0) return(NULL)
+      curves <- curves |>
+        arrange(date) |>
+        mutate(
+          cum_wf = cumprod(1 + ret_wf),
+          cum_bh = cumprod(1 + ret_bh),
+          cum_hindsight = aw_practical_backtest |>
+            filter(date %in% curves$date) |>
+            arrange(date) |>
+            pull(cum_strategy)
+        )
+
+      plot_data <- curves |>
+        select(date,
+               `Buy & Hold` = cum_bh,
+               `Walk-Forward` = cum_wf,
+               `Hindsight (VIX>30)` = cum_hindsight) |>
+        tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
+
+      ggplot(plot_data, aes(date, growth, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        scale_y_log10(labels = scales::dollar) +
+        scale_colour_manual(values = hd_palette(3)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = "Walk-Forward vs Hindsight vs Buy & Hold") +
+        hd_theme()
+    }),
+
+    # ── Transaction costs (#45) ─────────────────────────────────
+    targets::tar_target(aw_transaction_costs, {
+      library(dplyr)
+
+      d <- aw_practical_backtest
+      switches <- sum(diff(as.integer(d$in_market)) != 0)
+      cost_per_switch <- 0.0005  # 5bps per switch (spread + slippage)
+      total_cost <- switches * cost_per_switch
+      years <- nrow(d) / 252
+
+      # Gross metrics
+      cum_gross <- tail(d$cum_strategy, 1)
+      cagr_gross <- (cum_gross^(1 / years) - 1) * 100
+
+      # Net metrics (apply cost as lump deduction from cumulative)
+      cum_net <- cum_gross * (1 - cost_per_switch)^switches
+      cagr_net <- (cum_net^(1 / years) - 1) * 100
+
+      # Buy & hold (no switches)
+      cum_bh <- tail(d$cum_market, 1)
+      cagr_bh <- (cum_bh^(1 / years) - 1) * 100
+
+      compound_cost <- round((1 - (1 - cost_per_switch)^switches) * 100, 2)
+      tibble::tibble(
+        scenario = c("Buy & Hold", "VIX Protection (gross)", "VIX Protection (net)"),
+        switches = c(0L, as.integer(switches), as.integer(switches)),
+        cost_per_switch_bps = c(0, 5, 5),
+        total_cost_pct = c(0, round(total_cost * 100, 2), compound_cost),
+        cumulative = c(round(cum_bh, 1), round(cum_gross, 1), round(cum_net, 1)),
+        cagr = c(round(cagr_bh, 1), round(cagr_gross, 1), round(cagr_net, 1))
+      )
+    }),
+
+    # ── Subperiod stability (#45) ───────────────────────────────
+    targets::tar_target(aw_subperiod, {
+      library(dplyr)
+
+      d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
+
+      run_period <- function(data, label) {
+        n <- nrow(data)
+        if (n < 50) return(NULL)
+        in_mkt <- rep(TRUE, n)
+        cool <- 0L
+        for (i in 2:n) {
+          if (cool > 0) cool <- cool - 1L
+          if (abs(data$ret[i - 1]) > 0.03 ||
+              (!is.na(data$vix[i]) && data$vix[i] > 30)) {
+            in_mkt[i] <- FALSE
+            cool <- max(cool, 5L)
+          } else if (cool > 0 || (!is.na(data$vix[i]) && data$vix[i] > 25)) {
+            in_mkt[i] <- FALSE
+          }
+        }
+        sr <- ifelse(in_mkt, data$ret, 0)
+        yrs <- n / 252
+        cum_s <- prod(1 + sr)
+        cum_b <- prod(1 + data$ret)
+        cum_dd_s <- cumprod(1 + sr)
+        cum_dd_b <- cumprod(1 + data$ret)
+
+        tibble::tibble(
+          period = label,
+          n_days = n,
+          years = round(yrs, 1),
+          cagr_bh = round((cum_b^(1 / yrs) - 1) * 100, 1),
+          cagr_strat = round((cum_s^(1 / yrs) - 1) * 100, 1),
+          max_dd_bh = round(min((cum_dd_b - cummax(cum_dd_b)) /
+                                  cummax(cum_dd_b)) * 100, 1),
+          max_dd_strat = round(min((cum_dd_s - cummax(cum_dd_s)) /
+                                     cummax(cum_dd_s)) * 100, 1),
+          pct_cash = round(sum(!in_mkt) / n * 100, 1)
+        )
+      }
+
+      bind_rows(
+        run_period(d |> filter(as.Date(date) < as.Date("2008-01-01")),
+                   "1993-2007"),
+        run_period(d |> filter(as.Date(date) >= as.Date("2008-01-01"),
+                               as.Date(date) < as.Date("2020-01-01")),
+                   "2008-2019"),
+        run_period(d |> filter(as.Date(date) >= as.Date("2020-01-01")),
+                   "2020-2026"),
+        run_period(d, "Full Period")
+      )
+    }),
+
+    # ── Cross-market validation (#45) ───────────────────────────
+    targets::tar_target(aw_cross_market, {
+      library(dplyr)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      vix <- hd_macro("VIXCLS") |> select(date, vix = value) |> arrange(date)
+
+      purrr::map_dfr(c("SPY", "QQQ", "IWM", "DIA"), function(tkr) {
+        d <- aw_daily_returns |>
+          filter(ticker == tkr) |>
+          arrange(date) |>
+          left_join(vix, by = "date") |>
+          filter(!is.na(vix), !is.na(ret))
+
+        n <- nrow(d)
+        if (n < 252) return(NULL)
+        in_mkt <- rep(TRUE, n)
+        cool <- 0L
+        for (i in 2:n) {
+          if (cool > 0) cool <- cool - 1L
+          if (abs(d$ret[i - 1]) > 0.03 ||
+              (!is.na(d$vix[i]) && d$vix[i] > 30)) {
+            in_mkt[i] <- FALSE
+            cool <- max(cool, 5L)
+          } else if (cool > 0 || (!is.na(d$vix[i]) && d$vix[i] > 25)) {
+            in_mkt[i] <- FALSE
+          }
+        }
+        sr <- ifelse(in_mkt, d$ret, 0)
+        yrs <- n / 252
+        cum_s <- prod(1 + sr)
+        cum_b <- prod(1 + d$ret)
+        cum_dd_s <- cumprod(1 + sr)
+        cum_dd_b <- cumprod(1 + d$ret)
+
+        tibble::tibble(
+          ticker = tkr,
+          years = round(yrs, 1),
+          cagr_bh = round((cum_b^(1 / yrs) - 1) * 100, 1),
+          cagr_strat = round((cum_s^(1 / yrs) - 1) * 100, 1),
+          max_dd_bh = round(min((cum_dd_b - cummax(cum_dd_b)) /
+                                  cummax(cum_dd_b)) * 100, 1),
+          max_dd_strat = round(min((cum_dd_s - cummax(cum_dd_s)) /
+                                     cummax(cum_dd_s)) * 100, 1),
+          sharpe_bh = round(mean(d$ret) / sd(d$ret) * sqrt(252), 2),
+          sharpe_strat = round(mean(sr) / sd(sr) * sqrt(252), 2),
+          pct_cash = round(sum(!in_mkt) / n * 100, 1)
+        )
+      })
+    }),
+
+    # ── Bootstrap CI on Sharpe (#45) ────────────────────────────
+    targets::tar_target(aw_bootstrap_ci, {
+      library(dplyr)
+
+      d <- aw_practical_backtest
+      strat_ret <- d$ret_strategy
+      mkt_ret <- d$ret_market
+      n <- length(strat_ret)
+      block_size <- 63L  # ~3 months
+      n_boot <- 1000L
+
+      set.seed(42)
+      boot_sharpe_strat <- numeric(n_boot)
+      boot_sharpe_mkt <- numeric(n_boot)
+
+      for (b in seq_len(n_boot)) {
+        # Block bootstrap: sample block start positions
+        n_blocks <- ceiling(n / block_size)
+        starts <- sample(seq_len(n - block_size + 1), n_blocks, replace = TRUE)
+        idx <- unlist(lapply(starts, function(s) s:(s + block_size - 1)))[1:n]
+
+        bs <- strat_ret[idx]
+        bm <- mkt_ret[idx]
+        boot_sharpe_strat[b] <- mean(bs) / sd(bs) * sqrt(252)
+        boot_sharpe_mkt[b] <- mean(bm) / sd(bm) * sqrt(252)
+      }
+
+      tibble::tibble(
+        scenario = c("Buy & Hold", "VIX Protection"),
+        sharpe_point = c(
+          round(mean(mkt_ret) / sd(mkt_ret) * sqrt(252), 2),
+          round(mean(strat_ret) / sd(strat_ret) * sqrt(252), 2)
+        ),
+        sharpe_ci_lo = c(
+          round(quantile(boot_sharpe_mkt, 0.05), 2),
+          round(quantile(boot_sharpe_strat, 0.05), 2)
+        ),
+        sharpe_ci_hi = c(
+          round(quantile(boot_sharpe_mkt, 0.95), 2),
+          round(quantile(boot_sharpe_strat, 0.95), 2)
+        ),
+        ci_crosses_zero = c(
+          quantile(boot_sharpe_mkt, 0.05) < 0,
+          quantile(boot_sharpe_strat, 0.05) < 0
+        )
+      )
     })
   )
 }
