@@ -480,7 +480,7 @@ if (!is.null(bci)) {
 
 #### Alpha Decay
 
-Delay the exit signal by 1–10 trading days and re-run the full backtest. If alpha vanishes at t+1, the edge is speed-dependent.
+The alpha decay table below uses t+1 as baseline (earliest feasible execution — you see today's VIX at close and trade next day). Additional delays of t+2 to t+10 test robustness to slower execution.
 
 ```{r}
 ad <- safe_tar_read("aw_alpha_decay")
@@ -488,7 +488,7 @@ if (!is.null(ad)) {
   DT::datatable(ad,
     caption = htmltools::tags$caption(
       style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
-      "Alpha decay: CAGR drops from 18.2% (t+0) to 5.3% (t+1) — a cliff. Most of the alpha requires same-day execution. At t+1, max DD reverts to -52% (vs -19% at t+0). The strategy is heavily speed-dependent: VIX spikes and recovers within days."
+      "Alpha decay (t+1 to t+10). At t+1 (next-day execution): CAGR 5.3%, max DD -52% — the strategy underperforms buy & hold (10.6%) and provides no drawdown protection. The signal is flat across all delays: there is no exploitable speed advantage."
     ),
     rownames = FALSE,
     options = list(pageLength = 15, scrollX = TRUE, dom = "t")
@@ -497,7 +497,7 @@ if (!is.null(ad)) {
 ```
 
 ::: {.fig-caption}
-The t+0 to t+1 cliff is the most important finding in this vignette. The VIX protection strategy's edge comes from acting on the *same day* the signal fires. A 1-day delay loses ~70% of the alpha (CAGR 18.2% → 5.3%) and all of the drawdown protection (max DD -19% → -52%). This means the strategy requires end-of-day execution at minimum — checking VIX at close and trading before next open. At t+5 and beyond, the strategy still beats buy & hold (~7% vs ~10.6% CAGR) but the drawdown protection evaporates, defeating the purpose.
+At honest execution timing (t+1), the VIX protection strategy underperforms buy & hold: CAGR 5.3% vs 10.6%, max DD -52% vs -55%. The signal is essentially flat from t+1 to t+10 — there is no speed advantage to exploit. The strategy exits *after* the worst day has already happened and misses the recovery. The "18.4% CAGR" result previously reported used t+0 execution (seeing VIX at close and trading that same day), which is physically impossible.
 :::
 
 #### Hindsight Gap

@@ -512,17 +512,19 @@ plan_avoid_worst <- function() {
           # Decrement cooloff
           if (cooloff_remaining > 0) cooloff_remaining <- cooloff_remaining - 1L
 
-          # Check triggers
+          # Check triggers — ALL signals use PREVIOUS day (t+1 execution)
+          # You cannot act on today's VIX; you see it at close and trade next day
           shocked <- abs(d$ret[i - 1]) > shock_thresh
-          vix_elevated <- !is.na(d$vix[i]) && d$vix[i] > vix_high
+          vix_prev <- d$vix[i - 1]
+          vix_elevated <- !is.na(vix_prev) && vix_prev > vix_high
 
           if (shocked || vix_elevated) {
             in_market[i] <- FALSE
             cooloff_remaining <- max(cooloff_remaining, min_cooloff)
           } else if (cooloff_remaining > 0) {
             in_market[i] <- FALSE
-          } else if (!is.na(d$vix[i]) && d$vix[i] > vix_reentry) {
-            # Still elevated, stay out
+          } else if (!is.na(vix_prev) && vix_prev > vix_reentry) {
+            # Still elevated yesterday, stay out
             in_market[i] <- FALSE
           } else {
             in_market[i] <- TRUE
@@ -630,13 +632,14 @@ plan_avoid_worst <- function() {
         for (i in 2:n) {
           if (cooloff_remaining > 0) cooloff_remaining <- cooloff_remaining - 1L
           shocked <- abs(d$ret[i - 1]) > shock_thresh
-          vix_elevated <- !is.na(d$vix[i]) && d$vix[i] > vix_high
+          vp <- d$vix[i - 1]  # previous day VIX (t+1 execution)
+          vix_elevated <- !is.na(vp) && vp > vix_high
           if (shocked || vix_elevated) {
             in_market[i] <- FALSE
             cooloff_remaining <- max(cooloff_remaining, min_cooloff)
           } else if (cooloff_remaining > 0) {
             in_market[i] <- FALSE
-          } else if (!is.na(d$vix[i]) && d$vix[i] > vix_reentry) {
+          } else if (!is.na(vp) && vp > vix_reentry) {
             in_market[i] <- FALSE
           } else {
             in_market[i] <- TRUE
@@ -688,11 +691,12 @@ plan_avoid_worst <- function() {
         cool <- 0L
         for (i in 2:n) {
           if (cool > 0) cool <- cool - 1L
+          vp <- data$vix[i - 1]  # previous day VIX (t+1 execution)
           if (abs(data$ret[i - 1]) > shock_t ||
-              (!is.na(data$vix[i]) && data$vix[i] > vix_h)) {
+              (!is.na(vp) && vp > vix_h)) {
             in_mkt[i] <- FALSE
             cool <- max(cool, cooloff)
-          } else if (cool > 0 || (!is.na(data$vix[i]) && data$vix[i] > vix_r)) {
+          } else if (cool > 0 || (!is.na(vp) && vp > vix_r)) {
             in_mkt[i] <- FALSE
           }
         }
@@ -771,11 +775,12 @@ plan_avoid_worst <- function() {
         cool <- 0L
         for (i in 2:n) {
           if (cool > 0) cool <- cool - 1L
+          vp <- chunk$vix[i - 1]  # previous day VIX (t+1 execution)
           if (abs(chunk$ret[i - 1]) > 0.03 ||
-              (!is.na(chunk$vix[i]) && chunk$vix[i] > vh)) {
+              (!is.na(vp) && vp > vh)) {
             in_mkt[i] <- FALSE
             cool <- max(cool, 5L)
-          } else if (cool > 0 || (!is.na(chunk$vix[i]) && chunk$vix[i] > (vh - 5))) {
+          } else if (cool > 0 || (!is.na(vp) && vp > (vh - 5))) {
             in_mkt[i] <- FALSE
           }
         }
@@ -858,11 +863,12 @@ plan_avoid_worst <- function() {
         cool <- 0L
         for (i in 2:n) {
           if (cool > 0) cool <- cool - 1L
+          vp <- data$vix[i - 1]  # previous day VIX (t+1 execution)
           if (abs(data$ret[i - 1]) > 0.03 ||
-              (!is.na(data$vix[i]) && data$vix[i] > 30)) {
+              (!is.na(vp) && vp > 30)) {
             in_mkt[i] <- FALSE
             cool <- max(cool, 5L)
-          } else if (cool > 0 || (!is.na(data$vix[i]) && data$vix[i] > 25)) {
+          } else if (cool > 0 || (!is.na(vp) && vp > 25)) {
             in_mkt[i] <- FALSE
           }
         }
@@ -919,11 +925,12 @@ plan_avoid_worst <- function() {
         cool <- 0L
         for (i in 2:n) {
           if (cool > 0) cool <- cool - 1L
+          vp <- d$vix[i - 1]  # previous day VIX (t+1 execution)
           if (abs(d$ret[i - 1]) > 0.03 ||
-              (!is.na(d$vix[i]) && d$vix[i] > 30)) {
+              (!is.na(vp) && vp > 30)) {
             in_mkt[i] <- FALSE
             cool <- max(cool, 5L)
-          } else if (cool > 0 || (!is.na(d$vix[i]) && d$vix[i] > 25)) {
+          } else if (cool > 0 || (!is.na(vp) && vp > 25)) {
             in_mkt[i] <- FALSE
           }
         }
@@ -1039,7 +1046,7 @@ plan_avoid_worst <- function() {
         )
       }
 
-      delays <- 0:10
+      delays <- 1:10  # t+1 minimum — t+0 execution is impossible
       purrr::map_dfr(delays, function(delay) {
         r <- run_delayed(d, delay)
         tibble::as_tibble(c(list(delay_days = delay), r))
