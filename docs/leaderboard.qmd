@@ -169,6 +169,7 @@ if (!is.null(monthly)) {
 
   # Add marginal row (mean across years)
   num_cols <- setdiff(col_order, "Year")
+  monthly <- monthly |> mutate(Year = as.character(Year))
   marginal <- monthly |>
     summarise(across(all_of(num_cols), ~ format(round(mean(as.numeric(.), na.rm = TRUE), 1), nsmall = 1))) |>
     mutate(Year = "Mean")
