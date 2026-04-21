@@ -326,6 +326,62 @@ The asymmetry table on the **S&P 500 Analysis** tab includes Mkt-RF rows (Fama-F
 Mkt-RF is not identical to the S&P 500 — it is the value-weighted CRSP market return minus the risk-free rate. The longer history (1926 vs 1993 for SPY) provides stronger evidence that return asymmetry is a persistent structural feature of equity markets.
 ```
 
+# Practical Implementation
+
+## Row
+
+### {.tabset}
+
+#### VIX-Triggered Protection
+
+A tradeable approximation: after a large daily move (shock) or when the VIX exceeds a threshold (forward-looking implied volatility), go to cash. Re-enter when VIX subsides below a re-entry threshold, with a minimum cooling-off period.
+
+The VIX is forward-looking — it prices the market's expectation of 30-day volatility from S&P 500 options. Unlike realized volatility (backward-looking), VIX rises *before* the worst days cluster, making it a practical trigger.
+
+```{r}
+#| fig-height: 6
+safe_tar_read("aw_practical_plot")
+```
+
+::: {.fig-caption}
+```{r}
+#| echo: false
+#| results: asis
+cap <- safe_tar_read("aw_practical_caption")
+if (!is.null(cap)) cat(cap) else cat("*Caption not available.*")
+```
+:::
+
+#### Parameter Sensitivity
+
+```{r}
+sens <- safe_tar_read("aw_practical_sensitivity")
+if (!is.null(sens)) {
+  DT::datatable(sens,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "Sensitivity to VIX and shock thresholds. pct_cash = fraction of days out of market. Look for broad plateau, not sharp peak."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 20, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+#### How It Works
+
+| Step | Trigger | Action |
+|------|---------|--------|
+| 1 | Daily abs return > 3% **or** VIX > 30 | Exit to cash |
+| 2 | Minimum 5 trading days in cash | Stay out (cooling-off) |
+| 3 | VIX drops below 25 **and** cooloff expired | Re-enter market |
+
+**Why VIX, not realized vol?** Realized volatility is backward-looking — by the time it spikes, the worst days have already happened. VIX is forward-looking (implied from options prices) and rises *in anticipation* of volatility, giving earlier exit signals.
+
+**Why both shock AND VIX triggers?** Flash crashes (Aug 2015, Feb 2018) cause single-day shocks without sustained VIX elevation. The shock trigger catches these. Slow-building crises (2008, 2022) elevate VIX gradually — the VIX trigger catches these.
+
+**The trade-off:** More conservative thresholds (VIX > 25 vs > 35) mean more days in cash, reducing both risk and expected return. The sensitivity table shows this trade-off quantitatively.
+
 # Assumptions
 
 ## Row

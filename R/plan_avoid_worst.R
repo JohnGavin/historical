@@ -464,6 +464,214 @@ plan_avoid_worst <- function() {
         calc(spy |> filter(as.Date(date) >= oos), "Testing"),
         calc(spy, "Full Period")
       )
+    }),
+
+    # ── Practical: VIX-triggered protection ─────────────────────
+    # After a large move or when VIX is elevated, go to cash
+    # for a cooling-off period until vol subsides
+    targets::tar_target(aw_vix_daily, {
+      library(dplyr)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      spy <- aw_daily_returns |> filter(ticker == "SPY") |> arrange(date)
+      vix <- hd_macro("VIXCLS") |>
+        select(date, vix = value) |>
+        arrange(date)
+
+      spy |> left_join(vix, by = "date")
+    }),
+
+    targets::tar_target(aw_practical_params, {
+      list(
+        # Shock trigger: absolute daily return > this
+        shock_threshold = 0.03,  # 3% daily move
+        # VIX trigger: go to cash when VIX > this
+        vix_high = 30,
+        # VIX re-entry: return to market when VIX < this
+        vix_reentry = 25,
+        # Cooling-off: min days in cash after shock (even if VIX drops)
+        min_cooloff_days = 5L,
+        # Variants to test
+        vix_thresholds = c(25, 30, 35, 40),
+        shock_thresholds = c(0.02, 0.03, 0.04, 0.05)
+      )
+    }),
+
+    targets::tar_target(aw_practical_backtest, {
+      library(dplyr)
+
+      d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
+
+      run_strategy <- function(d, shock_thresh, vix_high, vix_reentry,
+                               min_cooloff) {
+        n <- nrow(d)
+        in_market <- rep(TRUE, n)
+        cooloff_remaining <- 0L
+
+        for (i in 2:n) {
+          # Decrement cooloff
+          if (cooloff_remaining > 0) cooloff_remaining <- cooloff_remaining - 1L
+
+          # Check triggers
+          shocked <- abs(d$ret[i - 1]) > shock_thresh
+          vix_elevated <- !is.na(d$vix[i]) && d$vix[i] > vix_high
+
+          if (shocked || vix_elevated) {
+            in_market[i] <- FALSE
+            cooloff_remaining <- max(cooloff_remaining, min_cooloff)
+          } else if (cooloff_remaining > 0) {
+            in_market[i] <- FALSE
+          } else if (!is.na(d$vix[i]) && d$vix[i] > vix_reentry) {
+            # Still elevated, stay out
+            in_market[i] <- FALSE
+          } else {
+            in_market[i] <- TRUE
+          }
+        }
+
+        strat_ret <- ifelse(in_market, d$ret, 0)
+        tibble::tibble(
+          date = d$date,
+          ret_market = d$ret,
+          ret_strategy = strat_ret,
+          in_market = in_market,
+          vix = d$vix,
+          cum_market = cumprod(1 + d$ret),
+          cum_strategy = cumprod(1 + strat_ret)
+        )
+      }
+
+      # Run default parameters
+      result <- run_strategy(d,
+        shock_thresh = aw_practical_params$shock_threshold,
+        vix_high = aw_practical_params$vix_high,
+        vix_reentry = aw_practical_params$vix_reentry,
+        min_cooloff = aw_practical_params$min_cooloff_days
+      )
+
+      result
+    }),
+
+    # ── Practical: equity curve plot ────────────────────────────
+    targets::tar_target(aw_practical_plot, {
+      library(ggplot2)
+      library(dplyr)
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+      plot_data <- aw_practical_backtest |>
+        select(date,
+               `Buy & Hold` = cum_market,
+               `VIX Protection` = cum_strategy) |>
+        tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
+
+      # Shade cash periods
+      cash_periods <- aw_practical_backtest |>
+        filter(!in_market) |>
+        select(date)
+
+      p <- ggplot(plot_data, aes(date, growth, colour = strategy)) +
+        geom_line(linewidth = 0.6) +
+        scale_y_log10(labels = scales::dollar) +
+        scale_colour_manual(values = hd_palette(2)) +
+        labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
+             title = "VIX-Triggered Protection vs Buy & Hold") +
+        hd_theme()
+
+      p
+    }),
+
+    # ── Practical: dynamic caption ──────────────────────────────
+    targets::tar_target(aw_practical_caption, {
+      library(dplyr)
+      d <- aw_practical_backtest
+      n_total <- nrow(d)
+      n_cash <- sum(!d$in_market)
+      pct_cash <- round(n_cash / n_total * 100, 1)
+      years <- n_total / 252
+
+      cum_mkt <- tail(d$cum_market, 1)
+      cum_strat <- tail(d$cum_strategy, 1)
+      cagr_mkt <- round((cum_mkt^(1 / years) - 1) * 100, 1)
+      cagr_strat <- round((cum_strat^(1 / years) - 1) * 100, 1)
+
+      vol_mkt <- round(sd(d$ret_market) * sqrt(252) * 100, 1)
+      vol_strat <- round(sd(d$ret_strategy) * sqrt(252) * 100, 1)
+
+      dd <- function(r) {
+        cum <- cumprod(1 + r)
+        round(min((cum - cummax(cum)) / cummax(cum)) * 100, 1)
+      }
+
+      paste0(
+        "**VIX-triggered protection vs buy & hold (SPY).** ",
+        "Rule: go to cash when VIX > ", aw_practical_params$vix_high,
+        " or after a >", aw_practical_params$shock_threshold * 100,
+        "% daily move; re-enter when VIX < ", aw_practical_params$vix_reentry,
+        " (min ", aw_practical_params$min_cooloff_days, "-day cooloff). ",
+        "Out of market ", pct_cash, "% of days (", n_cash, "/", n_total, "). ",
+        "Buy & hold: CAGR ", cagr_mkt, "%, vol ", vol_mkt,
+        "%, max DD ", dd(d$ret_market), "%. ",
+        "VIX protection: CAGR ", cagr_strat, "%, vol ", vol_strat,
+        "%, max DD ", dd(d$ret_strategy), "%. ",
+        format(min(d$date), "%Y"), "\u2013", format(max(d$date), "%Y"), "."
+      )
+    }),
+
+    # ── Practical: parameter sensitivity ────────────────────────
+    targets::tar_target(aw_practical_sensitivity, {
+      library(dplyr)
+
+      d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
+
+      run_variant <- function(d, shock_thresh, vix_high, vix_reentry, min_cooloff) {
+        n <- nrow(d)
+        in_market <- rep(TRUE, n)
+        cooloff_remaining <- 0L
+        for (i in 2:n) {
+          if (cooloff_remaining > 0) cooloff_remaining <- cooloff_remaining - 1L
+          shocked <- abs(d$ret[i - 1]) > shock_thresh
+          vix_elevated <- !is.na(d$vix[i]) && d$vix[i] > vix_high
+          if (shocked || vix_elevated) {
+            in_market[i] <- FALSE
+            cooloff_remaining <- max(cooloff_remaining, min_cooloff)
+          } else if (cooloff_remaining > 0) {
+            in_market[i] <- FALSE
+          } else if (!is.na(d$vix[i]) && d$vix[i] > vix_reentry) {
+            in_market[i] <- FALSE
+          } else {
+            in_market[i] <- TRUE
+          }
+        }
+        strat_ret <- ifelse(in_market, d$ret, 0)
+        years <- n / 252
+        cum <- prod(1 + strat_ret)
+        cum_dd <- cumprod(1 + strat_ret)
+        list(
+          cagr = round((cum^(1 / years) - 1) * 100, 1),
+          vol = round(sd(strat_ret) * sqrt(252) * 100, 1),
+          max_dd = round(min((cum_dd - cummax(cum_dd)) / cummax(cum_dd)) * 100, 1),
+          sharpe = round(mean(strat_ret) / sd(strat_ret) * sqrt(252), 2),
+          pct_cash = round(sum(!in_market) / n * 100, 1)
+        )
+      }
+
+      # Vary VIX threshold
+      vix_results <- purrr::map_dfr(aw_practical_params$vix_thresholds, function(vh) {
+        r <- run_variant(d, 0.03, vh, vh - 5, 5L)
+        tibble::as_tibble(c(list(variant = paste0("VIX>", vh)), r))
+      })
+
+      # Vary shock threshold
+      shock_results <- purrr::map_dfr(aw_practical_params$shock_thresholds, function(st) {
+        r <- run_variant(d, st, 30, 25, 5L)
+        tibble::as_tibble(c(list(variant = paste0("Shock>", st * 100, "%")), r))
+      })
+
+      # Buy & hold baseline
+      bh <- run_variant(d, 999, 999, 999, 0L)  # never triggers
+      baseline <- tibble::as_tibble(c(list(variant = "Buy & Hold"), bh))
+
+      bind_rows(baseline, vix_results, shock_results)
     })
   )
 }
