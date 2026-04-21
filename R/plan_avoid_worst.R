@@ -996,6 +996,54 @@ plan_avoid_worst <- function() {
           quantile(boot_sharpe_strat, 0.05) < 0
         )
       )
+    }),
+
+    # ── Alpha decay: delay signal by 1-10 days ─────────────────
+    targets::tar_target(aw_alpha_decay, {
+      library(dplyr)
+
+      d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
+      n <- nrow(d)
+
+      # Run strategy with delayed signal: the exit/re-entry decision
+      # is based on VIX and shock from `delay` days ago
+      run_delayed <- function(d, delay) {
+        n <- nrow(d)
+        in_mkt <- rep(TRUE, n)
+        cool <- 0L
+        for (i in 2:n) {
+          if (cool > 0) cool <- cool - 1L
+          # Look at signal from `delay` days ago
+          sig_idx <- max(1L, i - delay)
+          shocked <- abs(d$ret[sig_idx]) > 0.03
+          vix_high <- !is.na(d$vix[sig_idx]) && d$vix[sig_idx] > 30
+          vix_reentry <- !is.na(d$vix[sig_idx]) && d$vix[sig_idx] > 25
+
+          if (shocked || vix_high) {
+            in_mkt[i] <- FALSE
+            cool <- max(cool, 5L)
+          } else if (cool > 0 || vix_reentry) {
+            in_mkt[i] <- FALSE
+          }
+        }
+        sr <- ifelse(in_mkt, d$ret, 0)
+        yrs <- n / 252
+        cum <- prod(1 + sr)
+        cum_dd <- cumprod(1 + sr)
+        list(
+          cagr = round((cum^(1 / yrs) - 1) * 100, 1),
+          vol = round(sd(sr) * sqrt(252) * 100, 1),
+          max_dd = round(min((cum_dd - cummax(cum_dd)) / cummax(cum_dd)) * 100, 1),
+          sharpe = round(mean(sr) / sd(sr) * sqrt(252), 2),
+          pct_cash = round(sum(!in_mkt) / n * 100, 1)
+        )
+      }
+
+      delays <- 0:10
+      purrr::map_dfr(delays, function(delay) {
+        r <- run_delayed(d, delay)
+        tibble::as_tibble(c(list(delay_days = delay), r))
+      })
     })
   )
 }

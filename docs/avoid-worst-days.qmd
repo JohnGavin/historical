@@ -478,6 +478,28 @@ if (!is.null(bci)) {
 }
 ```
 
+#### Alpha Decay
+
+Delay the exit signal by 1–10 trading days and re-run the full backtest. If alpha vanishes at t+1, the edge is speed-dependent.
+
+```{r}
+ad <- safe_tar_read("aw_alpha_decay")
+if (!is.null(ad)) {
+  DT::datatable(ad,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "Alpha decay: CAGR drops from 18.2% (t+0) to 5.3% (t+1) — a cliff. Most of the alpha requires same-day execution. At t+1, max DD reverts to -52% (vs -19% at t+0). The strategy is heavily speed-dependent: VIX spikes and recovers within days."
+    ),
+    rownames = FALSE,
+    options = list(pageLength = 15, scrollX = TRUE, dom = "t")
+  )
+}
+```
+
+::: {.fig-caption}
+The t+0 to t+1 cliff is the most important finding in this vignette. The VIX protection strategy's edge comes from acting on the *same day* the signal fires. A 1-day delay loses ~70% of the alpha (CAGR 18.2% → 5.3%) and all of the drawdown protection (max DD -19% → -52%). This means the strategy requires end-of-day execution at minimum — checking VIX at close and trading before next open. At t+5 and beyond, the strategy still beats buy & hold (~7% vs ~10.6% CAGR) but the drawdown protection evaporates, defeating the purpose.
+:::
+
 #### Hindsight Gap
 
 The walk-forward mean OOS CAGR is ~15.6% vs hindsight CAGR of 18.4% — a gap of ~2.8pp. This is within the acceptable range (<5pp per issue #46 acceptance criteria).
