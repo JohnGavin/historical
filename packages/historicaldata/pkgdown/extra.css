@@ -1,2 +1,24 @@
 /* Fix navbar overlapping first line of content */
 body { padding-top: 70px; }
+
+/* Caption text white on dark theme */
+.fig-caption, figcaption, caption, .figure-caption {
+  color: #e0e0e0 !important;
+  caption-side: top !important;
+  text-align: left !important;
+}
+
+/* DT dark mode */
+.dataTables_wrapper, table.dataTable, table.dataTable th, table.dataTable td,
+.dataTables_wrapper .dataTables_info, .dataTables_wrapper .dataTables_filter,
+.dataTables_wrapper .dataTables_paginate .paginate_button {
+  color: #e0e0e0 !important;
+}
+table.dataTable, table.dataTable thead, table.dataTable tbody { background-color: #1a1a2e !important; }
+table.dataTable thead th { background-color: #16213e !important; border-bottom-color: #444 !important; }
+table.dataTable tbody tr { background-color: #1a1a2e !important; }
+table.dataTable tbody tr:hover { background-color: #252545 !important; }
+table.dataTable tbody tr.even { background-color: #1e1e3a !important; }
+.dataTables_wrapper input[type="search"], .dataTables_wrapper .form-control {
+  background-color: #16213e !important; color: #e0e0e0 !important; border-color: #444 !important;
+}
