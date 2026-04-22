@@ -85,6 +85,72 @@ hd_tickers <- function(dataset = "equity_daily") {
   ))$ticker
 }
 
+#' Macro series metadata registry
+#'
+#' Returns a tibble with metadata for every FRED macro series in the dataset.
+#' Useful for filtering by category, frequency, or forward-looking status before
+#' pulling data with [hd_fred()].
+#'
+#' @return A tibble with columns:
+#'   \describe{
+#'     \item{series_id}{FRED series identifier (character)}
+#'     \item{description}{Human-readable series name (character)}
+#'     \item{category}{One of "equity_index", "implied_vol", "interest_rate",
+#'       "credit_spread", "inflation", "yield_curve", "commodity", "currency",
+#'       "employment", "money_supply", "housing", "output" (character)}
+#'     \item{frequency}{One of "daily", "monthly", "quarterly" (character)}
+#'     \item{forward_looking}{TRUE if the series reflects market expectations (logical)}
+#'     \item{market_implied}{TRUE if derived from market prices (logical)}
+#'     \item{start_year}{Approximate start year on FRED (integer)}
+#'     \item{source_detail}{Data provider detail, e.g. "CBOE", "ICE BofA" (character)}
+#'   }
+#' @family discovery
+#' @export
+hd_macro_registry <- function() {
+  tibble::tribble(
+    ~series_id,              ~description,                              ~category,       ~frequency,  ~forward_looking, ~market_implied, ~start_year, ~source_detail,
+    "SP500",                 "S&P 500 Index",                           "equity_index",  "daily",     FALSE,            FALSE,           1957L,       "Standard & Poor's",
+    "VIXCLS",                "CBOE VIX (30-day implied vol)",           "implied_vol",   "daily",     TRUE,             TRUE,            1990L,       "CBOE",
+    "VXVCLS",                "CBOE VXV (93-day implied vol)",           "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",
+    "OVXCLS",                "CBOE OVX (crude oil implied vol)",        "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",
+    "GVZCLS",                "CBOE GVZ (gold implied vol)",             "implied_vol",   "daily",     TRUE,             TRUE,            2008L,       "CBOE",
+    "EVZCLS",                "CBOE EVZ (EUR/USD implied vol)",          "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",
+    "DGS2",                  "2-Year Treasury Yield",                   "interest_rate", "daily",     FALSE,            FALSE,           1976L,       "US Treasury",
+    "DGS10",                 "10-Year Treasury Yield",                  "interest_rate", "daily",     FALSE,            FALSE,           1962L,       "US Treasury",
+    "DGS30",                 "30-Year Treasury Yield",                  "interest_rate", "daily",     FALSE,            FALSE,           1977L,       "US Treasury",
+    "DFF",                   "Federal Funds Rate (daily)",              "interest_rate", "daily",     FALSE,            FALSE,           1954L,       "Federal Reserve",
+    "FEDFUNDS",              "Effective Federal Funds Rate",            "interest_rate", "monthly",   FALSE,            FALSE,           1954L,       "Federal Reserve",
+    "BAMLH0A0HYM2",          "ICE BofA US High Yield OAS",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",
+    "BAMLC0A4CBBB",          "ICE BofA BBB Corporate OAS",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",
+    "BAMLH0A2HYB",           "ICE BofA BB High Yield OAS",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",
+    "T10Y2Y",                "10Y-2Y Treasury Spread",                  "yield_curve",   "daily",     TRUE,             TRUE,            1976L,       "US Treasury",
+    "T10Y3M",                "10Y-3M Treasury Spread",                  "yield_curve",   "daily",     TRUE,             TRUE,            1982L,       "US Treasury",
+    "T10YIE",                "10-Year Breakeven Inflation",             "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread",
+    "T5YIE",                 "5-Year Breakeven Inflation",              "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread",
+    "T5YIFR",                "5Y-5Y Forward Inflation Expectation",     "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread",
+    "GDP",                   "Gross Domestic Product",                  "output",        "quarterly", FALSE,            FALSE,           1947L,       "BEA",
+    "UNRATE",                "Unemployment Rate",                       "employment",    "monthly",   FALSE,            FALSE,           1948L,       "BLS",
+    "CPIAUCSL",              "Consumer Price Index",                    "inflation",     "monthly",   FALSE,            FALSE,           1947L,       "BLS",
+    "PCEPI",                 "PCE Price Index",                         "inflation",     "monthly",   FALSE,            FALSE,           1959L,       "BEA",
+    "DCOILWTICO",            "WTI Crude Oil Spot",                      "commodity",     "daily",     FALSE,            FALSE,           1986L,       "EIA",
+    "GOLDAMGBD228NLBM",      "Gold Price London Fix",                   "commodity",     "daily",     FALSE,            FALSE,           1968L,       "ICE Benchmark",
+    "DTWEXBGS",              "Trade-Weighted USD Index",                "currency",      "daily",     FALSE,            FALSE,           2006L,       "Federal Reserve",
+    "CSUSHPISA",             "Case-Shiller Home Price Index",           "housing",       "monthly",   FALSE,            FALSE,           1987L,       "S&P/Case-Shiller",
+    "M2SL",                  "M2 Money Supply",                         "money_supply",  "monthly",   FALSE,            FALSE,           1959L,       "Federal Reserve"
+  )
+}
+
+#' List forward-looking macro series
+#'
+#' Returns the subset of `hd_macro_registry()` where `forward_looking == TRUE`.
+#'
+#' @return Tibble of forward-looking macro series metadata
+#' @family discovery
+#' @export
+hd_macro_forward <- function() {
+  hd_macro_registry() |> dplyr::filter(forward_looking)
+}
+
 #' Construct HF dataset URL using DuckDB's native `hf://` protocol
 #'
 #' DuckDB 0.10+ supports `hf://datasets/...` natively — no httpfs extension

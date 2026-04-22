@@ -6,17 +6,19 @@
 library(dplyr)
 library(arrow)
 
-# 20 key macro series covering:
+# 28 key macro series covering:
 # - Equity indices (SP500)
 # - Volatility (VIX)
 # - Interest rates (DGS2, DGS10, DGS30, FEDFUNDS, DFF)
-# - Credit spreads (BAMLH0A0HYM2, BAMLC0A4CBBB)
+# - Credit spreads (BAMLH0A0HYM2, BAMLC0A4CBBB, BAMLH0A2HYB)
 # - Macro (GDP, UNRATE, CPIAUCSL, PCEPI)
 # - Commodities (DCOILWTICO, GOLDAMGBD228NLBM)
 # - Currency (DTWEXBGS)
 # - Housing (CSUSHPISA)
 # - Money supply (M2SL)
 # - Leading indicators (T10Y2Y, T10YIE)
+# - Forward-looking implied volatility (VXVCLS, OVXCLS, GVZCLS, EVZCLS)
+# - Forward-looking inflation/rates (T5YIE, T5YIFR, T10Y3M)
 
 series_list <- c(
   "SP500",              # S&P 500 (daily)
@@ -38,7 +40,18 @@ series_list <- c(
   "CSUSHPISA",          # Case-Shiller Home Price Index (monthly)
   "M2SL",               # M2 Money Supply (monthly)
   "T10Y2Y",             # 10Y-2Y Spread (daily, yield curve)
-  "T10YIE"              # 10Y Breakeven Inflation (daily)
+  "T10YIE",             # 10Y Breakeven Inflation (daily)
+  # Forward-looking implied volatility
+  "VXVCLS",              # VXV 93-day VIX (vol term structure)
+  "OVXCLS",              # OVX crude oil implied vol
+  "GVZCLS",              # GVZ gold implied vol
+  "EVZCLS",              # EVZ EUR/USD implied vol
+  # Forward-looking inflation/rates
+  "T5YIE",               # 5-Year Breakeven Inflation
+  "T5YIFR",              # 5Y-5Y Forward Inflation Expectation
+  "T10Y3M",              # 10Y-3M Spread (recession signal)
+  # Additional credit
+  "BAMLH0A2HYB"          # ICE BofA BB High Yield Spread
 )
 
 fetch_fred_csv <- function(series_id) {
