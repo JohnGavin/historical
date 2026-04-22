@@ -87,56 +87,79 @@ hd_tickers <- function(dataset = "equity_daily") {
 
 #' Macro series metadata registry
 #'
-#' Returns a tibble with metadata for every FRED macro series in the dataset.
-#' Useful for filtering by category, frequency, or forward-looking status before
-#' pulling data with [hd_fred()].
+#' Returns a tibble with metadata for every macro series in the dataset,
+#' covering FRED series plus CBOE/ICE volatility indicators fetched directly.
+#' Useful for filtering by category, frequency, source, or forward-looking
+#' status before pulling data with [hd_fred()] or the CBOE fetch script.
 #'
 #' @return A tibble with columns:
 #'   \describe{
-#'     \item{series_id}{FRED series identifier (character)}
-#'     \item{description}{Human-readable series name (character)}
+#'     \item{series_id}{Series identifier (character)}
+#'     \item{description}{Short series name (character)}
+#'     \item{long_name}{Descriptive human-readable name (character)}
 #'     \item{category}{One of "equity_index", "implied_vol", "interest_rate",
 #'       "credit_spread", "inflation", "yield_curve", "commodity", "currency",
 #'       "employment", "money_supply", "housing", "output" (character)}
 #'     \item{frequency}{One of "daily", "monthly", "quarterly" (character)}
 #'     \item{forward_looking}{TRUE if the series reflects market expectations (logical)}
 #'     \item{market_implied}{TRUE if derived from market prices (logical)}
-#'     \item{start_year}{Approximate start year on FRED (integer)}
+#'     \item{start_year}{Approximate start year of the series (integer)}
 #'     \item{source_detail}{Data provider detail, e.g. "CBOE", "ICE BofA" (character)}
+#'     \item{source_type}{Where data is fetched from: "fred", "cboe", or "yahoo" (character)}
+#'     \item{implied_from}{Underlying market the indicator is derived from, or
+#'       \code{NA_character_} for non-implied series (character)}
+#'     \item{liquidity}{Market liquidity of the underlying: "high", "medium",
+#'       or "low" (character)}
 #'   }
 #' @family discovery
 #' @export
 hd_macro_registry <- function() {
   tibble::tribble(
-    ~series_id,              ~description,                              ~category,       ~frequency,  ~forward_looking, ~market_implied, ~start_year, ~source_detail,
-    "SP500",                 "S&P 500 Index",                           "equity_index",  "daily",     FALSE,            FALSE,           1957L,       "Standard & Poor's",
-    "VIXCLS",                "CBOE VIX (30-day implied vol)",           "implied_vol",   "daily",     TRUE,             TRUE,            1990L,       "CBOE",
-    "VXVCLS",                "CBOE VXV (93-day implied vol)",           "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",
-    "OVXCLS",                "CBOE OVX (crude oil implied vol)",        "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",
-    "GVZCLS",                "CBOE GVZ (gold implied vol)",             "implied_vol",   "daily",     TRUE,             TRUE,            2008L,       "CBOE",
-    "EVZCLS",                "CBOE EVZ (EUR/USD implied vol)",          "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",
-    "DGS2",                  "2-Year Treasury Yield",                   "interest_rate", "daily",     FALSE,            FALSE,           1976L,       "US Treasury",
-    "DGS10",                 "10-Year Treasury Yield",                  "interest_rate", "daily",     FALSE,            FALSE,           1962L,       "US Treasury",
-    "DGS30",                 "30-Year Treasury Yield",                  "interest_rate", "daily",     FALSE,            FALSE,           1977L,       "US Treasury",
-    "DFF",                   "Federal Funds Rate (daily)",              "interest_rate", "daily",     FALSE,            FALSE,           1954L,       "Federal Reserve",
-    "FEDFUNDS",              "Effective Federal Funds Rate",            "interest_rate", "monthly",   FALSE,            FALSE,           1954L,       "Federal Reserve",
-    "BAMLH0A0HYM2",          "ICE BofA US High Yield OAS",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",
-    "BAMLC0A4CBBB",          "ICE BofA BBB Corporate OAS",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",
-    "BAMLH0A2HYB",           "ICE BofA BB High Yield OAS",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",
-    "T10Y2Y",                "10Y-2Y Treasury Spread",                  "yield_curve",   "daily",     TRUE,             TRUE,            1976L,       "US Treasury",
-    "T10Y3M",                "10Y-3M Treasury Spread",                  "yield_curve",   "daily",     TRUE,             TRUE,            1982L,       "US Treasury",
-    "T10YIE",                "10-Year Breakeven Inflation",             "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread",
-    "T5YIE",                 "5-Year Breakeven Inflation",              "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread",
-    "T5YIFR",                "5Y-5Y Forward Inflation Expectation",     "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread",
-    "GDP",                   "Gross Domestic Product",                  "output",        "quarterly", FALSE,            FALSE,           1947L,       "BEA",
-    "UNRATE",                "Unemployment Rate",                       "employment",    "monthly",   FALSE,            FALSE,           1948L,       "BLS",
-    "CPIAUCSL",              "Consumer Price Index",                    "inflation",     "monthly",   FALSE,            FALSE,           1947L,       "BLS",
-    "PCEPI",                 "PCE Price Index",                         "inflation",     "monthly",   FALSE,            FALSE,           1959L,       "BEA",
-    "DCOILWTICO",            "WTI Crude Oil Spot",                      "commodity",     "daily",     FALSE,            FALSE,           1986L,       "EIA",
-    "GOLDAMGBD228NLBM",      "Gold Price London Fix",                   "commodity",     "daily",     FALSE,            FALSE,           1968L,       "ICE Benchmark",
-    "DTWEXBGS",              "Trade-Weighted USD Index",                "currency",      "daily",     FALSE,            FALSE,           2006L,       "Federal Reserve",
-    "CSUSHPISA",             "Case-Shiller Home Price Index",           "housing",       "monthly",   FALSE,            FALSE,           1987L,       "S&P/Case-Shiller",
-    "M2SL",                  "M2 Money Supply",                         "money_supply",  "monthly",   FALSE,            FALSE,           1959L,       "Federal Reserve"
+    ~series_id,          ~description,                              ~long_name,                                            ~category,       ~frequency,  ~forward_looking, ~market_implied, ~start_year, ~source_detail,        ~source_type, ~implied_from,                        ~liquidity,
+    # ---- Equity index ----
+    "SP500",             "S&P 500 Index",                           "S&P 500 Stock Market Index",                          "equity_index",  "daily",     FALSE,            FALSE,           1957L,       "Standard & Poor's",   "fred",        NA_character_,                        "high",
+    # ---- Implied vol: existing FRED series ----
+    "VIXCLS",            "CBOE VIX (30-day implied vol)",           "30-Day Expected Volatility (S&P 500 Options)",        "implied_vol",   "daily",     TRUE,             TRUE,            1990L,       "CBOE",                "fred",        "S&P 500 options",                    "high",
+    "VXVCLS",            "CBOE VXV (93-day implied vol)",           "93-Day Expected Volatility (S&P 500 Options)",        "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",                "fred",        "S&P 500 options",                    "high",
+    "OVXCLS",            "CBOE OVX (crude oil implied vol)",        "Crude Oil Expected Volatility (USO Options)",         "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",                "fred",        "USO crude oil options",              "medium",
+    "GVZCLS",            "CBOE GVZ (gold implied vol)",             "Gold Expected Volatility (GLD Options)",              "implied_vol",   "daily",     TRUE,             TRUE,            2008L,       "CBOE",                "fred",        "GLD gold options",                   "medium",
+    "EVZCLS",            "CBOE EVZ (EUR/USD implied vol)",          "EUR/USD Expected Volatility (FXE Options)",           "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",                "fred",        "FXE EUR/USD options",                "medium",
+    # ---- Interest rates ----
+    "DGS2",              "2-Year Treasury Yield",                   "2-Year US Treasury Yield",                            "interest_rate", "daily",     FALSE,            FALSE,           1976L,       "US Treasury",         "fred",        NA_character_,                        "high",
+    "DGS10",             "10-Year Treasury Yield",                  "10-Year US Treasury Yield",                           "interest_rate", "daily",     FALSE,            FALSE,           1962L,       "US Treasury",         "fred",        NA_character_,                        "high",
+    "DGS30",             "30-Year Treasury Yield",                  "30-Year US Treasury Yield",                           "interest_rate", "daily",     FALSE,            FALSE,           1977L,       "US Treasury",         "fred",        NA_character_,                        "high",
+    "DFF",               "Federal Funds Rate (daily)",              "Federal Funds Rate (Daily)",                          "interest_rate", "daily",     FALSE,            FALSE,           1954L,       "Federal Reserve",     "fred",        NA_character_,                        "high",
+    "FEDFUNDS",          "Effective Federal Funds Rate",            "Effective Federal Funds Rate (Monthly)",              "interest_rate", "monthly",   FALSE,            FALSE,           1954L,       "Federal Reserve",     "fred",        NA_character_,                        "high",
+    # ---- Credit spreads ----
+    "BAMLH0A0HYM2",      "ICE BofA US High Yield OAS",             "US High Yield Bond Spread (All Ratings)",             "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",            "fred",        "corporate bond vs Treasury spread",  "high",
+    "BAMLC0A4CBBB",      "ICE BofA BBB Corporate OAS",             "US Investment Grade Bond Spread (BBB)",               "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",            "fred",        "corporate bond vs Treasury spread",  "medium",
+    "BAMLH0A2HYB",       "ICE BofA BB High Yield OAS",             "US High Yield Bond Spread (BB Rating)",               "credit_spread", "daily",     TRUE,             TRUE,            1996L,       "ICE BofA",            "fred",        "corporate bond vs Treasury spread",  "medium",
+    # ---- Yield curve ----
+    "T10Y2Y",            "10Y-2Y Treasury Spread",                  "Yield Curve Slope (10Y minus 2Y Treasury)",           "yield_curve",   "daily",     TRUE,             TRUE,            1976L,       "US Treasury",         "fred",        "Treasury term structure",            "high",
+    "T10Y3M",            "10Y-3M Treasury Spread",                  "Yield Curve Slope (10Y minus 3M Treasury)",           "yield_curve",   "daily",     TRUE,             TRUE,            1982L,       "US Treasury",         "fred",        "Treasury term structure",            "high",
+    # ---- Inflation ----
+    "T10YIE",            "10-Year Breakeven Inflation",             "10-Year Market-Implied Inflation Rate",               "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread", "fred",        "TIPS vs nominal Treasury spread",    "high",
+    "T5YIE",             "5-Year Breakeven Inflation",              "5-Year Market-Implied Inflation Rate",                "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread", "fred",        "TIPS vs nominal Treasury spread",    "high",
+    "T5YIFR",            "5Y-5Y Forward Inflation Expectation",     "5-to-10-Year Forward Inflation Expectation",          "inflation",     "daily",     TRUE,             TRUE,            2003L,       "TIPS-nominal spread", "fred",        "TIPS vs nominal Treasury spread",    "high",
+    "GDP",               "Gross Domestic Product",                  "US Gross Domestic Product",                           "output",        "quarterly", FALSE,            FALSE,           1947L,       "BEA",                 "fred",        NA_character_,                        "low",
+    "UNRATE",            "Unemployment Rate",                       "US Unemployment Rate",                                "employment",    "monthly",   FALSE,            FALSE,           1948L,       "BLS",                 "fred",        NA_character_,                        "low",
+    "CPIAUCSL",          "Consumer Price Index",                    "Consumer Price Index (All Urban Consumers)",          "inflation",     "monthly",   FALSE,            FALSE,           1947L,       "BLS",                 "fred",        NA_character_,                        "low",
+    "PCEPI",             "PCE Price Index",                         "Personal Consumption Expenditures Price Index",       "inflation",     "monthly",   FALSE,            FALSE,           1959L,       "BEA",                 "fred",        NA_character_,                        "low",
+    # ---- Commodities ----
+    "DCOILWTICO",        "WTI Crude Oil Spot",                      "WTI Crude Oil Spot Price",                            "commodity",     "daily",     FALSE,            FALSE,           1986L,       "EIA",                 "fred",        NA_character_,                        "medium",
+    "GOLDAMGBD228NLBM",  "Gold Price London Fix",                   "Gold Price (London PM Fix)",                          "commodity",     "daily",     FALSE,            FALSE,           1968L,       "ICE Benchmark",       "fred",        NA_character_,                        "medium",
+    # ---- Currency ----
+    "DTWEXBGS",          "Trade-Weighted USD Index",                "Trade-Weighted US Dollar Index",                      "currency",      "daily",     FALSE,            FALSE,           2006L,       "Federal Reserve",     "fred",        NA_character_,                        "medium",
+    # ---- Housing / money ----
+    "CSUSHPISA",         "Case-Shiller Home Price Index",           "S&P/Case-Shiller Home Price Index",                   "housing",       "monthly",   FALSE,            FALSE,           1987L,       "S&P/Case-Shiller",    "fred",        NA_character_,                        "low",
+    "M2SL",              "M2 Money Supply",                         "M2 Money Supply",                                     "money_supply",  "monthly",   FALSE,            FALSE,           1959L,       "Federal Reserve",     "fred",        NA_character_,                        "low",
+    # ---- CBOE term structure (fetched via fetch_cboe_vol.R) ----
+    "VIX9D",             "CBOE VIX9D (9-day implied vol)",          "9-Day Expected Volatility (S&P 500 Options)",         "implied_vol",   "daily",     TRUE,             TRUE,            2011L,       "CBOE",                "cboe",        "S&P 500 options",                    "high",
+    "VIX3M",             "CBOE VIX3M (3-month implied vol)",        "3-Month Expected Volatility (S&P 500 Options)",       "implied_vol",   "daily",     TRUE,             TRUE,            2009L,       "CBOE",                "cboe",        "S&P 500 options",                    "high",
+    "VIX6M",             "CBOE VIX6M (6-month implied vol)",        "6-Month Expected Volatility (S&P 500 Options)",       "implied_vol",   "daily",     TRUE,             TRUE,            2008L,       "CBOE",                "cboe",        "S&P 500 options",                    "high",
+    "VIX1Y",             "CBOE VIX1Y (1-year implied vol)",         "1-Year Expected Volatility (S&P 500 Options)",        "implied_vol",   "daily",     TRUE,             TRUE,            2007L,       "CBOE",                "cboe",        "S&P 500 options",                    "high",
+    "SKEW",              "CBOE SKEW (tail risk)",                   "Tail Risk Index (S&P 500 OTM Put Skew)",              "implied_vol",   "daily",     TRUE,             TRUE,            1990L,       "CBOE",                "cboe",        "S&P 500 OTM put options",            "high",
+    "MOVE",              "ICE BofA MOVE (bond vol)",                "Bond Market Volatility (Treasury Options)",           "implied_vol",   "daily",     TRUE,             TRUE,            2002L,       "ICE BofA",            "yahoo",       "Treasury options (swaptions)",       "medium"
   )
 }
 
