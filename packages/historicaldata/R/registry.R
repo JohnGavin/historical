@@ -147,7 +147,6 @@ hd_macro_registry <- function() {
     "PCEPI",             "PCE Price Index",                         "Personal Consumption Expenditures Price Index",       "inflation",     "monthly",   FALSE,            FALSE,           1959L,       "BEA",                 "fred",        NA_character_,                        "low",
     # ---- Commodities ----
     "DCOILWTICO",        "WTI Crude Oil Spot",                      "WTI Crude Oil Spot Price",                            "commodity",     "daily",     FALSE,            FALSE,           1986L,       "EIA",                 "fred",        NA_character_,                        "medium",
-    "GOLDAMGBD228NLBM",  "Gold Price London Fix",                   "Gold Price (London PM Fix)",                          "commodity",     "daily",     FALSE,            FALSE,           1968L,       "ICE Benchmark",       "fred",        NA_character_,                        "medium",
     # ---- Currency ----
     "DTWEXBGS",          "Trade-Weighted USD Index",                "Trade-Weighted US Dollar Index",                      "currency",      "daily",     FALSE,            FALSE,           2006L,       "Federal Reserve",     "fred",        NA_character_,                        "medium",
     # ---- Housing / money ----

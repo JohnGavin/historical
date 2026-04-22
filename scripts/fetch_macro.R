@@ -6,13 +6,13 @@
 library(dplyr)
 library(arrow)
 
-# 28 key macro series covering:
+# 27 key macro series covering:
 # - Equity indices (SP500)
 # - Volatility (VIX)
 # - Interest rates (DGS2, DGS10, DGS30, FEDFUNDS, DFF)
 # - Credit spreads (BAMLH0A0HYM2, BAMLC0A4CBBB, BAMLH0A2HYB)
 # - Macro (GDP, UNRATE, CPIAUCSL, PCEPI)
-# - Commodities (DCOILWTICO, GOLDAMGBD228NLBM)
+# - Commodities (DCOILWTICO)
 # - Currency (DTWEXBGS)
 # - Housing (CSUSHPISA)
 # - Money supply (M2SL)
@@ -35,7 +35,6 @@ series_list <- c(
   "CPIAUCSL",           # CPI (monthly)
   "PCEPI",              # PCE Price Index (monthly)
   "DCOILWTICO",         # WTI Crude Oil (daily)
-  "GOLDAMGBD228NLBM",   # Gold Price London Fix (daily)
   "DTWEXBGS",           # Trade-Weighted USD Index (daily)
   "CSUSHPISA",          # Case-Shiller Home Price Index (monthly)
   "M2SL",               # M2 Money Supply (monthly)
