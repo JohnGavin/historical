@@ -1,12 +1,27 @@
 #!/usr/bin/env Rscript
 # fetch_cboe_vol.R
-# Fetches CBOE volatility term structure and skew indicators from the CBOE CDN
-# and ICE BofA MOVE via Yahoo Finance. Writes to data/raw/cboe_vol.parquet.
+# Fetches 45 CBOE implied series from the CBOE CDN plus ICE BofA MOVE via
+# Yahoo Finance. Writes to data/raw/cboe_vol.parquet (46 series total).
 #
-# Indicators:
-#   VIX9D, VIX3M, VIX6M, VIX1Y  — CBOE VIX term structure (CDN JSON)
-#   SKEW                          — CBOE Skew Index (CDN JSON)
-#   MOVE                          — ICE BofA MOVE Index (Yahoo Finance ^MOVE)
+# Categories:
+#   VIX term structure : VIX1D, VIX9D, VIX3M, VIX6M, VIX1Y, VVIX
+#   Equity index vol   : VXN (Nasdaq), VXD (DJIA), RVX (Russell 2000)
+#   International vol  : VXEEM, VXEWZ, VXFXI, VXEFA
+#   Single-stock vol   : VXAPL, VXAZN, VXGOG, VXGS, VXIBM
+#   Commodity/FX vol   : OVX, GVZ, VXSLV, VXGDX
+#   Bond vol           : VXTLT
+#   Skew               : SKEW
+#   Implied correlation: COR1M, COR3M, COR6M, COR1Y
+#   Implied dispersion : DSPX
+#   Options strategies : BXM, BXY, BXMD, BXMC, BXMW, PUT, WPUT, PPUT, CLL,
+#                        CLLZ, BFLY, CNDR
+#   Variance premium   : VPD, VPN
+#   Vol strategy       : LOVOL, SHORTVOL
+#   Bond vol (Yahoo)   : MOVE (ICE BofA ^MOVE)
+#
+# Note: VIX is intentionally excluded — we use VIXCLS from FRED (longer
+# history from 1990). OVXCLS/GVZCLS from FRED are retained separately;
+# OVX/GVZ here are the direct CBOE CDN versions.
 
 suppressPackageStartupMessages({
   library(httr2)
@@ -82,14 +97,70 @@ fetch_move <- function() {
 cli::cli_h1("CBOE Volatility Indicators Fetch")
 
 cboe_series <- list(
-  list(symbol = "VIX9D", series_id = "VIX9D"),
-  list(symbol = "VIX3M",  series_id = "VIX3M"),
-  list(symbol = "VIX6M",  series_id = "VIX6M"),
-  list(symbol = "VIX1Y",  series_id = "VIX1Y"),
-  list(symbol = "SKEW",   series_id = "SKEW")
+  # ---- VIX term structure ----
+  list(symbol = "VIX9D",     series_id = "VIX9D"),
+  list(symbol = "VIX3M",     series_id = "VIX3M"),
+  list(symbol = "VIX6M",     series_id = "VIX6M"),
+  list(symbol = "VIX1Y",     series_id = "VIX1Y"),
+  list(symbol = "VIX1D",     series_id = "VIX1D"),
+  list(symbol = "VVIX",      series_id = "VVIX"),
+  # ---- Equity index vol ----
+  list(symbol = "VXN",       series_id = "VXN"),
+  list(symbol = "VXD",       series_id = "VXD"),
+  list(symbol = "RVX",       series_id = "RVX"),
+  # ---- International / ETF vol ----
+  list(symbol = "VXEEM",     series_id = "VXEEM"),
+  list(symbol = "VXEWZ",     series_id = "VXEWZ"),
+  list(symbol = "VXFXI",     series_id = "VXFXI"),
+  list(symbol = "VXEFA",     series_id = "VXEFA"),
+  # ---- Single-stock vol ----
+  list(symbol = "VXAPL",     series_id = "VXAPL"),
+  list(symbol = "VXAZN",     series_id = "VXAZN"),
+  list(symbol = "VXGOG",     series_id = "VXGOG"),
+  list(symbol = "VXGS",      series_id = "VXGS"),
+  list(symbol = "VXIBM",     series_id = "VXIBM"),
+  # ---- Commodity / FX vol ----
+  list(symbol = "OVX",       series_id = "OVX"),
+  list(symbol = "GVZ",       series_id = "GVZ"),
+  list(symbol = "VXSLV",     series_id = "VXSLV"),
+  list(symbol = "VXGDX",     series_id = "VXGDX"),
+  # ---- Bond vol ----
+  list(symbol = "VXTLT",     series_id = "VXTLT"),
+  # ---- Skew ----
+  list(symbol = "SKEW",      series_id = "SKEW"),
+  # ---- Implied correlation ----
+  list(symbol = "COR1M",     series_id = "COR1M"),
+  list(symbol = "COR3M",     series_id = "COR3M"),
+  list(symbol = "COR6M",     series_id = "COR6M"),
+  list(symbol = "COR1Y",     series_id = "COR1Y"),
+  # ---- Implied dispersion ----
+  list(symbol = "DSPX",      series_id = "DSPX"),
+  # ---- Options strategy benchmarks ----
+  list(symbol = "BXM",       series_id = "BXM"),
+  list(symbol = "BXY",       series_id = "BXY"),
+  list(symbol = "BXMD",      series_id = "BXMD"),
+  list(symbol = "BXMC",      series_id = "BXMC"),
+  list(symbol = "BXMW",      series_id = "BXMW"),
+  list(symbol = "PUT",       series_id = "PUT"),
+  list(symbol = "WPUT",      series_id = "WPUT"),
+  list(symbol = "PPUT",      series_id = "PPUT"),
+  list(symbol = "CLL",       series_id = "CLL"),
+  list(symbol = "CLLZ",      series_id = "CLLZ"),
+  list(symbol = "BFLY",      series_id = "BFLY"),
+  list(symbol = "CNDR",      series_id = "CNDR"),
+  # ---- Variance risk premium ----
+  list(symbol = "VPD",       series_id = "VPD"),
+  list(symbol = "VPN",       series_id = "VPN"),
+  # ---- Vol strategy ----
+  list(symbol = "LOVOL",     series_id = "LOVOL"),
+  list(symbol = "SHORTVOL",  series_id = "SHORTVOL")
 )
 
-results <- lapply(cboe_series, function(s) fetch_cboe(s$symbol, s$series_id))
+results <- lapply(cboe_series, function(s) {
+  out <- fetch_cboe(s$symbol, s$series_id)
+  Sys.sleep(1)  # respect CBOE CDN rate limit (~15 req/min)
+  out
+})
 results[["MOVE"]] <- fetch_move()
 
 combined <- dplyr::bind_rows(Filter(Negate(is.null), results))
