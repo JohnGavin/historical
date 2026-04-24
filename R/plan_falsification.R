@@ -49,6 +49,13 @@ plan_falsification <- function() {
         dplyr::select(date, strategy_ret = portfolio_ret)
     }),
 
+    # rsc: daily returns from RSC overlay on SPY
+    targets::tar_target(fals_rsc_input, {
+      library(dplyr)
+      rsc_portfolio |>
+        dplyr::select(date, strategy_ret = ret_strategy)
+    }),
+
 
     # ═══════════════════════════════════════════════════════════════════
     # Shared data: factors and risk-free rate (fetched once)
@@ -351,6 +358,97 @@ plan_falsification <- function() {
 
 
     # ═══════════════════════════════════════════════════════════════════
+    # Per-strategy tests: rsc
+    # ═══════════════════════════════════════════════════════════════════
+
+    targets::tar_target(fals_hac_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_hac_sharpe(fals_rsc_input$strategy_ret)
+    }),
+
+    targets::tar_target(fals_wn_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      ret    <- fals_rsc_input$strategy_ret
+      T_obs  <- sum(!is.na(ret))
+      nulls  <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_rv_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      ret   <- fals_rsc_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_ma1_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      ret   <- fals_rsc_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_fn_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      ret   <- fals_rsc_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_garch_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      ret   <- fals_rsc_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_gjr_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      ret   <- fals_rsc_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_ff_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_factor_null_test(
+        strategy_daily = fals_rsc_input,
+        rf_daily       = fals_rf,
+        factors_daily  = fals_factors
+      )
+    }),
+
+
+    # ═══════════════════════════════════════════════════════════════════
     # Cross-strategy targets
     # ═══════════════════════════════════════════════════════════════════
 
@@ -363,11 +461,12 @@ plan_falsification <- function() {
         list(
           fals_avoid_worst_input |> dplyr::rename(avoid_worst = strategy_ret),
           fals_drif_input        |> dplyr::rename(drif        = strategy_ret),
-          fals_fac_max_input     |> dplyr::rename(fac_max     = strategy_ret)
+          fals_fac_max_input     |> dplyr::rename(fac_max     = strategy_ret),
+          fals_rsc_input         |> dplyr::rename(rsc         = strategy_ret)
         )
       )
 
-      mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max")])
+      mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max", "rsc")])
       hd_keff(mat)
     }),
 
@@ -377,12 +476,14 @@ plan_falsification <- function() {
       z_is <- c(
         fals_hac_avoid_worst$hac_tstat,
         fals_hac_drif$hac_tstat,
-        fals_hac_fac_max$hac_tstat
+        fals_hac_fac_max$hac_tstat,
+        fals_hac_rsc$hac_tstat
       )
       z_oos <- c(
         fals_ff_avoid_worst$alpha_tstat_hac,
         fals_ff_drif$alpha_tstat_hac,
-        fals_ff_fac_max$alpha_tstat_hac
+        fals_ff_fac_max$alpha_tstat_hac,
+        fals_ff_rsc$alpha_tstat_hac
       )
 
       hd_delta_z(z_is, z_oos, K_eff = fals_keff$K_eff)
@@ -395,67 +496,78 @@ plan_falsification <- function() {
 
     targets::tar_target(fals_summary, {
       tibble::tibble(
-        strategy = c("avoid_worst", "drif", "fac_max"),
+        strategy = c("avoid_worst", "drif", "fac_max", "rsc"),
 
         # HAC t-statistics
         hac_tstat = c(
           fals_hac_avoid_worst$hac_tstat,
           fals_hac_drif$hac_tstat,
-          fals_hac_fac_max$hac_tstat
+          fals_hac_fac_max$hac_tstat,
+          fals_hac_rsc$hac_tstat
         ),
         hac_sharpe = c(
           fals_hac_avoid_worst$naive_sharpe,
           fals_hac_drif$naive_sharpe,
-          fals_hac_fac_max$naive_sharpe
+          fals_hac_fac_max$naive_sharpe,
+          fals_hac_rsc$naive_sharpe
         ),
 
         # Null rejection rates (ideally <= 0.075)
         rej_rate_wn = c(
           fals_wn_avoid_worst$rejection_rate,
           fals_wn_drif$rejection_rate,
-          fals_wn_fac_max$rejection_rate
+          fals_wn_fac_max$rejection_rate,
+          fals_wn_rsc$rejection_rate
         ),
         rej_rate_rv = c(
           fals_rv_avoid_worst$rejection_rate,
           fals_rv_drif$rejection_rate,
-          fals_rv_fac_max$rejection_rate
+          fals_rv_fac_max$rejection_rate,
+          fals_rv_rsc$rejection_rate
         ),
         rej_rate_ma1 = c(
           fals_ma1_avoid_worst$rejection_rate,
           fals_ma1_drif$rejection_rate,
-          fals_ma1_fac_max$rejection_rate
+          fals_ma1_fac_max$rejection_rate,
+          fals_ma1_rsc$rejection_rate
         ),
         rej_rate_fn = c(
           fals_fn_avoid_worst$rejection_rate,
           fals_fn_drif$rejection_rate,
-          fals_fn_fac_max$rejection_rate
+          fals_fn_fac_max$rejection_rate,
+          fals_fn_rsc$rejection_rate
         ),
         rej_rate_garch = c(
           fals_garch_avoid_worst$rejection_rate,
           fals_garch_drif$rejection_rate,
-          fals_garch_fac_max$rejection_rate
+          fals_garch_fac_max$rejection_rate,
+          fals_garch_rsc$rejection_rate
         ),
         rej_rate_gjr = c(
           fals_gjr_avoid_worst$rejection_rate,
           fals_gjr_drif$rejection_rate,
-          fals_gjr_fac_max$rejection_rate
+          fals_gjr_fac_max$rejection_rate,
+          fals_gjr_rsc$rejection_rate
         ),
 
         # FF5+Mom alpha regression
         ff_alpha_annual = c(
           fals_ff_avoid_worst$alpha_annual,
           fals_ff_drif$alpha_annual,
-          fals_ff_fac_max$alpha_annual
+          fals_ff_fac_max$alpha_annual,
+          fals_ff_rsc$alpha_annual
         ),
         ff_alpha_tstat = c(
           fals_ff_avoid_worst$alpha_tstat_hac,
           fals_ff_drif$alpha_tstat_hac,
-          fals_ff_fac_max$alpha_tstat_hac
+          fals_ff_fac_max$alpha_tstat_hac,
+          fals_ff_rsc$alpha_tstat_hac
         ),
         ff_r_squared = c(
           fals_ff_avoid_worst$r_squared,
           fals_ff_drif$r_squared,
-          fals_ff_fac_max$r_squared
+          fals_ff_fac_max$r_squared,
+          fals_ff_rsc$r_squared
         )
       )
     })

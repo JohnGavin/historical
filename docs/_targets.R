@@ -53,6 +53,7 @@ source(here::here("R/plan_regime.R"))
 source(here::here("R/plan_alpha_decay.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_avoid_worst.R"))
+source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
 source(here::here("R/plan_falsification.R"))
 
@@ -62,5 +63,6 @@ c(plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_dr
   plan_etf_replication(), plan_kelly(), plan_bootstrap_ci(),
   plan_regime(), plan_alpha_decay(),
   plan_avoid_worst(),
+  plan_risk_state(),
   plan_leaderboard(), plan_qa_vignette(),
   plan_falsification())
