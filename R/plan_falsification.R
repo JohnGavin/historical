@@ -570,7 +570,59 @@ plan_falsification <- function() {
           fals_ff_rsc$r_squared
         )
       )
-    })
+    }),
+
+
+    # ═══════════════════════════════════════════════════════════════════
+    # Results database: persist this run to parquet log
+    # ═══════════════════════════════════════════════════════════════════
+
+    targets::tar_target(fals_results_db, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      summary <- fals_summary
+
+      # Build results rows from falsification summary
+      rows <- tibble::tibble(
+        run_date    = Sys.Date(),
+        strategy_id = summary$strategy,
+        asset_class = c("overlay", "factor", "factor", "overlay"),  # avoid_worst, drif, fac_max, rsc
+        partition   = "full",
+        benchmark   = "SPY",
+        is_negative = c(TRUE, FALSE, FALSE, TRUE),
+
+        # From falsification
+        hac_tstat      = summary$hac_tstat,
+        sharpe_hac     = summary$hac_sharpe,
+        ff_alpha_annual = summary$ff_alpha_annual,
+        ff_alpha_tstat  = summary$ff_alpha_tstat,
+        ff_r_squared    = summary$ff_r_squared,
+        rej_rate_wn    = summary$rej_rate_wn,
+        rej_rate_rv    = summary$rej_rate_rv,
+        rej_rate_ma1   = summary$rej_rate_ma1,
+        rej_rate_fn    = summary$rej_rate_fn,
+        rej_rate_garch = summary$rej_rate_garch,
+        rej_rate_gjr   = summary$rej_rate_gjr,
+
+        # Notes
+        note_1 = c(
+          "Pure market beta (R\u00b2=41%)",
+          "Genuine alpha",
+          "Genuine alpha",
+          "Pure market beta (R\u00b2=88%)"
+        ),
+        tag_1 = c("vol-timing", "momentum", "momentum", "vol-timing"),
+        tag_2 = c("daily", "monthly", "monthly", "daily")
+      )
+
+      # Add K_eff and delta_z (same for all strategies in a run)
+      rows$k_eff    <- fals_keff$K_eff
+      rows$delta_z  <- fals_delta_z$delta_z
+
+      hd_results_append(rows)
+      rows
+    }, cue = targets::tar_cue(mode = "always"))
 
   )
 }

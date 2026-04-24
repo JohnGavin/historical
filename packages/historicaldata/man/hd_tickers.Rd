@@ -20,6 +20,8 @@ Uses DuckDB httpfs — only fetches the ticker column.
 Other discovery: 
 \code{\link{hd_datasets}()},
 \code{\link{hd_exchanges}()},
+\code{\link{hd_macro_forward}()},
+\code{\link{hd_macro_registry}()},
 \code{\link{hd_macro_series}()},
 \code{\link{hd_summary}()}
 }

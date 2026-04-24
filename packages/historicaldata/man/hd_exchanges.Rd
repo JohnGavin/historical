@@ -18,6 +18,8 @@ List all exchanges
 \seealso{
 Other discovery: 
 \code{\link{hd_datasets}()},
+\code{\link{hd_macro_forward}()},
+\code{\link{hd_macro_registry}()},
 \code{\link{hd_macro_series}()},
 \code{\link{hd_summary}()},
 \code{\link{hd_tickers}()}
