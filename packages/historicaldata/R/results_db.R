@@ -164,7 +164,8 @@ hd_results_append <- function(new_rows, results_dir = NULL) {
   # If file exists for today, read and append
   if (file.exists(out_path)) {
     existing <- arrow::read_parquet(out_path)
-    combined <- dplyr::bind_rows(existing, new_rows) |>
+    # New rows first so distinct() keeps the latest version
+    combined <- dplyr::bind_rows(new_rows, existing) |>
       dplyr::distinct(strategy_id, partition, .keep_all = TRUE)
     arrow::write_parquet(combined, out_path, compression = "zstd")
   } else {
