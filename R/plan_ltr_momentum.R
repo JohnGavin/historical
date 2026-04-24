@@ -66,9 +66,10 @@ plan_ltr_momentum <- function() {
 
       # Keep only US-listed equities (no dot in ticker — dots indicate
       # European exchanges: .L=LSE, .PA=Paris, .DE=Frankfurt, .ST=Stockholm, etc.)
+      # Only fetch columns we need to minimise memory
       all_data <- duckplyr::read_parquet_duckdb(ds$url) |>
         filter(!grepl("\\.", ticker)) |>
-        select(date, ticker, close, adjusted, volume, asset_class) |>
+        select(date, ticker, adjusted, volume) |>
         collect()
 
       # Filter to tickers with at least min_history_days
@@ -88,221 +89,26 @@ plan_ltr_momentum <- function() {
     }),
 
 
-    # ── Feature Engineering: 21 features per stock per month-end ──────────
+    # ── Feature Engineering: pre-computed via scripts/compute_ltr_features.R
     #
-    # CRITICAL: t+1 execution — features computed from data UP TO the
-    # previous month-end, applied to NEXT month's return. We use lag()
-    # so signal for month m uses data up through end of month m-1.
+    # 21 features per stock per month-end, t+1 execution enforced.
+    # Pre-computed outside targets (too memory-intensive for callr subprocess).
+    # Run: Rscript scripts/compute_ltr_features.R
     #
     targets::tar_target(ltr_features, {
       library(dplyr)
-      library(tidyr)
-
-      # Add xgboost + slider to libpath
-      for (pkg_name in c("xgboost", "slider")) {
-        if (!requireNamespace(pkg_name, quietly = TRUE)) {
-          paths <- Sys.glob(sprintf("/nix/store/*-r-%s-*/library", pkg_name))
-          paths <- paths[file.exists(file.path(paths, pkg_name))]
-          if (length(paths) > 0) .libPaths(c(.libPaths(), paths[[1]]))
-        }
+      feat_path <- here::here("data", "raw", "ltr_features.parquet")
+      if (!file.exists(feat_path)) {
+        cli::cli_abort(c(
+          "x" = "LTR features not found at {feat_path}",
+          "i" = "Run: Rscript scripts/compute_ltr_features.R"
+        ))
       }
-
-      univ <- ltr_universe
-
-      # Compute daily returns (adjusted price)
-      daily <- univ |>
-        arrange(ticker, date) |>
-        group_by(ticker) |>
-        mutate(
-          daily_ret  = adjusted / lag(adjusted) - 1,
-          log_vol    = log(pmax(volume, 1))
-        ) |>
-        filter(!is.na(daily_ret)) |>
-        ungroup()
-
-      # Identify month-end dates: last trading day of each month
-      month_ends <- daily |>
-        mutate(ym = format(date, "%Y-%m")) |>
-        group_by(ticker, ym) |>
-        filter(date == max(date)) |>
-        ungroup() |>
-        select(ticker, date, ym)
-
-      # For each month-end date × ticker, compute rolling features
-      # using data UP TO (and including) that date (for the PREVIOUS month-end)
-      # t+1: we lag features forward so they apply to NEXT month's return.
-
-      # Helper: compute cumulative return over a window ending at row i
-      # slider::slide_dbl handles this efficiently
-      compute_window_return <- function(ret, n) {
-        slider::slide_dbl(
-          ret,
-          function(r) prod(1 + r) - 1,
-          .before = n - 1L,
-          .complete = TRUE
-        )
-      }
-
-      # Rolling vol (21-day)
-      compute_rolling_vol <- function(ret, n) {
-        slider::slide_dbl(
-          ret,
-          function(r) if (length(r) < 5) NA_real_ else sd(r) * sqrt(252),
-          .before = n - 1L,
-          .complete = TRUE
-        )
-      }
-
-      # Rolling vol (63-day)
-      compute_rolling_vol63 <- function(ret, n = 63L) {
-        slider::slide_dbl(
-          ret,
-          function(r) if (length(r) < 10) NA_real_ else sd(r) * sqrt(252),
-          .before = n - 1L,
-          .complete = TRUE
-        )
-      }
-
-      # Rolling mean volume (for size proxy / turnover)
-      compute_rolling_mean_vol <- function(vol, n) {
-        slider::slide_dbl(vol, mean, .before = n - 1L, .complete = TRUE)
-      }
-
-      # Compute all features for each ticker
-      tickers <- unique(daily$ticker)
-
-      cli::cli_inform(c("i" = "LTR features: computing for {length(tickers)} tickers"))
-
-      all_features <- lapply(tickers, function(tk) {
-        d <- daily |>
-          filter(ticker == tk) |>
-          arrange(date)
-
-        if (nrow(d) < ltr_params$min_history_days) return(NULL)
-
-        ret <- d$daily_ret
-        lvol <- d$log_vol
-
-        # Raw return windows
-        r1   <- compute_window_return(ret, 1L)
-        r5   <- compute_window_return(ret, 5L)
-        r10  <- compute_window_return(ret, 10L)
-        r21  <- compute_window_return(ret, 21L)
-        r63  <- compute_window_return(ret, 63L)
-        r126 <- compute_window_return(ret, 126L)
-        r252 <- compute_window_return(ret, 252L)
-
-        # Rolling vols
-        v21 <- compute_rolling_vol(ret, 21L)
-        v63 <- compute_rolling_vol63(ret, 63L)
-
-        # Rolling mean volume (for turnover and size proxy)
-        mv21 <- compute_rolling_mean_vol(lvol, 21L)
-        mv63 <- compute_rolling_mean_vol(lvol, 63L)
-
-        tibble(
-          ticker = tk,
-          date   = d$date,
-
-          # Raw returns
-          ret_1d   = r1,
-          ret_5d   = r5,
-          ret_10d  = r10,
-          ret_21d  = r21,
-          ret_63d  = r63,
-          ret_126d = r126,
-          ret_252d = r252,
-
-          # Vol-normalised returns: ret / annualised vol
-          nret_1d   = r1   / pmax(v21 / sqrt(252), 1e-8),
-          nret_5d   = r5   / pmax(v21 / sqrt(252) * sqrt(5), 1e-8),
-          nret_10d  = r10  / pmax(v21 / sqrt(252) * sqrt(10), 1e-8),
-          nret_21d  = r21  / pmax(v21, 1e-8),
-          nret_63d  = r63  / pmax(v21, 1e-8),
-          nret_126d = r126 / pmax(v21, 1e-8),
-
-          # Momentum composite features
-          mom_1_3  = r21 - r63,
-          mom_3_6  = r63 - r126,
-          mom_1_6  = r21 - r126,
-          mom_6_12 = r126 - r252,
-
-          # Vol features
-          vol_21d   = v21,
-          vol_63d   = v63,
-          vol_ratio = pmin(pmax(v21 / pmax(v63, 1e-8), 0.1), 10),
-
-          # Turnover / size proxies (log-volume based)
-          turnover_21d = pmin(pmax(mv21 / pmax(mv63, 1e-8), 0.1), 10),
-          size_rank    = mv63   # rank applied monthly below
-        )
-      })
-
-      daily_features <- bind_rows(Filter(Negate(is.null), all_features))
-
-      # Merge with month-end dates to get one row per ticker-month
-      # Features on month m = values at end of month m (raw data up to month m)
-      # We then LAG by 1 month so they correspond to PREVIOUS month-end signals
-      month_end_features <- month_ends |>
-        inner_join(daily_features, by = c("ticker", "date")) |>
-        arrange(ticker, ym)
-
-      # Compute next-month return (the prediction target)
-      monthly_rets <- month_end_features |>
-        select(ticker, ym) |>
-        inner_join(
-          month_end_features |>
-            group_by(ticker) |>
-            arrange(ym) |>
-            mutate(
-              price_eom = daily_features$ret_1d[match(paste(ticker, date),
-                                                      paste(daily_features$ticker, daily_features$date))]
-            ) |>
-            ungroup(),
-          by = c("ticker", "ym")
-        )
-
-      # Simpler: compute next-month return from month-end adjusted prices
-      adj_eom <- univ |>
-        mutate(ym = format(date, "%Y-%m")) |>
-        group_by(ticker, ym) |>
-        filter(date == max(date)) |>
-        ungroup() |>
-        arrange(ticker, ym) |>
-        group_by(ticker) |>
-        mutate(next_ret = lead(adjusted) / adjusted - 1) |>
-        ungroup() |>
-        select(ticker, ym, next_ret)
-
-      # t+1: lag features by 1 month — signal at end of month m predicts month m+1
-      # We already have features at end of month m; we join them to next_ret for m+1
-      feat_lagged <- month_end_features |>
-        group_by(ticker) |>
-        arrange(ym) |>
-        mutate(
-          # Shift features so they apply to next month
-          ym_predict = lead(ym)
-        ) |>
-        filter(!is.na(ym_predict)) |>
-        ungroup() |>
-        rename(ym_signal = ym) |>
-        rename(ym = ym_predict)
-
-      # Cross-sectional size rank (within each month)
-      feat_final <- feat_lagged |>
-        group_by(ym) |>
-        mutate(size_rank = rank(size_rank, ties.method = "average") / n()) |>
-        ungroup() |>
-        left_join(adj_eom, by = c("ticker", "ym")) |>
-        filter(!is.na(next_ret)) |>
-        # Remove rows with all-NA features
-        filter(!is.na(ret_21d), !is.na(vol_21d))
-
+      feat <- arrow::read_parquet(feat_path)
       cli::cli_inform(c(
-        "i" = "LTR features: {nrow(feat_final)} rows, {n_distinct(feat_final$ym)} months"
+        "v" = "LTR features: {nrow(feat)} rows, {n_distinct(feat$ticker)} tickers, {n_distinct(feat$ym)} months"
       ))
-
-      feat_final
+      feat
     }),
 
 
