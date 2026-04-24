@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-04-24
+
+### Completed
+- Avoid Worst Days strategy (#45 #46): 27 targets + vignette, t+1 execution fix dropped CAGR 18.4%→5.3%
+- Risk State Classification (#51): 15 targets, 3-signal VIX design — negative result (88% market beta, no alpha)
+- LTR Cross-Sectional Momentum (#49): 11 targets + 2 standalone scripts (nix ABI workaround for XGBoost)
+- Falsification framework (#53 Phase 1): 12 exported pkg functions (hd_hac_tstat, 6 null generators, K_eff, delta_z, FF regression) + 33 pipeline targets across 5 strategies
+- Results database (#60): 74-column schema (hd_results_schema/append/query), 23 metrics backfilled from pipeline
+- Macro registry expansion: 28→81 series with forward-looking metadata (source_type, implied_from, liquidity)
+- CBOE vol fetch script: 46 series (VIX term structure, equity/intl/commodity vol, skew, implied correlation/dispersion)
+- International vol fetch: VSTOXX, VHSI, NKV1, AXVI, INDIAVIX
+- HuggingFace upload: 78 macro series, 425K rows
+- Issues created: #57-#68 (negative results dashboard, shadow trades, commodities, prediction markets, CRPS, circuit-breakers, reviser)
+
+### Failed Approaches
+- t+0 VIX execution: used d$vix[i] instead of d$vix[i-1] — physically impossible same-day trading inflated CAGR by 3.5x
+- RSC overlay: 3-signal VIX design (VVIX, term structure change, term structure level) adds no alpha over buy-and-hold
+- XGBoost in callr subprocess: 5.4M rows × 21 features OOM — fixed by chunked standalone scripts
+- XGBoost from global nix shell: segfault from ABI mismatch — must run inside nix develop
+- VDAX/VCAC/VFTSE fetch: 404 or no free bulk source available
+- hd_results_append dedup: bind_rows(existing, new) kept stale rows — reversed order
+
+### Accuracy / Metrics
+- Pipeline: ~210 targets (19 plan files), 0 errors
+- Strategy scorecard: DRIF genuine alpha (t=4.73), Factor MAX genuine alpha (t=3.74), LTR borderline (t=1.99), Avoid Worst no alpha (t=-0.80), RSC no alpha (t=-1.60)
+- 12 issues created, multiple commits
+
+### Known Limitations
+- LTR alpha decay target is a stub — requires re-running XGBoost inside nix develop
+- 29 results DB columns still NA (trade-level metrics need #61)
+- VSTOXX data truncated at 2016 (STOXX .txt format issue)
+- Falsification dashboard vignette (#53) not yet created
+- Negative results dashboard (#57) not yet created
+
 ## 2026-04-20
 
 ### Completed

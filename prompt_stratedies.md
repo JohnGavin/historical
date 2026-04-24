@@ -16,6 +16,21 @@
 ====
 
 # Strategies to be considered now
+
+## spy 2.11 sharpe
++ https://www.quantitativo.com/p/statistical-arbitrage
+	+ Nov 10 2024
+		+ spread between assets
+		+ balance long and short positions
+		+ reduce overall market movements
++ /Users/johngavin/docs_gh/blogs/quantitiativo.com/inst/qmd/quantitativo.com_spy_2.11_sharpe.qmd
+  + **https://github.com/JohnGavin/quantitiativo.com/actions**
+    + https://github.com/JohnGavin/llm
+    + https://github.com/JohnGavin/r.package.example/actions/runs/10037744340
+      + https://github.com/user-workshop-cicd/r.pkg.template/actions/runs/9466913950
+
+
+
 ## Beat the Stock Market by Avoiding Its Worst Days
 + https://www.morningstar.com/funds/you-can-beat-stock-market-by-avoiding-its-worst-days-you-wont
 + make more by avoiding market’s biggest losses 
@@ -100,6 +115,16 @@
 	+ Stronger in:
 		+ Small caps
 		+ Illiquid stocks
+
+## The Many Facets of Stock Momentum: Distinguishing Factor and Stock Components
++ https://alphaarchitect.com/stock-specific-momentum/
++ there is a durable, stock-specific momentum component
+	+ tied to how prices react to firm news around earnings dates
++ real stock-specific momentum, not just factor timing
+	+ lower-risk way to capture momentum without leaning so heavily on broad factor moves
+	+ 12-month momentum that comes only from returns in short windows around each firm’s earnings announcements over the prior year
+	+ significant after controlling for changing factor exposures.
+
 
 ## Factor-max
 + https://alphaarchitect.com/factor-max/
