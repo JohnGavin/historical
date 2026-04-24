@@ -112,220 +112,31 @@ plan_ltr_momentum <- function() {
     }),
 
 
-    # ── Walk-Forward Model: XGBoost LambdaMART ───────────────────────────
+    # ── Walk-Forward Model + Portfolio: pre-computed via nix develop ──────
     #
-    # Expanding window: for each year Y from 2015 onwards,
-    # train on all data before year Y, predict rankings for each month in year Y.
-    # Retrain annually. Never use future data.
+    # XGBoost LambdaMART requires nix develop shell (compiled .so ABI mismatch
+    # from global dev shell causes segfault). Pre-computed via:
+    #   nix develop . --command Rscript scripts/compute_ltr_model.R
     #
-    targets::tar_target(ltr_model, {
-      library(dplyr)
-
-      # Add xgboost to libpath
-      if (!requireNamespace("xgboost", quietly = TRUE)) {
-        xgb_paths <- Sys.glob("/nix/store/*-r-xgboost-*/library")
-        xgb_paths <- xgb_paths[file.exists(file.path(xgb_paths, "xgboost"))]
-        if (length(xgb_paths) > 0) {
-          closure <- system2("nix-store", c("-qR", dirname(xgb_paths[[1]])),
-                             stdout = TRUE, stderr = FALSE)
-          r_libs <- closure[file.exists(file.path(closure, "library"))]
-          .libPaths(c(.libPaths(), unique(file.path(r_libs, "library"))))
-        }
-      }
-
-      features <- ltr_features
-
-      feature_cols <- setdiff(
-        names(features),
-        c("ym", "ticker", "date", "ym_signal", "next_ret",
-          "ret_252d",   # optional — often NA early in history
-          "mom_6_12")   # also uses 252d
-      )
-
-      # Only use months with complete features
-      train_months <- sort(unique(features$ym))
-
-      # Walk-forward: train up to year Y, predict year Y
-      # Start predictions from first year with >= train_years * 12 months of data
-      min_train_months <- ltr_params$train_years * 12L
-
-      all_predictions <- list()
-
-      first_pred_idx <- min_train_months + 1L
-      if (first_pred_idx > length(train_months)) {
-        cli::cli_warn(c("!" = "LTR: insufficient data for walk-forward"))
-        return(tibble(ym = character(), ticker = character(),
-                      predicted_rank = numeric(), ltr_score = numeric()))
-      }
-
-      # Identify test years (retrain annually)
-      pred_months <- train_months[first_pred_idx:length(train_months)]
-      pred_years  <- sort(unique(substr(pred_months, 1, 4)))
-
-      cli::cli_inform(c(
-        "i" = "LTR walk-forward: {length(pred_years)} test years, {length(pred_months)} test months"
-      ))
-
-      for (yr in pred_years) {
-        yr_months <- pred_months[substr(pred_months, 1, 4) == yr]
-        # Training data: all months BEFORE this year
-        cutoff_ym <- paste0(yr, "-01")
-        train_data <- features |>
-          filter(ym < cutoff_ym) |>
-          filter(!is.na(ret_21d), !is.na(vol_21d), !is.na(next_ret))
-
-        # Remove columns that are mostly NA
-        na_frac <- colMeans(is.na(train_data[, feature_cols, drop = FALSE]))
-        good_cols <- feature_cols[na_frac < 0.3]  # keep cols with <30% NA
-
-        if (nrow(train_data) < 200 || length(good_cols) < 5) {
-          cli::cli_warn(c("!" = "LTR: skipping year {yr} — insufficient training data"))
-          next
-        }
-
-        X_train <- as.matrix(train_data[, good_cols, drop = FALSE])
-        y_train <- train_data$next_ret
-
-        # Impute remaining NAs with column median
-        for (col_i in seq_len(ncol(X_train))) {
-          na_idx <- is.na(X_train[, col_i])
-          if (any(na_idx)) {
-            X_train[na_idx, col_i] <- median(X_train[!na_idx, col_i], na.rm = TRUE)
-          }
-        }
-
-        # XGBoost ranking requires group information: stocks per month
-        groups_train <- as.integer(table(train_data$ym))
-
-        dtrain <- xgboost::xgb.DMatrix(
-          data  = X_train,
-          label = y_train
-        )
-        xgboost::setinfo(dtrain, "group", groups_train)
-
-        model <- tryCatch({
-          xgboost::xgb.train(
-            params = list(
-              objective   = ltr_params$xgb_params$objective,
-              eval_metric = ltr_params$xgb_params$eval_metric,
-              max_depth   = ltr_params$xgb_params$max_depth,
-              eta         = ltr_params$xgb_params$eta,
-              nthread     = 1L  # deterministic
-            ),
-            data    = dtrain,
-            nrounds = ltr_params$xgb_params$nrounds,
-            verbose = 0
-          )
-        }, error = function(e) {
-          cli::cli_warn(c("!" = "LTR xgb.train failed for {yr}: {conditionMessage(e)}"))
-          NULL
-        })
-
-        if (is.null(model)) next
-
-        # Predict for each month in this year
-        for (test_ym in yr_months) {
-          test_data <- features |>
-            filter(ym == test_ym) |>
-            filter(!is.na(ret_21d), !is.na(vol_21d))
-
-          if (nrow(test_data) < ltr_params$min_stocks_per_month) {
-            cli::cli_warn(c(
-              "!" = "LTR: {test_ym} has only {nrow(test_data)} stocks (need {ltr_params$min_stocks_per_month})"
-            ))
-            next
-          }
-
-          X_test <- as.matrix(test_data[, good_cols, drop = FALSE])
-          # Impute NAs
-          for (col_i in seq_len(ncol(X_test))) {
-            na_idx <- is.na(X_test[, col_i])
-            if (any(na_idx)) {
-              X_test[na_idx, col_i] <- median(X_test[!na_idx, col_i], na.rm = TRUE)
-            }
-          }
-
-          scores <- predict(model, xgboost::xgb.DMatrix(X_test))
-
-          all_predictions[[length(all_predictions) + 1L]] <- tibble(
-            ym             = test_ym,
-            ticker         = test_data$ticker,
-            ltr_score      = scores,
-            predicted_rank = rank(-scores, ties.method = "average"),
-            n_stocks       = nrow(test_data)
-          )
-        }
-      }
-
-      if (length(all_predictions) == 0) {
-        cli::cli_warn(c("!" = "LTR: no predictions generated"))
-        return(tibble(ym = character(), ticker = character(),
-                      predicted_rank = numeric(), ltr_score = numeric()))
-      }
-
-      result <- bind_rows(all_predictions)
-      cli::cli_inform(c(
-        "v" = "LTR model: {nrow(result)} predictions, {n_distinct(result$ym)} months"
-      ))
-      result
-    }),
-
-
-    # ── Portfolio Construction: Long D10, Short D1 ────────────────────────
+    # Reads: data/raw/ltr_portfolio.parquet, data/raw/ltr_model_importance.parquet
+    #
     targets::tar_target(ltr_portfolio, {
       library(dplyr)
-
-      # Merge predictions with actual next-month returns
-      # Actual returns come from ltr_features (next_ret column)
-      rets <- ltr_features |>
-        select(ticker, ym, next_ret)
-
-      merged <- ltr_model |>
-        inner_join(rets, by = c("ticker", "ym")) |>
-        filter(!is.na(next_ret))
-
-      # Assign deciles per month: decile 1 = top score (long), 10 = bottom (short)
-      deciled <- merged |>
-        group_by(ym) |>
-        filter(n() >= ltr_params$min_stocks_per_month) |>
-        mutate(
-          decile = ntile(desc(ltr_score), ltr_params$n_quantiles)
-        ) |>
-        ungroup()
-
-      # Monthly portfolio returns
-      long_ret <- deciled |>
-        filter(decile == 1L) |>
-        group_by(ym) |>
-        summarise(long_ret = mean(next_ret, na.rm = TRUE), n_long = n(), .groups = "drop")
-
-      short_ret <- deciled |>
-        filter(decile == ltr_params$n_quantiles) |>
-        group_by(ym) |>
-        summarise(short_ret = mean(next_ret, na.rm = TRUE), n_short = n(), .groups = "drop")
-
-      port <- inner_join(long_ret, short_ret, by = "ym") |>
-        mutate(
-          # Winsorise returns
-          long_ret  = pmin(pmax(long_ret,  -ltr_params$max_monthly_ret), ltr_params$max_monthly_ret),
-          short_ret = pmin(pmax(short_ret, -ltr_params$max_monthly_ret), ltr_params$max_monthly_ret),
-          # Costs: 80% turnover assumed for monthly sort
-          turnover   = 0.80,
-          trade_cost = turnover * ltr_params$cost_per_trade * 2 * 2,
-          borrow_cost = ltr_params$borrow_rate_annual / 12,
-          total_cost  = trade_cost + borrow_cost,
-          # Long-short return
-          port_ret  = long_ret - short_ret - total_cost,
-          date      = as.Date(paste0(ym, "-15"))
-        )
-
-      # Add risk-free rate
-      port |>
-        left_join(stk_rf, by = "ym") |>
-        mutate(
-          port_cum  = cumprod(1 + port_ret),
-          long_cum  = cumprod(1 + long_ret)
-        )
+      port_path <- here::here("data", "raw", "ltr_portfolio.parquet")
+      if (!file.exists(port_path)) {
+        cli::cli_abort(c(
+          "x" = "LTR portfolio not found at {port_path}",
+          "i" = "Run: nix develop . --command Rscript scripts/compute_ltr_model.R"
+        ))
+      }
+      port <- arrow::read_parquet(port_path)
+      cli::cli_inform(c(
+        "v" = "LTR portfolio: {nrow(port)} months, {format(min(port$date), '%Y-%m')} to {format(max(port$date), '%Y-%m')}"
+      ))
+      port |> mutate(
+        port_ret = ls_ret_net,
+        port_cum = cumprod(1 + port_ret)
+      )
     }),
 
 
@@ -473,71 +284,15 @@ plan_ltr_momentum <- function() {
     # for lessons on monotonic constraints + shallow trees producing
     # compressed importance distributions.
     #
+    # ── Feature Importance: pre-computed via nix develop ──────────────
     targets::tar_target(ltr_feature_importance, {
       library(dplyr)
-
-      if (!requireNamespace("xgboost", quietly = TRUE)) {
-        xgb_paths <- Sys.glob("/nix/store/*-r-xgboost-*/library")
-        xgb_paths <- xgb_paths[file.exists(file.path(xgb_paths, "xgboost"))]
-        if (length(xgb_paths) > 0) {
-          closure <- system2("nix-store", c("-qR", dirname(xgb_paths[[1]])),
-                             stdout = TRUE, stderr = FALSE)
-          r_libs <- closure[file.exists(file.path(closure, "library"))]
-          .libPaths(c(.libPaths(), unique(file.path(r_libs, "library"))))
-        }
+      imp_path <- here::here("data", "raw", "ltr_model_importance.parquet")
+      if (!file.exists(imp_path)) {
+        cli::cli_warn("LTR importance not found — run: nix develop . --command Rscript scripts/compute_ltr_model.R")
+        return(tibble::tibble(Feature = character(), Gain = numeric()))
       }
-
-      features <- ltr_features
-
-      feature_cols <- setdiff(
-        names(features),
-        c("ym", "ticker", "date", "ym_signal", "next_ret", "ret_252d", "mom_6_12")
-      )
-
-      # Train on full in-sample period
-      train_data <- features |>
-        filter(ym <= format(ltr_params$is_end, "%Y-%m")) |>
-        filter(!is.na(ret_21d), !is.na(vol_21d), !is.na(next_ret))
-
-      na_frac <- colMeans(is.na(train_data[, feature_cols, drop = FALSE]))
-      good_cols <- feature_cols[na_frac < 0.3]
-
-      X <- as.matrix(train_data[, good_cols, drop = FALSE])
-      y <- train_data$next_ret
-
-      for (col_i in seq_len(ncol(X))) {
-        na_idx <- is.na(X[, col_i])
-        if (any(na_idx)) X[na_idx, col_i] <- median(X[!na_idx, col_i], na.rm = TRUE)
-      }
-
-      groups <- as.integer(table(train_data$ym))
-      dtrain <- xgboost::xgb.DMatrix(data = X, label = y)
-      xgboost::setinfo(dtrain, "group", groups)
-
-      fit <- tryCatch({
-        xgboost::xgb.train(
-          params = list(
-            objective   = ltr_params$xgb_params$objective,
-            eval_metric = ltr_params$xgb_params$eval_metric,
-            max_depth   = ltr_params$xgb_params$max_depth,
-            eta         = ltr_params$xgb_params$eta,
-            nthread     = 1L
-          ),
-          data    = dtrain,
-          nrounds = ltr_params$xgb_params$nrounds,
-          verbose = 0
-        )
-      }, error = function(e) {
-        cli::cli_warn(c("!" = "LTR feature importance model failed: {conditionMessage(e)}"))
-        NULL
-      })
-
-      if (is.null(fit)) {
-        return(tibble(Feature = character(), Gain = numeric(),
-                      Cover = numeric(), Frequency = numeric()))
-      }
-
-      imp <- xgboost::xgb.importance(model = fit) |>
+      imp <- arrow::read_parquet(imp_path) |>
         as_tibble() |>
         mutate(
           feature_group = dplyr::case_when(
@@ -549,15 +304,13 @@ plan_ltr_momentum <- function() {
             grepl("size",    Feature) ~ "Size",
             TRUE                      ~ "Other"
           )
-        ) |>
+        )
+      # Aggregate across years (importance computed per training year)
+      imp |>
+        group_by(Feature, feature_group) |>
+        summarise(Gain = mean(Gain), Cover = mean(Cover),
+                  Frequency = mean(Frequency), .groups = "drop") |>
         arrange(desc(Gain))
-
-      cli::cli_inform(c(
-        "i" = "LTR feature importance: top feature = {imp$Feature[1]} (gain={round(imp$Gain[1], 3)})",
-        "!" = "CAVEAT: rank:pairwise importance reflects ranking loss, not return prediction."
-      ))
-
-      imp
     }),
 
 
