@@ -305,7 +305,7 @@ plan_falsification_vignette <- function() {
     }),
 
 
-    # ── HAC bar chart ────────────────────────────────────────────────
+    # ── HAC dot chart (Cleveland style) ─────────────────────────────
     targets::tar_target(fals_vig_hac_plot, {
       library(ggplot2)
 
@@ -324,37 +324,38 @@ plan_falsification_vignette <- function() {
       hac_t <- sapply(hac_results, `[[`, "hac_tstat")
 
       df_long <- data.frame(
-        strategy = factor(rep(strat_names, 2), levels = strat_names),
-        type = rep(c("Naive t", "HAC t"), each = 5),
+        strategy = factor(rep(strat_names, 2), levels = rev(strat_names)),
+        type = factor(rep(c("Naive t", "HAC t"), each = 5),
+                      levels = c("Naive t", "HAC t")),
         t_stat = c(naive_t, hac_t)
       )
 
-      ggplot(df_long, aes(x = strategy, y = t_stat, fill = type)) +
-        geom_col(position = "dodge", width = 0.7) +
-        geom_hline(yintercept = 2.0, color = "#e74c3c", linetype = "dashed",
+      ggplot(df_long, aes(x = t_stat, y = strategy, colour = type, shape = type)) +
+        geom_vline(xintercept = 2.0, color = "#e74c3c", linetype = "dashed",
                    linewidth = 0.8) +
-        geom_hline(yintercept = 0, color = "#666", linewidth = 0.5) +
-        annotate("text", x = 0.5, y = 2.2, label = "t = 2.0 threshold",
-                 color = "#e74c3c", hjust = 0, size = 3.5) +
-        scale_fill_manual(values = c("Naive t" = "#4a90d9", "HAC t" = "#2ecc71")) +
+        geom_vline(xintercept = 0, color = "#666", linewidth = 0.5) +
+        geom_point(size = 5, position = position_dodge(width = 0.5)) +
+        annotate("text", x = 2.2, y = 0.5, label = "t = 2.0",
+                 color = "#e74c3c", hjust = 0, size = 4) +
+        scale_colour_manual(values = c("Naive t" = "#4a90d9", "HAC t" = "#2ecc71")) +
+        scale_shape_manual(values = c("Naive t" = 16, "HAC t" = 17)) +
         labs(
-          title = "Naive vs HAC t-Statistics",
+          title = "Naive vs HAC t-Statistics (Cleveland Dot Plot)",
           subtitle = "HAC correction accounts for GARCH persistence in returns",
-          x = NULL, y = "t-statistic", fill = NULL
+          x = "t-statistic", y = NULL, colour = NULL, shape = NULL
         ) +
         theme_minimal(base_size = 14) +
         theme(
           plot.background = element_rect(fill = "black", color = NA),
           panel.background = element_rect(fill = "black", color = NA),
           text = element_text(color = "#e0e0e0"),
-          axis.text = element_text(color = "#e0e0e0"),
-          axis.text.x = element_text(angle = 20, hjust = 1),
+          axis.text = element_text(color = "#e0e0e0", size = 13),
           legend.position = "top",
           legend.background = element_rect(fill = "black"),
           legend.text = element_text(color = "#e0e0e0"),
-          panel.grid.major.y = element_line(color = "#333"),
+          panel.grid.major.x = element_line(color = "#333"),
           panel.grid.minor = element_blank(),
-          panel.grid.major.x = element_blank()
+          panel.grid.major.y = element_line(color = "#222")
         )
     }),
 
