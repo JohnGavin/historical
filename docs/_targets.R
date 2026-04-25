@@ -56,6 +56,7 @@ source(here::here("R/plan_avoid_worst.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
 source(here::here("R/plan_falsification.R"))
+source(here::here("R/plan_falsification_vignette.R"))
 source(here::here("R/plan_ltr_momentum.R"))
 
 # Combine: partitions, strategies, portfolio, ETF replication, leaderboard, QA
@@ -67,4 +68,5 @@ c(plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_dr
   plan_risk_state(),
   plan_leaderboard(), plan_qa_vignette(),
   plan_falsification(),
+  plan_falsification_vignette(),
   plan_ltr_momentum())

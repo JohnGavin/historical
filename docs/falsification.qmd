@@ -1,0 +1,383 @@
+---
+title: "Strategy Falsification Dashboard"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+          <style>
+          body { font-size: 1.3em; }
+          .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
+          .nav-link { font-size: 0.95em !important; }
+          .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
+          .navbar, .quarto-dashboard-header, .navbar-dark,
+          .bslib-page-dashboard > .navbar {
+            background-color: black !important;
+            color: white !important;
+          }
+          .navbar .navbar-brand, .navbar .nav-link, .navbar-text,
+          .navbar .navbar-nav .nav-link {
+            color: white !important;
+          }
+          .navbar .nav-link.active, .navbar .nav-link:hover {
+            color: white !important;
+            background-color: black !important;
+            border: 1px solid white !important;
+            border-radius: 4px;
+          }
+          .navbar .nav-link { color: #aaa !important; }
+          .navbar-nav { flex-wrap: wrap !important; }
+          .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
+            height: auto !important; min-height: 0 !important;
+            max-height: none !important; overflow: visible !important;
+            flex: none !important;
+          }
+          .cell-output-display { display: block !important; position: relative !important;
+            overflow: visible !important; margin-bottom: 1em; }
+          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
+          .fig-caption { display: block; position: relative; clear: both;
+            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #e0e0e0; }
+          .datatables, .dataTables_wrapper { display: block !important;
+            position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
+          table.dataTable { white-space: nowrap; }
+          table caption { caption-side: top !important; }
+          details { margin-bottom: 0.5em; }
+          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+          .fullscreen-overlay {
+            position: fixed !important; top: 0 !important; left: 0 !important;
+            width: 100vw !important; height: 100vh !important;
+            z-index: 9999 !important; background: black !important;
+            padding: 10px !important; cursor: zoom-out !important;
+          }
+          .fullscreen-overlay img { width: 100% !important; height: 100% !important;
+            object-fit: contain !important; }
+          .cell-output-display:has(img) { cursor: zoom-in; }
+          </style>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          document.addEventListener('click', function(e) {
+            var overlay = e.target.closest('.fullscreen-overlay');
+            if (overlay) { overlay.remove(); return; }
+            var img = e.target.closest('.cell-output-display img');
+            if (!img) return;
+            var div = document.createElement('div');
+            div.className = 'fullscreen-overlay';
+            var clone = document.createElement('img');
+            clone.src = img.src;
+            div.appendChild(clone);
+            document.body.appendChild(div);
+          });
+          document.addEventListener('shown.bs.tab', function(e) {
+            var pane = document.querySelector(e.target.getAttribute('data-bs-target') || e.target.getAttribute('href'));
+            if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+```
+
+::: {.callout-note}
+**Falsification framework.** Every strategy must survive multiple statistical tests before being considered genuine. A strategy that looks profitable may simply be disguised factor exposure (beta) rather than true alpha. This dashboard applies Harvey, Liu & Zhu (2016) and Lopez de Prado (2018) methodology.
+:::
+
+# Scorecard
+
+## Row
+
+### {.tabset}
+
+#### Strategy Verdicts
+
+```{r}
+#| label: scorecard
+scorecard <- safe_tar_read("fals_vig_scorecard")
+caption <- safe_tar_read("fals_vig_scorecard_caption")
+if (!is.null(scorecard)) hd_dt(scorecard, caption)
+```
+
+#### Alpha vs Factor Exposure
+
+```{r}
+#| label: ff-alpha-plot
+#| fig-height: 6
+#| fig-width: 10
+safe_tar_read("fals_vig_ff_alpha_plot")
+```
+
+```{r}
+#| label: ff-alpha-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_ff_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### How to Read This
+
+**Verdict criteria:**
+
+- **Genuine alpha**: FF5+Mom alpha t-statistic > 2.0 AND R² < 15%. The strategy generates returns that known factors cannot explain, and factor exposure is low.
+- **Borderline**: Alpha t-stat near 2.0. May be genuine but evidence is weak. Requires out-of-sample confirmation.
+- **No alpha (beta)**: Alpha t-stat < 2.0 OR R² > 20%. The strategy's returns are explained by known factor exposure (market beta, momentum, value, etc.).
+
+**Key insight**: A strategy can have positive returns and still have zero alpha. If those returns come from market exposure (high R²), you can get the same exposure more cheaply via index funds.
+
+
+# HAC Analysis {#hac}
+
+## Row
+
+### {.tabset}
+
+#### Naive vs HAC Sharpe
+
+```{r}
+#| label: hac-plot
+#| fig-height: 6
+#| fig-width: 10
+safe_tar_read("fals_vig_hac_plot")
+```
+
+```{r}
+#| label: hac-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_hac_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### HAC Details
+
+```{r}
+#| label: hac-table
+hac_comp <- safe_tar_read("fals_vig_hac_comparison")
+cap <- safe_tar_read("fals_vig_hac_caption")
+if (!is.null(hac_comp)) hd_dt(hac_comp, cap)
+```
+
+#### Methodology
+
+**Why HAC correction matters:**
+
+Financial returns exhibit volatility clustering ([GARCH](https://en.wikipedia.org/wiki/Autoregressive_conditional_heteroskedasticity) persistence). Standard Sharpe ratios assume iid returns, which inflates the Sharpe by 20-30% on average.
+
+The Newey-West correction:
+
+- Uses a Bartlett kernel to downweight distant autocovariances
+- Bandwidth = floor(4 * (T/100)^(2/9)) — automatic, data-driven
+- Produces an HAC-consistent variance estimate for the mean return
+- The HAC t-statistic = mean(r) / sqrt(HAC_var / T)
+
+**Interpretation:**
+
+- HAC t > 2.0: Robust risk-adjusted return, survives serial correlation correction
+- HAC t < 2.0: Naive Sharpe is inflated by autocorrelation; true risk-adjusted performance is weaker
+- Inflation % shows how much the naive Sharpe overstates performance
+
+
+# Null Environments {#nulls}
+
+## Row
+
+### {.tabset}
+
+#### Rejection Heatmap
+
+```{r}
+#| label: null-heatmap
+#| fig-height: 6
+#| fig-width: 10
+safe_tar_read("fals_vig_null_heatmap")
+```
+
+```{r}
+#| label: null-heatmap-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_null_heatmap_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### Rejection Table
+
+```{r}
+#| label: null-table
+null_tbl <- safe_tar_read("fals_vig_null_table")
+cap <- safe_tar_read("fals_vig_null_heatmap_caption")
+if (!is.null(null_tbl)) hd_dt(null_tbl, cap)
+```
+
+#### Methodology
+
+**What are null environments?**
+
+A null environment generates synthetic return series with no genuine signal, but with realistic statistical properties. We test: "could a strategy generate the observed t-statistic just by chance in this environment?"
+
+For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the HAC t-statistic. The rejection rate is the fraction that exceeds the observed t-statistic.
+
+**The 6 null environments:**
+
+- **White Noise**: iid N(0, sigma²). Baseline — if a strategy "works" here, it's pure luck.
+- **Regime Vol**: Two-state volatility (high/low). Tests whether signal is just vol timing.
+- **MA(1)**: Autocorrelated returns (theta = 0.1). Tests whether signal exploits serial correlation friction.
+- **Factor Null**: Random factor loadings matching observed factor covariance structure. Tests whether signal is just factor exposure.
+- **GARCH(1,1)**: omega = 1e-6, alpha = 0.09, beta = 0.90. Tests whether signal exploits volatility clustering.
+- **GJR-GARCH**: Adds asymmetric leverage (gamma = 0.05). Tests whether signal exploits the leverage effect.
+
+**Interpretation:**
+
+- Rejection rate ≤ 8%: Strategy is easily replicated under the null — **no genuine signal**
+- Rejection rate 8-20%: Borderline — may be noise
+- Rejection rate > 20%: The null cannot explain the strategy's performance — **genuine signal**
+
+
+# Factor Regression {#ff}
+
+## Row
+
+### {.tabset}
+
+#### FF5+Momentum Betas
+
+```{r}
+#| label: ff-table
+ff_tbl <- safe_tar_read("fals_vig_ff_table")
+cap <- safe_tar_read("fals_vig_ff_caption")
+if (!is.null(ff_tbl)) hd_dt(ff_tbl, cap)
+```
+
+#### Methodology
+
+**Fama-French 5-Factor + Momentum regression:**
+
+$$r_{excess} = \alpha + \beta_1 \cdot MktRF + \beta_2 \cdot SMB + \beta_3 \cdot HML + \beta_4 \cdot RMW + \beta_5 \cdot CMA + \beta_6 \cdot Mom + \epsilon$$
+
+Where:
+
+- **MktRF**: Market excess return (market - risk-free)
+- **SMB**: Small Minus Big (size factor)
+- **HML**: High Minus Low (value factor)
+- **RMW**: Robust Minus Weak (profitability factor)
+- **CMA**: Conservative Minus Aggressive (investment factor)
+- **Mom**: Momentum (winners - losers, 12-2 month)
+
+**Alpha** is the intercept — the return not explained by any factor. If alpha is close to zero and R² is high, the strategy is just a combination of known factor exposures.
+
+**Decision rules:**
+
+- Alpha t > 2.0, R² < 15%: **Genuine alpha** — returns come from something beyond known factors
+- Alpha t > 2.0, R² > 15%: Alpha exists but significant factor exposure — investigate which factors
+- Alpha t < 2.0, R² > 20%: **Disguised beta** — just buy the factors directly
+- Alpha t < 2.0, R² < 10%: Strategy is noise — neither alpha nor systematic factor exposure
+
+**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html), daily frequency.
+
+
+# Multiplicity {#multiplicity}
+
+## Row
+
+### {.tabset}
+
+#### K_eff and Delta-Z
+
+```{r}
+#| label: multiplicity-table
+mult_tbl <- safe_tar_read("fals_vig_multiplicity")
+cap <- safe_tar_read("fals_vig_multiplicity_caption")
+if (!is.null(mult_tbl)) hd_dt(mult_tbl, cap)
+```
+
+#### Methodology
+
+**The multiple testing problem:**
+
+Testing 5 strategies inflates Type I error. The chance that *at least one* strategy exceeds t = 2.0 by pure luck is much higher than 5%.
+
+**K_eff (effective multiplicity):**
+
+K_eff = K² / ||Σ||²_F — the spectral participation ratio of the pairwise correlation matrix. It measures how many *truly independent* strategies exist:
+
+- K_eff = K: All strategies are uncorrelated (worst case for multiple testing)
+- K_eff = 1: All strategies are perfectly correlated (just one independent bet)
+- K_eff between 1 and K: Some independent structure
+
+**Harvey threshold:** sqrt(2 * log(K_eff)) — the t-statistic a strategy must exceed to survive multiplicity correction at the 5% level. Based on Harvey, Liu & Zhu (2016), "...and the Cross-Section of Expected Returns."
+
+**Delta-Z (IS-OOS gap):**
+
+Delta-Z = max(t_IS) - max(t_OOS) — the gap between the best in-sample and best out-of-sample t-statistics. A large gap indicates overfitting:
+
+- Delta-Z < 1: Modest overfitting, results likely robust
+- Delta-Z 1-2: Some overfitting, treat with caution
+- Delta-Z > 2: Severe overfitting, in-sample performance is misleading
+
+In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" = FF alpha t-stat (after removing known factor exposure). The OOS test is not a temporal holdout but a *structural* holdout — does the signal survive factor decomposition?
+
+
+# Assumptions {#assumptions}
+
+## Row
+
+### {.tabset}
+
+#### Framework
+
+**What this framework does:**
+
+1. **HAC correction**: Adjusts for serial correlation in returns (GARCH persistence inflates naive Sharpe by ~20-30%)
+2. **Null environment testing**: Generates 100 synthetic series per environment (6 environments) to test whether a strategy's t-statistic could arise by chance
+3. **Factor regression**: Decomposes returns into known factor exposure (beta) and residual alpha
+4. **Multiplicity correction**: Adjusts for testing multiple strategies simultaneously
+
+**What this framework does NOT do:**
+
+- Does not test for look-ahead bias (handled by the `look-ahead-bias-prevention` rule)
+- Does not test for transaction cost sensitivity (handled by `execution-delay-sensitivity` rule)
+- Does not test for parameter sensitivity (handled by `backtest-robustness` rule)
+- Does not test for temporal stability (handled by `backtest-partitions` rule)
+- Does not test for cross-geography pervasiveness (handled by `cross-geography-pervasiveness` rule)
+
+**References:**
+
+- Harvey, C., Liu, Y., & Zhu, H. (2016). "...and the Cross-Section of Expected Returns." *Review of Financial Studies*, 29(1), 5-68.
+- Lopez de Prado, M. (2018). "The Deflated Sharpe Ratio: Correcting for Selection Bias, Backtest Overfitting, and Non-Normality." *Journal of Portfolio Management*, 40(5), 94-107.
+- Newey, W. K., & West, K. D. (1987). "A Simple, Positive Semi-definite, Heteroskedasticity and Autocorrelation Consistent Covariance Matrix." *Econometrica*, 55(3), 703-708.
+- Fama, E., & French, K. (2015). "A Five-Factor Asset Pricing Model." *Journal of Financial Economics*, 116(1), 1-22.
+
+#### Build Info
+
+```{r}
+#| label: build-info
+#| results: asis
+build_info()
+```
