@@ -35,72 +35,108 @@ ul.task-list li input[type="checkbox"] {
 <link href="quiz_files/libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
 <script src="quiz_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="quiz_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="quiz_files/libs/bootstrap/bootstrap-28163b1fbaa4d35fdae8b703aca03440.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
-<link href="quiz_files/libs/bootstrap/bootstrap-dark-824d01da7c3efbad1b87ea45a7763824.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
-<script src="quiz_files/libs/quarto-dashboard/quarto-dashboard.js"></script>
-<script src="quiz_files/libs/quarto-dashboard/stickythead.js"></script>
-
-
-
-<script src="quiz_files/libs/quarto-dashboard/web-components.js" type="module"></script>
-<script src="quiz_files/libs/quarto-dashboard/components.js"></script>
-
-<link rel="stylesheet" href="vignette-shared.css">
+<link href="quiz_files/libs/bootstrap/bootstrap-5aeb795fb1f1a222a51c230a0084b391.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="quiz_files/libs/bootstrap/bootstrap-dark-fa40cdb917baf4fa3d1e593fe915e727.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <style>
-body { font-size: 1.5em; }
-.navbar .navbar-title, h1.title { font-size: 1.3em !important; }
-.nav-link { font-size: 0.85em !important; }
-.navbar, .quarto-dashboard-header, .navbar-dark,
-.bslib-page-dashboard > .navbar {
-  background-color: black !important; color: white !important;
+#quiz-app { max-width: 900px; margin: 0 auto; padding: 20px; font-family: inherit; }
+.quiz-intro h2 { color: #6c9bd2; margin-bottom: 0.5em; }
+.quiz-intro ul { font-size: 1.05em; line-height: 1.8; }
+.option-row { display: flex; align-items: center; gap: 12px; margin: 12px 0; flex-wrap: wrap; }
+.option-label { font-weight: bold; min-width: 100px; color: #aaa; }
+.option-btn-group { display: flex; gap: 6px; flex-wrap: wrap; }
+.option-btn {
+  padding: 10px 20px; border: 2px solid #555; border-radius: 8px;
+  background: #2b3e50; color: #ddd; cursor: pointer; font-size: 1em;
+  transition: all 0.15s;
 }
-.navbar .navbar-brand, .navbar .nav-link, .navbar-text,
-.navbar .navbar-nav .nav-link { color: white !important; }
-.navbar .nav-link.active, .navbar .nav-link:hover {
-  color: white !important; background-color: black !important;
-  border: 1px solid white !important; border-radius: 4px;
+.option-btn:hover { border-color: #4a90d9; }
+.option-btn.selected { border-color: #4a90d9; background: #14549e; color: white; }
+.btn-start {
+  display: inline-block; padding: 14px 40px; font-size: 1.2em; font-weight: bold;
+  border: none; border-radius: 8px; cursor: pointer; margin-top: 1.5em;
+  background: #4a90d9; color: white; transition: background 0.2s;
 }
-.navbar .nav-link { color: #aaa !important; font-size: 0.9em; padding: 0.3em 0.6em !important; }
-.navbar-nav { flex-wrap: wrap !important; }
-.bslib-page-fill, .html-fill-container, .html-fill-item,
-.bslib-card, .card, .tab-pane, .tab-content, .card-body,
-.bslib-grid, .bslib-grid-item {
-  height: auto !important; min-height: 0 !important;
-  max-height: none !important; overflow: visible !important;
-  flex: none !important;
-}
-#quiz-container { padding: 0.5em; }
-.quiz-charts { display: flex; gap: 1em; margin-bottom: 1em; }
-.quiz-charts > div { flex: 1; min-height: 300px; }
-.quiz-btn { padding: 0.8em 2em; margin: 0.3em; font-size: 1.1em;
-  border: 2px solid #666; border-radius: 8px; cursor: pointer;
-  background: #222; color: #ddd; transition: all 0.2s; }
-.quiz-btn:hover { border-color: #4a90d9; color: white; }
-.quiz-btn.correct { background: #1a9850 !important; border-color: #1a9850 !important; }
-.quiz-btn.wrong { background: #d73027 !important; border-color: #d73027 !important; }
-.quiz-btn:disabled { opacity: 0.5; cursor: default; }
-.quiz-score { font-size: 1.2em; color: #6c9bd2; margin: 0.5em 0; }
-.quiz-info { color: #aaa; font-size: 0.9em; margin: 0.5em 0; }
-.quiz-reveal { background: #111; border: 1px solid #444; border-radius: 8px;
-  padding: 1em; margin: 1em 0; display: none; }
-.quiz-reveal.show { display: block; }
-.quiz-length-selector { margin: 0.5em 0; }
-.quiz-length-selector label { color: #aaa; margin-right: 0.5em; }
-.quiz-length-selector select { background: #222; color: #ddd; border: 1px solid #555;
-  padding: 0.3em 0.5em; border-radius: 4px; }
-.quiz-difficulty { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px;
-  font-size: 0.8em; font-weight: bold; }
+.btn-start:hover { background: #3a7bc8; }
+
+/* Quiz phase */
+.quiz-header { display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.5em; flex-wrap: wrap; gap: 8px; }
+.quiz-score { font-size: 1.1em; color: #6c9bd2; }
+.quiz-progress { color: #aaa; font-size: 0.95em; }
+.quiz-difficulty { display: inline-block; padding: 3px 10px; border-radius: 4px;
+  font-size: 0.85em; font-weight: bold; }
 .quiz-difficulty.easy { background: #1a9850; color: white; }
 .quiz-difficulty.medium { background: #e6a817; color: black; }
 .quiz-difficulty.hard { background: #d73027; color: white; }
 .quiz-difficulty.pseudo { background: #7b3294; color: white; }
+
+.quiz-row { display: flex; align-items: stretch; gap: 16px; margin: 12px 0; }
+.quiz-col { flex: 1; min-width: 0; }
+.quiz-vs { flex: 0 0 50px; display: flex; align-items: center; justify-content: center;
+  font-size: 1.3em; font-weight: bold; color: #666; }
+.quiz-btn {
+  width: 100%; min-height: 320px; display: flex; flex-direction: column;
+  align-items: center; justify-content: flex-start;
+  border: 2px solid #555; border-radius: 8px; background: #1a1a2e;
+  color: #ddd; cursor: pointer; padding: 8px; transition: all 0.2s;
+}
+.quiz-btn:hover:not(:disabled) { border-color: #4a90d9; }
+.quiz-btn:disabled { cursor: default; opacity: 0.85; }
+.quiz-btn-correct { border-color: #1a9850 !important; background: #0d2818 !important; }
+.quiz-btn-wrong { border-color: #d73027 !important; background: #2d0f0f !important; }
+.quiz-btn .series-label { font-size: 1.1em; font-weight: bold; margin: 4px 0; }
+.quiz-btn .chart-container { width: 100%; flex: 1; min-height: 250px; }
+
+.quiz-controls { text-align: center; margin: 12px 0; }
+.quiz-nav-btn {
+  padding: 10px 24px; margin: 4px; font-size: 1em; border: 2px solid #555;
+  border-radius: 8px; background: #222; color: #ddd; cursor: pointer;
+}
+.quiz-nav-btn:hover { border-color: #4a90d9; color: white; }
+.quiz-nav-btn.primary { background: #4a90d9; border-color: #4a90d9; color: white; }
+
+.explanation-panel {
+  background: #111; border: 1px solid #444; border-radius: 8px;
+  padding: 16px; margin: 12px 0; display: none;
+}
+.explanation-panel.show { display: block; }
+
+.length-selector { margin: 8px 0; }
+.length-selector label { color: #aaa; margin-right: 8px; }
+.length-selector select {
+  background: #222; color: #ddd; border: 1px solid #555;
+  padding: 6px 10px; border-radius: 4px; font-size: 0.95em;
+}
+
+/* Results */
+.results-cards { display: flex; gap: 16px; margin: 16px 0; flex-wrap: wrap; }
+.result-card {
+  flex: 1; min-width: 200px; padding: 20px; border-radius: 8px;
+  text-align: center;
+}
+.result-card.score { background: #14549e; color: white; }
+.result-card.baseline { background: #333; color: #ddd; }
+.result-card .big-num { font-size: 2.5em; font-weight: bold; }
+.result-card .label { font-size: 0.9em; opacity: 0.8; }
+
+@media (max-width: 600px) {
+  .quiz-row { flex-direction: column; }
+  .quiz-vs { flex: 0 0 30px; }
+  .quiz-btn { min-height: 250px; }
+  .option-row { flex-direction: column; align-items: flex-start; }
+}
 </style>
+<script>
+if (!localStorage.getItem('quarto-color-scheme')) {
+  document.documentElement.setAttribute('data-bs-theme', 'dark');
+}
+</script>
 
 
 </head>
 
-<body class="quarto-dashboard dashboard-fill fullcontent quarto-dark"><script id="quarto-html-before-body" type="application/javascript">
+<body class="fullcontent quarto-dark"><script id="quarto-html-before-body" type="application/javascript">
     const toggleBodyColorMode = (bsSheetEl) => {
       const mode = bsSheetEl.getAttribute("data-mode");
       const bodyEl = window.document.querySelector("body");
@@ -262,85 +298,142 @@ body { font-size: 1.5em; }
     }
   </script>
 
-<header id="quarto-dashboard-header">
-<nav class="navbar navbar-expand-md slim" data-bs-theme="dark">
-  <div class="navbar-container container-fluid">
-    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboard-collapse" aria-controls="dashboard-collapse" aria-expanded="false" aria-label="Toggle navigation">
-      <span class="navbar-toggler-icon"></span>
-    </button>    
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
 
 
-    <div class="navbar-brand-container">
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Real or Simulated?</h1>
+</div>
 
 
-      <div class="navbar-title">
-        <div class="navbar-title-text"><a href="#">Real or Simulated?</a></div>
-        
-        
-      </div>
-    </div>
-<a class="quarto-color-scheme-toggle" href="" onclick="window.quartoToggleColorScheme(); return false;"><i class="bi"></i></a><div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-quiz" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#quiz" data-scrolling="false" href="#quiz" aria-controls="quiz" aria-selected="true"><span class="nav-link-text">Quiz</span></a></li></ul></div></div>
-</nav>
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
 </header>
-<div class="page-layout-custom quarto-dashboard-content bslib-gap-spacing html-fill-container bslib-page-fill quarto-dashboard-pages">  
 
 
-<div class="bslib-grid-item html-fill-item tab-content bslib-grid" data-layout="fill" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div id="quiz" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-quiz">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr);
-grid-auto-rows: minmax(0, 1fr);">
-<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<p>Can you tell real financial returns from simulated ones? Each round shows two time series — one is real strategy returns, the other is generated from a statistical null model. Guess which is real. Shorter visible windows earn bonus points.</p>
+<div id="quiz-app">
+<div id="phase-instructions" class="quiz-intro">
+<h2 class="anchored">
+Which time series is real?
+</h2>
+<ul>
+<li>
+Each round shows two cumulative return series side by side
+</li>
+<li>
+One is from a real trading strategy; the other is statistically simulated
+</li>
+<li>
+Click the series you think is <b>real</b>
+</li>
+<li>
+After your guess, a reveal shows the answer with labelled full-length series
+</li>
+<li>
+Shorter visible windows and harder difficulty levels earn bonus points
+</li>
+</ul>
+<div class="option-row">
+<pre><code>&lt;span class="option-label"&gt;Difficulty&lt;/span&gt;
+&lt;div class="option-btn-group" id="grp-diff"&gt;
+  &lt;button class="option-btn" onclick="setDiff('easy',this)"&gt;Easy&lt;/button&gt;
+  &lt;button class="option-btn" onclick="setDiff('medium',this)"&gt;Medium&lt;/button&gt;
+  &lt;button class="option-btn" onclick="setDiff('hard',this)"&gt;Hard&lt;/button&gt;
+  &lt;button class="option-btn selected" onclick="setDiff('mixed',this)"&gt;Mixed&lt;/button&gt;
+&lt;/div&gt;</code></pre>
 </div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-header dashboard-card-no-title bslib-navs-card-title">
-
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-2"><li class="nav-item" role="presentation"><a href="#card-tabset-2-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Play" aria-selected="true" class="nav-link active">Play</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-2-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="About" aria-selected="false" class="nav-link">About</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-2-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Build Info" aria-selected="false" class="nav-link">Build Info</a></li></ul></div>
-
-
-
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-2"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-1"><div class="card-body html-fill-item html-fill-container" data-title="Play">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
-<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<div id="quiz-container" class="html-fill-item html-fill-container">
-<div class="quiz-score html-fill-item html-fill-container">
-Score: <span id="score">0</span> / <span id="total">0</span> points | Round <span id="round-num">1</span> / <span id="round-total">20</span>
+<div class="option-row">
+<pre><code>&lt;span class="option-label"&gt;Questions&lt;/span&gt;
+&lt;div class="option-btn-group" id="grp-nq"&gt;
+  &lt;button class="option-btn selected" onclick="setNq(5,this)"&gt;5&lt;/button&gt;
+  &lt;button class="option-btn" onclick="setNq(10,this)"&gt;10&lt;/button&gt;
+  &lt;button class="option-btn" onclick="setNq(20,this)"&gt;20&lt;/button&gt;
+&lt;/div&gt;</code></pre>
 </div>
-<div class="quiz-info html-fill-item html-fill-container">
-<span id="difficulty-badge"></span> <span id="round-info"></span>
+<div style="text-align:center;">
+<pre><code>&lt;button class="btn-start" onclick="startQuiz()"&gt;Start Quiz&lt;/button&gt;</code></pre>
 </div>
-<div class="quiz-length-selector html-fill-item html-fill-container">
+</div>
+<div id="phase-quiz" style="display:none;">
+<div class="quiz-header">
+<pre><code>&lt;div class="quiz-score"&gt;Score: &lt;b id="score"&gt;0&lt;/b&gt; / &lt;span id="max-score"&gt;0&lt;/span&gt;&lt;/div&gt;
+&lt;div class="quiz-progress"&gt;
+  &lt;span id="diff-badge" class="quiz-difficulty"&gt;&lt;/span&gt;
+  Round &lt;span id="round-num"&gt;1&lt;/span&gt; / &lt;span id="round-total"&gt;5&lt;/span&gt;
+&lt;/div&gt;</code></pre>
+</div>
+<div class="length-selector">
 <pre><code>&lt;label&gt;Visible length:&lt;/label&gt;
-&lt;select id="length-select" onchange="updateLength()"&gt;
+&lt;select id="length-select" onchange="updateCharts()"&gt;
   &lt;option value="100"&gt;100 points (1x)&lt;/option&gt;
   &lt;option value="50"&gt;50 points (1.5x)&lt;/option&gt;
   &lt;option value="25"&gt;25 points (2x)&lt;/option&gt;
   &lt;option value="15"&gt;15 points (3x)&lt;/option&gt;
 &lt;/select&gt;</code></pre>
 </div>
-<div class="quiz-charts html-fill-item html-fill-container">
-<div id="chart-a" class="html-fill-item html-fill-container">
+<div class="quiz-row">
+<pre><code>&lt;div class="quiz-col"&gt;
+  &lt;button class="quiz-btn" id="btn-a" onclick="guess('A')"&gt;
+    &lt;span class="series-label"&gt;Series A&lt;/span&gt;
+    &lt;div class="chart-container" id="chart-a"&gt;&lt;/div&gt;
+  &lt;/button&gt;
+&lt;/div&gt;
+&lt;div class="quiz-vs"&gt;VS&lt;/div&gt;
+&lt;div class="quiz-col"&gt;
+  &lt;button class="quiz-btn" id="btn-b" onclick="guess('B')"&gt;
+    &lt;span class="series-label"&gt;Series B&lt;/span&gt;
+    &lt;div class="chart-container" id="chart-b"&gt;&lt;/div&gt;
+  &lt;/button&gt;
+&lt;/div&gt;</code></pre>
+</div>
+<div id="reveal" class="explanation-panel">
+<pre><code>&lt;div id="reveal-text"&gt;&lt;/div&gt;
+&lt;div id="reveal-chart" style="height:220px;margin-top:8px;"&gt;&lt;/div&gt;</code></pre>
+</div>
+<div class="quiz-controls">
+<pre><code>&lt;button class="quiz-nav-btn" id="btn-next" onclick="nextRound()" style="display:none;"&gt;
+  Next Round &amp;rarr;
+&lt;/button&gt;
+&lt;button class="quiz-nav-btn primary" id="btn-finish" onclick="showResults()" style="display:none;"&gt;
+  Finish
+&lt;/button&gt;</code></pre>
+</div>
+</div>
+<div id="phase-results" style="display:none;">
+<h2 style="color:#6c9bd2;" class="anchored">
+Quiz Complete
+</h2>
+<div class="results-cards">
+<pre><code>&lt;div class="result-card score"&gt;
+  &lt;div class="big-num" id="final-pct"&gt;0%&lt;/div&gt;
+  &lt;div class="label"&gt;Your Score&lt;/div&gt;
+  &lt;div id="final-score-detail"&gt;&lt;/div&gt;
+&lt;/div&gt;
+&lt;div class="result-card baseline"&gt;
+  &lt;div class="big-num"&gt;50%&lt;/div&gt;
+  &lt;div class="label"&gt;Random Guessing&lt;/div&gt;
+&lt;/div&gt;</code></pre>
+</div>
+<div id="results-breakdown" style="margin:16px 0;">
 
 </div>
-<div id="chart-b" class="html-fill-item html-fill-container">
-
+<div style="text-align:center;margin-top:16px;">
+<pre><code>&lt;button class="quiz-nav-btn primary" onclick="location.reload()"&gt;Try Again&lt;/button&gt;
+&lt;a href="falsification.html" class="quiz-nav-btn" style="text-decoration:none;display:inline-block;"&gt;
+  Falsification Methodology
+&lt;/a&gt;</code></pre>
 </div>
-</div>
-<div style="text-align:center;" class="html-fill-item html-fill-container">
-<pre><code>&lt;button class="quiz-btn" id="btn-a" onclick="guess('A')"&gt;A is Real&lt;/button&gt;
-&lt;button class="quiz-btn" id="btn-b" onclick="guess('B')"&gt;B is Real&lt;/button&gt;
-&lt;button class="quiz-btn" id="btn-next" onclick="nextRound()" style="display:none;"&gt;Next Round &amp;rarr;&lt;/button&gt;</code></pre>
-</div>
-<div id="reveal" class="quiz-reveal html-fill-item html-fill-container">
-
 </div>
 </div>
 <script id="quiz-data-json" type="application/json">
@@ -348,201 +441,206 @@ Score: <span id="score">0</span> / <span id="total">0</span> points | Round <spa
 </script>
 <script>
 
-var quizData = JSON.parse(document.getElementById("quiz-data-json").textContent || "[]");
-var currentRound = 0;
-var score = 0;
-var totalPoints = 0;
-var answered = false;
-var lengthMultipliers = {100: 1, 50: 1.5, 25: 2, 15: 3};
-var diffMultipliers = {easy: 1, medium: 2, hard: 3, pseudo: 4};
+var allRounds = JSON.parse(document.getElementById("quiz-data-json").textContent || "[]");
+var S = {
+  difficulty: "mixed",
+  nq: 5,
+  rounds: [],
+  current: 0,
+  score: 0,
+  maxScore: 0,
+  answered: false,
+  answers: []
+};
+
+var diffMult = {easy:1, medium:2, hard:3, pseudo:4};
+var lenMult = {100:1, 50:1.5, 25:2, 15:3};
+var plotLayout = {
+  paper_bgcolor:"transparent", plot_bgcolor:"transparent",
+  font:{color:"#ccc",size:11}, margin:{t:5,b:25,l:35,r:5},
+  xaxis:{gridcolor:"#333",title:"",zeroline:false},
+  yaxis:{gridcolor:"#333",title:"$1 growth",zeroline:false},
+  showlegend:false
+};
+
+function setDiff(d, btn) {
+  S.difficulty = d;
+  document.querySelectorAll("#grp-diff .option-btn").forEach(function(b){b.classList.remove("selected");});
+  btn.classList.add("selected");
+}
+
+function setNq(n, btn) {
+  S.nq = n;
+  document.querySelectorAll("#grp-nq .option-btn").forEach(function(b){b.classList.remove("selected");});
+  btn.classList.add("selected");
+}
+
+function startQuiz() {
+  // Filter rounds by difficulty
+  var pool = S.difficulty === "mixed" ? allRounds.slice() :
+    allRounds.filter(function(r){ return r.difficulty === S.difficulty; });
+  // Shuffle
+  for (var i = pool.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pool[i]; pool[i] = pool[j]; pool[j] = tmp;
+  }
+  S.rounds = pool.slice(0, Math.min(S.nq, pool.length));
+  S.current = 0; S.score = 0; S.maxScore = 0;
+  S.answers = new Array(S.rounds.length).fill(null);
+
+  document.getElementById("phase-instructions").style.display = "none";
+  document.getElementById("phase-quiz").style.display = "block";
+  document.getElementById("round-total").textContent = S.rounds.length;
+  renderRound();
+}
+
+function cumGrowth(ret) {
+  var c = [1];
+  for (var i = 0; i < ret.length; i++) c.push(c[i] * (1 + ret[i]));
+  return c;
+}
 
 function renderRound() {
-  if (currentRound >= quizData.length) { showFinal(); return; }
-  var r = quizData[currentRound];
-  answered = false;
-  document.getElementById("round-num").textContent = currentRound + 1;
-  document.getElementById("round-total").textContent = quizData.length;
-  document.getElementById("btn-a").disabled = false;
-  document.getElementById("btn-b").disabled = false;
+  var r = S.rounds[S.current];
+  S.answered = false;
+  document.getElementById("round-num").textContent = S.current + 1;
+  var badge = document.getElementById("diff-badge");
+  badge.className = "quiz-difficulty " + r.difficulty;
+  badge.textContent = r.difficulty.charAt(0).toUpperCase() + r.difficulty.slice(1) +
+    " (" + diffMult[r.difficulty] + "x)";
+
   document.getElementById("btn-a").className = "quiz-btn";
   document.getElementById("btn-b").className = "quiz-btn";
+  document.getElementById("btn-a").disabled = false;
+  document.getElementById("btn-b").disabled = false;
   document.getElementById("btn-next").style.display = "none";
-  document.getElementById("reveal").className = "quiz-reveal";
-  document.getElementById("reveal").innerHTML = "";
+  document.getElementById("btn-finish").style.display = "none";
+  document.getElementById("reveal").className = "explanation-panel";
 
-  var badge = document.getElementById("difficulty-badge");
-  badge.className = "quiz-difficulty " + r.difficulty;
-  badge.textContent = r.difficulty.charAt(0).toUpperCase() + r.difficulty.slice(1);
-  document.getElementById("round-info").textContent = "(" + diffMultipliers[r.difficulty] + "x difficulty)";
-
+  updateScore();
   updateCharts();
 }
 
 function updateCharts() {
-  var r = quizData[currentRound];
+  if (S.rounds.length === 0) return;
+  var r = S.rounds[S.current];
   var len = parseInt(document.getElementById("length-select").value);
   var a = r.series_a.slice(-len);
   var b = r.series_b.slice(-len);
-  // Convert returns to cumulative growth
-  var cumA = [1], cumB = [1];
-  for (var i = 0; i < a.length; i++) { cumA.push(cumA[i] * (1 + a[i])); }
-  for (var i = 0; i < b.length; i++) { cumB.push(cumB[i] * (1 + b[i])); }
 
-  var layout = {
-    paper_bgcolor: "#000", plot_bgcolor: "#000",
-    font: {color: "#e0e0e0"}, margin: {t: 30, b: 30, l: 40, r: 10},
-    xaxis: {gridcolor: "#333", title: "Observation"},
-    yaxis: {gridcolor: "#333", title: "Growth of $1"}
-  };
-  Plotly.react("chart-a", [{y: cumA, type: "scatter", mode: "lines",
-    line: {color: "#4a90d9", width: 2}, name: "Series A"}],
-    Object.assign({}, layout, {title: {text: "Series A", font: {size: 14, color: "#e0e0e0"}}}),
-    {scrollZoom: true, displayModeBar: false});
-  Plotly.react("chart-b", [{y: cumB, type: "scatter", mode: "lines",
-    line: {color: "#e6a817", width: 2}, name: "Series B"}],
-    Object.assign({}, layout, {title: {text: "Series B", font: {size: 14, color: "#e0e0e0"}}}),
-    {scrollZoom: true, displayModeBar: false});
+  Plotly.react("chart-a", [{y:cumGrowth(a), type:"scatter", mode:"lines",
+    line:{color:"#4a90d9",width:2}}], plotLayout, {displayModeBar:false,scrollZoom:true});
+  Plotly.react("chart-b", [{y:cumGrowth(b), type:"scatter", mode:"lines",
+    line:{color:"#e6a817",width:2}}], plotLayout, {displayModeBar:false,scrollZoom:true});
 }
 
-function updateLength() { if (!answered) updateCharts(); }
+function updateScore() {
+  document.getElementById("score").textContent = S.score;
+  document.getElementById("max-score").textContent = S.maxScore;
+}
 
 function guess(choice) {
-  if (answered) return;
-  answered = true;
-  var r = quizData[currentRound];
+  if (S.answered) return;
+  S.answered = true;
+  var r = S.rounds[S.current];
   var correct = (choice === r.answer);
   var len = parseInt(document.getElementById("length-select").value);
-  var pts = diffMultipliers[r.difficulty] * lengthMultipliers[len];
-  if (correct) score += pts;
-  totalPoints += pts;
+  var pts = diffMult[r.difficulty] * lenMult[len];
+  S.maxScore += pts;
+  if (correct) S.score += pts;
+  S.answers[S.current] = choice;
 
-  document.getElementById("score").textContent = score;
-  document.getElementById("total").textContent = totalPoints;
   document.getElementById("btn-a").disabled = true;
   document.getElementById("btn-b").disabled = true;
   if (r.answer === "A") {
-    document.getElementById("btn-a").className = "quiz-btn correct";
-    if (choice === "B") document.getElementById("btn-b").className = "quiz-btn wrong";
+    document.getElementById("btn-a").classList.add("quiz-btn-correct");
+    if (choice === "B") document.getElementById("btn-b").classList.add("quiz-btn-wrong");
   } else {
-    document.getElementById("btn-b").className = "quiz-btn correct";
-    if (choice === "A") document.getElementById("btn-a").className = "quiz-btn wrong";
+    document.getElementById("btn-b").classList.add("quiz-btn-correct");
+    if (choice === "A") document.getElementById("btn-a").classList.add("quiz-btn-wrong");
   }
-  document.getElementById("btn-next").style.display = "inline-block";
 
-  // Show reveal with full series
-  var reveal = document.getElementById("reveal");
-  reveal.className = "quiz-reveal show";
-  var verdict = correct ? "<span style=\"color:#1a9850;font-weight:bold\">Correct!</span>"
-                        : "<span style=\"color:#d73027;font-weight:bold\">Wrong.</span>";
-  reveal.innerHTML = verdict + " " + r.answer + " was real.<br>" +
+  // Show reveal
+  var verdict = correct ?
+    "<span style=\"color:#1a9850;font-weight:bold\">Correct!</span>" :
+    "<span style=\"color:#d73027;font-weight:bold\">Wrong.</span>";
+  document.getElementById("reveal-text").innerHTML =
+    verdict + " Series " + r.answer + " was real.<br>" +
     "<b>Real:</b> " + r.real_source + "<br>" +
-    "<b>Simulated:</b> " + r.sim_source + " (" + r.difficulty + ")<br>" +
-    "<b>Points:</b> " + (correct ? "+" + pts : "0") + " (difficulty " +
-    diffMultipliers[r.difficulty] + "x, length " + lengthMultipliers[len] + "x)" +
-    "<div id=\"reveal-chart\" style=\"height:250px;margin-top:0.5em;\"></div>";
+    "<b>Simulated:</b> " + r.sim_source + "<br>" +
+    "<b>Points:</b> " + (correct ? "+" + pts : "0") +
+    " (difficulty " + diffMult[r.difficulty] + "x, length " + lenMult[len] + "x)";
+  document.getElementById("reveal").className = "explanation-panel show";
 
-  // Full reveal chart with both series labelled
-  var cumReal = [1], cumSim = [1];
-  for (var i = 0; i < r.full_real.length; i++) { cumReal.push(cumReal[i] * (1 + r.full_real[i])); }
-  for (var i = 0; i < r.full_sim.length; i++) { cumSim.push(cumSim[i] * (1 + r.full_sim[i])); }
-  var revLayout = {
-    paper_bgcolor: "#111", plot_bgcolor: "#111",
-    font: {color: "#e0e0e0"}, margin: {t: 30, b: 30, l: 40, r: 10},
-    xaxis: {gridcolor: "#333"}, yaxis: {gridcolor: "#333", title: "Growth of $1"},
-    legend: {orientation: "h", x: 0.5, xanchor: "center", y: -0.15}
-  };
+  // Reveal chart with full series labelled
   Plotly.react("reveal-chart", [
-    {y: cumReal, type: "scatter", mode: "lines", line: {color: "#2ecc71", width: 2}, name: "Real: " + r.real_source},
-    {y: cumSim, type: "scatter", mode: "lines", line: {color: "#e74c3c", width: 2, dash: "dash"}, name: "Sim: " + r.sim_source}
-  ], revLayout, {displayModeBar: false});
+    {y:cumGrowth(r.full_real), type:"scatter", mode:"lines",
+     line:{color:"#2ecc71",width:2}, name:"Real: "+r.real_source},
+    {y:cumGrowth(r.full_sim), type:"scatter", mode:"lines",
+     line:{color:"#e74c3c",width:2,dash:"dash"}, name:"Sim: "+r.sim_source}
+  ], Object.assign({}, plotLayout, {showlegend:true,
+    legend:{orientation:"h",x:0.5,xanchor:"center",y:-0.2,font:{color:"#ccc"}}}),
+    {displayModeBar:false});
+
+  updateScore();
+  if (S.current < S.rounds.length - 1) {
+    document.getElementById("btn-next").style.display = "inline-block";
+  } else {
+    document.getElementById("btn-finish").style.display = "inline-block";
+  }
 }
 
-function nextRound() {
-  currentRound++;
-  renderRound();
-}
+function nextRound() { S.current++; renderRound(); }
 
-function showFinal() {
-  var container = document.getElementById("quiz-container");
-  var pct = totalPoints > 0 ? Math.round(score / totalPoints * 100) : 0;
-  container.innerHTML = "<h2 style=\"color:#6c9bd2\">Quiz Complete</h2>" +
-    "<p style=\"font-size:1.3em\">Final score: <b>" + score + " / " + totalPoints + "</b> points (" + pct + "%)</p>" +
-    "<p>You completed " + quizData.length + " rounds across 4 difficulty levels.</p>" +
-    "<p><a href=\"falsification.html\">See the full falsification methodology</a></p>" +
-    "<button class=\"quiz-btn\" onclick=\"location.reload()\">Play Again</button>";
+function showResults() {
+  document.getElementById("phase-quiz").style.display = "none";
+  document.getElementById("phase-results").style.display = "block";
+
+  var pct = S.maxScore > 0 ? Math.round(S.score / S.maxScore * 100) : 0;
+  document.getElementById("final-pct").textContent = pct + "%";
+  document.getElementById("final-score-detail").textContent =
+    S.score + " / " + S.maxScore + " points (" + S.rounds.length + " rounds)";
+
+  // Breakdown by difficulty
+  var diffs = ["easy","medium","hard","pseudo"];
+  var html = "<table style=\"width:100%;color:#ddd;border-collapse:collapse;\">" +
+    "<tr style=\"border-bottom:1px solid #444;\"><th style=\"text-align:left;padding:6px;\">Difficulty</th>" +
+    "<th>Correct</th><th>Total</th><th>Rate</th></tr>";
+  diffs.forEach(function(d) {
+    var rounds_d = S.rounds.filter(function(r,i){ return r.difficulty===d; });
+    if (rounds_d.length === 0) return;
+    var correct_d = rounds_d.filter(function(r,i){
+      var idx = S.rounds.indexOf(r);
+      return S.answers[idx] === r.answer;
+    }).length;
+    html += "<tr style=\"border-bottom:1px solid #333;\"><td style=\"padding:6px;\">" +
+      "<span class=\"quiz-difficulty "+d+"\">" + d.charAt(0).toUpperCase()+d.slice(1) + "</span></td>" +
+      "<td style=\"text-align:center;\">" + correct_d + "</td>" +
+      "<td style=\"text-align:center;\">" + rounds_d.length + "</td>" +
+      "<td style=\"text-align:center;\">" + Math.round(correct_d/rounds_d.length*100) + "%</td></tr>";
+  });
+  html += "</table>";
+  document.getElementById("results-breakdown").innerHTML = html;
 }
 
 // Arrow key navigation
 document.addEventListener("keydown", function(e) {
-  if (e.key === "ArrowRight" && answered) nextRound();
+  if (e.key === "ArrowRight" && S.answered) {
+    if (S.current < S.rounds.length - 1) nextRound();
+    else showResults();
+  }
 });
 
-// Start
-if (quizData.length > 0) renderRound();
-else document.getElementById("quiz-container").innerHTML = "<p>Quiz data not available. Run tar_make() first.</p>";
+// Fallback if no data
+if (allRounds.length === 0) {
+  document.getElementById("phase-instructions").innerHTML =
+    "<p>Quiz data not available. Run <code>tar_make()</code> first.</p>";
+}
 </script>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-2"><div class="card-body html-fill-item html-fill-container" data-title="About">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
-<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<strong>Can you tell real from simulated?</strong>
-<p>This quiz tests your ability to distinguish genuine financial time series from statistically generated ones. Each round presents two cumulative return series — one real, one simulated — and asks you to identify the real one.</p>
-<strong>Difficulty levels:</strong>
-<ul>
-<li><strong>Easy</strong> (1x): Simulated from White Noise (iid Gaussian returns). No volatility clustering, no structure. Should be distinguishable by the lack of realistic patterns.</li>
-<li><strong>Medium</strong> (2x): Simulated from <a href="https://en.wikipedia.org/wiki/Autoregressive_conditional_heteroskedasticity">GARCH(1,1)</a>. Has volatility clustering — much harder to distinguish from real data.</li>
-<li><strong>Hard</strong> (3x): Simulated from <a href="https://en.wikipedia.org/wiki/GARCH#GJR-GARCH">GJR-GARCH</a> with asymmetric leverage. Negative returns increase future volatility more than positive returns — closely mimics real market dynamics.</li>
-<li><strong>Pseudo</strong> (4x): The “simulated” series is actually the real series played backwards. Tests whether you can detect the temporal asymmetry of real markets (crashes are fast, recoveries are slow).</li>
-</ul>
-<strong>Length bonus:</strong>
-<p>Seeing fewer data points makes the task harder. Select a shorter window for bonus multipliers: 50 points (1.5x), 25 points (2x), or 15 points (3x).</p>
-<strong>Why this matters:</strong>
-<p>If you cannot distinguish a strategy’s returns from a null model, neither can a statistical test. The <a href="falsification.html">falsification framework</a> formalises this intuition with 6 null environments and 100 simulations each. This quiz lets you experience the same challenge visually.</p>
-<p><strong>Data source:</strong> Real returns from 5 strategies in the <a href="leaderboard.html">strategy leaderboard</a>. Simulated returns from <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R"><code>hd_null_env_*()</code></a> null generators.</p>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-2-3"><div class="card-body html-fill-item html-fill-container" data-title="Build Info">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
-<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/vdev">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/010c776420417d1738eb379dc8fb1d9d63ce565b"><code>010c776</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.2</a> | <strong>Built</strong> 2026-04-26 19:05:42</p>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-<div id="3ade8a4a-fb1d-4a6c-8409-ac45482d5fc9" class="hidden html-fill-item html-fill-container">
+<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/vdev">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/f79b7a013fb86ae252cdcaa78fb4f3fcf80c704f"><code>f79b7a0</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.2</a> | <strong>Built</strong> 2026-04-26 19:38:16</p>
 
-</div>
-</div>
-</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
-</div>
-</div>
-</div>
-
-
+</main>
+<!-- /main column -->
 <script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
     // Ensure there is a toggle, if there isn't float one in the top right
@@ -956,16 +1054,8 @@ else document.getElementById("quiz-container").innerHTML = "<p>Quiz data not ava
     }
   });
   </script>
-</div> <!-- /container fluid -->
+</div> <!-- /content -->
 
-<script type="application/javascript">
-window.document.addEventListener("DOMContentLoaded", function (_event) {
-  if (window.bslib.Card) {
-    window.bslib.Card.initializeAllCards();
-  }
-}); 
-</script>
-  
 
 
 
