@@ -2,54 +2,97 @@
 #
 # Pre-computed plots, tables, and captions for docs/falsification.qmd.
 # Depends on plan_falsification.R targets (fals_summary, fals_keff, etc.).
+#
+# Strategy names: single source of truth via fals_vig_names target.
+# All tables/plots/captions reference this target for consistent naming.
 
 plan_falsification_vignette <- function() {
+
+  # GH repo base URL for source links
+  gh_base <- "https://github.com/JohnGavin/historical/blob/main"
+
   list(
+
+    # ── Strategy names: single source of truth ───────────────────────
+    targets::tar_target(fals_vig_names, {
+      tibble::tibble(
+        code_name  = c("avoid_worst", "drif", "fac_max", "rsc", "ltr"),
+        short_name = c("Avoid Worst", "DRIF", "Factor MAX",
+                        "Risk State", "LTR"),
+        long_name  = c(
+          "Avoid Worst Days (VIX Protection)",
+          "DRIF (Factor Rotation)",
+          "Factor MAX (Factor Momentum)",
+          "Risk State (VIX Overlay)",
+          "LTR (Cross-Sectional Momentum)"
+        ),
+        ann_factor = c(252L, 12L, 12L, 252L, 12L),
+        asset_class = c("overlay", "factor", "factor", "overlay", "equity")
+      )
+    }),
+
 
     # ── Scorecard table ──────────────────────────────────────────────
     targets::tar_target(fals_vig_scorecard, {
       library(dplyr)
 
+      nms <- fals_vig_names
       summary <- fals_summary
+
       summary |>
         dplyr::mutate(
-          Strategy = c(
-            "Avoid Worst Days (VIX)", "DRIF (Factor Rotation)",
-            "Factor MAX (Momentum)", "Risk State (VIX Overlay)",
-            "LTR (CS Momentum)"
+          Verdict = factor(
+            dplyr::case_when(
+              ff_alpha_tstat > 2.0 & ff_r_squared < 0.15 ~ "Genuine alpha",
+              ff_alpha_tstat > 1.96 ~ "Borderline",
+              TRUE ~ "No alpha (beta)"
+            ),
+            levels = c("Genuine alpha", "Borderline", "No alpha (beta)"),
+            ordered = TRUE
           ),
+          Strategy = nms$long_name,
           `HAC t` = round(hac_tstat, 2),
           `Naive Sharpe` = round(hac_sharpe, 2),
-          `FF Alpha (ann)` = paste0(round(ff_alpha_annual * 100, 2), "%"),
-          `FF Alpha t` = round(ff_alpha_tstat, 2),
-          `FF R²` = paste0(round(ff_r_squared * 100, 1), "%"),
-          Verdict = dplyr::case_when(
-            ff_alpha_tstat > 2.0 & ff_r_squared < 0.15 ~ "Genuine alpha",
-            ff_alpha_tstat > 1.96 ~ "Borderline",
-            TRUE ~ "No alpha (beta)"
-          )
+          `Alpha (%)` = round(ff_alpha_annual * 100, 0),
+          `Alpha t` = round(ff_alpha_tstat, 2),
+          `R² (%)` = round(ff_r_squared * 100, 1)
         ) |>
-        dplyr::select(Strategy, `HAC t`, `Naive Sharpe`,
-                       `FF Alpha (ann)`, `FF Alpha t`, `FF R²`, Verdict)
+        dplyr::arrange(Verdict) |>
+        dplyr::select(Verdict, Strategy, `HAC t`, `Naive Sharpe`,
+                       `Alpha (%)`, `Alpha t`, `R² (%)`)
     }),
 
     targets::tar_target(fals_vig_scorecard_caption, {
+      nms <- fals_vig_names
       summary <- fals_summary
-      n_alpha <- sum(summary$ff_alpha_tstat > 2.0)
-      n_beta  <- sum(summary$ff_alpha_tstat <= 1.96)
-      best    <- summary$strategy[which.max(summary$ff_alpha_tstat)]
-      best_t  <- round(max(summary$ff_alpha_tstat), 2)
 
-      paste0(
+      alpha_mask <- summary$ff_alpha_tstat > 2.0 & summary$ff_r_squared < 0.15
+      alpha_names <- nms$long_name[alpha_mask]
+      border_mask <- summary$ff_alpha_tstat > 1.96 & !alpha_mask
+      border_names <- nms$long_name[border_mask]
+      beta_names <- nms$long_name[!alpha_mask & !border_mask]
+
+      gh <- "https://github.com/JohnGavin/historical/blob/main"
+
+      parts <- c(
         "Strategy falsification scorecard. ",
-        n_alpha, " of ", nrow(summary),
-        " strategies show genuine alpha (FF5+Mom alpha t > 2.0); ",
-        n_beta, " are explained by factor exposure. ",
-        "Best: ", best, " (t = ", best_t, "). ",
-        "HAC t-statistics use Newey-West correction. ",
-        "Source: plan_falsification.R, M = ",
-        fals_params$M, " null simulations per environment."
+        paste0(paste(alpha_names, collapse = " and "),
+               " show genuine alpha (Alpha t > 2.0, R² < 15%). "),
+        if (length(border_names) > 0) paste0(
+          paste(border_names, collapse = " and "), " are borderline. "
+        ) else NULL,
+        if (length(beta_names) > 0) paste0(
+          paste(beta_names, collapse = " and "),
+          " are explained by factor exposure (no alpha). "
+        ) else NULL,
+        "Columns: HAC t = Newey-West corrected t-statistic; ",
+        "Alpha (%) = annualised Fama-French 5-factor + Momentum intercept; ",
+        "Alpha t = HAC t-statistic on the alpha; ",
+        "R² (%) = variance explained by known factors. ",
+        "Source: [plan_falsification.R](", gh, "/R/plan_falsification.R), ",
+        "M = ", fals_params$M, " null simulations per environment."
       )
+      paste0(parts, collapse = "")
     }),
 
 
@@ -59,6 +102,7 @@ plan_falsification_vignette <- function() {
       library(tidyr)
       library(ggplot2)
 
+      nms <- fals_vig_names
       summary <- fals_summary
 
       rej_long <- summary |>
@@ -72,24 +116,29 @@ plan_falsification_vignette <- function() {
                        "GARCH(1,1)", "GJR-GARCH")
           ),
           strategy = factor(strategy,
-            levels = c("avoid_worst", "drif", "fac_max", "rsc", "ltr"),
-            labels = c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR")
+            levels = nms$code_name,
+            labels = nms$short_name
           ),
           pct = rejection_rate * 100
         )
 
+      # Text colour: black on light fills, white on dark fills
+      rej_long$text_col <- ifelse(rej_long$pct > 4 & rej_long$pct < 15,
+                                   "#000000", "#ffffff")
+
       ggplot(rej_long, aes(x = null_env, y = strategy, fill = pct)) +
         geom_tile(color = "#333") +
-        geom_text(aes(label = paste0(round(pct, 0), "%")),
-                  color = "white", size = 4.5, fontface = "bold") +
+        geom_text(aes(label = round(pct, 0), colour = text_col),
+                  size = 4.5, fontface = "bold", show.legend = FALSE) +
+        scale_colour_identity() +
         scale_fill_gradient2(
-          low = "#1a9850", mid = "#fee08b", high = "#d73027",
+          low = "#1a9850", mid = "#ffffbf", high = "#d73027",
           midpoint = 8, limits = c(0, 100),
-          name = "Rejection %"
+          name = "Rejection (%)"
         ) +
         labs(
           title = "Null Environment Rejection Rates",
-          subtitle = "Green (low) = strategy replicable under null. Red (high) = genuine signal.",
+          subtitle = "Green (low) = replicable under null. Red (high) = genuine signal.",
           x = "Null Environment", y = NULL
         ) +
         theme_minimal(base_size = 14) +
@@ -111,16 +160,20 @@ plan_falsification_vignette <- function() {
       max_rej <- max(unlist(summary[, grep("rej_rate_", names(summary))]))
       min_rej <- min(unlist(summary[, grep("rej_rate_", names(summary))]))
 
+      gh <- "https://github.com/JohnGavin/historical/blob/main"
+
       paste0(
         "Rejection rates across 6 null environments (M = ",
         fals_params$M, " simulations each). ",
+        "Values show rejection rate (%). ",
         "A low rate (<8%) means the strategy's t-statistic is easily replicated under ",
-        "the null — no genuine signal. A high rate means the null cannot explain the returns. ",
+        "the null. A high rate means the null cannot explain the returns. ",
         "Range: ", round(min_rej * 100, 0), "%-", round(max_rej * 100, 0), "%. ",
         "Null environments: White Noise (iid), Regime Vol (high/low vol switching), ",
         "MA(1) (autocorrelation friction), Factor Null (random factor exposure), ",
         "GARCH(1,1) (volatility clustering), GJR-GARCH (asymmetric leverage). ",
-        "Source: hd_null_rejection_rate(), alpha = ",
+        "Source: [hd_null_rejection_rate()](", gh,
+        "/packages/historicaldata/R/falsification.R), alpha = ",
         fals_params$alpha_level, "."
       )
     }),
@@ -130,19 +183,20 @@ plan_falsification_vignette <- function() {
     targets::tar_target(fals_vig_null_table, {
       library(dplyr)
 
+      nms <- fals_vig_names
       summary <- fals_summary
       summary |>
         dplyr::mutate(
-          Strategy = c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR"),
-          `White Noise` = paste0(round(rej_rate_wn * 100, 0), "%"),
-          `Regime Vol` = paste0(round(rej_rate_rv * 100, 0), "%"),
-          `MA(1)` = paste0(round(rej_rate_ma1 * 100, 0), "%"),
-          `Factor` = paste0(round(rej_rate_fn * 100, 0), "%"),
-          `GARCH` = paste0(round(rej_rate_garch * 100, 0), "%"),
-          `GJR` = paste0(round(rej_rate_gjr * 100, 0), "%")
+          Strategy = nms$long_name,
+          `White Noise (%)` = round(rej_rate_wn * 100, 0),
+          `Regime Vol (%)` = round(rej_rate_rv * 100, 0),
+          `MA(1) (%)` = round(rej_rate_ma1 * 100, 0),
+          `Factor (%)` = round(rej_rate_fn * 100, 0),
+          `GARCH (%)` = round(rej_rate_garch * 100, 0),
+          `GJR (%)` = round(rej_rate_gjr * 100, 0)
         ) |>
-        dplyr::select(Strategy, `White Noise`, `Regime Vol`, `MA(1)`,
-                       Factor, GARCH, GJR)
+        dplyr::select(Strategy, `White Noise (%)`, `Regime Vol (%)`, `MA(1) (%)`,
+                       `Factor (%)`, `GARCH (%)`, `GJR (%)`)
     }),
 
 
@@ -150,23 +204,22 @@ plan_falsification_vignette <- function() {
     targets::tar_target(fals_vig_hac_comparison, {
       library(dplyr)
 
+      nms <- fals_vig_names
       hac_results <- list(
         fals_hac_avoid_worst, fals_hac_drif, fals_hac_fac_max,
         fals_hac_rsc, fals_hac_ltr
       )
-      names_vec <- c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR")
 
       # Naive t-stat = naive_sharpe * sqrt(T / ann_factor)
-      ann_factors <- c(252, 12, 12, 252, 12)
       naive_t <- sapply(seq_along(hac_results), function(i) {
-        hac_results[[i]]$naive_sharpe * sqrt(hac_results[[i]]$T / ann_factors[i])
+        hac_results[[i]]$naive_sharpe * sqrt(hac_results[[i]]$T / nms$ann_factor[i])
       })
 
       tibble::tibble(
-        Strategy = names_vec,
-        `Naive Sharpe` = round(sapply(hac_results, `[[`, "naive_sharpe"), 3),
-        `Ann Mean` = paste0(round(sapply(hac_results, `[[`, "annualised_mean") * 100, 2), "%"),
-        `Ann Vol` = paste0(round(sapply(hac_results, `[[`, "annualised_vol") * 100, 2), "%"),
+        Strategy = nms$long_name,
+        `Naive Sharpe` = round(sapply(hac_results, `[[`, "naive_sharpe"), 2),
+        `Ann Mean (%)` = round(sapply(hac_results, `[[`, "annualised_mean") * 100, 1),
+        `Ann Vol (%)` = round(sapply(hac_results, `[[`, "annualised_vol") * 100, 1),
         `Naive t` = round(naive_t, 2),
         `HAC t` = round(sapply(hac_results, `[[`, "hac_tstat"), 2),
         `NW Lag` = as.integer(sapply(hac_results, `[[`, "lag_nw")),
@@ -175,21 +228,39 @@ plan_falsification_vignette <- function() {
     }),
 
     targets::tar_target(fals_vig_hac_caption, {
+      nms <- fals_vig_names
       hac_results <- list(
         fals_hac_avoid_worst, fals_hac_drif, fals_hac_fac_max,
         fals_hac_rsc, fals_hac_ltr
       )
+      hac_t <- sapply(hac_results, `[[`, "hac_tstat")
+      all_pass <- all(hac_t > 2.0)
+      min_t <- round(min(hac_t), 2)
+      min_name <- nms$long_name[which.min(hac_t)]
+      max_t <- round(max(hac_t), 2)
+      max_name <- nms$long_name[which.max(hac_t)]
       avg_lag <- round(mean(sapply(hac_results, `[[`, "lag_nw")), 1)
+
+      gh <- "https://github.com/JohnGavin/historical/blob/main"
 
       paste0(
         "Strategy performance with Newey-West HAC correction. ",
-        "Naive Sharpe assumes iid returns; HAC t-stat corrects for ",
-        "serial correlation (GARCH persistence). ",
+        "Columns: Naive Sharpe = uncorrected annualised Sharpe; ",
+        "Ann Mean/Vol (%) = annualised return and volatility; ",
+        "Naive t = t-statistic assuming iid returns; ",
+        "HAC t = t-statistic corrected for serial correlation (GARCH persistence); ",
         "NW Lag = Newey-West bandwidth (Bartlett kernel, auto: ",
-        "floor(4*(T/100)^(2/9))). Average lag: ", avg_lag, ". ",
-        "HAC t > 2.0 indicates robust risk-adjusted returns after ",
-        "accounting for volatility clustering. ",
-        "Source: hd_hac_sharpe()."
+        "floor(4*(T/100)^(2/9))), average lag: ", avg_lag, ". ",
+        if (all_pass) paste0(
+          "All 5 strategies exceed the HAC t > 2.0 threshold, ",
+          "ranging from ", min_name, " (t = ", min_t, ") to ",
+          max_name, " (t = ", max_t, "). "
+        ) else paste0(
+          "HAC t ranges from ", min_t, " to ", max_t, ". "
+        ),
+        "Source: [hd_hac_sharpe()](", gh,
+        "/packages/historicaldata/R/falsification.R#L80), ",
+        "[Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html)."
       )
     }),
 
@@ -198,13 +269,12 @@ plan_falsification_vignette <- function() {
     targets::tar_target(fals_vig_ff_table, {
       library(dplyr)
 
+      nms <- fals_vig_names
       ff_results <- list(
         fals_ff_avoid_worst, fals_ff_drif, fals_ff_fac_max,
         fals_ff_rsc, fals_ff_ltr
       )
-      names_vec <- c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR")
 
-      # Extract betas for each factor
       factor_names <- c("Mkt_RF", "SMB", "HML", "RMW", "CMA", "Mom")
 
       rows <- lapply(seq_along(ff_results), function(i) {
@@ -216,10 +286,10 @@ plan_falsification_vignette <- function() {
           factor_names
         )
         tibble::tibble(
-          Strategy = names_vec[i],
-          `Alpha (ann %)` = round(ff$alpha_annual * 100, 2),
+          Strategy = nms$long_name[i],
+          `Alpha (%)` = round(ff$alpha_annual * 100, 1),
           `Alpha t` = round(ff$alpha_tstat_hac, 2),
-          `R²` = round(ff$r_squared * 100, 1),
+          `R² (%)` = round(ff$r_squared * 100, 1),
           `Mkt-RF` = betas["Mkt_RF"],
           SMB = betas["SMB"],
           HML = betas["HML"],
@@ -232,33 +302,37 @@ plan_falsification_vignette <- function() {
     }),
 
     targets::tar_target(fals_vig_ff_caption, {
+      nms <- fals_vig_names
       ff_results <- list(
         fals_ff_avoid_worst, fals_ff_drif, fals_ff_fac_max,
         fals_ff_rsc, fals_ff_ltr
       )
-      names_vec <- c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR")
 
-      # Find highest R² strategy
       r2_vals <- sapply(ff_results, `[[`, "r_squared")
       highest_r2_idx <- which.max(r2_vals)
-      highest_r2_name <- names_vec[highest_r2_idx]
+      highest_r2_name <- nms$long_name[highest_r2_idx]
       highest_r2_pct <- round(r2_vals[highest_r2_idx] * 100, 1)
 
-      # Find best alpha
       alpha_t <- sapply(ff_results, `[[`, "alpha_tstat_hac")
       best_alpha_idx <- which.max(alpha_t)
-      best_alpha_name <- names_vec[best_alpha_idx]
+      best_alpha_name <- nms$long_name[best_alpha_idx]
       best_alpha_t <- round(alpha_t[best_alpha_idx], 2)
 
+      gh <- "https://github.com/JohnGavin/historical/blob/main"
+
       paste0(
-        "Fama-French 5-Factor + Momentum regression (r_excess = alpha + sum(beta_k * F_k) + epsilon). ",
-        "Alpha is annualised; t-statistic uses HAC standard errors. ",
-        "R-squared measures how much of the strategy's variance is explained by known factors. ",
-        "High R-squared (>20%) with low alpha t = disguised beta. ",
-        "Low R-squared (<10%) with high alpha t = genuine alpha. ",
+        "Fama-French 5-Factor + Momentum regression: ",
+        "r_excess = Alpha + beta_Mkt-RF + beta_SMB + beta_HML + ",
+        "beta_RMW + beta_CMA + beta_Mom + epsilon. ",
+        "Columns: Alpha (%) = annualised intercept; Alpha t = HAC t-statistic; ",
+        "R² (%) = variance explained by the 6 factors; ",
+        "Mkt-RF through Mom = factor betas. ",
         highest_r2_name, " has the highest factor exposure (R² = ", highest_r2_pct, "%). ",
         best_alpha_name, " has the strongest alpha (t = ", best_alpha_t, "). ",
-        "Source: hd_factor_null_test(), daily factor data from Ken French Data Library."
+        "Source: [hd_factor_null_test()](", gh,
+        "/packages/historicaldata/R/falsification.R), ",
+        "daily factor data from ",
+        "[Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html)."
       )
     }),
 
@@ -292,15 +366,21 @@ plan_falsification_vignette <- function() {
       dz   <- round(fals_delta_z$delta_z, 2)
       harvey_t <- round(sqrt(2 * log(fals_keff$K_eff)), 2)
 
+      gh <- "https://github.com/JohnGavin/historical/blob/main"
+
       paste0(
-        "Multiple testing adjustment. K_eff = ", keff,
+        "Multiple testing adjustment. ",
+        "K_eff = ", keff,
         " (spectral participation ratio from pairwise correlation matrix) ",
         "measures how many truly independent strategies exist among the 5 tested. ",
         "Delta-Z = ", dz, " measures the gap between the best in-sample and best ",
         "out-of-sample t-statistics. ",
         "Harvey et al. (2016) threshold = sqrt(2*log(K_eff)) = ", harvey_t,
-        ". A strategy's t-stat must exceed this to survive multiplicity correction. ",
-        "Source: hd_keff(), hd_delta_z()."
+        ". A strategy's HAC t must exceed this to survive multiplicity correction. ",
+        "Source: [hd_keff()](", gh,
+        "/packages/historicaldata/R/falsification.R), ",
+        "[hd_delta_z()](", gh,
+        "/packages/historicaldata/R/falsification.R)."
       )
     }),
 
@@ -309,22 +389,19 @@ plan_falsification_vignette <- function() {
     targets::tar_target(fals_vig_hac_plot, {
       library(ggplot2)
 
+      nms <- fals_vig_names
       hac_results <- list(
         fals_hac_avoid_worst, fals_hac_drif, fals_hac_fac_max,
         fals_hac_rsc, fals_hac_ltr
       )
 
-      # Compute naive t-stats for comparison
-      ann_factors <- c(252, 12, 12, 252, 12)
-      strat_names <- c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR")
-
       naive_t <- sapply(seq_along(hac_results), function(i) {
-        hac_results[[i]]$naive_sharpe * sqrt(hac_results[[i]]$T / ann_factors[i])
+        hac_results[[i]]$naive_sharpe * sqrt(hac_results[[i]]$T / nms$ann_factor[i])
       })
       hac_t <- sapply(hac_results, `[[`, "hac_tstat")
 
       df_long <- data.frame(
-        strategy = factor(rep(strat_names, 2), levels = rev(strat_names)),
+        strategy = factor(rep(nms$short_name, 2), levels = rev(nms$short_name)),
         type = factor(rep(c("Naive t", "HAC t"), each = 5),
                       levels = c("Naive t", "HAC t")),
         t_stat = c(naive_t, hac_t)
@@ -360,39 +437,36 @@ plan_falsification_vignette <- function() {
     }),
 
 
-    # ── FF alpha bar chart ───────────────────────────────────────────
+    # ── FF alpha scatter plot ────────────────────────────────────────
     targets::tar_target(fals_vig_ff_alpha_plot, {
       library(ggplot2)
 
+      nms <- fals_vig_names
       ff_results <- list(
         fals_ff_avoid_worst, fals_ff_drif, fals_ff_fac_max,
         fals_ff_rsc, fals_ff_ltr
       )
 
       df <- data.frame(
-        strategy = factor(
-          c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR"),
-          levels = c("Avoid Worst", "DRIF", "Factor MAX", "RSC Overlay", "LTR")
-        ),
+        strategy = factor(nms$short_name, levels = nms$short_name),
         alpha_annual = sapply(ff_results, `[[`, "alpha_annual") * 100,
         alpha_t      = sapply(ff_results, `[[`, "alpha_tstat_hac"),
         r_squared    = sapply(ff_results, `[[`, "r_squared") * 100
       )
 
-      df$verdict <- ifelse(df$alpha_t > 2.0, "Alpha", "Beta")
+      df$verdict <- ifelse(df$alpha_t > 2.0, "Genuine alpha", "No alpha (beta)")
 
       ggplot(df, aes(x = r_squared, y = alpha_annual, color = verdict)) +
         geom_point(size = 6) +
         geom_text(aes(label = strategy), vjust = -1.2, size = 4, color = "#e0e0e0") +
         geom_hline(yintercept = 0, color = "#666", linetype = "dashed") +
         geom_vline(xintercept = 15, color = "#666", linetype = "dashed") +
-        scale_color_manual(values = c("Alpha" = "#2ecc71", "Beta" = "#e74c3c")) +
-        scale_x_continuous(labels = function(x) paste0(x, "%")) +
-        scale_y_continuous(labels = function(x) paste0(x, "%")) +
+        scale_color_manual(values = c("Genuine alpha" = "#2ecc71",
+                                       "No alpha (beta)" = "#e74c3c")) +
         labs(
-          title = "Alpha vs Factor Exposure",
-          subtitle = "Genuine alpha = top-left (low R², positive alpha). Beta = right (high R²).",
-          x = "FF5+Mom R² (factor exposure)", y = "Annualised Alpha",
+          title = "Alpha (%) vs Factor Exposure R² (%)",
+          subtitle = "Genuine alpha = top-left (low R², positive Alpha). Beta = right (high R²).",
+          x = "R² (%)", y = "Alpha (%)",
           color = "Verdict"
         ) +
         theme_minimal(base_size = 14) +

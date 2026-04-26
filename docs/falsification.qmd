@@ -1,5 +1,5 @@
 ---
-title: "Strategy Falsification Dashboard"
+title: "Strategy Falsification"
 format:
   dashboard:
     orientation: rows
@@ -12,9 +12,9 @@ format:
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
           <style>
-          body { font-size: 1.3em; }
+          body { font-size: 1.5em; }
           .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
-          .nav-link { font-size: 0.95em !important; }
+          .nav-link { font-size: 0.85em !important; }
           .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
           .navbar, .quarto-dashboard-header, .navbar-dark,
           .bslib-page-dashboard > .navbar {
@@ -106,6 +106,84 @@ tar_config_set(store = store_path)
 utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
   file.path(here::here(), "docs/vignette_utils.R")
 source(utils_path)
+
+# Column definitions for linked headers (open in new tab)
+col_defs <- list(
+  "Verdict" = list(
+    title = "Classification: Genuine alpha, Borderline, or No alpha (beta)",
+    href = "#assumptions"
+  ),
+  "Strategy" = list(title = "Strategy long name", href = NULL),
+  "HAC t" = list(
+    title = "Newey-West HAC-corrected t-statistic on mean excess returns",
+    href = "https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator"
+  ),
+  "Naive Sharpe" = list(
+    title = "Annualised Sharpe ratio assuming iid returns (no serial correlation correction)",
+    href = "https://en.wikipedia.org/wiki/Sharpe_ratio"
+  ),
+  "Alpha (%)" = list(
+    title = "Annualised Fama-French 5-Factor + Momentum intercept, in percent",
+    href = "https://en.wikipedia.org/wiki/Fama%E2%80%93French_three-factor_model"
+  ),
+  "Alpha t" = list(
+    title = "HAC t-statistic on the FF5+Mom alpha intercept",
+    href = "#ff"
+  ),
+  "R\u00b2 (%)" = list(
+    title = "Variance explained by the 6 Fama-French + Momentum factors, in percent",
+    href = "#ff"
+  )
+)
+
+# DT helper with linked column headers (open in new tab)
+fals_dt <- function(df, caption_text) {
+  if (is.null(df)) return(invisible(NULL))
+  # Build header with title attributes and optional links
+  header_cells <- lapply(names(df), function(nm) {
+    cd <- col_defs[[nm]]
+    tip <- if (!is.null(cd)) cd$title else nm
+    href <- if (!is.null(cd)) cd$href else NULL
+    label <- if (!is.null(href)) {
+      as.character(htmltools::tags$a(
+        href = href, target = "_blank",
+        style = "color: #6c9bd2; text-decoration: underline dotted;",
+        title = tip, nm
+      ))
+    } else {
+      as.character(htmltools::tags$span(title = tip, nm))
+    }
+    label
+  })
+  sketch <- htmltools::withTags(table(
+    class = "display",
+    thead(tr(lapply(header_cells, function(h) th(htmltools::HTML(h))))
+  )))
+  DT::datatable(
+    df,
+    container = sketch,
+    escape = FALSE,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #ddd;",
+      htmltools::HTML(caption_text)
+    ),
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15, scrollX = TRUE, autoWidth = FALSE,
+      dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "  $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "  $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "}"
+      )
+    )
+  ) |>
+    DT::formatStyle(columns = names(df), color = "#ddd", backgroundColor = "#1a1a1a")
+}
 ```
 
 ::: {.callout-note}
@@ -124,7 +202,7 @@ source(utils_path)
 #| label: scorecard
 scorecard <- safe_tar_read("fals_vig_scorecard")
 caption <- safe_tar_read("fals_vig_scorecard_caption")
-if (!is.null(scorecard)) hd_dt(scorecard, caption)
+if (!is.null(scorecard)) fals_dt(scorecard, caption)
 ```
 
 #### Alpha vs Factor Exposure
@@ -147,62 +225,11 @@ if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 
 **Verdict criteria:**
 
-- **Genuine alpha**: FF5+Mom alpha t-statistic > 2.0 AND R² < 15%. The strategy generates returns that known factors cannot explain, and factor exposure is low.
-- **Borderline**: Alpha t-stat near 2.0. May be genuine but evidence is weak. Requires out-of-sample confirmation.
-- **No alpha (beta)**: Alpha t-stat < 2.0 OR R² > 20%. The strategy's returns are explained by known factor exposure (market beta, momentum, value, etc.).
+- **Genuine alpha**: Alpha t > 2.0 AND R² (%) < 15. The strategy generates returns that known factors cannot explain, and factor exposure is low.
+- **Borderline**: Alpha t near 2.0. May be genuine but evidence is weak. Requires out-of-sample confirmation.
+- **No alpha (beta)**: Alpha t < 2.0 OR R² (%) > 20. The strategy's returns are explained by known factor exposure (market beta, momentum, value, etc.).
 
 **Key insight**: A strategy can have positive returns and still have zero alpha. If those returns come from market exposure (high R²), you can get the same exposure more cheaply via index funds.
-
-
-# HAC Analysis {#hac}
-
-## Row
-
-### {.tabset}
-
-#### Naive vs HAC Sharpe
-
-```{r}
-#| label: hac-plot
-#| fig-height: 6
-#| fig-width: 10
-safe_tar_read("fals_vig_hac_plot")
-```
-
-```{r}
-#| label: hac-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_hac_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
-
-#### HAC Details
-
-```{r}
-#| label: hac-table
-hac_comp <- safe_tar_read("fals_vig_hac_comparison")
-cap <- safe_tar_read("fals_vig_hac_caption")
-if (!is.null(hac_comp)) hd_dt(hac_comp, cap)
-```
-
-#### Methodology
-
-**Why HAC correction matters:**
-
-Financial returns exhibit volatility clustering ([GARCH](https://en.wikipedia.org/wiki/Autoregressive_conditional_heteroskedasticity) persistence). Standard Sharpe ratios assume iid returns, which inflates the Sharpe by 20-30% on average.
-
-The Newey-West correction:
-
-- Uses a Bartlett kernel to downweight distant autocovariances
-- Bandwidth = floor(4 * (T/100)^(2/9)) — automatic, data-driven
-- Produces an HAC-consistent variance estimate for the mean return
-- The HAC t-statistic = mean(r) / sqrt(HAC_var / T)
-
-**Interpretation:**
-
-- HAC t > 2.0: Robust risk-adjusted return, survives serial correlation correction
-- HAC t < 2.0: Naive Sharpe is inflated by autocorrelation; true risk-adjusted performance is weaker
-- Inflation % shows how much the naive Sharpe overstates performance
 
 
 # Null Environments {#nulls}
@@ -233,7 +260,7 @@ if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 #| label: null-table
 null_tbl <- safe_tar_read("fals_vig_null_table")
 cap <- safe_tar_read("fals_vig_null_heatmap_caption")
-if (!is.null(null_tbl)) hd_dt(null_tbl, cap)
+if (!is.null(null_tbl)) fals_dt(null_tbl, cap)
 ```
 
 #### Methodology
@@ -242,11 +269,11 @@ if (!is.null(null_tbl)) hd_dt(null_tbl, cap)
 
 A null environment generates synthetic return series with no genuine signal, but with realistic statistical properties. We test: "could a strategy generate the observed t-statistic just by chance in this environment?"
 
-For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the HAC t-statistic. The rejection rate is the fraction that exceeds the observed t-statistic.
+For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the [HAC t-statistic](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator). The rejection rate is the fraction that exceeds the observed t-statistic.
 
-**The 6 null environments:**
+**The 6 null environments** (implemented in [`falsification.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R)):
 
-- **White Noise**: iid N(0, sigma²). Baseline — if a strategy "works" here, it's pure luck.
+- **White Noise**: iid N(0, sigma). Baseline — if a strategy "works" here, it's pure luck.
 - **Regime Vol**: Two-state volatility (high/low). Tests whether signal is just vol timing.
 - **MA(1)**: Autocorrelated returns (theta = 0.1). Tests whether signal exploits serial correlation friction.
 - **Factor Null**: Random factor loadings matching observed factor covariance structure. Tests whether signal is just factor exposure.
@@ -255,9 +282,59 @@ For each null environment, we generate M = 100 synthetic series, apply the strat
 
 **Interpretation:**
 
-- Rejection rate ≤ 8%: Strategy is easily replicated under the null — **no genuine signal**
+- Rejection rate < 8%: Strategy is easily replicated under the null — **no genuine signal**
 - Rejection rate 8-20%: Borderline — may be noise
 - Rejection rate > 20%: The null cannot explain the strategy's performance — **genuine signal**
+
+
+# HAC Correction {#hac}
+
+## Row
+
+### {.tabset}
+
+#### Naive vs HAC t-Statistics
+
+```{r}
+#| label: hac-plot
+#| fig-height: 6
+#| fig-width: 10
+safe_tar_read("fals_vig_hac_plot")
+```
+
+```{r}
+#| label: hac-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_hac_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### HAC Details
+
+```{r}
+#| label: hac-table
+hac_comp <- safe_tar_read("fals_vig_hac_comparison")
+cap <- safe_tar_read("fals_vig_hac_caption")
+if (!is.null(hac_comp)) fals_dt(hac_comp, cap)
+```
+
+#### Methodology
+
+**Why HAC correction matters:**
+
+Financial returns exhibit volatility clustering ([GARCH](https://en.wikipedia.org/wiki/Autoregressive_conditional_heteroskedasticity) persistence). Standard Sharpe ratios assume iid returns, which inflates the Sharpe by 20-30% on average.
+
+The [Newey-West correction](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator) (implemented in [`hd_hac_sharpe()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L80)):
+
+- Uses a Bartlett kernel to downweight distant autocovariances
+- Bandwidth = floor(4 * (T/100)^(2/9)) — automatic, data-driven
+- Produces an HAC-consistent variance estimate for the mean return
+- The HAC t-statistic = mean(r) / sqrt(HAC_var / T)
+
+**Interpretation:**
+
+- HAC t > 2.0: Robust risk-adjusted return, survives serial correlation correction
+- HAC t < 2.0: Naive Sharpe is inflated by autocorrelation; true risk-adjusted performance is weaker
 
 
 # Factor Regression {#ff}
@@ -266,43 +343,43 @@ For each null environment, we generate M = 100 synthetic series, apply the strat
 
 ### {.tabset}
 
-#### FF5+Momentum Betas
+#### Fama-French 5-Factor + Momentum Betas
 
 ```{r}
 #| label: ff-table
 ff_tbl <- safe_tar_read("fals_vig_ff_table")
 cap <- safe_tar_read("fals_vig_ff_caption")
-if (!is.null(ff_tbl)) hd_dt(ff_tbl, cap)
+if (!is.null(ff_tbl)) fals_dt(ff_tbl, cap)
 ```
 
 #### Methodology
 
-**Fama-French 5-Factor + Momentum regression:**
+**[Fama-French 5-Factor](https://en.wikipedia.org/wiki/Fama%E2%80%93French_three-factor_model) + [Momentum](https://en.wikipedia.org/wiki/Momentum_(finance)) regression:**
 
 $$r_{excess} = \alpha + \beta_1 \cdot MktRF + \beta_2 \cdot SMB + \beta_3 \cdot HML + \beta_4 \cdot RMW + \beta_5 \cdot CMA + \beta_6 \cdot Mom + \epsilon$$
 
 Where:
 
-- **MktRF**: Market excess return (market - risk-free)
+- **Mkt-RF**: Market excess return (market - risk-free)
 - **SMB**: Small Minus Big (size factor)
 - **HML**: High Minus Low (value factor)
 - **RMW**: Robust Minus Weak (profitability factor)
 - **CMA**: Conservative Minus Aggressive (investment factor)
 - **Mom**: Momentum (winners - losers, 12-2 month)
 
-**Alpha** is the intercept — the return not explained by any factor. If alpha is close to zero and R² is high, the strategy is just a combination of known factor exposures.
+**Alpha (%)** is the intercept — the annualised return not explained by any factor. **R² (%)** measures how much of the strategy's variance is explained by known factors.
 
-**Decision rules:**
+**Decision rules** (matching Verdict in the Scorecard):
 
-- Alpha t > 2.0, R² < 15%: **Genuine alpha** — returns come from something beyond known factors
-- Alpha t > 2.0, R² > 15%: Alpha exists but significant factor exposure — investigate which factors
-- Alpha t < 2.0, R² > 20%: **Disguised beta** — just buy the factors directly
-- Alpha t < 2.0, R² < 10%: Strategy is noise — neither alpha nor systematic factor exposure
+- Alpha t > 2.0, R² (%) < 15: **Genuine alpha** — returns come from something beyond known factors
+- Alpha t > 2.0, R² (%) > 15: Alpha exists but significant factor exposure — investigate
+- Alpha t < 2.0, R² (%) > 20: **Disguised beta** — just buy the factors directly
+- Alpha t < 2.0, R² (%) < 10: Strategy is noise
 
-**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html), daily frequency.
+**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html), daily frequency. Implemented in [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R).
 
 
-# Multiplicity {#multiplicity}
+# Multiplicity Correction {#multiplicity}
 
 ## Row
 
@@ -314,7 +391,7 @@ Where:
 #| label: multiplicity-table
 mult_tbl <- safe_tar_read("fals_vig_multiplicity")
 cap <- safe_tar_read("fals_vig_multiplicity_caption")
-if (!is.null(mult_tbl)) hd_dt(mult_tbl, cap)
+if (!is.null(mult_tbl)) fals_dt(mult_tbl, cap)
 ```
 
 #### Methodology
@@ -352,20 +429,24 @@ In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" 
 
 #### Framework
 
-**What this framework does:**
+**What this framework tests (4 of 5):**
 
-1. **HAC correction**: Adjusts for serial correlation in returns (GARCH persistence inflates naive Sharpe by ~20-30%)
-2. **Null environment testing**: Generates 100 synthetic series per environment (6 environments) to test whether a strategy's t-statistic could arise by chance
+1. **Null environment testing**: Generates 100 synthetic series per environment (6 environments) to test whether a strategy's t-statistic could arise by chance
+2. **HAC correction**: Adjusts for serial correlation in returns (GARCH persistence inflates naive Sharpe by ~20-30%)
 3. **Factor regression**: Decomposes returns into known factor exposure (beta) and residual alpha
-4. **Multiplicity correction**: Adjusts for testing multiple strategies simultaneously
+4. **Multiplicity correction**: Adjusts for testing multiple strategies simultaneously (K_eff, delta-Z)
+
+**Not yet implemented (1 of 5):**
+
+5. **Deflated Sharpe Ratio (DSR)**: Lopez de Prado's adjustment for skewness, kurtosis, and number of trials. Corrects the Sharpe ratio for non-normality — a strategy with negative skew (fat left tail) has an inflated Sharpe. See [#53 comment](https://github.com/JohnGavin/historical/issues/53) for implementation plan.
 
 **What this framework does NOT do:**
 
-- Does not test for look-ahead bias (handled by the `look-ahead-bias-prevention` rule)
-- Does not test for transaction cost sensitivity (handled by `execution-delay-sensitivity` rule)
-- Does not test for parameter sensitivity (handled by `backtest-robustness` rule)
-- Does not test for temporal stability (handled by `backtest-partitions` rule)
-- Does not test for cross-geography pervasiveness (handled by `cross-geography-pervasiveness` rule)
+- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R) (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/../../.claude/rules/look-ahead-bias-prevention.md) rule)
+- Does not test for transaction cost sensitivity (handled by [`execution-delay-sensitivity`](https://github.com/JohnGavin/historical/blob/main/R/plan_alpha_decay.R) — alpha decay analysis)
+- Does not test for parameter sensitivity (handled by [`backtest-robustness`](https://github.com/JohnGavin/historical/blob/main/R/plan_bootstrap_ci.R) — bootstrap CI)
+- Does not test for temporal stability (handled by [`backtest-partitions`](https://github.com/JohnGavin/historical/blob/main/R/plan_partitions.R) — train/test/validation split)
+- Does not test for cross-geography pervasiveness (requires international data — see [#58](https://github.com/JohnGavin/historical/issues/58))
 
 **References:**
 
