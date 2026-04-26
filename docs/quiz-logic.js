@@ -96,20 +96,25 @@ function renderRound() {
   document.getElementById("btn-a").disabled = S.answered;
   document.getElementById("btn-b").disabled = S.answered;
 
-  // Nav buttons
+  // Nav buttons: Back always on left (if not first), Next/Finish on right (if answered)
   document.getElementById("btn-prev").style.display = (S.current > 0) ? "inline-block" : "none";
-  document.getElementById("btn-next").style.display = "none";
-  document.getElementById("btn-finish").style.display = "none";
 
   if (S.answered) {
-    // Re-show answer state
+    // Re-show answer state for revisited questions
     var choice = S.answers[S.current];
     if (r.answer === "A") { document.getElementById("btn-a").classList.add("quiz-btn-correct"); if(choice==="B") document.getElementById("btn-b").classList.add("quiz-btn-wrong"); }
     else { document.getElementById("btn-b").classList.add("quiz-btn-correct"); if(choice==="A") document.getElementById("btn-a").classList.add("quiz-btn-wrong"); }
     showReveal(r, choice === r.answer);
-    if (S.current < S.rounds.length - 1) document.getElementById("btn-next").style.display = "inline-block";
-    else document.getElementById("btn-finish").style.display = "inline-block";
+    if (S.current < S.rounds.length - 1) {
+      document.getElementById("btn-next").style.display = "inline-block";
+      document.getElementById("btn-finish").style.display = "none";
+    } else {
+      document.getElementById("btn-next").style.display = "none";
+      document.getElementById("btn-finish").style.display = "inline-block";
+    }
   } else {
+    document.getElementById("btn-next").style.display = "none";
+    document.getElementById("btn-finish").style.display = "none";
     document.getElementById("reveal").className = "explanation-panel";
   }
 
