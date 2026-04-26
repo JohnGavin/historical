@@ -362,3 +362,64 @@ if (!is.null(params)) {
 #| results: asis
 build_info()
 ```
+
+
+# Falsification
+
+## Row
+
+### {.tabset}
+
+#### Scorecard
+
+The falsification framework tests 5 strategies against multiple statistical hurdles: HAC-corrected t-statistics, 6 null environment rejection rates, and Fama-French 5-Factor + Momentum alpha regression. Strategies that pass all tests show genuine alpha; those that fail are explained by known factor exposure (beta). Note: this covers 5 strategies from the falsification pipeline — partially overlapping with the leaderboard strategies above.
+
+```{r}
+#| label: fals-scorecard
+fals_sc <- safe_tar_read("fals_vig_scorecard")
+fals_sc_cap <- safe_tar_read("fals_vig_scorecard_caption")
+if (!is.null(fals_sc)) {
+  cap_text <- if (!is.null(fals_sc_cap)) fals_sc_cap else "Strategy falsification scorecard"
+  hd_dt(fals_sc, cap_text)
+}
+```
+
+#### Null Rejection
+
+Rejection rates across 6 null environments (M = 100 simulations each). A low rate means the strategy's performance is easily replicated under the null — no genuine signal. A high rate means the null cannot explain the observed returns.
+
+```{r}
+#| label: fals-heatmap
+#| fig-height: 5
+#| fig-width: 10
+safe_tar_read("fals_vig_null_heatmap")
+```
+
+```{r}
+#| label: fals-heatmap-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_null_heatmap_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### Alpha vs Factor Exposure
+
+Scatter plot of annualised alpha (%) against R² (%) from the Fama-French 5-Factor + Momentum regression. Genuine alpha strategies cluster in the top-left (low factor exposure, positive alpha). Beta strategies cluster on the right (high R²).
+
+```{r}
+#| label: fals-alpha-plot
+#| fig-height: 5
+#| fig-width: 10
+safe_tar_read("fals_vig_ff_alpha_plot")
+```
+
+```{r}
+#| label: fals-alpha-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_ff_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### Full Dashboard
+
+For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (K_eff, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
