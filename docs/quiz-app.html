@@ -1,13 +1,14 @@
 <div id="quiz-app">
 
+<!-- ═══ Instructions Phase ═══ -->
 <div id="phase-instructions" class="quiz-intro">
-  <h2>Which time series is real?</h2>
+  <h2>Which is real?</h2>
   <ul>
     <li>Each round shows two cumulative return series side by side</li>
     <li>One is from a real trading strategy; the other is statistically simulated</li>
     <li>Click the series you think is <b>real</b></li>
-    <li>After your guess, a reveal shows the answer with labelled full-length series</li>
-    <li>Shorter visible windows and harder difficulty levels earn bonus points</li>
+    <li>After your guess, a reveal shows the answer with the source data link</li>
+    <li>Shorter visible windows earn bonus points</li>
   </ul>
 
   <div class="option-row">
@@ -34,12 +35,20 @@
   </div>
 </div>
 
+<!-- ═══ Quiz Phase ═══ -->
 <div id="phase-quiz" style="display:none;">
   <div class="quiz-header">
-    <div class="quiz-score">Score: <b id="score">0</b> / <span id="max-score">0</span></div>
+    <div class="quiz-score">
+      <span id="correct-count">0</span> / <span id="total-count">0</span> correct
+    </div>
     <div class="quiz-progress">
       <span id="diff-badge" class="quiz-difficulty"></span>
       Round <span id="round-num">1</span> / <span id="round-total">5</span>
+    </div>
+    <div class="quiz-nav-top">
+      <button class="quiz-nav-btn" id="btn-prev" style="display:none;">&larr; Back</button>
+      <button class="quiz-nav-btn" id="btn-next" style="display:none;">Next &rarr;</button>
+      <button class="quiz-nav-btn primary" id="btn-finish" style="display:none;">Finish</button>
     </div>
   </div>
 
@@ -73,13 +82,9 @@
     <span id="reveal-text"></span>
     <div id="reveal-chart" style="height:220px;margin-top:8px;"></div>
   </div>
-
-  <div class="quiz-controls">
-    <button class="quiz-nav-btn" id="btn-next" style="display:none;">Next Round →</button>
-    <button class="quiz-nav-btn primary" id="btn-finish" style="display:none;">Finish</button>
-  </div>
 </div>
 
+<!-- ═══ Results Phase ═══ -->
 <div id="phase-results" style="display:none;">
   <h2 style="color:#6c9bd2;">Quiz Complete</h2>
   <div class="results-cards">
@@ -94,10 +99,13 @@
     </div>
   </div>
   <div id="results-breakdown"></div>
+  <div id="results-detail" style="margin:16px 0;"></div>
   <div style="text-align:center;margin-top:16px;">
+    <button class="quiz-nav-btn primary" id="btn-submit-score">Submit Score</button>
     <button class="quiz-nav-btn primary" id="btn-retry">Try Again</button>
-    <a href="falsification.html" class="quiz-nav-btn" style="text-decoration:none;display:inline-block;">Falsification Methodology</a>
+    <a href="falsification.html" class="quiz-nav-btn" style="text-decoration:none;display:inline-block;">Methodology</a>
   </div>
+  <div id="submit-status" style="color:#aaa;text-align:center;margin-top:8px;"></div>
 </div>
 
 </div>
