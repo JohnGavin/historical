@@ -331,6 +331,49 @@ hd_null_env_gjr_garch <- function(T_obs, M = 100, alpha_arch = 0.05,
 }
 
 
+# ── 8b. Merton jump-diffusion null ────────────────────────────────────────────
+
+#' Generate Merton jump-diffusion null series
+#'
+#' Simulates returns under a jump-diffusion model: continuous GBM + compound
+#' Poisson jumps.  No alpha — the drift is zero.
+#'
+#' @param T_obs Integer. Target series length (post-discard).
+#' @param M Integer. Number of null series (default 100).
+#' @param lambda_annual Numeric. Expected number of jumps per year (default 5).
+#' @param mu_jump Numeric. Mean log jump size (default 0).
+#' @param sigma_jump_annual Numeric. Annualised jump size volatility
+#'   (default 0.10).
+#' @param sigma_annual Numeric. Annualised diffusion volatility (default 0.20).
+#' @param seed Integer. Random seed (default 42).
+#'
+#' @return List of \code{M} numeric vectors each of length \code{T_obs}.
+#'
+#' @family falsification
+#' @export
+hd_null_env_jump_diffusion <- function(T_obs, M = 100, lambda_annual = 5,
+                                         mu_jump = 0, sigma_jump_annual = 0.10,
+                                         sigma_annual = 0.20, seed = 42L) {
+  set.seed(seed)
+  sigma_daily <- sigma_annual / sqrt(252)
+  sigma_j     <- sigma_jump_annual / sqrt(252)
+  lambda_daily <- lambda_annual / 252
+
+  lapply(seq_len(M), function(i) {
+    # Diffusion component
+    diffusion <- stats::rnorm(T_obs + 1L, mean = 0, sd = sigma_daily)
+    # Jump component: number of jumps per day ~ Poisson
+    n_jumps <- stats::rpois(T_obs + 1L, lambda = lambda_daily)
+    # Jump sizes: sum of n_jumps Gaussian jumps per day
+    jumps <- vapply(n_jumps, function(nj) {
+      if (nj == 0L) 0 else sum(stats::rnorm(nj, mean = mu_jump, sd = sigma_j))
+    }, double(1L))
+    r <- diffusion + jumps
+    r[-1L]  # discard first observation (t+1 execution)
+  })
+}
+
+
 # ── 9. Null rejection rate ────────────────────────────────────────────────────
 
 #' Compute rejection rate of a strategy function under a null environment
