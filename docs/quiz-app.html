@@ -1,0 +1,103 @@
+<div id="quiz-app">
+
+<div id="phase-instructions" class="quiz-intro">
+  <h2>Which time series is real?</h2>
+  <ul>
+    <li>Each round shows two cumulative return series side by side</li>
+    <li>One is from a real trading strategy; the other is statistically simulated</li>
+    <li>Click the series you think is <b>real</b></li>
+    <li>After your guess, a reveal shows the answer with labelled full-length series</li>
+    <li>Shorter visible windows and harder difficulty levels earn bonus points</li>
+  </ul>
+
+  <div class="option-row">
+    <span class="option-label">Difficulty</span>
+    <div class="option-btn-group" id="grp-diff">
+      <button class="option-btn" id="diff-easy">Easy</button>
+      <button class="option-btn" id="diff-medium">Medium</button>
+      <button class="option-btn" id="diff-hard">Hard</button>
+      <button class="option-btn selected" id="diff-mixed">Mixed</button>
+    </div>
+  </div>
+
+  <div class="option-row">
+    <span class="option-label">Questions</span>
+    <div class="option-btn-group" id="grp-nq">
+      <button class="option-btn selected" id="nq-5">5</button>
+      <button class="option-btn" id="nq-10">10</button>
+      <button class="option-btn" id="nq-20">20</button>
+    </div>
+  </div>
+
+  <div style="text-align:center;">
+    <button class="btn-start" id="btn-start">Start Quiz</button>
+  </div>
+</div>
+
+<div id="phase-quiz" style="display:none;">
+  <div class="quiz-header">
+    <div class="quiz-score">Score: <b id="score">0</b> / <span id="max-score">0</span></div>
+    <div class="quiz-progress">
+      <span id="diff-badge" class="quiz-difficulty"></span>
+      Round <span id="round-num">1</span> / <span id="round-total">5</span>
+    </div>
+  </div>
+
+  <div class="length-selector">
+    <label for="length-select">Visible length:</label>
+    <select id="length-select">
+      <option value="100">100 points (1x)</option>
+      <option value="50">50 points (1.5x)</option>
+      <option value="25">25 points (2x)</option>
+      <option value="15">15 points (3x)</option>
+    </select>
+  </div>
+
+  <div class="quiz-row">
+    <div class="quiz-col">
+      <button class="quiz-btn" id="btn-a">
+        <span class="series-label">Series A</span>
+        <div class="chart-container" id="chart-a"></div>
+      </button>
+    </div>
+    <div class="quiz-vs">VS</div>
+    <div class="quiz-col">
+      <button class="quiz-btn" id="btn-b">
+        <span class="series-label">Series B</span>
+        <div class="chart-container" id="chart-b"></div>
+      </button>
+    </div>
+  </div>
+
+  <div id="reveal" class="explanation-panel">
+    <span id="reveal-text"></span>
+    <div id="reveal-chart" style="height:220px;margin-top:8px;"></div>
+  </div>
+
+  <div class="quiz-controls">
+    <button class="quiz-nav-btn" id="btn-next" style="display:none;">Next Round →</button>
+    <button class="quiz-nav-btn primary" id="btn-finish" style="display:none;">Finish</button>
+  </div>
+</div>
+
+<div id="phase-results" style="display:none;">
+  <h2 style="color:#6c9bd2;">Quiz Complete</h2>
+  <div class="results-cards">
+    <div class="result-card score">
+      <div class="big-num" id="final-pct">0%</div>
+      <div class="label">Your Score</div>
+      <div id="final-score-detail"></div>
+    </div>
+    <div class="result-card baseline">
+      <div class="big-num">50%</div>
+      <div class="label">Random Guessing</div>
+    </div>
+  </div>
+  <div id="results-breakdown"></div>
+  <div style="text-align:center;margin-top:16px;">
+    <button class="quiz-nav-btn primary" id="btn-retry">Try Again</button>
+    <a href="falsification.html" class="quiz-nav-btn" style="text-decoration:none;display:inline-block;">Falsification Methodology</a>
+  </div>
+</div>
+
+</div>
