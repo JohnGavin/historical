@@ -6,18 +6,23 @@
   if (app && main) main.appendChild(app);
 })();
 
-// ── Quiz State ──────────────────────────────────────────────
+// Move build-info into results footer (not visible during quiz)
+(function() {
+  var bi = document.querySelector(".cell-output-display");
+  var footer = document.getElementById("build-info-footer");
+  if (bi && footer) footer.innerHTML = bi.innerHTML;
+  if (bi) bi.style.display = "none";
+})();
+
+// ── State ───────────────────────────────────────────────────
 var allRounds = [];
 try { allRounds = JSON.parse(document.getElementById("quiz-data-json").textContent || "[]"); } catch(e) {}
 
 var S = {
   difficulty: "mixed", nq: 5,
   rounds: [], current: 0,
-  nCorrect: 0, answered: false,
-  answers: [] // null | "A" | "B"
+  nCorrect: 0, answers: []
 };
-var diffMult = {easy:1, medium:2, hard:3, pseudo:4};
-var lenMult = {100:1, 50:1.5, 25:2, 15:3};
 var plotLayout = {
   paper_bgcolor:"transparent", plot_bgcolor:"transparent",
   font:{color:"#ccc",size:11}, margin:{t:5,b:25,l:35,r:5},
@@ -26,9 +31,8 @@ var plotLayout = {
   showlegend:false
 };
 
-// Google Form for score submission (create form and replace these)
-var GOOGLE_FORM_URL = ""; // TODO: set up Google Form
-var GOOGLE_FORM_SCORE_FIELD = "entry.0"; // TODO: field ID
+var GOOGLE_FORM_URL = "";
+var GOOGLE_FORM_SCORE_FIELD = "entry.0";
 
 // ── Event Listeners ─────────────────────────────────────────
 document.querySelectorAll("#grp-diff .option-btn").forEach(function(btn) {
@@ -48,25 +52,28 @@ document.querySelectorAll("#grp-nq .option-btn").forEach(function(btn) {
 document.getElementById("btn-start").addEventListener("click", startQuiz);
 document.getElementById("btn-a").addEventListener("click", function(){ guess("A"); });
 document.getElementById("btn-b").addEventListener("click", function(){ guess("B"); });
-document.getElementById("btn-next").addEventListener("click", function(){ S.current++; renderRound(); });
+document.getElementById("btn-next").addEventListener("click", nextOrFinish);
 document.getElementById("btn-prev").addEventListener("click", function(){ if(S.current>0){S.current--;renderRound();} });
-document.getElementById("btn-finish").addEventListener("click", showResults);
 document.getElementById("btn-retry").addEventListener("click", function(){ location.reload(); });
 document.getElementById("btn-submit-score").addEventListener("click", submitScore);
-document.getElementById("length-select").addEventListener("change", function(){ if(!S.answered) updateCharts(); });
+document.getElementById("length-select").addEventListener("change", function(){
+  if(S.answers[S.current] === null) updateCharts();
+});
 
-// Arrow keys
 document.addEventListener("keydown", function(e) {
-  if (e.key === "ArrowRight") {
-    if (S.answered && S.current < S.rounds.length - 1) { S.current++; renderRound(); }
-    else if (S.answered && S.current >= S.rounds.length - 1) showResults();
-  }
+  if (e.key === "ArrowRight") nextOrFinish();
   if (e.key === "ArrowLeft" && S.current > 0) { S.current--; renderRound(); }
 });
 
-// ── Quiz Logic ──────────────────────────────────────────────
+// ── Helpers ─────────────────────────────────────────────────
 function cumGrowth(ret) { var c=[1]; for(var i=0;i<ret.length;i++) c.push(c[i]*(1+ret[i])); return c; }
 
+function nextOrFinish() {
+  if (S.current < S.rounds.length - 1) { S.current++; renderRound(); }
+  else showResults();
+}
+
+// ── Start ───────────────────────────────────────────────────
 function startQuiz() {
   var pool = S.difficulty === "mixed" ? allRounds.slice() :
     allRounds.filter(function(r){ return r.difficulty === S.difficulty; });
@@ -81,40 +88,40 @@ function startQuiz() {
   renderRound();
 }
 
+// ── Render Round ────────────────────────────────────────────
 function renderRound() {
   var r = S.rounds[S.current];
-  S.answered = (S.answers[S.current] !== null);
+  var wasAnswered = (S.answers[S.current] !== null);
   document.getElementById("round-num").textContent = S.current + 1;
 
+  // Difficulty badge AFTER round number
   var badge = document.getElementById("diff-badge");
   badge.className = "quiz-difficulty " + r.difficulty;
   badge.textContent = r.difficulty.charAt(0).toUpperCase() + r.difficulty.slice(1);
 
-  // Reset buttons
+  // Reset choice buttons
   document.getElementById("btn-a").className = "quiz-btn";
   document.getElementById("btn-b").className = "quiz-btn";
-  document.getElementById("btn-a").disabled = S.answered;
-  document.getElementById("btn-b").disabled = S.answered;
+  document.getElementById("btn-a").disabled = wasAnswered;
+  document.getElementById("btn-b").disabled = wasAnswered;
 
-  // Nav buttons: Back always on left (if not first), Next/Finish on right (if answered)
-  document.getElementById("btn-prev").style.display = (S.current > 0) ? "inline-block" : "none";
+  // Back button: visible if not first round (use visibility to keep layout stable)
+  document.getElementById("btn-prev").style.visibility = (S.current > 0) ? "visible" : "hidden";
 
-  if (S.answered) {
-    // Re-show answer state for revisited questions
+  // Next button: always visible, label changes on last round
+  var nextBtn = document.getElementById("btn-next");
+  if (S.current >= S.rounds.length - 1) {
+    nextBtn.innerHTML = "Finish";
+  } else {
+    nextBtn.innerHTML = "Next &rarr;";
+  }
+
+  if (wasAnswered) {
     var choice = S.answers[S.current];
     if (r.answer === "A") { document.getElementById("btn-a").classList.add("quiz-btn-correct"); if(choice==="B") document.getElementById("btn-b").classList.add("quiz-btn-wrong"); }
     else { document.getElementById("btn-b").classList.add("quiz-btn-correct"); if(choice==="A") document.getElementById("btn-a").classList.add("quiz-btn-wrong"); }
     showReveal(r, choice === r.answer);
-    if (S.current < S.rounds.length - 1) {
-      document.getElementById("btn-next").style.display = "inline-block";
-      document.getElementById("btn-finish").style.display = "none";
-    } else {
-      document.getElementById("btn-next").style.display = "none";
-      document.getElementById("btn-finish").style.display = "inline-block";
-    }
   } else {
-    document.getElementById("btn-next").style.display = "none";
-    document.getElementById("btn-finish").style.display = "none";
     document.getElementById("reveal").className = "explanation-panel";
   }
 
@@ -136,9 +143,9 @@ function updateScore() {
   document.getElementById("correct-count").textContent = S.nCorrect;
 }
 
+// ── Guess ───────────────────────────────────────────────────
 function guess(choice) {
-  if (S.answered) return;
-  S.answered = true;
+  if (S.answers[S.current] !== null) return;
   S.answers[S.current] = choice;
   var r = S.rounds[S.current];
   var correct = (choice === r.answer);
@@ -151,9 +158,6 @@ function guess(choice) {
 
   showReveal(r, correct);
   updateScore();
-
-  if (S.current < S.rounds.length - 1) document.getElementById("btn-next").style.display = "inline-block";
-  else document.getElementById("btn-finish").style.display = "inline-block";
 }
 
 function showReveal(r, correct) {
@@ -164,7 +168,6 @@ function showReveal(r, correct) {
     "<b>Simulated:</b> " + r.sim_source;
   document.getElementById("reveal").className = "explanation-panel show";
 
-  // Reveal chart with labelled full series
   Plotly.react("reveal-chart", [
     {y:cumGrowth(r.full_real), type:"scatter", mode:"lines", line:{color:"#2ecc71",width:2}, name:"Real: " + r.real_name},
     {y:cumGrowth(r.full_sim), type:"scatter", mode:"lines", line:{color:"#e74c3c",width:2,dash:"dash"}, name:"Sim: " + r.null_env}
@@ -197,30 +200,31 @@ function showResults() {
   html += "</table>";
   document.getElementById("results-breakdown").innerHTML = html;
 
-  // Detail: each round with link to source
+  // Detail table
   var detail = "<h3 style='color:#6c9bd2;margin-top:16px;'>Round Details</h3><table style='width:100%;color:#ddd;border-collapse:collapse;'>" +
-    "<tr style='border-bottom:1px solid #444;'><th style='padding:6px;text-align:left;'>#</th><th style='text-align:left;'>Strategy</th>" +
-    "<th style='text-align:left;'>Null Model</th><th>Your Answer</th><th>Result</th></tr>";
+    "<tr style='border-bottom:1px solid #444;'><th style='padding:6px;text-align:left;'>#</th><th style='text-align:left;'>Real Data</th>" +
+    "<th style='text-align:left;'>Null Model</th><th>Answer</th><th>Result</th></tr>";
   S.rounds.forEach(function(r, i) {
     var ans = S.answers[i];
     var correct = (ans === r.answer);
-    var icon = correct ? "&#10004;" : "&#10008;";
-    var color = correct ? "#1a9850" : "#d73027";
+    var skipped = (ans === null);
+    var icon = skipped ? "—" : (correct ? "&#10004;" : "&#10008;");
+    var color = skipped ? "#666" : (correct ? "#1a9850" : "#d73027");
     var link = r.real_url ? "<a href='" + r.real_url + "' target='_blank' style='color:#6c9bd2;'>" + r.real_name + "</a>" : r.real_name;
     detail += "<tr style='border-bottom:1px solid #333;'><td style='padding:6px;'>" + (i+1) + "</td>" +
       "<td>" + link + "</td><td>" + r.null_env + "</td>" +
-      "<td style='text-align:center;'>" + (ans || "-") + "</td>" +
+      "<td style='text-align:center;'>" + (ans || "skipped") + "</td>" +
       "<td style='text-align:center;color:" + color + ";'>" + icon + "</td></tr>";
   });
   detail += "</table>";
   document.getElementById("results-detail").innerHTML = detail;
 }
 
-// ── Submit Score (Google Sheets) ────────────────────────────
+// ── Submit Score ────────────────────────────────────────────
 function submitScore() {
   var statusEl = document.getElementById("submit-status");
   if (!GOOGLE_FORM_URL) {
-    statusEl.textContent = "Score submission not yet configured (see issue #72).";
+    statusEl.textContent = "Score submission not yet configured.";
     statusEl.style.color = "#e6a817";
     return;
   }

@@ -37,17 +37,16 @@
 <!-- ═══ Quiz Phase ═══ -->
 <div id="phase-quiz" style="display:none;">
   <div class="quiz-header">
-    <div class="quiz-score">
-      <span id="correct-count">0</span> / <span id="total-count">0</span> correct
+    <div class="quiz-nav-left">
+      <button class="quiz-nav-btn" id="btn-prev" style="visibility:hidden;">&larr;</button>
     </div>
-    <div class="quiz-progress">
-      <span id="diff-badge" class="quiz-difficulty"></span>
+    <div class="quiz-center-info">
       Round <span id="round-num">1</span> / <span id="round-total">5</span>
+      <span id="diff-badge" class="quiz-difficulty"></span>
+      <span class="quiz-score-inline"><span id="correct-count">0</span> / <span id="total-count">0</span> correct</span>
     </div>
-    <div class="quiz-nav-top">
-      <button class="quiz-nav-btn" id="btn-prev" style="display:none;">&larr; Back</button>
-      <button class="quiz-nav-btn" id="btn-next" style="display:none;">Next &rarr;</button>
-      <button class="quiz-nav-btn primary" id="btn-finish" style="display:none;">Finish</button>
+    <div class="quiz-nav-right">
+      <button class="quiz-nav-btn" id="btn-next">Next &rarr;</button>
     </div>
   </div>
 
@@ -102,9 +101,9 @@
   <div style="text-align:center;margin-top:16px;">
     <button class="quiz-nav-btn primary" id="btn-submit-score">Submit Score</button>
     <button class="quiz-nav-btn primary" id="btn-retry">Try Again</button>
-    <a href="falsification.html" class="quiz-nav-btn" style="text-decoration:none;display:inline-block;">Methodology</a>
   </div>
   <div id="submit-status" style="color:#aaa;text-align:center;margin-top:8px;"></div>
+  <div id="build-info-footer" style="text-align:center;margin-top:24px;color:#666;font-size:0.8em;"></div>
 </div>
 
 </div>

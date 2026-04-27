@@ -1,5 +1,5 @@
 ---
-title: "Which is real?"
+title: "Which is Real?"
 format:
   html:
     embed-resources: false
@@ -11,6 +11,8 @@ format:
       - text: |
           <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
           <style>
+          body{font-size:1.3em}
+          caption,figcaption,.figure-caption{color:#fff!important}
           #quiz-app{max-width:900px;margin:0 auto;padding:20px}
           .quiz-intro h2{color:#6c9bd2;margin-bottom:.5em}
           .quiz-intro ul{font-size:1.05em;line-height:1.8}
@@ -22,10 +24,10 @@ format:
           .option-btn.selected{border-color:#4a90d9;background:#14549e;color:#fff}
           .btn-start{display:inline-block;padding:14px 40px;font-size:1.2em;font-weight:bold;border:none;border-radius:8px;cursor:pointer;margin-top:1.5em;background:#4a90d9;color:#fff}
           .btn-start:hover{background:#3a7bc8}
-          .quiz-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5em;flex-wrap:wrap;gap:8px}
-          .quiz-nav-top{display:flex;gap:4px;}
-          .quiz-score{font-size:1.1em;color:#6c9bd2}
-          .quiz-progress{color:#aaa;font-size:.95em}
+          .quiz-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5em;gap:8px}
+          .quiz-nav-left,.quiz-nav-right{flex:0 0 auto;}
+          .quiz-center-info{flex:1;text-align:center;color:#ddd;font-size:1em;}
+          .quiz-score-inline{color:#6c9bd2;margin-left:12px;}
           .quiz-difficulty{display:inline-block;padding:3px 10px;border-radius:4px;font-size:.85em;font-weight:bold}
           .quiz-difficulty.easy{background:#1a9850;color:#fff}
           .quiz-difficulty.medium{background:#e6a817;color:#000}
