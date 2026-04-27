@@ -6,12 +6,36 @@
   if (app && main) main.appendChild(app);
 })();
 
-// Move build-info into results footer (not visible during quiz)
+// Move build-info to instructions + results footers (hide from quiz questions)
 (function() {
-  var bi = document.querySelector(".cell-output-display");
-  var footer = document.getElementById("build-info-footer");
-  if (bi && footer) footer.innerHTML = bi.innerHTML;
-  if (bi) bi.style.display = "none";
+  var cells = document.querySelectorAll(".cell-output-display");
+  var biHTML = "";
+  cells.forEach(function(c) {
+    if (c.textContent.indexOf("historicaldata") >= 0 || c.textContent.indexOf("Git") >= 0) {
+      biHTML = c.innerHTML;
+      c.style.display = "none";
+    }
+  });
+  var f1 = document.getElementById("build-info-instructions");
+  var f2 = document.getElementById("build-info-footer");
+  if (f1 && biHTML) f1.innerHTML = biHTML;
+  if (f2 && biHTML) f2.innerHTML = biHTML;
+})();
+
+// Render QR codes on instructions + results pages
+(function() {
+  var url = window.location.href.split("#")[0].split("?")[0];
+  function renderQR(containerId) {
+    var el = document.getElementById(containerId);
+    if (!el || typeof qrcode === "undefined") return;
+    var qr = qrcode(0, "M");
+    qr.addData(url);
+    qr.make();
+    el.innerHTML = qr.createImgTag(4, 8) +
+      "<br><span style='color:#666;font-size:0.75em;'>" + url + "</span>";
+  }
+  renderQR("qr-instructions");
+  renderQR("qr-results");
 })();
 
 // ── State ───────────────────────────────────────────────────
