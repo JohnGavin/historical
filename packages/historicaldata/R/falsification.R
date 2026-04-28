@@ -587,3 +587,110 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
   for (nm in names(betas)) out[[nm]] <- betas[[nm]]
   out
 }
+
+
+# ── 13. Deflated Sharpe Ratio (DSR) ─────────────────────────────────────────
+
+#' Deflated Sharpe Ratio
+#'
+#' Adjusts the Sharpe ratio for non-normality (skewness, kurtosis) and
+#' multiple testing (number of strategies tried).  Based on Lopez de Prado
+#' (2018), "The Deflated Sharpe Ratio".
+#'
+#' The DSR tests H0: true Sharpe <= 0, accounting for the fact that:
+#' (1) returns are non-normal (fat tails inflate naive Sharpe), and
+#' (2) the best of K strategies has an inflated expected Sharpe
+#' even under pure noise (the "haircut").
+#'
+#' @param r Numeric vector of returns (daily or monthly).
+#' @param K_trials Integer. Number of strategies tested (default 1 = no
+#'   multiple-testing adjustment).
+#' @param ann_factor Integer. Annualisation factor (252 for daily, 12 for
+#'   monthly). Default 252.
+#'
+#' @return Named list:
+#'   \describe{
+#'     \item{dsr}{Deflated Sharpe Ratio (annualised).}
+#'     \item{dsr_pvalue}{p-value for H0: true Sharpe <= 0.}
+#'     \item{naive_sharpe}{Uncorrected annualised Sharpe.}
+#'     \item{haircut_pct}{Percentage reduction from naive to deflated.}
+#'     \item{skewness}{Sample skewness of returns.}
+#'     \item{kurtosis}{Sample excess kurtosis of returns.}
+#'     \item{K_trials}{Number of strategies tested.}
+#'     \item{T}{Number of observations.}
+#'   }
+#'
+#' @references
+#' Lopez de Prado, M. (2018). "The Deflated Sharpe Ratio: Correcting for
+#' Selection Bias, Backtest Overfitting, and Non-Normality."
+#' \emph{Journal of Portfolio Management}, 40(5), 94-107.
+#'
+#' @family falsification
+#' @export
+hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
+  r <- r[!is.na(r)]
+  T_obs <- length(r)
+  if (T_obs < 10L) {
+    return(list(dsr = NA_real_, dsr_pvalue = NA_real_,
+                naive_sharpe = NA_real_, haircut_pct = NA_real_,
+                skewness = NA_real_, kurtosis = NA_real_,
+                K_trials = K_trials, T = T_obs))
+  }
+
+  mu    <- mean(r)
+  sigma <- stats::sd(r)
+  sr    <- if (sigma > 0) mu / sigma else 0
+
+  # Annualised naive Sharpe
+  naive_sr <- sr * sqrt(ann_factor)
+
+  # Sample moments
+  n   <- T_obs
+  m3  <- sum((r - mu)^3) / n / sigma^3  # skewness
+  m4  <- sum((r - mu)^4) / n / sigma^4  # kurtosis (not excess)
+  ek  <- m4 - 3  # excess kurtosis
+
+  # Variance of the Sharpe ratio estimator (Lo, 2002):
+  # Var(SR) ≈ (1 - m3*SR + (m4-1)/4 * SR^2) / T
+  var_sr <- (1 - m3 * sr + (m4 - 1) / 4 * sr^2) / T_obs
+
+  # Expected maximum Sharpe under K independent trials (Euler-Mascheroni):
+  # E[max(SR)] ≈ sqrt(2*log(K)) - (gamma + log(pi/2)) / (2*sqrt(2*log(K)))
+  # For K=1: E[max] = 0
+  if (K_trials > 1L) {
+    z <- sqrt(2 * log(K_trials))
+    euler_mascheroni <- 0.5772156649
+    e_max_sr <- z - (euler_mascheroni + log(pi / 2)) / (2 * z)
+    # Scale to per-period SR (not annualised)
+    e_max_sr <- e_max_sr / sqrt(T_obs)
+  } else {
+    e_max_sr <- 0
+  }
+
+  # Deflated SR: test H0: SR <= E[max(SR)]
+  # DSR = (SR - E[max]) / sqrt(Var(SR))
+  se_sr <- sqrt(max(var_sr, .Machine$double.eps))
+  dsr_stat <- (sr - e_max_sr) / se_sr
+
+  # p-value (one-sided)
+  dsr_pvalue <- 1 - stats::pnorm(dsr_stat)
+
+  # Annualised DSR
+  dsr_ann <- dsr_stat * sqrt(ann_factor / T_obs)
+
+  # Haircut
+  haircut <- if (abs(naive_sr) > 0.001) {
+    (1 - dsr_ann / naive_sr) * 100
+  } else NA_real_
+
+  list(
+    dsr           = dsr_ann,
+    dsr_pvalue    = dsr_pvalue,
+    naive_sharpe  = naive_sr,
+    haircut_pct   = haircut,
+    skewness      = m3,
+    kurtosis      = ek,
+    K_trials      = K_trials,
+    T             = T_obs
+  )
+}

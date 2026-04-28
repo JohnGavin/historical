@@ -593,6 +593,32 @@ plan_falsification <- function() {
 
 
     # ═══════════════════════════════════════════════════════════════════
+    # Deflated Sharpe Ratio (DSR): adjusts for skewness, kurtosis, K trials
+    # ═══════════════════════════════════════════════════════════════════
+
+    targets::tar_target(fals_dsr_avoid_worst, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_deflated_sharpe(fals_avoid_worst_input$strategy_ret, K_trials = 5L, ann_factor = 252L)
+    }),
+    targets::tar_target(fals_dsr_drif, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_deflated_sharpe(fals_drif_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
+    }),
+    targets::tar_target(fals_dsr_fac_max, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_deflated_sharpe(fals_fac_max_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
+    }),
+    targets::tar_target(fals_dsr_rsc, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_deflated_sharpe(fals_rsc_input$strategy_ret, K_trials = 5L, ann_factor = 252L)
+    }),
+    targets::tar_target(fals_dsr_ltr, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      hd_deflated_sharpe(fals_ltr_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
+    }),
+
+
+    # ═══════════════════════════════════════════════════════════════════
     # Summary: one row per strategy with all test results
     # ═══════════════════════════════════════════════════════════════════
 
@@ -681,6 +707,29 @@ plan_falsification <- function() {
           fals_ff_fac_max$r_squared,
           fals_ff_rsc$r_squared,
           fals_ff_ltr$r_squared
+        ),
+
+        # Deflated Sharpe Ratio (Lopez de Prado 2018)
+        dsr = c(
+          fals_dsr_avoid_worst$dsr,
+          fals_dsr_drif$dsr,
+          fals_dsr_fac_max$dsr,
+          fals_dsr_rsc$dsr,
+          fals_dsr_ltr$dsr
+        ),
+        dsr_pvalue = c(
+          fals_dsr_avoid_worst$dsr_pvalue,
+          fals_dsr_drif$dsr_pvalue,
+          fals_dsr_fac_max$dsr_pvalue,
+          fals_dsr_rsc$dsr_pvalue,
+          fals_dsr_ltr$dsr_pvalue
+        ),
+        dsr_haircut_pct = c(
+          fals_dsr_avoid_worst$haircut_pct,
+          fals_dsr_drif$haircut_pct,
+          fals_dsr_fac_max$haircut_pct,
+          fals_dsr_rsc$haircut_pct,
+          fals_dsr_ltr$haircut_pct
         )
       )
     }),
