@@ -61,6 +61,7 @@ source(here::here("R/plan_falsification.R"))
 source(here::here("R/plan_falsification_vignette.R"))
 source(here::here("R/plan_ltr_momentum.R"))
 source(here::here("R/plan_quiz.R"))
+source(here::here("R/plan_mean_reversion.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -70,6 +71,7 @@ c(plan_strategy_names(),
   plan_regime(), plan_alpha_decay(),
   plan_avoid_worst(),
   plan_risk_state(),
+  plan_mean_reversion(),
   plan_leaderboard(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),

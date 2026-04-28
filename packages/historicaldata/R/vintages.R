@@ -21,38 +21,17 @@ utils::globalVariables(c("pub_date", ".release_n", "value", "final_value"))
 hd_macro_vintages <- function(series_id, from = NULL, to = NULL, release = "all") {
   ds <- hd_datasets()[["macro_vintages"]]
 
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
-  where_clauses <- character()
-  params <- list()
+  lf <- duckplyr::read_parquet_duckdb(ds$url)
 
   if (!missing(series_id) && !is.null(series_id)) {
-    placeholders <- paste(rep("?", length(series_id)), collapse = ", ")
-    where_clauses <- c(where_clauses, paste0("series_id IN (", placeholders, ")"))
-    params <- c(params, as.list(series_id))
+    lf <- lf |> dplyr::filter(series_id %in% !!series_id)
   }
+  if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!as.character(from))
+  if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!as.character(to))
 
-  if (!is.null(from)) {
-    where_clauses <- c(where_clauses, "date >= ?")
-    params <- c(params, list(as.character(from)))
-  }
-  if (!is.null(to)) {
-    where_clauses <- c(where_clauses, "date <= ?")
-    params <- c(params, list(as.character(to)))
-  }
+  lf <- lf |> dplyr::arrange(series_id, date, pub_date)
 
-  where <- if (length(where_clauses) > 0) {
-    paste("WHERE", paste(where_clauses, collapse = " AND "))
-  } else ""
-
-  sql <- sprintf(
-    "SELECT * FROM read_parquet('%s') %s ORDER BY series_id, date, pub_date",
-    ds$url, where
-  )
-
-  result <- DBI::dbGetQuery(con, sql, params = params) |>
-    dplyr::as_tibble()
+  result <- dplyr::collect(lf)
 
   # Filter by release number
  if (!identical(release, "all")) {

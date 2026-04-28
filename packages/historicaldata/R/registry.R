@@ -76,13 +76,11 @@ hd_tickers <- function(dataset = "equity_daily") {
     cli::cli_abort("Unknown dataset: {dataset}. See {.fn hd_datasets}.")
   }
 
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
-  DBI::dbGetQuery(con, sprintf(
-    "SELECT DISTINCT ticker FROM read_parquet('%s') ORDER BY ticker",
-    ds$url
-  ))$ticker
+  duckplyr::read_parquet_duckdb(ds$url) |>
+    dplyr::distinct(ticker) |>
+    dplyr::arrange(ticker) |>
+    dplyr::collect() |>
+    dplyr::pull(ticker)
 }
 
 #' Macro series metadata registry

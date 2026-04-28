@@ -4,25 +4,21 @@
 #' Each row records: what was changed, when, why, and the original value.
 #'
 #' @param ticker Filter to one ticker. NULL = all.
-#' @return Tibble with amendment records
+#' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
+#' @return Tibble or lazy duckplyr frame with amendment records
 #' @family quality-audit
 #' @export
-hd_amendments <- function(ticker = NULL) {
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
+hd_amendments <- function(ticker = NULL, collect = TRUE) {
   ds <- hd_datasets()[["amendments"]]
   if (is.null(ds)) {
     cli::cli_inform("No price amendments recorded yet.")
     return(dplyr::tibble())
   }
 
-  sql <- sprintf("SELECT * FROM read_parquet('%s')", ds$url)
-  if (!is.null(ticker)) {
-    sql <- paste0(sql, sprintf(" WHERE ticker = '%s'", ticker))
-  }
+  lf <- duckplyr::read_parquet_duckdb(ds$url)
+  if (!is.null(ticker)) lf <- lf |> dplyr::filter(ticker == !!ticker)
 
-  DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()
+  if (collect) dplyr::collect(lf) else lf
 }
 
 #' Get metadata amendments (Point-in-Time tracking)
@@ -33,16 +29,13 @@ hd_amendments <- function(ticker = NULL) {
 #'
 #' @param ticker Filter to one ticker. NULL = all.
 #' @param field Filter to one field (e.g. "beta_3yr"). NULL = all.
-#' @return Tibble with: ticker, field, old_value, new_value, source, method,
-#'   amended_at, amended_by, reversible
+#' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
+#' @return Tibble or lazy duckplyr frame
 #' @export
 #' @examplesIf interactive()
 #' hd_metadata_amendments("AAPL")
 #' hd_metadata_amendments(field = "beta_3yr")
-hd_metadata_amendments <- function(ticker = NULL, field = NULL) {
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
+hd_metadata_amendments <- function(ticker = NULL, field = NULL, collect = TRUE) {
   ds <- hd_datasets()[["metadata_amendments"]]
   if (is.null(ds)) {
     cli::cli_inform("No metadata amendments recorded yet.")
@@ -55,13 +48,10 @@ hd_metadata_amendments <- function(ticker = NULL, field = NULL) {
     ))
   }
 
-  wheres <- character()
-  if (!is.null(ticker)) wheres <- c(wheres, sprintf("ticker = '%s'", ticker))
-  if (!is.null(field)) wheres <- c(wheres, sprintf("field = '%s'", field))
+  lf <- duckplyr::read_parquet_duckdb(ds$url)
+  if (!is.null(ticker)) lf <- lf |> dplyr::filter(ticker == !!ticker)
+  if (!is.null(field))  lf <- lf |> dplyr::filter(field == !!field)
+  lf <- lf |> dplyr::arrange(dplyr::desc(amended_at), ticker, field)
 
-  sql <- sprintf("SELECT * FROM read_parquet('%s')", ds$url)
-  if (length(wheres) > 0) sql <- paste(sql, "WHERE", paste(wheres, collapse = " AND "))
-  sql <- paste(sql, "ORDER BY amended_at DESC, ticker, field")
-
-  DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()
+  if (collect) dplyr::collect(lf) else lf
 }
