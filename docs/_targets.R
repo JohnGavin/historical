@@ -37,6 +37,8 @@ tar_option_set(
   format = "rds"
 )
 
+# Source plans (strategy_names FIRST — may be referenced by any plan)
+source(here::here("R/plan_strategy_names.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
 source(here::here("R/plan_partitions.R"))
 source(here::here("R/plan_vignette.R"))
@@ -60,8 +62,9 @@ source(here::here("R/plan_falsification_vignette.R"))
 source(here::here("R/plan_ltr_momentum.R"))
 source(here::here("R/plan_quiz.R"))
 
-# Combine: partitions, strategies, portfolio, ETF replication, leaderboard, QA
-c(plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
+# Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
+c(plan_strategy_names(),
+  plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
   plan_stock_backtest(), plan_xgb_signal(), plan_portfolio_opt(),
   plan_etf_replication(), plan_kelly(), plan_bootstrap_ci(),
   plan_regime(), plan_alpha_decay(),

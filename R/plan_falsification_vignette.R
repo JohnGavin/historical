@@ -13,22 +13,12 @@ plan_falsification_vignette <- function() {
 
   list(
 
-    # ── Strategy names: single source of truth ───────────────────────
+    # ── Strategy names: filtered view of unified strategy_names target ──
     targets::tar_target(fals_vig_names, {
-      tibble::tibble(
-        code_name  = c("avoid_worst", "drif", "fac_max", "rsc", "ltr"),
-        short_name = c("Avoid Worst", "DRIF", "Factor MAX",
-                        "Risk State", "LTR"),
-        long_name  = c(
-          "Avoid Worst Days (VIX Protection)",
-          "DRIF (Factor Rotation)",
-          "Factor MAX (Factor Momentum)",
-          "Risk State (VIX Overlay)",
-          "LTR (Cross-Sectional Momentum)"
-        ),
-        ann_factor = c(252L, 12L, 12L, 252L, 12L),
-        asset_class = c("overlay", "factor", "factor", "overlay", "equity")
-      )
+      strategy_names |>
+        dplyr::filter(
+          code_name %in% c("avoid_worst", "drif", "fac_max", "rsc", "ltr")
+        )
     }),
 
 
