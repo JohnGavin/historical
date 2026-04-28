@@ -1,0 +1,201 @@
+---
+title: "Negative Results"
+format:
+  html:
+    embed-resources: false
+    theme:
+      dark: darkly
+      light: cosmo
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    include-in-header:
+      - text: |
+          <style>
+          body { font-size: 1.3em; }
+          caption, figcaption, .figure-caption { color: #fff !important; }
+          .negative-card {
+            background: #1a1a2e; border: 1px solid #d73027; border-radius: 8px;
+            padding: 16px; margin: 16px 0;
+          }
+          .negative-card h3 { color: #d73027; margin-top: 0; }
+          .lesson { background: #111; border-left: 4px solid #e6a817; padding: 12px 16px; margin: 12px 0; }
+          </style>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme'))
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(dplyr)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+```
+
+## Why Document Negative Results?
+
+Negative results are as valuable as positive ones. A strategy that fails the falsification framework teaches us:
+
+- Which signals are **disguised beta** (market exposure dressed up as alpha)
+- Which intuitions about markets are **wrong** (or at least not tradeable)
+- Where the **boundary** lies between genuine alpha and noise
+
+Publication bias in finance means failed strategies are rarely documented. This page corrects that.
+
+## Failed Strategies
+
+```{r}
+#| label: neg-scorecard
+summary <- safe_tar_read("fals_summary")
+nms <- safe_tar_read("fals_vig_names")
+if (!is.null(summary) && !is.null(nms)) {
+  neg <- summary |>
+    filter(ff_alpha_tstat < 2.0) |>
+    mutate(
+      Strategy = nms$long_name[match(strategy, nms$code_name)],
+      `HAC t` = round(hac_tstat, 2),
+      `Alpha t` = round(ff_alpha_tstat, 2),
+      `R² (%)` = round(ff_r_squared * 100, 1),
+      `Alpha (%)` = round(ff_alpha_annual * 100, 0),
+      Diagnosis = case_when(
+        ff_r_squared > 0.50 ~ "Pure market beta",
+        ff_r_squared > 0.15 ~ "Significant factor exposure",
+        TRUE ~ "Noise — neither alpha nor beta"
+      )
+    ) |>
+    select(Strategy, `HAC t`, `Alpha t`, `R² (%)`, `Alpha (%)`, Diagnosis) |>
+    arrange(`Alpha t`)
+
+  hd_dt(neg, paste0(
+    nrow(neg), " of ", nrow(summary),
+    " strategies failed the falsification framework (Alpha t < 2.0). ",
+    "These strategies' returns are explained by known factor exposure or noise."
+  ))
+}
+```
+
+## Avoid Worst Days (VIX Protection) {#avoid-worst}
+
+::: {.negative-card}
+### Verdict: Pure market beta (R² = 41%)
+
+**What it does:** Exit to cash when yesterday's VIX > 30 or yesterday's absolute return > 3%. Re-enter when VIX < 25 and 5-day cooloff expires. All signals use t-1 (previous day) values.
+
+**Why it fails:**
+
+- The strategy is essentially a crude vol-timing filter on SPY
+- When VIX is high, you're out of the market — but so is the VIX signal embedded in the market itself
+- The 41% R² means the strategy's returns are 41% explained by Mkt-RF (market factor alone)
+- Alpha = -1% per year: the strategy **destroys** value relative to just holding the market
+- The t+1 execution constraint is critical: the pre-fix version (using same-day VIX) showed 18.4% CAGR; honest t+1 execution drops it to 5.3%
+
+**Key lesson:** VIX is not a leading indicator — it's a concurrent indicator. By the time VIX > 30, the worst days have already happened.
+:::
+
+::: {.lesson}
+**What we learned:** Any strategy that triggers on elevated VIX is timing exits AFTER the crash, not before it. The worst days and best days cluster together (median 5 calendar days apart). You cannot avoid one without missing the other. See the [temporal clustering analysis](avoid-worst-days.html).
+:::
+
+## Risk State Classification (VIX Overlay) {#risk-state}
+
+::: {.negative-card}
+### Verdict: Pure market beta (R² = 88%)
+
+**What it does:** Three-signal design: VVIX (vol-of-vol) as early warning, VIX term structure 5-day change, VIX term structure level. Market-specific percentile thresholds from training data only. Overlay on SPY: reduce exposure when signals are elevated.
+
+**Why it fails:**
+
+- 88% R² — this is almost entirely market beta
+- Alpha = -1% per year (negative): the overlay HURTS performance
+- Despite using VVIX (which IS an early warning — it rises before VIX spikes), the signal doesn't translate into tradeable alpha
+- The 5-day change in term structure adds noise, not signal
+- Percentile thresholds from training data don't generalise: crisis regimes are structurally different from calm regimes
+
+**Key lesson:** Adding more VIX-derived signals doesn't help. VVIX, term structure, and VIX level are all highly correlated. Three correlated signals ≈ one signal with more noise.
+:::
+
+::: {.lesson}
+**What we learned:** Implied volatility signals (VIX, VVIX, term structure) are priced in. The market already incorporates this information. A strategy based on these signals is, by construction, replicating what the market already does — hence the 88% R² with the market factor.
+:::
+
+## LTR Cross-Sectional Momentum (Borderline) {#ltr}
+
+::: {.negative-card}
+### Verdict: Borderline (Alpha t = 1.99, R² = 7%)
+
+**What it does:** XGBoost LambdaMART ranks ~500 US stocks monthly using 21 momentum/volatility features. Long top decile, short bottom decile.
+
+**Why it's borderline:**
+
+- Alpha t = 1.99 — just below the 2.0 threshold
+- R² = 7% — low factor exposure, which is good
+- Alpha = 166% per year — suspiciously high
+- The demo uses ~51 stocks (not the full US universe) which inflates returns
+- Walk-forward from 2005 with annual retraining — but limited out-of-sample validation
+
+**Key lesson:** The signal may be genuine but the implementation is too small-scale to confirm. Needs: full US universe (3000+ stocks), transaction costs for monthly L/S rebalancing, and multi-market replication.
+:::
+
+::: {.lesson}
+**What we learned:** Cross-sectional momentum is well-documented academically. Our implementation is a proof-of-concept, not a production signal. The 166% annual alpha is an artifact of the small universe, not evidence of a genuine edge.
+:::
+
+## Pattern: What Predicts Failure?
+
+```{r}
+#| label: neg-pattern
+if (!is.null(summary) && !is.null(nms)) {
+  pattern <- summary |>
+    mutate(
+      Strategy = nms$long_name[match(strategy, nms$code_name)],
+      `Asset Class` = nms$asset_class[match(strategy, nms$code_name)],
+      `Frequency` = nms$frequency[match(strategy, nms$code_name)],
+      `R² (%)` = round(ff_r_squared * 100, 1),
+      `Alpha t` = round(ff_alpha_tstat, 2),
+      Verdict = ifelse(ff_alpha_tstat > 2.0, "Alpha", "No alpha")
+    ) |>
+    select(Strategy, `Asset Class`, Frequency, `R² (%)`, `Alpha t`, Verdict) |>
+    arrange(desc(`Alpha t`))
+
+  hd_dt(pattern, paste0(
+    "All 5 strategies sorted by Alpha t. ",
+    "The two overlay strategies (daily, VIX-based) both fail. ",
+    "The two factor strategies (monthly, momentum-based) both pass. ",
+    "Pattern: daily VIX-based overlays = beta; monthly factor rotation = alpha."
+  ))
+}
+```
+
+## Implications for Portfolio Construction
+
+1. **Do not include** Avoid Worst Days or Risk State in the multi-strategy portfolio (#52)
+2. **VIX-based overlays** add cost and complexity without alpha — use passive SPY instead
+3. **Factor rotation** (DRIF, Factor MAX) is where the genuine alpha lives
+4. **Cross-sectional momentum** (LTR) needs scaling before inclusion — promising but unconfirmed at production scale
+
+## References
+
+- Full falsification methodology: [Strategy Falsification](falsification.html)
+- Avoid Worst Days analysis: [avoid-worst-days.html](avoid-worst-days.html)
+- Strategy leaderboard: [leaderboard.html](leaderboard.html)
+- Harvey, Liu & Zhu (2016). "...and the Cross-Section of Expected Returns"
+
+```{r}
+#| label: build-info
+#| results: asis
+build_info()
+```
