@@ -18,6 +18,7 @@ Imports:
     DBI,
     dplyr,
     duckdb (>= 0.9),
+    duckplyr,
     ggplot2,
     rlang,
     tibble
@@ -25,7 +26,6 @@ Suggests:
     arrow (>= 14.0),
     curl,
     DT,
-    duckplyr,
     glmnet,
     here,
     purrr,
