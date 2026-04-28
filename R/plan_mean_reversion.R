@@ -199,6 +199,7 @@ plan_mean_reversion <- function() {
 
       calc <- function(d, label) {
         ret <- d$net_ret
+        ret <- ret[!is.na(ret)]
         n <- length(ret)
         if (n < 20) return(NULL)
         years <- n / 252
@@ -220,8 +221,9 @@ plan_mean_reversion <- function() {
         )
       }
 
-      port <- mr_portfolio
-      oos <- mr_params$test_start
+      port <- mr_portfolio |>
+        dplyr::mutate(date = as.Date(date))
+      oos <- as.Date(mr_params$test_start)
 
       dplyr::bind_rows(
         calc(port |> filter(date < oos), "Training"),
