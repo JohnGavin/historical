@@ -19,19 +19,17 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
     cli::cli_abort("Invalid metric: {metric}. Valid: {paste(valid_metrics, collapse = ', ')}")
   }
 
-
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
   ds <- hd_datasets()[["metadata"]]
-  direction <- if (desc) "DESC" else "ASC"
-  sql <- sprintf(
-    "SELECT * FROM read_parquet('%s') WHERE dataset = ? AND %s IS NOT NULL ORDER BY %s %s LIMIT %d",
-    ds$url, metric, metric, direction, as.integer(n)
-  )
+  lf <- duckplyr::read_parquet_duckdb(ds$url) |>
+    dplyr::filter(dataset == !!dataset, !is.na(.data[[metric]]))
 
-  DBI::dbGetQuery(con, sql, params = list(dataset)) |>
-    dplyr::as_tibble()
+  if (desc) {
+    lf <- lf |> dplyr::arrange(dplyr::desc(.data[[metric]]))
+  } else {
+    lf <- lf |> dplyr::arrange(.data[[metric]])
+  }
+
+  lf |> utils::head(n) |> dplyr::collect()
 }
 
 #' Most volatile tickers by recent realised volatility

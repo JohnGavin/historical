@@ -4,34 +4,30 @@
 #'
 #' @param pattern Regex pattern (default) or glob (if contains `*` or `?`)
 #' @param dataset Filter to one dataset (e.g. "equity_daily"). NULL = all.
-#' @return Tibble of matching tickers with metadata
+#' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
+#' @return Tibble or lazy duckplyr frame of matching tickers with metadata
 #' @export
 #' @examplesIf interactive()
 #' hd_search("^APP")     # regex: tickers starting with APP
 #' hd_search("*coin*")   # glob: names containing "coin"
-hd_search <- function(pattern, dataset = NULL) {
-
-  # Convert glob to regex if pattern contains unescaped * or ?
-  # (but NOT inside character classes like [.])
+hd_search <- function(pattern, dataset = NULL, collect = TRUE) {
   is_glob <- grepl("\\*|(?<!\\[)\\?", pattern, perl = TRUE) &&
     !grepl("\\[.*\\]", pattern)
   if (is_glob) {
     pattern <- utils::glob2rx(pattern, trim.head = TRUE, trim.tail = TRUE)
   }
 
+  # hd_search needs regexp_matches which duckplyr doesn't support natively.
+  # Use DBI for this one function (legitimate exception: regex predicate pushdown).
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
   ds <- hd_datasets()[["metadata"]]
-
-  # DuckDB parameterised binding doesn't work with regexp_matches
-  # Use direct interpolation (pattern is a regex, not user SQL)
   escaped_pattern <- gsub("'", "''", pattern)
   where <- sprintf(
     "regexp_matches(ticker, '%s') OR regexp_matches(LOWER(long_name), LOWER('%s'))",
     escaped_pattern, escaped_pattern
   )
-
   if (!is.null(dataset)) {
     where <- paste0("(", where, ") AND dataset = '", gsub("'", "''", dataset), "'")
   }
@@ -41,10 +37,7 @@ hd_search <- function(pattern, dataset = NULL) {
     ds$url, where
   )
 
-  result <- DBI::dbGetQuery(con, sql) |>
-    dplyr::as_tibble()
-
-  # Sanitise strings: yfinance long_name can contain embedded NUL bytes
+  result <- DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()
 
   chr_cols <- names(result)[vapply(result, is.character, logical(1))]
   for (col in chr_cols) {
@@ -56,25 +49,28 @@ hd_search <- function(pattern, dataset = NULL) {
 
 #' Summary of all datasets
 #'
-#' Returns one row per dataset with ticker count, row count, and date range.
-#'
+#' @param collect If TRUE (default), materialise.
 #' @return Tibble with dataset, n_tickers, total_obs, min_date, max_date, description
 #' @family discovery
 #' @export
-hd_summary <- function() {
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
+hd_summary <- function(collect = TRUE) {
   ds <- hd_datasets()[["metadata"]]
-  DBI::dbGetQuery(con, sprintf(
-    "SELECT dataset, COUNT(*) as n_tickers,
-            SUM(total_obs) as total_obs,
-            MIN(start_date) as min_date,
-            MAX(end_date) as max_date
-     FROM read_parquet('%s')
-     GROUP BY dataset ORDER BY dataset", ds$url
-  )) |>
-    dplyr::as_tibble() |>
+
+  lf <- duckplyr::read_parquet_duckdb(ds$url) |>
+    dplyr::summarise(
+      n_tickers = dplyr::n(),
+      total_obs = sum(total_obs, na.rm = TRUE),
+      min_date = min(start_date, na.rm = TRUE),
+      max_date = max(end_date, na.rm = TRUE),
+      .by = dataset
+    ) |>
+    dplyr::arrange(dataset)
+
+  result <- dplyr::collect(lf) |>
+    dplyr::mutate(
+      min_date = as.character(min_date),
+      max_date = as.character(max_date)
+    ) |>
     dplyr::left_join(
       dplyr::tibble(
         dataset = names(hd_datasets()),
@@ -82,19 +78,23 @@ hd_summary <- function() {
       ),
       by = "dataset"
     )
+
+  result
 }
 
 #' List all exchanges
 #'
 #' @param dataset Filter to one dataset. NULL = all.
-#' @return Tibble with exchange, full_exchange, n_tickers
+#' @return Tibble with exchange, n_tickers
 #' @family discovery
 #' @export
 hd_exchanges <- function(dataset = NULL) {
+  ds <- hd_datasets()[["metadata"]]
+
+  # STRING_AGG not available in duckplyr — use DBI for this one
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
-  ds <- hd_datasets()[["metadata"]]
   where <- if (!is.null(dataset)) sprintf("WHERE dataset = '%s'", dataset) else ""
   DBI::dbGetQuery(con, sprintf(
     "SELECT exchange, full_exchange, COUNT(*) as n_tickers,
@@ -107,64 +107,52 @@ hd_exchanges <- function(dataset = NULL) {
 
 #' Compact metadata table for a vector of tickers
 #'
-#' Returns key metadata columns for display below plots. Accepts single or
-#' multiple tickers. Uses batch `IN (...)` query.
-#'
 #' @param tickers Character vector of ticker symbols
-#' @return Tibble with: ticker, long_name, currency, exchange, market_cap,
-#'   volume_avg, yield_pct, beta_3yr
+#' @param collect If TRUE (default), materialise.
+#' @return Tibble or lazy frame with key metadata columns
 #' @export
 #' @examplesIf interactive()
 #' hd_ticker_meta(c("AAPL", "MSFT"))
-#' hd_ticker_meta(hd_group("FAANG"))
-hd_ticker_meta <- function(tickers) {
+hd_ticker_meta <- function(tickers, collect = TRUE) {
   tickers <- as.character(tickers)
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
   ds <- hd_datasets()[["metadata"]]
-  placeholders <- paste(rep("?", length(tickers)), collapse = ", ")
-  sql <- sprintf(
-    "SELECT ticker, long_name, currency, exchange, market_cap, volume_avg,
-            yield_pct, beta_3yr, start_date, end_date, total_obs
-     FROM read_parquet('%s') WHERE ticker IN (%s)
-     ORDER BY ticker",
-    ds$url, placeholders
-  )
 
-  result <- DBI::dbGetQuery(con, sql, params = as.list(tickers)) |>
-    dplyr::as_tibble()
+  lf <- duckplyr::read_parquet_duckdb(ds$url) |>
+    dplyr::filter(ticker %in% !!tickers) |>
+    dplyr::select(ticker, long_name, currency, exchange, market_cap, volume_avg,
+                  yield_pct, beta_3yr, start_date, end_date, total_obs) |>
+    dplyr::arrange(ticker)
 
-  # Sanitise strings from yfinance (may contain embedded NUL bytes)
-  chr_cols <- names(result)[vapply(result, is.character, logical(1))]
-  for (col in chr_cols) {
-    result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
-  }
-
-  result
+  if (collect) {
+    result <- dplyr::collect(lf)
+    chr_cols <- names(result)[vapply(result, is.character, logical(1))]
+    for (col in chr_cols) {
+      result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
+    }
+    result
+  } else lf
 }
 
 #' Full metadata for one ticker
 #'
 #' @param ticker Ticker symbol (e.g. "AAPL", "BTC")
+#' @param collect If TRUE (default), materialise.
 #' @return One-row tibble with all metadata columns
 #' @export
-hd_ticker_info <- function(ticker) {
-  con <- hd_connect()
-  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
-
+hd_ticker_info <- function(ticker, collect = TRUE) {
   ds <- hd_datasets()[["metadata"]]
-  result <- DBI::dbGetQuery(con, sprintf(
-    "SELECT * FROM read_parquet('%s') WHERE ticker = ?", ds$url
-  ), params = list(ticker)) |>
-    dplyr::as_tibble()
 
-  chr_cols <- names(result)[vapply(result, is.character, logical(1))]
-  for (col in chr_cols) {
-    result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
-  }
+  lf <- duckplyr::read_parquet_duckdb(ds$url) |>
+    dplyr::filter(ticker == !!ticker)
 
-  result
+  if (collect) {
+    result <- dplyr::collect(lf)
+    chr_cols <- names(result)[vapply(result, is.character, logical(1))]
+    for (col in chr_cols) {
+      result[[col]] <- iconv(result[[col]], to = "UTF-8", sub = "")
+    }
+    result
+  } else lf
 }
 
 #' FRED series metadata (frequency, units)
