@@ -14,6 +14,20 @@ suppressPackageStartupMessages({
   library(cli)
 })
 
+# Bootstrap nix store packages (duckplyr needed by historicaldata)
+for (pkg in c("duckplyr")) {
+  if (!requireNamespace(pkg, quietly = TRUE)) {
+    paths <- Sys.glob(sprintf("/nix/store/*-r-%s-*/library", pkg))
+    paths <- paths[file.exists(file.path(paths, pkg))]
+    if (length(paths) > 0) {
+      closure <- system2("nix-store", c("-qR", dirname(paths[[1]])),
+                         stdout = TRUE, stderr = FALSE)
+      r_libs <- closure[file.exists(file.path(closure, "library"))]
+      .libPaths(c(.libPaths(), file.path(r_libs, "library")))
+    }
+  }
+}
+
 pkgload::load_all(
   file.path(here::here(), "packages/historicaldata"),
   quiet = TRUE
