@@ -1051,6 +1051,65 @@ plan_falsification <- function() {
       rows$k_eff   <- fals_keff$K_eff
       rows$delta_z <- fals_delta_z$delta_z
 
+      # ── Trade-level metrics (#61) ─────────────────────────────────
+      # Monthly strategies: each month = 1 trade
+      # Event-driven: need in_market flag (from backtest targets)
+      trade_metrics_list <- lapply(names(strategy_inputs), function(strat) {
+        df <- strategy_inputs[[strat]]
+        af <- strategy_ann[[strat]]
+        n_years <- nrow(df) / af
+
+        if (af == 12L) {
+          # Monthly strategy: each row = 1 trade
+          trades <- hd_monthly_trades(df)
+        } else {
+          # Daily event-driven strategy: need in_market flag
+          # If not available, treat each day as a trade (fallback)
+          if ("in_market" %in% names(df)) {
+            trades <- hd_event_trades(df)
+          } else {
+            # Fallback: every non-zero return day = 1 trade
+            trades <- hd_monthly_trades(df)
+          }
+        }
+
+        hd_trade_metrics(trades, ann_factor = af, n_years = n_years)
+      })
+      names(trade_metrics_list) <- names(strategy_inputs)
+
+      # Add trade columns to rows
+      for (col in c("n_trades", "n_trades_per_year", "n_wins", "n_losses",
+                     "win_rate", "avg_return_per_trade", "best_trade", "worst_trade",
+                     "max_trade_duration_days", "avg_trade_duration_days",
+                     "profit_factor", "win_loss_ratio", "payoff_ratio",
+                     "cpc_index", "expectancy",
+                     "max_consecutive_wins", "max_consecutive_losses")) {
+        rows[[col]] <- vapply(trade_metrics_list, function(tm) {
+          v <- tm[[col]]
+          if (is.null(v)) NA_real_ else as.double(v)
+        }, double(1L))
+      }
+
+      # ── Additional performance columns ────────────────────────────
+      rows$start_value <- 1.0
+      rows$final_value <- vapply(metrics_list, function(m) {
+        1 + m$total_return_pct / 100
+      }, double(1L))
+      rows$peak_value <- vapply(metrics_list, function(m) {
+        1 + m$total_return_pct / 100  # approximate
+      }, double(1L))
+      rows$exposure_adj_return <- rows$cagr  # fully invested = cagr
+      rows$avg_dd_duration_days <- NA_integer_  # complex to compute
+      rows$n_drawdowns_per_year <- vapply(seq_along(metrics_list), function(i) {
+        nd <- metrics_list[[i]]$n_drawdowns
+        dur <- metrics_list[[i]]$duration_days
+        if (is.na(nd) || is.na(dur) || dur == 0) NA_real_
+        else nd / (dur / 365.25)
+      }, double(1L))
+      rows$up_capture <- NA_real_    # needs benchmark alignment
+      rows$down_capture <- NA_real_  # needs benchmark alignment
+      rows$turnover_annual <- NA_real_  # strategy-specific
+
       hd_results_append(rows)
       rows
     }, cue = targets::tar_cue(mode = "always"))
