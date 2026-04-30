@@ -65,6 +65,8 @@ source(here::here("R/plan_mean_reversion.R"))
 source(here::here("R/plan_marginal_contribution.R"))
 source(here::here("R/plan_strategy_decay.R"))
 source(here::here("R/plan_interpretability.R"))
+source(here::here("R/plan_multi_strategy.R"))
+source(here::here("R/plan_vix_macro_overlay.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -78,6 +80,8 @@ c(plan_strategy_names(),
   plan_marginal_contribution(),
   plan_strategy_decay(),
   plan_interpretability(),
+  plan_multi_strategy(),
+  plan_vix_macro_overlay(),
   plan_leaderboard(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
