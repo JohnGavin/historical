@@ -521,6 +521,198 @@ hd_delta_z <- function(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L) {
 }
 
 
+# ── 11b. Tail-weighted regime-conditional K_eff ───────────────────────────────
+
+#' Tail-weighted regime-conditional independence test
+#'
+#' Partitions the returns matrix into \emph{crisis} and \emph{calm} regimes
+#' and computes K_eff separately for each.  A strategy portfolio that claims
+#' diversification must show that K_eff does not collapse in the crisis regime
+#' (i.e., strategies remain independent precisely when it matters most).
+#'
+#' The crisis subset is defined as any row where at least one strategy's return
+#' falls below its empirical \code{q}-quantile.  The calm subset is the
+#' complement.
+#'
+#' @param returns_mat Numeric matrix where columns are strategy return series
+#'   and rows are time periods.  Must have complete cases (no NA rows).
+#' @param q Numeric scalar in (0, 1).  Quantile threshold defining the
+#'   lower tail (default 0.05 = bottom 5\%).
+#'
+#' @return Named list with components:
+#'   \describe{
+#'     \item{K_eff_crisis}{Effective number of independent strategies in the
+#'       crisis regime (lower = more correlated = less diversification).}
+#'     \item{K_eff_calm}{Effective number of independent strategies in the
+#'       calm regime.}
+#'     \item{n_crisis_days}{Number of crisis-regime observations.}
+#'     \item{n_calm_days}{Number of calm-regime observations.}
+#'     \item{correlation_crisis}{Correlation matrix estimated from crisis days.}
+#'     \item{correlation_calm}{Correlation matrix estimated from calm days.}
+#'   }
+#'
+#' @family falsification
+#' @export
+hd_tail_keff <- function(returns_mat, q = 0.05) {
+  if (!is.matrix(returns_mat)) returns_mat <- as.matrix(returns_mat)
+  returns_mat <- returns_mat[stats::complete.cases(returns_mat), , drop = FALSE]
+
+  K <- ncol(returns_mat)
+  n <- nrow(returns_mat)
+
+  # Compute per-column q-quantile thresholds
+  thresholds <- apply(returns_mat, 2, stats::quantile, probs = q, na.rm = TRUE)
+
+  # Crisis day: any strategy return falls below its q-quantile
+  in_crisis <- apply(
+    sweep(returns_mat, 2, thresholds, FUN = "<"),
+    1,
+    any
+  )
+
+  crisis_mat <- returns_mat[in_crisis,  , drop = FALSE]
+  calm_mat   <- returns_mat[!in_crisis, , drop = FALSE]
+
+  compute_keff <- function(mat) {
+    if (nrow(mat) < (K + 1L)) return(NA_real_)
+    sigma <- stats::cor(mat, use = "pairwise.complete.obs")
+    sigma[is.na(sigma)] <- 0
+    diag(sigma) <- 1
+    K^2 / sum(sigma^2)
+  }
+
+  cor_mat <- function(mat) {
+    if (nrow(mat) < (K + 1L)) {
+      m <- matrix(NA_real_, nrow = K, ncol = K)
+      dimnames(m) <- list(colnames(returns_mat), colnames(returns_mat))
+      return(m)
+    }
+    sigma <- stats::cor(mat, use = "pairwise.complete.obs")
+    sigma[is.na(sigma)] <- 0
+    diag(sigma) <- 1
+    sigma
+  }
+
+  list(
+    K_eff_crisis       = compute_keff(crisis_mat),
+    K_eff_calm         = compute_keff(calm_mat),
+    n_crisis_days      = nrow(crisis_mat),
+    n_calm_days        = nrow(calm_mat),
+    correlation_crisis = cor_mat(crisis_mat),
+    correlation_calm   = cor_mat(calm_mat)
+  )
+}
+
+
+# ── 11c. Empirical lower tail dependence ────────────────────────────────────
+
+#' Empirical lower tail dependence coefficient
+#'
+#' Estimates the lower tail dependence coefficient (lambda_L) for a pair of
+#' return series: the conditional probability that Y falls below its
+#' \code{q}-quantile given that X falls below its \code{q}-quantile.
+#'
+#' Under independence, lambda_L converges to \code{q} as the sample grows.
+#' Values substantially above \code{q} indicate tail co-movement —
+#' strategies tend to lose simultaneously in the worst periods.
+#'
+#' @param x Numeric vector of returns for the first strategy.
+#' @param y Numeric vector of returns for the second strategy.
+#' @param q Numeric scalar in (0, 1).  Quantile threshold for the lower tail
+#'   (default 0.05 = bottom 5\%).
+#'
+#' @return Named list with components:
+#'   \describe{
+#'     \item{lambda_L}{Empirical lower tail dependence coefficient,
+#'       \eqn{P(Y < Q_Y(q) \mid X < Q_X(q))}.  Under independence this
+#'       equals \code{q}.}
+#'     \item{q}{The quantile threshold used.}
+#'     \item{n_pairs}{Number of joint tail observations
+#'       (days where both X and Y are below their respective quantiles).}
+#'   }
+#'
+#' @family falsification
+#' @export
+hd_tail_dependence <- function(x, y, q = 0.05) {
+  keep <- !is.na(x) & !is.na(y)
+  x <- x[keep]
+  y <- y[keep]
+
+  qx <- stats::quantile(x, probs = q)
+  qy <- stats::quantile(y, probs = q)
+
+  in_x_tail <- x < qx
+  n_x_tail  <- sum(in_x_tail)
+
+  if (n_x_tail == 0L) {
+    return(list(lambda_L = NA_real_, q = q, n_pairs = 0L))
+  }
+
+  n_joint <- sum(in_x_tail & (y < qy))
+
+  list(
+    lambda_L = n_joint / n_x_tail,
+    q        = q,
+    n_pairs  = n_joint
+  )
+}
+
+
+# ── 11d. Pairwise drawdown overlap ──────────────────────────────────────────
+
+#' Pairwise drawdown overlap matrix
+#'
+#' For each strategy in \code{returns_mat}, identifies drawdown periods —
+#' contiguous stretches where the cumulative return is below the running
+#' maximum (underwater).  For each pair of strategies, computes the fraction
+#' of days that are simultaneously in a drawdown.
+#'
+#' A high overlap fraction indicates that strategies tend to be underwater at
+#' the same time, reducing the practical diversification benefit.
+#'
+#' @param returns_mat Numeric matrix where columns are strategy return series
+#'   and rows are time periods.  Rows with any NA are removed before
+#'   computing cumulative returns.
+#'
+#' @return Symmetric numeric matrix of dimension \code{K × K} (where K is the
+#'   number of strategies / columns).  Element \code{[i, j]} is the fraction
+#'   of days that both strategy \code{i} and strategy \code{j} are
+#'   simultaneously in a drawdown.  The diagonal is the fraction of days each
+#'   strategy is in its own drawdown.
+#'
+#' @family falsification
+#' @export
+hd_drawdown_overlap <- function(returns_mat) {
+  if (!is.matrix(returns_mat)) returns_mat <- as.matrix(returns_mat)
+  returns_mat <- returns_mat[stats::complete.cases(returns_mat), , drop = FALSE]
+
+  K   <- ncol(returns_mat)
+  nms <- colnames(returns_mat)
+  n   <- nrow(returns_mat)
+
+  # Identify drawdown days (cumulative return below running max)
+  is_drawdown <- function(r) {
+    cum_r   <- cumprod(1 + r) - 1          # cumulative return (approximate)
+    run_max <- cummax(cum_r)
+    cum_r < run_max                        # TRUE on every underwater day
+  }
+
+  dd_flags <- apply(returns_mat, 2, is_drawdown)  # n × K logical matrix
+
+  # Pairwise overlap fractions
+  overlap <- matrix(NA_real_, nrow = K, ncol = K,
+                    dimnames = list(nms, nms))
+
+  for (i in seq_len(K)) {
+    for (j in seq_len(K)) {
+      overlap[i, j] <- sum(dd_flags[, i] & dd_flags[, j]) / n
+    }
+  }
+
+  overlap
+}
+
+
 # ── 12. Factor null regression (FF alpha) ────────────────────────────────────
 
 #' OLS factor regression with HAC t-statistic on alpha

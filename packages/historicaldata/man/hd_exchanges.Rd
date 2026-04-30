@@ -10,7 +10,7 @@ hd_exchanges(dataset = NULL)
 \item{dataset}{Filter to one dataset. NULL = all.}
 }
 \value{
-Tibble with exchange, full_exchange, n_tickers
+Tibble with exchange, n_tickers
 }
 \description{
 List all exchanges

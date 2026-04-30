@@ -593,6 +593,49 @@ plan_falsification <- function() {
 
 
     # ═══════════════════════════════════════════════════════════════════
+    # Tail-weighted regime-conditional independence test
+    # ═══════════════════════════════════════════════════════════════════
+
+    targets::tar_target(fals_tail_independence, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      # Reuse the returns matrix construction from fals_keff
+      all_rets <- Reduce(
+        function(a, b) dplyr::full_join(a, b, by = "date"),
+        list(
+          fals_avoid_worst_input |> dplyr::rename(avoid_worst = strategy_ret),
+          fals_drif_input        |> dplyr::rename(drif        = strategy_ret),
+          fals_fac_max_input     |> dplyr::rename(fac_max     = strategy_ret),
+          fals_rsc_input         |> dplyr::rename(rsc         = strategy_ret),
+          fals_ltr_input         |> dplyr::rename(ltr         = strategy_ret)
+        )
+      )
+      mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max", "rsc", "ltr")])
+      mat <- mat[complete.cases(mat), ]
+
+      tail_keff <- hd_tail_keff(mat, q = 0.05)
+
+      # Pairwise tail dependence
+      strategies <- colnames(mat)
+      pairs <- combn(strategies, 2, simplify = FALSE)
+      tail_deps <- purrr::map_dfr(pairs, function(p) {
+        td <- hd_tail_dependence(mat[, p[1]], mat[, p[2]], q = 0.05)
+        tibble::tibble(strategy_1 = p[1], strategy_2 = p[2],
+               lambda_L = td$lambda_L, n_pairs = td$n_pairs)
+      })
+
+      dd_overlap <- hd_drawdown_overlap(mat)
+
+      list(
+        tail_keff = tail_keff,
+        tail_dependence = tail_deps,
+        drawdown_overlap = dd_overlap
+      )
+    }),
+
+
+    # ═══════════════════════════════════════════════════════════════════
     # Deflated Sharpe Ratio (DSR): adjusts for skewness, kurtosis, K trials
     # ═══════════════════════════════════════════════════════════════════
 

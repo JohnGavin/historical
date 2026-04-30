@@ -4,13 +4,15 @@
 \alias{hd_amendments}
 \title{Get price data amendments (Point-in-Time tracking)}
 \usage{
-hd_amendments(ticker = NULL)
+hd_amendments(ticker = NULL, collect = TRUE)
 }
 \arguments{
 \item{ticker}{Filter to one ticker. NULL = all.}
+
+\item{collect}{If TRUE (default), materialise. If FALSE, return lazy frame.}
 }
 \value{
-Tibble with amendment records
+Tibble or lazy duckplyr frame with amendment records
 }
 \description{
 Returns the amendment log showing corrections made to historical price data.

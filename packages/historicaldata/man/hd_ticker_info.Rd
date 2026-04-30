@@ -4,10 +4,12 @@
 \alias{hd_ticker_info}
 \title{Full metadata for one ticker}
 \usage{
-hd_ticker_info(ticker)
+hd_ticker_info(ticker, collect = TRUE)
 }
 \arguments{
 \item{ticker}{Ticker symbol (e.g. "AAPL", "BTC")}
+
+\item{collect}{If TRUE (default), materialise.}
 }
 \value{
 One-row tibble with all metadata columns

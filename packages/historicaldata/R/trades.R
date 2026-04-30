@@ -85,6 +85,127 @@ hd_event_trades <- function(daily_ret) {
   dplyr::bind_rows(trades)
 }
 
+#' Shadow trade analysis: parallel entry/exit timing sensitivity
+#'
+#' For each trade in \code{trades_df}, shifts the entry and exit dates by
+#' the Cartesian product of \code{entry_offsets} and \code{exit_offsets}
+#' business days and re-computes the trade return using \code{daily_returns}.
+#' Produces one row per (trade_id, entry_offset, exit_offset) combination,
+#' allowing you to see whether a strategy's alpha is robust to small timing
+#' differences or whether performance depends on hitting exact entry/exit dates.
+#'
+#' @param trades_df Tibble with at minimum columns \code{trade_id},
+#'   \code{entry_date}, \code{exit_date} as returned by [hd_event_trades()].
+#' @param daily_returns Tibble with columns \code{date} and \code{ret}
+#'   (daily returns of the underlying asset, e.g. SPY).
+#' @param entry_offsets Integer vector of business-day offsets applied to
+#'   \code{entry_date} (forward only; 0 = no shift).
+#' @param exit_offsets Integer vector of business-day offsets applied to
+#'   \code{exit_date} (negative = exit earlier, positive = exit later, 0 = no shift).
+#' @return Tibble with columns: \code{trade_id}, \code{entry_offset},
+#'   \code{exit_offset}, \code{entry_date}, \code{exit_date},
+#'   \code{duration_days}, \code{return_pct}, \code{is_win}.
+#'   Returns an empty tibble if \code{trades_df} has zero rows.
+#' @family trades
+#' @export
+hd_shadow_trades <- function(trades_df,
+                              daily_returns,
+                              entry_offsets = c(0L, 1L, 2L, 3L),
+                              exit_offsets = c(-5L, -2L, 0L, 2L, 5L)) {
+  if (nrow(trades_df) == 0L || nrow(daily_returns) == 0L) {
+    return(dplyr::tibble(
+      trade_id      = integer(),
+      entry_offset  = integer(),
+      exit_offset   = integer(),
+      entry_date    = as.Date(character()),
+      exit_date     = as.Date(character()),
+      duration_days = integer(),
+      return_pct    = numeric(),
+      is_win        = logical()
+    ))
+  }
+
+  # Sorted trading dates — used to shift by business days
+  trading_dates <- sort(unique(as.Date(daily_returns$date)))
+  n_dates <- length(trading_dates)
+
+  # Index lookup: date -> position in trading_dates
+  date_idx <- stats::setNames(seq_len(n_dates), as.character(trading_dates))
+
+  # Fast cumulative return over a date range [d1, d2] (inclusive)
+  ret_vec <- daily_returns$ret[order(as.Date(daily_returns$date))]
+
+  cum_return_range <- function(d1, d2) {
+    i1 <- date_idx[as.character(d1)]
+    i2 <- date_idx[as.character(d2)]
+    if (is.na(i1) || is.na(i2) || i1 > i2) return(NA_real_)
+    prod(1 + ret_vec[i1:i2]) - 1
+  }
+
+  # Shift a date by `k` business days (forward if k>0, backward if k<0)
+  shift_date <- function(d, k) {
+    idx <- date_idx[as.character(d)]
+    if (is.na(idx)) return(NA_real_)
+    new_idx <- idx + k
+    if (new_idx < 1L || new_idx > n_dates) return(NA_Date_)
+    trading_dates[new_idx]
+  }
+
+  NA_Date_ <- as.Date(NA_character_)
+
+  rows <- vector("list", nrow(trades_df) * length(entry_offsets) * length(exit_offsets))
+  r <- 0L
+
+  for (t in seq_len(nrow(trades_df))) {
+    tid      <- trades_df$trade_id[[t]]
+    orig_e   <- as.Date(trades_df$entry_date[[t]])
+    orig_x   <- as.Date(trades_df$exit_date[[t]])
+
+    for (eo in entry_offsets) {
+      shifted_entry <- shift_date(orig_e, eo)
+      if (is.na(shifted_entry)) next
+
+      for (xo in exit_offsets) {
+        shifted_exit <- shift_date(orig_x, xo)
+        if (is.na(shifted_exit)) next
+        if (shifted_entry >= shifted_exit) next
+
+        ret  <- cum_return_range(shifted_entry, shifted_exit)
+        if (is.na(ret)) next
+
+        r <- r + 1L
+        rows[[r]] <- list(
+          trade_id      = tid,
+          entry_offset  = eo,
+          exit_offset   = xo,
+          entry_date    = shifted_entry,
+          exit_date     = shifted_exit,
+          duration_days = as.integer(
+            difftime(shifted_exit, shifted_entry, units = "days")
+          ),
+          return_pct    = ret,
+          is_win        = ret > 0
+        )
+      }
+    }
+  }
+
+  if (r == 0L) {
+    return(dplyr::tibble(
+      trade_id      = integer(),
+      entry_offset  = integer(),
+      exit_offset   = integer(),
+      entry_date    = as.Date(character()),
+      exit_date     = as.Date(character()),
+      duration_days = integer(),
+      return_pct    = numeric(),
+      is_win        = logical()
+    ))
+  }
+
+  dplyr::bind_rows(rows[seq_len(r)])
+}
+
 #' Compute 17 trade-level metrics from a trades tibble
 #'
 #' @param trades Tibble from [hd_monthly_trades()] or [hd_event_trades()].

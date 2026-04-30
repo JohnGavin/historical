@@ -4,15 +4,17 @@
 \alias{hd_search}
 \title{Search tickers by pattern across all datasets}
 \usage{
-hd_search(pattern, dataset = NULL)
+hd_search(pattern, dataset = NULL, collect = TRUE)
 }
 \arguments{
 \item{pattern}{Regex pattern (default) or glob (if contains \code{*} or \verb{?})}
 
 \item{dataset}{Filter to one dataset (e.g. "equity_daily"). NULL = all.}
+
+\item{collect}{If TRUE (default), materialise. If FALSE, return lazy frame.}
 }
 \value{
-Tibble of matching tickers with metadata
+Tibble or lazy duckplyr frame of matching tickers with metadata
 }
 \description{
 Searches ticker symbols and long names using regex or glob patterns.

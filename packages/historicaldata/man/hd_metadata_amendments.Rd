@@ -4,16 +4,17 @@
 \alias{hd_metadata_amendments}
 \title{Get metadata amendments (Point-in-Time tracking)}
 \usage{
-hd_metadata_amendments(ticker = NULL, field = NULL)
+hd_metadata_amendments(ticker = NULL, field = NULL, collect = TRUE)
 }
 \arguments{
 \item{ticker}{Filter to one ticker. NULL = all.}
 
 \item{field}{Filter to one field (e.g. "beta_3yr"). NULL = all.}
+
+\item{collect}{If TRUE (default), materialise. If FALSE, return lazy frame.}
 }
 \value{
-Tibble with: ticker, field, old_value, new_value, source, method,
-amended_at, amended_by, reversible
+Tibble or lazy duckplyr frame
 }
 \description{
 Returns the PIT log of all metadata changes: computed fields, enrichments,

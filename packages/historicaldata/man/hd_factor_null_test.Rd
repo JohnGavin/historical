@@ -27,16 +27,21 @@ alpha with a Newey-West HAC standard error.
 }
 \seealso{
 Other falsification: 
+\code{\link{hd_deflated_sharpe}()},
 \code{\link{hd_delta_z}()},
+\code{\link{hd_drawdown_overlap}()},
 \code{\link{hd_hac_sharpe}()},
 \code{\link{hd_hac_tstat}()},
 \code{\link{hd_keff}()},
 \code{\link{hd_null_env_factor_null}()},
 \code{\link{hd_null_env_garch11}()},
 \code{\link{hd_null_env_gjr_garch}()},
+\code{\link{hd_null_env_jump_diffusion}()},
 \code{\link{hd_null_env_ma1}()},
 \code{\link{hd_null_env_regime_vol}()},
 \code{\link{hd_null_env_white_noise}()},
-\code{\link{hd_null_rejection_rate}()}
+\code{\link{hd_null_rejection_rate}()},
+\code{\link{hd_tail_dependence}()},
+\code{\link{hd_tail_keff}()}
 }
 \concept{falsification}

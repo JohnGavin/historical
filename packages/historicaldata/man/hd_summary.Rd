@@ -4,13 +4,16 @@
 \alias{hd_summary}
 \title{Summary of all datasets}
 \usage{
-hd_summary()
+hd_summary(collect = TRUE)
+}
+\arguments{
+\item{collect}{If TRUE (default), materialise.}
 }
 \value{
 Tibble with dataset, n_tickers, total_obs, min_date, max_date, description
 }
 \description{
-Returns one row per dataset with ticker count, row count, and date range.
+Summary of all datasets
 }
 \seealso{
 Other discovery: 

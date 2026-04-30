@@ -9,7 +9,8 @@ hd_factors(
   frequency = "daily",
   from = NULL,
   to = NULL,
-  local = FALSE
+  local = FALSE,
+  collect = TRUE
 )
 }
 \arguments{
@@ -22,9 +23,11 @@ hd_factors(
 \item{to}{End date. Default: no filter.}
 
 \item{local}{If TRUE, query local cache.}
+
+\item{collect}{If TRUE (default), materialise. If FALSE, return lazy frame.}
 }
 \value{
-Tibble with date, factor_name, value columns
+Lazy duckplyr frame or tibble
 }
 \description{
 Query Fama-French factor returns

@@ -4,27 +4,27 @@
 \alias{hd_macro}
 \title{Query FRED macro series}
 \usage{
-hd_macro(series_id, from = NULL, to = NULL, local = FALSE)
+hd_macro(series_id, from = NULL, to = NULL, local = FALSE, collect = TRUE)
 }
 \arguments{
-\item{series_id}{FRED series ID(s). Scalar or vector.
-Single: \code{"SP500"}. Batch: \code{c("SP500", "VIXCLS", "DGS10")}.}
+\item{series_id}{FRED series ID(s). Scalar or vector.}
 
 \item{from}{Start date (character or Date). Default: no filter.}
 
 \item{to}{End date (character or Date). Default: no filter.}
 
 \item{local}{If TRUE, query local cache instead of remote.}
+
+\item{collect}{If TRUE (default), materialise. If FALSE, return lazy frame.}
 }
 \value{
-Tibble with date, value, series_id columns
+Lazy duckplyr frame or tibble
 }
 \description{
-Accepts a single series ID or a character vector for batch queries.
+Query FRED macro series
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
-hd_macro("SP500", from = "2024-01-01")
-hd_macro(c("SP500", "VIXCLS", "DGS10"), from = "2024-01-01")
+hd_macro("SP500", from = "2024-01-01") |> head()
 \dontshow{\}) # examplesIf}
 }

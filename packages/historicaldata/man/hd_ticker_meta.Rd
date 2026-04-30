@@ -4,22 +4,21 @@
 \alias{hd_ticker_meta}
 \title{Compact metadata table for a vector of tickers}
 \usage{
-hd_ticker_meta(tickers)
+hd_ticker_meta(tickers, collect = TRUE)
 }
 \arguments{
 \item{tickers}{Character vector of ticker symbols}
+
+\item{collect}{If TRUE (default), materialise.}
 }
 \value{
-Tibble with: ticker, long_name, currency, exchange, market_cap,
-volume_avg, yield_pct, beta_3yr
+Tibble or lazy frame with key metadata columns
 }
 \description{
-Returns key metadata columns for display below plots. Accepts single or
-multiple tickers. Uses batch \code{IN (...)} query.
+Compact metadata table for a vector of tickers
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_ticker_meta(c("AAPL", "MSFT"))
-hd_ticker_meta(hd_group("FAANG"))
 \dontshow{\}) # examplesIf}
 }

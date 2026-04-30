@@ -4,7 +4,14 @@
 \alias{hd_ohlcv}
 \title{Query OHLCV data for one or more tickers}
 \usage{
-hd_ohlcv(ticker, from = NULL, to = NULL, dataset = NULL, local = FALSE)
+hd_ohlcv(
+  ticker,
+  from = NULL,
+  to = NULL,
+  dataset = NULL,
+  local = FALSE,
+  collect = TRUE
+)
 }
 \arguments{
 \item{ticker}{Ticker symbol(s). Character scalar or vector.
@@ -17,19 +24,20 @@ Single: \code{"AAPL"}. Batch: \code{c("AAPL", "MSFT", "GOOGL")}.}
 \item{dataset}{Dataset name from registry. If NULL, auto-detected from first ticker.}
 
 \item{local}{If TRUE, query local cache instead of remote.}
+
+\item{collect}{If TRUE, materialise immediately (backward compatible).
+If FALSE (default), return a lazy duckplyr frame.}
 }
 \value{
-Tibble of OHLCV data (multiple tickers stacked by ticker + date)
+Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
 }
 \description{
-Fetches data from HF-hosted Parquet via DuckDB httpfs.
-Only the matching rows are transferred (predicate pushdown).
-Accepts a single ticker or a character vector for batch queries.
+Returns a duckplyr lazy frame by default. Call \code{collect()} to materialise,
+or chain additional dplyr verbs for server-side computation.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
-hd_ohlcv("AAPL", from = "2024-01-01")
-hd_ohlcv(c("AAPL", "MSFT", "GOOGL"), from = "2024-01-01")
-hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")
+hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
+hd_ohlcv(c("AAPL", "MSFT"), from = "2024-01-01", collect = TRUE)
 \dontshow{\}) # examplesIf}
 }
