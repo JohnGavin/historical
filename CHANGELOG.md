@@ -1,5 +1,63 @@
 # Changelog
 
+## 2026-04-30 (session 2)
+
+### Completed
+- Tail-weighted independence test (#55): hd_tail_keff(), hd_tail_dependence(), hd_drawdown_overlap() + fals_tail_independence target — crisis vs calm K_eff, pairwise tail dependence, drawdown synchronisation
+- Enhanced Kelly variants (#56): hd_kelly_bayesian(), hd_kelly_rolling(), hd_kelly_bounded() + plan_kelly_variants.R (6 targets) — fractional sweep (25/50/75/100%), Bayesian posterior, rolling window, survival-constrained
+- Shadow trades (#62): hd_shadow_trades() + plan_shadow_trades.R (5 targets) — parallel entry/exit timing analysis with offset grid for signal quality diagnostics
+- European risk overlay (#58): plan_european_overlay.R (7 targets) — US VIX regime applied to 5 EU ETFs (EXSA.DE STOXX 600, FEZ Euro Stoxx 50, VGK FTSE Europe, EWG Germany, EWQ France). Negative result.
+- Daloopa API gap analysis (#78): documented 4 MCP tools, 12 REST endpoints, 24 Claude Code skills; cross-linked to #2 (public API)
+- Daloopa finretrieval evaluation (#79): LLM retrieval benchmark for financial QA
+- Issues created: #78, #79
+
+### Failed Approaches
+- Yahoo Finance v7/download CSV endpoint returns 401 Unauthorized — switched to v8/chart JSON API
+- Yahoo v8 chart API with simplifyVector=TRUE flattens nested indicators structure — must use simplifyVector=FALSE
+- Yahoo returns mismatched timestamp/adjclose lengths for EXSA.DE (4655 vs 4652) — truncate to shorter
+- EU ETFs (FEZ, VGK, EWG, EWQ, EXSA.DE) not in HuggingFace equity dataset — must fetch via Yahoo API directly
+- quantmod not available in nix develop shell — used raw Yahoo JSON API instead
+- POSIXt/Date mismatch: rsc_regime$date is POSIXct, factor dates are Date — inner_join produces 0 rows silently. Fix: as.Date() coercion on all date columns before joining
+
+### Findings: European RSC Overlay (#58)
+
+**Verdict: Negative result — same conclusion as US SPY overlay.**
+
+OOS comparison (2020 onward):
+
+| ETF | Strategy | CAGR (%) | Vol (%) | Max DD (%) | Sharpe |
+|-----|----------|-------:|-------:|----------:|-------:|
+| SPY (US) | Buy & Hold | 14.3 | 20.5 | -33.7 | 0.76 |
+| SPY | RSC Overlay | 10.3 | 17.2 | -31.3 | 0.66 |
+| EXSA.DE (STOXX 600) | Buy & Hold | 10.6 | 17.4 | -35.9 | 0.67 |
+| EXSA.DE | RSC Overlay | 9.1 | 15.3 | -32.9 | 0.65 |
+| FEZ (Euro Stoxx 50) | Buy & Hold | 11.0 | 23.6 | -39.0 | 0.56 |
+| FEZ | RSC Overlay | 7.1 | 20.9 | -35.7 | 0.44 |
+
+FF5+Mom falsification:
+
+| ETF | Alpha (% ann) | Alpha t-stat | R² (%) |
+|-----|-------------:|-------------:|-------:|
+| EXSA.DE (STOXX 600) | +4.04 | 1.38 | 15.0 |
+| FEZ (Euro Stoxx 50) | -4.70 | -1.70 | 62.2 |
+| VGK (FTSE Europe) | -5.14 | -2.06 | 65.7 |
+| EWG (Germany) | -4.14 | -1.47 | 56.8 |
+| EWQ (France) | -4.19 | -1.59 | 55.7 |
+
+Key: STOXX 600 is closest to neutral (Sharpe 0.67→0.65, small drag). All other EU ETFs show clear negative impact. The overlay reduces vol 2-3% and max DD 2-5% but sacrifices more CAGR. STOXX 600 low R² (15%) suggests US FF factors are a poor fit — European-specific factors may be needed. Negative alpha on US-listed EU ETFs (FEZ, VGK) is -4% to -5% annualised.
+
+### Accuracy / Metrics
+- Pipeline: ~260 targets across 29 plan files
+- 4 new plan files: plan_kelly_variants.R, plan_shadow_trades.R, plan_european_overlay.R, (plan_falsification.R updated)
+- 7 new exported pkg functions: hd_tail_keff, hd_tail_dependence, hd_drawdown_overlap, hd_kelly_bayesian, hd_kelly_rolling, hd_kelly_bounded, hd_shadow_trades
+
+### Known Limitations
+- EXSA.DE (STOXX 600) only from 2008 — shorter history than other ETFs
+- STOXX 600 FF regression R²=15% — US Fama-French factors poorly explain European broad index
+- Shadow trades (#62) only implemented for Avoid Worst strategy — needs upstream in_market flag for other strategies
+- Kelly variants (#56) use falsification bridge targets (fals_*_input) — only 3 of 5 strategies tested (drif, fac_max, ltr)
+- quantmod not in nix develop shell — EU ETF fetch uses raw Yahoo API which may break if Yahoo changes endpoint
+
 ## 2026-04-25 to 2026-04-30
 
 ### Completed
