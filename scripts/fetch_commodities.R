@@ -135,14 +135,29 @@ yahoo_tickers <- c(
 
 cli_inform(c("i" = "Fetching {length(yahoo_tickers)} Yahoo commodity tickers..."))
 
+# Use quantmod for direct Yahoo Finance download (supports futures tickers)
+if (!requireNamespace("quantmod", quietly = TRUE)) {
+  cli_abort("Install quantmod: install.packages('quantmod')")
+}
+
 yahoo_data <- lapply(yahoo_tickers, function(tkr) {
   Sys.sleep(1)  # rate limit
   tryCatch({
-    d <- hd_ohlcv(tkr)
-    if (nrow(d) == 0) return(NULL)
-    d |>
-      mutate(series_id = tkr, source = "yahoo") |>
-      select(date, value = adjusted, series_id, source)
+    # quantmod handles =F futures tickers correctly
+    env <- new.env()
+    quantmod::getSymbols(tkr, src = "yahoo", from = "2000-01-01",
+                          auto.assign = TRUE, env = env)
+    sym <- ls(env)[1]
+    if (is.null(sym)) return(NULL)
+    xts_obj <- env[[sym]]
+    # Use adjusted close (column 6) or close (column 4)
+    adj_col <- if (ncol(xts_obj) >= 6) 6 else 4
+    tibble(
+      date = as.Date(zoo::index(xts_obj)),
+      value = as.numeric(zoo::coredata(xts_obj)[, adj_col]),
+      series_id = tkr,
+      source = "yahoo"
+    ) |> filter(!is.na(value))
   }, error = function(e) {
     cli_warn("Failed: {tkr}: {e$message}")
     NULL
