@@ -19,8 +19,9 @@ plan_european_overlay <- function() {
     # ── Parameters ──────────────────────────────────────────────────────
     targets::tar_target(eur_params, {
       list(
-        eu_tickers      = c("FEZ", "VGK", "EWG", "EWQ"),
+        eu_tickers      = c("EXSA.DE", "FEZ", "VGK", "EWG", "EWQ"),
         eu_ticker_labels = c(
+          EXSA.DE = "STOXX Europe 600",
           FEZ = "Euro Stoxx 50",
           VGK = "FTSE Europe",
           EWG = "Germany",
@@ -72,9 +73,11 @@ plan_european_overlay <- function() {
           adj_close <- as.numeric(unlist(result$indicators$quote[[1]]$close))
           if (is.null(adj_close)) return(NULL)
         }
+        # Yahoo may return mismatched lengths — truncate to shorter
+        n <- min(length(ts_data), length(adj_close))
         tibble::tibble(
-          date  = as.Date(as.POSIXct(ts_data, origin = "1970-01-01", tz = "UTC")),
-          close = as.numeric(adj_close)
+          date  = as.Date(as.POSIXct(ts_data[seq_len(n)], origin = "1970-01-01", tz = "UTC")),
+          close = as.numeric(adj_close[seq_len(n)])
         ) |> dplyr::filter(!is.na(close))
       }
 
