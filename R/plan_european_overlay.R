@@ -43,23 +43,59 @@ plan_european_overlay <- function() {
       # rsc_regime already has: date, regime, exposure, rf_lag, spy_ret etc.
       # We only need date, regime, exposure, rf_lag from it.
       regime_daily <- rsc_regime |>
+        mutate(date = as.Date(date)) |>
         select(date, regime, exposure, rf_lag) |>
         arrange(date)
 
-      # Fetch each European ETF and join regime
+      # Fetch each European ETF via Yahoo Finance chart API
+      # (Not in HuggingFace equity dataset; quantmod not in nix shell;
+      #  v7/download endpoint returns 401)
+      fetch_yahoo_chart <- function(tkr, from = "2000-01-01") {
+        from_ts <- as.integer(as.POSIXct(from, tz = "UTC"))
+        to_ts   <- as.integer(Sys.time())
+        url <- sprintf(
+          "https://query1.finance.yahoo.com/v8/finance/chart/%s?period1=%d&period2=%d&interval=1d",
+          utils::URLencode(tkr), from_ts, to_ts
+        )
+        resp <- tryCatch(
+          jsonlite::fromJSON(url, simplifyVector = FALSE),
+          error = function(e) NULL
+        )
+        if (is.null(resp)) return(NULL)
+        result <- resp$chart$result[[1]]
+        if (is.null(result)) return(NULL)
+        ts_data <- unlist(result$timestamp)
+        adj     <- result$indicators$adjclose[[1]]$adjclose
+        adj_close <- as.numeric(unlist(adj))
+        if (is.null(adj_close) || all(is.na(adj_close))) {
+          # Fallback to regular close
+          adj_close <- as.numeric(unlist(result$indicators$quote[[1]]$close))
+          if (is.null(adj_close)) return(NULL)
+        }
+        tibble::tibble(
+          date  = as.Date(as.POSIXct(ts_data, origin = "1970-01-01", tz = "UTC")),
+          close = as.numeric(adj_close)
+        ) |> dplyr::filter(!is.na(close))
+      }
+
       purrr::map_dfr(eur_params$eu_tickers, function(tkr) {
         tryCatch({
-          hd_ohlcv(tkr) |>
-            mutate(date = as.Date(date)) |>
-            arrange(date) |>
-            mutate(
-              eu_ret = adjusted / lag(adjusted) - 1,
+          Sys.sleep(1)  # rate limit
+          raw <- fetch_yahoo_chart(tkr)
+          if (is.null(raw) || nrow(raw) < 20) {
+            cli::cli_warn("No data for {tkr}")
+            return(NULL)
+          }
+          raw |>
+            dplyr::arrange(date) |>
+            dplyr::mutate(
+              eu_ret = close / dplyr::lag(close) - 1,
               ticker = tkr,
               label  = eur_params$eu_ticker_labels[tkr]
             ) |>
-            filter(!is.na(eu_ret)) |>
-            select(date, ticker, label, eu_ret) |>
-            inner_join(regime_daily, by = "date")
+            dplyr::filter(!is.na(eu_ret)) |>
+            dplyr::select(date, ticker, label, eu_ret) |>
+            dplyr::inner_join(regime_daily, by = "date")
         }, error = function(e) {
           cli::cli_warn("Failed to fetch {tkr}: {conditionMessage(e)}")
           NULL
@@ -128,18 +164,18 @@ plan_european_overlay <- function() {
       # Fetch FF5 + Momentum daily factors (same as plan_falsification.R)
       ff5 <- hd_factors(dataset = "FF5", frequency = "daily") |>
         filter(factor_name != "RF") |>
-        mutate(value = value / 100) |>
+        mutate(date = as.Date(date), value = value / 100) |>
         select(date, factor_name, value)
 
       mom <- hd_factors(dataset = "Mom", frequency = "daily") |>
-        mutate(value = value / 100) |>
+        mutate(date = as.Date(date), value = value / 100) |>
         select(date, factor_name, value)
 
       factors_daily <- bind_rows(ff5, mom)
 
       rf_daily <- hd_factors(dataset = "FF5", frequency = "daily") |>
         filter(factor_name == "RF") |>
-        mutate(rf = value / 100) |>
+        mutate(date = as.Date(date), rf = value / 100) |>
         select(date, rf)
 
       purrr::map_dfr(eur_params$eu_tickers, function(tkr) {
@@ -180,6 +216,7 @@ plan_european_overlay <- function() {
 
       # SPY overlay OOS metrics from rsc_portfolio (Full period)
       spy_oos <- rsc_portfolio |>
+        mutate(date = as.Date(date)) |>
         filter(date >= eur_params$oos_start,
                !is.na(ret_strategy), !is.na(ret_buyhold)) |>
         (function(d) {
@@ -192,6 +229,7 @@ plan_european_overlay <- function() {
               vol    = round(sd(d$ret_buyhold) * sqrt(252) * 100, 2),
               max_dd = round(min((cumprod(1 + d$ret_buyhold) - cummax(cumprod(1 + d$ret_buyhold))) /
                                    cummax(cumprod(1 + d$ret_buyhold))) * 100, 2),
+              hac_tstat  = round(hd_hac_sharpe(d$ret_buyhold)$hac_tstat, 3),
               hac_sharpe = round(hd_hac_sharpe(d$ret_buyhold)$naive_sharpe, 3)
             ),
             tibble::tibble(
@@ -201,6 +239,7 @@ plan_european_overlay <- function() {
               vol    = round(sd(d$ret_strategy) * sqrt(252) * 100, 2),
               max_dd = round(min((cumprod(1 + d$ret_strategy) - cummax(cumprod(1 + d$ret_strategy))) /
                                    cummax(cumprod(1 + d$ret_strategy))) * 100, 2),
+              hac_tstat  = round(hd_hac_sharpe(d$ret_strategy)$hac_tstat, 3),
               hac_sharpe = round(hd_hac_sharpe(d$ret_strategy)$naive_sharpe, 3)
             )
           )
@@ -208,7 +247,7 @@ plan_european_overlay <- function() {
 
       eur_oos <- eur_results |>
         filter(period == "OOS") |>
-        select(ticker, asset, strategy, period, cagr, vol, max_dd, hac_sharpe)
+        select(ticker, asset, strategy, period, cagr, vol, max_dd, hac_tstat, hac_sharpe)
 
       bind_rows(spy_oos, eur_oos) |>
         arrange(ticker, strategy)
