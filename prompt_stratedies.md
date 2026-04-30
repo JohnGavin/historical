@@ -17,6 +17,38 @@
 
 # Strategies to be considered now
 
+
+## skip-month rule as a conditional tool by market environment
++ https://alphaarchitect.com/skip-month-mystery/
++ predict future momentum performance via returns and volatility from the prior month
++ And how does including or excluding that month change the strategy’s sensitivity to different market conditions?
++ classify months into 4 regimes 
+	+ if previous month’s return was gt or lt its trailing average
+	+ if volatility was elevated or calm. 
++ Theses
+	1. Strong Prior-Month Returns Predict Stronger Momentum
+	2. High Volatility Dampens Momentum—Even When Returns Are Strong
+	3. The Skip-Month Rule Makes Performance More Sensitive to Market Conditions
+	4. Market Regimes Matter: The Best and Worst Environments for Momentum
++ Claims
+	1. The Skip-Month Rule Isn’t One-Size-Fits-All
+	2. Pay Attention to Recent Volatility, Not Just Returns
+	3. Momentum Works Best in Stable Uptrends
+	4. Consider Stability vs. Sensitivity in Portfolio Design
+	5. The Most Recent Month Contains Diagnostic Information
+
++ competing long-only momentum strategies
+	+ 12-1 strategy 
+		+ returns from 12 months ago through 2 months ago
+			+ excluding the most recent month
+	+ 12-0 strategy (includes recent month)
+		+ Ranks industries returns from 12 months ago through last month
+			+ including that most recent month
+	+ invests equally in the top 5 performing industries
+		+ equal-weighted average returns of industries during holding month
++ Fama-French 48 industry portfolios 
++ from 1975 through 2024
+
 ## spy 2.11 sharpe
 + https://www.quantitativo.com/p/statistical-arbitrage
 	+ Nov 10 2024

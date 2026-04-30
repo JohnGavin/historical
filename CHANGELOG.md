@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-04-25 to 2026-04-30
+
+### Completed
+- Falsification dashboard (#53): 6-page dashboard with scorecard, HAC, null environments, FF regression, multiplicity, methodology. 13 vignette targets. Deflated Sharpe Ratio added as 5th test.
+- Negative results dashboard (#57): documents 3 falsified strategies with diagnoses and lessons
+- Quiz (#70): real vs simulated time series quiz — micromort template, 10 real tickers, 4 difficulty levels, QR codes, score tracking
+- Unified strategy_names target (#71): 9 strategies × 7 columns, single source of truth
+- Duckplyr migration (#77): 13/15 functions migrated from raw SQL; 5 legitimate exceptions (complex window/regex)
+- Results DB backfill (#60 #61): 71/74 columns populated; 3 new trade extraction functions
+- Marginal contribution (#54): DRIF + LTR best pair (Sharpe 0.68, DD -13.8%), LTR negatively correlated
+- Strategy decay (#73): Factor MAX decays >50%; DRIF and LTR stable across time
+- Model interpretability (#74): DRIF selects Momentum 52% of months; LTR features stable across 22 years
+- Multi-strategy portfolio (#52): decay-aware weighting (DRIF 50%/LTR 35%/FMAX 15%)
+- VIX macro overlay (#59): only UUP benefits; gold hurts (crisis rally missed)
+- Commodity data (#68): 145,873 rows, 37 series (FRED + Yahoo futures via quantmod)
+- Mean reversion (#50): negative result (CAGR -5.9%, Sharpe -0.22)
+- New pkg functions: hd_deflated_sharpe(), hd_null_env_jump_diffusion(), hd_monthly_trades(), hd_event_trades(), hd_trade_metrics()
+- New global rules: strategy-name-consistency.md, visualization-standards.md updated (caption↔table consistency, % formatting, column ordering)
+- Issues created: #71-#77
+- Issues closed: #49 #50 #51 #52 #53 #54 #57 #59 #60 #61 #68 #69 #70 #71 #72 #73 #74 #77
+
+### Failed Approaches
+- Quarto 1.8 strips raw HTML from R chunks and fenced divs — all attempts with cat(), knitr::asis_output(), {=html} blocks, ::: divs failed. Workaround: include-after-body + JS to relocate #quiz-app into <main>
+- Mean reversion on ETFs/large caps (z-score < -2, hold 5 days): CAGR -5.9% — drops that trigger signals are often start of larger drawdowns (momentum dominates reversion)
+- VIX overlay on gold: hurts performance because gold rallies during crises when VIX is high
+- Factor MAX shows >50% temporal decay — early Sharpe 0.93, late period lower
+- hd_ohlcv() can't fetch Yahoo futures (CL=F, GC=F) — not in HuggingFace equity dataset. Fixed with quantmod::getSymbols()
+
+### Accuracy / Metrics
+- Pipeline: ~250 targets across 26 plan files, 0 errors
+- Strategy scorecard: DRIF genuine alpha (DSR p<0.001), Factor MAX (DSR p=0.004), LTR borderline (DSR p=0.163)
+- Results DB: 71/74 columns populated (was 42/74)
+- 17 issues closed this session block
+- Duckplyr: 13/15 query functions migrated (was 2/15)
+
+### Known Limitations
+- reviser package not compiled in nix store — hd_revision_analysis() exists but can't be tested (#65)
+- LTR alpha decay needs XGBoost in nix develop shell — stub target
+- SHAP values for LTR deferred (needs nix develop for XGBoost predict(contrib=TRUE))
+- 4 results DB columns remain NA: avg_dd_duration_days, up/down_capture, turnover_annual
+- Quiz Google Sheets score submission not configured (#76)
+- VSTOXX data truncated at 2016
+- Multi-strategy portfolio Sharpe (0.36) lower than DRIF standalone (0.42) due to rebalancing costs
+
 ## 2026-04-24
 
 ### Completed
