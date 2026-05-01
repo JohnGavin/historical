@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-05-01
+
+### Completed
+- RAFI fundamental-weighted strategy (#75): plan_rafi.R (7 targets) — synthetic RAFI via FF factors (50% HML + 30% SMB + 20% Mom). Negative result: OOS Sharpe -0.19 vs market 0.94. Pre-2000 Sharpe 1.66, post-2000 Sharpe 0.24 — 85% decay consistent with value crowding.
+- CRPS forecast evaluation (#66): hd_crps_empirical(), hd_crps_normal(), hd_crps_skill(), hd_brier_score(), hd_horizon_skill() + plan_forecast_eval.R (6 targets). Distributional scoring without scoringRules dependency.
+- Daloopa data access test (#78, #79): downloaded FinRetrieval HuggingFace dataset (500 questions, Parquet). Our coverage: 0% — all questions require company fundamentals. Documented 4-phase integration plan.
+- Issues closed: #55, #56, #58, #62 (from prior session, formally closed with comments)
+
+### Failed Approaches
+- RAFI FF regression R²=100%: tautological — we constructed returns from FF factors then regressed on the same factors. Real test needs actual RAFI ETF returns (PRF, FNDF).
+- Mom factor not available monthly in our dataset — only daily. Fixed by compounding daily Mom returns to monthly.
+- RAFI OOS (2010+) negative CAGR for all variants — value/size premium has decayed post-2000.
+
+### Findings: RAFI Strategy (#75)
+
+| Strategy | Pre-2000 Sharpe | Post-2000 Sharpe | Decay |
+|----------|:-:|:-:|:--:|
+| RAFI Composite | 1.66 | 0.24 | -85% |
+| Revenue Proxy (HML) | 0.87 | 0.11 | -87% |
+| Equal-Weight (SMB) | 0.55 | 0.09 | -84% |
+| Benchmark (Market) | 0.83 | 0.53 | -36% |
+
+Verdict: RAFI premium existed historically but has been arbitraged away. Cap-weighted market dominates post-2000.
+
+### Accuracy / Metrics
+- Pipeline: ~270 targets across 31 plan files
+- 2 new plan files: plan_rafi.R, plan_forecast_eval.R
+- 5 new exported pkg functions: hd_crps_empirical, hd_crps_normal, hd_crps_skill, hd_brier_score, hd_horizon_skill
+- 13 open issues remaining (was 16 at session start)
+
+### Known Limitations
+- RAFI FF regression is tautological — need real RAFI ETF data (PRF, FNDF) for genuine falsification
+- scoringRules not in nix shell — CRPS/Brier implemented manually (correct but less battle-tested)
+- Daloopa API requires free signup — not yet tested
+- fe_horizon target uses SPY forward returns — may not align well with monthly strategy signals
+
 ## 2026-04-30 (session 2)
 
 ### Completed
