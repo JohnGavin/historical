@@ -72,6 +72,7 @@ source(here::here("R/plan_vix_macro_overlay.R"))
 source(here::here("R/plan_european_overlay.R"))
 source(here::here("R/plan_rafi.R"))
 source(here::here("R/plan_forecast_eval.R"))
+source(here::here("R/plan_kalshi.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -96,4 +97,5 @@ c(plan_strategy_names(),
   plan_falsification(),
   plan_falsification_vignette(),
   plan_ltr_momentum(),
-  plan_quiz())
+  plan_quiz(),
+  plan_kalshi())
