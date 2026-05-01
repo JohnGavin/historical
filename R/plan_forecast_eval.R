@@ -113,6 +113,7 @@ plan_forecast_eval <- function() {
     # Forecast probability: rolling win rate over the previous roll_months periods.
     # Naive baseline: unconditional win rate over the full sample.
     targets::tar_target(fe_brier, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       strategy_list <- list(
