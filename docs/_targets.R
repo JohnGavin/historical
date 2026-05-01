@@ -70,6 +70,8 @@ source(here::here("R/plan_shadow_trades.R"))
 source(here::here("R/plan_multi_strategy.R"))
 source(here::here("R/plan_vix_macro_overlay.R"))
 source(here::here("R/plan_european_overlay.R"))
+source(here::here("R/plan_rafi.R"))
+source(here::here("R/plan_forecast_eval.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -88,6 +90,8 @@ c(plan_strategy_names(),
   plan_multi_strategy(),
   plan_vix_macro_overlay(),
   plan_european_overlay(),
+  plan_rafi(),
+  plan_forecast_eval(),
   plan_leaderboard(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
