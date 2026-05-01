@@ -154,17 +154,28 @@ plan_kalshi <- function() {
       # Extract meeting date from event_ticker (e.g., "KXFED-25JUN25" -> "2025-06-25")
       parse_meeting_date <- function(ticker) {
         if (is.na(ticker)) return(as.Date(NA))
-        # Try common Kalshi formats: KXFED-DDMMMYY or KXFED-YYYYMMDD
-        m_short <- regmatches(ticker, regexpr("[0-9]{2}[A-Z]{3}[0-9]{2}$", ticker))
-        if (length(m_short) > 0 && nchar(m_short) > 0) {
-          d <- tryCatch(as.Date(m_short, format = "%d%b%y"), error = function(e) as.Date(NA))
+        # Kalshi FOMC tickers: KXFED-YYMM (e.g., KXFED-26JUN, KXFED-27JAN)
+        # or KXFED-YYMMMDD (e.g., KXFED-26JUN25)
+        # Extract the suffix after "KXFED-"
+        suffix <- sub("^KXFED-", "", ticker)
+        if (nchar(suffix) == 0) return(as.Date(NA))
+
+        # Format: YYMM (5 chars) e.g., "26JUN" → 2026-06-01
+        m1 <- regmatches(suffix, regexpr("^[0-9]{2}[A-Z]{3}$", suffix))
+        if (length(m1) > 0 && nchar(m1) > 0) {
+          d <- tryCatch(as.Date(paste0("01", m1), format = "%d%y%b"),
+                        error = function(e) as.Date(NA))
           if (!is.na(d)) return(d)
         }
-        m_long <- regmatches(ticker, regexpr("[0-9]{8}$", ticker))
-        if (length(m_long) > 0 && nchar(m_long) > 0) {
-          d <- tryCatch(as.Date(m_long, format = "%Y%m%d"), error = function(e) as.Date(NA))
+
+        # Format: YYMMDD (7 chars) e.g., "26JUN25" → 2026-06-25
+        m2 <- regmatches(suffix, regexpr("^[0-9]{2}[A-Z]{3}[0-9]{2}$", suffix))
+        if (length(m2) > 0 && nchar(m2) > 0) {
+          d <- tryCatch(as.Date(m2, format = "%y%b%d"),
+                        error = function(e) as.Date(NA))
           if (!is.na(d)) return(d)
         }
+
         as.Date(NA)
       }
 
@@ -174,7 +185,9 @@ plan_kalshi <- function() {
         filter(!is.na(probability), probability > 0) |>
         mutate(
           rate_pct     = vapply(outcome_label, parse_rate_from_label, numeric(1)),
-          meeting_date = vapply(event_ticker,  parse_meeting_date,    as.Date(NA))
+          meeting_date = as.Date(vapply(event_ticker, function(x) {
+            as.numeric(parse_meeting_date(x))
+          }, numeric(1)), origin = "1970-01-01")
         )
 
       if (all(is.na(markets_with_rate$rate_pct))) {
