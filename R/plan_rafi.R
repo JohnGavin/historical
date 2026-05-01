@@ -44,9 +44,16 @@ plan_rafi <- function() {
       ff5 <- hd_factors(dataset = "FF5", frequency = "monthly") |>
         mutate(date = as.Date(date))
 
-      mom <- hd_factors(dataset = "Mom", frequency = "monthly") |>
+      # Mom only available daily — aggregate to monthly compound returns
+      mom <- hd_factors(dataset = "Mom", frequency = "daily") |>
         mutate(date = as.Date(date)) |>
-        filter(factor_name == "Mom")
+        filter(factor_name == "Mom") |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        group_by(ym, factor_name) |>
+        summarise(value = (prod(1 + value / 100) - 1) * 100,
+                  .groups = "drop") |>
+        mutate(date = as.Date(paste0(ym, "-01"))) |>
+        select(date, factor_name, value)
 
       # Pivot FF5 wide (includes RF)
       ff5_wide <- ff5 |>
