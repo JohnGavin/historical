@@ -24,6 +24,51 @@
 
 Verdict: RAFI premium existed historically but has been arbitraged away. Cap-weighted market dominates post-2000.
 
+### Findings: CRPS Forecast Evaluation (#66)
+
+CRPS skill (negative = worse than naive unconditional distribution):
+
+| Strategy | CRPS Model | CRPS Naive | Skill | Obs |
+|----------|:----------:|:----------:|:-----:|:---:|
+| DRIF | 0.016 | 0.016 | -0.04 | 679 |
+| Factor MAX | 0.014 | 0.013 | -0.06 | 728 |
+| LTR | 0.027 | 0.025 | -0.05 | 243 |
+
+Brier score (directional probability calibration):
+
+| Strategy | Brier Model | Brier Naive | Skill | Win Rate |
+|----------|:----------:|:----------:|:-----:|:--------:|
+| DRIF | 0.258 | 0.241 | -0.07 | 61.1% |
+| Factor MAX | 0.257 | 0.250 | -0.03 | 59.3% |
+| LTR | 0.272 | 0.263 | -0.03 | 54.9% |
+
+Horizon skill (correlation of strategy signal with forward SPY returns):
+
+| Strategy | 1d | 5d | 10d | 21d |
+|----------|:---:|:---:|:----:|:----:|
+| DRIF | -0.010 | -0.016 | -0.031 | -0.045 |
+| Factor MAX | +0.019 | +0.045 | +0.068 | +0.102 |
+| LTR | -0.023 | -0.057 | -0.084 | -0.129 |
+
+Verdict: No strategy beats the unconditional distribution as a probabilistic forecast. Factor MAX shows weak positive correlation at longer horizons (r=0.10 at 21d). DRIF and LTR are contrarian — negatively correlated with forward market returns by construction.
+
+### Findings: Daloopa Data Coverage (#78, #79)
+
+FinRetrieval benchmark (500 questions, freely available on HuggingFace):
+
+| Category | Questions | Our coverage |
+|----------|----------:|:------------:|
+| income_statement | 126 | 0% |
+| balance_sheet | 119 | 0% |
+| cash_flow | 93 | 0% |
+| operational_kpis | 78 | 0% |
+| guidance_outlook | 43 | 0% |
+| segments_geography | 28 | 0% |
+| market_data | 8 | Partial |
+| valuation_metrics | 5 | 0% |
+
+Our `hd_*()` pipeline (OHLCV, FRED macro, FF factors, CBOE vol) has zero overlap with fundamentals-focused questions. Daloopa API would fill the gap — 4-phase integration plan documented in #78.
+
 ### Accuracy / Metrics
 - Pipeline: ~270 targets across 31 plan files
 - 2 new plan files: plan_rafi.R, plan_forecast_eval.R
