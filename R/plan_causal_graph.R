@@ -153,9 +153,16 @@ plan_causal_graph <- function() {
                       value = value / 100) |>
         dplyr::select(date, factor_name, value)
 
-      mom <- hd_factors(dataset = "Mom", frequency = "monthly") |>
-        dplyr::mutate(date = as.Date(date),
-                      value = value / 100) |>
+      # Mom only available daily — compound to monthly
+      mom <- hd_factors(dataset = "Mom", frequency = "daily") |>
+        dplyr::mutate(date = as.Date(date)) |>
+        dplyr::filter(factor_name == "Mom") |>
+        dplyr::mutate(ym = format(date, "%Y-%m")) |>
+        dplyr::summarise(
+          value = (prod(1 + value / 100) - 1),
+          .by = c(ym, factor_name)
+        ) |>
+        dplyr::mutate(date = as.Date(paste0(ym, "-01"))) |>
         dplyr::select(date, factor_name, value)
 
       factors_wide <- dplyr::bind_rows(ff5, mom) |>
@@ -189,17 +196,18 @@ plan_causal_graph <- function() {
       })
 
       # ── Strategy returns from falsification bridge targets ────────
+      # Strategy dates may be mid-month (15th) — normalise to 1st of month
       drif_ret <- fals_drif_input |>
-        dplyr::select(date, DRIF_return = strategy_ret) |>
-        dplyr::mutate(date = as.Date(date))
+        dplyr::mutate(date = as.Date(paste0(format(as.Date(date), "%Y-%m"), "-01"))) |>
+        dplyr::select(date, DRIF_return = strategy_ret)
 
       fac_max_ret <- fals_fac_max_input |>
-        dplyr::select(date, FacMAX_return = strategy_ret) |>
-        dplyr::mutate(date = as.Date(date))
+        dplyr::mutate(date = as.Date(paste0(format(as.Date(date), "%Y-%m"), "-01"))) |>
+        dplyr::select(date, FacMAX_return = strategy_ret)
 
       ltr_ret <- fals_ltr_input |>
-        dplyr::select(date, LTR_return = strategy_ret) |>
-        dplyr::mutate(date = as.Date(date))
+        dplyr::mutate(date = as.Date(paste0(format(as.Date(date), "%Y-%m"), "-01"))) |>
+        dplyr::select(date, LTR_return = strategy_ret)
 
       # ── Build Vol_regime proxy: VIX > 20 = high ──────────────────
       # (1 = high vol, 0 = low vol)
