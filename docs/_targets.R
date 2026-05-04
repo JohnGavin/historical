@@ -73,6 +73,8 @@ source(here::here("R/plan_european_overlay.R"))
 source(here::here("R/plan_rafi.R"))
 source(here::here("R/plan_forecast_eval.R"))
 source(here::here("R/plan_kalshi.R"))
+source(here::here("R/plan_nyt_sentiment.R"))
+source(here::here("R/plan_circuit_breaker.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -98,4 +100,6 @@ c(plan_strategy_names(),
   plan_falsification_vignette(),
   plan_ltr_momentum(),
   plan_quiz(),
-  plan_kalshi())
+  plan_kalshi(),
+  plan_nyt_sentiment(),
+  plan_circuit_breaker())
