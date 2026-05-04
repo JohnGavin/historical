@@ -43,8 +43,7 @@ plan_nyt_sentiment <- function() {
 
       if (!file.exists(nyt_params$subjects_path)) {
         cli::cli_warn(
-          "nyt_keywords.parquet not found at {nyt_params$subjects_path}. ",
-          "Run scripts/parse_nyt_tedalcorn.R to generate it."
+          "nyt_keywords.parquet not found at {nyt_params$subjects_path}. Run scripts/parse_nyt_tedalcorn.R to generate it."
         )
         return(tibble(
           date         = as.Date(character()),
@@ -70,8 +69,7 @@ plan_nyt_sentiment <- function() {
 
       if (nrow(kw_data) == 0) {
         cli::cli_warn(
-          "No rows matched target_keywords in {nyt_params$subjects_path}. ",
-          "Available keywords: {paste(head(unique(raw$keyword), 10), collapse = ', ')} ..."
+          "No rows matched target_keywords in {nyt_params$subjects_path}. Available keywords: {paste(head(unique(raw$keyword), 10), collapse = ', ')} ..."
         )
         return(tibble(
           date          = as.Date(character()),
@@ -121,9 +119,7 @@ plan_nyt_sentiment <- function() {
         ungroup()
 
       cli::cli_alert_success(
-        "nyt_keywords: {nrow(result)} rows | ",
-        "{n_distinct(result$keyword)} keywords | ",
-        "{format(min(result$date), '%Y-%m')} to {format(max(result$date), '%Y-%m')}"
+        "nyt_keywords: {nrow(result)} rows | {n_distinct(result$keyword)} keywords | {format(min(result$date), '%Y-%m')} to {format(max(result$date), '%Y-%m')}"
       )
 
       result
@@ -191,7 +187,14 @@ plan_nyt_sentiment <- function() {
         joined <- kw_df |>
           filter(keyword == kw_name) |>
           inner_join(
-            spy_df |> mutate(date = date + months(lag_k)),
+            spy_df |> mutate(date = {
+              # Shift date by lag_k months (all dates are 1st of month)
+              yr <- as.integer(format(date, "%Y"))
+              mo <- as.integer(format(date, "%m")) + lag_k
+              yr <- yr + (mo - 1L) %/% 12L
+              mo <- ((mo - 1L) %% 12L) + 1L
+              as.Date(sprintf("%04d-%02d-01", yr, mo))
+            }),
             by = "date"
           )
         if (nrow(joined) < nyt_params$min_months) return(NA_real_)

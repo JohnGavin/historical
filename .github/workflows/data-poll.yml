@@ -1,0 +1,48 @@
+name: Weekly Data Poll
+
+on:
+  schedule:
+    - cron: '0 6 * * 6'  # Every Saturday at 06:00 UTC
+  workflow_dispatch:        # Manual trigger via GitHub UI
+
+jobs:
+  poll:
+    runs-on: ubuntu-latest
+    # Allow individual sources to fail without blocking others
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - kalshi
+          # Commented out until verified in CI — add when ready:
+          # - commodities   # requires FRED_API_KEY secret
+          # - cboe_vol      # requires httr2, quantmod
+          # - nyt_tedalcorn # parse_nyt_tedalcorn.R (no auth)
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          install.packages(
+            c("jsonlite", "arrow", "dplyr", "cli", "here"),
+            repos = "https://cloud.r-project.org"
+          )
+
+      - name: Run fetch script
+        env:
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: Rscript scripts/fetch_${{ matrix.source }}.R
+
+      - name: Commit if data changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/raw/
+          git diff --cached --quiet || git commit -m "data: ${{ matrix.source }} $(date +%Y-%m-%d)"
+          git push
