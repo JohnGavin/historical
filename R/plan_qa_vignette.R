@@ -123,6 +123,66 @@ plan_qa_vignette <- function() {
         details = if (nrow(stats) > 0) stats else NULL,
         timestamp = Sys.time()
       )
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA 4: HTML quality check — scan rendered HTML for common defects
+    # Runs after quarto render; catches leaked code, empty tables, errors
+    targets::tar_target(qa_html_quality, {
+      html_dir <- here::here("docs")
+      html_files <- list.files(html_dir, pattern = "\\.html$", full.names = TRUE)
+
+      if (length(html_files) == 0) {
+        cli::cli_inform(c("i" = "QA HTML: no rendered HTML files found in docs/"))
+        return(list(n_files = 0L, issues = NULL, timestamp = Sys.time()))
+      }
+
+      # Patterns that should NEVER appear in deployed HTML
+      error_patterns <- c(
+        leaked_code  = "#\\| label|#\\| echo|#\\| results",
+        raw_tar_read = "safe_tar_read|tar_read\\(",
+        not_available = "not yet built|not available|MISSING EVIDENCE",
+        r_error      = "Error in |Error:",
+        null_output  = ">NULL<|> NULL<",
+        raw_tibble   = 'class="dataframe"'
+      )
+
+      results <- lapply(html_files, function(f) {
+        content <- readLines(f, warn = FALSE)
+        text <- paste(content, collapse = "\n")
+        counts <- vapply(error_patterns, function(pat) {
+          sum(grepl(pat, content, ignore.case = FALSE))
+        }, integer(1))
+        tibble::tibble(
+          file = basename(f),
+          total_issues = sum(counts),
+          leaked_code = counts[["leaked_code"]],
+          raw_tar_read = counts[["raw_tar_read"]],
+          not_available = counts[["not_available"]],
+          r_error = counts[["r_error"]],
+          null_output = counts[["null_output"]],
+          raw_tibble = counts[["raw_tibble"]]
+        )
+      })
+
+      report <- dplyr::bind_rows(results)
+      n_issues <- sum(report$total_issues)
+
+      if (n_issues > 0) {
+        bad <- report |> dplyr::filter(total_issues > 0)
+        cli::cli_warn(c(
+          "!" = "QA HTML: {n_issues} issue(s) across {nrow(bad)} file(s)",
+          "i" = "Files: {paste(bad$file, collapse = ', ')}"
+        ))
+      } else {
+        cli::cli_inform(c("v" = "QA HTML: {nrow(report)} files, 0 issues"))
+      }
+
+      list(
+        n_files = nrow(report),
+        n_issues = n_issues,
+        report = report,
+        timestamp = Sys.time()
+      )
     }, cue = targets::tar_cue(mode = "always"))
   )
 }
