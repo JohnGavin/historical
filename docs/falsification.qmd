@@ -14,7 +14,20 @@ format:
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
           <style>
-          body { font-size: 1.5em; }
+          :root { --base-font-size: 1.5em; }
+          body { font-size: var(--base-font-size); }
+          /* UI controls toolbar */
+          #ui-controls {
+            position: fixed; top: 60px; right: 12px; z-index: 9999;
+            display: flex; gap: 4px; background: rgba(0,0,0,0.8);
+            padding: 4px 8px; border-radius: 6px; border: 1px solid #444;
+          }
+          #ui-controls button {
+            background: #333; color: #e0e0e0; border: 1px solid #555;
+            border-radius: 4px; padding: 4px 8px; cursor: pointer;
+            font-size: 14px; line-height: 1;
+          }
+          #ui-controls button:hover { background: #555; }
           .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
           .nav-link { font-size: 0.85em !important; }
           .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
@@ -63,6 +76,31 @@ format:
           .datatables, .dataTables_wrapper { display: block !important;
             position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
           table.dataTable { white-space: nowrap; }
+          /* DT dark mode — mandatory contrast fix */
+          table.dataTable, table.dataTable thead, table.dataTable tbody {
+            background-color: #1a1a2e !important;
+          }
+          table.dataTable th, table.dataTable td,
+          .dataTables_wrapper, .dataTables_wrapper .dataTables_info,
+          .dataTables_wrapper .dataTables_filter,
+          .dataTables_wrapper .dataTables_paginate .paginate_button {
+            color: #e0e0e0 !important;
+          }
+          table.dataTable thead th {
+            background-color: #16213e !important;
+            border-bottom-color: #444 !important;
+          }
+          table.dataTable tbody tr:hover { background-color: #252545 !important; }
+          table.dataTable tbody tr.even { background-color: #1e1e3a !important; }
+          .dataTables_wrapper input[type="search"], .dataTables_wrapper .form-control {
+            background-color: #16213e !important; color: #e0e0e0 !important;
+            border-color: #444 !important;
+          }
+          /* Caption font-size consistency */
+          .card-body caption, .tab-pane caption, .dataTables_wrapper caption {
+            font-size: inherit !important; color: #e0e0e0 !important;
+            caption-side: top !important; text-align: left !important;
+          }
           table caption { caption-side: top !important; }
           details { margin-bottom: 0.5em; }
           details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
@@ -95,6 +133,40 @@ format:
           document.addEventListener('shown.bs.tab', function(e) {
             var pane = document.querySelector(e.target.getAttribute('data-bs-target') || e.target.getAttribute('href'));
             if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          // ── UI Controls: font size + dark/light toggle ──
+          document.addEventListener('DOMContentLoaded', function() {
+            var toolbar = document.createElement('div');
+            toolbar.id = 'ui-controls';
+            toolbar.innerHTML = '<button id="font-down" title="Decrease font">A-</button>' +
+              '<button id="font-up" title="Increase font">A+</button>' +
+              '<button id="theme-toggle" title="Toggle dark/light"></button>';
+            document.body.appendChild(toolbar);
+
+            // Font size
+            var baseSize = parseFloat(localStorage.getItem('font-size-px') || '24');
+            document.documentElement.style.setProperty('--base-font-size', baseSize + 'px');
+            document.getElementById('font-up').addEventListener('click', function() {
+              baseSize = Math.min(baseSize + 1, 32);
+              document.documentElement.style.setProperty('--base-font-size', baseSize + 'px');
+              localStorage.setItem('font-size-px', baseSize);
+            });
+            document.getElementById('font-down').addEventListener('click', function() {
+              baseSize = Math.max(baseSize - 1, 12);
+              document.documentElement.style.setProperty('--base-font-size', baseSize + 'px');
+              localStorage.setItem('font-size-px', baseSize);
+            });
+
+            // Dark/light toggle
+            var themeBtn = document.getElementById('theme-toggle');
+            var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            themeBtn.textContent = isDark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+            themeBtn.addEventListener('click', function() {
+              isDark = !isDark;
+              document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+              themeBtn.textContent = isDark ? '\u2600\uFE0F' : '\uD83C\uDF19';
+              localStorage.setItem('quarto-color-scheme', isDark ? 'dark' : 'light');
+            });
           });
           </script>
 execute:
