@@ -18,6 +18,18 @@ format:
           .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
           .nav-link { font-size: 0.85em !important; }
           .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
+          /* Causal DAG: taller to balance width:height */
+          #causal-dag-container { min-height: 600px; }
+          #causal-dag-container .mermaid svg { min-height: 550px; width: 100%; }
+          /* Click-to-zoom fullscreen overlay */
+          .dag-fullscreen {
+            position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh;
+            z-index: 9999; background: #000; padding: 20px; overflow: auto;
+            cursor: zoom-out;
+          }
+          #causal-dag-container { cursor: zoom-in; }
+          /* Font consistency for causal page */
+          #causal .card-body, #tab-causal .tab-pane { font-size: 1em; }
           .navbar, .quarto-dashboard-header, .navbar-dark,
           .bslib-page-dashboard > .navbar {
             background-color: black !important;
@@ -540,5 +552,6 @@ This is economically sensible and actionable: our multi-strategy portfolio (#52)
 ```{r}
 #| label: causal-caption
 #| results: asis
+#| echo: false
 cap <- safe_tar_read("cg_caption")
 if (!is.null(cap)) cat(cap)

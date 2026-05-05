@@ -15,6 +15,10 @@ if (target && container) {
   target.appendChild(container);
 }
 await mermaid.run({querySelector:".mermaid"});
+// Click-to-zoom: toggle fullscreen on click
+container.addEventListener("click", function() {
+  container.classList.toggle("dag-fullscreen");
+});
 </script>
 <pre class="mermaid" id="causal-dag-pre"></pre>
 <script type="text/plain" data-mermaid="causal-dag-pre">
