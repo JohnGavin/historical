@@ -7,31 +7,11 @@ format:
       dark: darkly
       light: cosmo
     embed-resources: false
-    include-after-body:
-      - causal-dag-all.html
     include-in-header:
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
-          <script type="module">
-          import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-          mermaid.initialize({startOnLoad:false, securityLevel:"loose", theme:"dark",
-            themeVariables:{background:"#000",primaryColor:"#999",lineColor:"#C00",primaryTextColor:"#000"}});
-          // Render mermaid on tab show (hidden tabs cause render failure)
-          async function renderMermaid() {
-            document.querySelectorAll('pre.mermaid').forEach(function(el) {
-              if (el.getAttribute('data-processed')) return;
-              // Decode HTML entities that Pandoc injects
-              var text = el.textContent || el.innerText;
-              el.removeAttribute('data-processed');
-            });
-            try { await mermaid.run({querySelector:'pre.mermaid'}); } catch(e) { console.log('mermaid initial run:', e); }
-          }
-          // Run on load for visible tabs
-          document.addEventListener('DOMContentLoaded', function() { setTimeout(renderMermaid, 500); });
-          // Re-run when tabs are shown (Bootstrap tab events)
-          document.addEventListener('shown.bs.tab', function() { setTimeout(renderMermaid, 200); });
-          </script>
+          <script type="module" src="causal-diagrams.js"></script>
           <style>
           :root { --base-font-size: 1.5em; }
           body { font-size: var(--base-font-size); }
