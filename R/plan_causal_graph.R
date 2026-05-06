@@ -30,6 +30,8 @@ plan_causal_graph <- function() {
           c("Mom",              "FacMAX_signal"),
           c("Mom",              "LTR_signal"),
           c("SMB",              "LTR_signal"),
+          # Crisis transmission: VIX affects value factor (violated implication)
+          c("VIX_level", "HML"),
           # Macro → Regime
           c("VIX_level",        "Vol_regime"),
           c("VIX_term_struct",  "Vol_regime"),
@@ -346,6 +348,50 @@ plan_causal_graph <- function() {
       )
     }),
 
+    # ── Pre/post-2010 split test for HML ⊥ VIX ────────────────────
+    targets::tar_target(cg_test_split, {
+      library(dplyr)
+
+      d <- cg_test_data
+      if (nrow(d) < 48) return(list(pre = NULL, post = NULL, comparison = NULL))
+
+      split_date <- as.Date("2010-01-01")
+      d_pre  <- d |> filter(date < split_date)
+      d_post <- d |> filter(date >= split_date)
+
+      # Partial correlation helper (same as in cg_test_implications)
+      partial_cor <- function(x, y, z_mat) {
+        if (length(x) < 20 || all(is.na(x)) || all(is.na(y))) return(NA_real_)
+        if (is.null(z_mat) || ncol(z_mat) == 0) return(cor(x, y, use = "complete.obs"))
+        complete <- complete.cases(cbind(x, y, z_mat))
+        if (sum(complete) < 20) return(NA_real_)
+        x <- x[complete]; y <- y[complete]; z_mat <- z_mat[complete, , drop = FALSE]
+        rx <- residuals(lm(x ~ z_mat))
+        ry <- residuals(lm(y ~ z_mat))
+        cor(rx, ry)
+      }
+
+      # Test the key violated implication (HML ⊥ VIX) in each period
+      test_period <- function(dat, label) {
+        if (nrow(dat) < 20) return(tibble::tibble(period = label, n = nrow(dat),
+                                                   hml_vix_r = NA_real_))
+        r <- partial_cor(dat$HML, dat$VIX_level, NULL)
+        tibble::tibble(period = label, n = nrow(dat), hml_vix_r = round(r, 3))
+      }
+
+      pre  <- test_period(d_pre, "Pre-2010")
+      post <- test_period(d_post, "2010+")
+      full <- test_period(d, "Full")
+
+      comparison <- bind_rows(pre, post, full)
+
+      list(
+        comparison = comparison,
+        strengthened = !is.na(post$hml_vix_r) && !is.na(pre$hml_vix_r) &&
+                       abs(post$hml_vix_r) > abs(pre$hml_vix_r)
+      )
+    }),
+
     # ── Plot the DAG ────────────────────────────────────────────────
     targets::tar_target(cg_plot, {
       library(igraph)
@@ -470,6 +516,18 @@ plan_causal_graph <- function() {
       viol <- cg_test_implications$n_violated
       skip <- cg_test_implications$n_skipped
 
+      # Add split test info if available
+      split <- cg_test_split
+      if (!is.null(split$comparison)) {
+        split_text <- paste0(
+          " HML-VIX correlation by period: ",
+          paste(split$comparison$period, "r=", split$comparison$hml_vix_r,
+                "(n=", split$comparison$n, ")", collapse = "; "), "."
+        )
+      } else {
+        split_text <- ""
+      }
+
       paste0(
         "Causal DAG for the portfolio: ",
         cg_dag$n_nodes, " nodes and ",
@@ -483,6 +541,7 @@ plan_causal_graph <- function() {
         skip, " skipped (data unavailable). ",
         "Implications with |r| ≥ 0.15 suggest the causal structure ",
         "requires revision. ",
+        split_text,
         "Source: R/plan_causal_graph.R."
       )
     })

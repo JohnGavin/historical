@@ -614,12 +614,35 @@ if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
 
 **Violated: HML ⊥ VIX (r = -0.17)**
 
-The value factor and VIX are NOT independent. During crises, VIX spikes AND value stocks underperform simultaneously. The DAG needs either:
+The value factor (HML) and volatility index (VIX) are NOT independent. This means:
 
-- A direct edge: VIX → HML (crises cause value drawdowns)
-- Or a latent common cause: *Crisis_mode* → {VIX, HML} (both driven by a hidden crisis state)
+| Impact area | What it means | Action |
+|-------------|---------------|--------|
+| **DRIF strategy** | DRIF loads on HML. During VIX spikes, DRIF underperforms MORE than the Vol_regime node alone predicts. | Consider reducing DRIF weight in crisis regimes |
+| **Multi-strategy portfolio (#52)** | Diversification between VIX overlay and value-heavy strategies is LESS than K_eff suggests — they correlate in crises, exactly when diversification matters most | Recompute weights with crisis-conditional correlations |
+| **Tail independence (#55)** | K_eff_crisis < K_eff_calm is expected — this finding explains why | Run `hd_tail_keff()` to quantify |
+| **DAG revision** | Need either: VIX → HML edge (direct), or latent "Crisis_mode" → {VIX, HML} | Added VIX → HML edge (dashed yellow in diagram) |
 
-This is economically sensible and actionable: our multi-strategy portfolio (#52) should account for this dependence when combining value-heavy strategies with VIX-based overlays.
+**Economic explanation:** In crises, investors sell risky assets indiscriminately. Value stocks (high book-to-market) are often distressed firms — they get sold first. Simultaneously, VIX spikes as options demand surges. The correlation is not VIX *causing* value to fall, but both responding to the same flight-to-safety mechanism.
+
+```{r}
+#| label: causal-split-test
+#| echo: false
+split <- safe_tar_read("cg_test_split")
+if (!is.null(split) && !is.null(split$comparison)) {
+  DT::datatable(
+    split$comparison,
+    rownames = FALSE, filter = "none",
+    options = list(pageLength = 5, dom = "t"),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      "HML-VIX correlation by period. If |r| strengthens post-2010, the crisis-value link has intensified (consistent with factor crowding)."
+    )
+  ) |> DT::formatRound("hml_vix_r", digits = 3)
+} else {
+  cat("*Split test not yet built.*")
+}
+```
 
 ```{r}
 #| label: causal-caption
