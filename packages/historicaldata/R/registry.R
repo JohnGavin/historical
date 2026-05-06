@@ -242,6 +242,6 @@ hd_macro_forward <- function() {
 #' @return `hf://datasets/{repo}/{filename}` URL
 #' @noRd
 hd_base_url <- function(filename) {
-  repo <- Sys.getenv("HD_HF_REPO", unset = "dsfefvx/finance-historical-data")
+  repo <- Sys.getenv("HD_HF_REPO", unset = "JohnGavin/finance-data")
   sprintf("hf://datasets/%s/%s", repo, filename)
 }

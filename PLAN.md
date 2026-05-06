@@ -539,7 +539,7 @@ After the prototype, document in `docs/prototype-results.qmd`:
 ## Phase 1 Final State
 
 **GitHub:** https://github.com/JohnGavin/historical
-**HF Dataset:** https://huggingface.co/datasets/dsfefvx/finance-historical-data
+**HF Dataset:** https://huggingface.co/datasets/JohnGavin/finance-data
 
 | Metric | Value |
 |--------|-------|

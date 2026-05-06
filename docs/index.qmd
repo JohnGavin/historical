@@ -67,7 +67,7 @@ execute:
 
 ## Row
 
-Historical finance database for backtesting: equities, crypto, macro, and factors. Code-only R package — data hosted on [Hugging Face](https://huggingface.co/datasets/dsfefvx/finance-historical-data), queried via DuckDB `hf://` protocol with predicate pushdown.
+Historical finance database for backtesting: equities, crypto, macro, and factors. Code-only R package — data hosted on [Hugging Face](https://huggingface.co/datasets/JohnGavin/finance-data), queried via DuckDB `hf://` protocol with predicate pushdown.
 
 <span class="badge badge-blue">R package</span>
 <span class="badge badge-green">DuckDB + Parquet</span>
@@ -146,7 +146,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 ## Row
 
 - [GitHub](https://github.com/JohnGavin/historical) — source code, issues, CI
-- [Hugging Face Dataset](https://huggingface.co/datasets/dsfefvx/finance-historical-data) — Parquet files, dataset card
+- [Hugging Face Dataset](https://huggingface.co/datasets/JohnGavin/finance-data) — Parquet files, dataset card
 - [Strategy Leaderboard](leaderboard.html) — rankings, equity curves, cost-adjusted metrics
 - [API Reference](pkg/index.html) — pkgdown function docs
 - [Examples](examples.html) — interactive dashboard with all datasets
@@ -190,7 +190,7 @@ import duckdb
 con = duckdb.connect()
 df = con.sql("""
     SELECT date, close, volume
-    FROM 'hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet'
+    FROM 'hf://datasets/JohnGavin/finance-data/equity_daily.parquet'
     WHERE ticker = 'AAPL' AND date >= '2024-01-01'
     ORDER BY date
 """).df()

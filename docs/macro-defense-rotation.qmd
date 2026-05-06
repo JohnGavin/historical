@@ -684,7 +684,7 @@ ggplot(both, aes(date, cum, colour = method)) +
 #### References
 
 1. **Source article:** [Defense First: When Not Losing is Winning](https://notfinancial.substack.com/p/defense-first-when-not-losing-is) — Not Financial Advice (Substack)
-2. **Data source:** [historicaldata](https://huggingface.co/datasets/dsfefvx/finance-historical-data) R package via DuckDB `hf://` protocol
+2. **Data source:** [historicaldata](https://huggingface.co/datasets/JohnGavin/finance-data) R package via DuckDB `hf://` protocol
 3. **TLT:** [iShares 20+ Year Treasury Bond ETF](https://www.ishares.com/us/products/239454/)
 4. **GLD:** [SPDR Gold Shares](https://www.spdrgoldshares.com/)
 5. **DBC:** [Invesco DB Commodity Index Tracking Fund](https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&productId=ETF-DBC)

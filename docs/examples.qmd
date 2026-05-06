@@ -658,7 +658,7 @@ con = duckdb.connect()
 # Query AAPL from HF-hosted Parquet — no download needed
 df = con.sql("""
     SELECT date, close, volume
-    FROM 'hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet'
+    FROM 'hf://datasets/JohnGavin/finance-data/equity_daily.parquet'
     WHERE ticker = 'AAPL' AND date >= '2024-01-01'
     ORDER BY date
 """).df()
@@ -666,15 +666,15 @@ df = con.sql("""
 
 #### Datasets
 
-All Parquet files are hosted on [Hugging Face](https://huggingface.co/datasets/dsfefvx/finance-historical-data) and queryable via DuckDB `hf://` protocol (R or Python, no download needed):
+All Parquet files are hosted on [Hugging Face](https://huggingface.co/datasets/JohnGavin/finance-data) and queryable via DuckDB `hf://` protocol (R or Python, no download needed):
 
 | Dataset | URL | Contents |
 |---------|-----|----------|
-| Equity daily | `hf://datasets/dsfefvx/finance-historical-data/equity_daily.parquet` | 958 tickers |
-| Crypto daily | `hf://datasets/dsfefvx/finance-historical-data/crypto_daily.parquet` | 14 tokens |
-| Macro daily | `hf://datasets/dsfefvx/finance-historical-data/macro_daily.parquet` | 19 FRED series |
-| Factors | `hf://datasets/dsfefvx/finance-historical-data/factors.parquet` | 7 FF factors |
-| Metadata | `hf://datasets/dsfefvx/finance-historical-data/metadata.parquet` | 994 ticker metadata |
+| Equity daily | `hf://datasets/JohnGavin/finance-data/equity_daily.parquet` | 958 tickers |
+| Crypto daily | `hf://datasets/JohnGavin/finance-data/crypto_daily.parquet` | 14 tokens |
+| Macro daily | `hf://datasets/JohnGavin/finance-data/macro_daily.parquet` | 19 FRED series |
+| Factors | `hf://datasets/JohnGavin/finance-data/factors.parquet` | 7 FF factors |
+| Metadata | `hf://datasets/JohnGavin/finance-data/metadata.parquet` | 994 ticker metadata |
 
 #### T language
 

@@ -7,7 +7,7 @@
 #' @keywords internal
 hd_is_online <- function() {
   tryCatch({
-    con <- url("https://huggingface.co/api/datasets/dsfefvx/finance-historical-data",
+    con <- url("https://huggingface.co/api/datasets/JohnGavin/finance-data",
                open = "r")
     on.exit(close(con))
     TRUE
