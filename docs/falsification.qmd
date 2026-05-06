@@ -8,7 +8,7 @@ format:
       light: cosmo
     embed-resources: false
     include-after-body:
-      - causal-dag.html
+      - causal-dag-all.html
     include-in-header:
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
@@ -555,28 +555,71 @@ build_info()
 
 ### {.tabset}
 
-#### DAG
+#### Overview
 
 ```{r}
-#| label: causal-dag-info
+#| label: causal-overview-info
 #| results: asis
+#| echo: false
 cg <- safe_tar_read("cg_dag")
 if (!is.null(cg)) {
-  cat(paste0("**", cg$n_nodes, " nodes**, **", cg$n_edges,
-             " directed edges**, acyclic: ", cg$is_dag, ".\n\n"))
-} else {
-  cat("*Causal DAG not yet built. Run `tar_make(names = 'cg_dag')`.*\n\n")
+  cat(paste0("Simplified view: strategies as single nodes. **", cg$n_nodes,
+             " nodes, ", cg$n_edges, " edges** in the full DAG. ",
+             "Click any strategy node to view its source code. ",
+             "Click diagram to zoom fullscreen."))
 }
 ```
 
 ```{r}
-#| label: causal-dag-mount
+#| label: causal-overview-mount
 #| results: asis
 #| echo: false
-cat('<div id="causal-dag-mount"></div>')
+cat('<div id="dag-overview-mount"></div>')
 ```
 
-Node colours: Factors (blue) | Macro (gold) | Regime (orange) | Signals (purple) | Returns (green) | Outcomes (red) | Structural (grey). Each arrow is a causal claim from our strategy pipeline. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
+#### Full DAG
+
+```{r}
+#| label: causal-full-mount
+#| results: asis
+#| echo: false
+cat('<div id="dag-full-mount"></div>')
+```
+
+Node colours: Factors (blue) | Macro (gold) | Regime (orange) | Signals (purple) | Returns (green) | Outcomes (red) | Structural (grey). Yellow dashed = violated implication. Green = tested, holds. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
+
+#### DRIF
+
+```{r}
+#| label: causal-drif-mount
+#| results: asis
+#| echo: false
+cat('<div id="dag-drif-mount"></div>')
+```
+
+DRIF (Dynamic Rotation Into Factors) selects the best-performing FF factor each month. Loads on HML, SMB, Mom, RMW. Yellow dashed edge: VIX affects HML in crises (r=-0.17). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R).
+
+#### Factor MAX
+
+```{r}
+#| label: causal-fmax-mount
+#| results: asis
+#| echo: false
+cat('<div id="dag-fmax-mount"></div>')
+```
+
+Factor MAX selects the top-momentum factor. Premium has decayed >50% (#73). Source: [plan_factormax.R](https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R).
+
+#### LTR
+
+```{r}
+#| label: causal-ltr-mount
+#| results: asis
+#| echo: false
+cat('<div id="dag-ltr-mount"></div>')
+```
+
+LTR (LambdaMART) uses XGBoost for cross-sectional stock ranking. Loads on Mom + SMB. Rate regime feeds into signal. Source: [plan_ltr_momentum.R](https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R).
 
 #### Implication Tests
 
@@ -654,3 +697,4 @@ if (!is.null(split) && !is.null(split$comparison)) {
 #| echo: false
 cap <- safe_tar_read("cg_caption")
 if (!is.null(cap)) cat(cap)
+```
