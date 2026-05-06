@@ -103,11 +103,25 @@ format:
             font-size: inherit !important; caption-side: top !important; text-align: left !important;
           }
           table caption { caption-side: top !important; }
-          /* Theme-aware text for ALL content */
+          /* Theme-aware text AND background for ALL content */
           [data-bs-theme="dark"] .card-body, [data-bs-theme="dark"] .tab-pane,
-          [data-bs-theme="dark"] .fig-caption, [data-bs-theme="dark"] caption { color: #e0e0e0 !important; }
+          [data-bs-theme="dark"] .fig-caption, [data-bs-theme="dark"] caption,
+          [data-bs-theme="dark"] p, [data-bs-theme="dark"] li,
+          [data-bs-theme="dark"] td, [data-bs-theme="dark"] th,
+          [data-bs-theme="dark"] .cell-output-display { color: #e0e0e0 !important; }
+          [data-bs-theme="dark"] .card-body, [data-bs-theme="dark"] .tab-pane,
+          [data-bs-theme="dark"] .tab-content, [data-bs-theme="dark"] .card {
+            background-color: #1a1a2e !important;
+          }
           [data-bs-theme="light"] .card-body, [data-bs-theme="light"] .tab-pane,
-          [data-bs-theme="light"] .fig-caption, [data-bs-theme="light"] caption { color: #1a1a1a !important; }
+          [data-bs-theme="light"] .fig-caption, [data-bs-theme="light"] caption,
+          [data-bs-theme="light"] p, [data-bs-theme="light"] li,
+          [data-bs-theme="light"] td, [data-bs-theme="light"] th,
+          [data-bs-theme="light"] .cell-output-display { color: #1a1a1a !important; }
+          [data-bs-theme="light"] .card-body, [data-bs-theme="light"] .tab-pane,
+          [data-bs-theme="light"] .tab-content, [data-bs-theme="light"] .card {
+            background-color: #fff !important;
+          }
           /* Warning cards + callouts — use base font size */
           .card-body .callout, .card-body .alert,
           .bslib-value-box, .card-header,
