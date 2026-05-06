@@ -1,1 +1,4 @@
 _targets/
+
+/.quarto/
+**/*.quarto_ipynb

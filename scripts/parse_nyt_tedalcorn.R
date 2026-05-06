@@ -115,8 +115,7 @@ all_subjects <- c(
 )
 
 cli::cli_alert_info(
-  "Total subjects: {length(all_subjects)} ({length(subjects_raw$persons)} persons, ",
-  "{length(subjects_raw$organizations)} orgs)"
+  "Total subjects: {length(all_subjects)} ({length(subjects_raw$persons)} persons, {length(subjects_raw$organizations)} orgs)"
 )
 
 # Filter to subjects matching economy patterns (case-insensitive regex)
@@ -230,8 +229,7 @@ if (is.null(apm) || length(apm) == 0) {
     )
 
   cli::cli_alert_success(
-    "dashboard.json: {nrow(volume_tbl)} monthly total-volume rows from ",
-    "{format(min(volume_tbl$date), '%Y-%m')} to {format(max(volume_tbl$date), '%Y-%m')}"
+    "dashboard.json: {nrow(volume_tbl)} monthly total-volume rows from {format(min(volume_tbl$date), '%Y-%m')} to {format(max(volume_tbl$date), '%Y-%m')}"
   )
 }
 
@@ -264,8 +262,7 @@ if (length(months_vec) == 0 || length(president_names) == 0) {
     counts <- presidents_raw[[pname]]
     if (is.null(counts) || length(counts) != length(months_vec)) {
       cli::cli_warn(
-        "President {pname}: length mismatch ({length(counts)} counts vs ",
-        "{length(months_vec)} months) — skipping"
+        "President {pname}: length mismatch ({length(counts)} counts vs {length(months_vec)} months) — skipping"
       )
       return(NULL)
     }
@@ -282,8 +279,7 @@ if (length(months_vec) == 0 || length(president_names) == 0) {
     )
 
   cli::cli_alert_success(
-    "presidents.json: {nrow(presidents_tbl)} monthly rows for ",
-    "{n_distinct(presidents_tbl$keyword)} presidents"
+    "presidents.json: {nrow(presidents_tbl)} monthly rows for {n_distinct(presidents_tbl$keyword)} presidents"
   )
 }
 
@@ -303,10 +299,7 @@ combined <- dplyr::bind_rows(subjects_tbl, presidents_tbl, volume_tbl) |>
   arrange(source, keyword, date)
 
 cli::cli_alert_info(
-  "Combined: {nrow(combined)} rows | ",
-  "{n_distinct(combined$keyword)} keywords | ",
-  "{n_distinct(combined$source)} sources | ",
-  "date range: {format(min(combined$date), '%Y-%m')} to {format(max(combined$date), '%Y-%m')}"
+  "Combined: {nrow(combined)} rows | {n_distinct(combined$keyword)} keywords | {n_distinct(combined$source)} sources | date range: {format(min(combined$date), '%Y-%m')} to {format(max(combined$date), '%Y-%m')}"
 )
 
 dir.create(dirname(OUTPUT_PATH), recursive = TRUE, showWarnings = FALSE)
