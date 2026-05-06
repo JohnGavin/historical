@@ -872,8 +872,12 @@ var plotLayout = {
   showlegend:false
 };
 
-var GOOGLE_FORM_URL = "";
-var GOOGLE_FORM_SCORE_FIELD = "entry.0";
+var GOOGLE_FORM_URL = "https://docs.google.com/forms/d/e/1FAIpQLSc9jgAyKjivt8qzeBdHq-mBIOVJfykmEvRVhymnIgXMhAf54A/formResponse";
+var GOOGLE_FORM_FIELDS = {
+  name: "entry.824211432", score: "entry.354757408",
+  correct: "entry.1208957071", total: "entry.595275214",
+  difficulty: "entry.852436587"
+};
 
 // ── Event Listeners ─────────────────────────────────────────
 document.querySelectorAll("#grp-diff .option-btn").forEach(function(btn) {
@@ -1070,14 +1074,16 @@ function submitScore() {
     return;
   }
   var pct = S.rounds.length > 0 ? Math.round(S.nCorrect / S.rounds.length * 100) : 0;
+  var diffLabel = (S.difficulty || "mixed").charAt(0).toUpperCase() + (S.difficulty || "mixed").slice(1);
+  var playerName = prompt("Enter your name for the leaderboard:", "Anonymous") || "Anonymous";
   var data = new FormData();
-  data.append(GOOGLE_FORM_SCORE_FIELD, JSON.stringify({
-    score: S.nCorrect, total: S.rounds.length, pct: pct,
-    difficulty: S.difficulty, nq: S.nq,
-    timestamp: new Date().toISOString()
-  }));
+  data.append(GOOGLE_FORM_FIELDS.name, playerName);
+  data.append(GOOGLE_FORM_FIELDS.score, pct);
+  data.append(GOOGLE_FORM_FIELDS.correct, S.nCorrect);
+  data.append(GOOGLE_FORM_FIELDS.total, S.rounds.length);
+  data.append(GOOGLE_FORM_FIELDS.difficulty, diffLabel);
   fetch(GOOGLE_FORM_URL, { method: "POST", mode: "no-cors", body: data })
-    .then(function() { statusEl.textContent = "Score submitted!"; statusEl.style.color = "#1a9850"; })
+    .then(function() { statusEl.textContent = "Score submitted! (" + playerName + ": " + pct + "%)"; statusEl.style.color = "#1a9850"; })
     .catch(function() { statusEl.textContent = "Submission failed."; statusEl.style.color = "#d73027"; });
   document.getElementById("btn-submit-score").disabled = true;
 }
