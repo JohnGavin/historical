@@ -625,8 +625,10 @@ The value factor (HML) and volatility index (VIX) are NOT independent. This mean
 
 **Economic explanation:** In crises, investors sell risky assets indiscriminately. Value stocks (high book-to-market) are often distressed firms — they get sold first. Simultaneously, VIX spikes as options demand surges. The correlation is not VIX *causing* value to fall, but both responding to the same flight-to-safety mechanism.
 
+**Temporal split finding:** The HML-VIX link was stronger pre-2010 (r=-0.26) and has weakened post-2010 (r=-0.14). This is the opposite of the crowding hypothesis — the crisis-value correlation peaked during 2000-2010 (dot-com crash + GFC), not after factor investing became popular. The VIX-HML edge in the DAG is most relevant for crisis periods, less so in recent calm markets.
+
 ```{r}
-#| label: causal-split-test
+#| label: causal-split-table
 #| echo: false
 split <- safe_tar_read("cg_test_split")
 if (!is.null(split) && !is.null(split$comparison)) {
@@ -636,7 +638,9 @@ if (!is.null(split) && !is.null(split$comparison)) {
     options = list(pageLength = 5, dom = "t"),
     caption = htmltools::tags$caption(
       style = "caption-side: top; text-align: left;",
-      "HML-VIX correlation by period. If |r| strengthens post-2010, the crisis-value link has intensified (consistent with factor crowding)."
+      paste0("HML-VIX correlation by period. Pre-2010 includes dot-com crash + GFC. ",
+             "Source: ", "[plan_causal_graph.R]",
+             "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).")
     )
   ) |> DT::formatRound("hml_vix_r", digits = 3)
 } else {
