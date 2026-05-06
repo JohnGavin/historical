@@ -16,6 +16,15 @@ format:
           <style>
           :root { --base-font-size: 1.5em; }
           body { font-size: var(--base-font-size); }
+          /* Hover tooltips for technical terms (#85) */
+          abbr[title] {
+            text-decoration: underline dotted #6c9bd2;
+            cursor: help;
+            font-style: normal;
+          }
+          abbr[title]:hover {
+            color: #6c9bd2;
+          }
           /* UI controls toolbar */
           #ui-controls {
             position: fixed; top: 60px; right: 12px; z-index: 9999;
@@ -596,7 +605,7 @@ cat('<div id="dag-overview-mount"></div>')
 cat('<div id="dag-full-mount"></div>')
 ```
 
-Node colours: Factors (blue) | Macro (gold) | Regime (orange) | Signals (purple) | Returns (green) | Outcomes (red) | Structural (grey). Yellow dashed = violated implication. Green = tested, holds. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
+Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
 
 #### DRIF
 
@@ -607,7 +616,7 @@ Node colours: Factors (blue) | Macro (gold) | Regime (orange) | Signals (purple)
 cat('<div id="dag-drif-mount"></div>')
 ```
 
-DRIF (Dynamic Rotation Into Factors) selects the best-performing FF factor each month. Loads on HML, SMB, Mom, RMW. Yellow dashed edge: VIX affects HML in crises (r=-0.17). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R).
+<abbr title="Dynamic Rotation Into Factors — each month selects the FF factor with highest trailing return">DRIF</abbr> selects the best-performing FF factor each month. Loads on <abbr title="High Minus Low — value factor: cheap stocks minus expensive stocks">HML</abbr>, <abbr title="Small Minus Big — size factor: small-cap minus large-cap returns">SMB</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>. Yellow dashed edge: VIX affects HML in crises (<abbr title="Partial correlation between HML and VIX = -0.17, indicating they co-move in crises">r=-0.17</abbr>). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R).
 
 #### Factor MAX
 
@@ -618,7 +627,7 @@ DRIF (Dynamic Rotation Into Factors) selects the best-performing FF factor each 
 cat('<div id="dag-fmax-mount"></div>')
 ```
 
-Factor MAX selects the top-momentum factor. Premium has decayed >50% (#73). Source: [plan_factormax.R](https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R).
+<abbr title="Factor Momentum MAX — selects the single FF factor with highest recent momentum">Factor MAX</abbr> selects the top-momentum factor. Premium has <abbr title="Strategy Sharpe ratio in early period vs late period. >50% decay means the edge has halved.">decayed >50%</abbr> (#73). Source: [plan_factormax.R](https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R).
 
 #### LTR
 
@@ -629,7 +638,7 @@ Factor MAX selects the top-momentum factor. Premium has decayed >50% (#73). Sour
 cat('<div id="dag-ltr-mount"></div>')
 ```
 
-LTR (LambdaMART) uses XGBoost for cross-sectional stock ranking. Loads on Mom + SMB. Rate regime feeds into signal. Source: [plan_ltr_momentum.R](https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R).
+<abbr title="LambdaMART — XGBoost-based cross-sectional momentum strategy. Ranks stocks by predicted return using gradient-boosted trees.">LTR</abbr> uses XGBoost for cross-sectional stock ranking. Loads on <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr> + <abbr title="Small Minus Big — size factor">SMB</abbr>. <abbr title="Fed rate above/below median classifies as high/low rate regime">Rate regime</abbr> feeds into signal. Source: [plan_ltr_momentum.R](https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R).
 
 #### Implication Tests
 
@@ -650,7 +659,7 @@ if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
              cg_impl$n_holds, " of ", cg_impl$n_implications,
              " implications hold (|r| < 0.15). ",
              "Violated implications suggest missing edges in the DAG. ",
-             "Source: plan_causal_graph.R, tested on monthly data.")
+             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R' target='_blank'>plan_causal_graph.R</a>, tested on monthly data.")
     )
   ) |>
     DT::formatRound("Partial r", digits = 3)
