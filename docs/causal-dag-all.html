@@ -34,18 +34,37 @@ document.querySelectorAll("script[data-mermaid]").forEach(function(s){
  var mount = document.getElementById("dag-"+id+"-mount");
  if(container && mount){ container.style.display="block"; mount.appendChild(container); }
 });
-await mermaid.run({querySelector:".mermaid"});
-// Click-to-zoom: attach to SVG after render completes
-document.querySelectorAll("[id$='-container']").forEach(function(c){
- var svg = c.querySelector("svg");
- var target = svg || c;
- target.style.cursor = "zoom-in";
- target.addEventListener("click", function(e){
- e.stopPropagation();
- c.classList.toggle("dag-fullscreen");
- target.style.cursor = c.classList.contains("dag-fullscreen") ? "zoom-out" : "zoom-in";
+
+// Render mermaid with retry on tab show
+// Hidden tabs (display:none) cause mermaid to fail silently.
+// Solution: render on DOMContentLoaded with delay, then re-render on tab show.
+var rendered = new Set();
+async function renderDiagrams() {
+ var pres = document.querySelectorAll("pre.mermaid:not([data-processed])");
+ if (pres.length === 0) return;
+ try {
+   await mermaid.run({nodes: Array.from(pres)});
+ } catch(e) {
+   console.log("mermaid render attempt:", e.message);
+ }
+ // Attach click-to-zoom on newly rendered SVGs
+ document.querySelectorAll("[id$='-container']").forEach(function(c){
+   if (rendered.has(c.id)) return;
+   var svg = c.querySelector("svg");
+   if (!svg) return;
+   rendered.add(c.id);
+   svg.style.cursor = "zoom-in";
+   svg.addEventListener("click", function(e){
+     e.stopPropagation();
+     c.classList.toggle("dag-fullscreen");
+     svg.style.cursor = c.classList.contains("dag-fullscreen") ? "zoom-out" : "zoom-in";
+   });
  });
-});
+}
+// Initial render after short delay (let Quarto tabs initialize)
+setTimeout(renderDiagrams, 1000);
+// Re-render when any tab is shown (Bootstrap 5 event)
+document.addEventListener("shown.bs.tab", function() { setTimeout(renderDiagrams, 300); });
 </script>
 
 <!-- DIAGRAM 1: Overview (simplified, ~12 nodes) -->
