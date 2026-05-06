@@ -21,7 +21,7 @@
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
 mermaid.initialize({startOnLoad:false, securityLevel:"loose", theme:"dark",
-  flowchart:{defaultRenderer:"elk", nodeSpacing:30, rankSpacing:80},
+  flowchart:{nodeSpacing:30, rankSpacing:80},
   themeVariables:{background:"#000",primaryColor:"#999",lineColor:"#C00",primaryTextColor:"#000"}});
 // Copy text from script tags to pre tags
 document.querySelectorAll("script[data-mermaid]").forEach(function(s){
@@ -52,7 +52,7 @@ document.querySelectorAll("[id$='-container']").forEach(function(c){
 <div id="dag-overview-container" style="display:none; min-height:500px; cursor:zoom-in;">
 <pre class="mermaid" id="dag-overview-pre"></pre>
 <script type="text/plain" data-mermaid="dag-overview-pre">
-%%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 60}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 60}}}%%
 graph LR
   subgraph Inputs["Data Inputs"]
     Factors["FF Factors<br>(HML, SMB, Mom,<br>RMW, CMA)"]
@@ -135,7 +135,7 @@ graph LR
 <div id="dag-full-container" style="display:none; min-height:700px; cursor:zoom-in;">
 <pre class="mermaid" id="dag-full-pre"></pre>
 <script type="text/plain" data-mermaid="dag-full-pre">
-%%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 30, "rankSpacing": 80}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 30, "rankSpacing": 80}}}%%
 graph TD
   subgraph Factors["Fama-French Factors"]
     HML["HML (Value)"]
@@ -282,7 +282,7 @@ graph TD
 <div id="dag-drif-container" style="display:none; min-height:400px; cursor:zoom-in;">
 <pre class="mermaid" id="dag-drif-pre"></pre>
 <script type="text/plain" data-mermaid="dag-drif-pre">
-%%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 80}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
   HML["HML (Value)"] --> DRIF_S["DRIF Signal<br>(selects best factor monthly)"]
   SMB["SMB (Size)"] --> DRIF_S
@@ -325,7 +325,7 @@ graph TD
 <div id="dag-fmax-container" style="display:none; min-height:400px; cursor:zoom-in;">
 <pre class="mermaid" id="dag-fmax-pre"></pre>
 <script type="text/plain" data-mermaid="dag-fmax-pre">
-%%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 80}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
   HML["HML (Value)"] --> FMAX_S["FacMAX Signal<br>(top momentum factor)"]
   SMB["SMB (Size)"] --> FMAX_S
@@ -361,7 +361,7 @@ graph TD
 <div id="dag-ltr-container" style="display:none; min-height:400px; cursor:zoom-in;">
 <pre class="mermaid" id="dag-ltr-pre"></pre>
 <script type="text/plain" data-mermaid="dag-ltr-pre">
-%%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 80}}}%%
+%%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
   Mom["Mom (Momentum)"] --> LTR_S["LTR Signal<br>(XGBoost cross-sectional)"]
   SMB["SMB (Size)"] --> LTR_S
