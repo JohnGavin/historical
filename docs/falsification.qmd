@@ -13,6 +13,11 @@ format:
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
+          <script type="module">
+          import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+          mermaid.initialize({startOnLoad:true, securityLevel:"loose", theme:"dark",
+            themeVariables:{background:"#000",primaryColor:"#999",lineColor:"#C00",primaryTextColor:"#000"}});
+          </script>
           <style>
           :root { --base-font-size: 1.5em; }
           body { font-size: var(--base-font-size); }
@@ -599,10 +604,90 @@ cat('<div id="dag-overview-mount"></div>')
 #### Full DAG
 
 ```{r}
-#| label: causal-full-mount
+#| label: causal-full-diagram
 #| results: asis
 #| echo: false
-cat('<div id="dag-full-mount"></div>')
+cat('<pre class="mermaid" style="min-height:600px;">
+graph TD
+  subgraph Factors["Fama-French Factors"]
+    HML["HML Value"]
+    SMB["SMB Size"]
+    Mom["Mom Momentum"]
+    RMW["RMW Profitability"]
+    Mkt_RF["Mkt-RF Market"]
+  end
+  subgraph Macro["Macro Signals"]
+    VIX["VIX Level"]
+    VTS["VIX Term Structure"]
+    VVIX["VVIX"]
+    Fed["Fed Rate"]
+    Infl["Inflation"]
+  end
+  subgraph Regime["Regime States"]
+    VolR["Vol Regime"]
+    RateR["Rate Regime"]
+  end
+  subgraph Signals["Strategy Signals"]
+    DRIF_S["DRIF Signal"]
+    FMAX_S["FacMAX Signal"]
+    LTR_S["LTR Signal"]
+    RSC_S["RSC Signal"]
+    VIX_S["VIX Overlay"]
+  end
+  subgraph Returns["Strategy Returns"]
+    DRIF_R["DRIF Return"]
+    FMAX_R["FacMAX Return"]
+    LTR_R["LTR Return"]
+    MKT_R["Market Return"]
+  end
+  subgraph Portfolio["Portfolio Outcomes"]
+    PORT["Portfolio Return"]
+    MDD["Max Drawdown"]
+    SR["Sharpe Ratio"]
+  end
+  subgraph Structural["Structural"]
+    Crowd["Factor Crowding"]
+    Decay["Premium Decay"]
+    Cost["Rebalance Cost"]
+  end
+  HML --> DRIF_S
+  SMB --> DRIF_S
+  Mom --> DRIF_S
+  RMW --> DRIF_S
+  HML --> FMAX_S
+  SMB --> FMAX_S
+  Mom --> FMAX_S
+  Mom --> LTR_S
+  SMB --> LTR_S
+  VIX --> VolR
+  VTS --> VolR
+  VVIX --> VolR
+  Fed --> RateR
+  Infl --> RateR
+  VolR --> RSC_S
+  VolR --> VIX_S
+  RateR --> LTR_S
+  DRIF_S --> DRIF_R
+  FMAX_S --> FMAX_R
+  LTR_S --> LTR_R
+  RSC_S --> MKT_R
+  VIX_S --> MKT_R
+  Mkt_RF --> MKT_R
+  Mkt_RF --> DRIF_R
+  Mkt_RF --> FMAX_R
+  Mkt_RF --> LTR_R
+  Crowd --> Decay
+  Decay --> FMAX_R
+  Decay --> DRIF_R
+  DRIF_R --> PORT
+  FMAX_R --> PORT
+  LTR_R --> PORT
+  Cost --> PORT
+  PORT --> SR
+  PORT --> MDD
+  VolR --> MDD
+  VIX -.->|"r=-0.17 VIOLATED"| HML
+</pre>')
 ```
 
 Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
@@ -617,10 +702,21 @@ cat(paste0('<p style="color:#888;font-size:0.8em;">Full DAG tab rendered: ', for
 #### DRIF
 
 ```{r}
-#| label: causal-drif-mount
+#| label: causal-drif-diagram
 #| results: asis
 #| echo: false
-cat('<div id="dag-drif-mount"></div>')
+cat('<pre class="mermaid" style="min-height:400px;">
+graph TD
+  HML["HML Value"] --> DRIF_S["DRIF Signal"]
+  SMB["SMB Size"] --> DRIF_S
+  Mom["Mom Momentum"] --> DRIF_S
+  RMW["RMW Profitability"] --> DRIF_S
+  DRIF_S --> DRIF_R["DRIF Return"]
+  Mkt_RF["Market Mkt-RF"] --> DRIF_R
+  VIX["VIX Level"] -.->|"r=-0.17"| HML
+  Decay["Premium Decay"] --> DRIF_R
+  DRIF_R --> PORT["Portfolio Return"]
+</pre>')
 ```
 
 <abbr title="Dynamic Rotation Into Factors — each month selects the FF factor with highest trailing return">DRIF</abbr> selects the best-performing FF factor each month. Loads on <abbr title="High Minus Low — value factor: cheap stocks minus expensive stocks">HML</abbr>, <abbr title="Small Minus Big — size factor: small-cap minus large-cap returns">SMB</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>. Yellow dashed edge: VIX affects HML in crises (<abbr title="Partial correlation between HML and VIX = -0.17, indicating they co-move in crises">r=-0.17</abbr>). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R).
