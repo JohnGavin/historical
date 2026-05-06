@@ -13,19 +13,30 @@ var dagDefs = {
   "dag-ltr-mount": "graph TD\n  Mom[\"Mom Momentum\"] --> LTR_S[\"LTR Signal\"]\n  SMB[\"SMB Size\"] --> LTR_S\n  RateR[\"Rate Regime\"] --> LTR_S\n  LTR_S --> LTR_R[\"LTR Return\"]\n  Mkt_RF[\"Market Mkt-RF\"] --> LTR_R\n  LTR_R --> PORT[\"Portfolio Return\"]\n  linkStyle default stroke:#CC0000,stroke-width:2px"
 };
 
+// Render each diagram INDIVIDUALLY so one failure doesn't block others
 async function renderDiagrams() {
   for (var mountId in dagDefs) {
     var mount = document.getElementById(mountId);
     if (!mount || mount.querySelector('svg')) continue;
+    // Check if mount is visible (hidden tabs cause mermaid to fail)
+    if (mount.offsetParent === null) continue;
     var pre = document.createElement('pre');
     pre.className = 'mermaid';
+    pre.id = 'mmd-' + mountId;
     pre.textContent = dagDefs[mountId];
     pre.style.minHeight = mountId.includes('full') ? '600px' : '400px';
     mount.appendChild(pre);
-  }
-  var unrendered = document.querySelectorAll('pre.mermaid:not([data-processed])');
-  if (unrendered.length > 0) {
-    try { await mermaid.run({nodes: Array.from(unrendered)}); } catch(e) { console.log('mermaid:', e); }
+    // Render THIS diagram alone
+    try {
+      await mermaid.render('mmd-render-' + mountId, dagDefs[mountId]).then(function(result) {
+        pre.innerHTML = result.svg;
+        pre.removeAttribute('data-processed');
+      });
+    } catch(e) {
+      console.log('mermaid error for ' + mountId + ':', e.message || e);
+      pre.textContent = 'Diagram render failed: ' + (e.message || e);
+      pre.style.color = '#ff4444';
+    }
   }
 }
 
