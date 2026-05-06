@@ -80,45 +80,40 @@ format:
             overflow: visible !important; margin-bottom: 1em; }
           .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
           .fig-caption { display: block; position: relative; clear: both;
-            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #e0e0e0; }
+            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; }
           .datatables, .dataTables_wrapper { display: block !important;
             position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
           table.dataTable { white-space: nowrap; }
-          /* DT dark mode — mandatory contrast fix */
-          table.dataTable, table.dataTable thead, table.dataTable tbody {
-            background-color: #1a1a2e !important;
-          }
-          table.dataTable th, table.dataTable td,
-          .dataTables_wrapper, .dataTables_wrapper .dataTables_info,
-          .dataTables_wrapper .dataTables_filter,
-          .dataTables_wrapper .dataTables_paginate .paginate_button {
-            color: #e0e0e0 !important;
-          }
-          table.dataTable thead th {
-            background-color: #16213e !important;
-            border-bottom-color: #444 !important;
-          }
-          table.dataTable tbody tr:hover { background-color: #252545 !important; }
-          table.dataTable tbody tr.even { background-color: #1e1e3a !important; }
-          .dataTables_wrapper input[type="search"], .dataTables_wrapper .form-control {
-            background-color: #16213e !important; color: #e0e0e0 !important;
-            border-color: #444 !important;
-          }
-          /* Caption font-size consistency */
+          /* DT theme-aware colours */
+          [data-bs-theme="dark"] table.dataTable, [data-bs-theme="dark"] table.dataTable thead,
+          [data-bs-theme="dark"] table.dataTable tbody { background-color: #1a1a2e !important; }
+          [data-bs-theme="dark"] table.dataTable th, [data-bs-theme="dark"] table.dataTable td,
+          [data-bs-theme="dark"] .dataTables_wrapper { color: #e0e0e0 !important; }
+          [data-bs-theme="dark"] table.dataTable thead th { background-color: #16213e !important; border-bottom-color: #444 !important; }
+          [data-bs-theme="dark"] table.dataTable tbody tr:hover { background-color: #252545 !important; }
+          [data-bs-theme="dark"] .dataTables_wrapper input[type="search"] { background-color: #16213e !important; color: #e0e0e0 !important; border-color: #444 !important; }
+          /* Light mode DT */
+          [data-bs-theme="light"] table.dataTable, [data-bs-theme="light"] table.dataTable thead,
+          [data-bs-theme="light"] table.dataTable tbody { background-color: #fff !important; }
+          [data-bs-theme="light"] table.dataTable th, [data-bs-theme="light"] table.dataTable td,
+          [data-bs-theme="light"] .dataTables_wrapper { color: #1a1a1a !important; }
+          [data-bs-theme="light"] table.dataTable thead th { background-color: #f8f9fa !important; border-bottom-color: #dee2e6 !important; }
+          /* Caption — inherits theme colour */
           .card-body caption, .tab-pane caption, .dataTables_wrapper caption {
-            font-size: inherit !important; color: #e0e0e0 !important;
-            caption-side: top !important; text-align: left !important;
+            font-size: inherit !important; caption-side: top !important; text-align: left !important;
           }
           table caption { caption-side: top !important; }
-          /* BUG 5 fix: dark mode card text contrast */
-          [data-bs-theme="dark"] .card-body,
-          [data-bs-theme="dark"] .tab-pane {
-            color: #e0e0e0 !important;
-          }
-          /* Font consistency for dashboard cards/warnings */
+          /* Theme-aware text for ALL content */
+          [data-bs-theme="dark"] .card-body, [data-bs-theme="dark"] .tab-pane,
+          [data-bs-theme="dark"] .fig-caption, [data-bs-theme="dark"] caption { color: #e0e0e0 !important; }
+          [data-bs-theme="light"] .card-body, [data-bs-theme="light"] .tab-pane,
+          [data-bs-theme="light"] .fig-caption, [data-bs-theme="light"] caption { color: #1a1a1a !important; }
+          /* Warning cards + callouts — use base font size */
           .card-body .callout, .card-body .alert,
-          .bslib-value-box, .card-header {
-            font-size: inherit !important;
+          .bslib-value-box, .card-header,
+          .callout-body, .callout-note .callout-body,
+          .alert p, .callout p {
+            font-size: var(--base-font-size) !important;
           }
           details { margin-bottom: 0.5em; }
           details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
@@ -668,11 +663,11 @@ if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
     options = list(pageLength = 10, dom = "t"),
     caption = htmltools::tags$caption(
       style = "caption-side: top; text-align: left;",
-      paste0("Conditional independence tests via partial correlation. ",
+      htmltools::HTML(paste0("Conditional independence tests via partial correlation. ",
              cg_impl$n_holds, " of ", cg_impl$n_implications,
-             " implications hold (|r| < 0.15). ",
+             " implications hold (|r| &lt; 0.15). ",
              "Violated implications suggest missing edges in the DAG. ",
-             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R' target='_blank'>plan_causal_graph.R</a>, tested on monthly data.")
+             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."))
     )
   ) |>
     DT::formatRound("Partial r", digits = 3)
