@@ -143,7 +143,9 @@ plan_qa_vignette <- function() {
         not_available = "not yet built|not available|MISSING EVIDENCE",
         r_error      = "Error in |Error:",
         null_output  = ">NULL<|> NULL<",
-        raw_tibble   = 'class="dataframe"'
+        raw_tibble   = 'class="dataframe"',
+        syntax_error = "Syntax error|Parse error|mermaid version",
+        broken_image = "broken-image|img-error"
       )
 
       results <- lapply(html_files, function(f) {

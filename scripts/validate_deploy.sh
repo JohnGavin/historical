@@ -23,10 +23,10 @@ echo ""
 
 TOTAL_ISSUES=0
 
-printf "%-20s %7s %7s %7s %7s %7s %7s\n" \
-  "Page" "Leaked" "TarRead" "NotAvl" "Error" "NULL" "RawTbl"
-printf "%-20s %7s %7s %7s %7s %7s %7s\n" \
-  "----" "------" "-------" "------" "-----" "----" "------"
+printf "%-20s %7s %7s %7s %7s %7s %7s %7s %7s\n" \
+  "Page" "Leaked" "TarRead" "NotAvl" "Error" "NULL" "RawTbl" "Syntax" "BrkImg"
+printf "%-20s %7s %7s %7s %7s %7s %7s %7s %7s\n" \
+  "----" "------" "-------" "------" "-----" "----" "------" "------" "------"
 
 for page in "${PAGES[@]}"; do
   if [ "$LOCAL" = "1" ]; then
@@ -47,15 +47,17 @@ for page in "${PAGES[@]}"; do
   errors=$(echo "$content" | grep -c 'Error in \|Error:' || true)
   nulls=$(echo "$content" | grep -c '>NULL<\|> NULL<' || true)
   raw_tbl=$(echo "$content" | grep -c 'class="dataframe"' || true)
+  syntax_err=$(echo "$content" | grep -ci 'Syntax error\|Parse error\|mermaid version' || true)
+  broken_img=$(echo "$content" | grep -ci 'broken-image\|img-error\|onerror' || true)
 
-  issues=$((leaked + tar_read + not_avail + errors + nulls + raw_tbl))
+  issues=$((leaked + tar_read + not_avail + errors + nulls + raw_tbl + syntax_err + broken_img))
   TOTAL_ISSUES=$((TOTAL_ISSUES + issues))
 
   status="OK"
   [ "$issues" -gt 0 ] && status="FAIL"
 
-  printf "%-20s %7d %7d %7d %7d %7d %7d  %s\n" \
-    "$page" "$leaked" "$tar_read" "$not_avail" "$errors" "$nulls" "$raw_tbl" "$status"
+  printf "%-20s %7d %7d %7d %7d %7d %7d %7d %7d  %s\n" \
+    "$page" "$leaked" "$tar_read" "$not_avail" "$errors" "$nulls" "$raw_tbl" "$syntax_err" "$broken_img" "$status"
 done
 
 echo ""
