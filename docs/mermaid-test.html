@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html><head>
+<meta charset="utf-8">
+<title>Mermaid Test - deployed 2026-05-06 20:00 UTC</title>
+</head>
+<body style="background:#000;color:#fff;font-family:sans-serif;padding:20px;">
+<h2>Mermaid Rendering Test</h2>
+<p>If you see diagrams below, mermaid works on GH Pages. If you see "Syntax error", it does not.</p>
+<p><strong>Deployed:</strong> <span id="ts">2026-05-06T20:00:00Z</span> | commit: 4bdb1ca</p>
+
+<h3>Test 1: Inline simple</h3>
+<pre class="mermaid">
+graph TD
+  A["Node A"] --> B["Node B"]
+  B --> C["Node C"]
+</pre>
+
+<h3>Test 2: Subgraphs + styles</h3>
+<pre class="mermaid">
+graph TD
+  subgraph Factors["FF Factors"]
+    HML["HML Value"]
+    SMB["SMB Size"]
+  end
+  HML --> DRIF["DRIF Signal"]
+  SMB --> DRIF
+  DRIF --> RET["DRIF Return"]
+  style HML fill:#4e9af1,stroke:#CC0000,color:#000
+  style DRIF fill:#a14ef1,stroke:#CC0000,color:#000
+  style RET fill:#4ef18a,stroke:#CC0000,color:#000
+  linkStyle default stroke:#CC0000,stroke-width:2px
+</pre>
+
+<h3>Test 3: Script-copy method (same as falsification page)</h3>
+<pre class="mermaid" id="test3"></pre>
+<script type="text/plain" data-mermaid="test3">
+graph TD
+  subgraph Factors["Fama-French Factors"]
+    HML["HML Value"]
+    SMB["SMB Size"]
+    Mom["Mom Momentum"]
+  end
+  subgraph Signals["Strategy Signals"]
+    DRIF_S["DRIF Signal"]
+    FMAX_S["FacMAX Signal"]
+  end
+  HML --> DRIF_S
+  SMB --> DRIF_S
+  Mom --> DRIF_S
+  HML --> FMAX_S
+  SMB --> FMAX_S
+  Mom --> FMAX_S
+  DRIF_S --> DRIF_R["DRIF Return"]
+  FMAX_S --> FMAX_R["FacMAX Return"]
+  VIX["VIX Level"] -.->|"r=-0.17"| HML
+  click HML "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  linkStyle default stroke:#CC0000,stroke-width:2px
+  linkStyle 8 stroke:#ffff00,stroke-width:3px,stroke-dasharray:5
+  style HML fill:#4e9af1,stroke:#CC0000,color:#000
+  style SMB fill:#4e9af1,stroke:#CC0000,color:#000
+  style Mom fill:#4e9af1,stroke:#CC0000,color:#000
+  style DRIF_S fill:#a14ef1,stroke:#CC0000,color:#000
+  style FMAX_S fill:#a14ef1,stroke:#CC0000,color:#000
+  style DRIF_R fill:#4ef18a,stroke:#CC0000,color:#000
+  style FMAX_R fill:#4ef18a,stroke:#CC0000,color:#000
+  style VIX fill:#f1c84e,stroke:#CC0000,color:#000
+</script>
+
+<h3>Test 4: Hidden then shown (simulates tab)</h3>
+<div id="hidden-container" style="display:none;">
+<pre class="mermaid" id="test4"></pre>
+<script type="text/plain" data-mermaid="test4">
+graph LR
+  A["Hidden Tab Test"] --> B["Should Render"]
+  B --> C["After Click"]
+</script>
+</div>
+<button onclick="document.getElementById('hidden-container').style.display='block'; setTimeout(function(){mermaid.run({nodes:[document.getElementById('test4')]})},200);" style="padding:8px 16px;background:#0d6efd;color:#fff;border:none;border-radius:4px;cursor:pointer;">Show Hidden Diagram</button>
+
+<script type="module">
+import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+window.mermaid = mermaid;
+mermaid.initialize({startOnLoad:false, securityLevel:"loose", theme:"dark",
+  themeVariables:{background:"#000",primaryColor:"#999",lineColor:"#C00",primaryTextColor:"#000"}});
+
+// Copy script text to pre tags
+document.querySelectorAll("script[data-mermaid]").forEach(function(s){
+  var t = document.getElementById(s.getAttribute("data-mermaid"));
+  if(t) t.textContent = s.textContent;
+});
+
+// Render visible diagrams
+await mermaid.run({querySelector:"pre.mermaid:not(#test4)"});
+</script>
+</body></html>
