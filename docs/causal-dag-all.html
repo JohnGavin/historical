@@ -55,23 +55,23 @@ document.querySelectorAll("[id$='-container']").forEach(function(c){
 %%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 60}}}%%
 graph LR
   subgraph Inputs["Data Inputs"]
-    Factors["FF Factors<br>(HML, SMB, Mom,<br>RMW, CMA)"]
-    Macro["Macro Signals<br>(VIX, VVIX, Fed,<br>Inflation)"]
-    Market["Market<br>(Mkt-RF)"]
+    Factors["FF Factors —(HML, SMB, Mom, —RMW, CMA)"]
+    Macro["Macro Signals —(VIX, VVIX, Fed, —Inflation)"]
+    Market["Market —(Mkt-RF)"]
   end
   subgraph Regime["Regime Classification"]
-    VolR["Vol Regime<br>(VIX-based)"]
-    RateR["Rate Regime<br>(Fed-based)"]
+    VolR["Vol Regime —(VIX-based)"]
+    RateR["Rate Regime —(Fed-based)"]
   end
   subgraph Strategies["Strategy Signals → Returns"]
-    DRIF["DRIF<br>(Factor Rotation)"]
-    FMAX["Factor MAX<br>(Momentum)"]
-    LTR["LTR<br>(Cross-Sectional)"]
+    DRIF["DRIF —(Factor Rotation)"]
+    FMAX["Factor MAX —(Momentum)"]
+    LTR["LTR —(Cross-Sectional)"]
     RSC["RSC Overlay"]
     VIXO["VIX Overlay"]
   end
   subgraph Portfolio["Outcomes"]
-    PORT["Portfolio<br>Return"]
+    PORT["Portfolio —Return"]
     RISK["Sharpe, Max DD"]
   end
   Structural["Crowding + Decay"]
@@ -284,14 +284,14 @@ graph TD
 <script type="text/plain" data-mermaid="dag-drif-pre">
 %%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
-  HML["HML (Value)"] --> DRIF_S["DRIF Signal<br>(selects best factor monthly)"]
+  HML["HML (Value)"] --> DRIF_S["DRIF Signal —(selects best factor monthly)"]
   SMB["SMB (Size)"] --> DRIF_S
   Mom["Mom (Momentum)"] --> DRIF_S
   RMW["RMW (Profitability)"] --> DRIF_S
   DRIF_S --> DRIF_R["DRIF Return"]
   Mkt_RF["Market (Mkt-RF)"] --> DRIF_R
   VIX["VIX Level"] -.->|"r=-0.17"| HML
-  Decay["Premium Decay<br>(crowding)"] --> DRIF_R
+  Decay["Premium Decay —(crowding)"] --> DRIF_R
   DRIF_R --> PORT["Portfolio Return"]
 
   click HML "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
@@ -327,12 +327,12 @@ graph TD
 <script type="text/plain" data-mermaid="dag-fmax-pre">
 %%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
-  HML["HML (Value)"] --> FMAX_S["FacMAX Signal<br>(top momentum factor)"]
+  HML["HML (Value)"] --> FMAX_S["FacMAX Signal —(top momentum factor)"]
   SMB["SMB (Size)"] --> FMAX_S
   Mom["Mom (Momentum)"] --> FMAX_S
   FMAX_S --> FMAX_R["FacMAX Return"]
   Mkt_RF["Market (Mkt-RF)"] --> FMAX_R
-  Decay["Premium Decay<br>(over 50% decay detected)"] --> FMAX_R
+  Decay["Premium Decay —(over 50% decay detected)"] --> FMAX_R
   FMAX_R --> PORT["Portfolio Return"]
 
   click HML "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
@@ -363,9 +363,9 @@ graph TD
 <script type="text/plain" data-mermaid="dag-ltr-pre">
 %%{init: {"flowchart": {"nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
-  Mom["Mom (Momentum)"] --> LTR_S["LTR Signal<br>(XGBoost cross-sectional)"]
+  Mom["Mom (Momentum)"] --> LTR_S["LTR Signal —(XGBoost cross-sectional)"]
   SMB["SMB (Size)"] --> LTR_S
-  RateR["Rate Regime<br>(Fed-based)"] --> LTR_S
+  RateR["Rate Regime —(Fed-based)"] --> LTR_S
   LTR_S --> LTR_R["LTR Return"]
   Mkt_RF["Market (Mkt-RF)"] --> LTR_R
   LTR_R --> PORT["Portfolio Return"]
