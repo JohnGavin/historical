@@ -102,6 +102,16 @@ format:
             caption-side: top !important; text-align: left !important;
           }
           table caption { caption-side: top !important; }
+          /* BUG 5 fix: dark mode card text contrast */
+          [data-bs-theme="dark"] .card-body,
+          [data-bs-theme="dark"] .tab-pane {
+            color: #e0e0e0 !important;
+          }
+          /* Font consistency for dashboard cards/warnings */
+          .card-body .callout, .card-body .alert,
+          .bslib-value-box, .card-header {
+            font-size: inherit !important;
+          }
           details { margin-bottom: 0.5em; }
           details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
           .fullscreen-overlay {

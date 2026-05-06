@@ -1,3 +1,22 @@
+<!-- Causal DAG styles -->
+<style>
+/* BUG 3 fix: ensure FMAX and LTR containers and their SVGs scale properly */
+#dag-fmax-container, #dag-ltr-container { min-height: 400px; }
+#dag-fmax-container svg, #dag-ltr-container svg { min-height: 350px; width: 100%; }
+/* All diagram containers: SVG fills width */
+[id$="-container"] svg { width: 100%; }
+/* BUG 5 fix: dark mode card text contrast */
+[data-bs-theme="dark"] .card-body,
+[data-bs-theme="dark"] .tab-pane {
+  color: #e0e0e0 !important;
+}
+/* DAG fullscreen overlay */
+.dag-fullscreen {
+  position: fixed !important; top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 9999; background: #000; padding: 20px; overflow: auto;
+}
+.dag-fullscreen svg { min-height: calc(100vh - 40px); width: 100%; }
+</style>
 <!-- Mermaid CDN + init (once) -->
 <script type="module">
 import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
@@ -16,9 +35,16 @@ document.querySelectorAll("script[data-mermaid]").forEach(function(s){
   if(container && mount){ container.style.display="block"; mount.appendChild(container); }
 });
 await mermaid.run({querySelector:".mermaid"});
-// Click-to-zoom on all diagram containers
+// Click-to-zoom: attach to SVG after render completes
 document.querySelectorAll("[id$='-container']").forEach(function(c){
-  c.addEventListener("click", function(){ c.classList.toggle("dag-fullscreen"); });
+  var svg = c.querySelector("svg");
+  var target = svg || c;
+  target.style.cursor = "zoom-in";
+  target.addEventListener("click", function(e){
+    e.stopPropagation();
+    c.classList.toggle("dag-fullscreen");
+    target.style.cursor = c.classList.contains("dag-fullscreen") ? "zoom-out" : "zoom-in";
+  });
 });
 </script>
 
@@ -29,23 +55,23 @@ document.querySelectorAll("[id$='-container']").forEach(function(c){
 %%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 60}}}%%
 graph LR
   subgraph Inputs["Data Inputs"]
-    Factors["FF Factors<br/>(HML, SMB, Mom,<br/>RMW, CMA)"]
-    Macro["Macro Signals<br/>(VIX, VVIX, Fed,<br/>Inflation)"]
-    Market["Market<br/>(Mkt-RF)"]
+    Factors["FF Factors<br>(HML, SMB, Mom,<br>RMW, CMA)"]
+    Macro["Macro Signals<br>(VIX, VVIX, Fed,<br>Inflation)"]
+    Market["Market<br>(Mkt-RF)"]
   end
   subgraph Regime["Regime Classification"]
-    VolR["Vol Regime<br/>(VIX-based)"]
-    RateR["Rate Regime<br/>(Fed-based)"]
+    VolR["Vol Regime<br>(VIX-based)"]
+    RateR["Rate Regime<br>(Fed-based)"]
   end
   subgraph Strategies["Strategy Signals → Returns"]
-    DRIF["DRIF<br/>(Factor Rotation)"]
-    FMAX["Factor MAX<br/>(Momentum)"]
-    LTR["LTR<br/>(Cross-Sectional)"]
+    DRIF["DRIF<br>(Factor Rotation)"]
+    FMAX["Factor MAX<br>(Momentum)"]
+    LTR["LTR<br>(Cross-Sectional)"]
     RSC["RSC Overlay"]
     VIXO["VIX Overlay"]
   end
   subgraph Portfolio["Outcomes"]
-    PORT["Portfolio<br/>Return"]
+    PORT["Portfolio<br>Return"]
     RISK["Sharpe, Max DD"]
   end
   Structural["Crowding + Decay"]
@@ -72,12 +98,19 @@ graph LR
   Structural --> FMAX
   Macro -.->|"r=-0.17 crisis link"| Factors
 
+  click Factors "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click Macro "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click Market "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click VolR "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click RateR "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
   click DRIF "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
   click FMAX "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
   click LTR "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
   click RSC "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
   click VIXO "https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R" _blank
   click PORT "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
+  click RISK "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
+  click Structural "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R" _blank
 
   linkStyle default stroke:#CC0000,stroke-width:2px
   linkStyle 20 stroke:#ffff00,stroke-width:3px,stroke-dasharray:5
@@ -185,18 +218,30 @@ graph TD
   click HML "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
   click SMB "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
   click Mom "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click RMW "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click Mkt_RF "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click VIX "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click VTS "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click VVIX "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click Fed "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click Infl "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click VolR "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click RateR "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
   click DRIF_S "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
   click FMAX_S "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
   click LTR_S "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
   click RSC_S "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
   click VIX_S "https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R" _blank
-  click VIX "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
   click DRIF_R "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
   click FMAX_R "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
   click LTR_R "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
+  click MKT_R "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
   click PORT "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
+  click SR "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
+  click MDD "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
   click Crowd "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R" _blank
   click Decay "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R" _blank
+  click Cost "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R" _blank
   linkStyle default stroke:#CC0000,stroke-width:2px
   linkStyle 9 stroke:#00cc66,stroke-width:2px
   linkStyle 12 stroke:#00cc66,stroke-width:2px
@@ -239,18 +284,26 @@ graph TD
 <script type="text/plain" data-mermaid="dag-drif-pre">
 %%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
-  HML["HML (Value)"] --> DRIF_S["DRIF Signal<br/>(selects best factor monthly)"]
+  HML["HML (Value)"] --> DRIF_S["DRIF Signal<br>(selects best factor monthly)"]
   SMB["SMB (Size)"] --> DRIF_S
   Mom["Mom (Momentum)"] --> DRIF_S
   RMW["RMW (Profitability)"] --> DRIF_S
   DRIF_S --> DRIF_R["DRIF Return"]
   Mkt_RF["Market (Mkt-RF)"] --> DRIF_R
   VIX["VIX Level"] -.->|"r=-0.17"| HML
-  Decay["Premium Decay<br/>(crowding)"] --> DRIF_R
+  Decay["Premium Decay<br>(crowding)"] --> DRIF_R
   DRIF_R --> PORT["Portfolio Return"]
 
+  click HML "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click SMB "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click Mom "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click RMW "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click Mkt_RF "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click VIX "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
   click DRIF_S "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
+  click DRIF_R "https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R" _blank
   click Decay "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R" _blank
+  click PORT "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
 
   linkStyle default stroke:#CC0000,stroke-width:2px
   linkStyle 6 stroke:#ffff00,stroke-width:3px,stroke-dasharray:5
@@ -274,16 +327,22 @@ graph TD
 <script type="text/plain" data-mermaid="dag-fmax-pre">
 %%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
-  HML["HML (Value)"] --> FMAX_S["FacMAX Signal<br/>(top momentum factor)"]
+  HML["HML (Value)"] --> FMAX_S["FacMAX Signal<br>(top momentum factor)"]
   SMB["SMB (Size)"] --> FMAX_S
   Mom["Mom (Momentum)"] --> FMAX_S
   FMAX_S --> FMAX_R["FacMAX Return"]
   Mkt_RF["Market (Mkt-RF)"] --> FMAX_R
-  Decay["Premium Decay<br/>(>50% decay detected)"] --> FMAX_R
+  Decay["Premium Decay<br>(over 50% decay detected)"] --> FMAX_R
   FMAX_R --> PORT["Portfolio Return"]
 
+  click HML "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
+  click SMB "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
+  click Mom "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
+  click Mkt_RF "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
   click FMAX_S "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
+  click FMAX_R "https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R" _blank
   click Decay "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R" _blank
+  click PORT "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
 
   linkStyle default stroke:#CC0000,stroke-width:2px
 
@@ -304,14 +363,20 @@ graph TD
 <script type="text/plain" data-mermaid="dag-ltr-pre">
 %%{init: {"flowchart": {"defaultRenderer": "elk", "nodeSpacing": 40, "rankSpacing": 80}}}%%
 graph TD
-  Mom["Mom (Momentum)"] --> LTR_S["LTR Signal<br/>(XGBoost cross-sectional)"]
+  Mom["Mom (Momentum)"] --> LTR_S["LTR Signal<br>(XGBoost cross-sectional)"]
   SMB["SMB (Size)"] --> LTR_S
-  RateR["Rate Regime<br/>(Fed-based)"] --> LTR_S
+  RateR["Rate Regime<br>(Fed-based)"] --> LTR_S
   LTR_S --> LTR_R["LTR Return"]
   Mkt_RF["Market (Mkt-RF)"] --> LTR_R
   LTR_R --> PORT["Portfolio Return"]
 
+  click Mom "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
+  click SMB "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
+  click RateR "https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R" _blank
+  click Mkt_RF "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
   click LTR_S "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
+  click LTR_R "https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R" _blank
+  click PORT "https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R" _blank
 
   linkStyle default stroke:#CC0000,stroke-width:2px
 
