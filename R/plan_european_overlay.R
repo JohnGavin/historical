@@ -3,15 +3,16 @@
 # Test whether US VIX-based Risk State Classification (RSC) regime signals
 # work better for European equity ETFs than for SPY.
 #
-# Rationale: US-EU vol correlation ~0.85 in crises.  Approach B (pragmatic):
-# apply the EXISTING US VIX regime (rsc_regime) directly to European ETFs.
-# This avoids a separate parameter fit, making it a genuine out-of-sample test
-# of the RSC signals' generalisability.
+# Approach A (pragmatic): apply EXISTING US VIX regime directly to EU ETFs.
+# Approach B (native): use ECB CISS equity stress sub-index as European
+#   vol proxy for regime classification (r=0.75 with VIX, #88).
 #
-# Upstream dependencies: rsc_regime, rsc_thresholds, rsc_params (plan_risk_state.R)
+# Upstream dependencies:
+#   - rsc_regime, rsc_thresholds, rsc_params (plan_risk_state.R)
+#   - ecb_raw (plan_ecb.R) — for CISS-based regime
 #
 # Naming convention: eur_*
-# Total targets: 7
+# Total targets: 9
 
 plan_european_overlay <- function() {
   list(
@@ -256,6 +257,91 @@ plan_european_overlay <- function() {
         arrange(ticker, strategy)
     }),
 
+
+    # ── CISS-based European regime (native vol proxy) ─────────────────
+    targets::tar_target(eur_ciss_regime, {
+      library(dplyr)
+
+      # CISS equity stress sub-index — r=0.75 with VIX (#88)
+      ciss_eq <- ecb_raw |>
+        filter(series_name == "ciss_equity") |>
+        select(date, ciss_equity = value) |>
+        arrange(date)
+
+      if (nrow(ciss_eq) < 100) {
+        cli::cli_warn("CISS equity has only {nrow(ciss_eq)} obs — skipping")
+        return(NULL)
+      }
+
+      # Classify regime using percentile thresholds on CISS equity
+      # (analogous to VIX-based RSC but using European-native stress)
+      q33 <- quantile(ciss_eq$ciss_equity, 0.33, na.rm = TRUE)
+      q67 <- quantile(ciss_eq$ciss_equity, 0.67, na.rm = TRUE)
+
+      ciss_eq |>
+        mutate(
+          ciss_regime = case_when(
+            ciss_equity <= q33 ~ "benign",
+            ciss_equity <= q67 ~ "cautious",
+            TRUE ~ "hostile"
+          ),
+          ciss_exposure = case_when(
+            ciss_regime == "benign"  ~ eur_params$exposure_benign,
+            ciss_regime == "cautious" ~ eur_params$exposure_cautious,
+            ciss_regime == "hostile" ~ eur_params$exposure_hostile
+          )
+        )
+    }),
+
+    # ── CISS overlay results ───────────────────────────────────────────
+    targets::tar_target(eur_ciss_results, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      if (is.null(eur_ciss_regime)) return(NULL)
+
+      purrr::map_dfr(eur_params$eu_tickers, function(tkr) {
+        d <- eur_daily |>
+          filter(ticker == tkr, !is.na(eu_ret)) |>
+          select(date, eu_ret, rf_lag) |>
+          inner_join(eur_ciss_regime |> select(date, ciss_exposure), by = "date") |>
+          mutate(
+            rf_use = ifelse(is.na(rf_lag), 0, rf_lag),
+            ret_ciss_overlay = ciss_exposure * eu_ret + (1 - ciss_exposure) * rf_use,
+            ret_buyhold = eu_ret
+          ) |>
+          filter(date >= eur_params$oos_start)
+
+        if (nrow(d) < 20) return(NULL)
+
+        years <- nrow(d) / 252
+        bh_cum <- cumprod(1 + d$ret_buyhold)
+        co_cum <- cumprod(1 + d$ret_ciss_overlay)
+
+        tibble::tibble(
+          ticker = tkr,
+          asset = eur_params$eu_ticker_labels[tkr],
+          strategy = c("Buy & Hold", "CISS Overlay"),
+          period = "OOS",
+          cagr = round(c(
+            (prod(1 + d$ret_buyhold)^(1/years) - 1) * 100,
+            (prod(1 + d$ret_ciss_overlay)^(1/years) - 1) * 100
+          ), 2),
+          vol = round(c(
+            sd(d$ret_buyhold) * sqrt(252) * 100,
+            sd(d$ret_ciss_overlay) * sqrt(252) * 100
+          ), 2),
+          max_dd = round(c(
+            min((bh_cum - cummax(bh_cum)) / cummax(bh_cum)) * 100,
+            min((co_cum - cummax(co_cum)) / cummax(co_cum)) * 100
+          ), 2),
+          hac_sharpe = round(c(
+            hd_hac_sharpe(d$ret_buyhold)$naive_sharpe,
+            hd_hac_sharpe(d$ret_ciss_overlay)$naive_sharpe
+          ), 3)
+        )
+      })
+    }),
 
     # ── Caption: dynamic summary of findings ────────────────────────────
     targets::tar_target(eur_caption, {

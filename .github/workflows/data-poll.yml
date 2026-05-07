@@ -14,6 +14,8 @@ jobs:
       matrix:
         source:
           - kalshi
+          - ecb             # ECB SDMX REST API (no auth)
+          - guardian        # Guardian Content API (test key, no auth)
           # Commented out until verified in CI — add when ready:
           # - commodities   # requires FRED_API_KEY secret
           # - cboe_vol      # requires httr2, quantmod

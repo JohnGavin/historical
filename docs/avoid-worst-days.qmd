@@ -81,8 +81,8 @@ format:
           });
           // Scroll to top when clicking a tab
           document.addEventListener('shown.bs.tab', function(e) {
-            var pane = document.querySelector(e.target.getAttribute('data-bs-target') || e.target.getAttribute('href'));
-            if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            var tabBar = e.target.closest('.nav-tabs');
+            if (tabBar) tabBar.scrollIntoView({ behavior: 'smooth', block: 'start' });
           });
           </script>
 execute:
