@@ -25,6 +25,8 @@ try:
 except ImportError:
     sys.exit("yfinance required. In Nix shell: already available.")
 
+USER_AGENT = "historical-data-fetcher/0.1"
+
 # Major US stocks + ETFs + macro hedge ETFs
 DEFAULT_TICKERS = [
     # Mega-cap tech
@@ -193,7 +195,7 @@ def load_sp500_tickers() -> list[str]:
     try:
         req = urllib.request.Request(
             "https://raw.githubusercontent.com/datasets/s-and-p-500-companies/main/data/constituents.csv",
-            headers={"User-Agent": "Mozilla/5.0"},
+            headers={"User-Agent": USER_AGENT},
         )
         response = urllib.request.urlopen(req, timeout=30)
         reader = csv.DictReader(io.TextIOWrapper(response))
