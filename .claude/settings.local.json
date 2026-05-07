@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(~/.claude/hooks/destructive_fs_guard.sh:*)",
+      "Bash(printf:*)",
+      "Bash(1 echo \"Exit code: $?\")"
+    ]
+  }
+}
