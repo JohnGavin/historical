@@ -17,8 +17,20 @@ plan_ecb <- function() {
       # Series to fetch — subset of hd_ecb_registry()
       list(
         series = c(
-          "euribor_3m", "ecb_refi_rate", "yield_curve_10y",
-          "hicp_inflation", "eurusd"
+          # FX
+          "eurusd", "eurgbp", "eurjpy", "eurchf",
+          # Interest rates
+          "euribor_3m", "euribor_6m", "ecb_refi_rate",
+          # Yield curve
+          "yield_curve_10y", "yield_curve_5y", "yield_curve_2y", "yield_curve_1y",
+          "yc_level", "yc_slope", "yc_curvature",
+          # CISS stress
+          "ciss_composite", "ciss_bond", "ciss_equity", "ciss_fx",
+          "ciss_money", "ciss_financial", "ciss_correlation", "ciss_sovereign",
+          # CISS per country
+          "ciss_de", "ciss_fr", "ciss_it", "ciss_gb", "ciss_us",
+          # Macro
+          "hicp_inflation", "m3_money_supply"
         ),
         start_date = "2000-01-01"
       )
