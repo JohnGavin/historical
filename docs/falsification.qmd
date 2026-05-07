@@ -428,7 +428,11 @@ In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" 
 
 #### Build Info
 
-`r build_info()`
+```{r}
+#| label: build-info
+#| results: asis
+build_info()
+```
 
 # Causal Graph {#causal}
 
