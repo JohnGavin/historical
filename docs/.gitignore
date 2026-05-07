@@ -2,3 +2,4 @@ _targets/
 
 /.quarto/
 **/*.quarto_ipynb
+dashboard.html
