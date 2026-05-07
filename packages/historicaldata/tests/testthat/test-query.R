@@ -74,3 +74,17 @@ test_that("hd_ohlcv snapshot of AAPL structure", {
 test_that("hd_datasets snapshot", {
   expect_snapshot(str(hd_datasets()))
 })
+
+test_that("hd_connect_local handles quoted parquet paths", {
+  skip_if_not_installed("arrow")
+
+  cache_dir <- tempfile("hd-cache-'")
+  dir.create(cache_dir)
+  arrow::write_parquet(tibble::tibble(x = 1), file.path(cache_dir, "sample.parquet"))
+
+  con <- hd_connect_local(cache_dir)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  result <- DBI::dbGetQuery(con, "SELECT x FROM sample")
+  expect_equal(result$x, 1)
+})

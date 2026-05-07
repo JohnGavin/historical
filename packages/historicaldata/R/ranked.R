@@ -58,7 +58,7 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
     WITH returns AS (
       SELECT ticker, date, %s as price,
         LN(%s / LAG(%s) OVER (PARTITION BY ticker ORDER BY date)) AS log_ret
-      FROM read_parquet('%s')
+      FROM %s
     ),
     vol AS (
       SELECT ticker, date, log_ret,
@@ -79,7 +79,7 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
     WHERE vol_21d IS NOT NULL
     ORDER BY vol_21d DESC
     LIMIT %d",
-    price_col, price_col, price_col, ds$url,
+    price_col, price_col, price_col, hd_read_parquet_sql(con, ds$url),
     as.integer(window_days) - 1L, as.integer(n)
   )
 

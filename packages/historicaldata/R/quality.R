@@ -25,7 +25,7 @@ hd_jumps <- function(dataset = "equity_daily", threshold = 0.4, n = 100) {
       SELECT ticker, date, %s AS close,
         LAG(%s) OVER (PARTITION BY ticker ORDER BY date) AS prev_close,
         LN(%s / NULLIF(LAG(%s) OVER (PARTITION BY ticker ORDER BY date), 0)) AS log_ret
-      FROM read_parquet('%s')
+      FROM %s
     )
     SELECT ticker, date::DATE AS date, prev_close, close,
       ROUND(log_ret, 4) AS log_ret,
@@ -34,7 +34,7 @@ hd_jumps <- function(dataset = "equity_daily", threshold = 0.4, n = 100) {
     WHERE ABS(log_ret) > %f
     ORDER BY ABS(log_ret) DESC
     LIMIT %d",
-    price_col, price_col, price_col, price_col, ds$url,
+    price_col, price_col, price_col, price_col, hd_read_parquet_sql(con, ds$url),
     threshold, as.integer(n)
   )
 
@@ -65,7 +65,7 @@ hd_quality <- function(dataset = "equity_daily", jump_threshold = 0.4) {
       SELECT ticker, date, %s AS close,
         LAG(%s) OVER (PARTITION BY ticker ORDER BY date) AS prev_close,
         LAG(date) OVER (PARTITION BY ticker ORDER BY date) AS prev_date
-      FROM read_parquet('%s')
+      FROM %s
     ),
     metrics AS (
       SELECT ticker, date, close, prev_close, prev_date,
@@ -84,7 +84,7 @@ hd_quality <- function(dataset = "equity_daily", jump_threshold = 0.4) {
     FROM metrics
     GROUP BY ticker
     ORDER BY n_jumps DESC, max_abs_log_ret DESC",
-    price_col, price_col, ds$url, jump_threshold
+    price_col, price_col, hd_read_parquet_sql(con, ds$url), jump_threshold
   )
 
   DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()

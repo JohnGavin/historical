@@ -33,8 +33,8 @@ hd_search <- function(pattern, dataset = NULL, collect = TRUE) {
   }
 
   sql <- sprintf(
-    "SELECT * FROM read_parquet('%s') WHERE %s ORDER BY dataset, ticker",
-    ds$url, where
+    "SELECT * FROM %s WHERE %s ORDER BY dataset, ticker",
+    hd_read_parquet_sql(con, ds$url), where
   )
 
   result <- DBI::dbGetQuery(con, sql) |> dplyr::as_tibble()
@@ -99,9 +99,9 @@ hd_exchanges <- function(dataset = NULL) {
   DBI::dbGetQuery(con, sprintf(
     "SELECT exchange, full_exchange, COUNT(*) as n_tickers,
             STRING_AGG(DISTINCT dataset, ', ') as datasets
-     FROM read_parquet('%s') %s
+     FROM %s %s
      GROUP BY exchange, full_exchange ORDER BY n_tickers DESC",
-    ds$url, where
+    hd_read_parquet_sql(con, ds$url), where
   )) |> dplyr::as_tibble()
 }
 

@@ -18,6 +18,10 @@ hd_connect <- function() {
   con
 }
 
+hd_read_parquet_sql <- function(con, path) {
+  sprintf("read_parquet(%s)", as.character(DBI::dbQuoteString(con, path)))
+}
+
 #' Create a DuckDB connection over local cached Parquet files
 #'
 #' @param cache_dir Path to local cache directory
@@ -40,8 +44,9 @@ hd_connect_local <- function(cache_dir = hd_cache_path()) {
   for (f in parquet_files) {
     view_name <- tools::file_path_sans_ext(basename(f))
     DBI::dbExecute(con, sprintf(
-      "CREATE VIEW %s AS SELECT * FROM read_parquet('%s')",
-      view_name, f
+      "CREATE VIEW %s AS SELECT * FROM %s",
+      as.character(DBI::dbQuoteIdentifier(con, view_name)),
+      hd_read_parquet_sql(con, f)
     ))
   }
 
