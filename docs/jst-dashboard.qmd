@@ -1,0 +1,273 @@
+---
+title: "JST Macrohistory: Long-Run Equity Returns"
+subtitle: "18 Countries, 1870-2020"
+format:
+  html:
+    toc: true
+    code-fold: true
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <style>
+          body { font-size: 1.1em; line-height: 1.6; }
+          .cell-output-display { margin: 1.5em 0; }
+          figure { margin: 2em 0; }
+          figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+          table { margin: 1.5em auto; }
+          /* UI Controls: font size + dark/light toggle */
+          #ui-controls {
+            position: fixed; top: 10px; right: 10px; z-index: 9999;
+            display: flex; gap: 5px; background: var(--bs-body-bg);
+            padding: 5px; border-radius: 4px; border: 1px solid var(--bs-border-color);
+          }
+          #ui-controls button {
+            padding: 5px 10px; border: 1px solid var(--bs-border-color);
+            background: var(--bs-body-bg); color: var(--bs-body-color);
+            cursor: pointer; border-radius: 3px;
+          }
+          #ui-controls button:hover { opacity: 0.8; }
+          </style>
+          <script>
+          // Default to dark mode
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          // UI Controls: font size + dark/light toggle
+          document.addEventListener('DOMContentLoaded', function() {
+            var toolbar = document.createElement('div');
+            toolbar.id = 'ui-controls';
+            toolbar.innerHTML = '<button id="font-down" title="Decrease font">A-</button>' +
+              '<button id="font-up" title="Increase font">A+</button>' +
+              '<button id="theme-toggle" title="Toggle dark/light">◐</button>';
+            document.body.appendChild(toolbar);
+
+            var baseSize = parseFloat(localStorage.getItem('font-size-px') || '17.6');
+            document.documentElement.style.fontSize = baseSize + 'px';
+
+            document.getElementById('font-up').addEventListener('click', function() {
+              baseSize = Math.min(baseSize + 1, 28);
+              document.documentElement.style.fontSize = baseSize + 'px';
+              localStorage.setItem('font-size-px', baseSize);
+            });
+            document.getElementById('font-down').addEventListener('click', function() {
+              baseSize = Math.max(baseSize - 1, 12);
+              document.documentElement.style.fontSize = baseSize + 'px';
+              localStorage.setItem('font-size-px', baseSize);
+            });
+            document.getElementById('theme-toggle').addEventListener('click', function() {
+              var current = document.documentElement.getAttribute('data-bs-theme');
+              var next = current === 'dark' ? 'light' : 'dark';
+              document.documentElement.setAttribute('data-bs-theme', next);
+              localStorage.setItem('quarto-color-scheme', next);
+            });
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(gt)
+
+# Load targets
+tar_load(jst_equity_premium)
+tar_load(jst_pervasiveness)
+tar_load(jst_crises)
+tar_load(jst_summary)
+```
+
+## Overview
+
+The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.net/database/) provides 150+ years of macroeconomic and financial data across `r jst_summary$n_countries` advanced economies, spanning `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]`. This vignette analyzes the equity premium (equity total return minus short-term government bill rate) to test the cross-geography pervasiveness criterion from the Swedroe evidence-based investing framework.
+
+**Key findings:**
+
+- Equity premium is positive in `r jst_summary$pervasive_count` of `r jst_summary$pervasive_total` countries over the full sample (mean > 0, t-stat > 2, majority of years positive)
+- USA equity premium from JST correlates `r jst_summary$correlation_with_ff` with the Fama-French market factor (1926-2020 overlap period)
+- Financial crises occurred in `r nrow(jst_crises)` countries, with total crisis-years ranging from `r min(jst_crises$n_crises)` to `r max(jst_crises$n_crises)` per country
+
+**Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241)
+
+---
+
+## Cross-Geography Pervasiveness
+
+The table below shows full-sample equity premium statistics by country, sorted by mean premium. A factor is considered *pervasive* if it has a positive mean premium, t-statistic > 2, and is positive in more than 50% of years.
+
+```{r}
+#| label: tbl-pervasiveness
+#| tbl-cap: "Equity premium pervasiveness test: full-sample statistics by country. Countries are sorted by mean premium. The 'Pervasive' column indicates whether the premium meets all three criteria: positive mean, t-stat > 2, and positive in >50% of years. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/)."
+
+jst_pervasiveness |>
+  select(
+    Country = iso,
+    Period = from_year,
+    `To Year` = to_year,
+    `N Years` = n_years,
+    `Mean (%)` = mean_premium,
+    `SD (%)` = sd_premium,
+    `t-stat` = t_stat,
+    `% Positive` = pct_positive,
+    Pervasive = pervasive
+  ) |>
+  gt() |>
+  fmt_number(columns = c(`Mean (%)`, `SD (%)`), decimals = 2) |>
+  fmt_number(columns = `t-stat`, decimals = 1) |>
+  fmt_number(columns = `% Positive`, decimals = 1) |>
+  data_color(
+    columns = `Mean (%)`,
+    palette = c("#f08080", "#69d4a0"),  # red (negative) to green (positive)
+    domain = c(-5, 10)
+  ) |>
+  data_color(
+    columns = Pervasive,
+    fn = function(x) ifelse(x, "#69d4a0", "#555555")
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(columns = Country)
+  ) |>
+  tab_options(
+    table.font.size = px(14),
+    heading.title.font.size = px(16),
+    column_labels.font.weight = "bold"
+  )
+```
+
+---
+
+## Equity Premium Heatmap
+
+The heatmap below shows mean equity premium by decade and country. Darker green indicates higher premium; red indicates negative premium. Missing cells represent periods with insufficient data.
+
+```{r}
+#| label: fig-heatmap
+#| fig-cap: !expr paste0("Equity premium heatmap: mean excess return (equity total return minus bill rate) by decade and country, ", jst_summary$year_range[1], "-", jst_summary$year_range[2], ". Green shades indicate positive premium, red indicates negative. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/). Generated by [R/plan_jst.R](https://github.com/JohnGavin/historicaldata/blob/main/R/plan_jst.R).")
+#| fig-width: 12
+#| fig-height: 8
+
+ggplot(jst_equity_premium, aes(x = decade, y = iso, fill = mean_premium)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  scale_fill_gradient2(
+    low = "#f08080",
+    mid = "#1a1a2e",
+    high = "#69d4a0",
+    midpoint = 0,
+    na.value = "grey50",
+    name = "Mean Premium (%)"
+  ) +
+  scale_x_continuous(breaks = seq(1870, 2020, 10)) +
+  labs(
+    title = "Equity Premium by Decade and Country",
+    subtitle = paste0(jst_summary$year_range[1], "-", jst_summary$year_range[2]),
+    x = "Decade",
+    y = "Country"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, color = "grey60"),
+    legend.position = "right"
+  )
+```
+
+---
+
+## Financial Crisis Timeline
+
+Financial crises (identified by the JST `crisisJST` indicator) are shown below as segments spanning crisis years for each country.
+
+```{r}
+#| label: fig-crises
+#| fig-cap: !expr paste0("Financial crisis timeline: crisis years by country, ", jst_summary$year_range[1], "-", jst_summary$year_range[2], ". Each segment represents a crisis year as identified by the JST crisisJST indicator. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/).")
+#| fig-width: 12
+#| fig-height: 6
+
+# Parse crisis_years string into long format
+crises_long <- jst_crises |>
+  separate_rows(crisis_years, sep = ", ") |>
+  mutate(year = as.integer(crisis_years)) |>
+  select(iso, year) |>
+  arrange(iso, year)
+
+# Create timeline plot
+ggplot(crises_long, aes(x = year, y = iso)) +
+  geom_point(color = "#f08080", size = 2) +
+  geom_segment(
+    aes(xend = year + 1, yend = iso),
+    color = "#f08080",
+    linewidth = 1,
+    alpha = 0.6
+  ) +
+  scale_x_continuous(breaks = seq(1870, 2020, 10)) +
+  labs(
+    title = "Financial Crisis Timeline",
+    subtitle = paste0(jst_summary$year_range[1], "-", jst_summary$year_range[2]),
+    x = "Year",
+    y = "Country"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, color = "grey60")
+  )
+```
+
+---
+
+## Crisis Frequency Table
+
+The table below shows the number of crisis years per country, sorted by total crisis-years.
+
+```{r}
+#| label: tbl-crises
+#| tbl-cap: "Financial crisis frequency by country: total crisis-years identified by the JST crisisJST indicator. Countries are sorted by total crisis count. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/)."
+
+jst_crises |>
+  select(
+    Country = iso,
+    `Total Crisis Years` = n_crises,
+    `Crisis Years` = crisis_years
+  ) |>
+  gt() |>
+  data_color(
+    columns = `Total Crisis Years`,
+    palette = c("#69d4a0", "#f08080"),
+    domain = c(0, max(jst_crises$n_crises))
+  ) |>
+  tab_style(
+    style = cell_text(weight = "bold"),
+    locations = cells_body(columns = Country)
+  ) |>
+  tab_options(
+    table.font.size = px(14),
+    column_labels.font.weight = "bold"
+  )
+```
+
+---
+
+## Data Notes
+
+- **Equity premium** = equity total return (`eq_tr`) - short-term government bill rate (`bill_rate`)
+- **Pervasiveness criteria**: mean premium > 0, t-stat > 2, and positive in >50% of years
+- **Crisis indicator**: `crisisJST` binary flag (1 = crisis year)
+- **Country coverage**: `r jst_summary$n_countries` countries: `r paste(sort(unique(jst_pervasiveness$iso)), collapse = ", ")`
+- **Data period**: `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]` (`r format(jst_summary$n_obs, big.mark = ",")` country-year observations)
+
+All target computations are defined in [`R/plan_jst.R`](https://github.com/JohnGavin/historicaldata/blob/main/R/plan_jst.R).

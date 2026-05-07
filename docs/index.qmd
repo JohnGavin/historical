@@ -143,6 +143,10 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <h4>European Overlay</h4>
 <p>CISS vs VIX regime comparison: ECB's Composite Indicator of Systemic Stress as European-native vol proxy. 5 European ETFs, OOS performance, attribution.</p>
 </a>
+<a href="jst-dashboard.html" class="info-card">
+<h4><abbr title="Jordà-Schularick-Taylor Macrohistory Database">JST</abbr> Macrohistory: Long-Run Equity Returns</h4>
+<p>155 years of equity premium across 18 countries (1870-2020). Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.</p>
+</a>
 <a href="pkg/index.html" class="info-card">
 <h4>API Reference</h4>
 <p>Full function documentation for all 30 exported functions, grouped by: Data Access, Discovery, Curated Groups, Quality &amp; Audit, Infrastructure, Visualisation.</p>
@@ -165,6 +169,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [Avoid Worst Days](avoid-worst-days.html) — return asymmetry thought experiment
 - [Falsification Tests](falsification.html) — causal integrity, FF alpha, HAC-robust Sharpe
 - [European Overlay](european-overlay.html) — CISS vs VIX regime comparison
+- [JST Macrohistory](jst-dashboard.html) — 155 years equity premium, 18 countries, pervasiveness test
 
 ## Row
 
