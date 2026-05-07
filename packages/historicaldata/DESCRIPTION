@@ -28,6 +28,7 @@ Suggests:
     DT,
     glmnet,
     here,
+    httr2,
     purrr,
     reviser,
     scales,
