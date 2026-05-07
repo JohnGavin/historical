@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-05-07
+
+### Completed
+- Closed 12 issues: #85 (tooltips), #86 (source links), #87 (leaked code), #88 (ECB 29 series), #89 (Guardian NLP), #90 (ggplot2 audit), #92 (tab scroll), #93 (CISS dashboard), #94 (LR layout), #95 (clickable nodes), #48 (Bloomberg closed), #98 Phase 1 (JST)
+- ECB: 29 series via SDMX REST API, CISS sub-market decomposition, VIX correlations (r=0.75), wired into European overlay
+- Guardian NLP: Phase 1-3a complete. sentimentr body text sentiment: no predictive signal (next-month r<0.08)
+- CISS overlay: 4/5 EU ETFs improve Sharpe ratio (Euro Stoxx 50: 0.56→1.03). New european-overlay.qmd dashboard deployed
+- JST Macrohistory: hd_jst() + hd_jst_variables() — 18 countries, 1870-2020, 59 variables
+- Knowledge base: knowledge/ with 4 wiki pages (ecb-data, ciss-stress, guardian-nlp, priced-in-signals)
+- roborev: .roborev.toml, codex wrapper fixed, roborev-resolution rule + template in llm project
+- Weekly scheduler: 5 active sources (kalshi, ecb, guardian, commodities, cboe_vol)
+
+### Failed Approaches
+- Guardian keyword counts as trading signal: all |r|<0.15 with SP500. Priced in by publication time.
+- Guardian body text NLP (sentimentr): same-month r≈0.27 (contemporaneous) but next-month r<0.08 (no prediction). FinBERT not recommended — constraint is timing, not NLP quality.
+- roborev `--agent codex` silently fell back to claude-code because codex not in nix PATH. Fixed with /usr/local/bin/codex wrapper + codex_cmd config.
+- HICP core inflation series key (ICP/M.U2.N.TOT_X_NRG_FOOD.4.ANR) returns 404 from ECB API.
+
+### Accuracy / Metrics
+- roborev: 6/19 addressed this week (32% resolution rate, was 0%)
+- ECB: 29/29 series fetching, 163K total observations
+- CISS equity vs VIX: Spearman r=0.751 (6,653 daily obs)
+- Guardian: ~289 business articles/month, 6 keywords tested
+
+### Known Limitations
+- roborev backlog: ~87 open reviews (continue burn-down with codex in terminal)
+- ECB frequency mismatch: daily/monthly/business-daily series need frequency-aware joins (roborev high-severity finding)
+- hd_ecb() missing req_timeout()/req_retry() (roborev high-severity finding)
+- VSTOXX has no free API — CISS equity is best available proxy
+- European overlay page not linked from main navigation yet
+- #96 (hover tooltips on diagram nodes) still open
+- flake.nix has stashed usethis addition
+
 ## 2026-05-01
 
 ### Completed
