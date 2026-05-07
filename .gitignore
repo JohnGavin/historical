@@ -44,3 +44,4 @@ inst/extdata/vignettes/stk_universe.rds
 inst/extdata/vignettes/stk_daily_ret.rds
 inst/extdata/vignettes/stk_drif_features.rds
 inst/extdata/vignettes/stk_drif_signal.rds
+docs/*_files/
