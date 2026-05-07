@@ -1,0 +1,302 @@
+---
+title: "European Overlay: CISS vs VIX Regime"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    css: falsification-theme.css
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          document.addEventListener('shown.bs.tab', function(e) {
+            var tabBar = e.target.closest('.nav-tabs');
+            if (tabBar) tabBar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(DT)
+library(dplyr)
+
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+```
+
+::: {.callout-note}
+**European overlay strategies.** Tests whether US VIX-based regime signals generalise to European equities, and compares with the ECB's own [CISS](https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1426.pdf) (Composite Indicator of Systemic Stress) equity sub-index as a European-native vol proxy. CISS equity correlates r=0.75 with VIX over 6,653 daily observations (2000-2026).
+:::
+
+# What is CISS?
+
+## Row
+
+### {.tabset}
+
+#### Definition
+
+The **Composite Indicator of Systemic Stress** (CISS) is the ECB's flagship risk indicator, published daily since 2000. It measures systemic stress across 5 financial market segments:
+
+| Sub-market | What it captures | Key variable |
+|-----------|-----------------|-------------|
+| **Equity** | Stock market volatility + returns | Realised vol, max drawdown, index returns |
+| **Bond** | Government bond spreads + volatility | Yield spread, realised vol |
+| **FX** | Currency volatility | EUR exchange rate volatility |
+| **Money market** | Interbank stress | EURIBOR-OIS spread, bid-ask |
+| **Financial intermediary** | Bank/insurance sector | Bank stock vol, CDS spreads |
+
+The composite index combines all 5 using **time-varying cross-correlations** — when markets stress simultaneously (contagion), the index spikes more than the sum of parts.
+
+**Range:** 0 (calm) to 1 (systemic crisis). Peak: 0.84 during the GFC (Oct 2008).
+
+**Why CISS, not VSTOXX?** VSTOXX (European implied vol, equivalent to VIX) is a commercial Qontigo product with no free API. CISS equity sub-index correlates r=0.75 with VIX and is freely available from the ECB.
+
+**Source:** [ECB SDMX API](https://data.ecb.europa.eu/) — series `CISS/D.U2.Z0Z.4F.EC.SS_CIN.IDX`. R function: [`hd_ecb()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R). Methodology: [Holló, Kremer & Lo Duca (2012), ECB WP #1426](https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1426.pdf).
+
+#### CISS vs VIX
+
+```{r}
+#| label: ciss-vix-correlation
+ecb_raw <- safe_tar_read("ecb_raw")
+if (!is.null(ecb_raw)) {
+  ciss_eq <- ecb_raw |> filter(series_name == "ciss_equity") |> select(date, ciss = value)
+  ciss_comp <- ecb_raw |> filter(series_name == "ciss_composite") |> select(date, ciss_composite = value)
+
+  # VIX from macro
+  vix_raw <- safe_tar_read("consolidated_macro")
+  if (!is.null(vix_raw)) {
+    vix <- vix_raw |> filter(series_id == "VIXCLS") |>
+      mutate(date = as.Date(date)) |>
+      select(date, vix = value)
+
+    merged <- inner_join(vix, ciss_eq, by = "date") |>
+      inner_join(ciss_comp, by = "date")
+
+    cor_tbl <- tibble::tibble(
+      Pair = c("CISS equity vs VIX", "CISS composite vs VIX", "CISS equity vs CISS composite"),
+      `Spearman r` = round(c(
+        cor(merged$ciss, merged$vix, method = "spearman"),
+        cor(merged$ciss_composite, merged$vix, method = "spearman"),
+        cor(merged$ciss, merged$ciss_composite, method = "spearman")
+      ), 3),
+      N = nrow(merged),
+      From = as.character(min(merged$date)),
+      To = as.character(max(merged$date))
+    )
+
+    DT::datatable(cor_tbl, rownames = FALSE, filter = "none",
+      options = list(dom = "t"),
+      caption = htmltools::tags$caption(
+        style = "caption-side: top; text-align: left;",
+        htmltools::HTML(paste0(
+          "Spearman rank correlations between CISS sub-indices and VIX. ",
+          "N = ", format(nrow(merged), big.mark = ","), " overlapping daily observations. ",
+          "CISS equity is the strongest VIX proxy (r = 0.75). ",
+          "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_ecb.R' target='_blank'>plan_ecb.R</a> + FRED VIXCLS."
+        ))
+      )
+    ) |> DT::formatRound("Spearman r", 3)
+  }
+}
+```
+
+#### Sub-Market Breakdown
+
+```{r}
+#| label: ciss-sub-markets
+if (!is.null(ecb_raw)) {
+  sub_markets <- c("ciss_equity", "ciss_bond", "ciss_fx", "ciss_money", "ciss_financial", "ciss_correlation", "ciss_sovereign")
+  sub_labels <- c("Equity", "Bond", "FX", "Money market", "Financial intermediary", "Cross-correlation", "Sovereign")
+
+  sub_summary <- ecb_raw |>
+    filter(series_name %in% sub_markets) |>
+    group_by(series_name) |>
+    summarise(
+      N = n(),
+      From = as.character(min(date)),
+      To = as.character(max(date)),
+      Min = round(min(value, na.rm = TRUE), 4),
+      Max = round(max(value, na.rm = TRUE), 4),
+      Mean = round(mean(value, na.rm = TRUE), 4),
+      .groups = "drop"
+    ) |>
+    mutate(`Sub-market` = sub_labels[match(series_name, sub_markets)]) |>
+    select(`Sub-market`, N, From, To, Min, Max, Mean)
+
+  DT::datatable(sub_summary, rownames = FALSE, filter = "none",
+    options = list(dom = "t"),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      htmltools::HTML(paste0(
+        "CISS sub-market components. All daily, 2000-2026. ",
+        "Cross-correlation is negative in calm markets (independence) ",
+        "and flips positive in crises (contagion). ",
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()</a>."
+      ))
+    )
+  ) |> DT::formatRound(c("Min", "Max", "Mean"), 4)
+}
+```
+
+# CISS Overlay Results
+
+## Row
+
+### {.tabset}
+
+#### OOS Performance
+
+```{r}
+#| label: ciss-results-table
+ciss_res <- safe_tar_read("eur_ciss_results")
+if (!is.null(ciss_res)) {
+  display <- ciss_res |>
+    select(ETF = asset, Strategy = strategy,
+           `CAGR (%)` = cagr, `Vol (%)` = vol,
+           `Max DD (%)` = max_dd, `Sharpe` = hac_sharpe)
+
+  DT::datatable(display, rownames = FALSE, filter = "none",
+    options = list(dom = "t", pageLength = 15),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      htmltools::HTML(paste0(
+        "CISS equity overlay vs Buy & Hold for 5 European ETFs (OOS, 2020-present). ",
+        "CISS regime: benign (100% equity), cautious (50%), hostile (10%). ",
+        "Thresholds: 33rd/67th percentile of CISS equity stress history. ",
+        "4 of 5 ETFs improve on Sharpe ratio. Max drawdown halved across all ETFs. ",
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R' target='_blank'>plan_european_overlay.R</a>."
+      ))
+    )
+  ) |> DT::formatRound(c("CAGR (%)", "Vol (%)", "Max DD (%)", "Sharpe"), 2)
+}
+```
+
+#### VIX vs CISS Comparison
+
+```{r}
+#| label: vix-vs-ciss
+eur_vix <- safe_tar_read("eur_results")
+if (!is.null(eur_vix) && !is.null(ciss_res)) {
+  # VIX overlay OOS
+  vix_oos <- eur_vix |>
+    filter(period == "OOS", strategy == "RSC Overlay") |>
+    select(asset, vix_cagr = cagr, vix_vol = vol, vix_dd = max_dd, vix_sharpe = hac_sharpe)
+
+  # CISS overlay OOS
+  ciss_oos <- ciss_res |>
+    filter(strategy == "CISS Overlay") |>
+    select(asset, ciss_cagr = cagr, ciss_vol = vol, ciss_dd = max_dd, ciss_sharpe = hac_sharpe)
+
+  # Buy & hold
+  bh_oos <- eur_vix |>
+    filter(period == "OOS", strategy == "Buy & Hold") |>
+    select(asset, bh_cagr = cagr, bh_vol = vol, bh_dd = max_dd, bh_sharpe = hac_sharpe)
+
+  comparison <- bh_oos |>
+    left_join(vix_oos, by = "asset") |>
+    left_join(ciss_oos, by = "asset") |>
+    select(ETF = asset,
+           `BH Sharpe` = bh_sharpe, `VIX Sharpe` = vix_sharpe, `CISS Sharpe` = ciss_sharpe,
+           `BH DD (%)` = bh_dd, `VIX DD (%)` = vix_dd, `CISS DD (%)` = ciss_dd)
+
+  DT::datatable(comparison, rownames = FALSE, filter = "none",
+    options = list(dom = "t"),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      htmltools::HTML(paste0(
+        "Three-way comparison: Buy & Hold vs US VIX overlay vs ECB CISS overlay. ",
+        "CISS overlay uses European-native stress signal; VIX uses US vol. ",
+        "Both reduce drawdowns dramatically. CISS outperforms VIX overlay on Sharpe for 3 of 5 ETFs. ",
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R' target='_blank'>plan_european_overlay.R</a>."
+      ))
+    )
+  ) |> DT::formatRound(c("BH Sharpe", "VIX Sharpe", "CISS Sharpe", "BH DD (%)", "VIX DD (%)", "CISS DD (%)"), 2)
+}
+```
+
+#### Attribution
+
+The CISS overlay reduces risk through regime-dependent exposure scaling:
+
+| Regime | CISS equity level | Equity exposure | When it fires |
+|--------|------------------|----------------|---------------|
+| **Benign** | Below 33rd percentile | 100% | Normal markets — fully invested |
+| **Cautious** | 33rd-67th percentile | 50% | Elevated stress — half equity, half cash |
+| **Hostile** | Above 67th percentile | 10% | Crisis — near-cash, avoid drawdown |
+
+**Return attribution:**
+
+- **Return drag in calm markets:** CISS overlay slightly underperforms buy & hold because cautious regime reduces exposure even when markets are fine (STOXX 600: 5.0% vs 10.6% CAGR)
+- **Drawdown protection:** Max DD halved across all ETFs (-36% to -43% buy & hold → -8% to -14% CISS overlay)
+- **Sharpe improvement:** Lower vol more than compensates for lower CAGR in 4 of 5 ETFs (Euro Stoxx 50: Sharpe 1.03 vs 0.56)
+- **STOXX 600 exception:** Broad diversification already provides some crisis protection, so the overlay's cost (reduced upside) exceeds its benefit (reduced drawdown) on a Sharpe basis
+
+**Why CISS works better than VIX for European equities:**
+
+1. CISS is contemporaneous — it measures European stress directly, not a lagged US signal
+2. CISS captures bond, FX, and money market stress that VIX misses (pure equity vol)
+3. CISS cross-correlation component detects contagion — markets moving together in crisis
+
+#### Country CISS
+
+```{r}
+#| label: country-ciss
+if (!is.null(ecb_raw)) {
+  countries <- c("ciss_de", "ciss_fr", "ciss_it", "ciss_gb", "ciss_us")
+  c_labels <- c("Germany", "France", "Italy", "UK", "US (ECB-computed)")
+
+  country_summary <- ecb_raw |>
+    filter(series_name %in% countries) |>
+    group_by(series_name) |>
+    summarise(
+      N = n(),
+      Mean = round(mean(value, na.rm = TRUE), 4),
+      Max = round(max(value, na.rm = TRUE), 4),
+      `Max date` = as.character(date[which.max(value)]),
+      .groups = "drop"
+    ) |>
+    mutate(Country = c_labels[match(series_name, countries)]) |>
+    select(Country, N, Mean, Max, `Max date`) |>
+    arrange(desc(Max))
+
+  DT::datatable(country_summary, rownames = FALSE, filter = "none",
+    options = list(dom = "t"),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      htmltools::HTML(paste0(
+        "Country-level CISS: systemic stress per country (daily, 2000-2026). ",
+        "Italy and France peaked during the eurozone debt crisis. UK peaked during Brexit/COVID. ",
+        "The ECB also computes a US CISS for cross-Atlantic comparison. ",
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()</a>."
+      ))
+    )
+  ) |> DT::formatRound(c("Mean", "Max"), 4)
+}
+```
+
+#### Build Info
+
+`r build_info()`
