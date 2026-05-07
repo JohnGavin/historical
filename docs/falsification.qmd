@@ -506,10 +506,36 @@ cat('<div id="dag-ltr-mount"></div>')
 #| echo: false
 cg_impl <- safe_tar_read("cg_test_implications")
 if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
+  # Add source code links to implication labels
+  node_links <- c(
+    HML = "packages/historicaldata/R/query.R",
+    SMB = "packages/historicaldata/R/query.R",
+    Mom = "packages/historicaldata/R/query.R",
+    RMW = "packages/historicaldata/R/query.R",
+    VIX = "R/plan_vix_macro_overlay.R",
+    DRIF = "R/plan_drif.R",
+    FMAX = "R/plan_factormax.R",
+    LTR = "R/plan_ltr_momentum.R",
+    Vol_regime = "R/plan_risk_state.R",
+    Rate_regime = "R/plan_regime.R",
+    Mkt_RF = "packages/historicaldata/R/query.R"
+  )
+  link_node <- function(name) {
+    for (nm in names(node_links)) {
+      if (grepl(nm, name, fixed = TRUE)) {
+        url <- paste0("https://github.com/JohnGavin/historical/blob/main/", node_links[nm])
+        name <- gsub(nm, paste0("<a href='", url, "' target='_blank'>", nm, "</a>"), name, fixed = TRUE)
+      }
+    }
+    name
+  }
+  impl_display <- cg_impl$results |>
+    dplyr::mutate(label = sapply(label, link_node)) |>
+    dplyr::select(Implication = label, `Partial r` = partial_cor,
+                  Status = status, Holds = holds)
   DT::datatable(
-    cg_impl$results |>
-      dplyr::select(Implication = label, `Partial r` = partial_cor,
-                    Status = status, Holds = holds),
+    impl_display,
+    escape = FALSE,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 10, dom = "t"),
     caption = htmltools::tags$caption(
@@ -539,10 +565,10 @@ The value factor (HML) and volatility index (VIX) are NOT independent. This mean
 
 | Impact area | What it means | Action |
 |-------------|---------------|--------|
-| **DRIF strategy** | DRIF loads on HML. During VIX spikes, DRIF underperforms MORE than the Vol_regime node alone predicts. | Consider reducing DRIF weight in crisis regimes |
-| **Multi-strategy portfolio (#52)** | Diversification between VIX overlay and value-heavy strategies is LESS than K_eff suggests — they correlate in crises, exactly when diversification matters most | Recompute weights with crisis-conditional correlations |
-| **Tail independence (#55)** | K_eff_crisis < K_eff_calm is expected — this finding explains why | Run `hd_tail_keff()` to quantify |
-| **DAG revision** | Need either: VIX → HML edge (direct), or latent "Crisis_mode" → {VIX, HML} | Added VIX → HML edge (dashed yellow in diagram) |
+| **[DRIF strategy](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R)** | DRIF loads on HML. During VIX spikes, DRIF underperforms MORE than the Vol_regime node alone predicts. | Consider reducing DRIF weight in crisis regimes |
+| **[Multi-strategy portfolio](https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R) ([#52](https://github.com/JohnGavin/historical/issues/52))** | Diversification between VIX overlay and value-heavy strategies is LESS than K_eff suggests — they correlate in crises, exactly when diversification matters most | Recompute weights with crisis-conditional correlations |
+| **[Tail independence](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R) ([#55](https://github.com/JohnGavin/historical/issues/55))** | K_eff_crisis < K_eff_calm is expected — this finding explains why | Run [`hd_tail_keff()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R) to quantify |
+| **[DAG revision](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R)** | Need either: VIX → HML edge (direct), or latent "Crisis_mode" → {VIX, HML} | Added VIX → HML edge (dashed yellow in diagram) |
 
 **Economic explanation:** In crises, investors sell risky assets indiscriminately. Value stocks (high book-to-market) are often distressed firms — they get sold first. Simultaneously, VIX spikes as options demand surges. The correlation is not VIX *causing* value to fall, but both responding to the same flight-to-safety mechanism.
 
