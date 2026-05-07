@@ -246,11 +246,11 @@ The strategy rotates among 5 Fama-French factors (daily data from 1963):
 
 | Factor | Description | Source |
 |--------|-------------|--------|
-| **HML** | High Minus Low (value) | FF5 |
-| **SMB** | Small Minus Big (size) | FF5 |
-| **RMW** | Robust Minus Weak (profitability) | FF5 |
-| **CMA** | Conservative Minus Aggressive (investment) | FF5 |
-| **Mom** | Momentum (winners minus losers) | Ken French |
+| **<abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>** | High Minus Low (value) | FF5 |
+| **<abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>** | Small Minus Big (size) | FF5 |
+| **<abbr title="Robust Minus Weak — profitability factor">RMW</abbr>** | Robust Minus Weak (profitability) | FF5 |
+| **<abbr title="Conservative Minus Aggressive — investment factor">CMA</abbr>** | Conservative Minus Aggressive (investment) | FF5 |
+| **<abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>** | Momentum (winners minus losers) | Ken French |
 
 Benchmark: **Mkt-RF** (market excess return).
 

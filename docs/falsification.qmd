@@ -245,7 +245,7 @@ if (!is.null(null_tbl)) fals_dt(null_tbl, cap)
 
 A null environment generates synthetic return series with no genuine signal, but with realistic statistical properties. We test: "could a strategy generate the observed t-statistic just by chance in this environment?"
 
-For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the [HAC t-statistic](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator). The rejection rate is the fraction that exceeds the observed t-statistic.
+For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the [<abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr> t-statistic](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator). The rejection rate is the fraction that exceeds the observed t-statistic.
 
 **The 6 null environments** (implemented in [`falsification.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R)):
 
@@ -253,8 +253,8 @@ For each null environment, we generate M = 100 synthetic series, apply the strat
 - **Regime Vol**: Two-state volatility (high/low). Tests whether signal is just vol timing.
 - **MA(1)**: Autocorrelated returns (theta = 0.1). Tests whether signal exploits serial correlation friction.
 - **Factor Null**: Random factor loadings matching observed factor covariance structure. Tests whether signal is just factor exposure.
-- **GARCH(1,1)**: omega = 1e-6, alpha = 0.09, beta = 0.90. Tests whether signal exploits volatility clustering.
-- **GJR-GARCH**: Adds asymmetric leverage (gamma = 0.05). Tests whether signal exploits the leverage effect.
+- **<abbr title="Generalized Autoregressive Conditional Heteroskedasticity">GARCH</abbr>(1,1)**: omega = 1e-6, alpha = 0.09, beta = 0.90. Tests whether signal exploits volatility clustering.
+- **<abbr title="Glosten-Jagannathan-Runkle GARCH — adds asymmetric leverage effect">GJR-GARCH</abbr>**: Adds asymmetric leverage (gamma = 0.05). Tests whether signal exploits the leverage effect.
 
 **Interpretation:**
 
@@ -325,18 +325,18 @@ if (!is.null(ff_tbl)) fals_dt(ff_tbl, cap)
 
 #### Methodology
 
-**[Fama-French 5-Factor](https://en.wikipedia.org/wiki/Fama%E2%80%93French_three-factor_model) + [Momentum](https://en.wikipedia.org/wiki/Momentum_(finance)) regression:**
+**[<abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr>](https://en.wikipedia.org/wiki/Fama%E2%80%93French_three-factor_model) + [Momentum](https://en.wikipedia.org/wiki/Momentum_(finance)) regression:**
 
 $$r_{excess} = \alpha + \beta_1 \cdot MktRF + \beta_2 \cdot SMB + \beta_3 \cdot HML + \beta_4 \cdot RMW + \beta_5 \cdot CMA + \beta_6 \cdot Mom + \epsilon$$
 
 Where:
 
 - **Mkt-RF**: Market excess return (market - risk-free)
-- **SMB**: Small Minus Big (size factor)
-- **HML**: High Minus Low (value factor)
-- **RMW**: Robust Minus Weak (profitability factor)
-- **CMA**: Conservative Minus Aggressive (investment factor)
-- **Mom**: Momentum (winners - losers, 12-2 month)
+- **<abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>**: Small Minus Big (size factor)
+- **<abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>**: High Minus Low (value factor)
+- **<abbr title="Robust Minus Weak — profitability factor">RMW</abbr>**: Robust Minus Weak (profitability factor)
+- **<abbr title="Conservative Minus Aggressive — investment factor">CMA</abbr>**: Conservative Minus Aggressive (investment factor)
+- **<abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>**: Momentum (winners - losers, 12-2 month)
 
 **Alpha (%)** is the intercept — the annualised return not explained by any factor. **R² (%)** measures how much of the strategy's variance is explained by known factors.
 
@@ -371,7 +371,7 @@ if (!is.null(mult_tbl)) fals_dt(mult_tbl, cap)
 
 Testing 5 strategies inflates Type I error. The chance that *at least one* strategy exceeds t = 2.0 by pure luck is much higher than 5%.
 
-**K_eff (effective multiplicity):**
+**<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr> (effective multiplicity):**
 
 K_eff = K² / ||Σ||²_F — the spectral participation ratio of the pairwise correlation matrix. It measures how many *truly independent* strategies exist:
 
@@ -409,7 +409,7 @@ In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" 
 
 **Not yet implemented (1 of 5):**
 
-5. **Deflated Sharpe Ratio (DSR)**: Lopez de Prado's adjustment for skewness, kurtosis, and number of trials. Corrects the Sharpe ratio for non-normality — a strategy with negative skew (fat left tail) has an inflated Sharpe. See [#53 comment](https://github.com/JohnGavin/historical/issues/53) for implementation plan.
+5. **<abbr title="Deflated Sharpe Ratio — adjusts for skewness, kurtosis, and number of trials">DSR</abbr>** (Deflated Sharpe Ratio): Lopez de Prado's adjustment for skewness, kurtosis, and number of trials. Corrects the Sharpe ratio for non-normality — a strategy with negative skew (fat left tail) has an inflated Sharpe. See [#53 comment](https://github.com/JohnGavin/historical/issues/53) for implementation plan.
 
 **What this framework does NOT do:**
 

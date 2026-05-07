@@ -93,7 +93,7 @@ if (!is.null(summary) && !is.null(nms)) {
 ::: {.negative-card}
 ### Verdict: Pure market beta (R² = 41%)
 
-**What it does:** Exit to cash when yesterday's VIX > 30 or yesterday's absolute return > 3%. Re-enter when VIX < 25 and 5-day cooloff expires. All signals use t-1 (previous day) values.
+**What it does:** Exit to cash when yesterday's <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> > 30 or yesterday's absolute return > 3%. Re-enter when VIX < 25 and 5-day cooloff expires. All signals use t-1 (previous day) values.
 
 **Why it fails:**
 
@@ -184,7 +184,7 @@ if (!is.null(summary) && !is.null(nms)) {
 
 1. **Do not include** Avoid Worst Days or Risk State in the multi-strategy portfolio (#52)
 2. **VIX-based overlays** add cost and complexity without alpha — use passive SPY instead
-3. **Factor rotation** (DRIF, Factor MAX) is where the genuine alpha lives
+3. **Factor rotation** (<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>, Factor MAX) is where the genuine alpha lives
 4. **Cross-sectional momentum** (LTR) needs scaling before inclusion — promising but unconfirmed at production scale
 
 ## References

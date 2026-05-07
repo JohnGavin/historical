@@ -47,11 +47,11 @@ Two signals applied at two levels, producing four strategies:
 | | Signal | Stock-Level (660 stocks, D1-D10) | Factor-Level (5 FF factors, top 2) |
 |--|--------|----------------------------------|-------------------------------------|
 | **MAX** | Highest single-day return in prior month | [Stock MAX](#stock-max) | [Factor MAX](factor-max.html) |
-| **DRIF** | Elastic net on 42 daily return features | [Stock DRIF](#stock-drif) | [Factor DRIF](drif.html) |
+| **<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>** | Elastic net on 42 daily return features | [Stock DRIF](#stock-drif) | [Factor DRIF](drif.html) |
 
 **Stock-level:** Each month, rank all 660 stocks by signal. Long top decile (~38 stocks), short bottom decile. Monthly rebalance. Equal weight within each decile.
 
-**Factor-level:** Each month, rank 5 Fama-French factors (HML, SMB, RMW, CMA, Mom) by signal. Long top 2. Monthly rebalance. Equal weight.
+**Factor-level:** Each month, rank 5 Fama-French factors (<abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>, <abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>, <abbr title="Conservative Minus Aggressive — investment factor">CMA</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>) by signal. Long top 2. Monthly rebalance. Equal weight.
 
 #### Equity Curves
 
@@ -202,7 +202,7 @@ safe_tar_read("stk_max_vs_factor_plot")
 |--|--------|
 | **Pros** | Simple signal (one number per stock-month). High raw returns. Works across markets. |
 | **Cons** | Very high volatility (44%). Max drawdown -74%. Sensitive to extreme events. High turnover (~monthly full rebalance). |
-| **Works well** | High-volatility regimes (VIX > 25). Small/mid-cap stocks with less analyst coverage. |
+| **Works well** | High-volatility regimes (<abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> > 25). Small/mid-cap stocks with less analyst coverage. |
 | **Works badly** | Low-volatility, trending markets where MAX signals are noise. |
 | **Factor exposure** | Loads on size (small-cap tilt in D1), volatility, and short-term reversal. Partially explained by these factors — not pure alpha. |
 

@@ -39,7 +39,7 @@ source(utils_path)
 ## Row
 
 ::: {.callout-note}
-## Daily Return Information Factor (DRIF)
+## Daily Return Information Factor (<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>)
 
 Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-returns/): an elastic net regression on the **full distribution of past 21 daily returns** — both chronological order and rank order — predicts next-month returns. This captures more information than single-signal approaches like MAX or momentum.
 
@@ -184,11 +184,11 @@ The strategy rotates among 5 Fama-French factors (daily data from 1963):
 
 | Factor | Description | Source |
 |--------|-------------|--------|
-| **HML** | High Minus Low (value) | FF5 |
-| **SMB** | Small Minus Big (size) | FF5 |
-| **RMW** | Robust Minus Weak (profitability) | FF5 |
-| **CMA** | Conservative Minus Aggressive (investment) | FF5 |
-| **Mom** | Momentum (winners minus losers) | Ken French |
+| **<abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>** | High Minus Low (value) | FF5 |
+| **<abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>** | Small Minus Big (size) | FF5 |
+| **<abbr title="Robust Minus Weak — profitability factor">RMW</abbr>** | Robust Minus Weak (profitability) | FF5 |
+| **<abbr title="Conservative Minus Aggressive — investment factor">CMA</abbr>** | Conservative Minus Aggressive (investment) | FF5 |
+| **<abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>** | Momentum (winners minus losers) | Ken French |
 
 Benchmark: **Mkt-RF** (market excess return). 42 features per factor-month (21 chronological + 21 rank).
 

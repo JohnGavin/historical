@@ -43,7 +43,7 @@ source(utils_path)
 
 #### Scorecard
 
-The falsification framework tests 5 strategies against multiple statistical hurdles: HAC-corrected t-statistics, 6 null environment rejection rates, and Fama-French 5-Factor + Momentum alpha regression. Strategies that pass all tests show genuine alpha; those that fail are explained by known factor exposure (beta). Note: this covers 5 strategies from the falsification pipeline — partially overlapping with the leaderboard strategies above.
+The falsification framework tests 5 strategies against multiple statistical hurdles: <abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr>-corrected t-statistics, 6 null environment rejection rates, and <abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr> + Momentum alpha regression. Strategies that pass all tests show genuine alpha; those that fail are explained by known factor exposure (beta). Note: this covers 5 strategies from the falsification pipeline — partially overlapping with the leaderboard strategies above.
 
 ```{r}
 #| label: fals-scorecard
@@ -93,7 +93,7 @@ if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 
 #### Full Dashboard
 
-For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (K_eff, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
+For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr>, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
 
 
 # Rankings
@@ -163,7 +163,7 @@ Each strategy links to its full definition, implementation, and backtest:
 | Strategy | Level | Signal | Definition |
 |----------|-------|--------|------------|
 | [Factor MAX](factor-max.html) | Factor (5 FF) | Max daily return in prior month | Ranks factors by single-day extreme |
-| [Factor DRIF](drif.html) | Factor (5 FF) | Elastic net on 42 daily return features | Full daily return distribution |
+| [Factor <abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>](drif.html) | Factor (5 FF) | Elastic net on 42 daily return features | Full daily return distribution |
 | [Stock MAX](stock-backtest.html#stock-max) | Stock (660) | Max daily return, D1-D10 decile spread | Cross-sectional stock sorting |
 | [Stock DRIF](stock-backtest.html#stock-drif) | Stock (660) | Elastic net, D1-D10 decile spread | Pooled cross-sectional elastic net |
 | [XGB DRIF](stock-backtest.html#stock-drif) | Stock (660) | XGBoost monotonic on 42 features | Non-linear signal with monotonic constraints |

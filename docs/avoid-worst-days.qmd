@@ -334,7 +334,7 @@ Mkt-RF is not identical to the S&P 500 — it is the value-weighted CRSP market 
 
 #### VIX-Triggered Protection
 
-A tradeable approximation: after a large daily move (shock) or when the VIX exceeds a threshold (forward-looking implied volatility), go to cash. Re-enter when VIX subsides below a re-entry threshold, with a minimum cooling-off period.
+A tradeable approximation: after a large daily move (shock) or when the <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> exceeds a threshold (forward-looking implied volatility), go to cash. Re-enter when VIX subsides below a re-entry threshold, with a minimum cooling-off period.
 
 The VIX is forward-looking — it prices the market's expectation of 30-day volatility from S&P 500 options. Unlike realized volatility (backward-looking), VIX rises *before* the worst days cluster, making it a practical trigger.
 

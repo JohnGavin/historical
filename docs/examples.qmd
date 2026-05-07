@@ -406,7 +406,7 @@ if (!is.null(df)) {
 
 #### FF3 Daily
 
-[Fama-French 3 factors](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp): Mkt-RF, SMB, HML, RF. Daily since 2020.
+[Fama-French 3 factors](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp): Mkt-RF, <abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>, <abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>, RF. Daily since 2020.
 
 ```{r}
 #| results: asis
@@ -424,7 +424,7 @@ safe_tar_read("vig_fa_ff3")
 
 #### FF5 Cumulative
 
-5-factor cumulative returns since 2000. RMW = profitability, CMA = investment.
+5-factor cumulative returns since 2000. <abbr title="Robust Minus Weak — profitability factor">RMW</abbr> = profitability, <abbr title="Conservative Minus Aggressive — investment factor">CMA</abbr> = investment.
 
 ```{r}
 #| results: asis
@@ -442,7 +442,7 @@ safe_tar_read("vig_fa_ff5")
 
 #### Momentum
 
-[Momentum](https://www.investopedia.com/terms/m/momentum.asp) (WML). March 2009 crash, post-2020 recovery.
+[<abbr title="Momentum — past 12-month winners minus losers">Momentum</abbr>](https://www.investopedia.com/terms/m/momentum.asp) (WML). March 2009 crash, post-2020 recovery.
 
 ```{r}
 #| results: asis

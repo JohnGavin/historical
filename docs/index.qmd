@@ -94,11 +94,11 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 </a>
 <a href="examples.html#macro" class="info-card">
 <h4>Macro</h4>
-<p>19 FRED series: SP500, VIX, Treasury yields, credit spreads, GDP, CPI, oil, USD. From 1947.</p>
+<p>19 FRED series: SP500, <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr>, Treasury yields, credit spreads, GDP, CPI, oil, USD. From 1947.</p>
 </a>
 <a href="examples.html#factors" class="info-card">
 <h4>Factors</h4>
-<p>Fama-French FF3, FF5, Momentum. Daily + monthly. Back to 1926. Ken French Data Library.</p>
+<p>Fama-French FF3, <abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr>, Momentum. Daily + monthly. Back to 1926. Ken French Data Library.</p>
 </a>
 </div>
 
@@ -124,7 +124,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <p>Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025).</p>
 </a>
 <a href="drif.html" class="info-card">
-<h4>DRIF: Daily Return Information</h4>
+<h4><abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>: Daily Return Information</h4>
 <p>Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals.</p>
 </a>
 <a href="stock-backtest.html" class="info-card">
