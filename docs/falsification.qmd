@@ -200,12 +200,7 @@ if (!is.null(scorecard)) fals_dt(scorecard, caption)
 safe_tar_read("fals_vig_ff_alpha_plot")
 ```
 
-```{r}
-#| label: ff-alpha-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_ff_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
+`r { cap <- safe_tar_read("fals_vig_ff_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
 
 #### How to Read This
 
@@ -233,12 +228,7 @@ if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 safe_tar_read("fals_vig_null_heatmap")
 ```
 
-```{r}
-#| label: null-heatmap-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_null_heatmap_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
+`r { cap <- safe_tar_read("fals_vig_null_heatmap_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
 
 #### Rejection Table
 
@@ -288,12 +278,7 @@ For each null environment, we generate M = 100 synthetic series, apply the strat
 safe_tar_read("fals_vig_hac_plot")
 ```
 
-```{r}
-#| label: hac-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_hac_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
+`r { cap <- safe_tar_read("fals_vig_hac_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
 
 #### HAC Details
 
@@ -443,11 +428,7 @@ In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" 
 
 #### Build Info
 
-```{r}
-#| label: build-info
-#| results: asis
-build_info()
-```
+`r build_info()`
 
 # Causal Graph {#causal}
 
@@ -457,18 +438,7 @@ build_info()
 
 #### Overview
 
-```{r}
-#| label: causal-overview-info
-#| results: asis
-#| echo: false
-cg <- safe_tar_read("cg_dag")
-if (!is.null(cg)) {
-  cat(paste0("Simplified view: strategies as single nodes. **", cg$n_nodes,
-             " nodes, ", cg$n_edges, " edges** in the full DAG. ",
-             "Click any strategy node to view its source code. ",
-             "Click diagram to zoom fullscreen."))
-}
-```
+`r { cg <- safe_tar_read("cg_dag"); if (!is.null(cg)) paste0("Simplified view: strategies as single nodes. **", cg$n_nodes, " nodes, ", cg$n_edges, " edges** in the full DAG. Click any strategy node to view its source code. Click diagram to zoom fullscreen.") else "" }`
 
 ```{r}
 #| label: causal-overview-mount
@@ -488,12 +458,7 @@ cat('<div id="dag-full-mount"></div>')
 
 Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
 
-```{r}
-#| label: full-dag-timestamp
-#| results: asis
-#| echo: false
-cat(paste0('<p style="color:#888;font-size:0.8em;">Full DAG tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>'))
-```
+`r paste0('<p style="color:#888;font-size:0.8em;">Full DAG tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>')`
 
 #### DRIF
 
@@ -506,12 +471,7 @@ cat('<div id="dag-drif-mount"></div>')
 
 <abbr title="Dynamic Rotation Into Factors — each month selects the FF factor with highest trailing return">DRIF</abbr> selects the best-performing FF factor each month. Loads on <abbr title="High Minus Low — value factor: cheap stocks minus expensive stocks">HML</abbr>, <abbr title="Small Minus Big — size factor: small-cap minus large-cap returns">SMB</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>. Yellow dashed edge: VIX affects HML in crises (<abbr title="Partial correlation between HML and VIX = -0.17, indicating they co-move in crises">r=-0.17</abbr>). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R).
 
-```{r}
-#| label: drif-dag-timestamp
-#| results: asis
-#| echo: false
-cat(paste0('<p style="color:#888;font-size:0.8em;">DRIF tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>'))
-```
+`r paste0('<p style="color:#888;font-size:0.8em;">DRIF tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>')`
 
 #### Factor MAX
 
@@ -605,10 +565,4 @@ if (!is.null(split) && !is.null(split$comparison)) {
 }
 ```
 
-```{r}
-#| label: causal-caption
-#| results: asis
-#| echo: false
-cap <- safe_tar_read("cg_caption")
-if (!is.null(cap)) cat(cap)
-```
+`r { cap <- safe_tar_read("cg_caption"); if (!is.null(cap)) cap else "" }`
