@@ -16,10 +16,9 @@ jobs:
           - kalshi
           - ecb             # ECB SDMX REST API (no auth)
           - guardian        # Guardian Content API (test key, no auth)
-          # Commented out until verified in CI — add when ready:
-          # - commodities   # requires FRED_API_KEY secret
-          # - cboe_vol      # requires httr2, quantmod
-          # - nyt_tedalcorn # parse_nyt_tedalcorn.R (no auth)
+          - commodities     # FRED commodity indexes (requires FRED_API_KEY secret)
+          - cboe_vol        # CBOE implied vol CDN (46 series, no auth)
+          # - nyt_tedalcorn # parse_nyt_tedalcorn.R (no auth, low priority)
 
     steps:
       - uses: actions/checkout@v4
@@ -32,7 +31,8 @@ jobs:
         shell: Rscript {0}
         run: |
           install.packages(
-            c("jsonlite", "arrow", "dplyr", "cli", "here"),
+            c("jsonlite", "arrow", "dplyr", "cli", "here",
+              "httr2", "tibble", "tidyr", "purrr"),
             repos = "https://cloud.r-project.org"
           )
 
