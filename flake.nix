@@ -52,6 +52,7 @@
             xgboost
             cli
             rlang
+            usethis
           ];
         };
 
