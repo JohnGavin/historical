@@ -39,6 +39,7 @@ jobs:
       - name: Run fetch script
         env:
           FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+          GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
         run: Rscript scripts/fetch_${{ matrix.source }}.R
 
       - name: Commit if data changed
