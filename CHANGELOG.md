@@ -24,14 +24,34 @@
 - CISS equity vs VIX: Spearman r=0.751 (6,653 daily obs)
 - Guardian: ~289 business articles/month, 6 keywords tested
 
+### Session 2 (continued)
+
+#### Completed
+- #96 closed: Hover tooltips on diagram nodes — 38 tooltips via SVG `<title>`, definitions + source refs
+- #98 Phase 2: plan_jst.R — 6 targets (equity premium, pervasiveness, FF comparison, crises, summary)
+- European Overlay + Falsification added to site navigation (index.qmd)
+- flake.nix: usethis added (from stash)
+- `.claude/` directory tracked — 18 project-specific rules now version controlled
+- **Destructive filesystem guard**: Enforced protection via PreToolUse:Bash hook
+  - Protected paths: .claude/, R/, packages/, data/, *.nix, _targets, knowledge/
+  - User must provide 4-digit confirmation code to proceed
+  - Audit logs: ~/.claude/logs/destructive_blocked.log, destructive_confirmed.log
+
+#### Failed Approaches
+- Suggested `rm -rf .claude/` to clear roborev working tree error — **wrong**, .claude/ is critical project config
+- Suggested gitignoring .claude/ — **wrong**, must be tracked for reproducibility
+- Both mistakes caught by user. Lesson: rules are advisory, not enforced. Led to implementing the destructive filesystem guard hook.
+
+#### roborev
+- 5 new failed reviews from this session's commits (codex errors)
+- Background refine process failed due to untracked files — roborev requires clean working tree
+
 ### Known Limitations
-- roborev backlog: ~87 open reviews (continue burn-down with codex in terminal)
+- roborev backlog: ~90 open reviews (continue burn-down with codex in terminal)
 - ECB frequency mismatch: daily/monthly/business-daily series need frequency-aware joins (roborev high-severity finding)
 - hd_ecb() missing req_timeout()/req_retry() (roborev high-severity finding)
 - VSTOXX has no free API — CISS equity is best available proxy
-- European overlay page not linked from main navigation yet
-- #96 (hover tooltips on diagram nodes) still open
-- flake.nix has stashed usethis addition
+- #98 Phase 3: JST dashboard vignette (long-run returns comparison) not started
 
 ## 2026-05-01
 
