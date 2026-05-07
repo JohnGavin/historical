@@ -169,7 +169,8 @@ hd_factors <- function(dataset = "FF3", frequency = "daily",
 #' @noRd
 detect_dataset <- function(ticker) {
   crypto_tickers <- c("BTC", "ETH", "SOL", "USDC", "USDT", "BNB",
-                       "XRP", "ADA", "DOGE", "DOT")
+                       "XRP", "ADA", "DOGE", "DOT", "HNT", "RAY",
+                       "BONK", "PYTH")
   if (toupper(ticker) %in% crypto_tickers) {
     "crypto_daily"
   } else {

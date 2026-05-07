@@ -10,6 +10,8 @@ test_that("hd_ohlcv returns tibble for AAPL", {
 })
 
 test_that("hd_ohlcv auto-detects crypto dataset", {
+  expect_equal(historicaldata:::detect_dataset("BONK"), "crypto_daily")
+
   skip_on_cran()
   skip_if_offline()
 
