@@ -1,0 +1,6 @@
+# Per-project roborev config for historical
+# See JohnGavin/llm#110 for cross-project workflow
+
+fix_min_severity = "high"
+refine_min_severity = "high"
+max_prompt_size = 200000
