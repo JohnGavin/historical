@@ -226,17 +226,21 @@ ggplot(rates, aes(date, value, colour = series_id)) +
 
 yc <- hd_macro("T10Y2Y", from = "2018-01-01") |> filter(!is.na(value))
 inv <- yc |> filter(value < 0)
-inv_start <- min(inv$date)
-inv_end <- max(inv$date)
-
-ggplot(yc, aes(date, value)) +
+p <- ggplot(yc, aes(date, value)) +
   geom_line(linewidth = 0.5, colour = "#FF6347") +
   geom_hline(yintercept = 0, linetype = "dashed", colour = "grey50") +
-  annotate("rect", xmin = inv_start, xmax = inv_end,
-           ymin = -Inf, ymax = 0, fill = "#FF6347", alpha = 0.2) +
   labs(x = NULL, y = "10Y - 2Y spread (%)",
        title = "Yield curve: 10Y-2Y spread with inversion") +
   hd_theme()
+
+if (nrow(inv) > 0) {
+  inv_start <- min(inv$date)
+  inv_end <- max(inv$date)
+  p <- p + annotate("rect", xmin = inv_start, xmax = inv_end,
+                    ymin = -Inf, ymax = 0, fill = "#FF6347", alpha = 0.2)
+}
+
+p
 '),
 
     # ── Macro: Credit Spreads ─────────────────────────────────────
