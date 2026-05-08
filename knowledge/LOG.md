@@ -4,6 +4,17 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 
 ## 2026-05-08
 
+### Tier 1 Data Integration Test Validation (PR #111)
+- **All integration targets validated** — 14/14 targets pass in under 20 seconds
+- **Test pipeline created** — `_targets_integration_test.R` with mock strategy returns for fast validation
+- **Tracking Error / IR**: `te_ir_metrics`, `te_ir_table` — measure strategy divergence from SPY benchmark
+- **Regime-conditional correlations**: `regime_corr_matrices` (9 regimes), `contagion_pairs`, `corr_heatmap_crisis/calm`
+- **Tail K_eff**: `keff_crisis_calm_by_strategy`, `keff_efficiency_plot`, `keff_summary_table` — effective sample size accounting for autocorrelation
+- **Data granularity fix**: `regime_correlations()` now expands monthly VIX to daily via year-month join (carry forward)
+- **Date type fix**: Changed `as.Date()` to `as.POSIXct()` to match `hd_ohlcv()` output class
+- **Next steps**: Merge PR #111 → validate in full pipeline (may need longer timeout for strategy feature engineering)
+- Related: #105 (Tier 1 gaps), #102 (correlation contagion analysis)
+
 ### Macrosynergy Macro Data Research (#100)
 - **Site access blocked (403)** — manual review required at https://macrosynergy.com/research/
 - **Research gap identified**: We have 29 ECB series but only use CISS equity for regime classification
