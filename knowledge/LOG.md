@@ -4,6 +4,16 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 
 ## 2026-05-08
 
+### Macrosynergy Macro Data Research (#100)
+- **Site access blocked (403)** — manual review required at https://macrosynergy.com/research/
+- **Research gap identified**: We have 29 ECB series but only use CISS equity for regime classification
+- **Unused series**: M3 money supply, HICP inflation, yield curve slope (10Y-2Y), yield level/curvature
+- **Missing vs typical macro approaches**: Industrial production, PMI, credit spreads, consumer confidence
+- **Priced-in risk**: GDP/CPI/PMI are widely-followed (consensus priced in); M3/credit conditions less watched
+- **Next steps**: Manual review of Macrosynergy → test incremental power (Fama-French + macro α) → cross-geography validation
+- **Current evidence quality**: BRONZE (no Macrosynergy access, no incremental-power test, no cross-geography replication)
+- See [[macrosynergy-research]]
+
 ### TAA Selection, Mid-Caps, and Lazy Prices Research (#104)
 - **Lazy Prices (10-K NLP)**: 22% annualized from text similarity on SEC filings, 6-18mo drift (Cohen et al. 2019)
   - Differs from Guardian NLP null result — 10-K is official disclosure with slow diffusion, not news
