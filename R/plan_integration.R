@@ -57,8 +57,8 @@ plan_integration <- function() {
     targets::tar_target(
       spy_returns,
       {
-        consolidated_equity |>
-          dplyr::filter(ticker == "SPY") |>
+        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+        hd_ohlcv("SPY") |>
           dplyr::arrange(date) |>
           dplyr::mutate(
             return = (adjusted / dplyr::lag(adjusted)) - 1
@@ -82,13 +82,13 @@ plan_integration <- function() {
           )
 
         # Get benchmark asset returns (SPY, TLT, GLD, DBC)
-        benchmark_assets <- consolidated_equity |>
-          dplyr::filter(ticker %in% c("SPY", "TLT", "GLD", "DBC")) |>
-          dplyr::select(date, ticker, close) |>
+        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+        benchmark_assets <- hd_ohlcv(c("SPY", "TLT", "GLD", "DBC")) |>
+          dplyr::select(date, ticker, adjusted) |>
           dplyr::arrange(ticker, date) |>
           dplyr::group_by(ticker) |>
           dplyr::mutate(
-            return = (close / dplyr::lag(close)) - 1
+            return = (adjusted / dplyr::lag(adjusted)) - 1
           ) |>
           dplyr::filter(!is.na(return)) |>
           dplyr::select(date, ticker, return) |>
@@ -106,10 +106,19 @@ plan_integration <- function() {
     ),
 
     # === LIQUIDITY: equity with ADV ===
+    # Note: Uses full equity universe from hd_ohlcv()
+    # For production use, may want to filter to liquid universe first
     targets::tar_target(
       equity_with_adv,
       {
-        calculate_adv(consolidated_equity, window_days = 20)
+        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+        # Get SPY as example - full universe would be hd_universe("equity")
+        # but that's 50+ tickers and slow for demo
+        equity_data <- hd_ohlcv("SPY") |>
+          dplyr::mutate(ticker = "SPY") |>
+          dplyr::select(date, ticker, open, high, low, close, adjusted, volume)
+
+        calculate_adv(equity_data, window_days = 20)
       }
     ),
 
@@ -131,7 +140,7 @@ plan_integration <- function() {
       {
         liquidity_summary(equity_with_adv) |>
           DT::datatable(
-            caption = "Liquidity Summary by Ticker",
+            caption = "Liquidity Summary by Ticker (SPY Example)",
             options = list(pageLength = 20),
             rownames = FALSE
           ) |>
