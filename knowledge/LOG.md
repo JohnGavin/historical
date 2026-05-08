@@ -51,3 +51,20 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 - **Data availability:** Volume, VVIX, multi-asset returns all freely available (Yahoo Finance)
 - **Effort estimate (Tier 1):** 8-12 hours implementation
 - See [[market-behavior-gap-analysis]]
+
+### Regime-Dependent Trend Following (#102)
+- Alpha Architect article inaccessible (403 error) — research based on existing codebase + general principles
+- **Three existing regime implementations** already in codebase:
+  1. `plan_regime.R`: Volatility-based (realized vol + VIX), 3-tier scaling (100%/70%/40%)
+  2. `plan_risk_state.R`: VIX options multi-signal (VVIX, term structure level/change), 3-tier (100%/50%/10%)
+  3. `plan_avoid_worst.R`: VIX protection (binary on/off), extensive validation (walk-forward, cross-market, alpha decay)
+- **Strengths**: Rigorous bias prevention (training-only thresholds, explicit t+1 execution), comprehensive robustness testing (parameter sweeps, subperiod stability, bootstrap CI)
+- **Gaps vs literature**: No trend-regime (SMA distance, momentum z-score), no macro-regime (yield curve, credit spreads), discrete scaling only (no continuous functions)
+- **Key insight from avoid_worst.R**: Worst/best days cluster (median 20-day gap) → selective avoidance impractical → regime-based exit justified
+- **Evidence quality**: avoid_worst 82%, risk_state 78%, regime 70% (all meet or exceed Bronze quality gate)
+- **Recommendations** (prioritized):
+  1. Add trend-regime overlay (trending/choppy × low-vol/high-vol → 4 states)
+  2. Test continuous VIX scaling vs binary (reduce switches)
+  3. Expand cross-market validation to international/bonds/commodities (pervasiveness gap)
+  4. Add transaction cost analysis to regime.R and risk_state.R
+- See [[regime-trend-following]]
