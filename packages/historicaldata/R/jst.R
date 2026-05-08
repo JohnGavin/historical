@@ -35,6 +35,9 @@ hd_jst <- function(cache = TRUE) {
   if (!requireNamespace("haven", quietly = TRUE)) {
     cli::cli_abort("Package {.pkg haven} required for reading Stata .dta files.")
   }
+  if (!requireNamespace("httr2", quietly = TRUE)) {
+    cli::cli_abort("Package {.pkg httr2} required for downloading JST data.")
+  }
 
   url <- "https://www.macrohistory.net/app/download/9834512469/JSTdatasetR6.dta"
   tmp <- tempfile(fileext = ".dta")

@@ -22,6 +22,9 @@ hd_guardian <- function(query, section = "business",
   if (!requireNamespace("httr2", quietly = TRUE)) {
     cli::cli_abort("Package {.pkg httr2} required for Guardian data.")
   }
+  if (!requireNamespace("jsonlite", quietly = TRUE)) {
+    cli::cli_abort("Package {.pkg jsonlite} required for parsing Guardian API responses.")
+  }
 
   all_results <- list()
   page <- 1L
