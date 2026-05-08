@@ -178,8 +178,8 @@ build_info <- function(pkg_name = "historicaldata") {
 
   r_link <- sprintf("[%s](https://cran.r-project.org/doc/manuals/r-release/NEWS.html)", r_ver)
 
-  cat(sprintf(
+  sprintf(
     "**%s** %s | **Git** %s | **R** %s | **Built** %s",
     pkg_name, ver_link, sha_link, r_link, build_time
-  ))
+  )
 }
