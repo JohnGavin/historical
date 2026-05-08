@@ -46,3 +46,4 @@ inst/extdata/vignettes/stk_drif_features.rds
 inst/extdata/vignettes/stk_drif_signal.rds
 # docs/*_files/ — MUST commit for GitHub Pages (no CI render)
 .claude/settings.local.json
+.DS_Store
