@@ -29,22 +29,22 @@ plan_integration <- function() {
       strategy_returns,
       {
         # Helper to extract strategy returns in long format
-        extract_strategy <- function(portfolio_df, ret_col, strategy_name) {
+        extract_strategy <- function(portfolio_df, ret_col_name, strategy_name) {
           portfolio_df |>
             dplyr::mutate(strategy = strategy_name) |>
-            dplyr::select(date, strategy, return = {{ ret_col }})
+            dplyr::select(date, strategy, return = .data[[ret_col_name]])
         }
 
         # Bind all strategies
         dplyr::bind_rows(
           # Factor strategies
-          extract_strategy(fm_portfolio, portfolio_ret, "Factor MAX"),
-          extract_strategy(drif_portfolio, portfolio_ret, "Factor DRIF"),
+          extract_strategy(fm_portfolio, "portfolio_ret", "Factor MAX"),
+          extract_strategy(drif_portfolio, "portfolio_ret", "Factor DRIF"),
 
           # Stock strategies
-          extract_strategy(stk_max_portfolio, port_ret, "Stock MAX"),
-          extract_strategy(stk_drif_portfolio, port_ret, "Stock DRIF"),
-          extract_strategy(xgb_drif_portfolio, port_ret, "XGB DRIF")
+          extract_strategy(stk_max_portfolio, "port_ret", "Stock MAX"),
+          extract_strategy(stk_drif_portfolio, "port_ret", "Stock DRIF"),
+          extract_strategy(xgb_drif_portfolio, "port_ret", "XGB DRIF")
         ) |>
           dplyr::arrange(strategy, date)
       }
