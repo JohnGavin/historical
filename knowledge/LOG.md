@@ -38,6 +38,20 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 
 ## 2026-05-08
 
+### Market Behavior Coverage Audit (#105)
+- **Overall coverage: 53%** (weighted by importance)
+- Strong: Performance metrics (95%), evolution tracking (80%)
+- Partial: Correlation (65%), volatility (70%), market comparison (55%)
+- Weak: Liquidity (15%), trading volumes (10%)
+- **Tier 1 gaps (high priority):**
+  1. Volume data ingestion + liquidity filters (ADV > $1M)
+  2. Tracking error and information ratio vs SPY
+  3. Cross-asset correlations (SPY, TLT, GLD, DBC)
+  4. Tail K_eff (crisis vs calm regimes) per #55
+- **Data availability:** Volume, VVIX, multi-asset returns all freely available (Yahoo Finance)
+- **Effort estimate (Tier 1):** 8-12 hours implementation
+- See [[market-behavior-gap-analysis]]
+
 ### Regime-Dependent Trend Following (#102)
 - Alpha Architect article inaccessible (403 error) — research based on existing codebase + general principles
 - **Three existing regime implementations** already in codebase:
