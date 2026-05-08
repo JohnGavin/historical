@@ -74,6 +74,14 @@ table caption, .dataTables_wrapper caption {
 }
 .cell-output-display:has(img) { cursor: zoom-in; }
 
+/* Small callout notes — 85% of base body text */
+.callout.small, .callout-note.small {
+  font-size: 0.85em !important;
+}
+.callout.small .callout-body, .callout-note.small .callout-body {
+  font-size: inherit !important;
+}
+
 /* Code details toggle */
 details { margin-bottom: 0.5em; }
 details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
