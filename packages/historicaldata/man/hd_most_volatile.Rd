@@ -25,3 +25,10 @@ and returns the top N. Uses a single DuckDB window query over the full Parquet.
 hd_most_volatile("equity_daily", 3)
 \dontshow{\}) # examplesIf}
 }
+\seealso{
+Other curated-groups: 
+\code{\link{hd_group}()},
+\code{\link{hd_ticker_groups}()},
+\code{\link{hd_top_by}()}
+}
+\concept{curated-groups}

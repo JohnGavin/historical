@@ -4,6 +4,7 @@
 #' Groups are editorial (curated), not computed from metadata.
 #'
 #' @return Tibble with columns: group, description, tickers (character vector in list-column)
+#' @family curated-groups
 #' @export
 #' @examples
 #' hd_ticker_groups()
@@ -81,6 +82,7 @@ hd_ticker_groups <- function() {
 #'
 #' @param name Group name (e.g. "FAANG", "Magnificent 7", "Stablecoins")
 #' @return Character vector of ticker symbols
+#' @family curated-groups
 #' @export
 #' @examples
 #' hd_group("FAANG")

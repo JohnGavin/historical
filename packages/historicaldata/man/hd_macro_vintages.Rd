@@ -32,7 +32,14 @@ hd_macro_vintages("PAYEMS", from = "2024-01-01", release = "first")
 }
 \seealso{
 Other data-access: 
+\code{\link{hd_ecb}()},
+\code{\link{hd_factors}()},
+\code{\link{hd_guardian}()},
+\code{\link{hd_guardian_monthly}()},
+\code{\link{hd_jst}()},
 \code{\link{hd_lazy}()},
-\code{\link{hd_macro_series}()}
+\code{\link{hd_macro}()},
+\code{\link{hd_macro_series}()},
+\code{\link{hd_ohlcv}()}
 }
 \concept{data-access}

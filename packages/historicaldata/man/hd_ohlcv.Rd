@@ -41,3 +41,16 @@ hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
 hd_ohlcv(c("AAPL", "MSFT"), from = "2024-01-01", collect = TRUE)
 \dontshow{\}) # examplesIf}
 }
+\seealso{
+Other data-access: 
+\code{\link{hd_ecb}()},
+\code{\link{hd_factors}()},
+\code{\link{hd_guardian}()},
+\code{\link{hd_guardian_monthly}()},
+\code{\link{hd_jst}()},
+\code{\link{hd_lazy}()},
+\code{\link{hd_macro}()},
+\code{\link{hd_macro_series}()},
+\code{\link{hd_macro_vintages}()}
+}
+\concept{data-access}

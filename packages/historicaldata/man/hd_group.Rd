@@ -19,3 +19,10 @@ Get tickers for a named group
 hd_group("FAANG")
 hd_group("Major Crypto")
 }
+\seealso{
+Other curated-groups: 
+\code{\link{hd_most_volatile}()},
+\code{\link{hd_ticker_groups}()},
+\code{\link{hd_top_by}()}
+}
+\concept{curated-groups}

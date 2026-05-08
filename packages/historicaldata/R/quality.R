@@ -8,6 +8,7 @@
 #' @param threshold Minimum absolute log return to flag (default 0.4 = ~50%)
 #' @param n Maximum number of jumps to return (default 100)
 #' @return Tibble with: ticker, date, prev_close, close, log_ret, pct_change
+#' @family quality-audit
 #' @export
 #' @examplesIf interactive()
 #' hd_jumps("equity_daily", threshold = 0.5, n = 20)

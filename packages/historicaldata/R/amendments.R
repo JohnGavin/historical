@@ -31,6 +31,7 @@ hd_amendments <- function(ticker = NULL, collect = TRUE) {
 #' @param field Filter to one field (e.g. "beta_3yr"). NULL = all.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Tibble or lazy duckplyr frame
+#' @family quality-audit
 #' @export
 #' @examplesIf interactive()
 #' hd_metadata_amendments("AAPL")

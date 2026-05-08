@@ -38,10 +38,16 @@ status before pulling data with \code{\link[=hd_fred]{hd_fred()}} or the CBOE fe
 \seealso{
 Other discovery: 
 \code{\link{hd_datasets}()},
+\code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},
+\code{\link{hd_fred_meta}()},
+\code{\link{hd_jst_variables}()},
 \code{\link{hd_macro_forward}()},
 \code{\link{hd_macro_series}()},
+\code{\link{hd_search}()},
 \code{\link{hd_summary}()},
+\code{\link{hd_ticker_info}()},
+\code{\link{hd_ticker_meta}()},
 \code{\link{hd_tickers}()}
 }
 \concept{discovery}

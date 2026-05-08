@@ -20,6 +20,8 @@ max absolute jump, number of gaps > 5 days.
 }
 \seealso{
 Other quality-audit: 
-\code{\link{hd_amendments}()}
+\code{\link{hd_amendments}()},
+\code{\link{hd_jumps}()},
+\code{\link{hd_metadata_amendments}()}
 }
 \concept{quality-audit}

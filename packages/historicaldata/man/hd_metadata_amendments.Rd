@@ -27,3 +27,10 @@ hd_metadata_amendments("AAPL")
 hd_metadata_amendments(field = "beta_3yr")
 \dontshow{\}) # examplesIf}
 }
+\seealso{
+Other quality-audit: 
+\code{\link{hd_amendments}()},
+\code{\link{hd_jumps}()},
+\code{\link{hd_quality}()}
+}
+\concept{quality-audit}

@@ -7,6 +7,7 @@
 #' @param n Number of tickers to return (default 10)
 #' @param desc Sort descending? (default TRUE = largest first)
 #' @return Tibble with ticker + metadata columns, sorted by metric
+#' @family curated-groups
 #' @export
 #' @examplesIf interactive()
 #' hd_top_by("equity_daily", "market_cap", 5)
@@ -41,6 +42,7 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
 #' @param n Number of tickers to return (default 5)
 #' @param window_days Rolling window in trading days (default 21)
 #' @return Tibble with ticker, vol_21d, sorted by vol descending
+#' @family curated-groups
 #' @export
 #' @examplesIf interactive()
 #' hd_most_volatile("equity_daily", 3)

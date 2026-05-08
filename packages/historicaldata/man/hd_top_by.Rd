@@ -27,3 +27,10 @@ hd_top_by("equity_daily", "market_cap", 5)
 hd_top_by("crypto_daily", "volume_avg", 3)
 \dontshow{\}) # examplesIf}
 }
+\seealso{
+Other curated-groups: 
+\code{\link{hd_group}()},
+\code{\link{hd_most_volatile}()},
+\code{\link{hd_ticker_groups}()}
+}
+\concept{curated-groups}

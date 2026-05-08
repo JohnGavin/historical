@@ -20,6 +20,8 @@ Each row records: what was changed, when, why, and the original value.
 }
 \seealso{
 Other quality-audit: 
+\code{\link{hd_jumps}()},
+\code{\link{hd_metadata_amendments}()},
 \code{\link{hd_quality}()}
 }
 \concept{quality-audit}

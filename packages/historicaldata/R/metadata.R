@@ -6,6 +6,7 @@
 #' @param dataset Filter to one dataset (e.g. "equity_daily"). NULL = all.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Tibble or lazy duckplyr frame of matching tickers with metadata
+#' @family discovery
 #' @export
 #' @examplesIf interactive()
 #' hd_search("^APP")     # regex: tickers starting with APP
@@ -110,6 +111,7 @@ hd_exchanges <- function(dataset = NULL) {
 #' @param tickers Character vector of ticker symbols
 #' @param collect If TRUE (default), materialise.
 #' @return Tibble or lazy frame with key metadata columns
+#' @family discovery
 #' @export
 #' @examplesIf interactive()
 #' hd_ticker_meta(c("AAPL", "MSFT"))
@@ -138,6 +140,7 @@ hd_ticker_meta <- function(tickers, collect = TRUE) {
 #' @param ticker Ticker symbol (e.g. "AAPL", "BTC")
 #' @param collect If TRUE (default), materialise.
 #' @return One-row tibble with all metadata columns
+#' @family discovery
 #' @export
 hd_ticker_info <- function(ticker, collect = TRUE) {
   ds <- hd_datasets()[["metadata"]]
@@ -161,6 +164,7 @@ hd_ticker_info <- function(ticker, collect = TRUE) {
 #' These are hardcoded since the FRED API requires an API key.
 #'
 #' @return Tibble with series_id, frequency, units, title
+#' @family discovery
 #' @export
 hd_fred_meta <- function() {
   dplyr::tribble(

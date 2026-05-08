@@ -20,3 +20,8 @@ Designed for dark-themed dashboards and vignettes.
 library(ggplot2)
 ggplot(mtcars, aes(wt, mpg)) + geom_point(colour = "#00BFFF") + hd_theme()
 }
+\seealso{
+Other visualisation: 
+\code{\link{hd_palette}()}
+}
+\concept{visualisation}

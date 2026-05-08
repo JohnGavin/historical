@@ -5,6 +5,7 @@
 #'
 #' @param base_size Base font size (default 14)
 #' @return A ggplot2 theme object
+#' @family visualisation
 #' @export
 #' @examples
 #' library(ggplot2)

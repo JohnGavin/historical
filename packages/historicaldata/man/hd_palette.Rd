@@ -15,4 +15,8 @@ Character vector of hex colours
 \description{
 10 colours chosen for visibility on black backgrounds.
 }
+\seealso{
+Other visualisation: 
+\code{\link{hd_theme}()}
+}
 \concept{visualisation}

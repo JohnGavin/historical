@@ -17,3 +17,10 @@ Groups are editorial (curated), not computed from metadata.
 hd_ticker_groups()
 hd_ticker_groups() |> dplyr::filter(group == "FAANG")
 }
+\seealso{
+Other curated-groups: 
+\code{\link{hd_group}()},
+\code{\link{hd_most_volatile}()},
+\code{\link{hd_top_by}()}
+}
+\concept{curated-groups}

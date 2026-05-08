@@ -17,15 +17,28 @@ List available macro series
 }
 \seealso{
 Other data-access: 
+\code{\link{hd_ecb}()},
+\code{\link{hd_factors}()},
+\code{\link{hd_guardian}()},
+\code{\link{hd_guardian_monthly}()},
+\code{\link{hd_jst}()},
 \code{\link{hd_lazy}()},
-\code{\link{hd_macro_vintages}()}
+\code{\link{hd_macro}()},
+\code{\link{hd_macro_vintages}()},
+\code{\link{hd_ohlcv}()}
 
 Other discovery: 
 \code{\link{hd_datasets}()},
+\code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},
+\code{\link{hd_fred_meta}()},
+\code{\link{hd_jst_variables}()},
 \code{\link{hd_macro_forward}()},
 \code{\link{hd_macro_registry}()},
+\code{\link{hd_search}()},
 \code{\link{hd_summary}()},
+\code{\link{hd_ticker_info}()},
+\code{\link{hd_ticker_meta}()},
 \code{\link{hd_tickers}()}
 }
 \concept{data-access}

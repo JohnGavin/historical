@@ -12,6 +12,7 @@
 #' @param collect If TRUE, materialise immediately (backward compatible).
 #'   If FALSE (default), return a lazy duckplyr frame.
 #' @return Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
+#' @family data-access
 #' @export
 #' @examplesIf interactive()
 #' hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
@@ -84,6 +85,7 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
 #' @param local If TRUE, query local cache instead of remote.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Lazy duckplyr frame or tibble
+#' @family data-access
 #' @export
 #' @examplesIf interactive()
 #' hd_macro("SP500", from = "2024-01-01") |> head()
@@ -143,6 +145,7 @@ hd_macro_series <- function(local = FALSE) {
 #' @param local If TRUE, query local cache.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Lazy duckplyr frame or tibble
+#' @family data-access
 #' @export
 hd_factors <- function(dataset = "FF3", frequency = "daily",
                        from = NULL, to = NULL, local = FALSE,
