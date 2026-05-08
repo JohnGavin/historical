@@ -29,9 +29,17 @@ show_code <- function(target_name) {
 }
 
 #' Read a vig_* target with RDS fallback
-safe_tar_read <- function(name) {
-  tryCatch(
-    targets::tar_read_raw(name),
+#'
+#' In strict mode (VIGNETTE_STRICT=1 env var), fails with error instead of
+#' returning NULL. Use strict mode in CI/production renders to catch missing
+#' targets early.
+#'
+#' @param name Target name to read
+#' @param strict If TRUE, stop() on missing target. Default: checks VIGNETTE_STRICT env var.
+safe_tar_read <- function(name, strict = nzchar(Sys.getenv("VIGNETTE_STRICT"))) {
+  result <- tryCatch(
+
+targets::tar_read_raw(name),
     error = function(e) {
       rds_dirs <- c("../inst/extdata/vignettes", "inst/extdata/vignettes")
       for (d in rds_dirs) {
@@ -41,6 +49,13 @@ safe_tar_read <- function(name) {
       NULL
     }
   )
+
+  if (is.null(result) && strict) {
+    stop("VIGNETTE_STRICT: Target '", name, "' not found. Run tar_make() first.",
+         call. = FALSE)
+  }
+
+  result
 }
 
 #' Format large numbers as human-readable (1.2T, 345M, 12K)
