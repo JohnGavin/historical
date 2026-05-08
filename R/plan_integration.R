@@ -28,23 +28,26 @@ plan_integration <- function() {
     targets::tar_target(
       strategy_returns,
       {
-        # Helper to extract strategy returns in long format
-        extract_strategy <- function(portfolio_df, ret_col_name, strategy_name) {
-          portfolio_df |>
-            dplyr::mutate(strategy = strategy_name) |>
-            dplyr::select(date, strategy, return = .data[[ret_col_name]])
-        }
-
-        # Bind all strategies
+        # Bind all strategies - extract and rename columns inline
         dplyr::bind_rows(
           # Factor strategies
-          extract_strategy(fm_portfolio, "portfolio_ret", "Factor MAX"),
-          extract_strategy(drif_portfolio, "portfolio_ret", "Factor DRIF"),
+          fm_portfolio |>
+            dplyr::mutate(strategy = "Factor MAX") |>
+            dplyr::select(date, strategy, return = portfolio_ret),
+          drif_portfolio |>
+            dplyr::mutate(strategy = "Factor DRIF") |>
+            dplyr::select(date, strategy, return = portfolio_ret),
 
           # Stock strategies
-          extract_strategy(stk_max_portfolio, "port_ret", "Stock MAX"),
-          extract_strategy(stk_drif_portfolio, "port_ret", "Stock DRIF"),
-          extract_strategy(xgb_drif_portfolio, "port_ret", "XGB DRIF")
+          stk_max_portfolio |>
+            dplyr::mutate(strategy = "Stock MAX") |>
+            dplyr::select(date, strategy, return = port_ret),
+          stk_drif_portfolio |>
+            dplyr::mutate(strategy = "Stock DRIF") |>
+            dplyr::select(date, strategy, return = port_ret),
+          xgb_drif_portfolio |>
+            dplyr::mutate(strategy = "XGB DRIF") |>
+            dplyr::select(date, strategy, return = port_ret)
         ) |>
           dplyr::arrange(strategy, date)
       }
