@@ -2,6 +2,33 @@
 
 Chronological record of findings. Wiki pages synthesise these into structured knowledge.
 
+## 2026-05-08
+
+### Macrosynergy Macro Data Research (#100)
+- **Site access blocked (403)** — manual review required at https://macrosynergy.com/research/
+- **Research gap identified**: We have 29 ECB series but only use CISS equity for regime classification
+- **Unused series**: M3 money supply, HICP inflation, yield curve slope (10Y-2Y), yield level/curvature
+- **Missing vs typical macro approaches**: Industrial production, PMI, credit spreads, consumer confidence
+- **Priced-in risk**: GDP/CPI/PMI are widely-followed (consensus priced in); M3/credit conditions less watched
+- **Next steps**: Manual review of Macrosynergy → test incremental power (Fama-French + macro α) → cross-geography validation
+- **Current evidence quality**: BRONZE (no Macrosynergy access, no incremental-power test, no cross-geography replication)
+- See [[macrosynergy-research]]
+
+### TAA Selection, Mid-Caps, and Lazy Prices Research (#104)
+- **Lazy Prices (10-K NLP)**: 22% annualized from text similarity on SEC filings, 6-18mo drift (Cohen et al. 2019)
+  - Differs from Guardian NLP null result — 10-K is official disclosure with slow diffusion, not news
+  - US-only evidence (violates cross-geography-pervasiveness) — need UK/EU replication
+  - HIGH priority: exceptional returns, free data (SEC EDGAR), 4 robust similarity measures
+  - Roadmap: obtain original paper → data pipeline (sec-edgar-downloader) → backtest replication → cost model
+- **Size Effect (Lower Tier Large Caps)**: 11% annual claimed but ZERO disclosed sample period/robustness
+  - Authors acknowledge parameter tuning, hypothesis reversal (initial idea failed)
+  - LOW priority: not credible without sample period, single-market, modest returns
+- **TAA Strategy Selection (AllocateSmartly)**: Momentum-based selection shows NO Sharpe improvement vs equal-weight
+  - 53-year backtest (1973-2026), 100+ strategies, no transaction cost model
+  - INFORMATIONAL: validates current decay-aware fixed weighting (plan_multi_strategy.R)
+  - Short-term momentum (3-6mo) fails for TAA strategies
+- See [[taa-selection-research]]
+
 ## 2026-05-07
 
 ### ECB Data Access (#88)
