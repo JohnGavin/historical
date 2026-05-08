@@ -46,8 +46,8 @@ utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
 source(utils_path)
 ```
 
-::: {.callout-note}
-**European overlay strategies.** Tests whether US VIX-based regime signals generalise to European equities, and compares with the ECB's own [CISS](https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1426.pdf) (Composite Indicator of Systemic Stress) equity sub-index as a European-native vol proxy. CISS equity correlates r=0.75 with VIX over 6,653 daily observations (2000-2026).
+::: {.callout-note .small}
+European overlay strategies. Tests whether US VIX-based regime signals generalise to European equities, and compares with the ECB's own [CISS](https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1426.pdf){target="_blank"} (<abbr title="Composite Indicator of Systemic Stress — ECB's flagship daily systemic risk indicator combining bond, equity, FX, money market, and financial intermediary stress">Composite Indicator of Systemic Stress</abbr>) equity sub-index as a European-native vol proxy. CISS equity correlates r≈0.75 with VIX over 6,000+ daily observations (2000-2026). See also: [ECB CISS page](https://www.ecb.europa.eu/stats/macroprudential_indicators/systemic_risk/html/index.en.html){target="_blank"} | [Wikipedia](https://en.wikipedia.org/wiki/Composite_Indicator_of_Systemic_Stress){target="_blank"}.
 :::
 
 # What is CISS?
@@ -74,7 +74,7 @@ The composite index combines all 5 using **time-varying cross-correlations** —
 
 **Why CISS, not VSTOXX?** VSTOXX (European implied vol, equivalent to VIX) is a commercial Qontigo product with no free API. CISS equity sub-index correlates r=0.75 with VIX and is freely available from the ECB.
 
-**Source:** [ECB SDMX API](https://data.ecb.europa.eu/) — series `CISS/D.U2.Z0Z.4F.EC.SS_CIN.IDX`. R function: [`hd_ecb()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R). Methodology: [Holló, Kremer & Lo Duca (2012), ECB WP #1426](https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1426.pdf).
+**Source:** [ECB SDMX API](https://data.ecb.europa.eu/){target="_blank"} — series `CISS/D.U2.Z0Z.4F.EC.SS_CIN.IDX`. R function: [`hd_ecb()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R){target="_blank"}. Methodology: [Holló, Kremer & Lo Duca (2012), ECB WP #1426](https://www.ecb.europa.eu/pub/pdf/scpwps/ecbwp1426.pdf){target="_blank"}.
 
 #### CISS vs VIX
 
@@ -288,9 +288,10 @@ if (!is.null(ecb_raw)) {
       style = "caption-side: top; text-align: left;",
       htmltools::HTML(paste0(
         "Country-level CISS: systemic stress per country (daily, 2000-2026). ",
-        "Italy and France peaked during the eurozone debt crisis. UK peaked during Brexit/COVID. ",
-        "The ECB also computes a US CISS for cross-Atlantic comparison. ",
-        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()</a>."
+        "Italy and France peaked during the eurozone debt crisis (2011-2012). All countries peaked during GFC (2008). ",
+        "The ECB also computes a <strong>US CISS</strong> for cross-Atlantic comparison — a potential overlay signal for US equities too. ",
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()</a>. ",
+        "Reference: <a href='https://www.ecb.europa.eu/stats/macroprudential_indicators/systemic_risk/html/index.en.html' target='_blank'>ECB CISS dashboard</a>."
       ))
     )
   ) |> DT::formatRound(c("Mean", "Max"), 4)
