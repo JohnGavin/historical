@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-05-08
+
+### Completed
+- **Tier 1 Data Integration Test** (PR #111): All 4 gap implementations validated via fast test pipeline
+  - Created `_targets_integration_test.R` — mock strategy returns, validates in <20s
+  - 14/14 integration targets passing: tracking error/IR, regime correlations, tail K_eff, contagion detection
+  - Fixed date type mismatch: Changed `as.Date()` → `as.POSIXct()` to match `hd_ohlcv()` output
+  - Fixed VIX granularity: `regime_correlations()` now expands monthly VIX to daily via year-month join
+  - Updated `knowledge/LOG.md` with completion entry
+  - All changes committed and pushed to `feature/tier1-data-integration`
+
+### Failed Approaches
+- Tried using `consolidated_equity` in docs pipeline — doesn't exist there, docs pipeline uses `hd_ohlcv()` directly
+- Tried helper function with `{{ ret_col }}` for column selection — scoping issues with tidyeval, simplified to inline transformations
+- Tried `date >= as.Date("2020-01-01")` for TLT — returns all NAs (TLT starts ~2010), changed to 2010-01-01
+- Tried left_join by `date` for daily returns + monthly VIX — most days don't match month-end, resulted in NAs. Fixed with year-month join.
+
+### Accuracy / Metrics
+- Integration test: 14/14 targets pass, <20s runtime (vs 10+ min for full pipeline)
+- Test targets: 8 core + 6 display (tables/plots)
+- Full pipeline attempted: 88 targets completed before 600s timeout
+- roborev: 42 failed, 14 addressed (33% resolution rate, unchanged from session start)
+
+### Known Limitations
+- Full pipeline integration targets not yet validated — strategy feature engineering (stk_drif_features, etf_a_features) takes >10 min
+- Integration test uses mock data — real integration with actual strategy portfolios still needs validation
+- Integration plan (`R/plan_integration.R`) wired to docs pipeline but not yet exercised end-to-end
+
 ## 2026-05-07
 
 ### Completed

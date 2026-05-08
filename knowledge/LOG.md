@@ -4,6 +4,17 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 
 ## 2026-05-08
 
+### Tier 1 Data Integration Test Validation (PR #111)
+- **All integration targets validated** — 14/14 targets pass in under 20 seconds
+- **Test pipeline created** — `_targets_integration_test.R` with mock strategy returns for fast validation
+- **Tracking Error / IR**: `te_ir_metrics`, `te_ir_table` — measure strategy divergence from SPY benchmark
+- **Regime-conditional correlations**: `regime_corr_matrices` (9 regimes), `contagion_pairs`, `corr_heatmap_crisis/calm`
+- **Tail K_eff**: `keff_crisis_calm_by_strategy`, `keff_efficiency_plot`, `keff_summary_table` — effective sample size accounting for autocorrelation
+- **Data granularity fix**: `regime_correlations()` now expands monthly VIX to daily via year-month join (carry forward)
+- **Date type fix**: Changed `as.Date()` to `as.POSIXct()` to match `hd_ohlcv()` output class
+- **Next steps**: Merge PR #111 → validate in full pipeline (may need longer timeout for strategy feature engineering)
+- Related: #105 (Tier 1 gaps), #102 (correlation contagion analysis)
+
 ### Macrosynergy Macro Data Research (#100)
 - **Site access blocked (403)** — manual review required at https://macrosynergy.com/research/
 - **Research gap identified**: We have 29 ECB series but only use CISS equity for regime classification
@@ -95,3 +106,18 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
   3. Expand cross-market validation to international/bonds/commodities (pervasiveness gap)
   4. Add transaction cost analysis to regime.R and risk_state.R
 - See [[regime-trend-following]]
+
+### Tier 1 Gap Integration (#105 follow-up)
+- **Integration complete**: All 4 Tier 1 implementations wired to actual data sources
+- **New integration plan**: `R/plan_integration.R` creates unified targets:
+  - `vix_monthly`: Monthly VIX from existing `aw_vix_daily` target
+  - `strategy_returns`: Unified long-format target combining all 5 strategies (Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF)
+  - `spy_returns`: SPY benchmark returns from `consolidated_equity`
+  - `multi_asset_returns`: Wide-format returns combining strategies + benchmarks (SPY, TLT, GLD, DBC)
+- **Liquidity targets wired**: `equity_with_adv`, `equity_liquidity_filtered`, `liquidity_summary_table`
+- **TE/IR targets wired**: `te_ir_metrics`, `te_ir_table` using SPY benchmark
+- **Regime correlation targets wired**: `regime_corr_matrices` (9 regimes), `contagion_pairs`, heatmaps, SPY-TLT comparison
+- **Tail K_eff targets wired**: `keff_crisis_calm_by_strategy`, `keff_efficiency_plot`, `keff_summary_table`
+- **Pipeline changes**: Added 4 function sources + plan_integration to `docs/_targets.R`
+- **Status**: Ready for `tar_make()` execution to materialize integrated targets
+- **Next steps**: Run pipeline, validate outputs, integrate into vignettes

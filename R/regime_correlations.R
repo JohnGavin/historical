@@ -9,9 +9,18 @@
 #' @return List of correlation matrices by regime
 #' @export
 regime_correlations <- function(returns_wide, vix_data) {
-  # Join with VIX data
-  data_with_vix <- returns_wide |>
-    dplyr::left_join(vix_data, by = "date")
+  # Expand monthly VIX to daily by joining on year-month
+  returns_with_ym <- returns_wide |>
+    dplyr::mutate(year_month = format(date, "%Y-%m"))
+
+  vix_with_ym <- vix_data |>
+    dplyr::mutate(year_month = format(date, "%Y-%m")) |>
+    dplyr::select(year_month, vix)
+
+  # Join with VIX data (monthly VIX gets carried to all days in that month)
+  data_with_vix <- returns_with_ym |>
+    dplyr::left_join(vix_with_ym, by = "year_month") |>
+    dplyr::select(-year_month)
 
   # Define regimes
   data_with_regimes <- data_with_vix |>
