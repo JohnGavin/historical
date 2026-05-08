@@ -37,6 +37,12 @@ tar_option_set(
   format = "rds"
 )
 
+# Source Tier 1 gap functions
+source(here::here("R/liquidity.R"))
+source(here::here("R/tracking_error.R"))
+source(here::here("R/regime_correlations.R"))
+source(here::here("R/tail_keff.R"))
+
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
@@ -79,6 +85,7 @@ source(here::here("R/plan_causal_graph.R"))
 source(here::here("R/plan_ecb.R"))
 source(here::here("R/plan_guardian.R"))
 source(here::here("R/plan_jst.R"))
+source(here::here("R/plan_integration.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -95,6 +102,7 @@ c(plan_strategy_names(),
   plan_interpretability(),
   plan_shadow_trades(),
   plan_multi_strategy(),
+  plan_integration(),
   plan_vix_macro_overlay(),
   plan_european_overlay(),
   plan_rafi(),
