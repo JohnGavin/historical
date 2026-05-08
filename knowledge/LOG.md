@@ -2,6 +2,23 @@
 
 Chronological record of findings. Wiki pages synthesise these into structured knowledge.
 
+## 2026-05-08
+
+### TAA Selection, Mid-Caps, and Lazy Prices Research (#104)
+- **Lazy Prices (10-K NLP)**: 22% annualized from text similarity on SEC filings, 6-18mo drift (Cohen et al. 2019)
+  - Differs from Guardian NLP null result — 10-K is official disclosure with slow diffusion, not news
+  - US-only evidence (violates cross-geography-pervasiveness) — need UK/EU replication
+  - HIGH priority: exceptional returns, free data (SEC EDGAR), 4 robust similarity measures
+  - Roadmap: obtain original paper → data pipeline (sec-edgar-downloader) → backtest replication → cost model
+- **Size Effect (Lower Tier Large Caps)**: 11% annual claimed but ZERO disclosed sample period/robustness
+  - Authors acknowledge parameter tuning, hypothesis reversal (initial idea failed)
+  - LOW priority: not credible without sample period, single-market, modest returns
+- **TAA Strategy Selection (AllocateSmartly)**: Momentum-based selection shows NO Sharpe improvement vs equal-weight
+  - 53-year backtest (1973-2026), 100+ strategies, no transaction cost model
+  - INFORMATIONAL: validates current decay-aware fixed weighting (plan_multi_strategy.R)
+  - Short-term momentum (3-6mo) fails for TAA strategies
+- See [[taa-selection-research]]
+
 ## 2026-05-07
 
 ### ECB Data Access (#88)
