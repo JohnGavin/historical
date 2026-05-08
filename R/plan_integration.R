@@ -138,7 +138,7 @@ plan_integration <- function() {
     targets::tar_target(
       liquidity_summary_table,
       {
-        liquidity_summary(equity_with_adv) |>
+        liquidity_summary(equity_liquidity_filtered) |>
           DT::datatable(
             caption = "Liquidity Summary by Ticker (SPY Example)",
             options = list(pageLength = 20),
