@@ -13,9 +13,11 @@ navbar:
     github:
       icon: fab fa-github
       href: https://github.com/JohnGavin/historical
+      aria-label: GitHub
     home:
       icon: fas fa-home
       href: https://johngavin.github.io/historical/
+      aria-label: Home
     articles:
       text: Articles
       menu:
@@ -41,6 +43,23 @@ reference:
       - hd_macro
       - hd_factors
       - hd_lazy
+
+  - title: External Data Sources
+    desc: Access data from ECB, Guardian, and JST Macrohistory
+    contents:
+      - hd_ecb
+      - hd_ecb_registry
+      - hd_guardian
+      - hd_guardian_monthly
+      - hd_jst
+      - hd_jst_variables
+
+  - title: Macro Extensions
+    desc: Forward-looking macro, vintages, and registry
+    contents:
+      - hd_macro_forward
+      - hd_macro_registry
+      - hd_macro_vintages
 
   - title: Discovery
     desc: Search, explore, and summarise available datasets and tickers
@@ -70,6 +89,63 @@ reference:
       - hd_quality
       - hd_amendments
       - hd_metadata_amendments
+      - hd_revision_analysis
+
+  - title: Performance Metrics
+    desc: Sharpe ratios, HAC-robust statistics, and deflated metrics
+    contents:
+      - hd_hac_sharpe
+      - hd_hac_tstat
+      - hd_deflated_sharpe
+      - hd_delta_z
+      - hd_drawdown_overlap
+      - hd_horizon_skill
+
+  - title: Scoring & Calibration
+    desc: Brier scores, CRPS, and forecast calibration metrics
+    contents:
+      - hd_brier_score
+      - hd_crps_empirical
+      - hd_crps_normal
+      - hd_crps_skill
+
+  - title: Kelly & Position Sizing
+    desc: Kelly criterion variants and effective sample size
+    contents:
+      - hd_kelly_bayesian
+      - hd_kelly_bounded
+      - hd_kelly_rolling
+      - hd_keff
+      - hd_tail_keff
+      - hd_tail_dependence
+
+  - title: Trade Analysis
+    desc: Trade-level metrics and event analysis
+    contents:
+      - hd_event_trades
+      - hd_monthly_trades
+      - hd_shadow_trades
+      - hd_trade_metrics
+
+  - title: Null Hypothesis Testing
+    desc: Factor null tests and simulation environments
+    contents:
+      - hd_factor_null_test
+      - hd_null_rejection_rate
+      - hd_null_env_white_noise
+      - hd_null_env_ma1
+      - hd_null_env_garch11
+      - hd_null_env_gjr_garch
+      - hd_null_env_jump_diffusion
+      - hd_null_env_regime_vol
+      - hd_null_env_factor_null
+
+  - title: Results Storage
+    desc: Append, query, and manage backtest results
+    contents:
+      - hd_results_append
+      - hd_results_query
+      - hd_results_schema
 
   - title: Infrastructure
     desc: DuckDB connections, caching, and downloads

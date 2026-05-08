@@ -147,9 +147,9 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <h4><abbr title="Jordà-Schularick-Taylor Macrohistory Database">JST</abbr> Macrohistory: Long-Run Equity Returns</h4>
 <p>155 years of equity premium across 18 countries (1870-2020). Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.</p>
 </a>
-<a href="pkg/index.html" class="info-card">
+<a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
 <h4>API Reference</h4>
-<p>Full function documentation for all 30 exported functions, grouped by: Data Access, Discovery, Curated Groups, Quality &amp; Audit, Infrastructure, Visualisation.</p>
+<p>Full function documentation for all 70 exported functions: Data Access, Discovery, Performance Metrics, Kelly Sizing, Null Hypothesis Testing, and more.</p>
 </a>
 </div>
 
@@ -160,7 +160,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [GitHub](https://github.com/JohnGavin/historical) — source code, issues, CI
 - [Hugging Face Dataset](https://huggingface.co/datasets/JohnGavin/finance-data) — Parquet files, dataset card
 - [Strategy Leaderboard](leaderboard.html) — rankings, equity curves, cost-adjusted metrics
-- [API Reference](pkg/index.html) — pkgdown function docs
+- [API Reference](https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R) — function source code
 - [Examples](examples.html) — interactive dashboard with all datasets
 - [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
 - [Factor MAX](factor-max.html) — factor rotation strategy
