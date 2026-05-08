@@ -277,8 +277,8 @@ if (!is.null(metrics)) {
 
 1. [DRIF: factor-level implementation](drif.html) — same methodology on 5 FF factors
 2. [Factor MAX](factor-max.html) — simpler signal, comparison benchmark
-3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/) — original research
-4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/) — MAX signal research
+3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank"} — original research
+4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/){target="_blank"} — MAX signal research
 
 # XGBoost DRIF
 

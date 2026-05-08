@@ -81,6 +81,8 @@ The composite index combines all 5 using **time-varying cross-correlations** —
 ```{r}
 #| label: ciss-vix-correlation
 ecb_raw <- safe_tar_read("ecb_raw")
+data_available <- FALSE
+
 if (!is.null(ecb_raw)) {
   ciss_eq <- ecb_raw |> filter(series_name == "ciss_equity") |> select(date, ciss = value)
   ciss_comp <- ecb_raw |> filter(series_name == "ciss_composite") |> select(date, ciss_composite = value)
@@ -95,31 +97,38 @@ if (!is.null(ecb_raw)) {
     merged <- inner_join(vix, ciss_eq, by = "date") |>
       inner_join(ciss_comp, by = "date")
 
-    cor_tbl <- tibble::tibble(
-      Pair = c("CISS equity vs VIX", "CISS composite vs VIX", "CISS equity vs CISS composite"),
-      `Spearman r` = round(c(
-        cor(merged$ciss, merged$vix, method = "spearman"),
-        cor(merged$ciss_composite, merged$vix, method = "spearman"),
-        cor(merged$ciss, merged$ciss_composite, method = "spearman")
-      ), 3),
-      N = nrow(merged),
-      From = as.character(min(merged$date)),
-      To = as.character(max(merged$date))
-    )
-
-    DT::datatable(cor_tbl, rownames = FALSE, filter = "none",
-      options = list(dom = "t"),
-      caption = htmltools::tags$caption(
-        style = "caption-side: top; text-align: left;",
-        htmltools::HTML(paste0(
-          "Spearman rank correlations between CISS sub-indices and VIX. ",
-          "N = ", format(nrow(merged), big.mark = ","), " overlapping daily observations. ",
-          "CISS equity is the strongest VIX proxy (r = 0.75). ",
-          "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_ecb.R' target='_blank'>plan_ecb.R</a> + FRED VIXCLS."
-        ))
+    if (nrow(merged) > 0) {
+      data_available <- TRUE
+      cor_tbl <- tibble::tibble(
+        Pair = c("CISS equity vs VIX", "CISS composite vs VIX", "CISS equity vs CISS composite"),
+        `Spearman r` = round(c(
+          cor(merged$ciss, merged$vix, method = "spearman"),
+          cor(merged$ciss_composite, merged$vix, method = "spearman"),
+          cor(merged$ciss, merged$ciss_composite, method = "spearman")
+        ), 3),
+        N = nrow(merged),
+        From = as.character(min(merged$date)),
+        To = as.character(max(merged$date))
       )
-    ) |> DT::formatRound("Spearman r", 3)
+
+      DT::datatable(cor_tbl, rownames = FALSE, filter = "none",
+        options = list(dom = "t"),
+        caption = htmltools::tags$caption(
+          style = "caption-side: top; text-align: left;",
+          htmltools::HTML(paste0(
+            "Spearman rank correlations between CISS sub-indices and VIX. ",
+            "N = ", format(nrow(merged), big.mark = ","), " overlapping daily observations. ",
+            "CISS equity is the strongest VIX proxy (r = 0.75). ",
+            "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_ecb.R' target='_blank'>plan_ecb.R</a> + FRED VIXCLS."
+          ))
+        )
+      ) |> DT::formatRound("Spearman r", 3)
+    }
   }
+}
+
+if (!data_available) {
+  htmltools::p(class = "text-muted", "Data not available. Run tar_make() to build ecb_raw and consolidated_macro targets.")
 }
 ```
 
@@ -158,6 +167,8 @@ if (!is.null(ecb_raw)) {
       ))
     )
   ) |> DT::formatRound(c("Min", "Max", "Mean"), 4)
+} else {
+  htmltools::p(class = "text-muted", "Data not available. Run tar_make() to build ecb_raw target.")
 }
 ```
 
