@@ -148,8 +148,8 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <p>155 years of equity premium across 18 countries (1870-2020). Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.</p>
 </a>
 <a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
-<h4>API Reference</h4>
-<p>Full function documentation for all 70 exported functions: Data Access, Discovery, Performance Metrics, Kelly Sizing, Null Hypothesis Testing, and more.</p>
+<h4>Source Code</h4>
+<p>Browse R source files on GitHub: Data Access, Discovery, Performance Metrics, Kelly Sizing, Null Hypothesis Testing, and more.</p>
 </a>
 </div>
 
