@@ -37,11 +37,13 @@ tar_option_set(
   format = "rds"
 )
 
-# Source Tier 1 gap functions
-source(here::here("R/liquidity.R"))
-source(here::here("R/tracking_error.R"))
-source(here::here("R/regime_correlations.R"))
-source(here::here("R/tail_keff.R"))
+# Source Tier 1 & 2 gap functions
+# TODO: create liquidity.R, tracking_error.R, regime_correlations.R, tail_keff.R
+# source(here::here("R/liquidity.R"))
+# source(here::here("R/tracking_error.R"))
+# source(here::here("R/regime_correlations.R"))
+# source(here::here("R/tail_keff.R"))
+source(here::here("R/vvix_analysis.R"))
 
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
@@ -75,6 +77,8 @@ source(here::here("R/plan_interpretability.R"))
 source(here::here("R/plan_shadow_trades.R"))
 source(here::here("R/plan_multi_strategy.R"))
 source(here::here("R/plan_vix_macro_overlay.R"))
+source(here::here("R/plan_vvix.R"))
+# source(here::here("R/plan_integration.R"))  # TODO: create plan_integration.R
 source(here::here("R/plan_european_overlay.R"))
 source(here::here("R/plan_rafi.R"))
 source(here::here("R/plan_forecast_eval.R"))
@@ -85,7 +89,6 @@ source(here::here("R/plan_causal_graph.R"))
 source(here::here("R/plan_ecb.R"))
 source(here::here("R/plan_guardian.R"))
 source(here::here("R/plan_jst.R"))
-source(here::here("R/plan_integration.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -102,8 +105,9 @@ c(plan_strategy_names(),
   plan_interpretability(),
   plan_shadow_trades(),
   plan_multi_strategy(),
-  plan_integration(),
   plan_vix_macro_overlay(),
+  plan_vvix(),
+  # plan_integration(),  # TODO: create plan_integration.R
   plan_european_overlay(),
   plan_rafi(),
   plan_forecast_eval(),

@@ -5,6 +5,9 @@ on:
     - cron: '0 6 * * 6'  # Every Saturday at 06:00 UTC
   workflow_dispatch:        # Manual trigger via GitHub UI
 
+permissions:
+  contents: write  # Required for git push to main branch
+
 jobs:
   poll:
     runs-on: ubuntu-latest
@@ -27,12 +30,21 @@ jobs:
         with:
           r-version: '4.4'
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libuv1-dev
+
+      - name: Ensure data directory exists
+        run: mkdir -p data/raw
+
       - name: Install R dependencies
         shell: Rscript {0}
         run: |
           install.packages(
             c("jsonlite", "arrow", "dplyr", "cli", "here",
-              "httr2", "tibble", "tidyr", "purrr"),
+              "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload",
+              "DBI", "duckdb", "duckplyr", "ggplot2"),
             repos = "https://cloud.r-project.org"
           )
 
@@ -46,6 +58,9 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/raw/
-          git diff --cached --quiet || git commit -m "data: ${{ matrix.source }} $(date +%Y-%m-%d)"
-          git push
+          git add -f data/raw/
+          if ! git diff --cached --quiet; then
+            git commit -m "data: ${{ matrix.source }} $(date +%Y-%m-%d)"
+            git pull --rebase origin ${{ github.ref_name }}
+            git push
+          fi
