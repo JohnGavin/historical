@@ -5,6 +5,9 @@ on:
     - cron: '0 6 * * 6'  # Every Saturday at 06:00 UTC
   workflow_dispatch:        # Manual trigger via GitHub UI
 
+permissions:
+  contents: write  # Required for git push to main branch
+
 jobs:
   poll:
     runs-on: ubuntu-latest
