@@ -83,8 +83,16 @@ parse_markets <- function(markets) {
     ))
   }
 
-  safe_num  <- function(x) { v <- suppressWarnings(as.numeric(x)); if (is.na(v)) NA_real_  else v }
-  safe_int  <- function(x) { v <- suppressWarnings(as.integer(x)); if (is.na(v)) NA_integer_ else v }
+  safe_num  <- function(x) {
+    if (is.null(x) || length(x) == 0) return(NA_real_)
+    v <- suppressWarnings(as.numeric(x))
+    if (is.na(v)) NA_real_ else v
+  }
+  safe_int  <- function(x) {
+    if (is.null(x) || length(x) == 0) return(NA_integer_)
+    v <- suppressWarnings(as.integer(x))
+    if (is.na(v)) NA_integer_ else v
+  }
   safe_chr  <- function(x) if (is.null(x) || length(x) == 0) NA_character_ else as.character(x[[1]])
   safe_time <- function(x) {
     if (is.null(x) || length(x) == 0 || is.na(x)) return(as.POSIXct(NA))

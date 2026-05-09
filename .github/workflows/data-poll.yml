@@ -32,7 +32,7 @@ jobs:
         run: |
           install.packages(
             c("jsonlite", "arrow", "dplyr", "cli", "here",
-              "httr2", "tibble", "tidyr", "purrr"),
+              "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload"),
             repos = "https://cloud.r-project.org"
           )
 
