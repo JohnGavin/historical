@@ -1,0 +1,830 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>JST Macrohistory: Long-Run Equity Returns</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="jst-dashboard_files/libs/clipboard/clipboard.min.js"></script>
+<script src="jst-dashboard_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="jst-dashboard_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="jst-dashboard_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="jst-dashboard_files/libs/quarto-html/popper.min.js"></script>
+<script src="jst-dashboard_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="jst-dashboard_files/libs/quarto-html/anchor.min.js"></script>
+<link href="jst-dashboard_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="jst-dashboard_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="jst-dashboard_files/libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<script src="jst-dashboard_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="jst-dashboard_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="jst-dashboard_files/libs/bootstrap/bootstrap-5aeb795fb1f1a222a51c230a0084b391.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="jst-dashboard_files/libs/bootstrap/bootstrap-dark-fa40cdb917baf4fa3d1e593fe915e727.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<link href="jst-dashboard_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
+<script src="jst-dashboard_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<link href="jst-dashboard_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
+<script src="jst-dashboard_files/libs/datatables-binding-0.34.0/datatables.js"></script>
+<script src="jst-dashboard_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<link href="jst-dashboard_files/libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+<link href="jst-dashboard_files/libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet">
+<script src="jst-dashboard_files/libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
+<link href="jst-dashboard_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
+<script src="jst-dashboard_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
+<style>
+body { font-size: 1.1em; line-height: 1.6; }
+.cell-output-display { margin: 1.5em 0; }
+figure { margin: 2em 0; }
+figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+table { margin: 1.5em auto; }
+/* UI Controls: font size + dark/light toggle */
+#ui-controls {
+  position: fixed; top: 10px; right: 10px; z-index: 9999;
+  display: flex; gap: 5px; background: var(--bs-body-bg);
+  padding: 5px; border-radius: 4px; border: 1px solid var(--bs-border-color);
+}
+#ui-controls button {
+  padding: 5px 10px; border: 1px solid var(--bs-border-color);
+  background: var(--bs-body-bg); color: var(--bs-body-color);
+  cursor: pointer; border-radius: 3px;
+}
+#ui-controls button:hover { opacity: 0.8; }
+</style>
+<script>
+// Default to dark mode
+if (!localStorage.getItem('quarto-color-scheme')) {
+  document.documentElement.setAttribute('data-bs-theme', 'dark');
+}
+// UI Controls: font size + dark/light toggle
+document.addEventListener('DOMContentLoaded', function() {
+  var toolbar = document.createElement('div');
+  toolbar.id = 'ui-controls';
+  toolbar.innerHTML = '<button id="font-down" title="Decrease font">A-</button>' +
+    '<button id="font-up" title="Increase font">A+</button>' +
+    '<button id="theme-toggle" title="Toggle dark/light">◐</button>';
+  document.body.appendChild(toolbar);
+
+  var baseSize = parseFloat(localStorage.getItem('font-size-px') || '17.6');
+  document.documentElement.style.fontSize = baseSize + 'px';
+
+  document.getElementById('font-up').addEventListener('click', function() {
+    baseSize = Math.min(baseSize + 1, 28);
+    document.documentElement.style.fontSize = baseSize + 'px';
+    localStorage.setItem('font-size-px', baseSize);
+  });
+  document.getElementById('font-down').addEventListener('click', function() {
+    baseSize = Math.max(baseSize - 1, 12);
+    document.documentElement.style.fontSize = baseSize + 'px';
+    localStorage.setItem('font-size-px', baseSize);
+  });
+  document.getElementById('theme-toggle').addEventListener('click', function() {
+    var current = document.documentElement.getAttribute('data-bs-theme');
+    var next = current === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-bs-theme', next);
+    localStorage.setItem('quarto-color-scheme', next);
+  });
+});
+</script>
+
+
+</head>
+
+<body class="quarto-dark"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = true;
+    const darkModeDefault = authorPrefersDark;
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#cross-geography-pervasiveness" id="toc-cross-geography-pervasiveness" class="nav-link" data-scroll-target="#cross-geography-pervasiveness">Cross-Geography Pervasiveness</a></li>
+  <li><a href="#equity-premium-heatmap" id="toc-equity-premium-heatmap" class="nav-link" data-scroll-target="#equity-premium-heatmap">Equity Premium Heatmap</a></li>
+  <li><a href="#financial-crisis-timeline" id="toc-financial-crisis-timeline" class="nav-link" data-scroll-target="#financial-crisis-timeline">Financial Crisis Timeline</a></li>
+  <li><a href="#crisis-frequency-table" id="toc-crisis-frequency-table" class="nav-link" data-scroll-target="#crisis-frequency-table">Crisis Frequency Table</a></li>
+  <li><a href="#data-notes" id="toc-data-notes" class="nav-link" data-scroll-target="#data-notes">Data Notes</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">JST Macrohistory: Long-Run Equity Returns</h1>
+<p class="subtitle lead">18 Countries, 1870-2020</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>The <a href="https://www.macrohistory.net/database/" target="_blank">Jordà-Schularick-Taylor Macrohistory Database</a> provides 150+ years of macroeconomic and financial data across 18 advanced economies, spanning 1870 to 2020. This vignette analyzes the equity premium (equity total return minus short-term government bill rate) to test the cross-geography pervasiveness criterion from the Swedroe evidence-based investing framework.</p>
+<p><strong>Key findings:</strong></p>
+<ul>
+<li>Equity premium is positive in 14 of 16 countries over the full sample (mean &gt; 0, t-stat &gt; 2, majority of years positive)</li>
+<li>USA equity premium from JST correlates with the Fama-French market factor (1926-2020 overlap period)</li>
+<li>Financial crises occurred in 18 countries, with total crisis-years ranging from 1 to 9 per country</li>
+</ul>
+<p><strong>Source:</strong> Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). “Macrofinancial History and the New Business Cycle Facts.” In <em>NBER Macroeconomics Annual 2016</em>, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. <a href="https://doi.org/10.1086/690241" target="_blank">DOI: 10.1086/690241</a></p>
+<hr>
+</section>
+<section id="cross-geography-pervasiveness" class="level2">
+<h2 class="anchored" data-anchor-id="cross-geography-pervasiveness">Cross-Geography Pervasiveness</h2>
+<p>The table below shows full-sample equity premium statistics by country, sorted by mean premium. A factor is considered <em>pervasive</em> if it has a positive mean premium, t-statistic &gt; 2, and is positive in more than 50% of years.</p>
+<div class="cell">
+<div id="tbl-pervasiveness" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-pervasiveness-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;1: Equity premium pervasiveness test: full-sample statistics by country. Countries are sorted by mean premium. The ‘Pervasive’ column indicates whether the premium meets all three criteria: positive mean, t-stat &gt; 2, and positive in &gt;50% of years. Data source: <a href="https://www.macrohistory.net/database/">JST Macrohistory Database</a>.
+</figcaption>
+<div aria-describedby="tbl-pervasiveness-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<div class="datatables html-widget html-fill-item" id="htmlwidget-963edaa78d7cbc2e41b7" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-963edaa78d7cbc2e41b7">{"x":{"filter":"none","vertical":false,"data":[["DEU","FIN","JPN","ITA","NLD","SWE","AUS","BEL","CHE","ESP","GBR","USA","DNK","FRA","NOR","PRT"],[1870,1896,1886,1870,1900,1871,1870,1870,1900,1900,1871,1872,1875,1870,1881,1880],[2020,2020,2020,2020,2020,2020,2020,2020,2020,2020,2020,2020,2020,2020,2020,2020],[145,125,133,131,121,150,148,147,121,117,150,149,146,144,140,141],[0.22,0.1,0.09,0.07000000000000001,0.07000000000000001,0.07000000000000001,0.06,0.06,0.06,0.06,0.06,0.06,0.05,0.05,0.05,0.04],[1.73,0.3,0.26,0.31,0.23,0.2,0.16,0.23,0.19,0.21,0.19,0.18,0.18,0.22,0.2,0.27],[1.57,3.84,4.08,2.63,3.27,4.14,4.97,3.02,3.51,3.3,3.81,4.33,3.48,2.51,3.06,1.77],[66.90000000000001,59.2,65.40000000000001,55.7,63.6,62,73.59999999999999,53.1,66.90000000000001,62.4,64.7,66.40000000000001,61,57.6,60,58.9],[false,true,true,true,true,true,true,true,true,true,true,true,true,true,true,false]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Country<\/th>\n      <th>Period<\/th>\n      <th>To Year<\/th>\n      <th>N Years<\/th>\n      <th>Mean (%)<\/th>\n      <th>SD (%)<\/th>\n      <th>t-stat<\/th>\n      <th>% Positive<\/th>\n      <th>Pervasive<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":20,"dom":"t","columnDefs":[{"className":"dt-center","targets":[1,2,3,4,5,6,7,8]},{"name":"Country","targets":0},{"name":"Period","targets":1},{"name":"To Year","targets":2},{"name":"N Years","targets":3},{"name":"Mean (%)","targets":4},{"name":"SD (%)","targets":5},{"name":"t-stat","targets":6},{"name":"% Positive","targets":7},{"name":"Pervasive","targets":8}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,20,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[4]; $(this.api().cell(row, 4).node()).css({'background':isNaN(parseFloat(value)) || value <= 0.040000 ? '' : 'linear-gradient(90.000000deg, transparent ' + Math.max(0.220000 - value, 0)/0.180000 * 100 + '%, #69d4a0 ' + Math.max(0.220000 - value, 0)/0.180000 * 100 + '%)','background-size':'100% 90%','background-repeat':'no-repeat','background-position':'center'});\nvar value=data[8]; $(this.api().cell(row, 8).node()).css({'background-color':value == true ? \"#69d4a0\" : value == false ? \"#555555\" : null});\n}"}},"evals":["options.rowCallback"],"jsHooks":[]}</script>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<hr>
+</section>
+<section id="equity-premium-heatmap" class="level2">
+<h2 class="anchored" data-anchor-id="equity-premium-heatmap">Equity Premium Heatmap</h2>
+<p>The heatmap below shows mean equity premium by decade and country. Darker green indicates higher premium; red indicates negative premium. Missing cells represent periods with insufficient data.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-heatmap" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-heatmap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="jst-dashboard_files/figure-html/fig-heatmap-1.png" class="img-fluid figure-img" width="1152">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-heatmap-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: Equity premium heatmap: mean excess return (equity total return minus bill rate) by decade and country, 1870-2020. Green shades indicate positive premium, red indicates negative. Data source: <a href="https://www.macrohistory.net/database/">JST Macrohistory Database</a>. Generated by <a href="https://github.com/JohnGavin/historicaldata/blob/main/R/plan_jst.R">R/plan_jst.R</a>.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+<section id="financial-crisis-timeline" class="level2">
+<h2 class="anchored" data-anchor-id="financial-crisis-timeline">Financial Crisis Timeline</h2>
+<p>Financial crises (identified by the JST <code>crisisJST</code> indicator) are shown below as segments spanning crisis years for each country.</p>
+<div class="cell">
+<div class="cell-output-display">
+<div id="fig-crises" class="quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-fig figure">
+<div aria-describedby="fig-crises-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<img src="jst-dashboard_files/figure-html/fig-crises-1.png" class="img-fluid figure-img" width="1152">
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-crises-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;2: Financial crisis timeline: crisis years by country, 1870-2020. Each segment represents a crisis year as identified by the JST crisisJST indicator. Data source: <a href="https://www.macrohistory.net/database/">JST Macrohistory Database</a>.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<hr>
+</section>
+<section id="crisis-frequency-table" class="level2">
+<h2 class="anchored" data-anchor-id="crisis-frequency-table">Crisis Frequency Table</h2>
+<p>The table below shows the number of crisis years per country, sorted by total crisis-years.</p>
+<div class="cell">
+<div id="tbl-crises" class="cell quarto-float quarto-figure quarto-figure-center anchored">
+<figure class="quarto-float quarto-float-tbl figure">
+<figcaption class="quarto-float-caption-top quarto-float-caption quarto-float-tbl" id="tbl-crises-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Table&nbsp;2: Financial crisis frequency by country: total crisis-years identified by the JST crisisJST indicator. Countries are sorted by total crisis count. Data source: <a href="https://www.macrohistory.net/database/">JST Macrohistory Database</a>.
+</figcaption>
+<div aria-describedby="tbl-crises-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+<div class="cell-output-display">
+<div class="datatables html-widget html-fill-item" id="htmlwidget-dd8376f9802f720315e9" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-dd8376f9802f720315e9">{"x":{"filter":"none","vertical":false,"data":[["ITA","BEL","ESP","JPN","DNK","SWE","USA","CHE","DEU","FIN","PRT","FRA","GBR","NOR","AUS","NLD","CAN","IRL"],[9,8,8,7,6,6,6,5,5,5,5,4,4,4,2,2,1,1],["1873, 1887, 1893, 1907, 1921, 1930, 1935, 1990, 2008","1870, 1876, 1885, 1925, 1931, 1934, 1939, 2008","1883, 1890, 1913, 1920, 1924, 1931, 1977, 2008","1871, 1890, 1901, 1907, 1920, 1927, 1997","1877, 1885, 1908, 1921, 1987, 2008","1878, 1907, 1922, 1931, 1991, 2008","1873, 1893, 1907, 1930, 1984, 2007","1870, 1910, 1931, 1991, 2008","1873, 1891, 1901, 1931, 2008","1877, 1900, 1921, 1931, 1991","1890, 1920, 1923, 1931, 2008","1882, 1889, 1930, 2008","1890, 1974, 1991, 2007","1899, 1922, 1931, 1988","1893, 1989","1921, 2008","1907","2008"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Country<\/th>\n      <th>Total Crisis Years<\/th>\n      <th>Crisis Years<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":20,"dom":"t","columnDefs":[{"className":"dt-center","targets":1},{"name":"Country","targets":0},{"name":"Total Crisis Years","targets":1},{"name":"Crisis Years","targets":2}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,20,25,50,100],"rowCallback":"function(row, data, displayNum, displayIndex, dataIndex) {\nvar value=data[1]; $(this.api().cell(row, 1).node()).css({'background':isNaN(parseFloat(value)) || value <= 1.000000 ? '' : 'linear-gradient(90.000000deg, transparent ' + Math.max(9.000000 - value, 0)/8.000000 * 100 + '%, #f08080 ' + Math.max(9.000000 - value, 0)/8.000000 * 100 + '%)','background-size':'100% 90%','background-repeat':'no-repeat','background-position':'center'});\n}"}},"evals":["options.rowCallback"],"jsHooks":[]}</script>
+</div>
+</div>
+</figure>
+</div>
+</div>
+<hr>
+</section>
+<section id="data-notes" class="level2">
+<h2 class="anchored" data-anchor-id="data-notes">Data Notes</h2>
+<ul>
+<li><strong>Equity premium</strong> = equity total return (<code>eq_tr</code>) - short-term government bill rate (<code>bill_rate</code>)</li>
+<li><strong>Pervasiveness criteria</strong>: mean premium &gt; 0, t-stat &gt; 2, and positive in &gt;50% of years</li>
+<li><strong>Crisis indicator</strong>: <code>crisisJST</code> binary flag (1 = crisis year)</li>
+<li><strong>Country coverage</strong>: 18 countries: AUS, BEL, CHE, DEU, DNK, ESP, FIN, FRA, GBR, ITA, JPN, NLD, NOR, PRT, SWE, USA</li>
+<li><strong>Data period</strong>: 1870 to 2020 (2,718 country-year observations)</li>
+</ul>
+<p>All target computations are defined in <a href="https://github.com/JohnGavin/historicaldata/blob/main/R/plan_jst.R"><code>R/plan_jst.R</code></a>.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
