@@ -40,7 +40,8 @@ jobs:
         run: |
           install.packages(
             c("jsonlite", "arrow", "dplyr", "cli", "here",
-              "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload"),
+              "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload",
+              "DBI", "duckdb", "duckplyr", "ggplot2"),
             repos = "https://cloud.r-project.org"
           )
 
@@ -54,6 +55,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/raw/
+          git add -f data/raw/
           git diff --cached --quiet || git commit -m "data: ${{ matrix.source }} $(date +%Y-%m-%d)"
           git push
