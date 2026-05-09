@@ -32,6 +32,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libcurl4-openssl-dev libuv1-dev
 
+      - name: Ensure data directory exists
+        run: mkdir -p data/raw
+
       - name: Install R dependencies
         shell: Rscript {0}
         run: |
