@@ -38,6 +38,7 @@ jobs:
       - name: Ensure data directory exists
         run: mkdir -p data/raw
 
+
       - name: Install R dependencies
         shell: Rscript {0}
         run: |
