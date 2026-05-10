@@ -53,11 +53,30 @@
 - Momentum decomposition: 4 functions, 10 targets, integrated into pipeline
 - Issue creation: 9 issues in ~45 minutes
 
+### Phase 1 Testing Complete (4-5 hours)
+- ✅ Downloaded Ken French data (753 months, 1963-2026)
+- ✅ Fixed 5 pipeline issues:
+  - RcppRoll dependency (add to tar_option_set packages)
+  - Date convention (month-end vs month-start → year-month join)
+  - Forward return calculation (use slider::slide_dbl)
+  - Cache path and parquet writing (use tools::R_user_dir + saveRDS)
+- ✅ Successfully decomposed 209,065 stock-months (529 tickers)
+- ✅ Computed persistence metrics (rank IC by horizon)
+- **Results:**
+  - Industry momentum: Persists (IC=0.028 at 1m, t=2.95 ***)
+  - Stock-specific: Persists at ALL horizons (unexpected - should revert)
+  - Style: Weak (IC≈0, not significant - should be strong)
+  - Beta: Not robust (IC≈0 as expected)
+- **Discrepancies from De Boer et al. (2025):**
+  - 2/4 components match expectations (Industry ✅, Beta ✅)
+  - Stock-specific persists instead of reverting (opposite of paper)
+  - Style momentum weak instead of strong
+  - Likely due to: time period (2000-2026 vs pre-2000), universe size (529 vs broader)
+
 ### Known Limitations
-- Momentum decomposition pipeline not yet tested (next: download Ken French data, run decomposition)
-- Ken French data download may fail if website format changes (will handle errors gracefully)
-- Decomposition limited to post-2000 period (LTR universe availability)
-- Computational cost: ~1.3M regressions (529 stocks × 200 months × 12-month windows) = 10-20 min first run
+- Decomposition findings differ from paper on Style and Stock-Specific components
+- Methodology differences not fully investigated (attribution approach, industry classification)
+- Forward return alignment should be verified (month T signal → T+1 to T+h return)
 
 ## 2026-05-09
 
