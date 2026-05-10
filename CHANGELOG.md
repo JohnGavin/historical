@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-05-10
+
+### Completed
+- **Momentum decomposition infrastructure** (Issue #121, Phase 1: 2 hours)
+  - Created R/momentum_decomposition.R: 4 functions
+    - hd_ff_factors(): Download Ken French 5-factor, momentum, industry data
+    - decompose_momentum(): Split 12-month returns into 5 components (beta, style, industry, stock-specific)
+    - compute_persistence(): Measure component predictive power (rank IC by horizon)
+    - plot_persistence_by_component(): Visualize IC by component and forecast horizon
+  - Created R/plan_momentum_decomposition.R: 10 targets
+    - Download: ff_5factors, ff_momentum, ff_industries_12
+    - Decompose: stock_returns_monthly → momentum_components
+    - Analyze: persistence_metrics, persistence_plot, momentum_comparison
+    - Validate: sum of components ≈ total return
+    - Dispersion: cross-sectional dispersion over time
+  - Integrated into docs/_targets.R (source + plan call)
+  - Based on: De Boer, Gao, Montminy (2025) SSRN 5716502
+  - Next: Test pipeline (download data, run decomposition, validate vs paper findings)
+- **Transaction cost audit** (Issue #125, Phase 1: 3 hours)
+  - Completed: Cost Audit Phase 1 - measured actual liquidity
+  - LTR universe: 529 stocks (not 51 as comment said)
+  - Liquidity classification (2024 ADV):
+    - Tier 1 (Mega >$1B ADV): 26 stocks (5%) - cost 0.02%
+    - Tier 2 (Large $100M-1B): 237 stocks (45%) - cost 0.05%
+    - Tier 3 (Mid $10M-100M): 258 stocks (49%) - cost 0.25%
+    - Tier 4 (Small <$10M): 8 stocks (1.5%) - cost 0.50%
+  - Realistic cost: 0.153% per trade (equal-weight average)
+  - Current LTR: 0.10% (53% too low)
+  - Expected Sharpe impact: -15 to -25% (recorded in #127)
+  - Decision: Skip Phase 2 re-run (user chose to move to #121)
+- **Issue grouping and prioritization** (30 min)
+  - Created 5 thematic groups: Momentum Optimization, Risk Management, ML/GenAI, Diversification, Research Exploration
+  - Week 1 priority: #125 (cost audit BLOCKING), #121 (momentum decomposition), #123 (regime allocation)
+  - 30-40 hour first week roadmap
+- **Issues created:**
+  - #119: Momentum volatility spikes (Mozes 2026)
+  - #120: StockGPT transformer (Mai 2024)
+  - #121: Momentum decomposition (De Boer et al. 2025)
+  - #122: Causal crash prediction (Ranjan 2025)
+  - #123: Regime-dependent allocation (Zakamulin 2026)
+  - #124: Curve trades with macro signals (Macrosynergy 2026)
+  - #125: Transaction cost reality check (StratProof 2026)
+  - #126: Quantocracy roundup (May 3, 2026)
+  - #127: Research ROI tracking (meta-validation issue)
+
+### Failed Approaches
+- Tried to load historicaldata package in global shell: package not available. Ken French functions will download directly from web.
+
+### Accuracy / Metrics
+- Cost audit: 529 stocks analyzed, 4 liquidity tiers, 0.153% measured cost (vs 0.50% rule default)
+- Momentum decomposition: 4 functions, 10 targets, integrated into pipeline
+- Issue creation: 9 issues in ~45 minutes
+
+### Known Limitations
+- Momentum decomposition pipeline not yet tested (next: download Ken French data, run decomposition)
+- Ken French data download may fail if website format changes (will handle errors gracefully)
+- Decomposition limited to post-2000 period (LTR universe availability)
+- Computational cost: ~1.3M regressions (529 stocks × 200 months × 12-month windows) = 10-20 min first run
+
 ## 2026-05-09
 
 ### Completed
