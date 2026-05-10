@@ -382,11 +382,18 @@ compute_persistence <- function(decomposed_momentum,
     h_months <- horizon_months[h]
 
     # Join signal with forward returns
+    # Compute forward returns using slider (forward-looking window)
     forward <- stock_returns |>
       dplyr::group_by(ticker) |>
       dplyr::arrange(date) |>
       dplyr::mutate(
-        forward_ret = RcppRoll::roll_prodr(1 + monthly_ret, n = h_months, align = "left") - 1
+        forward_ret = slider::slide_dbl(
+          monthly_ret,
+          ~prod(1 + .x, na.rm = FALSE) - 1,
+          .before = 0,
+          .after = h_months - 1,
+          .complete = TRUE
+        )
       ) |>
       dplyr::ungroup() |>
       dplyr::select(ticker, date, forward_ret)

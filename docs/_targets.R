@@ -30,7 +30,7 @@ for (pkg in c("duckplyr", "glmnet", "xgboost", "slider")) {
 }
 
 tar_option_set(
-  packages = c("dplyr", "duckplyr", "ggplot2", "tidyr", "scales", "DT", "rlang", "cli"),
+  packages = c("dplyr", "duckplyr", "ggplot2", "tidyr", "scales", "DT", "rlang", "cli", "RcppRoll"),
   memory = "transient",
   garbage_collection = TRUE,
   error = "continue",  # Don't let one broken target block all others
