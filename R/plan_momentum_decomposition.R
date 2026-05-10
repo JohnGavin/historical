@@ -27,14 +27,11 @@ plan_momentum_decomposition <- function() {
     tar_target(
       stock_returns_monthly,
       {
-        # Load from existing LTR universe
-        ltr_univ <- tar_read(ltr_universe)
-
-        ltr_univ |>
+        ltr_universe |>
           mutate(ym = format(date, "%Y-%m")) |>
           group_by(ticker, ym) |>
           summarise(
-            date = max(date),  # Month-end date
+            date = as.Date(max(date)),  # Month-end date, convert to Date class
             monthly_ret = prod(1 + (adjusted / lag(adjusted) - 1), na.rm = TRUE) - 1,
             .groups = "drop"
           ) |>

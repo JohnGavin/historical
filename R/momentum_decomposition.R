@@ -1,5 +1,24 @@
 # Momentum Decomposition Functions
 # Based on De Boer, Gao, Montminy (2025): "Optimizing the Persistence of Price Momentum"
+#
+# IMPLEMENTATION NOTE: 4 vs 5 Components
+#
+# The paper decomposes momentum into 5 components:
+#   1. Beta momentum (market exposure)
+#   2. Country momentum (geographic exposure)
+#   3. Style momentum (factor loadings: HML, SMB, RMW, CMA)
+#   4. Industry momentum (sector trends)
+#   5. Stock-specific momentum (residual)
+#
+# For US-only stocks (our LTR universe), country momentum is zero because all
+# stocks share the same geography. Therefore, this implementation uses 4
+# components, omitting country momentum.
+#
+# Fama-French 5-Factor Model Definitions:
+#   - HML (High Minus Low): Value factor — high book-to-market vs low
+#   - SMB (Small Minus Big): Size factor — small-cap vs large-cap
+#   - RMW (Robust Minus Weak): Profitability — high operating profit vs low
+#   - CMA (Conservative Minus Aggressive): Investment — low asset growth vs high
 
 #' Download Ken French Factor Data
 #'
@@ -35,16 +54,19 @@ hd_ff_factors <- function(dataset = "F-F_Research_Data_5_Factors_2x3",
                           cache = TRUE) {
   frequency <- match.arg(frequency)
 
-  # Cache directory
-  cache_dir <- hd_cache_path()
+  # Cache directory (use R standard cache location)
+  cache_dir <- file.path(
+    tools::R_user_dir("historicaldata", "cache"),
+    "ken_french"
+  )
   if (!dir.exists(cache_dir)) dir.create(cache_dir, recursive = TRUE)
 
-  cache_file <- file.path(cache_dir, paste0(dataset, "_", frequency, ".parquet"))
+  cache_file <- file.path(cache_dir, paste0(dataset, "_", frequency, ".rds"))
 
   # Return cached if exists
   if (cache && file.exists(cache_file)) {
     cli::cli_alert_info("Using cached {dataset} ({frequency})")
-    return(duckplyr::read_parquet_duckdb(cache_file))
+    return(readRDS(cache_file))
   }
 
   # Construct download URL
@@ -124,7 +146,7 @@ hd_ff_factors <- function(dataset = "F-F_Research_Data_5_Factors_2x3",
 
   # Cache if requested
   if (cache) {
-    duckplyr::write_parquet_duckdb(df, cache_file)
+    saveRDS(df, cache_file)
     cli::cli_alert_success("Cached {dataset} to {basename(cache_file)}")
   }
 
@@ -168,15 +190,26 @@ decompose_momentum <- function(stock_returns,
                                lookback_months = 12,
                                min_obs = 6) {
 
-  # Join stock returns with factors
-  combined <- stock_returns |>
-    dplyr::inner_join(factor_returns, by = "date") |>
+  # Join stock returns with factors using year-month (dates may differ by convention)
+  stock_ym <- stock_returns |>
+    dplyr::mutate(ym = format(date, "%Y-%m"))
+
+  factor_ym <- factor_returns |>
+    dplyr::mutate(ym = format(date, "%Y-%m")) |>
+    dplyr::select(-date)
+
+  combined <- stock_ym |>
+    dplyr::inner_join(factor_ym, by = "ym") |>
     dplyr::arrange(ticker, date)
 
   # If industry returns provided, join them
   if (!is.null(industry_returns)) {
+    industry_ym <- industry_returns |>
+      dplyr::mutate(ym = format(date, "%Y-%m")) |>
+      dplyr::select(-date)
+
     combined <- combined |>
-      dplyr::left_join(industry_returns, by = "date")
+      dplyr::left_join(industry_ym, by = "ym")
   }
 
   # Compute 12-month trailing returns (for validation)
