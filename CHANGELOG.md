@@ -3,6 +3,32 @@
 ## 2026-05-10
 
 ### Completed
+- **Momentum decomposition Phase 2: Optimized Signals** (Issue #121, Phase 2: 3 hours)
+  - **Critical Finding: Decomposition destroys value. All component-based strategies have negative Sharpe ratios.**
+  - Extended R/momentum_decomposition.R: +3 functions (192 lines)
+    - build_optimized_signals(): Construct paper/data-driven/conservative signals from components
+    - backtest_momentum_signals(): Long-short portfolio simulator with transaction costs
+    - summarize_backtest_performance(): Sharpe, drawdown, turnover metrics
+  - Extended R/plan_momentum_decomposition.R: +6 targets
+    - optimized_signals: All four variants (baseline, paper, data_driven, conservative)
+    - backtest_results: Monthly returns with 0.153% per-trade costs (from #125)
+    - performance_summary: Performance table with Sharpe, annual return, max DD, turnover
+    - cumulative_returns_plot: Cumulative return curves (log scale)
+    - rolling_sharpe_plot: 36-month rolling Sharpe
+    - turnover_analysis: Mean/median/min/max turnover by strategy
+  - **Backtest Results (2000-2026, 529 stocks, 742 months):**
+    - Baseline (Total 12m LTR): Net Sharpe 0.054, Gross 0.069, Turnover 7.9%
+    - Paper (Style + Industry): Net Sharpe **-0.337**, Gross -0.232, Turnover 26.4%
+    - Data-Driven (Industry + Stock-Spec): Net Sharpe **-0.342**, Gross -0.229, Turnover 27.5%
+    - Conservative (Industry Only): Net Sharpe **-0.386**, Gross -0.282, Turnover 26.4%
+  - **Why Decomposition Failed:**
+    1. Turnover explosion: Decomposed signals 3.3x more volatile (26% vs 8% monthly)
+    2. Signal dilution: Isolating components breaks covariance structure (they're not independent)
+    3. Persistence ≠ Profitability: Rank IC of 0.02-0.03 too weak after costs
+    4. Baseline momentum too weak: Sharpe 0.05 leaves nothing to optimize
+  - **Conclusion:** Do NOT decompose momentum. Use total 12m return if momentum is required.
+  - Based on: De Boer, Gao, Montminy (2025) SSRN 5716502
+  - Next: Optional deep dive (correlation analysis, regime effects) OR move to #119/#123
 - **Momentum decomposition infrastructure** (Issue #121, Phase 1: 2 hours)
   - Created R/momentum_decomposition.R: 4 functions
     - hd_ff_factors(): Download Ken French 5-factor, momentum, industry data

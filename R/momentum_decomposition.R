@@ -473,3 +473,196 @@ plot_persistence_by_component <- function(persistence_metrics,
     ggplot2::theme_minimal() +
     ggplot2::theme(legend.position = "bottom")
 }
+
+
+#' Build Optimized Momentum Signals
+#'
+#' Combine momentum components into optimized signals based on different
+#' weighting schemes.
+#'
+#' @param decomposed_momentum Tibble from decompose_momentum()
+#' @param scheme Character. One of:
+#'   - "paper" (Style + Industry)
+#'   - "data_driven" (Industry + Stock-Specific)
+#'   - "conservative" (Industry only)
+#'   - "baseline" (Total 12-month return, for comparison)
+#' @param weights Numeric vector of length 2 for "paper" and "data_driven".
+#'   Defaults to equal weights (0.5, 0.5).
+#'
+#' @return Tibble with columns: ticker, date, signal, scheme
+#'
+#' @export
+build_optimized_signals <- function(decomposed_momentum,
+                                   scheme = c("paper", "data_driven", "conservative", "baseline"),
+                                   weights = c(0.5, 0.5)) {
+
+  scheme <- match.arg(scheme)
+
+  if (scheme == "baseline") {
+    # Baseline is total 12-month return (sum of all components)
+    result <- decomposed_momentum |>
+      dplyr::mutate(
+        signal = beta_momentum + style_momentum + industry_momentum + stock_specific_momentum
+      ) |>
+      dplyr::select(ticker, date, signal) |>
+      dplyr::mutate(scheme = "baseline")
+
+  } else if (scheme == "paper") {
+    # Paper recommendation: Style + Industry
+    result <- decomposed_momentum |>
+      dplyr::mutate(
+        signal = weights[1] * style_momentum + weights[2] * industry_momentum
+      ) |>
+      dplyr::select(ticker, date, signal) |>
+      dplyr::mutate(scheme = "paper")
+
+  } else if (scheme == "data_driven") {
+    # Data-driven: Industry + Stock-Specific
+    result <- decomposed_momentum |>
+      dplyr::mutate(
+        signal = weights[1] * industry_momentum + weights[2] * stock_specific_momentum
+      ) |>
+      dplyr::select(ticker, date, signal) |>
+      dplyr::mutate(scheme = "data_driven")
+
+  } else if (scheme == "conservative") {
+    # Conservative: Industry only
+    result <- decomposed_momentum |>
+      dplyr::mutate(signal = industry_momentum) |>
+      dplyr::select(ticker, date, signal) |>
+      dplyr::mutate(scheme = "conservative")
+  }
+
+  result
+}
+
+
+#' Backtest Momentum Signals
+#'
+#' Simulate long-short portfolio returns from momentum signals with transaction costs.
+#'
+#' @param signals Tibble with columns: ticker, date, signal, scheme
+#' @param stock_returns Tibble with monthly stock returns
+#' @param n_long Integer. Number of stocks to long (default 50)
+#' @param n_short Integer. Number of stocks to short (default 50)
+#' @param cost_per_trade Numeric. One-way transaction cost as fraction of trade
+#'   (default 0.00153, from issue #125)
+#' @param leverage Numeric. Portfolio leverage (default 1 for long-short dollar-neutral)
+#'
+#' @return Tibble with columns: date, scheme, portfolio_ret, turnover, cost, net_ret
+#'
+#' @export
+backtest_momentum_signals <- function(signals,
+                                     stock_returns,
+                                     n_long = 50,
+                                     n_short = 50,
+                                     cost_per_trade = 0.00153,
+                                     leverage = 1) {
+
+  # Join signals with next month's returns
+  combined <- signals |>
+    dplyr::inner_join(
+      stock_returns |>
+        dplyr::mutate(date_lag = date) |>
+        dplyr::group_by(ticker) |>
+        dplyr::mutate(date = dplyr::lag(date)) |>
+        dplyr::filter(!is.na(date)) |>
+        dplyr::select(ticker, date, next_ret = monthly_ret),
+      by = c("ticker", "date")
+    )
+
+  # For each month, rank stocks and select top/bottom
+  portfolio <- combined |>
+    dplyr::group_by(scheme, date) |>
+    dplyr::mutate(
+      rank = rank(-signal, na.last = "keep", ties.method = "first"),
+      n_stocks = dplyr::n()
+    ) |>
+    dplyr::filter(rank <= n_long | rank > (n_stocks - n_short)) |>
+    dplyr::mutate(
+      weight = dplyr::case_when(
+        rank <= n_long ~ leverage / (2 * n_long),
+        TRUE ~ -leverage / (2 * n_short)
+      ),
+      position = ifelse(rank <= n_long, "long", "short")
+    ) |>
+    dplyr::ungroup()
+
+  # Compute portfolio returns
+  monthly_returns <- portfolio |>
+    dplyr::group_by(scheme, date) |>
+    dplyr::summarise(
+      portfolio_ret = sum(weight * next_ret, na.rm = TRUE),
+      n_positions = dplyr::n(),
+      .groups = "drop"
+    )
+
+  # Compute turnover (fraction of portfolio that changes each month)
+  turnover <- portfolio |>
+    dplyr::arrange(scheme, ticker, date) |>
+    dplyr::group_by(scheme, ticker) |>
+    dplyr::mutate(
+      prev_weight = dplyr::lag(weight, default = 0),
+      weight_change = abs(weight - prev_weight)
+    ) |>
+    dplyr::group_by(scheme, date) |>
+    dplyr::summarise(
+      turnover = sum(weight_change, na.rm = TRUE) / 2,  # Divide by 2 for one-way turnover
+      .groups = "drop"
+    )
+
+  # Join and compute costs
+  result <- monthly_returns |>
+    dplyr::left_join(turnover, by = c("scheme", "date")) |>
+    dplyr::mutate(
+      turnover = ifelse(is.na(turnover), 0, turnover),
+      cost = turnover * cost_per_trade,
+      net_ret = portfolio_ret - cost
+    )
+
+  result
+}
+
+
+#' Summarize Backtest Performance
+#'
+#' Compute performance metrics (Sharpe, cumulative return, max drawdown, turnover)
+#' for backtested momentum signals.
+#'
+#' @param backtest_results Tibble from backtest_momentum_signals()
+#' @param annual_rf Numeric. Annual risk-free rate (default 0.02)
+#'
+#' @return Tibble with one row per scheme and performance metrics
+#'
+#' @export
+summarize_backtest_performance <- function(backtest_results, annual_rf = 0.02) {
+
+  monthly_rf <- (1 + annual_rf)^(1/12) - 1
+
+  backtest_results |>
+    dplyr::group_by(scheme) |>
+    dplyr::summarise(
+      n_months = dplyr::n(),
+      mean_ret = mean(net_ret, na.rm = TRUE),
+      sd_ret = sd(net_ret, na.rm = TRUE),
+      sharpe = (mean(net_ret, na.rm = TRUE) - monthly_rf) / sd(net_ret, na.rm = TRUE) * sqrt(12),
+      cumulative_ret = prod(1 + net_ret, na.rm = TRUE) - 1,
+      annual_ret = (1 + mean(net_ret, na.rm = TRUE))^12 - 1,
+      mean_turnover = mean(turnover, na.rm = TRUE),
+      mean_cost = mean(cost, na.rm = TRUE),
+      gross_sharpe = (mean(portfolio_ret, na.rm = TRUE) - monthly_rf) / sd(portfolio_ret, na.rm = TRUE) * sqrt(12),
+      .groups = "drop"
+    ) |>
+    dplyr::mutate(
+      max_dd = purrr::map_dbl(scheme, ~{
+        rets <- backtest_results |>
+          dplyr::filter(scheme == .x) |>
+          dplyr::pull(net_ret)
+        cumrets <- cumprod(1 + rets)
+        cummax <- cummax(cumrets)
+        dd <- (cumrets - cummax) / cummax
+        min(dd, na.rm = TRUE)
+      })
+    ) |>
+    dplyr::arrange(dplyr::desc(sharpe))
+}

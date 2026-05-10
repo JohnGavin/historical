@@ -241,6 +241,177 @@ plan_momentum_decomposition <- function() {
           theme_minimal() +
           theme(legend.position = "bottom")
       }
+    ),
+
+    # ===== PHASE 2: Optimized Signals =====
+
+    # 11. Build optimized signals (all four schemes)
+    tar_target(
+      optimized_signals,
+      {
+        # Build all four signal variants
+        baseline <- build_optimized_signals(momentum_components, "baseline")
+        paper <- build_optimized_signals(momentum_components, "paper", weights = c(0.5, 0.5))
+        data_driven <- build_optimized_signals(momentum_components, "data_driven", weights = c(0.5, 0.5))
+        conservative <- build_optimized_signals(momentum_components, "conservative")
+
+        bind_rows(baseline, paper, data_driven, conservative)
+      }
+    ),
+
+    # 12. Backtest all signals
+    tar_target(
+      backtest_results,
+      {
+        backtest_momentum_signals(
+          signals = optimized_signals,
+          stock_returns = stock_returns_monthly,
+          n_long = 50,
+          n_short = 50,
+          cost_per_trade = 0.00153,  # From issue #125
+          leverage = 1
+        )
+      }
+    ),
+
+    # 13. Performance summary
+    tar_target(
+      performance_summary,
+      {
+        summarize_backtest_performance(
+          backtest_results,
+          annual_rf = 0.02
+        ) |>
+          mutate(
+            scheme_label = recode(
+              scheme,
+              baseline = "Baseline (Total 12m LTR)",
+              paper = "Paper (Style + Industry)",
+              data_driven = "Data-Driven (Industry + Stock-Specific)",
+              conservative = "Conservative (Industry Only)"
+            )
+          ) |>
+          select(
+            Strategy = scheme_label,
+            `Sharpe (Net)` = sharpe,
+            `Sharpe (Gross)` = gross_sharpe,
+            `Annual Return` = annual_ret,
+            `Max Drawdown` = max_dd,
+            `Mean Turnover` = mean_turnover,
+            `Mean Cost` = mean_cost,
+            `N Months` = n_months
+          )
+      }
+    ),
+
+    # 14. Cumulative returns plot
+    tar_target(
+      cumulative_returns_plot,
+      {
+        cumulative <- backtest_results |>
+          arrange(scheme, date) |>
+          group_by(scheme) |>
+          mutate(
+            cumulative_ret = cumprod(1 + net_ret),
+            scheme_label = recode(
+              scheme,
+              baseline = "Baseline (Total 12m LTR)",
+              paper = "Paper (Style + Industry)",
+              data_driven = "Data-Driven (Industry + Stock-Specific)",
+              conservative = "Conservative (Industry Only)"
+            )
+          )
+
+        ggplot(cumulative, aes(x = date, y = cumulative_ret, color = scheme_label)) +
+          geom_line(linewidth = 0.8) +
+          scale_y_log10(labels = scales::percent_format(scale = 1)) +
+          labs(
+            title = "Cumulative Returns: Optimized Momentum Signals",
+            subtitle = paste0(
+              "Long-short (50/50), 0.153% per-trade cost, ",
+              min(cumulative$date), " to ", max(cumulative$date)
+            ),
+            x = NULL,
+            y = "Cumulative Return (Log Scale)",
+            color = "Strategy"
+          ) +
+          theme_minimal() +
+          theme(legend.position = "bottom")
+      }
+    ),
+
+    # 15. Rolling Sharpe ratio plot (36-month window)
+    tar_target(
+      rolling_sharpe_plot,
+      {
+        monthly_rf <- (1.02)^(1/12) - 1
+
+        rolling <- backtest_results |>
+          arrange(scheme, date) |>
+          group_by(scheme) |>
+          mutate(
+            rolling_sharpe = slider::slide_dbl(
+              net_ret,
+              ~ifelse(sd(.x) > 0, (mean(.x) - monthly_rf) / sd(.x) * sqrt(12), NA_real_),
+              .before = 35,
+              .after = 0,
+              .complete = TRUE
+            ),
+            scheme_label = recode(
+              scheme,
+              baseline = "Baseline",
+              paper = "Paper",
+              data_driven = "Data-Driven",
+              conservative = "Conservative"
+            )
+          ) |>
+          filter(!is.na(rolling_sharpe))
+
+        ggplot(rolling, aes(x = date, y = rolling_sharpe, color = scheme_label)) +
+          geom_line(linewidth = 0.8, alpha = 0.7) +
+          geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+          labs(
+            title = "Rolling 36-Month Sharpe Ratio",
+            subtitle = "Net-of-cost performance",
+            x = NULL,
+            y = "Sharpe Ratio",
+            color = "Strategy"
+          ) +
+          theme_minimal() +
+          theme(legend.position = "bottom")
+      }
+    ),
+
+    # 16. Turnover analysis
+    tar_target(
+      turnover_analysis,
+      {
+        backtest_results |>
+          group_by(scheme) |>
+          summarise(
+            mean_turnover = mean(turnover, na.rm = TRUE),
+            median_turnover = median(turnover, na.rm = TRUE),
+            min_turnover = min(turnover, na.rm = TRUE),
+            max_turnover = max(turnover, na.rm = TRUE),
+            .groups = "drop"
+          ) |>
+          mutate(
+            scheme_label = recode(
+              scheme,
+              baseline = "Baseline (Total 12m LTR)",
+              paper = "Paper (Style + Industry)",
+              data_driven = "Data-Driven (Industry + Stock-Specific)",
+              conservative = "Conservative (Industry Only)"
+            )
+          ) |>
+          select(
+            Strategy = scheme_label,
+            `Mean Turnover` = mean_turnover,
+            `Median Turnover` = median_turnover,
+            `Min Turnover` = min_turnover,
+            `Max Turnover` = max_turnover
+          )
+      }
     )
   )
 }
