@@ -1,5 +1,71 @@
 # Changelog
 
+## 2026-05-11
+
+### Completed
+- **Cross-Asset Momentum Decomposition Research Complete** (~30 hours across issues #121, #123, #134, #135, PR #137, #136, #139, #140)
+  - **Equity momentum decomposition (Issue #121, Phase 1+2)**: ALL decomposed strategies FAILED (Sharpe -0.34 to -0.39 vs baseline +0.05)
+    - Paper strategy (Style + Industry): Net Sharpe -0.34, turnover 26% (vs 8% baseline)
+    - Data-driven (Industry + Stock-Specific): Net Sharpe -0.34, turnover 28%
+    - Conservative (Industry Only): Net Sharpe -0.39, turnover 26%
+    - Root causes: (1) Turnover explosion (3.3×) overwhelmed signals, (2) Breaking covariance structure destroyed information, (3) Rank IC 0.02-0.03 too weak after 0.153% costs
+  - **Regime-dependent momentum (Issue #123)**: Decomposition failed in ALL regimes (Calm/Elevated/Spike), 0/9 strategies had positive Sharpe
+    - Key finding: Baseline momentum Sharpe +0.63 in calm regime (VIX <20, 65% of time) vs +0.05 always-invested
+    - Decomposed strategies negative even in calm: -0.15 to -0.44
+  - **Commodities momentum test (Issue #134, PR #137)**: Both baseline AND decomposition FAILED
+    - Baseline 12m: Net Sharpe **-0.85**, Gross -0.75, Max DD -68%
+    - Decomposed (Short+Long, Vol-Filtered, Trend-Filtered): Net Sharpe -0.89 to -0.91
+    - Finding: Even gross Sharpe (before costs) deeply negative — momentum itself doesn't work in commodities (1992-2026)
+  - **Crypto momentum test (Issue #135, PR #136)**: ONLY SUCCESS across all asset classes
+    - Baseline: Sharpe 0.572, Annual Return 16.4%
+    - BTC-Adjusted: Sharpe **0.593**, Annual Return 17.2% (+3.7% improvement)
+    - Residual-Only: Sharpe 0.593, Annual Return 17.2%
+    - Why succeeded: Simplest structure (no industries), BTC beta cleanly separable, high base volatility (costs less binding)
+  - **Zakamulin regime-aware allocation (PR #139, #140)**: MARGINAL SUCCESS
+    - Step function (VIX<20): Sharpe **0.24** vs 0.05 baseline (+385% improvement)
+    - Mean exposure 78%, low turnover 9.6%
+    - Status: Marginal (0.24 < 0.3 standalone threshold) but validates calm-regime insight
+    - Recommendation: Apply to multi-factor portfolios, not standalone momentum
+- **Strategic Recommendations**:
+  - ❌ ABANDON: Equity momentum decomposition (all variants), commodities momentum (baseline Sharpe -0.85), commodities decomposition
+  - ✅ DEPLOY: Crypto momentum with BTC-beta adjustment (Sharpe 0.59), regime-aware allocation as multi-factor overlay
+  - 🔍 INVESTIGATE: Mean reversion in commodities (Issue #138), crypto Phase 2 (perps + funding rates), Zakamulin on multi-factor portfolios
+- **Issues closed**: #121 (equity decomposition), #123 (regime analysis), #134 (commodities test), #135 (crypto test)
+- **Issues created**: #138 (mean reversion in commodities follow-up)
+- **PRs merged**: #130 (404 fixes), #131 (leaderboard captions), #132 (volatility spikes), #133 (regime momentum), #137 (commodities implementation), #136 (crypto implementation), #139 (Zakamulin allocation), #140 (ROI tracker update)
+- **Knowledge base updated**: `/tmp/knowledge_cross_asset_momentum.md` (complete findings), `/tmp/final_cross_asset_summary.md` (30-hour research summary)
+- **Issue #127 (ROI tracker)** updated with complete cross-asset ROI table
+
+### Failed Approaches
+- **Momentum decomposition in equities**: All 3 decomposition methods (Paper, Data-Driven, Conservative) had negative Sharpe ratios. Turnover 3.3× higher than baseline overwhelmed weak signals. Rank IC 0.02-0.03 statistically significant but economically meaningless after 0.153% transaction costs.
+- **Regime rescue hypothesis**: Tested if ANY regime (Calm/Elevated/Spike) would rescue decomposition performance. Result: 0/9 strategies positive in ANY regime. Decomposition fundamentally broken, not regime-specific.
+- **Commodities momentum baseline**: Even gross Sharpe (before costs) deeply negative (-0.75). Suggests momentum itself doesn't work in commodities in our 1992-2026 sample, contrary to some academic literature.
+- **Crypto pipeline (initial)**: Data loading error (DuckDB schema mismatch). Fixed by switching to arrow, changing 'adjusted' → 'close', normalizing tickers, implementing manual rolling covariance.
+
+### Accuracy / Metrics
+- **Execution model**: Parallel git worktrees with model/skill-appropriate delegation saved ~10 hours (8 hours parallelized vs 15-20 sequential)
+- **Cross-asset coverage**: 3/3 asset classes tested (equities, commodities, crypto)
+- **Definitive evidence**: 2/3 asset classes show decomposition failure (equities, commodities)
+- **Success rate**: 1/3 asset classes (crypto only) where decomposition improved performance
+- **Regime-aware baseline**: 5× Sharpe improvement (0.05 → 0.24) from simple VIX<20 rule
+- **Research ROI**:
+  - Issue #121 (equity): Expected +0.10 to +0.20, Actual -0.34 to -0.39 (Δ -0.44 to -0.59), 8h effort → Negative ROI (but valuable negative result)
+  - Issue #123 (regime): Expected regime rescue, Actual 0/9 positive, 4h → Negative ROI (but found calm-regime insight)
+  - Issue #134 (commodities): Expected cross-asset validation, Actual -0.89 to -0.91, 5h → Valuable negative result
+  - Issue #135 (crypto): Expected test, Actual +0.59 Sharpe, 3h → **POSITIVE ROI**
+  - Zakamulin: Expected improvement, Actual 0.05 → 0.24, 5h → Marginal (needs multi-factor context)
+
+### Known Limitations
+- **Crypto Phase 2 not yet tested**: Perpetuals + funding rate carry decomposition (requires Binance/Bybit/Deribit API integration)
+- **Mean reversion hypothesis untested**: If momentum fails in commodities (Sharpe -0.85), mean reversion may work (Issue #138 created)
+- **Zakamulin allocation marginal standalone**: Sharpe 0.24 < 0.3 threshold for standalone deployment. Recommended for multi-factor portfolio overlay only.
+- **Equity/commodity decomposition abandoned**: No further optimization attempted. Decomposition fundamentally incompatible with these asset classes.
+- **Sample period specificity**: Equity findings are post-2000 (529 stocks, 2000-2026), commodities 1992-2026. Academic literature shows stronger momentum in earlier periods (1960s-1980s). Possible explanations: crowding, improved market efficiency, changed microstructure.
+
+### Lessons Learned
+- **Process wins**: Pre/post ROI tracking caught failure early, cross-asset testing prevented equity-specific false conclusion, parallel worktree execution saved ~10 hours, regime analysis found actionable insight despite decomposition failure
+- **Research insights**: (1) Academic persistence ≠ portfolio profitability (Rank IC 0.02-0.03 significant but economically meaningless after costs), (2) Decomposition breaks covariance even when economically motivated, (3) Asset-class-specific factors exist (crypto BTC-beta works, equity style/industry doesn't), (4) Regime-conditional allocation valuable (5× Sharpe from VIX<20 rule)
+
 ## 2026-05-09
 
 ### Completed
