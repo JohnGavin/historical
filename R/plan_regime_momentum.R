@@ -3,26 +3,13 @@
 #
 # Context: Issue #121 showed all decomposed momentum strategies have negative
 # Sharpe ratios. This plan tests if they work better in specific volatility regimes.
+#
+# Note: Depends on vix_daily from plan_volatility_spikes (avoid duplicate target)
 
 plan_regime_momentum <- function() {
   list(
-    # 1. Get daily VIX data
-    tar_target(
-      vix_daily,
-      {
-        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
-        library(dplyr)
-
-        # Download VIX from FRED
-        hd_macro("VIXCLS") |>
-          mutate(date = as.Date(date)) |>
-          select(date, vix = value) |>
-          filter(!is.na(vix)) |>
-          arrange(date)
-      }
-    ),
-
-    # 2. Classify VIX regimes (calm/elevated/spike)
+    # 1. Classify VIX regimes (calm/elevated/spike)
+    # Uses vix_daily from plan_volatility_spikes to avoid duplication
     tar_target(
       vix_regimes,
       {
@@ -33,7 +20,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 3. Add regime information to momentum backtest results
+    # 2. Add regime information to momentum backtest results
     tar_target(
       momentum_by_regime,
       {
@@ -45,7 +32,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 4. Baseline (total 12m momentum) performance by regime
+    # 3. Baseline (total 12m momentum) performance by regime
     tar_target(
       baseline_regime_performance,
       {
@@ -59,7 +46,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 5. Decomposed strategies performance by regime
+    # 4. Decomposed strategies performance by regime
     tar_target(
       decomposed_regime_performance,
       {
@@ -73,7 +60,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 6. Combined regime comparison table (all strategies × all regimes)
+    # 5. Combined regime comparison table (all strategies × all regimes)
     tar_target(
       regime_comparison_table,
       {
@@ -118,7 +105,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 7. Regime allocation comparison (binary vs continuous)
+    # 6. Regime allocation comparison (binary vs continuous)
     tar_target(
       regime_allocation_comparison,
       {
@@ -162,7 +149,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 8. Sharpe ratio plot by regime
+    # 7. Sharpe ratio plot by regime
     tar_target(
       regime_allocation_plot,
       {
@@ -179,7 +166,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 9. Cumulative returns with regime shading
+    # 8. Cumulative returns with regime shading
     tar_target(
       regime_cumulative_plot,
       {
@@ -190,7 +177,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 10. Regime statistics summary
+    # 9. Regime statistics summary
     tar_target(
       regime_stats,
       {
@@ -215,7 +202,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 11. Best/worst regime for each strategy
+    # 10. Best/worst regime for each strategy
     tar_target(
       best_regime_by_strategy,
       {
@@ -258,7 +245,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 12. Key finding: Do ANY decomposed strategies have positive Sharpe in ANY regime?
+    # 11. Key finding: Do ANY decomposed strategies have positive Sharpe in ANY regime?
     tar_target(
       regime_rescue_test,
       {
@@ -300,7 +287,7 @@ plan_regime_momentum <- function() {
       }
     ),
 
-    # 13. Summary caption for display
+    # 12. Summary caption for display
     tar_target(
       regime_momentum_caption,
       {
