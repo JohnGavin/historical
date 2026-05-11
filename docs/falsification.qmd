@@ -210,6 +210,14 @@ safe_tar_read("fals_vig_ff_alpha_plot")
 - **Borderline**: Alpha t near 2.0. May be genuine but evidence is weak. Requires out-of-sample confirmation.
 - **No alpha (beta)**: Alpha t < 2.0 OR R² (%) > 20. The strategy's returns are explained by known factor exposure (market beta, momentum, value, etc.).
 
+**Scorecard column definitions:**
+
+- **HAC t**: Newey-West HAC-corrected t-statistic on mean excess returns. Adjusts for serial correlation in returns. Values > 2.0 are statistically significant at the 5% level.
+- **Naive Sharpe**: Annualised Sharpe ratio assuming iid (independent and identically distributed) returns. Typically overstates risk-adjusted performance by 20-30% due to volatility clustering.
+- **Alpha (%)**: Annualised Fama-French 5-Factor + Momentum alpha (intercept from regression). Represents returns not explained by these 6 factors. Positive = outperformance, negative = underperformance.
+- **Alpha t**: HAC t-statistic on the FF5+Momentum alpha intercept. Must exceed 2.0 to be statistically significant. Higher values indicate stronger evidence against the null (returns = factor-driven beta).
+- **R² (%)**: Variance explained by the 6 Fama-French + Momentum factors. Low R² (< 15%) suggests the strategy's returns come from genuine alpha. High R² (> 20%) suggests the strategy is just replicating known factor exposure.
+
 **Key insight**: A strategy can have positive returns and still have zero alpha. If those returns come from market exposure (high R²), you can get the same exposure more cheaply via index funds.
 
 
