@@ -11,20 +11,20 @@
 #
 # Does NOT use Birdeye / Drift API — uses existing parquet only.
 
-plan_solana_momentum <- function() {
+# --------------------------------------------------------------------------
+# Parameters — defined at file scope so worker processes can see them
+# --------------------------------------------------------------------------
+SOL_UNIVERSE   <- c("SOL", "RAY", "BONK", "HNT")
+SOL_BETA_WIN   <- 252L   # rolling window for BTC beta (configurable)
+SOL_LOOKBACK   <- 252L   # momentum lookback (configurable)
+SOL_LEVERAGE   <- 1.0    # unleveraged (configurable)
+SOL_COST_BPS   <- 30L    # 0.3% per trade
+SOL_N_LONG     <- 2L     # longs in 4-token universe
+SOL_N_SHORT    <- 2L     # shorts in 4-token universe
+SOL_PARQUET    <- "/Users/johngavin/docs_gh/proj/finance/data/historical-crypto/data/raw/crypto_all.parquet"
+SOL_VOL_WIN    <- 63L    # 63-day vol for position sizing
 
-  # --------------------------------------------------------------------------
-  # Parameters
-  # --------------------------------------------------------------------------
-  SOLANA_UNIVERSE  <- c("SOL", "RAY", "BONK", "HNT")
-  BETA_WINDOW      <- 252L   # rolling window for BTC beta (configurable)
-  LOOKBACK_DAYS    <- 252L   # momentum lookback (configurable)
-  LEVERAGE         <- 1.0    # unleveraged (configurable)
-  COST_BPS         <- 30L    # 0.3% per trade
-  N_LONG           <- 2L     # longs in 4-token universe
-  N_SHORT          <- 2L     # shorts in 4-token universe
-  PARQUET_PATH     <- "/Users/johngavin/docs_gh/proj/finance/data/historical-crypto/data/raw/crypto_all.parquet"
-  VOL_WINDOW       <- 63L    # 63-day vol for position sizing
+plan_solana_momentum <- function() {
 
   list(
 
@@ -32,8 +32,8 @@ plan_solana_momentum <- function() {
     tar_target(
       sol_raw_data,
       {
-        arrow::read_parquet(PARQUET_PATH) |>
-          dplyr::filter(ticker %in% c(SOLANA_UNIVERSE, "BTC")) |>
+        arrow::read_parquet(SOL_PARQUET) |>
+          dplyr::filter(ticker %in% c(SOL_UNIVERSE, "BTC")) |>
           dplyr::select(date, ticker, close) |>
           dplyr::arrange(ticker, date)
       }
@@ -58,8 +58,8 @@ plan_solana_momentum <- function() {
       sol_btc_betas,
       {
         sol_rets_universe <- sol_returns |>
-          dplyr::filter(ticker %in% SOLANA_UNIVERSE)
-        calculate_btc_beta(sol_rets_universe, sol_btc_returns, lookback = BETA_WINDOW)
+          dplyr::filter(ticker %in% SOL_UNIVERSE)
+        calculate_btc_beta(sol_rets_universe, sol_btc_returns, lookback = SOL_BETA_WIN)
       }
     ),
 
@@ -69,7 +69,7 @@ plan_solana_momentum <- function() {
       sol_signals_raw,
       {
         # build_crypto_signals expects BTC in returns for btc_mom calc
-        build_crypto_signals(sol_returns, sol_btc_betas, lookback = LOOKBACK_DAYS)
+        build_crypto_signals(sol_returns, sol_btc_betas, lookback = SOL_LOOKBACK)
       }
     ),
 
@@ -80,13 +80,13 @@ plan_solana_momentum <- function() {
       sol_vol_weights,
       {
         sol_universe_rets <- sol_returns |>
-          dplyr::filter(ticker %in% SOLANA_UNIVERSE)
+          dplyr::filter(ticker %in% SOL_UNIVERSE)
 
         vol_63d <- sol_universe_rets |>
           dplyr::group_by(ticker) |>
           dplyr::arrange(date) |>
           dplyr::mutate(
-            vol_63d = RcppRoll::roll_sd(ret, n = VOL_WINDOW, fill = NA, align = "right")
+            vol_63d = RcppRoll::roll_sd(ret, n = SOL_VOL_WIN, fill = NA, align = "right")
           ) |>
           dplyr::select(date, ticker, vol_63d) |>
           dplyr::filter(!is.na(vol_63d)) |>
@@ -97,12 +97,12 @@ plan_solana_momentum <- function() {
     ),
 
     # 7. Apply vol-adjusted weights to signals
-    #    For each signal × date: compute inv-vol weight normalised within leg
+    #    For each signal x date: compute inv-vol weight normalised within leg
     tar_target(
       sol_signals,
       {
         sol_signals_raw |>
-          dplyr::filter(ticker %in% SOLANA_UNIVERSE) |>
+          dplyr::filter(ticker %in% SOL_UNIVERSE) |>
           dplyr::left_join(sol_vol_weights, by = c("date", "ticker")) |>
           dplyr::group_by(date) |>
           dplyr::mutate(
@@ -129,10 +129,10 @@ plan_solana_momentum <- function() {
       backtest_crypto_momentum(
         signals = sol_signals |>
           dplyr::select(date, ticker, signal = mom_total),
-        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
-        cost_bps = COST_BPS,
-        n_long = N_LONG,
-        n_short = N_SHORT
+        returns = sol_returns |> dplyr::filter(ticker %in% SOL_UNIVERSE),
+        cost_bps = SOL_COST_BPS,
+        n_long = SOL_N_LONG,
+        n_short = SOL_N_SHORT
       )
     ),
 
@@ -142,10 +142,10 @@ plan_solana_momentum <- function() {
       backtest_crypto_momentum(
         signals = sol_signals |>
           dplyr::select(date, ticker, signal = mom_btc_adj),
-        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
-        cost_bps = COST_BPS,
-        n_long = N_LONG,
-        n_short = N_SHORT
+        returns = sol_returns |> dplyr::filter(ticker %in% SOL_UNIVERSE),
+        cost_bps = SOL_COST_BPS,
+        n_long = SOL_N_LONG,
+        n_short = SOL_N_SHORT
       )
     ),
 
@@ -155,10 +155,10 @@ plan_solana_momentum <- function() {
       backtest_crypto_momentum(
         signals = sol_signals |>
           dplyr::select(date, ticker, signal = mom_residual),
-        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
-        cost_bps = COST_BPS,
-        n_long = N_LONG,
-        n_short = N_SHORT
+        returns = sol_returns |> dplyr::filter(ticker %in% SOL_UNIVERSE),
+        cost_bps = SOL_COST_BPS,
+        n_long = SOL_N_LONG,
+        n_short = SOL_N_SHORT
       )
     ),
 
@@ -168,10 +168,10 @@ plan_solana_momentum <- function() {
       backtest_weekly_momentum(
         signals = sol_signals |>
           dplyr::select(date, ticker, signal = mom_total),
-        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
-        cost_bps = COST_BPS,
-        n_long = N_LONG,
-        n_short = N_SHORT
+        returns = sol_returns |> dplyr::filter(ticker %in% SOL_UNIVERSE),
+        cost_bps = SOL_COST_BPS,
+        n_long = SOL_N_LONG,
+        n_short = SOL_N_SHORT
       )
     ),
 
@@ -181,10 +181,10 @@ plan_solana_momentum <- function() {
       backtest_weekly_momentum(
         signals = sol_signals |>
           dplyr::select(date, ticker, signal = mom_btc_adj),
-        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
-        cost_bps = COST_BPS,
-        n_long = N_LONG,
-        n_short = N_SHORT
+        returns = sol_returns |> dplyr::filter(ticker %in% SOL_UNIVERSE),
+        cost_bps = SOL_COST_BPS,
+        n_long = SOL_N_LONG,
+        n_short = SOL_N_SHORT
       )
     ),
 
@@ -194,10 +194,10 @@ plan_solana_momentum <- function() {
       backtest_weekly_momentum(
         signals = sol_signals |>
           dplyr::select(date, ticker, signal = mom_residual),
-        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
-        cost_bps = COST_BPS,
-        n_long = N_LONG,
-        n_short = N_SHORT
+        returns = sol_returns |> dplyr::filter(ticker %in% SOL_UNIVERSE),
+        cost_bps = SOL_COST_BPS,
+        n_long = SOL_N_LONG,
+        n_short = SOL_N_SHORT
       )
     ),
 
@@ -295,8 +295,8 @@ plan_solana_momentum <- function() {
           ggplot2::labs(
             title = paste0(
               "Solana Momentum Decomposition: Cumulative Net Returns\n",
-              "Universe: ", paste(SOLANA_UNIVERSE, collapse = ", "),
-              " | Cost: ", COST_BPS, "bps | Lookback: ", LOOKBACK_DAYS, "d"
+              "Universe: ", paste(SOL_UNIVERSE, collapse = ", "),
+              " | Cost: ", SOL_COST_BPS, "bps | Lookback: ", SOL_LOOKBACK, "d"
             ),
             x    = NULL,
             y    = "Cumulative Return (net of costs)",
