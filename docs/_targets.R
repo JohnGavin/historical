@@ -48,6 +48,9 @@ source(here::here("R/vvix_analysis.R"))
 # Source momentum decomposition functions (issue #121)
 source(here::here("R/momentum_decomposition.R"))
 
+# Source regime-dependent momentum functions (issue #123)
+source(here::here("R/regime_momentum.R"))
+
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
@@ -93,6 +96,7 @@ source(here::here("R/plan_ecb.R"))
 source(here::here("R/plan_guardian.R"))
 source(here::here("R/plan_jst.R"))
 source(here::here("R/plan_momentum_decomposition.R"))
+source(here::here("R/plan_regime_momentum.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -127,4 +131,5 @@ c(plan_strategy_names(),
   plan_ecb(),
   plan_guardian(),
   plan_jst(),
-  plan_momentum_decomposition())
+  plan_momentum_decomposition(),
+  plan_regime_momentum())
