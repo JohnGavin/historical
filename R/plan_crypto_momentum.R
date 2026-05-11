@@ -26,26 +26,18 @@ plan_crypto_momentum <- function() {
     }),
 
 
-    # ── Universe: All crypto tickers from DuckDB ──────────────────────
+    # ── Universe: All crypto tickers from local parquet ──────────────────────
     targets::tar_target(crypto_universe, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
+      library(arrow)
 
-      # Load duckplyr for parquet access
-      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
-      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
-      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
-
-      ds <- hd_datasets()[["crypto_daily"]]
-
-      # Fetch all crypto data in the sample period
-      crypto_data <- duckplyr::read_parquet_duckdb(ds$url) |>
+      # Read crypto data from local parquet file
+      crypto_data <- arrow::read_parquet(here::here("data/raw/crypto_all.parquet")) |>
         filter(
           date >= crypto_mom_params$sample_start,
           date <= crypto_mom_params$sample_end
         ) |>
-        select(date, ticker, adjusted, volume) |>
-        collect() |>
+        select(date, ticker, close, volume) |>
         arrange(ticker, date)
 
       # Filter to tickers with sufficient history (at least lookback + beta_window days)
@@ -79,7 +71,7 @@ plan_crypto_momentum <- function() {
 
       # Extract BTC returns
       btc_returns <- crypto_returns |>
-        filter(ticker == "BTC-USD") |>
+        filter(ticker == "BTC") |>
         select(date, ret)
 
       # Compute betas for all coins

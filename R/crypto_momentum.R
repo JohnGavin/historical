@@ -17,9 +17,9 @@
 
 #' Calculate Crypto Returns
 #'
-#' Compute log returns from adjusted close prices.
+#' Compute log returns from close prices.
 #'
-#' @param crypto_data Tibble with columns: date, ticker, adjusted
+#' @param crypto_data Tibble with columns: date, ticker, close
 #' @return Tibble with columns: date, ticker, ret (daily log return)
 #'
 #' @examples
@@ -35,7 +35,7 @@ calculate_crypto_returns <- function(crypto_data) {
     dplyr::group_by(ticker) |>
     dplyr::arrange(date) |>
     dplyr::mutate(
-      ret = log(adjusted / dplyr::lag(adjusted))
+      ret = log(close / dplyr::lag(close))
     ) |>
     dplyr::filter(!is.na(ret)) |>
     dplyr::ungroup()
@@ -54,7 +54,7 @@ calculate_crypto_returns <- function(crypto_data) {
 #'
 #' @examples
 #' \dontrun{
-#' btc_rets <- returns |> filter(ticker == "BTC-USD") |> select(date, ret)
+#' btc_rets <- returns |> filter(ticker == "BTC") |> select(date, ret)
 #' betas <- calculate_btc_beta(returns, btc_rets, lookback = 252)
 #' }
 calculate_btc_beta <- function(returns, btc_returns, lookback = 252) {
@@ -75,8 +75,12 @@ calculate_btc_beta <- function(returns, btc_returns, lookback = 252) {
     dplyr::group_by(ticker) |>
     dplyr::arrange(date) |>
     dplyr::mutate(
-      # Rolling covariance / rolling variance
-      cov_btc = RcppRoll::roll_cov(ret, btc_ret, n = lookback, fill = NA, align = "right"),
+      # Rolling covariance: E[XY] - E[X]E[Y]
+      mean_ret = RcppRoll::roll_mean(ret, n = lookback, fill = NA, align = "right"),
+      mean_btc = RcppRoll::roll_mean(btc_ret, n = lookback, fill = NA, align = "right"),
+      mean_product = RcppRoll::roll_mean(ret * btc_ret, n = lookback, fill = NA, align = "right"),
+      cov_btc = mean_product - (mean_ret * mean_btc),
+      # Rolling variance
       var_btc = RcppRoll::roll_var(btc_ret, n = lookback, fill = NA, align = "right"),
       btc_beta = cov_btc / var_btc
     ) |>
@@ -126,20 +130,21 @@ build_crypto_signals <- function(returns, btc_betas, lookback = 252) {
 
   # Compute BTC momentum
   btc_mom <- returns |>
-    dplyr::filter(ticker == "BTC-USD") |>
+    dplyr::filter(ticker == "BTC") |>
     dplyr::group_by(ticker) |>
     dplyr::arrange(date) |>
     dplyr::mutate(
       btc_mom = RcppRoll::roll_sum(ret, n = lookback, fill = NA, align = "right")
     ) |>
-    dplyr::select(date, btc_mom) |>
     dplyr::filter(!is.na(btc_mom)) |>
-    dplyr::ungroup()
+    dplyr::ungroup() |>
+    dplyr::select(date, btc_mom)
 
   # Join everything and compute adjusted signals
   mom_total |>
     dplyr::left_join(btc_betas, by = c("date", "ticker")) |>
     dplyr::left_join(btc_mom, by = "date") |>
+    dplyr::ungroup() |>  # Ensure ungrouped before select
     dplyr::mutate(
       # BTC-adjusted momentum: total - (beta * BTC momentum)
       mom_btc_adj = mom_total - (btc_beta * btc_mom),
