@@ -48,6 +48,9 @@ source(here::here("R/vvix_analysis.R"))
 # Source momentum decomposition functions (issue #121)
 source(here::here("R/momentum_decomposition.R"))
 
+# Source volatility spike analysis functions (issue #119 Phase 1)
+source(here::here("R/volatility_spike_analysis.R"))
+
 # Source regime-dependent momentum functions (issue #123)
 source(here::here("R/regime_momentum.R"))
 
@@ -96,6 +99,7 @@ source(here::here("R/plan_ecb.R"))
 source(here::here("R/plan_guardian.R"))
 source(here::here("R/plan_jst.R"))
 source(here::here("R/plan_momentum_decomposition.R"))
+source(here::here("R/plan_volatility_spikes.R"))
 source(here::here("R/plan_regime_momentum.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
@@ -132,4 +136,5 @@ c(plan_strategy_names(),
   plan_guardian(),
   plan_jst(),
   plan_momentum_decomposition(),
+  plan_volatility_spikes(),
   plan_regime_momentum())

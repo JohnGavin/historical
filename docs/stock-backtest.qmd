@@ -217,7 +217,7 @@ safe_tar_read("stk_max_vs_factor_plot")
 ::: {.callout-note}
 ## Strategy: Stock-Level DRIF (Daily Return Information Factor)
 
-**What:** Each month, use an elastic net regression on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.
+**What:** Each month, use an <a href="https://en.wikipedia.org/wiki/Elastic_net_regularization" target="_blank"><abbr title="A regularized regression method combining L1 (lasso) and L2 (ridge) penalties">elastic net regression</abbr></a> on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.
 
 **Rationale (Market Dynamics):** The full sequence of daily returns contains more predictive information than any single summary statistic (mean, max, volatility). Specifically:
 
@@ -266,12 +266,13 @@ if (!is.null(metrics)) {
 
 | | Detail |
 |--|--------|
-| **Pros** | Uses full daily return information (42 features). Best OOS Sharpe (0.79). Elastic net prevents overfitting. |
-| **Cons** | Weak in-sample (1.3% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. |
-| **Works well** | When the cross-section is large (more stocks = better elastic net training). Post-2020 period. |
-| **Works badly** | Small universes (<100 stocks). When feature matrix is rank-deficient. |
+| **Pros (long-only)** | Uses full daily return information (42 features). Best OOS Sharpe (0.79). Elastic net prevents overfitting. Long-only returns are positive across all periods. |
+| **Cons** | Weak in-sample long-short (1.3% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. |
+| **Works well** | When the cross-section is large (more stocks = better elastic net training). Post-2020 period. Long-only implementation avoids cost drag of short leg. |
+| **Works badly** | Small universes (<100 stocks). Long-short after costs (D1-D10 spread insufficient to overcome 1.85%/month cost). |
 | **Factor exposure** | Lower factor loading than MAX (elastic net regularises out common factors). More likely to represent genuine alpha. |
 | **OOS > IS anomaly** | Possible explanations: universe composition change post-2010, elastic net needs many years to learn, or OOS window (62 months) is too short to be conclusive. |
+| **Implementation choice** | Long-only D1 is the practical strategy — avoids short costs and borrows, captures most of the signal. Long-short shown for comparison but unprofitable after realistic costs. |
 
 #### References
 

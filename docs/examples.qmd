@@ -139,7 +139,7 @@ utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
 source(utils_path)
 ```
 
-# Equity
+# Equity {#equity}
 
 ## Row
 
@@ -233,7 +233,7 @@ if (!is.null(df)) {
 ```
 
 
-# Crypto
+# Crypto {#crypto}
 
 ## Row
 
@@ -323,7 +323,7 @@ if (!is.null(df)) {
 ```
 
 
-# Macro
+# Macro {#macro}
 
 ## Row
 
@@ -398,7 +398,7 @@ if (!is.null(df)) {
 ```
 
 
-# Factors
+# Factors {#factors}
 
 ## Row
 

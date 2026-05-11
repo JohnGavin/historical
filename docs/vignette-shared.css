@@ -88,3 +88,6 @@ details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
 
 /* Prevent tab click from scrolling to top */
 .nav-link[data-bs-toggle="tab"] { scroll-behavior: auto; }
+
+/* Right-justify numeric columns in tables */
+.dt-right { text-align: right !important; }
