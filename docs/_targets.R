@@ -44,6 +44,7 @@ tar_option_set(
 # source(here::here("R/regime_correlations.R"))
 # source(here::here("R/tail_keff.R"))
 source(here::here("R/vvix_analysis.R"))
+source(here::here("R/crypto_momentum_helpers.R"))
 
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
@@ -89,6 +90,7 @@ source(here::here("R/plan_causal_graph.R"))
 source(here::here("R/plan_ecb.R"))
 source(here::here("R/plan_guardian.R"))
 source(here::here("R/plan_jst.R"))
+source(here::here("R/plan_solana_momentum.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -122,4 +124,5 @@ c(plan_strategy_names(),
   plan_causal_graph(),
   plan_ecb(),
   plan_guardian(),
-  plan_jst())
+  plan_jst(),
+  plan_solana_momentum())

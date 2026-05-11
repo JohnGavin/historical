@@ -1,330 +1,312 @@
 # Solana-Only Momentum Decomposition Targets Plan
 #
-# Tests momentum decomposition on Solana ecosystem tokens only
-# Uses DeFi data sources (Birdeye spot + Drift perps)
+# Proof-of-concept using available crypto_all.parquet data.
+# Universe: SOL, RAY, BONK, HNT (+ BTC as reference).
+# Three signal variants x two rebalance frequencies = 6 backtest targets.
 #
-# Parameters:
-# - beta_window: 252 (configurable)
-# - leverage: 1.0 (configurable)
-# - vol_adjust: TRUE
-# - rebalance_freq: "weekly"
+# Reuses helpers from R/crypto_momentum_helpers.R:
+#   calculate_crypto_returns(), calculate_btc_beta(),
+#   build_crypto_signals(), backtest_crypto_momentum(),
+#   backtest_weekly_momentum()
+#
+# Does NOT use Birdeye / Drift API — uses existing parquet only.
 
 plan_solana_momentum <- function() {
+
+  # --------------------------------------------------------------------------
+  # Parameters
+  # --------------------------------------------------------------------------
+  SOLANA_UNIVERSE  <- c("SOL", "RAY", "BONK", "HNT")
+  BETA_WINDOW      <- 252L   # rolling window for BTC beta (configurable)
+  LOOKBACK_DAYS    <- 252L   # momentum lookback (configurable)
+  LEVERAGE         <- 1.0    # unleveraged (configurable)
+  COST_BPS         <- 30L    # 0.3% per trade
+  N_LONG           <- 2L     # longs in 4-token universe
+  N_SHORT          <- 2L     # shorts in 4-token universe
+  PARQUET_PATH     <- "/Users/johngavin/docs_gh/proj/finance/data/historical-crypto/data/raw/crypto_all.parquet"
+  VOL_WINDOW       <- 63L    # 63-day vol for position sizing
+
   list(
-    # 1. Define Solana token universe (liquid tokens only)
-    tar_target(
-      solana_universe_raw,
-      {
-        # Candidate tokens
-        candidates <- c("SOL", "RAY", "BONK", "JUP", "PYTH", "ORCA", "JTO", "HNT")
 
-        # NOTE: Will filter by liquidity metrics after fetching data
-        candidates
+    # 1. Load raw parquet (Solana universe + BTC reference)
+    tar_target(
+      sol_raw_data,
+      {
+        arrow::read_parquet(PARQUET_PATH) |>
+          dplyr::filter(ticker %in% c(SOLANA_UNIVERSE, "BTC")) |>
+          dplyr::select(date, ticker, close) |>
+          dplyr::arrange(ticker, date)
       }
     ),
 
-    # 2. Fetch spot prices from Birdeye (4-hourly for signal, daily for backtest)
+    # 2. Compute log returns
     tar_target(
-      solana_spot_4h,
-      {
-        # API key from environment
-        if (Sys.getenv("BIRDEYE_API_KEY") == "") {
-          cli::cli_abort("BIRDEYE_API_KEY not set. Get free key at https://birdeye.so/")
-        }
+      sol_returns,
+      calculate_crypto_returns(sol_raw_data)
+    ),
 
-        fetch_birdeye_spot(
-          tokens = solana_universe_raw,
-          start_date = as.Date("2021-01-01"),  # Earliest common start for most tokens
-          end_date = Sys.Date(),
-          interval = "4H"  # 4-hourly for higher frequency signals
-        )
+    # 3. Separate BTC reference returns (used for beta estimation)
+    tar_target(
+      sol_btc_returns,
+      sol_returns |>
+        dplyr::filter(ticker == "BTC") |>
+        dplyr::select(date, ret)
+    ),
+
+    # 4. Compute rolling BTC beta per Solana token
+    tar_target(
+      sol_btc_betas,
+      {
+        sol_rets_universe <- sol_returns |>
+          dplyr::filter(ticker %in% SOLANA_UNIVERSE)
+        calculate_btc_beta(sol_rets_universe, sol_btc_returns, lookback = BETA_WINDOW)
       }
     ),
 
-    # 3. Fetch Drift perp prices + funding rates
+    # 5. Build the three signal variants
+    #    Inputs include BTC returns (for btc_mom) so filter to full dataset
     tar_target(
-      solana_perps_drift,
+      sol_signals_raw,
       {
-        # Map tokens to Drift perp markets
-        perp_markets <- paste0(solana_universe_raw, "-PERP")
-
-        fetch_drift_perps(
-          markets = perp_markets,
-          start_date = as.Date("2022-03-01"),  # Drift v2 launch
-          end_date = Sys.Date()
-        )
+        # build_crypto_signals expects BTC in returns for btc_mom calc
+        build_crypto_signals(sol_returns, sol_btc_betas, lookback = LOOKBACK_DAYS)
       }
     ),
 
-    # 4. Calculate liquidity metrics (filter to liquid tokens only)
+    # 6. Volatility-adjusted position sizing
+    #    weight = (1/vol_63d) / sum(1/vol_63d) per long/short leg
+    #    Fall back to equal-weight if vol is NA
     tar_target(
-      solana_liquidity_metrics,
+      sol_vol_weights,
       {
-        calculate_liquidity_metrics(
-          spot_data = solana_spot_4h,
-          perp_data = solana_perps_drift,
-          min_daily_volume = 1e6  # $1M minimum daily volume
-        )
-      }
-    ),
+        sol_universe_rets <- sol_returns |>
+          dplyr::filter(ticker %in% SOLANA_UNIVERSE)
 
-    # 5. Filter to liquid universe
-    tar_target(
-      solana_universe_liquid,
-      {
-        liquid_tokens <- solana_liquidity_metrics |>
-          dplyr::filter(is_liquid) |>
-          dplyr::pull(ticker)
-
-        if (length(liquid_tokens) < 5) {
-          cli::cli_warn("Only {length(liquid_tokens)} liquid tokens found. Minimum recommended: 5")
-        }
-
-        cli::cli_alert_success("Liquid Solana universe: {paste(liquid_tokens, collapse=', ')}")
-
-        liquid_tokens
-      }
-    ),
-
-    # 6. Resample to daily for backtesting (from 4H data)
-    tar_target(
-      solana_spot_daily,
-      {
-        solana_spot_4h |>
-          dplyr::filter(ticker %in% solana_universe_liquid) |>
-          dplyr::mutate(date = as.Date(timestamp)) |>
-          dplyr::group_by(ticker, date) |>
-          dplyr::summarise(
-            open = dplyr::first(open),
-            high = max(high),
-            low = min(low),
-            close = dplyr::last(close),
-            volume = sum(volume),
-            .groups = "drop"
-          )
-      }
-    ),
-
-    # 7. Calculate daily returns
-    tar_target(
-      solana_returns_daily,
-      {
-        solana_spot_daily |>
+        vol_63d <- sol_universe_rets |>
           dplyr::group_by(ticker) |>
           dplyr::arrange(date) |>
           dplyr::mutate(
-            return = log(close / dplyr::lag(close))
+            vol_63d = RcppRoll::roll_sd(ret, n = VOL_WINDOW, fill = NA, align = "right")
           ) |>
-          dplyr::filter(!is.na(return)) |>
+          dplyr::select(date, ticker, vol_63d) |>
+          dplyr::filter(!is.na(vol_63d)) |>
+          dplyr::ungroup()
+
+        vol_63d
+      }
+    ),
+
+    # 7. Apply vol-adjusted weights to signals
+    #    For each signal × date: compute inv-vol weight normalised within leg
+    tar_target(
+      sol_signals,
+      {
+        sol_signals_raw |>
+          dplyr::filter(ticker %in% SOLANA_UNIVERSE) |>
+          dplyr::left_join(sol_vol_weights, by = c("date", "ticker")) |>
+          dplyr::group_by(date) |>
+          dplyr::mutate(
+            inv_vol = dplyr::if_else(is.na(vol_63d) | vol_63d == 0, NA_real_, 1 / vol_63d),
+            sum_inv_vol = sum(inv_vol, na.rm = TRUE),
+            vol_weight = dplyr::if_else(
+              is.na(inv_vol) | sum_inv_vol == 0,
+              1 / dplyr::n(),        # equal-weight fallback
+              inv_vol / sum_inv_vol
+            )
+          ) |>
           dplyr::ungroup() |>
-          dplyr::select(ticker, date, return, close)
+          dplyr::select(date, ticker, mom_total, mom_btc_adj, mom_residual, vol_weight)
       }
     ),
 
-    # 8. BTC returns (reference for beta calculation)
+    # -------------------------------------------------------------------------
+    # Backtest targets: 3 signals x 2 frequencies = 6 targets
+    # -------------------------------------------------------------------------
+
+    # 8. Monthly: Baseline (total) momentum
     tar_target(
-      btc_returns_daily,
-      {
-        solana_returns_daily |>
-          dplyr::filter(ticker == "BTC") |>
-          dplyr::select(date, btc_return = return)
-      }
+      sol_bt_monthly_baseline,
+      backtest_crypto_momentum(
+        signals = sol_signals |>
+          dplyr::select(date, ticker, signal = mom_total),
+        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
+        cost_bps = COST_BPS,
+        n_long = N_LONG,
+        n_short = N_SHORT
+      )
     ),
 
-    # 9. Build momentum signals (configurable parameters)
+    # 9. Monthly: BTC-adjusted momentum
     tar_target(
-      solana_signals,
-      {
-        # Configurable parameters
-        LOOKBACK_DAYS <- 252    # 12-month momentum
-        BETA_WINDOW <- 252      # 12-month beta estimation
-        VOL_ADJUST <- TRUE      # Use volatility-adjusted sizing
-        LEVERAGE <- 1.0         # Unleveraged
+      sol_bt_monthly_btc_adj,
+      backtest_crypto_momentum(
+        signals = sol_signals |>
+          dplyr::select(date, ticker, signal = mom_btc_adj),
+        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
+        cost_bps = COST_BPS,
+        n_long = N_LONG,
+        n_short = N_SHORT
+      )
+    ),
 
-        build_momentum_signals(
-          returns = solana_returns_daily |> dplyr::filter(ticker != "BTC"),
-          btc_returns = btc_returns_daily,
-          lookback_days = LOOKBACK_DAYS,
-          beta_window = BETA_WINDOW,
-          vol_adjust = VOL_ADJUST,
-          leverage = LEVERAGE
+    # 10. Monthly: Residual-only momentum
+    tar_target(
+      sol_bt_monthly_residual,
+      backtest_crypto_momentum(
+        signals = sol_signals |>
+          dplyr::select(date, ticker, signal = mom_residual),
+        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
+        cost_bps = COST_BPS,
+        n_long = N_LONG,
+        n_short = N_SHORT
+      )
+    ),
+
+    # 11. Weekly: Baseline (total) momentum
+    tar_target(
+      sol_bt_weekly_baseline,
+      backtest_weekly_momentum(
+        signals = sol_signals |>
+          dplyr::select(date, ticker, signal = mom_total),
+        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
+        cost_bps = COST_BPS,
+        n_long = N_LONG,
+        n_short = N_SHORT
+      )
+    ),
+
+    # 12. Weekly: BTC-adjusted momentum
+    tar_target(
+      sol_bt_weekly_btc_adj,
+      backtest_weekly_momentum(
+        signals = sol_signals |>
+          dplyr::select(date, ticker, signal = mom_btc_adj),
+        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
+        cost_bps = COST_BPS,
+        n_long = N_LONG,
+        n_short = N_SHORT
+      )
+    ),
+
+    # 13. Weekly: Residual-only momentum
+    tar_target(
+      sol_bt_weekly_residual,
+      backtest_weekly_momentum(
+        signals = sol_signals |>
+          dplyr::select(date, ticker, signal = mom_residual),
+        returns = sol_returns |> dplyr::filter(ticker %in% SOLANA_UNIVERSE),
+        cost_bps = COST_BPS,
+        n_long = N_LONG,
+        n_short = N_SHORT
+      )
+    ),
+
+    # -------------------------------------------------------------------------
+    # Summary and diagnostic targets
+    # -------------------------------------------------------------------------
+
+    # 14. Performance summary table: strategy x freq -> metrics
+    tar_target(
+      sol_performance_summary,
+      {
+        extract_summary <- function(bt, strategy, freq) {
+          s <- bt$summary
+          dplyr::tibble(
+            strategy   = strategy,
+            freq       = freq,
+            gross_sharpe   = s$gross_sharpe,
+            net_sharpe     = s$net_sharpe,
+            annual_ret     = s$net_annual_ret,
+            max_drawdown   = s$max_drawdown,
+            avg_turnover   = s$avg_turnover,
+            n_years        = s$n_years
+          )
+        }
+
+        dplyr::bind_rows(
+          extract_summary(sol_bt_monthly_baseline,  "Baseline",   "monthly"),
+          extract_summary(sol_bt_monthly_btc_adj,   "BTC-Adj",    "monthly"),
+          extract_summary(sol_bt_monthly_residual,  "Residual",   "monthly"),
+          extract_summary(sol_bt_weekly_baseline,   "Baseline",   "weekly"),
+          extract_summary(sol_bt_weekly_btc_adj,    "BTC-Adj",    "weekly"),
+          extract_summary(sol_bt_weekly_residual,   "Residual",   "weekly")
         )
       }
     ),
 
-    # 10. Backtest: Baseline momentum
+    # 15. BTC beta stats per Solana token
     tar_target(
-      solana_bt_baseline,
-      {
-        backtest_momentum(
-          signals = solana_signals |> dplyr::select(ticker, date, signal = baseline_mom, position_size),
-          returns = solana_returns_daily,
-          costs = 0.003,  # 0.3% per trade (DeFi slippage)
-          rebalance_freq = "weekly"
-        )
-      }
-    ),
-
-    # 11. Backtest: BTC-adjusted momentum
-    tar_target(
-      solana_bt_btc_adj,
-      {
-        backtest_momentum(
-          signals = solana_signals |> dplyr::select(ticker, date, signal = btc_adj_mom, position_size),
-          returns = solana_returns_daily,
-          costs = 0.003,
-          rebalance_freq = "weekly"
-        )
-      }
-    ),
-
-    # 12. Backtest: Residual-only momentum
-    tar_target(
-      solana_bt_residual,
-      {
-        backtest_momentum(
-          signals = solana_signals |> dplyr::select(ticker, date, signal = residual_mom, position_size),
-          returns = solana_returns_daily,
-          costs = 0.003,
-          rebalance_freq = "weekly"
-        )
-      }
-    ),
-
-    # 13. Performance summary
-    tar_target(
-      solana_performance_summary,
-      {
-        bind_rows(
-          solana_bt_baseline |> mutate(strategy = "Baseline (12m)"),
-          solana_bt_btc_adj |> mutate(strategy = "BTC-Adjusted"),
-          solana_bt_residual |> mutate(strategy = "Residual-Only")
+      sol_btc_beta_stats,
+      sol_btc_betas |>
+        dplyr::group_by(ticker) |>
+        dplyr::summarise(
+          mean_beta   = mean(btc_beta, na.rm = TRUE),
+          median_beta = stats::median(btc_beta, na.rm = TRUE),
+          sd_beta     = stats::sd(btc_beta, na.rm = TRUE),
+          beta_25     = stats::quantile(btc_beta, 0.25, na.rm = TRUE),
+          beta_75     = stats::quantile(btc_beta, 0.75, na.rm = TRUE),
+          n_obs       = dplyr::n(),
+          .groups = "drop"
         ) |>
-          group_by(strategy) |>
-          summarise(
-            gross_sharpe = calculate_sharpe(gross_pnl),
-            net_sharpe = calculate_sharpe(net_pnl),
-            gross_annual_ret = mean(gross_pnl) * 252,
-            net_annual_ret = mean(net_pnl) * 252,
-            max_drawdown = calculate_max_dd(cumsum(net_pnl)),
-            avg_turnover = mean(turnover),
-            .groups = "drop"
-          )
-      }
+        dplyr::arrange(dplyr::desc(median_beta))
     ),
 
-    # 14. BTC beta analysis (how much does SOL ecosystem move with BTC?)
+    # 16. Cumulative returns plot (all 6 series)
     tar_target(
-      solana_btc_beta_analysis,
+      sol_cumulative_plot,
       {
-        solana_signals |>
-          group_by(ticker) |>
-          summarise(
-            mean_beta = mean(btc_beta, na.rm = TRUE),
-            median_beta = median(btc_beta, na.rm = TRUE),
-            sd_beta = sd(btc_beta, na.rm = TRUE),
-            beta_25 = quantile(btc_beta, 0.25, na.rm = TRUE),
-            beta_75 = quantile(btc_beta, 0.75, na.rm = TRUE),
-            .groups = "drop"
-          ) |>
-          arrange(desc(median_beta))
-      }
-    ),
+        extract_cumret <- function(bt, strategy, freq) {
+          bt$performance |>
+            dplyr::select(date, cum_ret_net) |>
+            dplyr::mutate(
+              strategy = strategy,
+              freq     = freq,
+              series   = paste0(strategy, " (", freq, ")")
+            )
+        }
 
-    # 15. Funding rate carry analysis (for Phase 2)
-    tar_target(
-      solana_funding_rate_stats,
-      {
-        solana_perps_drift |>
-          mutate(ticker = sub("-PERP", "", market)) |>
-          filter(ticker %in% solana_universe_liquid) |>
-          group_by(ticker) |>
-          summarise(
-            mean_funding_rate = mean(funding_rate, na.rm = TRUE) * 24 * 365,  # Annualized
-            sd_funding_rate = sd(funding_rate, na.rm = TRUE) * sqrt(24 * 365),
-            positive_pct = mean(funding_rate > 0, na.rm = TRUE),
-            .groups = "drop"
-          ) |>
-          arrange(desc(mean_funding_rate))
-      }
-    ),
-
-    # 16. Cumulative returns plot
-    tar_target(
-      solana_cumulative_plot,
-      {
-        combined <- bind_rows(
-          solana_bt_baseline |> mutate(strategy = "Baseline"),
-          solana_bt_btc_adj |> mutate(strategy = "BTC-Adjusted"),
-          solana_bt_residual |> mutate(strategy = "Residual-Only")
+        combined <- dplyr::bind_rows(
+          extract_cumret(sol_bt_monthly_baseline,  "Baseline",  "monthly"),
+          extract_cumret(sol_bt_monthly_btc_adj,   "BTC-Adj",   "monthly"),
+          extract_cumret(sol_bt_monthly_residual,  "Residual",  "monthly"),
+          extract_cumret(sol_bt_weekly_baseline,   "Baseline",  "weekly"),
+          extract_cumret(sol_bt_weekly_btc_adj,    "BTC-Adj",   "weekly"),
+          extract_cumret(sol_bt_weekly_residual,   "Residual",  "weekly")
         )
 
-        ggplot(combined, aes(x = date, y = cumsum(net_pnl), color = strategy)) +
-          geom_line(linewidth = 1) +
-          scale_color_manual(values = c("Baseline" = "#999", "BTC-Adjusted" = "#0066CC", "Residual-Only" = "#CC0000")) +
-          labs(
-            title = "Solana Momentum Decomposition: Cumulative Returns",
-            subtitle = paste0(
-              "Universe: ", paste(solana_universe_liquid, collapse = ", "),
-              " | Weekly rebalance | 0.3% costs"
+        ggplot2::ggplot(
+          combined,
+          ggplot2::aes(x = date, y = cum_ret_net, color = series, linetype = freq)
+        ) +
+          ggplot2::geom_line(linewidth = 0.9) +
+          ggplot2::scale_color_manual(
+            values = c(
+              "Baseline (monthly)"  = "#2c3e50",
+              "BTC-Adj (monthly)"   = "#e67e22",
+              "Residual (monthly)"  = "#c0392b",
+              "Baseline (weekly)"   = "#7f8c8d",
+              "BTC-Adj (weekly)"    = "#f39c12",
+              "Residual (weekly)"   = "#e74c3c"
+            )
+          ) +
+          ggplot2::scale_linetype_manual(
+            values = c("monthly" = "solid", "weekly" = "dashed")
+          ) +
+          ggplot2::labs(
+            title = paste0(
+              "Solana Momentum Decomposition: Cumulative Net Returns\n",
+              "Universe: ", paste(SOLANA_UNIVERSE, collapse = ", "),
+              " | Cost: ", COST_BPS, "bps | Lookback: ", LOOKBACK_DAYS, "d"
             ),
-            x = NULL,
-            y = "Cumulative Return",
-            color = "Strategy"
+            x    = NULL,
+            y    = "Cumulative Return (net of costs)",
+            color = "Strategy",
+            linetype = "Frequency"
           ) +
-          theme_minimal() +
-          theme(legend.position = "top")
-      }
-    ),
-
-    # 17. Rolling Sharpe plot
-    tar_target(
-      solana_rolling_sharpe_plot,
-      {
-        combined <- bind_rows(
-          solana_bt_baseline |> mutate(strategy = "Baseline"),
-          solana_bt_btc_adj |> mutate(strategy = "BTC-Adjusted"),
-          solana_bt_residual |> mutate(strategy = "Residual-Only")
-        )
-
-        combined |>
-          group_by(strategy) |>
-          arrange(date) |>
-          mutate(
-            rolling_sharpe = RcppRoll::roll_meanr(net_pnl, n = 63) /
-                            RcppRoll::roll_sdr(net_pnl, n = 63) * sqrt(252)
-          ) |>
-          ungroup() |>
-          filter(!is.na(rolling_sharpe)) |>
-          ggplot(aes(x = date, y = rolling_sharpe, color = strategy)) +
-          geom_line(linewidth = 0.8) +
-          geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
-          scale_color_manual(values = c("Baseline" = "#999", "BTC-Adjusted" = "#0066CC", "Residual-Only" = "#CC0000")) +
-          labs(
-            title = "Solana Momentum: 63-Day Rolling Sharpe Ratio",
-            x = NULL,
-            y = "Rolling Sharpe (63d)",
-            color = "Strategy"
-          ) +
-          theme_minimal() +
-          theme(legend.position = "top")
-      }
-    ),
-
-    # 18. Performance table (display)
-    tar_target(
-      solana_performance_table,
-      {
-        solana_performance_summary |>
-          mutate(
-            gross_sharpe = round(gross_sharpe, 3),
-            net_sharpe = round(net_sharpe, 3),
-            gross_annual_ret = scales::percent(gross_annual_ret, accuracy = 0.1),
-            net_annual_ret = scales::percent(net_annual_ret, accuracy = 0.1),
-            max_drawdown = scales::percent(max_drawdown, accuracy = 0.1),
-            avg_turnover = scales::percent(avg_turnover, accuracy = 0.1)
-          )
+          ggplot2::theme_minimal(base_size = 11) +
+          ggplot2::theme(legend.position = "right")
       }
     )
+
   )
 }
