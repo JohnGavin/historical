@@ -97,10 +97,14 @@ hd_dt <- function(df, caption_text) {
     df[[col]] <- clean_dates(df[[col]])
   }
 
+  # Identify numeric columns (after formatting they may be character, check original df)
+  numeric_cols <- which(sapply(df, function(x) is.numeric(x) ||
+                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
   DT::datatable(
     df,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #ddd;",
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #888;",
       caption_text
     ),
     rownames = FALSE,
@@ -111,6 +115,9 @@ hd_dt <- function(df, caption_text) {
       autoWidth = FALSE,
       dom = "frtip",
       search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1)  # DT uses 0-based indexing
+      ),
       initComplete = DT::JS(
         "function(settings, json) {",
         "  $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",

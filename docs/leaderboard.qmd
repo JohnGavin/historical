@@ -133,7 +133,7 @@ if (!is.null(lb)) {
            " flagged as non-credible (>20% CAGR or >50x cum P&L — likely unrealistic).")
   } else ""
 
-  hd_dt(metrics_long, paste0("Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Net CAGR (after 0.20% round-trip/month), Cum P&L (net). Sharpe secondary.", flag_note))
+  hd_dt(metrics_long, paste0("Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Net CAGR (after 0.20% round-trip/month). Sharpe secondary.", flag_note))
 }
 ```
 
@@ -142,17 +142,35 @@ if (!is.null(lb)) {
 ```{r}
 if (!is.null(lb)) {
   # NEVER show Validation data — sealed envelope (backtest-partitions rule)
+  params <- safe_tar_read("stk_params")
+
+  # Create years lookup
+  years_map <- tibble(
+    period = c("Training", "Testing", "Full Period"),
+    Years = if (!is.null(params)) {
+      c(
+        paste0(format(as.Date(params$start_date), "%Y"), "-", format(as.Date(params$is_end), "%Y")),
+        paste0(format(as.Date(params$test_start), "%Y"), "-", format(as.Date(params$test_end), "%Y")),
+        paste0(format(as.Date(params$start_date), "%Y"), "-", format(as.Date(params$test_end), "%Y"))
+      )
+    } else {
+      c("—", "—", "—")
+    }
+  )
+
   by_part <- lb |>
     filter(period != "Validation") |>
+    left_join(years_map, by = "period") |>
     mutate(
       CAGR = paste0(round(cagr * 100, 1), "%"),
       Vol = paste0(round(vol * 100, 1), "%"),
       Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
-      `Max DD` = paste0(round(max_dd * 100, 1), "%")
+      `Max DD` = paste0(round(max_dd * 100, 1), "%"),
+      `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%"))
     ) |>
-    select(Strategy = strategy, Period = period, CAGR, Vol, Sharpe, `Max DD`)
+    select(Strategy = strategy, Period = period, Years, CAGR, Vol, Sharpe, `Max DD`, `CVaR 95%`)
 
-  hd_dt(by_part, "All strategies × Training and Testing partitions. Validation partition is sealed — not shown until production deployment.")
+  hd_dt(by_part, "All strategies × Training and Testing partitions. Years column shows date ranges. Validation partition is sealed — not shown until production deployment.")
 }
 ```
 
