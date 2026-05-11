@@ -31,6 +31,7 @@ pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 # source(here::here("R/regime_correlations.R"))
 # source(here::here("R/tail_keff.R"))
 source(here::here("R/vvix_analysis.R"))
+source(here::here("R/crypto_momentum_helpers.R"))
 
 # Source canonical backtest annualisation helper (annualise_returns()) — used by plan_kelly_variants + plan_etf_replication
 source(here::here("R/utils_metrics.R"))
@@ -119,6 +120,7 @@ source(here::here("R/plan_regime_momentum.R"))
 source(here::here("R/plan_zakamulin_allocation.R"))
 source(here::here("R/plan_commodities_momentum.R"))
 source(here::here("R/plan_crypto_momentum.R"))
+source(here::here("R/plan_solana_momentum.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -159,6 +161,7 @@ c(plan_strategy_names(),
   plan_zakamulin_allocation(),
   plan_commodities_momentum(),
   plan_crypto_momentum(),
+  plan_solana_momentum(),
 
   # Phase 1 of #149: date-type consistency across all registered datasets.
   # tar_target_raw + explicit deps so targets schedules dv_join_key_types
