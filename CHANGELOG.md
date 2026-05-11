@@ -1,5 +1,69 @@
 # Changelog
 
+## 2026-05-11
+
+### Week 1 Execution: Website Fixes + Research Findings (Issues #128, #129, #119, #123, #127)
+
+**Context:** Post-momentum decomposition (#121 complete), executed Week 1 plan via parallel git worktrees with appropriate model/skill allocation.
+
+**Completed (4 PRs merged, all tests pass):**
+
+1. **PR #130: Fix 404 errors** (Issue #128, quick-fix/haiku, 30 min)
+   - Added explicit anchor IDs to examples.qmd: `{#equity}`, `{#crypto}`, `{#macro}`, `{#factors}`
+   - Expanded falsification.qmd explanations: HAC t, Naive Sharpe, Alpha %, Alpha t, R²
+   - All anchor links now resolve correctly
+
+2. **PR #131: Improve leaderboard vignette** (Issue #129, general-purpose/sonnet, 45 min)
+   - Fixed caption color: #ddd (white) → #888 (gray) for dark mode
+   - Added numeric right-justification via `.dt-right` CSS class
+   - Added CVaR 95% column, Years column (Training/Testing periods)
+   - Added Wikipedia link for elastic net
+   - Improved pros/cons section structure in stock-backtest.qmd
+
+3. **PR #132: Volatility spike analysis Phase 1** (Issue #119, general-purpose/sonnet, 2.5 hours)
+   - Created R/volatility_spike_analysis.R (140 lines, 4 functions):
+     - detect_volatility_spikes(), calculate_spike_duration(), calculate_reversal_speed(), compare_spike_frequency()
+   - Created R/plan_volatility_spikes.R (8 targets)
+   - **Finding:** Only 2 spikes detected in 2014-2024 (April 2025, August 2024) using VIX ≥ 1.5× 63-day MA threshold
+   - **Discrepancy:** Alpha Architect paper claims 3× frequency increase — parameter sweep needed
+
+4. **PR #133: Regime-dependent momentum** (Issue #123, general-purpose/sonnet, 3.5 hours)
+   - Created R/regime_momentum.R (374 lines, 4 functions):
+     - classify_vix_regimes() (Calm <20, Elevated 20-30, Spike >30)
+     - partition_returns_by_regime(), regime_conditional_performance(), compare_strategies_by_regime()
+   - Created R/plan_regime_momentum.R (13 targets originally, 12 after duplicate fix)
+   - **CRITICAL FINDING: Decomposition fails in ALL regimes**
+     - Baseline (total 12m): Calm Sharpe 0.63, Elevated 0.15, Spike -1.44
+     - Paper decomposed: Calm -0.44, Elevated -0.46, Spike -0.66 (ALL NEGATIVE)
+     - Data-Driven: Calm -0.15, Elevated -0.66, Spike -0.86 (ALL NEGATIVE)
+     - Conservative: Calm -0.27, Elevated -0.81, Spike -0.85 (ALL NEGATIVE)
+   - **Regime rescue test: 0/9 positive Sharpe ratios (0%)**
+   - **Conclusion: ABANDON momentum decomposition entirely**
+   - **Actionable insight:** Baseline Sharpe 0.63 in calm (65% of time) suggests regime-conditional allocation of baseline momentum
+
+5. **Issue #127 comment: Update ROI tracker** (manual, 15 min)
+   - Documented #121 results: Expected +10-20% Sharpe, Actual -0.39 to -0.44 (ALL negative), Delta -0.40 to -0.45
+   - Lesson: Academic persistence (rank IC) ≠ Portfolio profitability (net Sharpe after costs)
+
+**Post-Merge Fix (commit 5cdfe74):**
+- Fixed duplicate target error: Both plan_volatility_spikes and plan_regime_momentum defined `vix_daily`
+- Refactored plan_regime_momentum to reuse vix_daily from plan_volatility_spikes
+- Verified all 12 regime momentum targets + 8 volatility spike targets build successfully
+- Confirmed key finding via targets: `regime_rescue_test$any_positive = FALSE` (0 out of 9 positive)
+
+**Execution Notes:**
+- Parallel worktree execution: #128 + #129 (simultaneously), then #119, then #123
+- Total time: ~7 hours (vs 12-17 estimated — faster via parallelization)
+- All PRs merged to main, pipeline validated, no regressions
+
+**Next Steps (Optional Week 2):**
+- Option A: Regime-based allocation Phase 2 (#123) — apply Zakamulin continuous allocation to baseline
+- Option B: Volatility spike parameter sweep (#119 Phase 2) — test 1.2×-1.5× thresholds, extend to 1990
+- Option C: Knowledge audit + DRIF (#118 + #117)
+- Option D: Pivot to Macro/GenAI (#124, #120)
+
+---
+
 ## 2026-05-10
 
 ### Completed
