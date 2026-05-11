@@ -101,6 +101,7 @@ source(here::here("R/plan_jst.R"))
 source(here::here("R/plan_momentum_decomposition.R"))
 source(here::here("R/plan_volatility_spikes.R"))
 source(here::here("R/plan_regime_momentum.R"))
+source(here::here("R/plan_crypto_momentum.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -137,4 +138,5 @@ c(plan_strategy_names(),
   plan_jst(),
   plan_momentum_decomposition(),
   plan_volatility_spikes(),
-  plan_regime_momentum())
+  plan_regime_momentum(),
+  plan_crypto_momentum())
