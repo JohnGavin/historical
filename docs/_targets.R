@@ -54,6 +54,9 @@ source(here::here("R/volatility_spike_analysis.R"))
 # Source regime-dependent momentum functions (issue #123)
 source(here::here("R/regime_momentum.R"))
 
+# Source Zakamulin continuous allocation functions (issue #123 follow-up)
+source(here::here("R/zakamulin_allocation.R"))
+
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
@@ -101,6 +104,7 @@ source(here::here("R/plan_jst.R"))
 source(here::here("R/plan_momentum_decomposition.R"))
 source(here::here("R/plan_volatility_spikes.R"))
 source(here::here("R/plan_regime_momentum.R"))
+source(here::here("R/plan_zakamulin_allocation.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -137,4 +141,5 @@ c(plan_strategy_names(),
   plan_jst(),
   plan_momentum_decomposition(),
   plan_volatility_spikes(),
-  plan_regime_momentum())
+  plan_regime_momentum(),
+  plan_zakamulin_allocation())
