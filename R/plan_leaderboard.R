@@ -104,7 +104,9 @@ plan_leaderboard <- function() {
 
       # Join cost metrics onto all_metrics
       all_metrics <- all_metrics |>
-        left_join(cost_rows, by = c("strategy", "period"))
+        left_join(cost_rows, by = c("strategy", "period")) |>
+        # Mark strategies that draw on stk_universe (survivorship-biased); see #150
+        mutate(survivorship_biased = strategy %in% c("Stock MAX", "Stock DRIF", "XGB DRIF"))
 
       # Join bootstrap CI columns (Sharpe CI, crosses-zero flag)
       if (!is.null(boot_ci_summary) && nrow(boot_ci_summary) > 0) {

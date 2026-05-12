@@ -33,6 +33,10 @@ tar_config_set(store = store_path)
 utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
   file.path(here::here(), "docs/vignette_utils.R")
 source(utils_path)
+
+disc_path <- if (file.exists("../R/disclosures.R")) "../R/disclosures.R" else
+  file.path(here::here(), "R/disclosures.R")
+source(disc_path)
 ```
 
 # Falsification
@@ -98,6 +102,10 @@ For detailed methodology, HAC analysis, factor regression betas, multiplicity co
 
 # Rankings
 
+::: {.callout-warning collapse="false" title="Survivorship bias"}
+`r disclosure_survivorship()`
+:::
+
 ## Row
 
 ### {.tabset}
@@ -133,7 +141,15 @@ if (!is.null(lb)) {
            " flagged as non-credible (>20% CAGR or >50x cum P&L — likely unrealistic).")
   } else ""
 
-  hd_dt(metrics_long, paste0("Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Net CAGR (after 0.20% round-trip/month). Sharpe secondary.", flag_note))
+  n_biased <- if ("survivorship_biased" %in% names(full)) sum(full$survivorship_biased, na.rm = TRUE) else 0L
+  bias_note <- if (n_biased > 0) {
+    biased <- full$strategy[!is.na(full$survivorship_biased) & full$survivorship_biased]
+    paste0(" Survivorship-biased (`survivorship_biased = TRUE`): ",
+           paste(biased, collapse = ", "),
+           " — draw on `stk_universe` (see issue #150).")
+  } else ""
+
+  hd_dt(metrics_long, paste0("Risk-first rankings (sorted by max drawdown). Risk: DD, CVaR, Vol. Return: Net CAGR (after 0.20% round-trip/month). Sharpe secondary.", flag_note, bias_note))
 }
 ```
 

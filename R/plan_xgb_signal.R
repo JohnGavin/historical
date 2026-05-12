@@ -127,7 +127,7 @@ plan_xgb_signal <- function() {
         calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
         calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
-      )
+      ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
     }),
 
     # ── XGBoost vs Elastic Net comparison ─────────────────────────
