@@ -598,37 +598,46 @@ plan_falsification <- function() {
 
     targets::tar_target(fals_tail_independence, {
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
-      library(dplyr)
 
-      # Reuse the returns matrix construction from fals_keff
-      all_rets <- Reduce(
-        function(a, b) dplyr::full_join(a, b, by = "date"),
-        list(
-          fals_avoid_worst_input |> dplyr::rename(avoid_worst = strategy_ret),
-          fals_drif_input        |> dplyr::rename(drif        = strategy_ret),
-          fals_fac_max_input     |> dplyr::rename(fac_max     = strategy_ret),
-          fals_rsc_input         |> dplyr::rename(rsc         = strategy_ret),
-          fals_ltr_input         |> dplyr::rename(ltr         = strategy_ret)
-        )
+      aligned <- align_period(
+        series = list(
+          avoid_worst = fals_avoid_worst_input,
+          drif        = fals_drif_input,
+          fac_max     = fals_fac_max_input,
+          rsc         = fals_rsc_input,
+          ltr         = fals_ltr_input
+        ),
+        to_period = "month",
+        anchor    = "end_bizday",
+        method    = "compound",
+        value_col = "strategy_ret",
+        min_obs   = 1L
       )
-      mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max", "rsc", "ltr")])
-      mat <- mat[complete.cases(mat), ]
+
+      strategies <- c("avoid_worst", "drif", "fac_max", "rsc", "ltr")
+      mat <- as.matrix(aligned[, strategies])
+      mat <- mat[stats::complete.cases(mat), ]
+
+      if (nrow(mat) < 24L) {
+        cli::cli_abort(c(
+          "x" = "fals_tail_independence: only {nrow(mat)} aligned monthly observations.",
+          "i" = "Need >= 24. Check input series ranges and {.fn align_period} configuration."
+        ))
+      }
 
       tail_keff <- hd_tail_keff(mat, q = 0.05)
 
-      # Pairwise tail dependence
-      strategies <- colnames(mat)
-      pairs <- combn(strategies, 2, simplify = FALSE)
+      pairs <- utils::combn(strategies, 2, simplify = FALSE)
       tail_deps <- purrr::map_dfr(pairs, function(p) {
         td <- hd_tail_dependence(mat[, p[1]], mat[, p[2]], q = 0.05)
         tibble::tibble(strategy_1 = p[1], strategy_2 = p[2],
-               lambda_L = td$lambda_L, n_pairs = td$n_pairs)
+                       lambda_L = td$lambda_L, n_pairs = td$n_pairs)
       })
 
       dd_overlap <- hd_drawdown_overlap(mat)
 
       list(
-        tail_keff = tail_keff,
+        tail_keff       = tail_keff,
         tail_dependence = tail_deps,
         drawdown_overlap = dd_overlap
       )
