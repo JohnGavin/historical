@@ -215,19 +215,26 @@ plan_drif <- function() {
         )
       })
 
+      # Thread last_date (actual last trading day of each month) from drif_daily.
+      # This is identical to the max(date) computed inside drif_features but
+      # made available here via a lightweight summarise on the dependency we
+      # already have. No to_month_end_bizday() call needed: max(date) IS the
+      # correct business-day date by construction (#147 layer 2).
+      month_end_dates <- drif_daily |>
+        filter(factor_name == drif_params$benchmark_factor) |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        group_by(ym) |>
+        summarise(last_date = max(date), .groups = "drop")
+
       bind_rows(Filter(Negate(is.null), results)) |>
+        left_join(month_end_dates, by = "ym") |>
         mutate(
-          # TODO (#147 layer 2): replace paste0(ym, "-15") with
-          # to_month_end_bizday(as.Date(paste0(ym, "-01"))) so that drif
-          # uses the same month-end-bizday convention as fac_max and ltr.
-          # The -15 stub is causally safe (monthly_ret is fully observed by
-          # month-end) but produces mid-month dates that fail the
-          # dv_monthly_convention validation target.
-          date = as.Date(paste0(ym, "-15")),
+          date = last_date,   # threaded from monthly_ret per #147 layer 2
           port_cum = cumprod(1 + portfolio_ret),
           bench_cum = cumprod(1 + benchmark_ret),
           excess_ret = portfolio_ret - rf_ret
-        )
+        ) |>
+        select(-last_date)
     }),
 
     # ── Metrics ───────────────────────────────────────────────────
@@ -306,7 +313,7 @@ plan_drif <- function() {
       library(dplyr)
 
       drif <- drif_portfolio |>
-        select(ym, drif_ret = portfolio_ret)
+        select(ym, date, drif_ret = portfolio_ret)  # date already last_date per #147 layer 2
 
       max_data <- fm_portfolio |>
         select(ym, max_ret = portfolio_ret)
@@ -314,9 +321,7 @@ plan_drif <- function() {
       inner_join(drif, max_data, by = "ym") |>
         mutate(
           drif_cum = cumprod(1 + drif_ret),
-          max_cum  = cumprod(1 + max_ret),
-          # TODO (#147 layer 2): same -15 stub as drif_portfolio — migrate together
-          date = as.Date(paste0(ym, "-15"))
+          max_cum  = cumprod(1 + max_ret)
         )
     }),
 
