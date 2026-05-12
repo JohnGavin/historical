@@ -33,7 +33,8 @@ plan_falsification <- function() {
     targets::tar_target(fals_avoid_worst_input, {
       library(dplyr)
       aw_practical_backtest |>
-        dplyr::select(date, strategy_ret = ret_strategy)
+        dplyr::select(date, strategy_ret = ret_strategy) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))   # coerce POSIXct from upstream hd_ohlcv/hd_macro join
     }),
 
     # drif: monthly portfolio returns
@@ -54,14 +55,16 @@ plan_falsification <- function() {
     targets::tar_target(fals_rsc_input, {
       library(dplyr)
       rsc_portfolio |>
-        dplyr::select(date, strategy_ret = ret_strategy)
+        dplyr::select(date, strategy_ret = ret_strategy) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))   # coerce POSIXct from upstream rsc_data chain
     }),
 
     # ltr: monthly long-short returns from LambdaMART CS momentum
     targets::tar_target(fals_ltr_input, {
       library(dplyr)
       ltr_portfolio |>
-        dplyr::select(date, strategy_ret = port_ret)
+        dplyr::select(date, strategy_ret = port_ret) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))   # timezone-safe: tz="UTC" avoids day-shift on end-of-day POSIXct
     }),
 
 
