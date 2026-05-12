@@ -22,7 +22,7 @@ detect_volatility_spikes <- function(vix_daily, threshold = 1.5, window_days = 6
   vix_with_ma <- vix_daily |>
     dplyr::arrange(date) |>
     dplyr::mutate(
-      vix_ma = RcppRoll::roll_mean(vix, n = window_days, align = "right", fill = NA),
+      vix_ma = roll_mean_safe(vix, n = window_days),
       spike_threshold = vix_ma * threshold,
       is_spike = !is.na(vix_ma) & vix >= spike_threshold
     )

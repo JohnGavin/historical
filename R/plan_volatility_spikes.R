@@ -24,7 +24,7 @@ plan_volatility_spikes <- function() {
         vix_daily |>
           dplyr::arrange(date) |>
           dplyr::mutate(
-            vix_ma_3m = RcppRoll::roll_mean(vix, n = 63, align = "right", fill = NA)
+            vix_ma_3m = roll_mean_safe(vix, n = 63)
           )
       }
     ),
