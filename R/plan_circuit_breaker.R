@@ -58,7 +58,7 @@ plan_circuit_breaker <- function() {
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
-      purrr::map(cb_params$fed_series, function(sid) {
+      results <- purrr::map(cb_params$fed_series, function(sid) {
         tryCatch({
           df <- hd_macro(sid) |>
             # hd_macro() returns POSIXt — always coerce
@@ -77,8 +77,19 @@ plan_circuit_breaker <- function() {
           NULL
         })
       }) |>
-        purrr::compact() |>
-        dplyr::bind_rows()
+        purrr::compact()
+
+      if (length(results) == 0L) {
+        cli::cli_abort(c(
+          "x" = "cb_data: 0 FRED Fed series successfully fetched.",
+          "i" = "Tried: {.val {cb_params$fed_series}}",
+          "i" = "Check macro parquet contents: {.code DBI::dbGetQuery(con, \"SELECT DISTINCT series_id FROM ...\")}",
+          "i" = "Or update {.code cb_params$fed_series} to use available IDs.",
+          "i" = "Tracked in issue #145 layer 2 (data fix)."
+        ))
+      }
+
+      dplyr::bind_rows(results)
     }),
 
     # ── Regime: classify dormant vs active ────────────────────────
@@ -94,6 +105,16 @@ plan_circuit_breaker <- function() {
     # Uses only past data — no look-ahead.
     targets::tar_target(cb_regime, {
       library(dplyr)
+
+      # Defensive: cb_data should already have aborted if empty (issue #145 layer 1),
+      # but guard here too in case cb_data is restored from an old cache.
+      if (nrow(cb_data) == 0L || !all(c("series_id", "date", "value") %in% names(cb_data))) {
+        cli::cli_abort(c(
+          "x" = "cb_regime: cb_data is empty or missing required columns.",
+          "i" = "nrow: {nrow(cb_data)}, names: {.val {names(cb_data)}}",
+          "i" = "Expected columns: series_id, date, value."
+        ))
+      }
 
       thresh <- cb_params$mad_threshold
       win    <- cb_params$baseline_window

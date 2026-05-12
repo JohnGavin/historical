@@ -217,6 +217,12 @@ plan_drif <- function() {
 
       bind_rows(Filter(Negate(is.null), results)) |>
         mutate(
+          # TODO (#147 layer 2): replace paste0(ym, "-15") with
+          # to_month_end_bizday(as.Date(paste0(ym, "-01"))) so that drif
+          # uses the same month-end-bizday convention as fac_max and ltr.
+          # The -15 stub is causally safe (monthly_ret is fully observed by
+          # month-end) but produces mid-month dates that fail the
+          # dv_monthly_convention validation target.
           date = as.Date(paste0(ym, "-15")),
           port_cum = cumprod(1 + portfolio_ret),
           bench_cum = cumprod(1 + benchmark_ret),
@@ -308,7 +314,8 @@ plan_drif <- function() {
       inner_join(drif, max_data, by = "ym") |>
         mutate(
           drif_cum = cumprod(1 + drif_ret),
-          max_cum = cumprod(1 + max_ret),
+          max_cum  = cumprod(1 + max_ret),
+          # TODO (#147 layer 2): same -15 stub as drif_portfolio — migrate together
           date = as.Date(paste0(ym, "-15"))
         )
     }),
