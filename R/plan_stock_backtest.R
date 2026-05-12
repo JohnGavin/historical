@@ -147,7 +147,8 @@ plan_stock_backtest <- function() {
       all_data |>
         filter(ticker %in% ticker_stats$ticker,
                date >= stk_params$start_date) |>
-        arrange(ticker, date)
+        arrange(ticker, date) |>
+        mutate(date = as.Date(date, tz = "UTC"))   # coerce POSIXct from DuckDB TIMESTAMP
     }),
 
     # ── Group 1: Monthly returns for all stocks ───────────────────
