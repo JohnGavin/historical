@@ -257,7 +257,7 @@ plan_stock_backtest <- function() {
         calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
         calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
-      )
+      ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
     }),
 
     # ── Group 2: Stock MAX cumulative return plot ─────────────────
@@ -486,7 +486,7 @@ plan_stock_backtest <- function() {
         calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
         calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
-      )
+      ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
     }),
 
     # ── DRIF cumulative return plot ───────────────────────────────

@@ -51,6 +51,9 @@ source(here::here("R/utils_rolling.R"))
 # Source period-alignment helper (must load before plan_falsification uses align_period)
 source(here::here("R/utils_align.R"))
 
+# Source disclosure strings — single source of truth for survivorship-bias caveats (#150)
+source(here::here("R/disclosures.R"))
+
 # Source date helpers — to_month_end_bizday() etc. (issue #147)
 source(here::here("R/utils_dates.R"))
 

@@ -32,7 +32,15 @@ tar_config_set(store = store_path)
 utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
   file.path(here::here(), "docs/vignette_utils.R")
 source(utils_path)
+
+disc_path <- if (file.exists("../R/disclosures.R")) "../R/disclosures.R" else
+  file.path(here::here(), "R/disclosures.R")
+source(disc_path)
 ```
+
+::: {.callout-warning collapse="false" title="Survivorship bias"}
+`r disclosure_survivorship()`
+:::
 
 # Comparison
 
@@ -95,7 +103,11 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
     make_row(fac_drif, "Factor DRIF")
   )
 
-  hd_dt(all_metrics, "All strategies by partition (Training / Testing / Validation / Full). Factor-level links: Factor MAX, Factor DRIF.")
+  hd_dt(all_metrics, paste0(
+    "All strategies by partition (Training / Testing / Validation / Full). ",
+    "Factor-level links: Factor MAX, Factor DRIF. ",
+    "Stock MAX and Stock DRIF draw on `stk_universe` (survivorship-biased — see issue #150)."
+  ))
 }
 ```
 
