@@ -238,6 +238,59 @@ test_that("check_monthly_convention snapshot — ok tibble structure", {
   expect_snapshot(result$status)
 })
 
+# ── Tests for dataset_registry() coverage ─────────────────────────────────────
+
+test_that("dataset_registry has more than 11 rows after expansion", {
+  reg <- dataset_registry()
+  expect_gt(nrow(reg), 11L)
+})
+
+test_that("dataset_registry target_name values are unique", {
+  reg <- dataset_registry()
+  expect_equal(length(unique(reg$target_name)), nrow(reg))
+})
+
+test_that("dataset_registry freq values are in the allowed set", {
+  allowed_freqs <- c("daily", "weekly", "monthly", "quarterly", "annual", "yearly")
+  reg <- dataset_registry()
+  bad_freqs <- setdiff(unique(reg$freq), allowed_freqs)
+  expect_equal(
+    bad_freqs, character(0),
+    info = paste("Unexpected freq values:", paste(bad_freqs, collapse = ", "))
+  )
+})
+
+test_that("dataset_registry date_anchor values are in the allowed set", {
+  # Canonical set from the original 11 entries
+  allowed_anchors <- c(
+    "trading_day", "mid_month", "end_bizday", "end_calendar", "release_day"
+  )
+  reg <- dataset_registry()
+  bad_anchors <- setdiff(unique(reg$date_anchor), allowed_anchors)
+  expect_equal(
+    bad_anchors, character(0),
+    info = paste("Unexpected date_anchor values:", paste(bad_anchors, collapse = ", "))
+  )
+})
+
+test_that("dataset_registry has expected column names", {
+  reg <- dataset_registry()
+  expect_equal(
+    names(reg),
+    c("target_name", "kind", "freq", "date_anchor", "notes")
+  )
+})
+
+test_that("dataset_registry kind values are in the allowed set", {
+  allowed_kinds <- c("ohlcv", "macro", "returns", "derived", "factors")
+  reg <- dataset_registry()
+  bad_kinds <- setdiff(unique(reg$kind), allowed_kinds)
+  expect_equal(
+    bad_kinds, character(0),
+    info = paste("Unexpected kind values:", paste(bad_kinds, collapse = ", "))
+  )
+})
+
 # ── Tests for check_frequency_alignment() ────────────────────────────────────
 
 # Build a registry row for testing
