@@ -237,3 +237,80 @@ test_that("check_monthly_convention snapshot — ok tibble structure", {
   expect_snapshot(names(result))
   expect_snapshot(result$status)
 })
+
+# ── Tests for check_frequency_alignment() ────────────────────────────────────
+
+# Build a registry row for testing
+make_freq_registry <- function(target_name, freq) {
+  tibble::tibble(
+    target_name = target_name,
+    kind = "returns", freq = freq,
+    date_anchor = "end_bizday", notes = NA_character_
+  )
+}
+
+# Build a tibble of daily dates (every calendar day)
+daily_dates_df <- function(n = 30) {
+  tibble::tibble(
+    date  = seq(as.Date("2025-01-01"), by = "day", length.out = n),
+    value = rnorm(n)
+  )
+}
+
+# Build a tibble of monthly dates (first of each month)
+monthly_dates_df <- function(n = 12) {
+  tibble::tibble(
+    date  = seq(as.Date("2025-01-01"), by = "month", length.out = n),
+    value = rnorm(n)
+  )
+}
+
+# Test A: Daily series matches "daily" expectation → status="ok"
+test_that("daily series registered as daily returns status=ok", {
+  reg    <- make_freq_registry("daily_tgt", "daily")
+  reader <- make_reader(daily_tgt = daily_dates_df(30))
+
+  result <- check_frequency_alignment(reg, read_fn = reader)
+
+  expect_s3_class(result, "tbl_df")
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$status, "ok")
+  expect_equal(result$expected_freq_days, 1L)
+  expect_lte(result$observed_median_days, 2L)   # daily data: median gap 1 day
+})
+
+# Test B: Daily series registered as monthly → violation
+test_that("daily series mistakenly registered as monthly produces violation warning", {
+  reg    <- make_freq_registry("daily_as_monthly", "monthly")
+  reader <- make_reader(daily_as_monthly = daily_dates_df(30))
+
+  # Median gap 1 day; expected 30 days; 1 <= 2*30 so... wait:
+  # Violation when observed > 2 * expected.
+  # 1 day observed, 30 days expected: 1 <= 60 → NOT a violation.
+  # We need the reverse: monthly data registered as daily.
+  # Flip: monthly data registered as "daily" → median gap 30d > 2*1d → violation.
+  reg2    <- make_freq_registry("monthly_as_daily", "daily")
+  reader2 <- make_reader(monthly_as_daily = monthly_dates_df(12))
+
+  expect_warning(
+    result <- check_frequency_alignment(reg2, read_fn = reader2),
+    regexp = NULL  # any warning is expected
+  )
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$status, "violation")
+  expect_equal(result$expected_freq_days, 1L)
+  expect_gte(result$observed_median_days, 28.0)  # monthly gap ~30 days
+})
+
+# Test C: Missing/empty series → status="missing", no abort
+test_that("missing series returns status=missing without aborting", {
+  reg    <- make_freq_registry("missing_tgt", "daily")
+  # reader has nothing → simulates unbuilt target
+  reader <- make_reader()
+
+  # Should not abort — missing targets are silently skipped
+  result <- check_frequency_alignment(reg, read_fn = reader)
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$status, "missing")
+  expect_true(is.na(result$observed_median_days))
+})

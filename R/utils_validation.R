@@ -118,6 +118,151 @@ check_date_key_types <- function(
   result
 }
 
+# Map registry freq string to expected inter-observation gap in days
+.freq_to_days <- function(freq) {
+  freq_map <- c(
+    "daily"     = 1L,
+    "weekly"    = 7L,
+    "monthly"   = 30L,
+    "quarterly" = 91L,
+    "annual"    = 365L,
+    "yearly"    = 365L
+  )
+  unname(freq_map[freq])
+}
+
+#' Check sampling frequency alignment for registered datasets
+#'
+#' For each target in the registry, reads its cached value, computes the median
+#' inter-observation interval in days, and compares it against the declared
+#' frequency in `registry$freq`. Warns (does not abort) when the observed median
+#' interval exceeds twice the declared frequency. Returns a summary tibble so
+#' the caller can inspect the detail.
+#'
+#' Mirrors `check_date_key_types()` — same `read_fn` injection pattern for
+#' testability without touching the targets store.
+#'
+#' @param registry Tibble from `dataset_registry()`. Must have columns
+#'   `target_name` and `freq`.
+#' @param read_fn Function with signature `read_fn(name)` returning the target
+#'   object. Default reads RDS objects directly from `store`. Pass a fake in
+#'   tests to avoid touching the targets store.
+#' @param store Path to the targets store directory. Defaults to `"_targets"`.
+#' @return Tibble: `target_name`, `expected_freq_days`, `observed_median_days`,
+#'   `status` ("ok", "missing", "violation").
+#' @export
+check_frequency_alignment <- function(
+    registry = dataset_registry(),
+    read_fn  = NULL,
+    store    = "_targets") {
+
+  if (is.null(read_fn)) {
+    read_fn <- .make_store_reader(store)
+  }
+
+  # Early return for empty registry
+  if (nrow(registry) == 0L) {
+    return(tibble::tibble(
+      target_name        = character(0),
+      expected_freq_days = integer(0),
+      observed_median_days = numeric(0),
+      status             = character(0)
+    ))
+  }
+
+  rows <- purrr::map(seq_len(nrow(registry)), function(i) {
+    nm   <- registry$target_name[[i]]
+    freq <- registry$freq[[i]]
+
+    expected_days <- .freq_to_days(freq)
+
+    # If freq is unrecognised, skip with a note
+    if (is.na(expected_days)) {
+      cli::cli_inform(c("i" = "Skipping {nm}: unrecognised freq {.val {freq}}."))
+      return(tibble::tibble(
+        target_name        = nm,
+        expected_freq_days = NA_integer_,
+        observed_median_days = NA_real_,
+        status             = "missing"
+      ))
+    }
+
+    obj <- tryCatch(
+      read_fn(nm),
+      error = function(e) {
+        cli::cli_inform(c("i" = "Skipping {nm}: not in cache ({conditionMessage(e)})"))
+        NULL
+      }
+    )
+
+    if (is.null(obj) || !is.data.frame(obj) || ncol(obj) == 0L) {
+      return(tibble::tibble(
+        target_name        = nm,
+        expected_freq_days = expected_days,
+        observed_median_days = NA_real_,
+        status             = "missing"
+      ))
+    }
+
+    if (!("date" %in% names(obj))) {
+      cli::cli_inform(c("i" = "Skipping {nm}: no `date` column."))
+      return(tibble::tibble(
+        target_name        = nm,
+        expected_freq_days = expected_days,
+        observed_median_days = NA_real_,
+        status             = "missing"
+      ))
+    }
+
+    dates <- sort(unique(as.Date(obj$date)))
+
+    if (length(dates) < 2L) {
+      # Can't compute an interval with < 2 distinct dates
+      cli::cli_inform(c("i" = "Skipping {nm}: fewer than 2 unique dates."))
+      return(tibble::tibble(
+        target_name        = nm,
+        expected_freq_days = expected_days,
+        observed_median_days = NA_real_,
+        status             = "missing"
+      ))
+    }
+
+    gaps <- as.numeric(diff(dates), units = "days")
+    med_gap <- stats::median(gaps)
+
+    status <- if (med_gap > 2L * expected_days) "violation" else "ok"
+
+    tibble::tibble(
+      target_name        = nm,
+      expected_freq_days = expected_days,
+      observed_median_days = med_gap,
+      status             = status
+    )
+  })
+
+  result <- dplyr::bind_rows(rows)
+
+  violations <- dplyr::filter(result, status == "violation")
+  if (nrow(violations) > 0L) {
+    n_v <- nrow(violations)
+    detail <- paste0(
+      violations$target_name,
+      " (expected ~", violations$expected_freq_days, "d, observed median ",
+      round(violations$observed_median_days, 1), "d)",
+      collapse = "; "
+    )
+    suffix <- if (n_v == 1L) "" else "s"
+    cli::cli_warn(c(
+      "!" = paste0(n_v, " target", suffix,
+                   " have observed sampling frequency > 2× declared frequency."),
+      "i" = detail,
+      "i" = "Check {.arg freq} in {.fn dataset_registry} or the data source."
+    ))
+  }
+
+  result
+}
+
 #' Check month-end-bizday date convention for a set of targets
 #'
 #' For each named target, reads its cached RDS object and verifies that every

@@ -198,5 +198,18 @@ c(plan_strategy_names(),
     ),
     deps = c("fals_drif_input", "fals_fac_max_input", "fals_ltr_input"),
     cue = targets::tar_cue(mode = "always")
+  ),
+
+  # #148 Phase 3: validate sampling-frequency alignment for all registered datasets.
+  # Warns (does not abort) when a series's observed median interval exceeds
+  # 2× the registry-declared frequency. This catches mis-registered freq values
+  # and data sources that changed cadence silently.
+  # tar_target_raw + explicit deps (matches #152 pattern) so this runs AFTER
+  # all registered producers. cb_data and cb_regime excluded pending #145.
+  targets::tar_target_raw(
+    "dv_frequency_alignment",
+    command = quote(check_frequency_alignment(dataset_registry())),
+    deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
+    cue = targets::tar_cue(mode = "always")
   )
 )
