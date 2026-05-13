@@ -59,21 +59,49 @@ plan_circuit_breaker <- function() {
       library(dplyr)
 
       results <- purrr::map(cb_params$fed_series, function(sid) {
-        tryCatch({
-          df <- hd_macro(sid) |>
+        # Try HuggingFace parquet first (cheap, cached)
+        df <- tryCatch({
+          out <- hd_macro(sid) |>
             # hd_macro() returns POSIXt — always coerce
             mutate(date = as.Date(date)) |>
             filter(!is.na(value), is.finite(value)) |>
             select(date, series_id, value) |>
             arrange(date)
-
-          if (nrow(df) == 0) {
-            cli::cli_warn("cb_data: no rows returned for {sid}")
-            return(NULL)
-          }
-          df
+          if (nrow(out) == 0L) NULL else out
         }, error = function(e) {
-          cli::cli_warn("cb_data: failed to fetch {sid}: {conditionMessage(e)}")
+          cli::cli_inform(
+            "cb_data: hd_macro({sid}) failed ({conditionMessage(e)}); will try FRED API"
+          )
+          NULL
+        })
+
+        if (!is.null(df)) return(df)
+
+        # Fallback: fetch directly from FRED API (the 4 Fed-asset series are not
+        # currently in the macro_daily HF parquet — see #145 layer 2)
+        if (!nzchar(Sys.getenv("FRED_API_KEY"))) {
+          cli::cli_warn(c(
+            "cb_data: {sid} not in HF parquet and FRED_API_KEY is unset.",
+            "i" = "Set FRED_API_KEY in .Renviron, or remove {sid} from cb_params$fed_series."
+          ))
+          return(NULL)
+        }
+
+        tryCatch({
+          fredr::fredr_set_key(Sys.getenv("FRED_API_KEY"))
+          fredr::fredr(series_id = sid) |>
+            mutate(
+              date      = as.Date(date),
+              series_id = sid,
+              value     = as.numeric(value)
+            ) |>
+            filter(!is.na(value), is.finite(value)) |>
+            select(date, series_id, value) |>
+            arrange(date)
+        }, error = function(e) {
+          cli::cli_warn(
+            "cb_data: FRED fallback for {sid} failed: {conditionMessage(e)}"
+          )
           NULL
         })
       }) |>

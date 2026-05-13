@@ -11,7 +11,7 @@ library(targets)
 
 # Ensure project nix shell packages are on .libPaths
 # (Claude's dev shell may not include all project deps)
-for (pkg in c("duckplyr", "glmnet", "xgboost", "slider")) {
+for (pkg in c("duckplyr", "glmnet", "xgboost", "slider", "RcppRoll")) {
   if (!requireNamespace(pkg, quietly = TRUE)) {
     pkg_paths <- Sys.glob(sprintf("/nix/store/*-r-%s-*/library", pkg))
     pkg_paths <- pkg_paths[file.exists(file.path(pkg_paths, pkg))]
