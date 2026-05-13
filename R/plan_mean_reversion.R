@@ -61,7 +61,8 @@ plan_mean_reversion <- function() {
             dplyr::filter(!is.na(ret)) |>
             dplyr::select(date, ticker, ret, adjusted, volume)
         }, error = function(e) NULL)
-      })
+      }) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     # ── Rolling risk stats per stock ────────────────────────────

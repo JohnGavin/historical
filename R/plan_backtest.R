@@ -40,7 +40,8 @@ plan_backtest <- function() {
         dplyr::filter(date == max(date)) |>
         dplyr::ungroup() |>
         dplyr::select(ticker, date, close, adjusted) |>
-        dplyr::arrange(ticker, date)
+        dplyr::arrange(ticker, date) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     # ── Data: monthly returns ─────────────────────────────────────
@@ -50,7 +51,8 @@ plan_backtest <- function() {
         dplyr::arrange(date) |>
         dplyr::mutate(ret = adjusted / dplyr::lag(adjusted) - 1) |>
         dplyr::filter(!is.na(ret)) |>
-        dplyr::ungroup()
+        dplyr::ungroup() |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     # ── Expanding window backtest (in-sample) ─────────────────────

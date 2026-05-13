@@ -53,7 +53,8 @@ plan_etf_replication <- function() {
         mutate(daily_ret = adjusted / dplyr::lag(adjusted) - 1) |>
         filter(!is.na(daily_ret)) |>
         ungroup() |>
-        select(ticker, date, daily_ret, close, adjusted)
+        select(ticker, date, daily_ret, close, adjusted) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     # ── ETF monthly returns ───────────────────────────────────────
@@ -70,7 +71,8 @@ plan_etf_replication <- function() {
         mutate(monthly_ret = adjusted / dplyr::lag(adjusted) - 1) |>
         filter(!is.na(monthly_ret)) |>
         ungroup() |>
-        select(ticker, date, ym, monthly_ret)
+        select(ticker, date, ym, monthly_ret) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     # ══ APPROACH A: DRIF on ETF returns ═══════════════════════════

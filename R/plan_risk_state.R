@@ -76,7 +76,8 @@ plan_risk_state <- function() {
         left_join(vix3m, by = "date") |>
         left_join(vvix,  by = "date") |>
         left_join(rf,    by = "date") |>
-        arrange(date)
+        arrange(date) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
 

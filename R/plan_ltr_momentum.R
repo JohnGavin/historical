@@ -85,7 +85,8 @@ plan_ltr_momentum <- function() {
 
       all_data |>
         filter(ticker %in% ticker_stats$ticker) |>
-        arrange(ticker, date)
+        arrange(ticker, date) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
 
@@ -133,10 +134,12 @@ plan_ltr_momentum <- function() {
       cli::cli_inform(c(
         "v" = "LTR portfolio: {nrow(port)} months, {format(min(port$date), '%Y-%m')} to {format(max(port$date), '%Y-%m')}"
       ))
-      port |> mutate(
-        port_ret = ls_ret_net,
-        port_cum = cumprod(1 + port_ret)
-      )
+      port |>
+        mutate(
+          port_ret = ls_ret_net,
+          port_cum = cumprod(1 + port_ret)
+        ) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
 

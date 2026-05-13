@@ -34,7 +34,8 @@ plan_avoid_worst <- function() {
           filter(!is.na(ret)) |>
           select(date, ticker, ret)
         d
-      })
+      }) |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     # ── Daily returns: Fama-French Mkt-RF (1926+) ──────────────
@@ -478,7 +479,9 @@ plan_avoid_worst <- function() {
         select(date, vix = value) |>
         arrange(date)
 
-      spy |> left_join(vix, by = "date")
+      spy |>
+        left_join(vix, by = "date") |>
+        dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
     targets::tar_target(aw_practical_params, {
