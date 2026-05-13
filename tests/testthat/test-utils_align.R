@@ -273,3 +273,116 @@ test_that("missing value_col in series element triggers cli_abort", {
     align_period(series = list(x = bad), value_col = "strategy_ret")
   )
 })
+
+# ── asof_lookup() tests ───────────────────────────────────────────────────────
+
+# Test 9: Daily y joined to month-end x — correct level lookup
+test_that("asof_lookup attaches closest preceding y value for each x date", {
+  # x: 4 month-end dates
+  x <- tibble::tibble(
+    date = as.Date(c("2025-01-31", "2025-02-28", "2025-03-31", "2025-04-30"))
+  )
+
+  # y: daily VIX-like levels — only a few dates per month for simplicity
+  y <- tibble::tibble(
+    date  = as.Date(c(
+      "2025-01-15", "2025-01-28",      # Jan: 2025-01-28 is closest <= 2025-01-31
+      "2025-02-10", "2025-02-25",      # Feb: 2025-02-25 is closest <= 2025-02-28
+      "2025-03-20", "2025-03-31",      # Mar: 2025-03-31 == anchor
+      "2025-04-01"                     # Apr: 2025-04-01 > 2025-04-30? No, 2025-04-01 < 2025-04-30
+      # so the closest on or before 2025-04-30 is 2025-04-01
+    )),
+    level = c(15.2, 14.8, 19.3, 18.1, 22.5, 21.0, 17.7)
+  )
+
+  result <- asof_lookup(x, y, "level")
+
+  expect_s3_class(result, "tbl_df")
+  expect_named(result, c("date", "level"))
+  expect_equal(nrow(result), 4L)
+
+  # Jan anchor 2025-01-31 → closest y is 2025-01-28 (level = 14.8)
+  expect_equal(result$level[result$date == as.Date("2025-01-31")], 14.8)
+
+  # Feb anchor 2025-02-28 → closest y is 2025-02-25 (level = 18.1)
+  expect_equal(result$level[result$date == as.Date("2025-02-28")], 18.1)
+
+  # Mar anchor 2025-03-31 → exact match (level = 21.0)
+  expect_equal(result$level[result$date == as.Date("2025-03-31")], 21.0)
+
+  # Apr anchor 2025-04-30 → closest y is 2025-04-01 (level = 17.7)
+  expect_equal(result$level[result$date == as.Date("2025-04-30")], 17.7)
+})
+
+# Test 10: tol_days enforcement — stale y obs become NA
+test_that("tol_days returns NA when no y obs within tolerance window", {
+  x <- tibble::tibble(
+    date = as.Date(c("2025-01-10", "2025-01-20", "2025-01-31"))
+  )
+
+  y <- tibble::tibble(
+    date  = as.Date(c("2025-01-01", "2025-01-15", "2025-01-29")),
+    level = c(100.0, 200.0, 300.0)
+  )
+
+  # tol_days = 5:
+  #   2025-01-10: closest y is 2025-01-01 (9 days ago) → stale → NA
+  #   2025-01-20: closest y is 2025-01-15 (5 days ago) → exactly at limit → NOT stale
+  #   2025-01-31: closest y is 2025-01-29 (2 days ago) → within tolerance → 300.0
+  result <- asof_lookup(x, y, "level", tol_days = 5L)
+
+  expect_equal(nrow(result), 3L)
+  expect_true(is.na(result$level[result$date == as.Date("2025-01-10")]),
+              info = "9-day-old y should be NA with tol_days=5")
+  # 5 days: 2025-01-15 to 2025-01-20 = 5 days, which equals tol_days, so NOT stale
+  expect_false(is.na(result$level[result$date == as.Date("2025-01-20")]),
+               info = "5-day-old y should NOT be NA at exactly tol_days=5")
+  expect_equal(result$level[result$date == as.Date("2025-01-31")], 300.0)
+})
+
+# Test 11: No future leak — ASOF JOIN never uses y dates after x date
+test_that("asof_lookup never uses y observations that are strictly after x date", {
+  x <- tibble::tibble(
+    date = as.Date(c("2025-01-05", "2025-01-10"))
+  )
+
+  y <- tibble::tibble(
+    # y has dates AFTER each x date — these must never be used
+    date  = as.Date(c("2025-01-07", "2025-01-15", "2025-01-20")),
+    level = c(999.0, 888.0, 777.0)
+  )
+
+  result <- asof_lookup(x, y, "level")
+
+  # 2025-01-05: all y dates are after 2025-01-05 → no valid asof match → NA
+  expect_true(is.na(result$level[result$date == as.Date("2025-01-05")]),
+              info = "No y obs at or before 2025-01-05 — should be NA, not a future value")
+
+  # 2025-01-10: closest y at or before 2025-01-10 is 2025-01-07 (level=999.0)
+  # NOT 2025-01-15 which is after x date
+  expect_equal(result$level[result$date == as.Date("2025-01-10")], 999.0)
+})
+
+# Test 12: POSIXct input — defensive coercion succeeds, no zero-row failure
+test_that("asof_lookup handles POSIXct date column in y via defensive coercion", {
+  x <- tibble::tibble(
+    date = as.Date(c("2025-03-31", "2025-04-30"))
+  )
+
+  # y has POSIXct timestamps (common from arrow::read_parquet on TIMESTAMP cols)
+  y <- tibble::tibble(
+    date  = as.POSIXct(c("2025-03-28 00:00:00", "2025-04-25 00:00:00"), tz = "UTC"),
+    level = c(42.1, 55.3)
+  )
+
+  # Without defensive coercion, DuckDB ASOF JOIN on Date vs POSIXct may
+  # silently produce 0 matches. With as.Date() coercion, both rows should match.
+  result <- asof_lookup(x, y, "level")
+
+  expect_equal(nrow(result), 2L)
+  # Both x dates should have matched the closest y obs
+  expect_false(any(is.na(result$level)),
+               info = "POSIXct coercion should produce valid matches, not NAs")
+  expect_equal(result$level[result$date == as.Date("2025-03-31")], 42.1)
+  expect_equal(result$level[result$date == as.Date("2025-04-30")], 55.3)
+})

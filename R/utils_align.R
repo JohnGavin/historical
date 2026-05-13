@@ -184,3 +184,119 @@ align_period <- function(series,
 
   dplyr::arrange(result, date)
 }
+
+#' As-of join: attach the most recent y value at or before each x date
+#'
+#' For each row of `x`, finds the row in `y` whose date is the largest value
+#' less than or equal to `x$date` (the "as-of" semantic). Returns `x` with the
+#' matched `value_col` from `y` attached.
+#'
+#' Use this when the question is a *point-in-time level lookup*, NOT a period
+#' aggregation. Example: "what was VIX (level) on each month-end?".
+#' For aggregating returns or other flow quantities, use `align_period()`.
+#'
+#' @param x Tibble with a `date` column (Date). Driver of the lookup.
+#' @param y Tibble with a `date` column (Date) and the value column.
+#' @param value_col Name of the column in `y` to attach (character scalar).
+#' @param tol_days Optional max staleness in days. If the most recent y
+#'   observation is older than `x$date - tol_days`, the result is NA.
+#'   Default `NULL` (no limit). Common choice: `7L` for daily data joined
+#'   to monthly anchors; `1L` for strict same-day-or-prior.
+#' @return `x` with one extra column named `value_col`. Row order matches `x`.
+#' @export
+asof_lookup <- function(x, y, value_col, tol_days = NULL) {
+
+  # ── Input validation ──────────────────────────────────────────────────────────
+
+  if (!is.data.frame(x)) {
+    cli::cli_abort(c(
+      "x" = "{.arg x} must be a data frame.",
+      "i" = "Received: {.cls {class(x)}}."
+    ))
+  }
+  if (!is.data.frame(y)) {
+    cli::cli_abort(c(
+      "x" = "{.arg y} must be a data frame.",
+      "i" = "Received: {.cls {class(y)}}."
+    ))
+  }
+  if (!"date" %in% names(x)) {
+    cli::cli_abort(c(
+      "x" = "{.arg x} must have a {.val date} column.",
+      "i" = "Columns found: {.val {names(x)}}."
+    ))
+  }
+  if (!"date" %in% names(y)) {
+    cli::cli_abort(c(
+      "x" = "{.arg y} must have a {.val date} column.",
+      "i" = "Columns found: {.val {names(y)}}."
+    ))
+  }
+  if (!is.character(value_col) || length(value_col) != 1L || is.na(value_col) ||
+      nchar(value_col) == 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg value_col} must be a non-empty character scalar.",
+      "i" = "Received: {.val {value_col}}."
+    ))
+  }
+  if (!value_col %in% names(y)) {
+    cli::cli_abort(c(
+      "x" = "{.arg y} does not have a column named {.val {value_col}}.",
+      "i" = "Columns in y: {.val {names(y)}}."
+    ))
+  }
+  if (!is.null(tol_days)) {
+    if (!is.numeric(tol_days) || length(tol_days) != 1L || is.na(tol_days) ||
+        tol_days < 0 || tol_days != floor(tol_days)) {
+      cli::cli_abort(c(
+        "x" = "{.arg tol_days} must be NULL or a non-negative integer-valued scalar.",
+        "i" = "Received: {.val {tol_days}}."
+      ))
+    }
+    tol_days <- as.integer(tol_days)
+  }
+
+  # ── Defensive date coercion (data-validation-timeseries Section 9) ─────────
+  # POSIXct join keys silently produce 0 matches in SQL; coerce both sides.
+
+  x <- dplyr::mutate(x, date = as.Date(.data$date))
+  y <- dplyr::mutate(y, date = as.Date(.data$date))
+
+  # ── ASOF JOIN via DuckDB ──────────────────────────────────────────────────────
+  # DuckDB ASOF LEFT JOIN is available from DuckDB >= 0.9.
+  # Semantics: for each row of x_tbl, pick the y_tbl row whose date is the
+  # largest value <= x_tbl.date (i.e., the most recent y observation that is
+  # not in the future relative to x).
+
+  con <- duckdb::dbConnect(duckdb::duckdb())
+  on.exit(duckdb::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  duckdb::duckdb_register(con, "x_tbl", x)
+  duckdb::duckdb_register(con, "y_tbl", y[, c("date", value_col), drop = FALSE])
+
+  sql <- paste0(
+    "SELECT x_tbl.*, y_tbl.", value_col, ", ",
+    "       y_tbl.date AS asof_y_date_ ",
+    "FROM x_tbl ",
+    "ASOF LEFT JOIN y_tbl ON x_tbl.date >= y_tbl.date"
+  )
+
+  out <- DBI::dbGetQuery(con, sql)
+
+  # ── tol_days post-filter ──────────────────────────────────────────────────────
+  # If y_date is more than tol_days before x date, set value_col to NA.
+  # The asof_y_date_ sentinel column lets us compute staleness without re-joining.
+
+  if (!is.null(tol_days)) {
+    stale <- !is.na(out[["asof_y_date_"]]) &
+      (as.Date(out[["date"]]) - as.Date(out[["asof_y_date_"]])) > tol_days
+    out[[value_col]][stale] <- NA
+    # Also mark rows where y_date is missing (no y obs at or before x date)
+    out[[value_col]][is.na(out[["asof_y_date_"]])] <- NA
+  }
+
+  # Drop the internal sentinel column
+  out[["asof_y_date_"]] <- NULL
+
+  tibble::as_tibble(out)
+}
