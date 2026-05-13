@@ -38,7 +38,8 @@ DATASET_REGISTRY <- tibble::tribble(
   "vvix_daily",            "macro",    "daily",     "trading_day",   "VVIX from CBOE parquet; vol-of-vol series",
   "rsc_data",              "macro",    "daily",     "trading_day",   "SPY+VIXCLS+VIX3M+VVIX+RF joined; rsc inputs",
   # --- monthly aggregates and strategy portfolios ---
-  "fm_monthly",            "factors",  "monthly",   "end_bizday",    "FF5+Mom monthly compound returns from fm_daily",
+  # NOTE: fm_monthly excluded — uses `last_date` not `date` as its date column.
+  # Re-add when the registry schema gains a `date_col` field (or fm_monthly is renamed).
   "fm_portfolio",          "returns",  "monthly",   "end_bizday",    "Factor MAX monthly portfolio returns",
   "drif_portfolio",        "returns",  "monthly",   "mid_month",     "DRIF factor-level monthly portfolio; date=last_date",
   "bt_prices",             "ohlcv",    "monthly",   "end_bizday",    "multi-ticker monthly snapshot prices from bt plan",
@@ -49,7 +50,9 @@ DATASET_REGISTRY <- tibble::tribble(
   "rafi_data",             "factors",  "monthly",   "end_calendar",  "FF5+Mom wide-format monthly; date=first-of-month",
   "nyt_keywords",          "macro",    "monthly",   "mid_month",     "NYT article counts per keyword; 12-month rolling avg",
   # --- annual / low-frequency ---
-  "jst_raw",               "macro",    "annual",    "end_calendar",  "JST Macrohistory DB; 155yr global asset returns"
+  # NOTE: jst_raw excluded — panel data (year × country), not a single time series
+  # with a `date` join key. Schema is keyed by (year, country); not a candidate
+  # for cross-series date alignment.
 )
 
 #' Dataset registry for cross-series alignment validation
