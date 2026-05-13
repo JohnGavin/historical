@@ -171,39 +171,32 @@ c(plan_strategy_names(),
   plan_crypto_momentum(),
 
   # Phase 1 of #149: date-type consistency across all registered datasets.
-  # cue = "always" because this target depends on cached VALUES, not just code;
-  # only "always" guarantees it re-runs on every tar_make() to catch newly
-  # produced targets that introduced a type mismatch.
-  targets::tar_target(dv_join_key_types, {
-    check_date_key_types(dataset_registry())
-  }, cue = targets::tar_cue(mode = "always")),
+  # tar_target_raw + explicit deps so targets schedules dv_join_key_types
+  # AFTER all registered producers rebuild (fixes #152 Bug 1).
+  # check_date_key_types() uses readRDS() internally — no tar_read_raw().
+  # cb_data and cb_regime are excluded from deps because they are broken
+  # pending #145 — the validation function marks them "missing" gracefully.
+  targets::tar_target_raw(
+    "dv_join_key_types",
+    command = quote(check_date_key_types(dataset_registry())),
+    deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
+    cue = targets::tar_cue(mode = "always")
+  ),
 
   # Layer 1 of #147: validate that monthly-return targets use month-end-bizday
   # date stamps.  cli_warn (not cli_abort) — informational pending the drif
-  # migration in layer 2.  cue = "always" so it re-runs even when no code
-  # changed (the cached target VALUES may change as upstream targets rebuild).
-  targets::tar_target(dv_monthly_convention, {
-    monthly_targets <- c("fals_drif_input", "fals_fac_max_input", "fals_ltr_input")
-    results <- purrr::map_dfr(monthly_targets, function(nm) {
-      df <- tryCatch(targets::tar_read_raw(nm), error = function(e) NULL)
-      if (is.null(df) || !"date" %in% names(df)) {
-        return(tibble::tibble(
-          target = nm, status = "missing", n = 0L, pct_match = NA_real_
-        ))
-      }
-      actual   <- as.Date(df$date)
-      expected <- to_month_end_bizday(actual)
-      pct_match <- mean(actual == expected, na.rm = TRUE)
-      tibble::tibble(target = nm, status = "ok", n = nrow(df), pct_match = pct_match)
-    })
-    off <- dplyr::filter(results, status == "ok", pct_match < 0.95)
-    if (nrow(off) > 0L) {
-      cli::cli_warn(c(
-        "!" = "{nrow(off)} target{?s} do not follow month-end-bizday convention (#147):",
-        "i" = "{paste0(off$target, ' (', round(off$pct_match * 100, 1), '%)', collapse = '; ')}",
-        "i" = "Use {.fn to_month_end_bizday} when constructing these dates."
-      ))
-    }
-    results
-  }, cue = targets::tar_cue(mode = "always"))
+  # migration in layer 2.
+  # tar_target_raw + explicit deps so this runs AFTER the three monthly
+  # targets rebuild (fixes #152 Bug 2).  readRDS replaces tar_read_raw()
+  # which is forbidden inside a target body (silently errors in tryCatch).
+  targets::tar_target_raw(
+    "dv_monthly_convention",
+    command = quote(
+      check_monthly_convention(
+        c("fals_drif_input", "fals_fac_max_input", "fals_ltr_input")
+      )
+    ),
+    deps = c("fals_drif_input", "fals_fac_max_input", "fals_ltr_input"),
+    cue = targets::tar_cue(mode = "always")
+  )
 )

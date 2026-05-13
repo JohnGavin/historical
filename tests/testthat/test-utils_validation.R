@@ -1,5 +1,6 @@
 testthat::local_edition(3)
 source(here::here("R/dataset_registry.R"))
+source(here::here("R/utils_dates.R"))       # to_month_end_bizday() needed by check_monthly_convention
 source(here::here("R/utils_validation.R"))
 
 # ── Helper factories ──────────────────────────────────────────────────────────
@@ -157,4 +158,82 @@ test_that("dataset_registry returns a tibble with expected columns", {
   expect_s3_class(reg, "tbl_df")
   expect_true(all(c("target_name", "kind", "freq", "date_anchor", "notes") %in% names(reg)))
   expect_true(nrow(reg) >= 1L)
+})
+
+# ── Tests 7-11: check_monthly_convention() ───────────────────────────────────
+# Note: dv_monthly_convention target body is a one-liner that calls
+# check_monthly_convention(), so unit tests here exercise the full logic.
+# Direct testing of the target body is not feasible without a live targets
+# store — the read_fn injection pattern makes the helper fully testable.
+
+make_monthly_reader <- function(...) {
+  store <- list(...)
+  function(nm) {
+    if (!nm %in% names(store)) stop(paste0("target not found: ", nm))
+    store[[nm]]
+  }
+}
+
+# Build a tibble of month-end-bizday dates (last biz day of each month)
+month_end_dates <- function(n = 12) {
+  # Use known month-end business days for 2025
+  dates <- as.Date(c(
+    "2025-01-31", "2025-02-28", "2025-03-31", "2025-04-30",
+    "2025-05-30", "2025-06-30", "2025-07-31", "2025-08-29",
+    "2025-09-30", "2025-10-31", "2025-11-28", "2025-12-31"
+  ))
+  tibble::tibble(date = dates[seq_len(n)], ret = rnorm(n))
+}
+
+# Build a tibble with mid-month dates (not month-end-bizday)
+mid_month_dates <- function(n = 12) {
+  dates <- seq(as.Date("2025-01-15"), by = "month", length.out = n)
+  tibble::tibble(date = dates, ret = rnorm(n))
+}
+
+test_that("check_monthly_convention returns ok tibble when all dates are month-end-bizday", {
+  reader <- make_monthly_reader(
+    tgt_a = month_end_dates(12),
+    tgt_b = month_end_dates(6)
+  )
+  result <- check_monthly_convention(c("tgt_a", "tgt_b"), read_fn = reader)
+  expect_s3_class(result, "tbl_df")
+  expect_equal(nrow(result), 2L)
+  expect_true(all(result$status == "ok"))
+  expect_true(all(result$pct_match >= 0.95, na.rm = TRUE))
+})
+
+test_that("check_monthly_convention warns and returns ok row when dates deviate", {
+  reader <- make_monthly_reader(tgt_mid = mid_month_dates(12))
+  expect_warning(
+    result <- check_monthly_convention("tgt_mid", read_fn = reader),
+    regexp = NULL  # any warning is expected
+  )
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$status, "ok")
+  expect_true(result$pct_match < 0.95)
+})
+
+test_that("check_monthly_convention marks missing targets with status=missing not status=ok", {
+  reader <- make_monthly_reader(present = month_end_dates(6))
+  # "absent" is not in the store — simulates an unbuilt target
+  result <- check_monthly_convention(c("present", "absent"), read_fn = reader)
+  expect_equal(nrow(result), 2L)
+  expect_equal(result$status[result$target == "present"], "ok")
+  expect_equal(result$status[result$target == "absent"], "missing")
+  expect_equal(result$n[result$target == "absent"], 0L)
+})
+
+test_that("check_monthly_convention marks target lacking date column as missing", {
+  reader <- make_monthly_reader(no_date = tibble::tibble(ret = 1:12))
+  result <- check_monthly_convention("no_date", read_fn = reader)
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$status, "missing")
+})
+
+test_that("check_monthly_convention snapshot — ok tibble structure", {
+  reader <- make_monthly_reader(snap_tgt = month_end_dates(3))
+  result <- check_monthly_convention("snap_tgt", read_fn = reader)
+  expect_snapshot(names(result))
+  expect_snapshot(result$status)
 })

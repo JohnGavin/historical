@@ -117,3 +117,63 @@ check_date_key_types <- function(
 
   result
 }
+
+#' Check month-end-bizday date convention for a set of targets
+#'
+#' For each named target, reads its cached RDS object and verifies that every
+#' `date` value is the last business day of its calendar month (per #147).
+#' Warns (does not abort) when a target has fewer than 95% of dates on
+#' month-end-bizday dates so the pipeline can continue collecting data.
+#'
+#' `tar_read_raw()` is **forbidden** inside a targets pipeline body — nested
+#' store access silently errors inside `tryCatch`, returning NULL and reporting
+#' every target as "missing" even when built.  This helper uses `readRDS()`
+#' directly (the same pattern as `.make_store_reader()`), and accepts a
+#' `read_fn` parameter for unit-testing without touching the targets store.
+#'
+#' @param targets_vec Character vector of target names to validate.
+#' @param read_fn Function with signature `read_fn(name)` returning the target
+#'   object.  Default reads RDS objects directly from `store`.
+#'   Pass a fake in tests to avoid touching the targets store.
+#' @param store Path to the targets store directory.  Defaults to `"_targets"`.
+#' @return Tibble: target, status ("ok", "missing"), n, pct_match.
+#' @export
+check_monthly_convention <- function(
+    targets_vec,
+    read_fn = NULL,
+    store   = "_targets") {
+
+  if (is.null(read_fn)) {
+    read_fn <- .make_store_reader(store)
+  }
+
+  results <- purrr::map_dfr(targets_vec, function(nm) {
+    df <- tryCatch(
+      read_fn(nm),
+      error = function(e) {
+        cli::cli_inform(c("i" = "Skipping {nm}: not in cache ({conditionMessage(e)})"))
+        NULL
+      }
+    )
+    if (is.null(df) || !"date" %in% names(df)) {
+      return(tibble::tibble(
+        target = nm, status = "missing", n = 0L, pct_match = NA_real_
+      ))
+    }
+    actual    <- as.Date(df$date)
+    expected  <- to_month_end_bizday(actual)
+    pct_match <- mean(actual == expected, na.rm = TRUE)
+    tibble::tibble(target = nm, status = "ok", n = nrow(df), pct_match = pct_match)
+  })
+
+  off <- dplyr::filter(results, status == "ok", pct_match < 0.95)
+  if (nrow(off) > 0L) {
+    cli::cli_warn(c(
+      "!" = "{nrow(off)} target{?s} do not follow month-end-bizday convention (#147):",
+      "i" = "{paste0(off$target, ' (', round(off$pct_match * 100, 1), '%)', collapse = '; ')}",
+      "i" = "Use {.fn to_month_end_bizday} when constructing these dates."
+    ))
+  }
+
+  results
+}
