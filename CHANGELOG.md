@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-05-13
+
+### Pipeline reliability + registry expansion (11 commits, 7 issues touched)
+
+**Context:** Continuation from 2026-05-12's PR-merge cycle (#150, #151, #147). Today's session: Group A pipeline-hygiene fixes that compound the prior session's work, then Group H quick wins (#140 DAG interactivity), then Group B's #148 alignment-helper completion + a registry expansion that surfaced 10 latent silent-join bugs.
+
+**Completed:**
+
+- **#152 (`0db2687`)** — `dv_join_key_types` and `dv_monthly_convention` validators pinned to producer dependencies via `tar_target_raw + deps`; replaced forbidden `tar_read_raw()` with `readRDS()` pattern; extracted `check_monthly_convention()` for testability. **32 PASS** tests.
+- **#145 layer 2 (`7420288`)** — `cb_data` falls back to direct `fredr::fredr()` for the 4 Fed series (WALCL, WSHOMCB, DPCREDIT, TOTRESNS) absent from upstream HuggingFace `macro_daily.parquet`. **9336 rows, all 4 series, 1959-01-01 to 2026-05-11.** Unblocked 5 cascade targets.
+- **#153 (closed not-a-bug)** — Both glmnet/xgboost already in `tproject.toml + flake.nix`; root cause was `tar_make()` invoked from outer dev shell. Documented `nix develop` requirement.
+- **#140 labeled edges (`5c52e44`)** — `addEdgeInteractivity()` framework + 2 labeled-edge tooltips/click-links in `docs/causal-diagrams.js`.
+- **#140 unlabeled edges, Option B (`193223a`)** — Floating popups for **55 unique unlabeled edges** across 5 DAGs. Mermaid v11 `id="L_<SRC>_<DST>_<idx>"` parsing with underscore-aware split. Single shared popup div, midpoint-positioned via base64 `data-points`, dark/light themed via `--bs-*` vars.
+- **#148 + #146 (`869a019`, `18e6fe5`)** — `asof_lookup()` (duckplyr ASOF JOIN wrapper for level lookups, distinct from `align_period()` aggregation). New `dv_frequency_alignment` validator. **fals_tail_independence verified at 254 complete monthly rows** (≥100 acceptance criterion). 35+45 PASS tests.
+- **#118 (audit page, not closed)** — Wiki page at `knowledge/wiki/cakici-2024-coverage-audit.md` (162 lines, 8 keyword categories, 3 AI-inferred markers, Sources block). Result: **2 Implemented / 5 Partial / 1 Not implemented (multiverse)**. LOCAL only per `wiki-storage-policy`.
+- **#157 filed** — Follow-up from #118: 2^4 multiverse on `plan_drif.R` (~1d). Captures the audit's #1 recommended action.
+- **Registry expansion (`4047019`, `4444426`, `1cf28ae`)** — `dataset_registry()` 11 → 34 entries. Validator caught 10 POSIXct producers; all coerced to Date at producer side via `mutate(date = as.Date(date, tz = "UTC"))`. Final state: **34/34 series Date class, 0 frequency violations.**
+
+### Failed Approaches
+
+- **wiki-curator agent for #118 stalled** at the file-write step (600s watchdog, no file produced). Took it over directly — was cheaper than respawning. Lesson: large research-then-write tasks may exceed wiki-curator's productive window; consider splitting into two prompts (research, then write).
+- **Initial registry expansion added `fm_monthly` and `jst_raw` without verification** of `date` column presence. Validator (correctly) aborted. Removed both; documented inline why. Lesson: agents should verify schema before adding to registries — wrote no test for this ahead of time.
+
+### Accuracy / Metrics
+
+- **Tests:** +80 PASS (test-utils_align: 35, test-utils_validation: 45).
+- **Validator coverage:** `dv_join_key_types` 9/9 ok pre-expansion → 24/34 → **34/34 ok** post-fix. `dv_frequency_alignment` 34/34 ok, 0 violations.
+- **Bugs eliminated:** 10 latent POSIXct silent-join bugs + 14 cb_* cascade errors + ~8 dv_* false negatives = **~32 fewer error surfaces in `tar_make()`**.
+- **DAG interactivity:** 100% edge coverage across 5 DAGs (57 of 57 enumerated edges have metadata).
+
+### Known Limitations
+
+- **Stock-level DRIF (#117) blocked on #150 Option A** (PIT data acquisition). Stock-level Sharpes remain survivorship-biased until then.
+- **Multiverse / specification-curve absent** (largest paper gap — tracked as #157).
+- **`fm_monthly` not in registry** — uses `last_date` not `date`; re-add when registry schema gains `date_col` field, or fm_monthly is renamed.
+- **`commodities_returns`, `crypto_returns`, `ecb_raw`** — registry candidates excluded today (unbuilt cache or multi-frequency schema). Not tracked separately (low value).
+
+### Next Session
+
+- Resume on either #157 (multiverse, ~1d) or remaining #118 audit follow-ups (citations ~1h, horizon-decay table ~3h).
+- Burn was at 42% / projected 148% of cap by week-end after today; tomorrow ideally a rest day to pull projection back under cap. Resume Wed+ at ≤ ~$95/day.
+
 ## 2026-05-11
 
 ### Week 1 Execution: Website Fixes + Research Findings (Issues #128, #129, #119, #123, #127)
