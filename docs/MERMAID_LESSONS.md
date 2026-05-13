@@ -100,6 +100,25 @@ Always use `[data-bs-theme="dark"]` and `[data-bs-theme="light"]` selectors, nev
 | `scripts/qa_mermaid_syntax.sh` | mmdc CLI + Chrome headless | Diagram syntax errors |
 | Browser test (manual) | Visual inspection | Theme issues, hidden tab rendering |
 
+## Unlabeled edge interactivity (implemented in #140 Option B)
+
+Mermaid v11 renders unlabeled edges as `<path class="flowchart-link">` elements with
+deterministic ids: `id="L_<SRC>_<DST>_<idx>"` (e.g. `L_Mkt_RF_LTR_R_0`).
+
+Key facts:
+- `data-points` attribute contains a base64-encoded JSON array of `{x,y}` waypoints
+  in SVG space. Decode with `atob()` then `JSON.parse()` to get the midpoint.
+- Node IDs may contain underscores (`Mkt_RF`). The path id body is therefore
+  ambiguous (e.g. `L_Mkt_RF_LTR_R_0` — is the src `Mkt` or `Mkt_RF`?).
+- Resolution: parse the body (`Mkt_RF_LTR_R`), try every split from longest src first.
+  Validate both halves against the diagram's known node-ID set (extracted from `dagDefs`
+  by `nodeIdsFromDagDef()`). The first split where both halves are valid nodes wins.
+- A single shared popup `<div class="edge-popup">` is appended to `<body>` and reused
+  for all edges. CSS uses `--bs-*` vars for Bootstrap dark/light theming.
+- Hover-bridge: `mouseleave` on a path schedules a 200ms hide; `mouseenter` on the
+  popup cancels the timeout so users can click the source link.
+- `position: fixed` (not `absolute`) on the popup prevents scroll jitter.
+
 ## Adding a new diagram
 
 1. Add diagram text to `docs/causal-diagrams.js` in `dagDefs` object
@@ -107,4 +126,8 @@ Always use `[data-bs-theme="dark"]` and `[data-bs-theme="light"]` selectors, nev
 3. Run `scripts/qa_mermaid_syntax.sh` to validate
 4. Deploy and test in browser (both dark and light mode)
 5. Check hidden tab renders on click
-6. For every new **labeled** edge in the diagram, add an entry to `edgeMetadata` in `causal-diagrams.js` keyed by the exact label text (e.g. `"r=-0.17 VIOLATED"`). For unlabeled edges, add a `"SRC->DST"` key once the stretch goal from #140 is implemented. Tooltip text MUST cite the specific R function or `tar_target` name that implements or tests the edge relationship — grep the `R/` directory to verify before writing the tooltip.
+6. For every new **labeled** edge, add an entry to `edgeMetadata` keyed by the exact
+   label text (e.g. `"r=-0.17 VIOLATED"`).
+   For every **unlabeled** edge, add a `"SRC->DST"` entry (e.g. `"Mkt_RF->LTR_R"`).
+   Tooltip text MUST cite the specific R function or `tar_target` name — grep `R/`
+   to verify before writing the tooltip. Never invent line numbers.
