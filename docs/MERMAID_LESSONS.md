@@ -107,3 +107,4 @@ Always use `[data-bs-theme="dark"]` and `[data-bs-theme="light"]` selectors, nev
 3. Run `scripts/qa_mermaid_syntax.sh` to validate
 4. Deploy and test in browser (both dark and light mode)
 5. Check hidden tab renders on click
+6. For every new **labeled** edge in the diagram, add an entry to `edgeMetadata` in `causal-diagrams.js` keyed by the exact label text (e.g. `"r=-0.17 VIOLATED"`). For unlabeled edges, add a `"SRC->DST"` key once the stretch goal from #140 is implemented. Tooltip text MUST cite the specific R function or `tar_target` name that implements or tests the edge relationship — grep the `R/` directory to verify before writing the tooltip.
