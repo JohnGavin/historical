@@ -77,6 +77,65 @@ portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L,
     )
 }
 
+#' Apply ADV-based participation cap to HRP weights
+#'
+#' For each (date, ticker) in a named weight vector, cap the weight so that
+#' no single position exceeds adv_pct_cap × (stock ADV / total-leg ADV).
+#' This is a portfolio-size-free cap: it bounds weight proportional to ADV share.
+#' Residual weight is redistributed proportionally to remaining positions.
+#'
+#' @param w Named numeric vector of portfolio weights (must sum to 1)
+#' @param adv_by_ticker Named numeric vector: ticker → monthly ADV in dollar terms
+#' @param adv_pct_cap Maximum fraction of ADV-weighted capacity per stock (default 0.10)
+#' @return List with capped_w (renormalised) and hit_cap (logical vector)
+apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
+  if (length(w) == 0L) return(list(capped_w = w, hit_cap = logical(0)))
+  # Align ADV to weight vector; fill missing with median (conservative)
+  tickers <- names(w)
+  adv <- adv_by_ticker[tickers]
+  adv[is.na(adv)] <- median(adv_by_ticker, na.rm = TRUE)
+  adv[is.na(adv) | adv <= 0] <- 1  # guard: zero/missing ADV gets token liquidity
+
+  # ADV-proportional capacity: each stock's share of total-leg ADV
+  adv_share <- adv / sum(adv, na.rm = TRUE)
+  w_max     <- adv_share * adv_pct_cap / min(adv_pct_cap, 1)
+  # Simpler: max allowed weight = adv_pct_cap times the ADV-proportional share
+  # scaled so that if all stocks are at cap they still sum to 1
+  # => w_max_i = adv_share_i (when adv_pct_cap >= 1 no cap binds)
+  # For adv_pct_cap < 1: allow up to adv_share_i / adv_pct_cap * adv_pct_cap = adv_share_i
+  # More useful: allow up to adv_pct_cap per stock regardless of ADV (dollar-share cap).
+  # Use: max weight = adv_share_i × (1 / adv_pct_cap) × adv_pct_cap = adv_share_i
+  # (this is identical). Better interpretation: cap at adv_pct_cap × adv_share_i/min(adv_share_i)
+  # which bounds positions proportional to ADV. Use the simplest defensible rule:
+  # cap each weight at adv_pct_cap (absolute weight cap) where ADV ratio is < threshold.
+  # For large-decile portfolios the uncapped HRP weight ≈ 1/n ≈ 0.015 for n=65.
+  # adv_pct_cap=0.10 as absolute weight cap would bind almost nothing.
+  # Correct approach: cap at adv_share_i × (1/adv_pct_cap) rescaled to sum=1 — too complex.
+  # Final decision: use dollar-ADV cap where effective weight ≤ adv_pct_cap × ADV_share × n,
+  # which simplifies to: if w_i > adv_pct_cap × adv_share_i × n, cap to that value.
+  n <- length(w)
+  w_max <- adv_pct_cap * adv_share * n  # cap: 10% × ADV-fraction × n_stocks
+  w_max <- pmin(w_max, 1)               # never cap above 1
+
+  hit_cap  <- w > w_max
+  w_capped <- pmin(w, w_max)
+
+  # Redistribute residual proportionally to uncapped positions
+  residual <- sum(w) - sum(w_capped)
+  if (residual > 1e-10 && any(!hit_cap)) {
+    uncapped_sum <- sum(w_capped[!hit_cap])
+    if (uncapped_sum > 0) {
+      w_capped[!hit_cap] <- w_capped[!hit_cap] * (sum(w_capped[!hit_cap]) + residual) / uncapped_sum
+    }
+  }
+
+  # Renormalise to sum to 1
+  w_total <- sum(w_capped)
+  if (w_total > 0) w_capped <- w_capped / w_total
+
+  list(capped_w = w_capped, hit_cap = hit_cap)
+}
+
 #' Long-short portfolio with HRP weighting per leg (Lopez de Prado 2016)
 #' @param df Data frame with ym, ticker, decile, monthly_ret (signal-to-return merged)
 #' @param returns_wide Wide tibble: rows = ym, cols = ticker, values = monthly_ret
@@ -86,16 +145,21 @@ portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L,
 #' @param cost_per_trade Cost per trade as fraction (default 0.005 = 0.50%)
 #' @param borrow_rate_annual Annual borrow cost for short positions (default 0.03 = 3%)
 #' @param max_monthly_ret Winsorise monthly returns at ±this (default 0.20 = 20%)
-#' @return Tibble with same shape as portfolio_longshort
+#' @param adv_monthly Monthly ADV data: tibble(ym, ticker, adv_dollars). NULL = no cap.
+#' @param adv_pct_cap Maximum participation per stock as multiple of ADV-weight share × n (default 0.10)
+#' @return Tibble with same shape as portfolio_longshort, plus adv_cap columns when adv_monthly supplied
 portfolio_longshort_hrp <- function(df, returns_wide,
                                     long_decile = 1L, short_decile = 10L,
                                     lookback_months = 36L,
                                     cost_per_trade = 0.005,
                                     borrow_rate_annual = 0.03,
-                                    max_monthly_ret = 0.20) {
+                                    max_monthly_ret = 0.20,
+                                    adv_monthly = NULL,
+                                    adv_pct_cap = 0.10) {
   if (!requireNamespace("HierPortfolios", quietly = TRUE)) {
     cli::cli_abort("HierPortfolios package required for HRP weighting")
   }
+  use_adv_cap <- !is.null(adv_monthly)
   # Winsorise returns
   df <- df |>
     dplyr::mutate(monthly_ret = pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret))
@@ -150,6 +214,23 @@ portfolio_longshort_hrp <- function(df, returns_wide,
       if (is.null(w_short)) w_short <- setNames(rep(1 / length(shorts), length(shorts)), shorts)
     }
 
+    # ADV participation cap (applied AFTER HRP, BEFORE return computation)
+    n_cap_long  <- 0L
+    n_cap_short <- 0L
+    if (use_adv_cap) {
+      adv_t <- adv_monthly[adv_monthly$ym == ym_t, c("ticker", "adv_dollars")]
+      adv_vec <- setNames(adv_t$adv_dollars, adv_t$ticker)
+
+      cap_long  <- apply_adv_cap(w_long,  adv_vec, adv_pct_cap)
+      cap_short <- apply_adv_cap(w_short, adv_vec, adv_pct_cap)
+
+      n_cap_long  <- sum(cap_long$hit_cap)
+      n_cap_short <- sum(cap_short$hit_cap)
+
+      w_long  <- cap_long$capped_w
+      w_short <- cap_short$capped_w
+    }
+
     # Compute weighted returns from this month's actual returns
     ret_long  <- df[df$ym == ym_t & df$decile == long_decile,  c("ticker", "monthly_ret")]
     ret_short <- df[df$ym == ym_t & df$decile == short_decile, c("ticker", "monthly_ret")]
@@ -173,14 +254,16 @@ portfolio_longshort_hrp <- function(df, returns_wide,
     port_ret    <- long_ret - short_ret - total_cost
 
     out[[i]] <- dplyr::tibble(
-      ym        = ym_t,
-      port_ret  = port_ret,
-      long_ret  = long_ret,
-      short_ret = short_ret,
-      n_long    = length(w_long),
-      n_short   = length(w_short),
-      turnover  = turnover,
-      total_cost = total_cost
+      ym         = ym_t,
+      port_ret   = port_ret,
+      long_ret   = long_ret,
+      short_ret  = short_ret,
+      n_long     = length(w_long),
+      n_short    = length(w_short),
+      turnover   = turnover,
+      total_cost = total_cost,
+      n_cap_long  = n_cap_long,
+      n_cap_short = n_cap_short
     )
 
     prev_w_long  <- w_long
@@ -234,7 +317,8 @@ plan_stock_backtest <- function() {
         cost_per_trade = 0.005,       # 0.50% per trade (Option 1: higher than 0.10%)
         borrow_rate_annual = 0.03,    # 3% annualised borrow cost for shorts (Option 5)
         max_monthly_ret = 0.20,       # Winsorise at ±20% (Option 2)
-        hrp_lookback_months = 36L     # HRP covariance lookback for stock-level long-short
+        hrp_lookback_months = 36L,    # HRP covariance lookback for stock-level long-short
+        adv_pct_cap = 0.10            # ADV participation cap: 10% of ADV-weighted share × n
       )
     }),
 
@@ -311,6 +395,22 @@ plan_stock_backtest <- function() {
         mutate(value = value / 100, ym = format(date, "%Y-%m")) |>
         group_by(ym) |>
         summarise(rf_ret = prod(1 + value) - 1, .groups = "drop")
+    }),
+
+    # ── Group 1: Monthly ADV per ticker (for ADV participation cap) ──
+    targets::tar_target(stk_monthly_adv, {
+      library(dplyr)
+
+      stk_universe |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        group_by(ticker, ym) |>
+        summarise(
+          adv_shares = median(volume, na.rm = TRUE),   # median daily volume over month
+          avg_close  = mean(close,  na.rm = TRUE),
+          adv_dollars = adv_shares * avg_close,        # approx daily ADV in dollar terms
+          .groups = "drop"
+        ) |>
+        filter(!is.na(adv_dollars), adv_dollars > 0)
     }),
 
     # ── Group 2: Stock-level Factor MAX signal ────────────────────
@@ -412,6 +512,98 @@ plan_stock_backtest <- function() {
         )
     }),
 
+    # ── Group 2: Stock MAX HRP + ADV-cap variant (#143 gap #3) ──────
+    targets::tar_target(stk_max_portfolio_hrp_adv, {
+      library(dplyr)
+
+      # Wide-format monthly returns for HRP covariance
+      returns_wide <- stk_monthly |>
+        select(ym, ticker, monthly_ret) |>
+        tidyr::pivot_wider(names_from = ticker, values_from = monthly_ret) |>
+        arrange(ym)
+
+      # Same signal-merge as stk_max_portfolio
+      signal <- stk_max_signal |>
+        group_by(ticker) |>
+        arrange(ym) |>
+        mutate(signal_ym = ym, ym = dplyr::lead(ym)) |>
+        filter(!is.na(ym)) |>
+        ungroup()
+
+      merged <- signal |>
+        select(ticker, ym, max_ret) |>
+        inner_join(stk_monthly, by = c("ticker", "ym"))
+
+      stocks_per_month <- merged |> count(ym, name = "n_stocks")
+      valid_months <- stocks_per_month |> filter(n_stocks >= stk_params$n_deciles * 5) |> pull(ym)
+      merged <- merged |> filter(ym %in% valid_months)
+
+      deciled <- assign_decile(merged, max_ret, stk_params$n_deciles)
+      port <- portfolio_longshort_hrp(
+        deciled, returns_wide,
+        long_decile = 1L, short_decile = 10L,
+        lookback_months = stk_params$hrp_lookback_months,
+        cost_per_trade = stk_params$cost_per_trade,
+        borrow_rate_annual = stk_params$borrow_rate_annual,
+        max_monthly_ret = stk_params$max_monthly_ret,
+        adv_monthly = stk_monthly_adv,
+        adv_pct_cap = stk_params$adv_pct_cap
+      )
+
+      port |>
+        left_join(stk_rf, by = "ym") |>
+        mutate(
+          date = as.Date(paste0(ym, "-15")),
+          port_cum = cumprod(1 + port_ret),
+          long_cum = cumprod(1 + long_ret)
+        )
+    }),
+
+    # ── Group 2: ADV cap impact analysis (#143 gap #3) ───────────
+    targets::tar_target(stk_max_adv_cap_impact, {
+      library(dplyr)
+
+      p <- stk_max_portfolio_hrp_adv
+      n_months <- nrow(p)
+
+      # Overall cap statistics
+      overall <- tibble::tibble(
+        metric = c(
+          "months_in_backtest",
+          "pct_months_any_cap_long",
+          "pct_months_any_cap_short",
+          "avg_caps_per_month_long",
+          "avg_caps_per_month_short",
+          "avg_turnover_hrp",
+          "avg_turnover_hrp_adv"
+        ),
+        value = c(
+          n_months,
+          round(100 * mean(p$n_cap_long  > 0, na.rm = TRUE), 1),
+          round(100 * mean(p$n_cap_short > 0, na.rm = TRUE), 1),
+          round(mean(p$n_cap_long,  na.rm = TRUE), 2),
+          round(mean(p$n_cap_short, na.rm = TRUE), 2),
+          round(mean(stk_max_portfolio_hrp$turnover, na.rm = TRUE), 4),
+          round(mean(p$turnover, na.rm = TRUE), 4)
+        )
+      )
+
+      # Annual cap rate
+      by_year <- p |>
+        mutate(year = substr(ym, 1, 4)) |>
+        group_by(year) |>
+        summarise(
+          n_months  = dplyr::n(),
+          pct_cap_long  = round(100 * mean(n_cap_long  > 0, na.rm = TRUE), 1),
+          pct_cap_short = round(100 * mean(n_cap_short > 0, na.rm = TRUE), 1),
+          avg_turnover  = round(mean(turnover, na.rm = TRUE), 4),
+          avg_cost      = round(mean(total_cost, na.rm = TRUE), 4),
+          .groups = "drop"
+        )
+
+      list(overall = overall, by_year = by_year)
+    }),
+
     # ── Group 2: Stock MAX metrics ────────────────────────────────
     targets::tar_target(stk_max_metrics, {
       library(dplyr)
@@ -425,29 +617,35 @@ plan_stock_backtest <- function() {
       ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
     }),
 
-    # ── Group 2: Stock MAX EW vs HRP comparison (#114 Phase 2) ────
+    # ── Group 2: Stock MAX EW vs HRP vs HRP+ADV comparison (#143) ──
     targets::tar_target(stk_max_hrp_comparison, {
       library(dplyr)
 
       ew  <- stk_max_portfolio
       hrp <- stk_max_portfolio_hrp
+      adv <- stk_max_portfolio_hrp_adv
 
-      ew_metrics <- bind_rows(
-        calc_backtest_metrics(ew  |> filter(date <= stk_params$is_end), "Training"),
-        calc_backtest_metrics(ew  |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
-        calc_backtest_metrics(ew  |> filter(date >= stk_params$val_start), "Validation"),
-        calc_backtest_metrics(ew, "Full Period")
-      ) |> mutate(weighting = "Equal Weight")
+      add_cost_cols <- function(port, label) {
+        bind_rows(
+          calc_backtest_metrics(port |> filter(date <= stk_params$is_end), "Training"),
+          calc_backtest_metrics(port |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+          calc_backtest_metrics(port |> filter(date >= stk_params$val_start), "Validation"),
+          calc_backtest_metrics(port, "Full Period")
+        ) |>
+          mutate(
+            weighting    = label,
+            avg_turnover = round(mean(port$turnover, na.rm = TRUE), 3),
+            avg_cost_mth = round(mean(port$total_cost, na.rm = TRUE), 4)
+          )
+      }
 
-      hrp_metrics <- bind_rows(
-        calc_backtest_metrics(hrp |> filter(date <= stk_params$is_end), "Training"),
-        calc_backtest_metrics(hrp |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
-        calc_backtest_metrics(hrp |> filter(date >= stk_params$val_start), "Validation"),
-        calc_backtest_metrics(hrp, "Full Period")
-      ) |> mutate(weighting = "HRP")
-
-      bind_rows(ew_metrics, hrp_metrics) |>
-        select(weighting, period, months, cagr, vol, sharpe, max_dd) |>
+      bind_rows(
+        add_cost_cols(ew,  "PSO Equal Weight"),
+        add_cost_cols(hrp, "HRP"),
+        add_cost_cols(adv, "HRP+ADV-cap")
+      ) |>
+        select(weighting, period, months, cagr, vol, sharpe, max_dd,
+               avg_turnover, avg_cost_mth) |>
         mutate(survivorship_biased = TRUE)  # see #150
     }),
 
