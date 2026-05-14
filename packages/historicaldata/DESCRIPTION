@@ -29,6 +29,7 @@ Suggests:
     glmnet,
     haven,
     here,
+    HierPortfolios,
     httr2,
     jsonlite,
     purrr,
