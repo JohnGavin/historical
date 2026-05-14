@@ -77,6 +77,124 @@ portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L,
     )
 }
 
+#' Long-short portfolio with HRP weighting per leg (Lopez de Prado 2016)
+#' @param df Data frame with ym, ticker, decile, monthly_ret (signal-to-return merged)
+#' @param returns_wide Wide tibble: rows = ym, cols = ticker, values = monthly_ret
+#' @param long_decile Which decile to go long (default 1 = top)
+#' @param short_decile Which decile to short (default 10 = bottom)
+#' @param lookback_months HRP covariance lookback (default 36L)
+#' @param cost_per_trade Cost per trade as fraction (default 0.005 = 0.50%)
+#' @param borrow_rate_annual Annual borrow cost for short positions (default 0.03 = 3%)
+#' @param max_monthly_ret Winsorise monthly returns at ±this (default 0.20 = 20%)
+#' @return Tibble with same shape as portfolio_longshort
+portfolio_longshort_hrp <- function(df, returns_wide,
+                                    long_decile = 1L, short_decile = 10L,
+                                    lookback_months = 36L,
+                                    cost_per_trade = 0.005,
+                                    borrow_rate_annual = 0.03,
+                                    max_monthly_ret = 0.20) {
+  if (!requireNamespace("HierPortfolios", quietly = TRUE)) {
+    cli::cli_abort("HierPortfolios package required for HRP weighting")
+  }
+  # Winsorise returns
+  df <- df |>
+    dplyr::mutate(monthly_ret = pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret))
+
+  # Helper: compute HRP weights for a vector of tickers given a returns_wide slice
+  hrp_weights_for_tickers <- function(tickers, ret_slice) {
+    sub <- ret_slice[, intersect(tickers, colnames(ret_slice)), drop = FALSE]
+    # Drop tickers with too few observations
+    n_obs <- colSums(!is.na(sub))
+    keep <- n_obs >= max(12L, ceiling(nrow(sub) * 0.5))
+    sub <- sub[, keep, drop = FALSE]
+    if (ncol(sub) < 3L) return(NULL)  # signal fallback
+    cov_mat <- stats::cov(sub, use = "pairwise.complete.obs")
+    if (any(!is.finite(cov_mat))) return(NULL)
+    w <- tryCatch({
+      hrp_result <- HierPortfolios::HRP_Portfolio(cov_mat)
+      w <- as.numeric(hrp_result$weights)
+      names(w) <- colnames(cov_mat)
+      w / sum(w)
+    }, error = function(e) NULL)
+    w
+  }
+
+  # Iterate months in order; for each, fit HRP per leg
+  months <- sort(unique(df$ym))
+  prev_w_long  <- numeric(0); names(prev_w_long)  <- character(0)
+  prev_w_short <- numeric(0); names(prev_w_short) <- character(0)
+  fallback_count <- 0L
+
+  out <- vector("list", length(months))
+  for (i in seq_along(months)) {
+    ym_t <- months[i]
+    # Lookback window: months strictly before ym_t in returns_wide
+    ret_idx <- which(returns_wide$ym < ym_t)
+    if (length(ret_idx) < lookback_months) {
+      # Not enough history yet — skip this month
+      next
+    }
+    ret_slice <- returns_wide[utils::tail(ret_idx, lookback_months), -1L, drop = FALSE]
+
+    longs  <- df$ticker[df$ym == ym_t & df$decile == long_decile]
+    shorts <- df$ticker[df$ym == ym_t & df$decile == short_decile]
+    if (length(longs) == 0L || length(shorts) == 0L) next
+
+    w_long  <- hrp_weights_for_tickers(longs,  ret_slice)
+    w_short <- hrp_weights_for_tickers(shorts, ret_slice)
+
+    if (is.null(w_long) || is.null(w_short)) {
+      # Equal-weight fallback
+      fallback_count <- fallback_count + 1L
+      if (is.null(w_long))  w_long  <- setNames(rep(1 / length(longs),  length(longs)),  longs)
+      if (is.null(w_short)) w_short <- setNames(rep(1 / length(shorts), length(shorts)), shorts)
+    }
+
+    # Compute weighted returns from this month's actual returns
+    ret_long  <- df[df$ym == ym_t & df$decile == long_decile,  c("ticker", "monthly_ret")]
+    ret_short <- df[df$ym == ym_t & df$decile == short_decile, c("ticker", "monthly_ret")]
+    long_ret  <- sum(w_long[ret_long$ticker]   * ret_long$monthly_ret,   na.rm = TRUE)
+    short_ret <- sum(w_short[ret_short$ticker] * ret_short$monthly_ret, na.rm = TRUE)
+
+    # Actual turnover (vs prior month weights, aligned by ticker)
+    align_turnover <- function(w_new, w_old) {
+      all_t <- union(names(w_new), names(w_old))
+      v_new <- ifelse(all_t %in% names(w_new), w_new[all_t], 0)
+      v_old <- ifelse(all_t %in% names(w_old), w_old[all_t], 0)
+      0.5 * sum(abs(v_new - v_old), na.rm = TRUE)
+    }
+    turnover_long  <- if (length(prev_w_long)  == 0L) 1.0 else align_turnover(w_long,  prev_w_long)
+    turnover_short <- if (length(prev_w_short) == 0L) 1.0 else align_turnover(w_short, prev_w_short)
+    turnover <- (turnover_long + turnover_short) / 2
+
+    trade_cost  <- turnover * cost_per_trade * 2 * 2   # both legs, buy + sell
+    borrow_cost <- borrow_rate_annual / 12
+    total_cost  <- trade_cost + borrow_cost
+    port_ret    <- long_ret - short_ret - total_cost
+
+    out[[i]] <- dplyr::tibble(
+      ym        = ym_t,
+      port_ret  = port_ret,
+      long_ret  = long_ret,
+      short_ret = short_ret,
+      n_long    = length(w_long),
+      n_short   = length(w_short),
+      turnover  = turnover,
+      total_cost = total_cost
+    )
+
+    prev_w_long  <- w_long
+    prev_w_short <- w_short
+  }
+
+  if (fallback_count > 0L) {
+    cli::cli_warn(
+      "HRP fell back to equal weight in {fallback_count} of {length(months)} months (insufficient covariance history)"
+    )
+  }
+  dplyr::bind_rows(out)
+}
+
 #' Standard backtest metrics
 calc_backtest_metrics <- function(df, label, rf_col = "rf_ret") {
   n <- nrow(df)
@@ -115,7 +233,8 @@ plan_stock_backtest <- function() {
         # Cost model (Options 1, 4, 5)
         cost_per_trade = 0.005,       # 0.50% per trade (Option 1: higher than 0.10%)
         borrow_rate_annual = 0.03,    # 3% annualised borrow cost for shorts (Option 5)
-        max_monthly_ret = 0.20        # Winsorise at ±20% (Option 2)
+        max_monthly_ret = 0.20,       # Winsorise at ±20% (Option 2)
+        hrp_lookback_months = 36L     # HRP covariance lookback for stock-level long-short
       )
     }),
 
@@ -248,6 +367,51 @@ plan_stock_backtest <- function() {
         )
     }),
 
+    # ── Group 2: Stock MAX HRP-weighted variant (#114 Phase 2) ────
+    targets::tar_target(stk_max_portfolio_hrp, {
+      library(dplyr)
+
+      # Wide-format monthly returns for HRP covariance
+      returns_wide <- stk_monthly |>
+        select(ym, ticker, monthly_ret) |>
+        tidyr::pivot_wider(names_from = ticker, values_from = monthly_ret) |>
+        arrange(ym)
+
+      # Same signal-merge as stk_max_portfolio
+      signal <- stk_max_signal |>
+        group_by(ticker) |>
+        arrange(ym) |>
+        mutate(signal_ym = ym, ym = dplyr::lead(ym)) |>
+        filter(!is.na(ym)) |>
+        ungroup()
+
+      merged <- signal |>
+        select(ticker, ym, max_ret) |>
+        inner_join(stk_monthly, by = c("ticker", "ym"))
+
+      stocks_per_month <- merged |> count(ym, name = "n_stocks")
+      valid_months <- stocks_per_month |> filter(n_stocks >= stk_params$n_deciles * 5) |> pull(ym)
+      merged <- merged |> filter(ym %in% valid_months)
+
+      deciled <- assign_decile(merged, max_ret, stk_params$n_deciles)
+      port <- portfolio_longshort_hrp(
+        deciled, returns_wide,
+        long_decile = 1L, short_decile = 10L,
+        lookback_months = stk_params$hrp_lookback_months,
+        cost_per_trade = stk_params$cost_per_trade,
+        borrow_rate_annual = stk_params$borrow_rate_annual,
+        max_monthly_ret = stk_params$max_monthly_ret
+      )
+
+      port |>
+        left_join(stk_rf, by = "ym") |>
+        mutate(
+          date = as.Date(paste0(ym, "-15")),
+          port_cum = cumprod(1 + port_ret),
+          long_cum = cumprod(1 + long_ret)
+        )
+    }),
+
     # ── Group 2: Stock MAX metrics ────────────────────────────────
     targets::tar_target(stk_max_metrics, {
       library(dplyr)
@@ -259,6 +423,32 @@ plan_stock_backtest <- function() {
         calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
       ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
+    }),
+
+    # ── Group 2: Stock MAX EW vs HRP comparison (#114 Phase 2) ────
+    targets::tar_target(stk_max_hrp_comparison, {
+      library(dplyr)
+
+      ew  <- stk_max_portfolio
+      hrp <- stk_max_portfolio_hrp
+
+      ew_metrics <- bind_rows(
+        calc_backtest_metrics(ew  |> filter(date <= stk_params$is_end), "Training"),
+        calc_backtest_metrics(ew  |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_backtest_metrics(ew  |> filter(date >= stk_params$val_start), "Validation"),
+        calc_backtest_metrics(ew, "Full Period")
+      ) |> mutate(weighting = "Equal Weight")
+
+      hrp_metrics <- bind_rows(
+        calc_backtest_metrics(hrp |> filter(date <= stk_params$is_end), "Training"),
+        calc_backtest_metrics(hrp |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_backtest_metrics(hrp |> filter(date >= stk_params$val_start), "Validation"),
+        calc_backtest_metrics(hrp, "Full Period")
+      ) |> mutate(weighting = "HRP")
+
+      bind_rows(ew_metrics, hrp_metrics) |>
+        select(weighting, period, months, cagr, vol, sharpe, max_dd) |>
+        mutate(survivorship_biased = TRUE)  # see #150
     }),
 
     # ── Group 2: Stock MAX cumulative return plot ─────────────────
