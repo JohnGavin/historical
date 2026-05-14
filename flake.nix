@@ -53,6 +53,7 @@
             cli
             rlang
             usethis
+            HierPortfolios
           ];
         };
 

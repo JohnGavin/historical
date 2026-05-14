@@ -115,24 +115,55 @@ plan_portfolio_opt <- function() {
       setNames(weights, strat_cols)
     }),
 
+    # ── HRP weights on training data (Lopez de Prado 2016) ────────
+    targets::tar_target(port_hrp_weights, {
+      library(dplyr)
+
+      strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+      train <- port_returns |> filter(date <= stk_params$is_end)
+
+      if (nrow(train) < 24) {
+        cli::cli_warn("Not enough training data for HRP")
+        return(setNames(rep(0.25, 4), strat_cols))
+      }
+
+      ret_matrix <- as.matrix(train[, strat_cols])
+      ret_matrix <- ret_matrix[complete.cases(ret_matrix), , drop = FALSE]
+
+      if (!requireNamespace("HierPortfolios", quietly = TRUE)) {
+        cli::cli_warn("HierPortfolios not installed - falling back to equal weight")
+        return(setNames(rep(0.25, 4), strat_cols))
+      }
+
+      cov_mat <- cov(ret_matrix)
+      # HRP_Portfolio returns a data.frame with a 'weights' column,
+      # rownames match colnames of cov_mat.
+      hrp_result <- HierPortfolios::HRP_Portfolio(cov_mat)
+      w <- hrp_result$weights
+      names(w) <- strat_cols
+      w / sum(w)
+    }),
+
     # ── Portfolio returns with optimal weights ────────────────────
     targets::tar_target(port_combined, {
       library(dplyr)
 
       strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
-      w <- port_optimal_weights
+      w_pso <- port_optimal_weights
+      w_hrp <- port_hrp_weights
 
       ret_matrix <- as.matrix(port_returns[, strat_cols])
-      port_ret <- as.numeric(ret_matrix %*% w)
-
-      # Equal-weight benchmark
-      eq_ret <- rowMeans(ret_matrix)
+      pso_ret <- as.numeric(ret_matrix %*% w_pso)
+      hrp_ret <- as.numeric(ret_matrix %*% w_hrp)
+      eq_ret  <- rowMeans(ret_matrix)
 
       port_returns |>
         mutate(
-          optimal_ret = port_ret,
+          optimal_ret = pso_ret,
+          hrp_ret     = hrp_ret,
           equalwt_ret = eq_ret,
           optimal_cum = cumprod(1 + optimal_ret),
+          hrp_cum     = cumprod(1 + hrp_ret),
           equalwt_cum = cumprod(1 + equalwt_ret)
         )
     }),
@@ -144,18 +175,27 @@ plan_portfolio_opt <- function() {
       calc_port_metrics <- function(df, label) {
         n <- nrow(df)
         if (n < 12) return(NULL)
+        rf_ann <- mean(df$rf_ret, na.rm = TRUE) * 12
+        sharpe <- function(r) {
+          ann <- prod(1 + r)^(12/n) - 1
+          vol <- sd(r) * sqrt(12)
+          if (vol < 1e-8) NA_real_ else (ann - rf_ann) / vol
+        }
+        maxdd <- function(r) {
+          cum <- cumprod(1 + r)
+          min(cum / cummax(cum) - 1)
+        }
         tibble(
           period = label, months = n,
-          opt_cagr = prod(1 + df$optimal_ret)^(12/n) - 1,
-          opt_vol = sd(df$optimal_ret) * sqrt(12),
-          opt_sharpe = (prod(1 + df$optimal_ret)^(12/n) - 1 - mean(df$rf_ret)*12) /
-            (sd(df$optimal_ret) * sqrt(12)),
-          opt_maxdd = min(cumprod(1 + df$optimal_ret) / cummax(cumprod(1 + df$optimal_ret)) - 1),
-          eq_cagr = prod(1 + df$equalwt_ret)^(12/n) - 1,
-          eq_vol = sd(df$equalwt_ret) * sqrt(12),
-          eq_sharpe = (prod(1 + df$equalwt_ret)^(12/n) - 1 - mean(df$rf_ret)*12) /
-            (sd(df$equalwt_ret) * sqrt(12)),
-          eq_maxdd = min(cumprod(1 + df$equalwt_ret) / cummax(cumprod(1 + df$equalwt_ret)) - 1)
+          opt_cagr   = prod(1 + df$optimal_ret)^(12/n) - 1,
+          opt_sharpe = sharpe(df$optimal_ret),
+          opt_maxdd  = maxdd(df$optimal_ret),
+          hrp_cagr   = prod(1 + df$hrp_ret)^(12/n) - 1,
+          hrp_sharpe = sharpe(df$hrp_ret),
+          hrp_maxdd  = maxdd(df$hrp_ret),
+          eq_cagr    = prod(1 + df$equalwt_ret)^(12/n) - 1,
+          eq_sharpe  = sharpe(df$equalwt_ret),
+          eq_maxdd   = maxdd(df$equalwt_ret)
         )
       }
 
@@ -174,12 +214,17 @@ plan_portfolio_opt <- function() {
       library(scales)
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
-      w <- port_optimal_weights
-      w_label <- paste(names(w), paste0(round(w * 100), "%"), sep = "=", collapse = ", ")
+      w_pso <- port_optimal_weights
+      w_hrp <- port_hrp_weights
+      w_label <- paste0(
+        "PSO: ", paste(names(w_pso), paste0(round(w_pso * 100), "%"), sep = "=", collapse = ", "),
+        "  |  HRP: ", paste(names(w_hrp), paste0(round(w_hrp * 100), "%"), sep = "=", collapse = ", ")
+      )
 
       plot_data <- port_combined |>
         select(date,
                `PSO Optimal` = optimal_cum,
+               HRP           = hrp_cum,
                `Equal Weight` = equalwt_cum) |>
         tidyr::pivot_longer(-date, names_to = "portfolio", values_to = "growth")
 
@@ -188,10 +233,10 @@ plan_portfolio_opt <- function() {
         geom_vline(xintercept = stk_params$test_start, linetype = "dashed",
                    colour = "grey50", linewidth = 0.4) +
         scale_y_log10(labels = dollar) +
-        scale_colour_manual(values = hd_palette(2)) +
+        scale_colour_manual(values = hd_palette(3)) +
         labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
-             title = "Portfolio: PSO Optimal vs Equal Weight",
-             subtitle = paste("Weights:", w_label)) +
+             title = "Portfolio: PSO vs HRP vs Equal Weight",
+             subtitle = w_label) +
         hd_theme()
     }),
 
