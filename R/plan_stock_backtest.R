@@ -318,11 +318,29 @@ plan_stock_backtest <- function() {
         borrow_rate_annual = 0.03,    # 3% annualised borrow cost for shorts (Option 5)
         max_monthly_ret = 0.20,       # Winsorise at ±20% (Option 2)
         hrp_lookback_months = 36L,    # HRP covariance lookback for stock-level long-short
-        adv_pct_cap = 0.10            # ADV participation cap: 10% of ADV-weighted share × n
+        adv_pct_cap = 0.10,           # ADV participation cap: 10% of ADV-weighted share × n
+        top_n_market_cap = 100L       # #150 Option C: restrict to top-N by current market cap
       )
     }),
 
-    # ── Group 1: Universe — all non-ETF stocks with sufficient history ──
+    # ── Group 1: Top-N tickers by current market cap (#150 Option C) ──
+    targets::tar_target(stk_top_tickers, {
+      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+      library(dplyr)
+
+      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
+      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
+      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+
+      meta_url <- hd_datasets()[["metadata"]]$url
+      duckplyr::read_parquet_duckdb(meta_url) |>
+        filter(dataset == "equity_daily", !is.na(market_cap), !grepl("\\.L$", ticker)) |>
+        collect() |>
+        slice_max(market_cap, n = stk_params$top_n_market_cap) |>
+        pull(ticker)
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # ── Group 1: Universe — top-N non-ETF stocks with sufficient history ──
     targets::tar_target(stk_universe, {
       pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
@@ -333,9 +351,9 @@ plan_stock_backtest <- function() {
 
       ds <- hd_datasets()[["equity_daily"]]
 
-      # All daily data for non-LSE-ETF tickers
+      # All daily data for non-LSE-ETF tickers, restricted to top-N by market cap (#150 Option C)
       all_data <- duckplyr::read_parquet_duckdb(ds$url) |>
-        filter(!grepl("\\.L$", ticker)) |>
+        filter(!grepl("\\.L$", ticker), ticker %in% stk_top_tickers) |>
         select(date, ticker, close, adjusted, volume) |>
         collect()
 
