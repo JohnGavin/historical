@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-05-15
+
+### #150 Option C — top-100 market-cap restriction on stk_universe
+
+**Context:** Option B (disclosure banner) deployed 2026-05-12. Option C narrows `stk_universe` from 667 to top-100 by current market cap to limit *forward* survivorship exposure. Backtest results remain survivorship-biased — see Known Limitations.
+
+**Completed:**
+
+- New `stk_top_tickers` target reads `hd_datasets()[["metadata"]]` and slices the top-100 by `market_cap` (cue=always so the universe refreshes with external metadata).
+- `stk_params$top_n_market_cap = 100L` parameter exposes N.
+- `stk_universe` filters to `ticker %in% stk_top_tickers`.
+- `disclosure_survivorship()` rewritten to dynamically reflect N and reframe as "limit forward exposure" rather than "reduce bias" — the historical bias is unchanged.
+
+**Spike findings (read-only, equal-weighted proxy):** Full universe (667) Sharpe 0.884; top-100 Sharpe 1.036 (+0.15, +17%); top-50 1.077; top-200 0.987. Higher Sharpe at smaller N reflects mega-cap concentration, not bias removal. Cap cutoff at top-100: $155B. Median history of top-100: ~33 years. Only 13/100 have full 56-year history.
+
+### Known Limitations
+
+- **Option A (point-in-time data acquisition) remains open.** Top-100 restriction does not retroactively add Lehman/Bear/Enron/etc. to the universe. Strategies still need a banner.
+- **Validation seal already broken on stk_max family (#114 work).** Option C does not change that — N is chosen from current metadata, not from validation results, but the same validation window has been used for prior tuning.
+
 ## 2026-05-14
 
 ### HRP allocator + ADV-cap cost realism (4 commits, 3 issues touched)
