@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-05-14
+
+### HRP allocator + ADV-cap cost realism (4 commits, 3 issues touched)
+
+**Context:** Two issue-driven workstreams in one session: (a) #114 — implement HRP (Lopez de Prado 2016) via `HierPortfolios` CRAN package after surveying alternatives to re-implementation; (b) #143 gap #3 — add ADV-based participation cap as the cost-realism follow-up. Both treated as empirical experiments, not as commitments to ship the underlying strategy.
+
+**Completed:**
+
+- **#114 Phase 0 (`2105727`)** — `HierPortfolios` 1.0.2 added to `tproject.toml` + `DESCRIPTION`; `t update` regenerated `flake.nix`. CRAN survey before adopting: `HierPortfolios` covers HRP/HCAA/HERC/DHRP; `tdaverse` covers persistent-homology/Mapper for the speculative TRP track. Re-implementation rejected in favour of CRAN.
+- **#114 Phase 1 (`5e72205`)** — `port_hrp_weights` target in `R/plan_portfolio_opt.R` for the 4-strategy meta-allocator (PSO vs HRP vs equal-weight). HRP weights stk_max=13%, stk_drif=17%, fac_max=40%, fac_drif=30%. **HRP Sharpe -0.63 vs PSO 0.63 on training** — meta-allocator is the wrong universe for HRP because it diversifies into structurally loss-making stock strategies.
+- **#114 Phase 2 (`cde2ea2`)** — `portfolio_longshort_hrp()` + `stk_max_portfolio_hrp` + `stk_max_hrp_comparison` in `R/plan_stock_backtest.R` (191 lines). Per-leg HRP fits with rolling 36-month covariance, insufficient-history fallback to equal-weight (<3 tickers), actual weight-change turnover replaces hardcoded 0.80. **Sharpe improved across all periods (Training -1.34→-1.06, Testing -1.32→-0.81, Validation -0.92→-0.61, Full -1.33→-1.04). Turnover 0.80→0.63 (-21%). Cost drag 22%→18%.** Both weightings remain unprofitable in absolute terms.
+- **#143 gap #3 (`796a42b`)** — `apply_adv_cap()` + `stk_monthly_adv` + `stk_max_portfolio_hrp_adv` + `stk_max_adv_cap_impact` (226 lines). 10% ADV cap as a hard constraint on per-stock notional. **Sharpe improved everywhere (Full -1.04→-0.86, Validation -0.61→-0.26).**
+- **#158 filed** — Solana APIs investigation (CoinEdition comparison, including tokenised-equity / DEX depth as ADV proxy).
+
+### Failed Approaches
+
+- **HRP on the 4-strategy meta-allocator (Phase 1)** — HRP saw 4 series with similar covariance structure and diversified into the worst (loss-making) stock-level strategies. PSO discriminates by Sharpe; HRP only by covariance. Lesson: HRP belongs at the leg level (cross-section of stocks), not at the strategy level.
+- **`%||%` chain on `HierPortfolios::HRP_Portfolio()` output** — defensive `w$w %||% w$weights %||% w[[1]]` was unnecessary; output is a clean data.frame with `$weights` column. Use directly.
+- **ADV cap as a cost-reduction lever** — counter to thesis: cap *raised* turnover (0.633→0.734) and monthly cost (1.52%→1.72%), yet still improved Sharpe by 0.18. The cap forces redistribution against HRP's concentration gradient; that's a marginal signal improvement, not a cost reduction. ADV cap is a hard constraint; reducing turnover requires Almgren-style cost modelling instead.
+- **Tinsley issue almost duplicated** — `gh issue list --search` caught #143 already audits the same article; extended via comment instead of filing. Lesson worth keeping: search before filing.
+- **`t update` blocked by untracked LOCAL wiki file** — `knowledge/wiki/cakici-2024-coverage-audit.md` is intentionally untracked per `wiki-storage-policy`; had to `git stash --include-untracked` then pop. Tooling friction worth a future hook.
+
+### Accuracy / Metrics
+
+- **Strategy Sharpe progression on `stk_max` long-short (Full Period):** PSO EW -1.33 → HRP -1.04 → HRP+ADV-cap -0.86. Three sequential improvements, +0.47 cumulative Sharpe, **never crossed zero.**
+- **Validation period (2023-01-01 onwards, ~3.5 yrs):** Sharpe -0.92 → -0.26 (largest delta, also smallest sample — confidence interval wide; seal now broken by the comparison itself).
+- **Cost drag remains 17-18%/year** after both interventions. Floor on cost-side optimisation reached.
+- **Issues:** #114 open with two phase-summary comments; #143 open with gap #3 implementation comment; #158 newly filed.
+- **Push state:** 4 commits to origin/main (`2105727`, `5e72205`, `cde2ea2`, `796a42b`).
+
+### Known Limitations
+
+- **Stock-level Sharpes still survivorship-biased** (#150 unresolved). Three rounds of portfolio-construction tuning have hit a floor of negative Sharpe — the gross-alpha input is overstated, so further cost-side or allocation work cannot change the conclusion until the universe is rebuilt with delisted tickers.
+- **Validation seal broken on `stk_max` family** — the comparison sequence has now used validation as a tuning signal. Future deployment of any `stk_max` variant requires either (a) a new untouched validation window or (b) explicit acknowledgement in the vignette.
+- **HRP Phase 2b (DRIF) and Phase 3 (HERC/DHRP) deferred** — likely to reproduce the Phase 2 pattern (improve Sharpe but stay negative) until #150 is resolved.
+- **TRP / `tdaverse` track deferred** — Phase 6 (Wasserstein regime detector via `phutil`) promoted as the only `tdaverse` application that doesn't require profitable underlying strategy. Speculative; not on critical path.
+- **ADV cap is single-fill model** — cap residual is dropped, not spilled to next period. Realistic for retail; understates effective trade size for larger AUM.
+
+### Next Session
+
+- **Pivot to #150 (survivorship bias in 660-stock universe).** Rationale: cost-side ceiling reached on `stk_max`; gross alpha is the next variable; #150 says it's overstated. Until fixed, every leaderboard Sharpe is biased upward.
+- **Fresh context.** Burn this session: ~$294 → projected ~$687 (137% of $500 cap). Quadratic loop cost on continuation. #150 work in `R/plan_universe.R` + HuggingFace fetch scripts has near-zero overlap with this session's portfolio-optimisation files; nothing in this conversation accelerates it.
+- **#158 follow-up** — when bandwidth permits, smoke-test 1-2 Solana finalists for tokenised-equity coverage.
+
 ## 2026-05-13
 
 ### Pipeline reliability + registry expansion (11 commits, 7 issues touched)

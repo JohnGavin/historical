@@ -1,76 +1,68 @@
-# Current Work (Session 2026-05-09)
+# Current Work (Session 2026-05-14)
 
-**Last updated:** 2026-05-09 13:10 UTC
+**Last updated:** 2026-05-14 → 2026-05-15 (session ended)
 
 ## Active Branch
 
-`sonnet-0508` — 3 commits ahead of main via PR #112
+`main` — clean, all 4 session commits pushed to origin
 
 ## Session Summary
 
-### Major Completions
+Two empirical experiments on the `stk_max` long-short factor strategy:
 
-1. **Weekly Data Poll Workflow** (PR #112) — 8 debugging iterations
-   - Fixed all 5 sources: kalshi, ecb, guardian, commodities, cboe_vol
-   - 8 issues resolved: missing packages, system deps, Kalshi bug, directory creation, git permissions, parallel push race, FRED_API_KEY
-   - Status: Ready for merge pending successful workflow run
+1. **#114 HRP allocator** (Lopez de Prado 2016, via `HierPortfolios` CRAN)
+   - Phase 1: 4-strategy meta-allocator — HRP underperformed PSO (wrong universe)
+   - Phase 2: 660-stock per-leg HRP — improved Sharpe 0.3 across all periods, cut turnover 21%, but still negative Sharpe everywhere
 
-2. **VVIX Analysis** (Tier 2 gap #105)
-   - Created `R/vvix_analysis.R` (4 functions) and `R/plan_vvix.R` (7 targets)
-   - Volatility coverage: 70% → 90%
-   - Status: Code complete, targets pending (need cboe_vol.parquet from first poll run)
+2. **#143 gap #3 ADV-cap cost realism**
+   - 10% participation cap on per-stock notional
+   - Improved Sharpe 0.18 further (Full -1.04→-0.86, Validation -0.61→-0.26)
+   - Counter to thesis: cap *raised* turnover and monthly cost; improvement came from weight redistribution, not cost reduction
 
-3. **JST Macrohistory Dashboard** (Phase 3)
-   - Rendered `docs/jst-dashboard.qmd` (6 sections)
-   - Created `knowledge/wiki/jst-dms-comparison.md` (JST as free DMS alternative)
-   - Status: Deployed to branch, will be live after PR merge
+3. **#158 filed** — Solana APIs investigation (incl. tokenised-equity DEX depth as ADV proxy)
 
-### Issues Created This Session
+## Commits Pushed
 
-- #114: European UCITS wrappers (EQQQ/CNDX)
-- #115: Financial planning optimization models
-- #116: Quantitativo 5-paper comparison
+- `2105727` — HierPortfolios dependency (#114 Phase 0)
+- `5e72205` — port_hrp_weights target (#114 Phase 1)
+- `cde2ea2` — HRP-weighted Factor MAX long-short (#114 Phase 2)
+- `796a42b` — ADV-based participation cap (#143 gap #3)
+
+## Empirical Conclusion
+
+Three sequential portfolio-construction improvements (PSO → HRP → HRP+ADV) moved `stk_max` Full Period Sharpe from -1.33 to -0.86. **Never crossed zero.** Cost drag floor reached at 17-18%/year. Validation seal now broken on `stk_max` family.
 
 ## Next Session Tasks
 
-### Immediate (High Priority)
-- [ ] Merge PR #112 to main (weekly poll fixes)
-- [ ] Monitor first Saturday poll run (validates all 5 sources)
-- [ ] Build VVIX targets once `cboe_vol.parquet` exists
+### Immediate (highest leverage)
 
-### Short-term (This Week)
-- [ ] Create missing Tier 1/2 source files:
-  - `R/liquidity.R`
-  - `R/tracking_error.R`
-  - `R/regime_correlations.R`
-  - `R/tail_keff.R`
-  - `R/plan_integration.R`
-- [ ] Uncomment source lines in `docs/_targets.R`
-- [ ] Deploy JST dashboard extensions: USA/FF comparison, housing returns
+- [ ] **Pivot to #150** (survivorship bias in 660-stock universe). Three sequential allocation/cost interventions on `stk_max` cannot beat a survivorship-inflated gross alpha number. Until #150 is resolved, every leaderboard Sharpe is biased upward.
 
-### Medium-term (Next 2 Weeks)
-- [ ] Work on issue #116 (Quantitativo papers — DRIF deep dive, momentum decomposition)
-- [ ] Work on issue #114 (EQQQ/CNDX European wrapper investigation)
-- [ ] Address roborev findings (51 failed, priority TBD)
+### Deferred
 
-## Open PRs
+- [ ] #114 Phase 2b (DRIF with HRP) — likely reproduces Phase 2 pattern; defer until #150
+- [ ] #114 Phase 3 (HERC + DHRP) — same reason
+- [ ] #114 Phase 6 (Wasserstein regime detector via `tdaverse::phutil`) — only `tdaverse` application that doesn't require profitable underlying; speculative
+- [ ] #143 gap #3 follow-ups: Almgren-style square-root impact + per-stock spread proxy — would *reduce* turnover (real cost levers, unlike ADV cap)
+- [ ] #143 other open gaps: #1 multiple-testing, #4 regime-conditional Sharpe, #5 qa gates, #6 loss-cluster analysis, #7 ±20% sweeps
+- [ ] #158 — Solana API smoke-test (defer to bandwidth)
 
-- #112: Weekly data poll fixes (ready to merge)
+### Sealed but worth noting
 
-## Known Issues
+- Validation period for `stk_max` family is now compromised by tuning. Future deployment requires either a new validation window post-2026 or vignette-level disclosure.
 
-- VVIX targets defined but not built (waiting for cboe_vol.parquet)
-- Tier 1/2 gap functions referenced but not created
-- JST dashboard missing 3 planned extensions
-- roborev: 51 failed findings (pre-existing)
+## Open Issues This Session
+
+- #114 (HRP) — 2 phase-summary comments; open
+- #143 (Tinsley audit) — 1 implementation comment; open
+- #158 (Solana APIs) — newly filed
 
 ## Files Modified This Session
 
-- `.github/workflows/data-poll.yml` (6 fixes)
-- `scripts/fetch_kalshi.R` (safe_num bug fix)
-- `R/vvix_analysis.R` (new)
-- `R/plan_vvix.R` (new)
-- `docs/_targets.R` (integrated VVIX, commented missing sources)
-- `docs/jst-dashboard.qmd` (YAML fixes, gt→DT conversion)
-- `knowledge/wiki/jst-dms-comparison.md` (new)
-- `CHANGELOG.md` (updated)
+- `tproject.toml`, `flake.nix`, `packages/historicaldata/DESCRIPTION` (HierPortfolios dep)
+- `R/plan_portfolio_opt.R` (HRP Phase 1)
+- `R/plan_stock_backtest.R` (HRP Phase 2 + ADV cap, ~417 net lines)
+
+## Burn Notes
+
+Session burn: ~$294 → projected ~$687 (137% of $500 weekly cap). Resume #150 in fresh context to avoid quadratic continuation cost.
