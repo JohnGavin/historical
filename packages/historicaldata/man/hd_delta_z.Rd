@@ -4,7 +4,7 @@
 \alias{hd_delta_z}
 \title{Test for in-sample over-fitting via ΔZ}
 \usage{
-hd_delta_z(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L)
+hd_delta_z(z_is, z_oos, k_eff_count, n_sim = 5000L, seed = 42L)
 }
 \arguments{
 \item{z_is}{Numeric vector of in-sample HAC t-statistics across strategies.}
@@ -12,8 +12,10 @@ hd_delta_z(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L)
 \item{z_oos}{Numeric vector of out-of-sample HAC t-statistics (same order
 as \code{z_is}).}
 
-\item{K_eff}{Numeric. Effective number of independent strategies from
-\code{\link{hd_keff}}.}
+\item{k_eff_count}{Numeric. Effective number of independent strategies from
+any K_eff method, e.g. \code{\link{hd_keff_frob}} (Frobenius-norm) or
+\code{\link{hd_strat_keff_vertox}} (Vertox correlation-aware count).
+Bare \code{K_eff} is reserved — always pass a method-suffixed value.}
 
 \item{n_sim}{Integer. Number of simulations for the null distribution
 (default 5000).}
@@ -42,7 +44,7 @@ Other falsification:
 \code{\link{hd_factor_null_test}()},
 \code{\link{hd_hac_sharpe}()},
 \code{\link{hd_hac_tstat}()},
-\code{\link{hd_keff}()},
+\code{\link{hd_keff_frob}()},
 \code{\link{hd_null_env_factor_null}()},
 \code{\link{hd_null_env_garch11}()},
 \code{\link{hd_null_env_gjr_garch}()},
@@ -52,6 +54,6 @@ Other falsification:
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_null_rejection_rate}()},
 \code{\link{hd_tail_dependence}()},
-\code{\link{hd_tail_keff}()}
+\code{\link{hd_tail_keff_frob}()}
 }
 \concept{falsification}

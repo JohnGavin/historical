@@ -432,7 +432,7 @@ hd_null_rejection_rate <- function(strategy_fn, null_series, alpha_level = 0.05)
 
 # ── 10. Effective number of independent tests ─────────────────────────────────
 
-#' Effective number of independent strategies (K_eff)
+#' Effective number of independent strategies (K_eff_frob)
 #'
 #' Estimates the effective number of independent tests from a correlation
 #' matrix of strategy returns using the eigenvalue-based formula:
@@ -445,7 +445,7 @@ hd_null_rejection_rate <- function(strategy_fn, null_series, alpha_level = 0.05)
 #'
 #' @return Named list:
 #'   \describe{
-#'     \item{K_eff}{Effective number of independent strategies.}
+#'     \item{K_eff_frob}{Effective number of independent strategies.}
 #'     \item{K}{Total number of strategies (columns).}
 #'     \item{frobenius_norm_sq}{Squared Frobenius norm of the correlation
 #'       matrix.}
@@ -453,7 +453,7 @@ hd_null_rejection_rate <- function(strategy_fn, null_series, alpha_level = 0.05)
 #'
 #' @family falsification
 #' @export
-hd_keff <- function(returns_mat) {
+hd_keff_frob <- function(returns_mat) {
   if (!is.matrix(returns_mat)) returns_mat <- as.matrix(returns_mat)
   K     <- ncol(returns_mat)
   sigma <- stats::cor(returns_mat, use = "pairwise.complete.obs")
@@ -461,9 +461,9 @@ hd_keff <- function(returns_mat) {
   sigma[is.na(sigma)] <- 0
   diag(sigma) <- 1  # ensure diagonal is 1
   frob2 <- sum(sigma^2)
-  K_eff <- K^2 / frob2
+  K_eff_frob <- K^2 / frob2
 
-  list(K_eff = K_eff, K = K, frobenius_norm_sq = frob2)
+  list(K_eff_frob = K_eff_frob, K = K, frobenius_norm_sq = frob2)
 }
 
 
@@ -478,8 +478,10 @@ hd_keff <- function(returns_mat) {
 #' @param z_is Numeric vector of in-sample HAC t-statistics across strategies.
 #' @param z_oos Numeric vector of out-of-sample HAC t-statistics (same order
 #'   as \code{z_is}).
-#' @param K_eff Numeric. Effective number of independent strategies from
-#'   \code{\link{hd_keff}}.
+#' @param k_eff_count Numeric. Effective number of independent strategies from
+#'   any K_eff method, e.g. \code{\link{hd_keff_frob}} (Frobenius-norm) or
+#'   \code{\link{hd_strat_keff_vertox}} (Vertox correlation-aware count).
+#'   Bare `K_eff` is reserved — always pass a method-suffixed value.
 #' @param n_sim Integer. Number of simulations for the null distribution
 #'   (default 5000).
 #' @param seed Integer. Random seed (default 42).
@@ -495,9 +497,9 @@ hd_keff <- function(returns_mat) {
 #'
 #' @family falsification
 #' @export
-hd_delta_z <- function(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L) {
+hd_delta_z <- function(z_is, z_oos, k_eff_count, n_sim = 5000L, seed = 42L) {
   set.seed(seed)
-  K_int   <- max(1L, round(K_eff))
+  K_int   <- max(1L, round(k_eff_count))
   z_star_is  <- max(z_is,  na.rm = TRUE)
   z_star_oos <- max(z_oos, na.rm = TRUE)
   delta_z    <- z_star_is - z_star_oos
@@ -521,13 +523,13 @@ hd_delta_z <- function(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L) {
 }
 
 
-# ── 11b. Tail-weighted regime-conditional K_eff ───────────────────────────────
+# ── 11b. Tail-weighted regime-conditional K_eff_frob ───────────────────────────────
 
 #' Tail-weighted regime-conditional independence test
 #'
 #' Partitions the returns matrix into \emph{crisis} and \emph{calm} regimes
-#' and computes K_eff separately for each.  A strategy portfolio that claims
-#' diversification must show that K_eff does not collapse in the crisis regime
+#' and computes K_eff_frob separately for each.  A strategy portfolio that claims
+#' diversification must show that K_eff_frob does not collapse in the crisis regime
 #' (i.e., strategies remain independent precisely when it matters most).
 #'
 #' The crisis subset is defined as any row where at least one strategy's return
@@ -541,9 +543,9 @@ hd_delta_z <- function(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L) {
 #'
 #' @return Named list with components:
 #'   \describe{
-#'     \item{K_eff_crisis}{Effective number of independent strategies in the
+#'     \item{K_eff_frob_crisis}{Effective number of independent strategies in the
 #'       crisis regime (lower = more correlated = less diversification).}
-#'     \item{K_eff_calm}{Effective number of independent strategies in the
+#'     \item{K_eff_frob_calm}{Effective number of independent strategies in the
 #'       calm regime.}
 #'     \item{n_crisis_days}{Number of crisis-regime observations.}
 #'     \item{n_calm_days}{Number of calm-regime observations.}
@@ -553,7 +555,7 @@ hd_delta_z <- function(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L) {
 #'
 #' @family falsification
 #' @export
-hd_tail_keff <- function(returns_mat, q = 0.05) {
+hd_tail_keff_frob <- function(returns_mat, q = 0.05) {
   if (!is.matrix(returns_mat)) returns_mat <- as.matrix(returns_mat)
   returns_mat <- returns_mat[stats::complete.cases(returns_mat), , drop = FALSE]
 
@@ -594,8 +596,8 @@ hd_tail_keff <- function(returns_mat, q = 0.05) {
   }
 
   list(
-    K_eff_crisis       = compute_keff(crisis_mat),
-    K_eff_calm         = compute_keff(calm_mat),
+    K_eff_frob_crisis       = compute_keff(crisis_mat),
+    K_eff_frob_calm         = compute_keff(calm_mat),
     n_crisis_days      = nrow(crisis_mat),
     n_calm_days        = nrow(calm_mat),
     correlation_crisis = cor_mat(crisis_mat),
