@@ -570,7 +570,7 @@ plan_falsification <- function() {
       )
 
       mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max", "rsc", "ltr")])
-      hd_keff(mat)
+      hd_keff_frob(mat)
     }),
 
     targets::tar_target(fals_delta_z, {
@@ -591,7 +591,7 @@ plan_falsification <- function() {
         fals_ff_ltr$alpha_tstat_hac
       )
 
-      hd_delta_z(z_is, z_oos, K_eff = fals_keff$K_eff)
+      hd_delta_z(z_is, z_oos, k_eff_count = fals_keff$K_eff_frob)
     }),
 
 
@@ -628,7 +628,7 @@ plan_falsification <- function() {
         ))
       }
 
-      tail_keff <- hd_tail_keff(mat, q = 0.05)
+      tail_keff <- hd_tail_keff_frob(mat, q = 0.05)
 
       pairs <- utils::combn(strategies, 2, simplify = FALSE)
       tail_deps <- purrr::map_dfr(pairs, function(p) {
@@ -1102,8 +1102,8 @@ plan_falsification <- function() {
         tag_2 = c("daily", "monthly", "monthly", "daily", "monthly")
       )
 
-      # K_eff and delta_z (same for all strategies in a run)
-      rows$k_eff   <- fals_keff$K_eff
+      # K_eff_frob and delta_z (same for all strategies in a run)
+      rows$k_eff   <- fals_keff$K_eff_frob
       rows$delta_z <- fals_delta_z$delta_z
 
       # ── Trade-level metrics (#61) ─────────────────────────────────
