@@ -381,20 +381,26 @@ compute_persistence <- function(decomposed_momentum,
     h <- results$horizon[i]
     h_months <- horizon_months[h]
 
-    # Join signal with forward returns
-    # Compute forward returns using slider (forward-looking window)
+    # Join signal with forward returns. The signal at month T must predict
+    # returns over T+1 through T+h. Lead the return series by one period
+    # first, then take a forward window of length h. Without the lead, the
+    # window T:T+h-1 includes month T's own return — i.e., the signal is
+    # "predicting" the month it was computed in (roborev #941, look-ahead
+    # bias).
     forward <- stock_returns |>
       dplyr::group_by(ticker) |>
       dplyr::arrange(date) |>
       dplyr::mutate(
+        monthly_ret_lead = dplyr::lead(monthly_ret, n = 1L),
         forward_ret = slider::slide_dbl(
-          monthly_ret,
+          monthly_ret_lead,
           ~prod(1 + .x, na.rm = FALSE) - 1,
           .before = 0,
           .after = h_months - 1,
           .complete = TRUE
         )
       ) |>
+      dplyr::select(-monthly_ret_lead) |>
       dplyr::ungroup() |>
       dplyr::select(ticker, date, forward_ret)
 
