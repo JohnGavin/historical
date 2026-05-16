@@ -8,3 +8,17 @@
       i d_date: Date; d_posix: POSIXct/POSIXt
       i Coerce to a common type (`as.Date()`) at the producing target.
 
+# check_monthly_convention snapshot — ok tibble structure
+
+    Code
+      names(result)
+    Output
+      [1] "target"    "status"    "n"         "pct_match"
+
+---
+
+    Code
+      result$status
+    Output
+      [1] "ok"
+
