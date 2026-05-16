@@ -263,6 +263,136 @@ check_frequency_alignment <- function(
   result
 }
 
+#' Probe pairwise alignment between two registered datasets
+#'
+#' Given a two-row registry slice (one row per dataset in the pair), reads each
+#' target from the cache and checks the `date_class` alignment dimension.
+#' Returns a one-row tibble summarising compatibility. Emits
+#' `cli::cli_warn()` on mismatch but does NOT abort — this is a canary
+#' (informational), not a gate.
+#'
+#' Currently checks Dimension 1 (date class) and Dimension 2 (frequency).
+#' The function is designed for future extension: additional `dimension` rows
+#' can be appended to the returned tibble.
+#'
+#' @param registry Two-row tibble (or slice from `dataset_registry()`).
+#'   Must have at least columns `target_name` and `freq`.
+#' @param read_fn Function `read_fn(name)` returning the target object.
+#'   Default reads RDS objects directly from `store`. Pass a fake in tests.
+#' @param store Path to the targets store directory. Defaults to `"_targets"`.
+#' @return One-row tibble: `pair` (chr), `dimension` ("date_class"),
+#'   `status` ("ok", "warn", "missing"), `evidence` (chr detail).
+#' @export
+probe_pairwise_alignment <- function(
+    registry,
+    read_fn = NULL,
+    store   = "_targets") {
+
+  stopifnot(nrow(registry) == 2L)
+
+  if (is.null(read_fn)) {
+    read_fn <- .make_store_reader(store)
+  }
+
+  nm_a <- registry$target_name[[1L]]
+  nm_b <- registry$target_name[[2L]]
+  pair_label <- paste0(nm_a, " vs ", nm_b)
+
+  # Read both targets; catch cache misses gracefully
+  obj_a <- tryCatch(
+    read_fn(nm_a),
+    error = function(e) {
+      cli::cli_inform(c("i" = "Skipping {nm_a}: not in cache ({conditionMessage(e)})"))
+      NULL
+    }
+  )
+  obj_b <- tryCatch(
+    read_fn(nm_b),
+    error = function(e) {
+      cli::cli_inform(c("i" = "Skipping {nm_b}: not in cache ({conditionMessage(e)})"))
+      NULL
+    }
+  )
+
+  # If either is missing, return a "missing" row — not an error
+  if (is.null(obj_a) || is.null(obj_b)) {
+    return(tibble::tibble(
+      pair      = pair_label,
+      dimension = "date_class",
+      status    = "missing",
+      evidence  = paste0(
+        if (is.null(obj_a)) nm_a else "",
+        if (is.null(obj_a) && is.null(obj_b)) " and " else "",
+        if (is.null(obj_b)) nm_b else "",
+        " not in cache"
+      )
+    ))
+  }
+
+  # Extract date column classes
+  cls_a <- if ("date" %in% names(obj_a)) {
+    paste(class(obj_a$date), collapse = "/")
+  } else {
+    NA_character_
+  }
+  cls_b <- if ("date" %in% names(obj_b)) {
+    paste(class(obj_b$date), collapse = "/")
+  } else {
+    NA_character_
+  }
+
+  # Dimension: date_class
+  if (!is.na(cls_a) && !is.na(cls_b) && cls_a != cls_b) {
+    evidence <- paste0(nm_a, ": ", cls_a, "; ", nm_b, ": ", cls_b)
+    cli::cli_warn(c(
+      "!" = "Date-class mismatch detected for pair {.val {pair_label}}.",
+      "i" = "{evidence}",
+      "i" = paste0(
+        "A Date/POSIXct join produces 0 matching rows silently. ",
+        "Coerce both to {.code as.Date()} at the producing target."
+      )
+    ))
+    return(tibble::tibble(
+      pair      = pair_label,
+      dimension = "date_class",
+      status    = "warn",
+      evidence  = evidence
+    ))
+  }
+
+  # Dimension: freq mismatch (from registry metadata — no live data inspection)
+  freq_a <- registry$freq[[1L]]
+  freq_b <- registry$freq[[2L]]
+  if (!is.na(freq_a) && !is.na(freq_b) && freq_a != freq_b) {
+    evidence <- paste0(nm_a, ": ", freq_a, "; ", nm_b, ": ", freq_b)
+    cli::cli_warn(c(
+      "!" = "Frequency mismatch detected for pair {.val {pair_label}}.",
+      "i" = "{evidence}",
+      "i" = paste0(
+        "Joining daily and monthly series produces a sparse result. ",
+        "Use align_period() (#148) before joining."
+      )
+    ))
+    return(tibble::tibble(
+      pair      = pair_label,
+      dimension = "freq",
+      status    = "warn",
+      evidence  = paste0("freq mismatch: ", evidence)
+    ))
+  }
+
+  # All checked dimensions pass
+  tibble::tibble(
+    pair      = pair_label,
+    dimension = "date_class",
+    status    = "ok",
+    evidence  = paste0("both ", cls_a %||% "unknown", "; freq both ", freq_a %||% "unknown")
+  )
+}
+
+# Null-coalescing operator (base R doesn't have one; rlang's %||% used here)
+`%||%` <- function(x, y) if (is.null(x) || length(x) == 0L) y else x
+
 #' Check month-end-bizday date convention for a set of targets
 #'
 #' For each named target, reads its cached RDS object and verifies that every
