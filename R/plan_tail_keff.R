@@ -1,12 +1,12 @@
-# Tail effective sample size (K_eff) targets
-# Addresses gap from #105: tail K_eff mentioned in #55 but not computed
+# Tail effective sample size (K_eff_acf) targets
+# Addresses gap from #105: tail K_eff_acf mentioned in #55 but not computed
 # Measures effective independent observations in crisis vs calm regimes
 
 library(targets)
 library(dplyr)
 
 list(
-  # === K_eff by strategy and regime (crisis vs calm) ===
+  # === K_eff_acf by strategy and regime (crisis vs calm) ===
   tar_target(
     keff_crisis_calm_by_strategy,
     {
@@ -19,7 +19,7 @@ list(
     }
   ),
 
-  # === K_eff visualization ===
+  # === K_eff_acf visualization ===
   tar_target(
     keff_efficiency_plot,
     {
@@ -27,23 +27,23 @@ list(
     }
   ),
 
-  # === K_eff summary table ===
+  # === K_eff_acf summary table ===
   tar_target(
     keff_summary_table,
     {
       keff_crisis_calm_by_strategy |>
         DT::datatable(
-          caption = "Effective Sample Size (K_eff) by Strategy and Regime",
+          caption = "Effective Sample Size (K_eff_acf) by Strategy and Regime",
           options = list(pageLength = 20),
           rownames = FALSE
         ) |>
-        DT::formatRound(columns = c("K_eff", "acf_sum"), digits = 2) |>
+        DT::formatRound(columns = c("K_eff_acf", "acf_sum"), digits = 2) |>
         DT::formatPercentage(columns = "efficiency", digits = 1) |>
         DT::formatRound(columns = "N", digits = 0)
     }
   ),
 
-  # === Tail partition K_eff (5%/90%/5%) ===
+  # === Tail partition K_eff_acf (5%/90%/5%) ===
   # Example for a single strategy
   tar_target(
     keff_tail_partitions_example,
@@ -62,10 +62,10 @@ list(
     keff_crisis_calm_summary,
     {
       keff_crisis_calm_by_strategy |>
-        dplyr::select(strategy, regime, K_eff, efficiency) |>
+        dplyr::select(strategy, regime, K_eff_acf, efficiency) |>
         tidyr::pivot_wider(
           names_from = regime,
-          values_from = c(K_eff, efficiency)
+          values_from = c(K_eff_acf, efficiency)
         ) |>
         dplyr::mutate(
           # Crisis efficiency as % of calm efficiency
@@ -82,8 +82,8 @@ list(
     {
       tibble::tibble(
         metric = c(
-          "K_eff",
-          "Efficiency (K_eff/N)",
+          "K_eff_acf",
+          "Efficiency (K_eff_acf/N)",
           "Crisis penalty",
           "Data multiplier"
         ),

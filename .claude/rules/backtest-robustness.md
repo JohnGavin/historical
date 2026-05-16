@@ -95,7 +95,7 @@ against simulated environments where no real edge exists.
 
 | Metric | Description | Fail threshold |
 |--------|-------------|---------------|
-| K_eff | Effective sample size after autocorrelation adjustment | < 30 |
+| K_eff_acf | Effective sample size after autocorrelation adjustment | < 30 |
 | Delta_Z | Z-score gap between strategy and null | < 1.96 (not significant) |
 | Stage 1 rejection rate | % of 5 simulation environments where strategy is rejected as noise | < 80% (must reject in 4/5) |
 | Adjusted Sharpe | Sharpe ratio corrected for multiple testing / look-ahead | < 0.5 |
