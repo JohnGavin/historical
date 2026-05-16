@@ -1,26 +1,26 @@
-# Tail effective sample size (K_eff) analysis
-# Gap from #105: tail K_eff mentioned in #55 but not implemented
+# Tail effective sample size (K_eff_acf) analysis
+# Gap from #105: tail K_eff_acf mentioned in #55 but not implemented
 # Measures effective independent observations accounting for autocorrelation
 
-#' Calculate effective sample size (K_eff) using Newey-West approach
+#' Calculate effective sample size (K_eff_acf) using Newey-West approach
 #'
-#' K_eff adjusts sample size for autocorrelation. Higher autocorrelation
+#' K_eff_acf adjusts sample size for autocorrelation. Higher autocorrelation
 #' reduces effective sample size, affecting statistical power.
 #'
-#' Formula: K_eff = N / (1 + 2 * sum(rho_k))
+#' Formula: K_eff_acf = N / (1 + 2 * sum(rho_k))
 #' where rho_k are autocorrelations up to lag L
 #'
 #' @param x Numeric vector of observations
 #' @param max_lag Maximum lag for autocorrelation (default: floor(N^(1/3)))
-#' @return List with K_eff, N, and autocorrelation sum
+#' @return List with K_eff_acf, N, and autocorrelation sum
 #' @export
 calculate_keff <- function(x, max_lag = NULL) {
   x_clean <- x[!is.na(x)]
   N <- length(x_clean)
 
   if (N < 10) {
-    cli::cli_warn("Fewer than 10 observations for K_eff calculation")
-    return(list(K_eff = NA_real_, N = N, acf_sum = NA_real_))
+    cli::cli_warn("Fewer than 10 observations for K_eff_acf calculation")
+    return(list(K_eff_acf = NA_real_, N = N, acf_sum = NA_real_))
   }
 
   if (is.null(max_lag)) {
@@ -37,26 +37,26 @@ calculate_keff <- function(x, max_lag = NULL) {
   acf_sum <- sum(acf_values * nw_weights, na.rm = TRUE)
 
   # Effective sample size
-  K_eff <- N / (1 + 2 * acf_sum)
+  K_eff_acf <- N / (1 + 2 * acf_sum)
 
   list(
-    K_eff = K_eff,
+    K_eff_acf = K_eff_acf,
     N = N,
     acf_sum = acf_sum,
-    efficiency = K_eff / N  # Proportion of "independent" observations
+    efficiency = K_eff_acf / N  # Proportion of "independent" observations
   )
 }
 
-#' Calculate tail K_eff split by crisis regime
+#' Calculate tail K_eff_acf split by crisis regime
 #'
 #' Compares effective sample size in crisis (VIX ≥ 30) vs calm (VIX < 30) periods.
-#' Crisis periods typically have higher autocorrelation → lower K_eff.
+#' Crisis periods typically have higher autocorrelation → lower K_eff_acf.
 #'
 #' @param returns Numeric vector of strategy returns
 #' @param dates Date vector (same length as returns)
 #' @param vix_data Tibble with columns: date, vix
 #' @param crisis_threshold VIX threshold for crisis (default 30)
-#' @return Tibble with K_eff for crisis, calm, and full sample
+#' @return Tibble with K_eff_acf for crisis, calm, and full sample
 #' @export
 tail_keff_crisis_calm <- function(returns, dates, vix_data, crisis_threshold = 30) {
   # Join returns with VIX
@@ -68,7 +68,7 @@ tail_keff_crisis_calm <- function(returns, dates, vix_data, crisis_threshold = 3
   crisis_returns <- data |> dplyr::filter(vix >= crisis_threshold) |> dplyr::pull(return)
   calm_returns <- data |> dplyr::filter(vix < crisis_threshold) |> dplyr::pull(return)
 
-  # Calculate K_eff for each regime
+  # Calculate K_eff_acf for each regime
   keff_crisis <- calculate_keff(crisis_returns)
   keff_calm <- calculate_keff(calm_returns)
   keff_full <- calculate_keff(data$return)
@@ -76,18 +76,18 @@ tail_keff_crisis_calm <- function(returns, dates, vix_data, crisis_threshold = 3
   tibble::tibble(
     regime = c("Full Sample", "Crisis (VIX ≥ 30)", "Calm (VIX < 30)"),
     N = c(keff_full$N, keff_crisis$N, keff_calm$N),
-    K_eff = c(keff_full$K_eff, keff_crisis$K_eff, keff_calm$K_eff),
+    K_eff_acf = c(keff_full$K_eff_acf, keff_crisis$K_eff_acf, keff_calm$K_eff_acf),
     efficiency = c(keff_full$efficiency, keff_crisis$efficiency, keff_calm$efficiency),
     acf_sum = c(keff_full$acf_sum, keff_crisis$acf_sum, keff_calm$acf_sum)
   )
 }
 
-#' Calculate tail K_eff for multiple strategies
+#' Calculate tail K_eff_acf for multiple strategies
 #'
 #' @param returns_df Tibble with columns: date, strategy, return
 #' @param vix_data Tibble with columns: date, vix
 #' @param crisis_threshold VIX threshold for crisis (default 30)
-#' @return Tibble with K_eff by strategy and regime
+#' @return Tibble with K_eff_acf by strategy and regime
 #' @export
 tail_keff_by_strategy <- function(returns_df, vix_data, crisis_threshold = 30) {
   returns_df |>
@@ -106,13 +106,13 @@ tail_keff_by_strategy <- function(returns_df, vix_data, crisis_threshold = 30) {
     tidyr::unnest(keff_results)
 }
 
-#' Calculate K_eff for tail partitions (5%/90%/5%)
+#' Calculate K_eff_acf for tail partitions (5%/90%/5%)
 #'
 #' Splits returns into bottom 5%, middle 90%, top 5% and calculates
-#' K_eff for each partition.
+#' K_eff_acf for each partition.
 #'
 #' @param returns Numeric vector of returns
-#' @return Tibble with K_eff by tail partition
+#' @return Tibble with K_eff_acf by tail partition
 #' @export
 tail_keff_partitions <- function(returns) {
   returns_clean <- returns[!is.na(returns)]
@@ -126,7 +126,7 @@ tail_keff_partitions <- function(returns) {
   middle_90 <- returns_clean[returns_clean > q05 & returns_clean < q95]
   top_5 <- returns_clean[returns_clean >= q95]
 
-  # Calculate K_eff for each partition
+  # Calculate K_eff_acf for each partition
   keff_bottom <- calculate_keff(bottom_5)
   keff_middle <- calculate_keff(middle_90)
   keff_top <- calculate_keff(top_5)
@@ -136,12 +136,12 @@ tail_keff_partitions <- function(returns) {
     threshold_low = c(NA, q05, q95),
     threshold_high = c(q05, q95, NA),
     N = c(keff_bottom$N, keff_middle$N, keff_top$N),
-    K_eff = c(keff_bottom$K_eff, keff_middle$K_eff, keff_top$K_eff),
+    K_eff_acf = c(keff_bottom$K_eff_acf, keff_middle$K_eff_acf, keff_top$K_eff_acf),
     efficiency = c(keff_bottom$efficiency, keff_middle$efficiency, keff_top$efficiency)
   )
 }
 
-#' Plot K_eff efficiency by regime
+#' Plot K_eff_acf efficiency by regime
 #'
 #' @param keff_df Output from tail_keff_crisis_calm() or tail_keff_by_strategy()
 #' @return ggplot bar chart
@@ -157,7 +157,7 @@ plot_keff_efficiency <- function(keff_df) {
       title = "Effective Sample Size Efficiency by Regime",
       subtitle = "Lower efficiency = higher autocorrelation (fewer independent observations)",
       x = NULL,
-      y = "K_eff / N (Efficiency)"
+      y = "K_eff_acf / N (Efficiency)"
     ) +
     ggplot2::theme_minimal() +
     ggplot2::theme(

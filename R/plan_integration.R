@@ -4,7 +4,7 @@
 # - Liquidity analysis → consolidated_equity
 # - Tracking error/IR → strategy returns + SPY benchmark
 # - Regime correlations → multi-asset returns + VIX
-# - Tail K_eff → strategy returns + VIX
+# - Tail K_eff_acf → strategy returns + VIX
 
 plan_integration <- function() {
   list(
@@ -261,11 +261,11 @@ plan_integration <- function() {
       {
         keff_crisis_calm_by_strategy |>
           DT::datatable(
-            caption = "Effective Sample Size (K_eff) by Strategy and Regime",
+            caption = "Effective Sample Size (K_eff_acf) by Strategy and Regime",
             options = list(pageLength = 20),
             rownames = FALSE
           ) |>
-          DT::formatRound(columns = c("K_eff", "acf_sum"), digits = 2) |>
+          DT::formatRound(columns = c("K_eff_acf", "acf_sum"), digits = 2) |>
           DT::formatPercentage(columns = "efficiency", digits = 1) |>
           DT::formatRound(columns = "N", digits = 0)
       }
