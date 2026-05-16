@@ -842,7 +842,10 @@ plan_stock_backtest <- function() {
         fit <- tryCatch({
           glmnet::cv.glmnet(X_train, y_train, alpha = 0.5,
                             nfolds = 5, type.measure = "mse")
-        }, error = function(e) NULL)
+        }, error = function(e) {
+          cli::cli_warn("cv.glmnet failed for month {.val {m}}: {conditionMessage(e)}")
+          NULL
+        })
 
         if (is.null(fit)) return(NULL)
         pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))

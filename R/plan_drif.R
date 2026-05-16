@@ -155,7 +155,10 @@ plan_drif <- function() {
           glmnet::cv.glmnet(X_train, y_train,
                             alpha = drif_params$alpha,
                             nfolds = 5, type.measure = "mse")
-        }, error = function(e) NULL)
+        }, error = function(e) {
+          cli::cli_warn("cv.glmnet failed for month {.val {m}}: {conditionMessage(e)}")
+          NULL
+        })
 
         if (is.null(fit)) return(NULL)
         pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))
