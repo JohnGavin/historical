@@ -275,9 +275,11 @@ test_that("dataset_registry date_anchor values are in the allowed set", {
 
 test_that("dataset_registry has expected column names", {
   reg <- dataset_registry()
+  # Phase 2 (#149): added currency, units, identity_col between date_anchor and notes
   expect_equal(
     names(reg),
-    c("target_name", "kind", "freq", "date_anchor", "notes")
+    c("target_name", "kind", "freq", "date_anchor",
+      "currency", "units", "identity_col", "notes")
   )
 })
 
