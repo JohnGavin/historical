@@ -54,6 +54,7 @@
             rlang
             usethis
             HierPortfolios
+            yfscreen
           ];
         };
 
