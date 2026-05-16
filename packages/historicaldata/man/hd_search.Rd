@@ -27,6 +27,7 @@ hd_search("*coin*")   # glob: names containing "coin"
 }
 \seealso{
 Other discovery: 
+\code{\link{hd_alpaca_assets_snapshot}()},
 \code{\link{hd_datasets}()},
 \code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},

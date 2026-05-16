@@ -14,6 +14,7 @@ Maps human-readable names to ECB SDMX series keys with metadata.
 }
 \seealso{
 Other discovery: 
+\code{\link{hd_alpaca_assets_snapshot}()},
 \code{\link{hd_datasets}()},
 \code{\link{hd_exchanges}()},
 \code{\link{hd_fred_meta}()},

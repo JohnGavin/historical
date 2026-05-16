@@ -37,6 +37,7 @@ status before pulling data with \code{\link[=hd_fred]{hd_fred()}} or the CBOE fe
 }
 \seealso{
 Other discovery: 
+\code{\link{hd_alpaca_assets_snapshot}()},
 \code{\link{hd_datasets}()},
 \code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},

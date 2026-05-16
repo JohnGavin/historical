@@ -15,6 +15,7 @@ Adding a new asset class = adding an entry here.
 }
 \seealso{
 Other discovery: 
+\code{\link{hd_alpaca_assets_snapshot}()},
 \code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},
 \code{\link{hd_fred_meta}()},
