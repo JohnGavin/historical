@@ -4,3 +4,16 @@
 fix_min_severity = "high"
 refine_min_severity = "high"
 max_prompt_size = 200000
+
+# ── Review-exclusion policy ──────────────────────────────────────────────────
+# Some patterns reviewers will keep flagging are intentional in this project.
+# Document them here so future review prompts can be told not to re-flag.
+#
+# 1. HTML in docs/ (10 jobs closed 2026-05-16, IDs 628 630 631 632 633 635
+#    636 637 638 715). GitHub Pages serves this project's site directly from
+#    `main` `/docs/`, per the global `gh-pages-nojekyll` and
+#    `website-index-update` rules. Removing `docs/*.html` from git breaks
+#    the deployed site. Reviewers should NOT flag committed HTML/CSS/JS in
+#    `docs/` as a code-review concern — it is the deployed artifact.
+#    Internal-only HTML (e.g. examples.html, dashboard.html dev builds) IS
+#    gitignored via docs/.gitignore where appropriate.
