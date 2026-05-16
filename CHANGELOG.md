@@ -6,6 +6,10 @@
 
 Added `knowledge/wiki/daloopa-gap-analysis.md`: gap analysis of daloopa/investing (institutional fundamental data MCP) vs our current data setup. Conclusion: 1 adopt (REST API design lessons for #2), 2 defer (MCP integration + `hd_fundamentals()` wrapper pending paid account), 4 reject as out-of-scope (15 analyst-workflow skills and standalone earnings/SEC features). Full analysis at `knowledge/wiki/daloopa-gap-analysis.md`.
 
+### Quantocracy May-3 2026 roundup curated (#126)
+
+Curated 5 articles from the Quantocracy May 3 2026 roundup into `knowledge/wiki/quantocracy-may-2026.md`. Cross-referenced against open issues: StratProof covered by #125, Macrosynergy by #124. Two new topics surfaced: optimal regime-dependent exposure sizing (Alpha Architect, actionable for plan_regime.R) and risk parity 58-year tail audit (Beyond Passive, context for #114).
+
 ## 2026-05-15
 
 ### #150 Option C — top-100 market-cap restriction on stk_universe
