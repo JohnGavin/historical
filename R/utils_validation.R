@@ -271,10 +271,9 @@ check_frequency_alignment <- function(
 #' `cli::cli_warn()` on mismatch but does NOT abort — this is a canary
 #' (informational), not a gate.
 #'
-#' Currently checks Dimension 1 (date_class). Future PRs will extend to
-#' Dimension 2 (freq metadata) and beyond. The function is designed for
-#' future extension: additional `dimension` rows can be appended to the
-#' returned tibble.
+#' Currently checks Dimension 1 (date class) and Dimension 2 (frequency).
+#' The function is designed for future extension: additional `dimension` rows
+#' can be appended to the returned tibble.
 #'
 #' @param registry Two-row tibble (or slice from `dataset_registry()`).
 #'   Must have at least columns `target_name` and `freq`.
@@ -376,7 +375,7 @@ probe_pairwise_alignment <- function(
     ))
     return(tibble::tibble(
       pair      = pair_label,
-      dimension = "date_class",
+      dimension = "freq",
       status    = "warn",
       evidence  = paste0("freq mismatch: ", evidence)
     ))

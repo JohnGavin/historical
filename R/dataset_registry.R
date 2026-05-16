@@ -1,7 +1,7 @@
 # Dataset registry for cross-series alignment validation
 #
 # Enumerates dataset-shaped targets that have a date axis and may be joined
-# across series. Phase 1 scope: 33 targets known to be joined cross-series.
+# across series. Phase 1 scope: 34 targets known to be joined cross-series.
 # Used by dv_join_key_types, dv_frequency_alignment, dv_monthly_convention
 # (existing), and dv_pairwise_alignment_matrix (Phase 2, #149).
 #

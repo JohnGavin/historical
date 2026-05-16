@@ -160,12 +160,9 @@ test_that("daily vs monthly registered series flags freq mismatch with status=wa
   )
 
   expect_equal(nrow(result), 1L)
-  expect_equal(result$dimension, "date_class")
-  # When date classes match but freq mismatch — look at freq field
-  # Both are Date class so date_class=ok, but registry freq mismatch is detectable
-  # The function should still return "ok" for date_class and the warn is from freq
-  # (checking registry metadata, not live data)
-  expect_true(result$status %in% c("ok", "warn"))
+  expect_equal(result$dimension, "freq")
+  # Freq mismatch is detected from registry metadata; status must be "warn"
+  expect_equal(result$status, "warn")
 })
 
 test_that("same-freq pair does not produce a warning", {
