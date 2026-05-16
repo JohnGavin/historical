@@ -9,6 +9,28 @@
 
 # ── Helpers (not targets) ─────────────────────────────────────────
 
+#' Shift a "YYYY-MM" string by one calendar month
+#'
+#' Replaces the look-ahead-prone `dplyr::lead(ym)` row-based shift, which
+#' silently pairs a month-T signal with a non-T+1 return when a ticker has
+#' gaps in its monthly panel. Calendar-based shift means the signal_ym -> ym
+#' pairing is fixed at the calendar level — missing months become explicit
+#' NA after the downstream join rather than silently shifting to the wrong
+#' return. Vectorised; base R only (no lubridate dep).
+#'
+#' Fixes roborev #752 (R/plan_stock_backtest.R look-ahead).
+#'
+#' @noRd
+next_ym <- function(ym) {
+  vapply(ym, function(x) {
+    if (is.na(x) || !nzchar(x)) return(NA_character_)
+    d <- as.Date(paste0(x, "-01"))
+    if (is.na(d)) return(NA_character_)
+    d_next <- seq.Date(d, by = "1 month", length.out = 2L)[2L]
+    format(d_next, "%Y-%m")
+  }, character(1L), USE.NAMES = FALSE)
+}
+
 #' Assign decile ranks within each month
 #' @param df Data frame with ym and signal columns
 #' @param signal_col Name of signal column (unquoted)
@@ -454,7 +476,7 @@ plan_stock_backtest <- function() {
       signal <- stk_max_signal |>
         group_by(ticker) |>
         arrange(ym) |>
-        mutate(signal_ym = ym, ym = dplyr::lead(ym)) |>
+        mutate(signal_ym = ym, ym = next_ym(ym)) |>
         filter(!is.na(ym)) |>
         ungroup()
 
@@ -499,7 +521,7 @@ plan_stock_backtest <- function() {
       signal <- stk_max_signal |>
         group_by(ticker) |>
         arrange(ym) |>
-        mutate(signal_ym = ym, ym = dplyr::lead(ym)) |>
+        mutate(signal_ym = ym, ym = next_ym(ym)) |>
         filter(!is.na(ym)) |>
         ungroup()
 
@@ -544,7 +566,7 @@ plan_stock_backtest <- function() {
       signal <- stk_max_signal |>
         group_by(ticker) |>
         arrange(ym) |>
-        mutate(signal_ym = ym, ym = dplyr::lead(ym)) |>
+        mutate(signal_ym = ym, ym = next_ym(ym)) |>
         filter(!is.na(ym)) |>
         ungroup()
 
