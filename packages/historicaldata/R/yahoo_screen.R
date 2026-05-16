@@ -13,6 +13,11 @@
 #' @param out_dir Directory for the parquet. Created if missing.
 #' @param date Snapshot date (defaults to today); embedded in the filename.
 #' @param min_rows Soft floor — warn if the screener returned fewer than this.
+#' @param max_total Upper bound on rows to retrieve. yfscreen's `size` argument
+#'   is the TOTAL desired (not page size); the function chunks internally at
+#'   250/request and stops early when a page returns empty. Default 10000 is
+#'   enough to capture any single-region universe; lower it for quick smoke
+#'   tests.
 #' @return Path to the written parquet (invisibly).
 #' @family discovery
 #' @export
@@ -20,12 +25,13 @@ hd_yahoo_screen_snapshot <- function(region,
                                      sec_type = c("etf", "equity", "mutualfund", "index", "future"),
                                      out_dir,
                                      date = Sys.Date(),
-                                     min_rows = 10L) {
+                                     min_rows = 10L,
+                                     max_total = 10000L) {
   rlang::check_installed(c("yfscreen", "arrow"))
   sec_type <- match.arg(sec_type)
 
   query <- yfscreen::create_query(list(list("eq", list("region", region))))
-  payload <- yfscreen::create_payload(sec_type, query)
+  payload <- yfscreen::create_payload(sec_type, query, size = max_total)
   rows <- yfscreen::get_data(payload)
 
   if (!is.data.frame(rows) || nrow(rows) == 0L) {

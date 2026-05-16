@@ -38,6 +38,7 @@ Other discovery:
 \code{\link{hd_summary}()},
 \code{\link{hd_ticker_info}()},
 \code{\link{hd_ticker_meta}()},
-\code{\link{hd_tickers}()}
+\code{\link{hd_tickers}()},
+\code{\link{hd_yahoo_screen_snapshot}()}
 }
 \concept{discovery}
