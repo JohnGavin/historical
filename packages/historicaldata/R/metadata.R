@@ -24,13 +24,16 @@ hd_search <- function(pattern, dataset = NULL, collect = TRUE) {
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
   ds <- hd_datasets()[["metadata"]]
-  escaped_pattern <- gsub("'", "''", pattern)
+  # SQL-quote user inputs via DBI to defeat injection (`'; DROP TABLE x;--` etc.)
+  # Manual gsub("'", "''", x) is insufficient — fails on backslash, NUL, encoding edges.
+  qpattern <- DBI::dbQuoteString(con, pattern)
   where <- sprintf(
-    "regexp_matches(ticker, '%s') OR regexp_matches(LOWER(long_name), LOWER('%s'))",
-    escaped_pattern, escaped_pattern
+    "regexp_matches(ticker, %s) OR regexp_matches(LOWER(long_name), LOWER(%s))",
+    qpattern, qpattern
   )
   if (!is.null(dataset)) {
-    where <- paste0("(", where, ") AND dataset = '", gsub("'", "''", dataset), "'")
+    qdataset <- DBI::dbQuoteString(con, dataset)
+    where <- paste0("(", where, ") AND dataset = ", qdataset)
   }
 
   sql <- sprintf(
@@ -96,7 +99,12 @@ hd_exchanges <- function(dataset = NULL) {
   con <- hd_connect()
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE))
 
-  where <- if (!is.null(dataset)) sprintf("WHERE dataset = '%s'", dataset) else ""
+  # SQL-quote dataset via DBI to defeat injection (was sprintf with raw '%s').
+  where <- if (!is.null(dataset)) {
+    sprintf("WHERE dataset = %s", DBI::dbQuoteString(con, dataset))
+  } else {
+    ""
+  }
   DBI::dbGetQuery(con, sprintf(
     "SELECT exchange, full_exchange, COUNT(*) as n_tickers,
             STRING_AGG(DISTINCT dataset, ', ') as datasets
