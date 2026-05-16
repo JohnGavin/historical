@@ -38,5 +38,6 @@ Suggests:
     targets,
     testthat (>= 3.0.0),
     tidyr,
-    xgboost
+    xgboost,
+    yfscreen
 Config/testthat/edition: 3
