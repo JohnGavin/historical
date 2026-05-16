@@ -2,6 +2,56 @@
 
 ## 2026-05-16
 
+### Opus marathon session — 12 PRs, 3 issues, 3 audits, 10 roborev closes
+
+**Data-source registry additions (3 merged PRs):**
+- `#169` DGS20 20Y Treasury yield (FRED, daily, 1993+) added to `hd_macro_registry()`, with 1987-1993 discontinuation note in `notes` column. Closes #167.
+- `#172` `yfscreen` UK ETF universe snapshot — adds `yfscreen` to tproject.toml + DESCRIPTION; new `hd_yahoo_screen_snapshot()` helper; one-off run produced `packages/historicaldata/inst/extdata/yahoo/gb_etf_universe_20260516.parquet` (5,499 LSE/CXE/AQS/IOB ETFs, 149 metadata cols). All 5 target ETFs from #168 (VUSA, CSPX, EQQQ, VWRL, ISF) present. Non-obvious finding: `yfscreen::create_payload(size=N)` is TOTAL desired, not page size — default 25 silently misses universe.
+- `#173` Alpaca `assets_list` snapshot scaffolding — `hd_alpaca_assets_snapshot()` direct `httr2` wrapper (alpacar is GitHub-only, vendoring is simpler than nix overlay). Scrape deferred pending `ALPACA_KEY`/`ALPACA_SECRET` in `~/.Renviron`.
+- `#174` EUR/USD chain (`DEXUSEU` post-1999 + `DEXGEUS` pre-1999 with splice at official 1.95583 DEM:EUR). Unblocks #142 Phase 1 (restating strategies in EUR over 1970-2026 full sample). 2-row registry add.
+
+**#160 Vertox `K_eff_strat` audit + 2-of-4-PR implementation:**
+- `#175` PR 1: rename `K_eff` → `K_eff_acf` in `R/tail_keff.R`, `R/plan_tail_keff.R`, `R/plan_integration.R`, `.claude/rules/backtest-robustness.md`. Frees bare `K_eff` token for the Vertox metric.
+- `#177` PR 2: `hd_strat_keff_vertox()` helper via MC + Brent inversion + rank-deficient short-circuit. Plus a THIRD `K_eff` collision the audit originally missed: renamed `hd_keff` → `hd_keff_frob` and `hd_tail_keff` → `hd_tail_keff_frob` in `falsification.R` + callers in `plan_falsification*.R`. `hd_delta_z(K_eff = …)` param renamed to `k_eff_count` (method-agnostic). 20/20 tests pass.
+
+**roborev high-severity sweep (4 merged PRs, closes/reduces 69→~44 backlog):**
+- `#179` (PR A) SQL injection fix in `metadata.R` `hd_search`/`hd_exchanges` via `DBI::dbQuoteString()`; audit showed 5 of 7 other SQL findings stale (already refactored to duckplyr).
+- `#180` (PR B) Silent `tryCatch` sweep — 3 sites in `connect.R` / `plan_drif.R` / `plan_stock_backtest.R` now log via `cli::cli_warn` before returning NULL.
+- `#181` (PR C) Look-ahead bias fixes — new `next_ym()` calendar-shift helper replaces row-based `lead(ym)` in 3 sites in `plan_stock_backtest.R`; `momentum_decomposition.R::compute_persistence` slider window now leads `monthly_ret` first so forward window is T+1:T+h not T:T+h-1.
+- `#182` (PR D) HTML-in-git policy: 10 roborev jobs closed as wontfix (docs/*.html is the deployed Pages artifact per `gh-pages-nojekyll`); policy documented in `.roborev.toml`.
+
+**Research issues filed:**
+- `#170` Macrosynergy macro-aware equity indices (JPMaQS → FRED mapping; 55-row Annex 2 transcribed)
+- `#171` Datawookie alpacar (tradability flags `shortable`/`easy_to_borrow`/`fractionable` for #114 Phase 2)
+- `#178` NMOF + neighbours for least-correlated K-of-N subset selection (Schumann); complements `K_eff_strat` (this PR) as the optimisation dual
+
+**Issue amendments / audits:**
+- `#142` Beyond Passive FX overlay — amendment with data-availability gaps (DEXGEUS chain), tail-protective vs drift decomposition (Figure 6), 1973-1980 / 1985-1995 named regimes; added `enhancement,low-priority` labels.
+- `#160` Vertox K_eff — 4-PR phased plan with file-by-file collision map and naming decision.
+- `#168` IBKR CPAPI — yfscreen Phase 1.5 amendment positioning yfscreen as complementary (universe discovery, no auth) and resequencing the spike plan.
+
+### Failed Approaches
+- **Initial #168 Phase 1 IBKR symbol-search via unauthenticated REST**: `cgi-pub/stock_search.pl?symbol=VUSA` returned "no matches found" — endpoint signature evolved, undocumented. Conclusion: conid resolution genuinely requires the Client Portal Gateway; documented in the spike comment rather than continued debugging.
+- **`yfscreen::create_payload(size = 25)` default**: produced 25 rows, missing 3 of 5 #168 target ETFs. Default `size` is misleadingly named — it's the TOTAL desired, not page size. Re-ran with `max_total = 10000` → 5,499 rows. Helper now defaults to 10000.
+- **Original #160 audit's collision map was incomplete**: missed `hd_keff` and `hd_tail_keff` in `falsification.R` (Frobenius-norm method). Caught mid-PR-2; expanded scope to rename those too. Audit principle "bare K_eff reserved" only enforced after this expansion.
+- **`roborev fix --list` default scope**: filters to current branch by default. Initially showed only 1 high-severity finding (the just-pushed PR 2). Querying main directly via `roborev list --branch main --json` (then parsing reviews.db) showed the real 169 backlog. CLI surface obscures the cross-branch picture.
+
+### Accuracy / Metrics
+- Roborev high-severity backlog on main: 179 → ~44 (10 HTML-in-git closed as wontfix, 5 SQL-stale closed-by-fix in PR A, 3 silent-tryCatch closed by PR B, 2 look-ahead closed by PR C). Net: ~25 findings off the active list this session.
+- Open commit-specific roborev findings (no recurring pattern): ~40. Each needs individual triage; no batch closer available.
+- `packages/historicaldata` test count: +20 (new `test-hd_strat_keff_vertox.R` with snapshot + boundary + monotonicity + input-validation tests).
+- `hd_macro_registry()` rows: 82 → 84 (DGS20, DEXUSEU, DEXGEUS).
+- New exports in NAMESPACE: `hd_yahoo_screen_snapshot`, `hd_alpaca_assets_snapshot`, `hd_strat_keff_vertox`. Renamed: `hd_keff_frob`, `hd_tail_keff_frob`.
+- PR C will CHANGE backtest results when re-run: `next_ym()` calendar-shift drops misaligned signal→return pairs (Sharpe/CAGR direction unpredictable per-strategy); momentum_decomposition.R IC/t-stat values will drop wherever they were inflated by look-ahead.
+
+### Known Limitations
+- `#160` PR 3 (targets + DSR leaderboard column + vignette) and PR 4 (rule updates: `backtest-robustness` K_eff_strat stopping criterion, `statistical-reporting` §2, `analytical-review-checklist`) not started. Should run in a sonnet worktree per the audit.
+- `#171` Alpaca scrape itself deferred until `ALPACA_KEY`/`ALPACA_SECRET` are wired into `~/.Renviron`. Scaffolding (`hd_alpaca_assets_snapshot()` + `scripts/fetch_alpaca_assets.R`) is on main and runs end-to-end once creds exist.
+- **Mandatory follow-up from PR C**: `qa_look_ahead_bias` target per `look-ahead-bias-prevention` rule NOT added. ~50 LOC template in `model-evaluation-calibration` skill. Without this gate the look-ahead pattern can recur.
+- **Backtest re-run needed**: PRs B and C change behaviour. `tar_make()` should be re-run to surface any pre-existing latent failures that the new `cli_warn`s expose, and to produce the before/after numbers for the CHANGELOG "Accuracy fixes" entry referenced in PR C.
+- 40 commit-specific roborev findings remain — no batch fix available, needs individual triage in future sessions.
+- Hardcoded prose values in `docs/stock-backtest.qmd` (`dynamic-prose-values` rule), dark-mode unconditional CSS in `docs/vignette_utils.R`, outdated `tar_make` comment in `R/plan_backtest.R`, broken `qa_summary` dependency in `R/plan_factormax.R` — all flagged but not addressed.
+
 ### #78 daloopa/investing gap analysis
 
 Added `knowledge/wiki/daloopa-gap-analysis.md`: gap analysis of daloopa/investing (institutional fundamental data MCP) vs our current data setup. Conclusion: 1 adopt (REST API design lessons for #2), 2 defer (MCP integration + `hd_fundamentals()` wrapper pending paid account), 4 reject as out-of-scope (15 analyst-workflow skills and standalone earnings/SEC features). Full analysis at `knowledge/wiki/daloopa-gap-analysis.md`.
