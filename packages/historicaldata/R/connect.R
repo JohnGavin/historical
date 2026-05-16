@@ -13,7 +13,13 @@ hd_connect <- function() {
   # Load httpfs as fallback for non-HF HTTPS URLs (e.g. local servers)
   tryCatch(
     invisible(DBI::dbExecute(con, "INSTALL httpfs; LOAD httpfs;")),
-    error = function(e) NULL
+    error = function(e) {
+      cli::cli_warn(c(
+        "!" = "httpfs extension not loaded: {conditionMessage(e)}",
+        "i" = "Non-HF HTTPS sources (local servers, custom Parquet URLs) will fail. hf:// still works."
+      ))
+      NULL
+    }
   )
   con
 }
