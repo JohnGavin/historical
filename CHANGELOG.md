@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-16
+
+### #78 daloopa/investing gap analysis
+
+Added `knowledge/wiki/daloopa-gap-analysis.md`: gap analysis of daloopa/investing (institutional fundamental data MCP) vs our current data setup. Conclusion: 1 adopt (REST API design lessons for #2), 2 defer (MCP integration + `hd_fundamentals()` wrapper pending paid account), 4 reject as out-of-scope (15 analyst-workflow skills and standalone earnings/SEC features). Full analysis at `knowledge/wiki/daloopa-gap-analysis.md`.
+
 ## 2026-05-15
 
 ### #150 Option C — top-100 market-cap restriction on stk_universe
