@@ -233,8 +233,9 @@ plan_drif <- function() {
         left_join(month_end_dates, by = "ym") |>
         mutate(
           date = last_date,   # threaded from monthly_ret per #147 layer 2
-          port_cum = cumprod(1 + portfolio_ret),
-          bench_cum = cumprod(1 + benchmark_ret),
+          # coalesce NA → 0 to prevent cumprod NA-propagation tail; missing periods treated as zero-return
+          port_cum   = cumprod(1 + dplyr::coalesce(portfolio_ret, 0)),
+          bench_cum  = cumprod(1 + dplyr::coalesce(benchmark_ret, 0)),
           excess_ret = portfolio_ret - rf_ret
         ) |>
         select(-last_date)

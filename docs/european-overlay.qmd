@@ -103,9 +103,9 @@ if (!is.null(ecb_raw)) {
       cor_tbl <- tibble::tibble(
         Pair = c("CISS equity vs VIX", "CISS composite vs VIX", "CISS equity vs CISS composite"),
         `Spearman r` = round(c(
-          cor(merged$ciss, merged$vix, method = "spearman"),
-          cor(merged$ciss_composite, merged$vix, method = "spearman"),
-          cor(merged$ciss, merged$ciss_composite, method = "spearman")
+          cor(merged$ciss, merged$vix, method = "spearman", use = "complete.obs"),
+          cor(merged$ciss_composite, merged$vix, method = "spearman", use = "complete.obs"),
+          cor(merged$ciss, merged$ciss_composite, method = "spearman", use = "complete.obs")
         ), 3),
         N = nrow(merged),
         From = as.character(min(merged$date)),

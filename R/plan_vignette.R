@@ -29,11 +29,15 @@ vig_pair <- function(name, code) {
       library(scales)
       library(tidyr)
       library(purrr)
-      # Inject shared constants
+      # Inject shared constants (inlined at target-construction; crew-worker safe)
       MIN_MARKET_CAP <- VIG_MIN_MARKET_CAP
       MAX_YIELD_PCT  <- VIG_MAX_YIELD_PCT
       eval(parse(text = CODEREF))
-    }, list(CODEREF = as.symbol(code_name))))
+    }, list(
+      CODEREF            = as.symbol(code_name),
+      VIG_MIN_MARKET_CAP = VIG_MIN_MARKET_CAP,
+      VIG_MAX_YIELD_PCT  = VIG_MAX_YIELD_PCT
+    )))
   )
 }
 
