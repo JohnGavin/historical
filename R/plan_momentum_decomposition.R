@@ -28,7 +28,10 @@ plan_momentum_decomposition <- function() {
       stock_returns_monthly,
       {
         ltr_universe |>
-          mutate(ym = format(date, "%Y-%m")) |>
+          # Stay in Date space — coercing POSIXct to Date via as.POSIXct() uses
+          # the system timezone and can shift dates near month boundaries on UTC-
+          # machines. format.Date() is timezone-agnostic. (roborev cluster B, F5)
+          mutate(ym = format(as.Date(date), "%Y-%m")) |>
           group_by(ticker, ym) |>
           summarise(
             date = as.Date(max(date)),  # Month-end date, convert to Date class
