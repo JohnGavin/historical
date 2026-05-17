@@ -21,7 +21,9 @@ Single: \code{"AAPL"}. Batch: \code{c("AAPL", "MSFT", "GOOGL")}.}
 
 \item{to}{End date (character or Date). Default: no filter.}
 
-\item{dataset}{Dataset name from registry. If NULL, auto-detected from first ticker.}
+\item{dataset}{Dataset name from registry. If \code{NULL} (default), each ticker
+is routed to its dataset via \code{\link[=detect_dataset]{detect_dataset()}} and results are bound
+together. Pass an explicit dataset name to force single-dataset routing.}
 
 \item{local}{If TRUE, query local cache instead of remote.}
 
@@ -35,10 +37,19 @@ Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
 Returns a duckplyr lazy frame by default. Call \code{collect()} to materialise,
 or chain additional dplyr verbs for server-side computation.
 }
+\details{
+Mixed-dataset batches (e.g. \code{c("AAPL", "BTC")}) are split by detected
+dataset, queried separately, and \code{bind_rows}'d. Columns that exist in
+only one dataset (e.g. \code{adjusted} in equities, \code{market_cap} in crypto)
+are filled with \code{NA} for rows from the other dataset. When the batch
+spans multiple datasets, the result is always materialised — \code{collect = FALSE} cannot be honoured because lazy frames from distinct parquet
+sources cannot be bound.
+}
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
 hd_ohlcv(c("AAPL", "MSFT"), from = "2024-01-01", collect = TRUE)
+hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-01")  # mixed equity + crypto
 \dontshow{\}) # examplesIf}
 }
 \seealso{

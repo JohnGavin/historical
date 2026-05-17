@@ -58,3 +58,20 @@
         ..$ frequency  : chr "append-only"
         ..$ description: chr "PIT log of all metadata changes: computed fields, enrichments, corrections"
 
+# hd_ohlcv split-and-bind: collect=FALSE informs user
+
+    Code
+      result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-05",
+      collect = FALSE)
+    Message
+      Mixed-dataset batch detected: "crypto_daily" and "equity_daily".
+      i Returning materialised tibble; `collect = FALSE` cannot be honoured when binding across datasets.
+
+# hd_ohlcv: empty ticker vector errors
+
+    Code
+      hd_ohlcv(character(0))
+    Condition
+      Error in `hd_ohlcv()`:
+      ! `ticker` must be a non-empty character vector.
+
