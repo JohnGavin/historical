@@ -121,3 +121,15 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 - **Pipeline changes**: Added 4 function sources + plan_integration to `docs/_targets.R`
 - **Status**: Ready for `tar_make()` execution to materialize integrated targets
 - **Next steps**: Run pipeline, validate outputs, integrate into vignettes
+
+## 2026-05-16
+
+### Quantocracy May 3 2026 Roundup (#126)
+- **5 articles surveyed** from https://quantocracy.com/recent-quant-links-from-quantocracy-as-of-05032026/
+- **Already covered by existing issues:** StratProof 22 crypto strategies (#125), Macrosynergy yield curve (#124)
+- **Related to existing issues:** Beyond Passive risk parity audit (#114), Alpha Architect regime exposure (#119, #141)
+- **New topics identified:**
+  1. Optimal regime-dependent exposure sizing (Alpha Architect) — upgrades heuristic scaling in plan_regime.R
+  2. Risk parity 58-year tail/drawdown audit (Beyond Passive) — empirical context for #114 HRP work
+- **Individual article fetches:** WebFetch permission denied; blurbs sourced from Quantocracy HTML only
+- See [[quantocracy-may-2026]]

@@ -9,6 +9,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 - [Guardian NLP](wiki/guardian-nlp.md) — Keyword counts and sentimentr body text: no predictive signal
 - [CISS Stress Analysis](wiki/ciss-stress.md) — Sub-market decomposition, VIX correlations, regime proxy
 - [Priced-In Signals](wiki/priced-in-signals.md) — Why public news has no edge (NYT, Guardian, keyword counts)
+- [Quantocracy May 2026](wiki/quantocracy-may-2026.md) — May 3 2026 roundup: 5 articles, 2 new topics (regime sizing, risk parity audit), 3 already-covered
 
 ## Log
 
