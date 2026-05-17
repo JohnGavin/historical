@@ -9,7 +9,8 @@ hd_guardian_monthly(
   section = "business",
   from = "2020-01-01",
   to = NULL,
-  api_key = Sys.getenv("GUARDIAN_API_KEY", "test")
+  api_key = Sys.getenv("GUARDIAN_API_KEY", "test"),
+  max_pages = 5L
 )
 }
 \arguments{
@@ -22,6 +23,10 @@ hd_guardian_monthly(
 \item{to}{End date}
 
 \item{api_key}{API key}
+
+\item{max_pages}{Maximum pages to fetch. The Guardian API rate-limits at
+1 req/sec for the "test" key, so \code{max_pages = 50} takes ~50 seconds.
+Default is 5 (≈ 5 seconds, 1000 articles max — sufficient for most queries).}
 }
 \value{
 Tibble with columns: year_month, keyword, n_articles
