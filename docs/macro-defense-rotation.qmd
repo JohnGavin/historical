@@ -38,12 +38,11 @@ format:
           /* Allow navbar tabs to wrap to second line */
           .navbar-nav { flex-wrap: wrap !important; }
           .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
+          /* Exclude .bslib-grid and .bslib-grid-item to preserve grid layout */
           .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
-          .bslib-grid, .bslib-grid-item {
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body {
             height: auto !important; min-height: 0 !important;
             max-height: none !important; overflow: visible !important;
-            flex: none !important;
           }
           .cell-output-display { display: block !important; position: relative !important;
             overflow: visible !important; margin-bottom: 1em; }
@@ -78,7 +77,10 @@ format:
             if (!img) return;
             var div = document.createElement('div');
             div.className = 'fullscreen-overlay';
-            div.innerHTML = '<img src="' + img.src + '">';
+            var overlayImg = document.createElement('img');
+            overlayImg.src = img.src;
+            overlayImg.alt = img.alt || '';
+            div.appendChild(overlayImg);
             div.addEventListener('click', function() { div.remove(); });
             document.body.appendChild(div);
           });
@@ -693,9 +695,4 @@ ggplot(both, aes(date, cum, colour = method)) +
 
 #### Build Info
 
-```{r}
-#| label: build-info
-#| echo: false
-#| results: asis
-build_info()
-```
+{{< include _includes/build-info-footer.qmd >}}

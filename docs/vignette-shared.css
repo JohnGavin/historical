@@ -22,12 +22,11 @@ body { font-size: 1.1em; }
 [data-bs-theme="light"] .fig-caption { color: #555 !important; }
 
 /* Kill dashboard fill layout — content flows like a normal page */
+/* Exclude .bslib-grid and .bslib-grid-item to preserve grid layout */
 .bslib-page-fill, .html-fill-container, .html-fill-item,
-.bslib-card, .card, .tab-pane, .tab-content, .card-body,
-.bslib-grid, .bslib-grid-item {
+.bslib-card, .card, .tab-pane, .tab-content, .card-body {
   height: auto !important; min-height: 0 !important;
   max-height: none !important; overflow: visible !important;
-  flex: none !important;
 }
 
 /* Cell outputs: block layout, no overlap */

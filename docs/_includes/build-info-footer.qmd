@@ -1,0 +1,6 @@
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+build_info()
+```
