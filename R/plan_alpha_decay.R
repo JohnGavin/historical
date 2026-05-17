@@ -81,7 +81,7 @@ plan_alpha_decay <- function() {
           distinct() |>
           group_by(ticker) |>
           arrange(ym, .by_group = TRUE) |>
-          mutate(next_ym = dplyr::lead(ym)) |>
+          mutate(next_ym = dplyr::lead(ym)) |>   # look-ahead-safe: builds join key, not a return series
           ungroup()
 
         exit <- price_index |>
@@ -123,7 +123,7 @@ plan_alpha_decay <- function() {
         signal_lagged <- signal_df |>
           group_by(ticker) |>
           arrange(ym) |>
-          mutate(ym = dplyr::lead(ym)) |>   # signal predicts NEXT month
+          mutate(ym = dplyr::lead(ym)) |>   # look-ahead-safe: signal predicts NEXT month (intentional shift)
           filter(!is.na(ym)) |>
           ungroup()
 
