@@ -19,14 +19,13 @@ format:
           /* Plot height: constrain to reasonable aspect ratio */
           .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
           /* Kill dashboard fill layout — content flows like a normal page */
+          /* Exclude .bslib-grid and .bslib-grid-item to preserve grid layout */
           .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
-          .bslib-grid, .bslib-grid-item {
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body {
             height: auto !important;
             min-height: 0 !important;
             max-height: none !important;
             overflow: visible !important;
-            flex: none !important;
           }
           /* Each cell output: block layout, no overlap */
           .cell-output-display { display: block !important; position: relative !important;
@@ -36,7 +35,7 @@ format:
           /* Fig captions: below the plot, not overlaid */
           .fig-caption { display: block; position: relative; clear: both;
             margin-top: 0.5em; margin-bottom: 1em; }
-          /* Tables: block, no overlap, horizontal scroll via wrapper */
+          /* Tables: block, horizontal scroll (not overflow:visible which breaks DT scroll) */
           .datatables, .dataTables_wrapper { display: block !important;
             position: relative !important; overflow-x: auto !important;
             margin-top: 0.5em; margin-bottom: 1em; }

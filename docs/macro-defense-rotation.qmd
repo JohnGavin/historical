@@ -38,12 +38,11 @@ format:
           /* Allow navbar tabs to wrap to second line */
           .navbar-nav { flex-wrap: wrap !important; }
           .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
+          /* Exclude .bslib-grid and .bslib-grid-item to preserve grid layout */
           .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
-          .bslib-grid, .bslib-grid-item {
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body {
             height: auto !important; min-height: 0 !important;
             max-height: none !important; overflow: visible !important;
-            flex: none !important;
           }
           .cell-output-display { display: block !important; position: relative !important;
             overflow: visible !important; margin-bottom: 1em; }
