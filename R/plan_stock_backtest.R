@@ -139,21 +139,32 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
   w_max <- adv_pct_cap * adv_share * n  # cap: 10% × ADV-fraction × n_stocks
   w_max <- pmin(w_max, 1)               # never cap above 1
 
-  hit_cap  <- w > w_max
-  w_capped <- pmin(w, w_max)
+  # Iterative clip-redistribute loop: after redistribution a previously-uncapped
+  # position may exceed the cap. Re-clip until convergence or max iterations (F3 fix).
+  hit_cap_any <- logical(length(w))
+  w_capped <- w
+  max_iter <- 50L
+  for (iter in seq_len(max_iter)) {
+    hit_this <- w_capped > w_max
+    if (!any(hit_this)) break          # converged — nothing exceeds cap
 
-  # Redistribute residual proportionally to uncapped positions
-  residual <- sum(w) - sum(w_capped)
-  if (residual > 1e-10 && any(!hit_cap)) {
-    uncapped_sum <- sum(w_capped[!hit_cap])
-    if (uncapped_sum > 0) {
-      w_capped[!hit_cap] <- w_capped[!hit_cap] * (sum(w_capped[!hit_cap]) + residual) / uncapped_sum
-    }
+    hit_cap_any <- hit_cap_any | hit_this
+    residual <- sum(w_capped[hit_this] - w_max[hit_this])
+    w_capped[hit_this] <- w_max[hit_this]
+
+    uncapped <- !hit_cap_any           # only distribute to positions never capped yet
+    if (!any(uncapped) || residual <= 1e-10) break
+    uncapped_sum <- sum(w_capped[uncapped])
+    if (uncapped_sum <= 0) break
+    w_capped[uncapped] <- w_capped[uncapped] + residual * (w_capped[uncapped] / uncapped_sum)
   }
 
-  # Renormalise to sum to 1
+  # Renormalise to sum to 1 (guard against floating-point drift)
   w_total <- sum(w_capped)
   if (w_total > 0) w_capped <- w_capped / w_total
+
+  # hit_cap reflects any position that was clipped in any iteration
+  hit_cap <- hit_cap_any
 
   list(capped_w = w_capped, hit_cap = hit_cap)
 }
@@ -209,6 +220,11 @@ portfolio_longshort_hrp <- function(df, returns_wide,
   months <- sort(unique(df$ym))
   prev_w_long  <- numeric(0); names(prev_w_long)  <- character(0)
   prev_w_short <- numeric(0); names(prev_w_short) <- character(0)
+  # Track previous month's per-ticker returns so we can compute drifted weights.
+  # Turnover = sum(|new_weight - drifted_old_weight|) where drifted_old_weight
+  # accounts for return-driven weight drift between rebalances (F2 fix).
+  prev_ret_long  <- numeric(0); names(prev_ret_long)  <- character(0)
+  prev_ret_short <- numeric(0); names(prev_ret_short) <- character(0)
   fallback_count <- 0L
 
   out <- vector("list", length(months))
@@ -259,15 +275,40 @@ portfolio_longshort_hrp <- function(df, returns_wide,
     long_ret  <- sum(w_long[ret_long$ticker]   * ret_long$monthly_ret,   na.rm = TRUE)
     short_ret <- sum(w_short[ret_short$ticker] * ret_short$monthly_ret, na.rm = TRUE)
 
-    # Actual turnover (vs prior month weights, aligned by ticker)
-    align_turnover <- function(w_new, w_old) {
-      all_t <- union(names(w_new), names(w_old))
-      v_new <- ifelse(all_t %in% names(w_new), w_new[all_t], 0)
-      v_old <- ifelse(all_t %in% names(w_old), w_old[all_t], 0)
-      0.5 * sum(abs(v_new - v_old), na.rm = TRUE)
+    # Actual turnover: compare new intended weights against DRIFTED old weights.
+    # Drifted weight_i = old_weight_i * (1 + ret_i) / sum(old_weight * (1 + ret))
+    # This accounts for return-driven weight drift between rebalances (F2 fix).
+    drift_weights <- function(w_old, ret_old) {
+      common <- intersect(names(w_old), names(ret_old))
+      if (length(common) == 0L) return(w_old)  # no return data — keep as-is
+      w_common <- w_old[common]
+      r_common <- ret_old[common]
+      drifted <- w_common * (1 + r_common)
+      total <- sum(drifted, na.rm = TRUE)
+      if (!is.finite(total) || total <= 0) return(w_old)  # guard degenerate case
+      out <- w_old  # start with full old vector (positions that left → 0 after drift)
+      out[common] <- drifted / total
+      out[setdiff(names(w_old), common)] <- 0  # tickers with no return data drift to 0
+      out
     }
-    turnover_long  <- if (length(prev_w_long)  == 0L) 1.0 else align_turnover(w_long,  prev_w_long)
-    turnover_short <- if (length(prev_w_short) == 0L) 1.0 else align_turnover(w_short, prev_w_short)
+    align_turnover <- function(w_new, w_drifted) {
+      all_t <- union(names(w_new), names(w_drifted))
+      v_new     <- ifelse(all_t %in% names(w_new),     w_new[all_t],     0)
+      v_drifted <- ifelse(all_t %in% names(w_drifted), w_drifted[all_t], 0)
+      0.5 * sum(abs(v_new - v_drifted), na.rm = TRUE)
+    }
+    if (length(prev_w_long) == 0L) {
+      turnover_long <- 1.0
+    } else {
+      drifted_long  <- drift_weights(prev_w_long,  prev_ret_long)
+      turnover_long <- align_turnover(w_long, drifted_long)
+    }
+    if (length(prev_w_short) == 0L) {
+      turnover_short <- 1.0
+    } else {
+      drifted_short  <- drift_weights(prev_w_short, prev_ret_short)
+      turnover_short <- align_turnover(w_short, drifted_short)
+    }
     turnover <- (turnover_long + turnover_short) / 2
 
     trade_cost  <- turnover * cost_per_trade * 2 * 2   # both legs, buy + sell
@@ -290,6 +331,9 @@ portfolio_longshort_hrp <- function(df, returns_wide,
 
     prev_w_long  <- w_long
     prev_w_short <- w_short
+    # Store this month's per-ticker returns for drift calculation next iteration
+    prev_ret_long  <- setNames(ret_long$monthly_ret,  ret_long$ticker)
+    prev_ret_short <- setNames(ret_short$monthly_ret, ret_short$ticker)
   }
 
   if (fallback_count > 0L) {
