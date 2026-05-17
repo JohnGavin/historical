@@ -88,3 +88,45 @@ test_that("hd_connect_local handles quoted parquet paths", {
   result <- DBI::dbGetQuery(con, "SELECT x FROM sample")
   expect_equal(result$x, 1)
 })
+
+test_that("hd_ohlcv split-and-bind: mixed equity + crypto batch", {
+  skip_on_cran()
+  skip_if_offline()
+
+  result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-10")
+  expect_s3_class(result, "tbl_df")
+  expect_true(nrow(result) > 0L)
+  expect_true("AAPL" %in% result$ticker)
+  expect_true("BTC" %in% result$ticker)
+  # Union of schemas: equity-only columns are NA for crypto rows
+  expect_true("adjusted" %in% names(result))     # equity-only column
+  aapl_rows <- result[result$ticker == "AAPL", ]
+  btc_rows  <- result[result$ticker == "BTC",  ]
+  expect_true(all(!is.na(aapl_rows$adjusted)))   # AAPL has adjusted prices
+  expect_true(all(is.na(btc_rows$adjusted)))     # BTC rows get NA for equity-only col
+})
+
+test_that("hd_ohlcv split-and-bind: collect=FALSE informs user", {
+  skip_on_cran()
+  skip_if_offline()
+
+  expect_snapshot(
+    result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01",
+                       to = "2026-04-05", collect = FALSE)
+  )
+  expect_s3_class(result, "tbl_df")  # materialised despite collect=FALSE
+})
+
+test_that("hd_ohlcv split-and-bind: single-dataset batch keeps fast path", {
+  skip_on_cran()
+  skip_if_offline()
+
+  # Two equity tickers — no inform message, no split, normal collect respected
+  result <- hd_ohlcv(c("AAPL", "MSFT"), from = "2026-04-01", to = "2026-04-05")
+  expect_s3_class(result, "tbl_df")
+  expect_setequal(unique(result$ticker), c("AAPL", "MSFT"))
+})
+
+test_that("hd_ohlcv: empty ticker vector errors", {
+  expect_snapshot(error = TRUE, hd_ohlcv(character(0)))
+})

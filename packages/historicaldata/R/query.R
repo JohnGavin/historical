@@ -7,23 +7,66 @@
 #'   Single: `"AAPL"`. Batch: `c("AAPL", "MSFT", "GOOGL")`.
 #' @param from Start date (character or Date). Default: no filter.
 #' @param to End date (character or Date). Default: no filter.
-#' @param dataset Dataset name from registry. If NULL, auto-detected from first ticker.
+#' @param dataset Dataset name from registry. If `NULL` (default), each ticker
+#'   is routed to its dataset via [detect_dataset()] and results are bound
+#'   together. Pass an explicit dataset name to force single-dataset routing.
 #' @param local If TRUE, query local cache instead of remote.
 #' @param collect If TRUE, materialise immediately (backward compatible).
 #'   If FALSE (default), return a lazy duckplyr frame.
+#' @details
+#' Mixed-dataset batches (e.g. `c("AAPL", "BTC")`) are split by detected
+#' dataset, queried separately, and `bind_rows`'d. Columns that exist in
+#' only one dataset (e.g. `adjusted` in equities, `market_cap` in crypto)
+#' are filled with `NA` for rows from the other dataset. When the batch
+#' spans multiple datasets, the result is always materialised — `collect
+#' = FALSE` cannot be honoured because lazy frames from distinct parquet
+#' sources cannot be bound.
 #' @return Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
 #' @family data-access
 #' @export
 #' @examplesIf interactive()
 #' hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
 #' hd_ohlcv(c("AAPL", "MSFT"), from = "2024-01-01", collect = TRUE)
+#' hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-01")  # mixed equity + crypto
 hd_ohlcv <- function(ticker, from = NULL, to = NULL,
                      dataset = NULL, local = FALSE, collect = TRUE) {
   ticker <- as.character(ticker)
-  if (is.null(dataset)) {
-    dataset <- detect_dataset(ticker[1])
+  if (length(ticker) == 0L) {
+    cli::cli_abort("{.arg ticker} must be a non-empty character vector.")
   }
 
+  # Explicit dataset: skip auto-detection, single-dataset query (unchanged behaviour).
+  if (!is.null(dataset)) {
+    return(hd_ohlcv_single(ticker, dataset, from, to, local, collect))
+  }
+
+  # Auto-detect per ticker, then group.
+  detected <- vapply(ticker, detect_dataset, character(1L), USE.NAMES = FALSE)
+  ds_groups <- split(ticker, detected)
+
+  # Fast path: all tickers belong to one dataset — single query, identical to old behaviour.
+  if (length(ds_groups) == 1L) {
+    return(hd_ohlcv_single(ticker, names(ds_groups), from, to, local, collect))
+  }
+
+  # Mixed-dataset batch: query each, bind, return materialised.
+  # Lazy mode cannot survive bind_rows across distinct parquet sources — inform user.
+  if (!collect) {
+    cli::cli_inform(c(
+      "Mixed-dataset batch detected: {.val {names(ds_groups)}}.",
+      "i" = "Returning materialised tibble; {.code collect = FALSE} cannot be honoured when binding across datasets."
+    ))
+  }
+
+  results <- lapply(names(ds_groups), function(ds_name) {
+    hd_ohlcv_single(ds_groups[[ds_name]], ds_name, from, to, local, collect = TRUE)
+  })
+  dplyr::bind_rows(results) |> dplyr::arrange(ticker, date)
+}
+
+#' @noRd
+# Internal: single-dataset OHLCV query. See hd_ohlcv for split-and-bind public wrapper.
+hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
   ds <- hd_datasets()[[dataset]]
   if (is.null(ds)) {
     cli::cli_abort("Unknown dataset: {dataset}. See {.fn hd_datasets}.")
