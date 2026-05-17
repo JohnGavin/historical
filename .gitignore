@@ -45,6 +45,38 @@ inst/extdata/vignettes/stk_universe.rds
 inst/extdata/vignettes/stk_daily_ret.rds
 inst/extdata/vignettes/stk_drif_features.rds
 inst/extdata/vignettes/stk_drif_signal.rds
+# Pipeline intermediates with zero vignette readers (verified via grep
+# `safe_tar_read("<name>")` across docs/). Rebuilt by tar_make() into
+# _targets/objects/; inst/extdata copy was dead. Re-add explicitly only
+# if a vignette gains a safe_tar_read() call on one of these.
+inst/extdata/vignettes/aw_daily_ff.rds
+inst/extdata/vignettes/aw_daily_returns.rds
+inst/extdata/vignettes/aw_params.rds
+inst/extdata/vignettes/aw_practical_backtest.rds
+inst/extdata/vignettes/aw_practical_params.rds
+inst/extdata/vignettes/aw_remove_days.rds
+inst/extdata/vignettes/aw_rolling.rds
+inst/extdata/vignettes/bt_*.rds
+inst/extdata/vignettes/code_vig_*.rds
+inst/extdata/vignettes/drif_daily.rds
+inst/extdata/vignettes/drif_features.rds
+inst/extdata/vignettes/drif_portfolio.rds
+inst/extdata/vignettes/drif_signal.rds
+inst/extdata/vignettes/drif_vs_max.rds
+inst/extdata/vignettes/fm_daily.rds
+inst/extdata/vignettes/fm_etf_data.rds
+inst/extdata/vignettes/fm_monthly.rds
+inst/extdata/vignettes/fm_portfolio.rds
+inst/extdata/vignettes/fm_signal.rds
+inst/extdata/vignettes/qa_summary.rds
+inst/extdata/vignettes/stk_all_comparison.rds
+inst/extdata/vignettes/stk_drif_portfolio.rds
+inst/extdata/vignettes/stk_max_portfolio.rds
+inst/extdata/vignettes/stk_max_signal.rds
+inst/extdata/vignettes/stk_max_vs_factor.rds
+inst/extdata/vignettes/stk_monthly.rds
+inst/extdata/vignettes/stk_rf.rds
+inst/extdata/vignettes/vig_setup.rds
 # docs/*_files/ — MUST commit for GitHub Pages (no CI render)
 .claude/settings.local.json
 .claude/worktrees/
