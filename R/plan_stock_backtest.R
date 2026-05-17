@@ -139,21 +139,32 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
   w_max <- adv_pct_cap * adv_share * n  # cap: 10% × ADV-fraction × n_stocks
   w_max <- pmin(w_max, 1)               # never cap above 1
 
-  hit_cap  <- w > w_max
-  w_capped <- pmin(w, w_max)
+  # Iterative clip-redistribute loop: after redistribution a previously-uncapped
+  # position may exceed the cap. Re-clip until convergence or max iterations (F3 fix).
+  hit_cap_any <- logical(length(w))
+  w_capped <- w
+  max_iter <- 50L
+  for (iter in seq_len(max_iter)) {
+    hit_this <- w_capped > w_max
+    if (!any(hit_this)) break          # converged — nothing exceeds cap
 
-  # Redistribute residual proportionally to uncapped positions
-  residual <- sum(w) - sum(w_capped)
-  if (residual > 1e-10 && any(!hit_cap)) {
-    uncapped_sum <- sum(w_capped[!hit_cap])
-    if (uncapped_sum > 0) {
-      w_capped[!hit_cap] <- w_capped[!hit_cap] * (sum(w_capped[!hit_cap]) + residual) / uncapped_sum
-    }
+    hit_cap_any <- hit_cap_any | hit_this
+    residual <- sum(w_capped[hit_this] - w_max[hit_this])
+    w_capped[hit_this] <- w_max[hit_this]
+
+    uncapped <- !hit_cap_any           # only distribute to positions never capped yet
+    if (!any(uncapped) || residual <= 1e-10) break
+    uncapped_sum <- sum(w_capped[uncapped])
+    if (uncapped_sum <= 0) break
+    w_capped[uncapped] <- w_capped[uncapped] + residual * (w_capped[uncapped] / uncapped_sum)
   }
 
-  # Renormalise to sum to 1
+  # Renormalise to sum to 1 (guard against floating-point drift)
   w_total <- sum(w_capped)
   if (w_total > 0) w_capped <- w_capped / w_total
+
+  # hit_cap reflects any position that was clipped in any iteration
+  hit_cap <- hit_cap_any
 
   list(capped_w = w_capped, hit_cap = hit_cap)
 }
