@@ -25,8 +25,11 @@ tar_source("R/cross_reference.R")
 tar_source("R/consolidate.R")
 tar_source("R/validate_macro.R")
 tar_source("R/validate_factors.R")
+tar_source("R/plan_qa_gates.R")
 
 list(
+  # === QA GATES (run first — abort on look-ahead bias or other violations) ===
+  plan_qa_gates(),
   # === EQUITY (50+ tickers from Yahoo + Kaggle AAPL for cross-ref) ===
   tar_target(equity_api_file,    "tmp_equity_api.parquet",    format = "file"),
   tar_target(equity_static_file, "tmp_equity_static.parquet", format = "file"),
