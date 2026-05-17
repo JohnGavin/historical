@@ -61,6 +61,66 @@ execute:
 ```{r}
 #| label: setup
 #| include: false
+# Compute landing-page stats dynamically at render time.
+# Each remote query is wrapped in tryCatch; fallback is "—" so render
+# succeeds even when HuggingFace is offline.
+
+local({
+  # Load the package from the project tree
+  suppressMessages(pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE))
+
+  n_tickers <- tryCatch({
+    tickers_equity <- hd_tickers("equity_daily")
+    tickers_crypto <- hd_tickers("crypto_daily")
+    length(unique(c(tickers_equity, tickers_crypto)))
+  }, error = function(e) NA_integer_)
+
+  n_datasets <- tryCatch(length(hd_datasets()), error = function(e) NA_integer_)
+
+  n_rows <- tryCatch({
+    ds_names <- names(hd_datasets())
+    row_counts <- sapply(ds_names, function(nm) {
+      tryCatch({
+        ds <- hd_datasets()[[nm]]
+        duckplyr::read_parquet_duckdb(ds$url) |>
+          dplyr::count() |>
+          dplyr::collect() |>
+          dplyr::pull(n)
+      }, error = function(e) 0L)
+    })
+    sum(row_counts)
+  }, error = function(e) NA_integer_)
+
+  yr_history <- tryCatch({
+    date_datasets <- c("equity_daily", "crypto_daily", "macro_daily", "factors")
+    all_dates <- unlist(lapply(date_datasets, function(nm) {
+      tryCatch({
+        ds <- hd_datasets()[[nm]]
+        duckplyr::read_parquet_duckdb(ds$url) |>
+          dplyr::summarise(min_date = min(date, na.rm = TRUE),
+                           max_date = max(date, na.rm = TRUE)) |>
+          dplyr::collect() |>
+          as.list() |>
+          unlist()
+      }, error = function(e) NULL)
+    }))
+    if (length(all_dates) == 0) return(NA_integer_)
+    all_dates <- as.Date(all_dates)
+    as.integer(round(as.numeric(difftime(max(all_dates), min(all_dates), units = "days")) / 365.25))
+  }, error = function(e) NA_integer_)
+
+  # Format helpers
+  fmt_tickers  <- if (is.na(n_tickers))  "—" else format(n_tickers, big.mark = ",")
+  fmt_rows     <- if (is.na(n_rows))     "—" else paste0(round(n_rows / 1e6, 1), "M")
+  fmt_datasets <- if (is.na(n_datasets)) "—" else as.character(n_datasets)
+  fmt_yr       <- if (is.na(yr_history)) "—" else paste0(yr_history, "yr")
+
+  # Export to parent env so inline R blocks can reference them
+  assign("stat_tickers",  fmt_tickers,  envir = parent.env(environment()))
+  assign("stat_rows",     fmt_rows,     envir = parent.env(environment()))
+  assign("stat_datasets", fmt_datasets, envir = parent.env(environment()))
+  assign("stat_yr",       fmt_yr,       envir = parent.env(environment()))
+})
 ```
 
 # Datasets
@@ -74,10 +134,10 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <span class="badge badge-gold">Hugging Face</span>
 
 <div class="stats-row">
-<div class="stat"><div class="num">1,022</div><div class="label">tickers</div></div>
-<div class="stat"><div class="num">2.3M</div><div class="label">rows</div></div>
-<div class="stat"><div class="num">6</div><div class="label">datasets</div></div>
-<div class="stat"><div class="num">100yr</div><div class="label">history</div></div>
+<div class="stat"><div class="num">`r stat_tickers`</div><div class="label">tickers</div></div>
+<div class="stat"><div class="num">`r stat_rows`</div><div class="label">rows</div></div>
+<div class="stat"><div class="num">`r stat_datasets`</div><div class="label">datasets</div></div>
+<div class="stat"><div class="num">`r stat_yr`</div><div class="label">history</div></div>
 <div class="stat"><div class="num">30</div><div class="label">functions</div></div>
 </div>
 
