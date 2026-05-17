@@ -695,9 +695,4 @@ ggplot(both, aes(date, cum, colour = method)) +
 
 #### Build Info
 
-```{r}
-#| label: build-info
-#| echo: false
-#| results: asis
-build_info()
-```
+{{< include _includes/build-info-footer.qmd >}}

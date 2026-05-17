@@ -697,9 +697,4 @@ Then start R and run the Setup tab code above.
 
 ## Row
 
-```{r}
-#| label: build-info
-#| echo: false
-#| results: asis
-build_info()
-```
+{{< include _includes/build-info-footer.qmd >}}
