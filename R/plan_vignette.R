@@ -110,7 +110,7 @@ vol <- hd_ohlcv(vol_tickers, from = "2023-06-01") |>
   mutate(
     log_ret = log(adjusted / lag(adjusted)),
     cum_sq = cumsum(if_else(is.na(log_ret), 0, log_ret^2)),
-    vol_21d = sqrt(pmax((cum_sq - lag(cum_sq, 21, default = 0)) / 21, 0)) * sqrt(252)
+    vol_21d = sqrt(pmax((cum_sq - lag(cum_sq, 21, default = NA_real_)) / 21, 0)) * sqrt(252)
   ) |>
   filter(!is.na(vol_21d), date >= as.Date("2024-01-01")) |>
   ungroup()
@@ -176,10 +176,9 @@ wide <- hd_ohlcv(corr_tickers, from = "2023-01-01") |>
   mutate(ret = log(close / lag(close))) |>
   filter(!is.na(ret)) |> ungroup() |>
   select(date, ticker, ret) |>
-  pivot_wider(names_from = ticker, values_from = ret) |>
-  filter(if_all(everything(), ~ !is.na(.)))
+  pivot_wider(names_from = ticker, values_from = ret)
 
-cor_mat <- cor(wide |> select(-date))
+cor_mat <- cor(wide |> select(-date), use = "pairwise.complete.obs")
 cor_long <- cor_mat |> as.data.frame() |>
   mutate(row = rownames(cor_mat)) |>
   pivot_longer(-row, names_to = "col", values_to = "cor")
@@ -249,8 +248,10 @@ p
 # Batch query: 2 credit spread series in one request
 spreads <- hd_macro(c("BAMLH0A0HYM2", "BAMLC0A4CBBB"), from = "2020-01-01") |>
   filter(!is.na(value)) |>
-  mutate(series_id = recode(series_id,
-    BAMLH0A0HYM2 = "HY Spread", BAMLC0A4CBBB = "BBB Spread"))
+  mutate(series_id = case_match(series_id,
+    "BAMLH0A0HYM2" ~ "HY Spread",
+    "BAMLC0A4CBBB" ~ "BBB Spread",
+    .default = series_id))
 
 ggplot(spreads, aes(date, value, colour = series_id)) +
   geom_line(linewidth = 0.5) +
