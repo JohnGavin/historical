@@ -1,0 +1,4 @@
+project:
+  type: default
+  post-render:
+    - /Users/johngavin/docs_gh/llm/.claude/scripts/quarto_post_render_contrast.sh
