@@ -27,7 +27,9 @@ hd_guardian(
 
 \item{page_size}{Results per page (max 200)}
 
-\item{max_pages}{Maximum pages to fetch (rate limit protection)}
+\item{max_pages}{Maximum pages to fetch (rate limit protection). The Guardian
+API rate-limits at 1 req/sec for the "test" key, so \code{max_pages = 50} takes
+approximately 50 seconds per call. Default is 10 (≈ 10 seconds).}
 }
 \value{
 Tibble with columns: date, headline, section, wordcount, url

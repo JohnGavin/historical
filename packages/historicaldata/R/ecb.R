@@ -157,83 +157,86 @@ hd_ecb_registry <- function() {
       unit = "percent"
     ),
     # ── CISS: Composite Indicator of Systemic Stress ─────────────────
+    # NOTE: CISS series are published on business days only (weekends missing).
+    # Downstream joins against true-daily series should use left_join (not
+    # inner_join) and handle NA explicitly to avoid silently dropping weekends.
     ciss_composite = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_CIN.IDX",
       description = "CISS composite systemic stress (0=calm, 1=crisis)",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_bond = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_BMN.CON",
       description = "CISS bond market stress contribution",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_equity = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_EMN.CON",
       description = "CISS equity market stress contribution (implied vol proxy)",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_fx = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_FXN.CON",
       description = "CISS FX market stress contribution",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_money = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_MMN.CON",
       description = "CISS money market stress contribution",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_financial = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_FIN.CON",
       description = "CISS financial intermediary stress contribution",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_correlation = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SS_CON.CON",
       description = "CISS cross-market correlation (more negative = less contagion)",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "correlation"
     ),
     ciss_sovereign = list(
       key = "CISS/D.U2.Z0Z.4F.EC.SOV_EWN.IDX",
       description = "CISS sovereign stress (equal-weighted euro area)",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     # ── CISS per country ─────────────────────────────────────────────
     ciss_de = list(
       key = "CISS/D.DE.Z0Z.4F.EC.SS_CIN.IDX",
       description = "CISS Germany systemic stress",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_fr = list(
       key = "CISS/D.FR.Z0Z.4F.EC.SS_CIN.IDX",
       description = "CISS France systemic stress",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_it = list(
       key = "CISS/D.IT.Z0Z.4F.EC.SS_CIN.IDX",
       description = "CISS Italy systemic stress",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_gb = list(
       key = "CISS/D.GB.Z0Z.4F.EC.SS_CIN.IDX",
       description = "CISS UK systemic stress",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     ciss_us = list(
       key = "CISS/D.US.Z0Z.4F.EC.SS_CIN.IDX",
       description = "CISS US systemic stress (ECB-computed, comparable with euro area)",
-      frequency = "daily",
+      frequency = "business_daily",
       unit = "index_0_1"
     ),
     # ── Macro ────────────────────────────────────────────────────────
