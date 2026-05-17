@@ -71,8 +71,8 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
     ),
     latest_vol AS (
       SELECT ticker,
-        LAST(vol) AS vol_21d,
-        LAST(date) AS as_of
+        LAST(vol ORDER BY date) AS vol_21d,
+        MAX(date) AS as_of
       FROM vol
       GROUP BY ticker
     )
