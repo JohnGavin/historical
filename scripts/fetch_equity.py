@@ -200,11 +200,34 @@ def load_sp500_tickers() -> list[str]:
         response = urllib.request.urlopen(req, timeout=30)
         reader = csv.DictReader(io.TextIOWrapper(response))
         tickers = [row["Symbol"].replace(".", "-") for row in reader]
+
+        # Sanity check: S&P 500 should have ~500 constituents
+        if len(tickers) < 400:
+            raise RuntimeError(
+                f"S&P 500 fetch returned only {len(tickers)} tickers; expected ~500. "
+                "Possible upstream schema change or incomplete data."
+            )
+
         print(f"  Loaded {len(tickers)} S&P 500 tickers from GitHub")
         return tickers
+    except urllib.error.HTTPError as e:
+        print(f"  ERROR: HTTP {e.code} fetching S&P 500 tickers: {e.reason}", file=sys.stderr)
+        raise
+    except urllib.error.URLError as e:
+        print(f"  ERROR: URL error fetching S&P 500 tickers: {e.reason}", file=sys.stderr)
+        raise
+    except csv.Error as e:
+        print(f"  ERROR: CSV parsing error in S&P 500 data: {e}", file=sys.stderr)
+        raise
+    except RuntimeError:
+        raise
+    except KeyError as e:
+        print(f"  ERROR: Missing expected column in S&P 500 CSV: {e}", file=sys.stderr)
+        print(f"  Available columns: {reader.fieldnames if 'reader' in locals() else 'unknown'}", file=sys.stderr)
+        raise
     except Exception as e:
-        print(f"  WARNING: Failed to load S&P 500: {e}")
-        return []
+        print(f"  ERROR: Unexpected error loading S&P 500 tickers: {e}", file=sys.stderr)
+        raise
 
 
 # Major European stocks with Yahoo Finance exchange suffixes
