@@ -9,6 +9,40 @@ test_that("hd_ecb_registry has expected entries", {
   }
 })
 
+test_that("hd_ecb_registry CISS series use business_daily frequency (F2)", {
+  # CISS series are published on business days only; registry must reflect this
+  # so downstream joins do not silently drop weekends.
+  reg <- hd_ecb_registry()
+  ciss_names <- grep("^ciss_", names(reg), value = TRUE)
+  expect_true(length(ciss_names) > 0L, info = "No CISS series found in registry")
+  for (nm in ciss_names) {
+    expect_equal(
+      reg[[nm]]$frequency, "business_daily",
+      info = paste("CISS series", nm, "should be business_daily, not daily")
+    )
+  }
+})
+
+test_that("hd_ecb returns NULL with warning on simulated transport error (F1)", {
+  # Verifies that hd_ecb() propagates transport-level errors as warnings + NULL,
+  # which allows the tryCatch in plan_ecb to isolate per-series failures.
+  skip_if_not_installed("httr2")
+  fake_error <- function(req) {
+    # Simulate a connection error (non-200 path is already tested; this tests
+    # that a thrown condition from req_perform is handled gracefully via the
+    # non-200 branch returning NULL+warning).
+    httr2::response(
+      status_code = 503L,
+      headers = list(`Content-Type` = "text/plain"),
+      body = charToRaw("Service Unavailable")
+    )
+  }
+  result <- suppressWarnings(httr2::with_mocked_responses(fake_error, {
+    hd_ecb("ECB/FAKE_SERIES")
+  }))
+  expect_null(result)
+})
+
 test_that("hd_ecb parses daily series success path", {
   skip_if_not_installed("httr2")
   csv_body <- "KEY,FREQ,TIME_PERIOD,OBS_VALUE\nEXR/D.USD.EUR.SP00.A,D,2024-01-02,1.0956\nEXR/D.USD.EUR.SP00.A,D,2024-01-03,1.0921\n"

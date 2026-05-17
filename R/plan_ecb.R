@@ -49,13 +49,25 @@ plan_ecb <- function() {
           cli::cli_warn("ECB series {nm} not in registry")
           return(NULL)
         }
-        df <- reg$hd_ecb(info$key, start = ecb_params$start_date)
-        if (!is.null(df)) {
-          df$series_name <- nm
-          df$description <- info$description
-          df$unit <- info$unit
-        }
-        df
+        # Wrap per-series fetch so one stalled/errored endpoint cannot hang the
+        # entire target.  hd_ecb() already has req_timeout(30) + req_retry(3),
+        # but transport errors (connection refused, TCP stall) can still escape
+        # as R conditions.  tryCatch here ensures the lapply continues.
+        tryCatch({
+          df <- reg$hd_ecb(info$key, start = ecb_params$start_date)
+          if (!is.null(df)) {
+            df$series_name <- nm
+            df$description <- info$description
+            df$unit <- info$unit
+          }
+          df
+        }, error = function(e) {
+          cli::cli_warn(c(
+            "!" = "ECB series {nm} failed and will be skipped.",
+            "i" = "{conditionMessage(e)}"
+          ))
+          NULL
+        })
       })
 
       dplyr::bind_rows(results)
