@@ -87,7 +87,10 @@ format:
             // Clone just the img into a temporary overlay div
             var div = document.createElement('div');
             div.className = 'fullscreen-overlay';
-            div.innerHTML = '<img src="' + img.src + '">';
+            var overlayImg = document.createElement('img');
+            overlayImg.src = img.src;
+            overlayImg.alt = img.alt || '';
+            div.appendChild(overlayImg);
             div.addEventListener('click', function() { div.remove(); });
             document.body.appendChild(div);
           });
