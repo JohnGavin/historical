@@ -187,8 +187,27 @@ hd_ff_factors <- function(dataset = "F-F_Research_Data_5_Factors_2x3",
 decompose_momentum <- function(stock_returns,
                                factor_returns,
                                industry_returns = NULL,
-                               lookback_months = 12,
+                               lookback_months = 24,
                                min_obs = 6) {
+
+  # F6 guard: OLS with 5 FF factors + 12 industry dummies = 17 parameters.
+  # With lookback_months < 24, observations (n) can be less than parameters (p),
+  # producing a degenerate fit (perfect in-sample R², zero generalisation).
+  # Minimum 24 months provides 7 degrees of freedom vs 17 parameters.
+  # (roborev cluster B, finding F6)
+  n_ff_params <- 5L   # Mkt.RF, SMB, HML, RMW, CMA
+  n_ind_params <- if (!is.null(industry_returns)) 12L else 0L
+  n_params <- 1L + n_ff_params + n_ind_params  # intercept + factors + industries
+  min_lookback <- n_params + 7L  # require at least 7 df
+  if (lookback_months < min_lookback) {
+    cli::cli_abort(c(
+      "x" = "{.arg lookback_months} must be >= {min_lookback} to avoid overfitting.",
+      "i" = "Regression has {n_params} parameters ({n_ff_params} FF factors + \\
+{n_ind_params} industry dummies + 1 intercept).",
+      "i" = "Received: {.val {lookback_months}} months ({lookback_months} obs vs {n_params} params).",
+      "i" = "Use lookback_months >= {min_lookback} for at least 7 degrees of freedom."
+    ))
+  }
 
   # Join stock returns with factors using year-month (dates may differ by convention)
   stock_ym <- stock_returns |>
@@ -201,6 +220,21 @@ decompose_momentum <- function(stock_returns,
   combined <- stock_ym |>
     dplyr::inner_join(factor_ym, by = "ym") |>
     dplyr::arrange(ticker, date)
+
+  # F1 assertion: join must produce rows (dates differ by convention — FF uses
+  # month-START e.g. 2024-01-01, stock returns use month-END e.g. 2024-01-31;
+  # the ym key coerces both sides to "YYYY-MM" before joining so they match.
+  # Zero rows means date format mismatch — abort before any downstream
+  # computation silently consumes empty data. (roborev cluster B, finding F1)
+  if (nrow(combined) == 0L) {
+    cli::cli_abort(c(
+      "x" = "Factor join produced 0 rows — date convention mismatch.",
+      "i" = "stock_returns date range: {min(stock_returns$date)} to {max(stock_returns$date)}",
+      "i" = "factor_returns date range: {min(factor_returns$date)} to {max(factor_returns$date)}",
+      "i" = "Both sides are coerced to YYYY-MM keys before joining.",
+      "i" = "Check that factor_returns has a 'date' column with parseable dates."
+    ))
+  }
 
   # If industry returns provided, join them
   if (!is.null(industry_returns)) {
@@ -505,11 +539,12 @@ build_optimized_signals <- function(decomposed_momentum,
   scheme <- match.arg(scheme)
 
   if (scheme == "baseline") {
-    # Baseline is total 12-month return (sum of all components)
+    # Baseline is the ACTUAL trailing 12-month return (ret_12m), NOT the sum of
+    # decomposition components. Summing components is degenerate — by construction
+    # the decomposition is exhaustive so the sum is mechanically close to ret_12m,
+    # making the comparison uninformative. (roborev cluster B, finding F3)
     result <- decomposed_momentum |>
-      dplyr::mutate(
-        signal = beta_momentum + style_momentum + industry_momentum + stock_specific_momentum
-      ) |>
+      dplyr::mutate(signal = ret_12m) |>
       dplyr::select(ticker, date, signal) |>
       dplyr::mutate(scheme = "baseline")
 
@@ -603,10 +638,24 @@ backtest_momentum_signals <- function(signals,
       .groups = "drop"
     )
 
-  # Compute turnover (fraction of portfolio that changes each month)
+  # Compute turnover over the UNION of names across consecutive months.
+  # The naive lag()-per-ticker approach only covers stocks present in both old
+  # and new periods. Stocks that exit the portfolio (new weight = 0) are absent
+  # from the new period's rows, so their exit weight-change is never counted.
+  # Fix: build a complete (scheme, ticker, date) grid, fill missing weights with
+  # 0, then compute abs(new - old) over the full universe. (roborev cluster B, F4)
+  all_dates <- sort(unique(portfolio$date))
   turnover <- portfolio |>
+    dplyr::select(scheme, ticker, date, weight) |>
     dplyr::arrange(scheme, ticker, date) |>
+    # Expand to full (scheme x ticker x date) universe so exits get weight = 0
+    tidyr::complete(
+      tidyr::nesting(scheme, ticker),
+      date = all_dates,
+      fill = list(weight = 0)
+    ) |>
     dplyr::group_by(scheme, ticker) |>
+    dplyr::arrange(date) |>
     dplyr::mutate(
       prev_weight = dplyr::lag(weight, default = 0),
       weight_change = abs(weight - prev_weight)

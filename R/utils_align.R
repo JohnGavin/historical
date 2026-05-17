@@ -258,9 +258,27 @@ asof_lookup <- function(x, y, value_col, tol_days = NULL) {
 
   # ── Defensive date coercion (data-validation-timeseries Section 9) ─────────
   # POSIXct join keys silently produce 0 matches in SQL; coerce both sides.
+  # as.Date() truncates time-of-day — if y has multiple intraday rows for the
+  # same date, the coercion collapses them and DuckDB selects an arbitrary one.
+  # Error loudly here rather than silently returning wrong values.
+  # (roborev cluster B, finding F2)
 
   x <- dplyr::mutate(x, date = as.Date(.data$date))
   y <- dplyr::mutate(y, date = as.Date(.data$date))
+
+  dup_dates <- y |>
+    dplyr::count(.data$date, name = "n_") |>
+    dplyr::filter(.data$n_ > 1L)
+  if (nrow(dup_dates) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg y} has {nrow(dup_dates)} date{?s} with more than one row after \\
+coercing to Date (intraday observations collapse to an arbitrary row).",
+      "i" = "Aggregate {.arg y} to daily before calling {.fn asof_lookup}: \\
+e.g. last observation per date.",
+      "i" = "First duplicate date: {.val {dup_dates$date[1L]}} \\
+({dup_dates$n_[1L]} rows)."
+    ))
+  }
 
   # ── ASOF JOIN via DuckDB ──────────────────────────────────────────────────────
   # DuckDB ASOF LEFT JOIN is available from DuckDB >= 0.9.
