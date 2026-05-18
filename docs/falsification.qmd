@@ -253,9 +253,9 @@ if (!is.null(null_tbl)) fals_dt(null_tbl, cap)
 
 A null environment generates synthetic return series with no genuine signal, but with realistic statistical properties. We test: "could a strategy generate the observed t-statistic just by chance in this environment?"
 
-For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the [<abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr> t-statistic](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator){target="_blank"}. The rejection rate is the fraction that exceeds the observed t-statistic.
+For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the [<abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr> t-statistic](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator){target="_blank" rel="noopener noreferrer"}. The rejection rate is the fraction that exceeds the observed t-statistic.
 
-**The 6 null environments** (implemented in [`falsification.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R){target="_blank"}):
+**The 6 null environments** (implemented in [`falsification.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R){target="_blank" rel="noopener noreferrer"}):
 
 - **White Noise**: iid N(0, sigma). Baseline — if a strategy "works" here, it's pure luck.
 - **Regime Vol**: Two-state volatility (high/low). Tests whether signal is just vol timing.
@@ -355,7 +355,7 @@ Where:
 - Alpha t < 2.0, R² (%) > 20: **Disguised beta** — just buy the factors directly
 - Alpha t < 2.0, R² (%) < 10: Strategy is noise
 
-**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank"}, daily frequency. Implemented in [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R){target="_blank"}.
+**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}, daily frequency. Implemented in [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R){target="_blank" rel="noopener noreferrer"}.
 
 
 # Multiplicity Correction {#multiplicity}
@@ -421,11 +421,11 @@ In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" 
 
 **What this framework does NOT do:**
 
-- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R){target="_blank"} (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/../../.claude/rules/look-ahead-bias-prevention.md){target="_blank"} rule)
-- Does not test for transaction cost sensitivity (handled by [`execution-delay-sensitivity`](https://github.com/JohnGavin/historical/blob/main/R/plan_alpha_decay.R){target="_blank"} — alpha decay analysis)
-- Does not test for parameter sensitivity (handled by [`backtest-robustness`](https://github.com/JohnGavin/historical/blob/main/R/plan_bootstrap_ci.R){target="_blank"} — bootstrap CI)
-- Does not test for temporal stability (handled by [`backtest-partitions`](https://github.com/JohnGavin/historical/blob/main/R/plan_partitions.R){target="_blank"} — train/test/validation split)
-- Does not test for cross-geography pervasiveness (requires international data — see [#58](https://github.com/JohnGavin/historical/issues/58){target="_blank"})
+- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R){target="_blank" rel="noopener noreferrer"} (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/../../.claude/rules/look-ahead-bias-prevention.md){target="_blank" rel="noopener noreferrer"} rule)
+- Does not test for transaction cost sensitivity (handled by [`execution-delay-sensitivity`](https://github.com/JohnGavin/historical/blob/main/R/plan_alpha_decay.R){target="_blank" rel="noopener noreferrer"} — alpha decay analysis)
+- Does not test for parameter sensitivity (handled by [`backtest-robustness`](https://github.com/JohnGavin/historical/blob/main/R/plan_bootstrap_ci.R){target="_blank" rel="noopener noreferrer"} — bootstrap CI)
+- Does not test for temporal stability (handled by [`backtest-partitions`](https://github.com/JohnGavin/historical/blob/main/R/plan_partitions.R){target="_blank" rel="noopener noreferrer"} — train/test/validation split)
+- Does not test for cross-geography pervasiveness (requires international data — see [#58](https://github.com/JohnGavin/historical/issues/58){target="_blank" rel="noopener noreferrer"})
 
 **References:**
 

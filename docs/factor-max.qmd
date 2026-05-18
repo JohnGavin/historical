@@ -63,7 +63,10 @@ format:
             if (!cell) return;
             var div = document.createElement('div');
             div.className = 'fullscreen-overlay';
-            div.innerHTML = '<img src="' + img.src + '">';
+            var clone = document.createElement('img');
+            clone.src = img.src;
+            clone.alt = img.alt || '';
+            div.appendChild(clone);
             div.addEventListener('click', function() { div.remove(); });
             document.body.appendChild(div);
           });
@@ -98,7 +101,7 @@ source(utils_path)
 ::: {.callout-note}
 ## Factor MAX Rotation
 
-Based on [Alpha Architect research](https://alphaarchitect.com/factor-max/){target="_blank"} (Dec 2025): the **maximum daily return within a month** predicts next-month factor returns. This signal captures investor underreaction to factor-level news and is distinct from factor momentum.
+Based on [Alpha Architect research](https://alphaarchitect.com/factor-max/){target="_blank" rel="noopener noreferrer"} (Dec 2025): the **maximum daily return within a month** predicts next-month factor returns. This signal captures investor underreaction to factor-level news and is distinct from factor momentum.
 
 **Implementation:** Each month, rank Fama-French factors by their MAX signal (highest single-day return that month). Go long the top 2 factors next month with equal weights. Rebalance monthly.
 :::
@@ -274,8 +277,8 @@ if (!is.null(params)) {
 
 #### References
 
-1. **Research:** [Factor MAX: A New Signal for Predicting Factor Returns](https://alphaarchitect.com/factor-max/){target="_blank"} — Alpha Architect (Dec 2025)
-2. **Data:** Fama-French factors via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank"}, accessed through `hd_factors()`
+1. **Research:** [Factor MAX: A New Signal for Predicting Factor Returns](https://alphaarchitect.com/factor-max/){target="_blank" rel="noopener noreferrer"} — Alpha Architect (Dec 2025)
+2. **Data:** Fama-French factors via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}, accessed through `hd_factors()`
 3. **Methodology:** Expanding window backtest with OOS holdout, same pattern as [Macro Defense Rotation](macro-defense-rotation.html)
 
 #### Build Info

@@ -88,7 +88,7 @@ tar_load(jst_summary)
 
 ## Overview
 
-The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.net/database/){target="_blank"} provides 150+ years of macroeconomic and financial data across `r jst_summary$n_countries` advanced economies, spanning `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]`. This vignette analyzes the equity premium (equity total return minus short-term government bill rate) to test the cross-geography pervasiveness criterion from the Swedroe evidence-based investing framework.
+The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.net/database/){target="_blank" rel="noopener noreferrer"} provides 150+ years of macroeconomic and financial data across `r jst_summary$n_countries` advanced economies, spanning `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]`. This vignette analyzes the equity premium (equity total return minus short-term government bill rate) to test the cross-geography pervasiveness criterion from the Swedroe evidence-based investing framework.
 
 **Key findings:**
 
@@ -96,7 +96,7 @@ The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.ne
 - USA equity premium from JST correlates `r jst_summary$correlation_with_ff` with the Fama-French market factor (1926-2020 overlap period)
 - Financial crises occurred in `r nrow(jst_crises)` countries, with total crisis-years ranging from `r min(jst_crises$n_crises)` to `r max(jst_crises$n_crises)` per country
 
-**Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241){target="_blank"}
+**Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241){target="_blank" rel="noopener noreferrer"}
 
 ---
 
