@@ -81,3 +81,5 @@ inst/extdata/vignettes/vig_setup.rds
 .claude/settings.local.json
 .claude/worktrees/
 .DS_Store
+# roborev tool's local runtime backlog dump (regenerated from ~/.roborev/reviews.db)
+.roborev/
