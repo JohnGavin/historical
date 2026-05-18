@@ -34,7 +34,7 @@ plan_kelly_variants <- function() {
           f <- mean(ret) / var(ret) * frac
           f <- max(0, min(1, f))
           strat_ret <- ret * f
-          m <- calc_backtest_metrics(strat_ret)
+          m <- annualise_returns(strat_ret)
           tibble(
             strategy   = strat,
             method     = paste0("Fractional (", frac * 100, "%)"),
@@ -65,7 +65,7 @@ plan_kelly_variants <- function() {
         bk  <- hd_kelly_bayesian(ret)
         f   <- max(0, min(1, bk$f_star))
         strat_ret <- ret * f
-        m <- calc_backtest_metrics(strat_ret)
+        m <- annualise_returns(strat_ret)
         tibble(
           strategy   = strat,
           method     = "Bayesian",
@@ -95,7 +95,7 @@ plan_kelly_variants <- function() {
         bk  <- hd_kelly_bounded(ret, fraction = 0.25)
         f   <- max(0, min(1, bk$f_star))
         strat_ret <- ret * f
-        m <- calc_backtest_metrics(strat_ret)
+        m <- annualise_returns(strat_ret)
         tibble(
           strategy   = strat,
           method     = "Bounded",

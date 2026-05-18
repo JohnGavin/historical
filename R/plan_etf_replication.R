@@ -217,8 +217,8 @@ plan_etf_replication <- function() {
       p <- etf_a_portfolio
       calc_m <- function(df, label) {
         n <- nrow(df); if (n < 6) return(NULL)
-        m      <- calc_backtest_metrics(df$port_ret)
-        m_long <- calc_backtest_metrics(df$long_only_ret)
+        m      <- annualise_returns(df$port_ret)
+        m_long <- annualise_returns(df$long_only_ret)
         tibble(period = label, months = n,
                cagr = m$cagr,
                long_cagr = m_long$cagr,
@@ -303,8 +303,8 @@ plan_etf_replication <- function() {
       p <- etf_b_portfolio
       calc_m <- function(df, label) {
         n <- nrow(df); if (n < 6) return(NULL)
-        m      <- calc_backtest_metrics(df$port_ret)
-        m_long <- calc_backtest_metrics(df$long_only_ret)
+        m      <- annualise_returns(df$port_ret)
+        m_long <- annualise_returns(df$long_only_ret)
         tibble(period = label, months = n,
                cagr = m$cagr,
                long_cagr = m_long$cagr,

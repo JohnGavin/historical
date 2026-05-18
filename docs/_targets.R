@@ -52,6 +52,9 @@ pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 # source(here::here("R/tail_keff.R"))
 source(here::here("R/vvix_analysis.R"))
 
+# Source canonical backtest annualisation helper (annualise_returns()) — used by plan_kelly_variants + plan_etf_replication
+source(here::here("R/utils_metrics.R"))
+
 # Source rolling utility helpers (must load before any analysis file that calls roll_mean_safe)
 source(here::here("R/utils_rolling.R"))
 
