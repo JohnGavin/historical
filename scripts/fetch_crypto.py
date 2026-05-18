@@ -80,14 +80,18 @@ def main():
     combined = pd.concat(frames, ignore_index=True)
 
     # Standardise columns
-    col_map = {"adj_close": "adjusted"}
-    combined = combined.rename(columns=col_map)
+    # Note: crypto data has no adjusted-close column (CoinGecko/Yahoo crypto never
+    # had one); the adj_close → adjusted rename was dead code and is removed.
+    # keep list below selects only columns that actually exist in crypto OHLCV.
 
     if hasattr(combined["date"].dtype, "tz") and combined["date"].dt.tz is not None:
         combined["date"] = combined["date"].dt.tz_localize(None)
 
     keep = ["date", "open", "high", "low", "close", "volume",
             "ticker", "source", "asset_class"]
+    required = {"date", "close", "ticker"}
+    missing = required - set(combined.columns)
+    assert not missing, f"Missing required columns after reshape: {missing}"
     combined = combined[[c for c in keep if c in combined.columns]]
     combined = combined.sort_values(["ticker", "date"]).reset_index(drop=True)
 

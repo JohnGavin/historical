@@ -74,6 +74,15 @@ def yahoo_ticker(ticker: str, dataset: str) -> str:
     return ticker
 
 
+def first_present(d: dict, *keys):
+    """Return the first value that is not None, ignoring falsy-but-valid 0.0."""
+    for k in keys:
+        v = d.get(k)
+        if v is not None:
+            return v
+    return None
+
+
 def fetch_yahoo_info(yahoo_sym: str) -> dict:
     """Fetch metadata from yfinance .info dict."""
     try:
@@ -97,9 +106,10 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
             "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
             # ETF-specific
             "expense_ratio": info.get("annualReportExpenseRatio"),
-            # Yield: use trailingAnnualDividendYield if available, else yield
-            # Flag yields > 20% as "synthetic" (likely options premium, not dividends)
-            "yield_pct": info.get("trailingAnnualDividendYield") or info.get("yield"),
+            # Yield: use trailingAnnualDividendYield if available, else yield.
+            # Use first_present (not `or`) so 0.0 (no dividend) is not treated as
+            # missing and does not fall through to the next key (#646 #667).
+            "yield_pct": first_present(info, "trailingAnnualDividendYield", "yield"),
             "yield_type": (
                 "synthetic" if (info.get("yield") or 0) > 0.20 else
                 "trailing" if info.get("trailingAnnualDividendYield") else
