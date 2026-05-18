@@ -3,8 +3,8 @@
 # Expanding window backtest with out-of-sample holdout.
 # All parameters in bt_params — change once, tar_make() rebuilds all.
 #
-# Usage:
-#   targets::tar_make(store = "docs/_targets_backtest")
+# Usage (from docs/ directory):
+#   targets::tar_make()
 
 plan_backtest <- function() {
   list(
