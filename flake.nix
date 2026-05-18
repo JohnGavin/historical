@@ -56,6 +56,7 @@
             HierPortfolios
             yfscreen
             slider
+            RcppRoll
           ];
         };
 
