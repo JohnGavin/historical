@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-05-18
+
+### Round 1 + Round 2 cleanup — 7 PRs, 3 issues, infrastructure for centralised llm + telemetry
+
+**Pre-Round (Opus inline + verification):**
+- \`270922d\` `chore(repo): gitignore .roborev/ + commit cakici-2024 coverage wiki` — T1 tidied 2 pre-existing untracked items. \`.roborev/\` is roborev's local runtime cache (regenerated from \`~/.roborev/reviews.db\`); cakici-2024-coverage-audit.md is real wiki content (8KB) authored 2026-05-16 that sat untracked across 2 sessions.
+- T2 roborev close: launched \`roborev compact\` (codex tokens, not Claude org) — first run closed 3 stale verdicts + consolidated others; open jobs 170 → 153. Second run found no remaining open jobs to consolidate. 75 remaining \"failed\" verdicts are historical findings on old commits; will be superseded by re-reviews or need per-id explicit close.
+- T5 #187 F1 (cash-proxy) decision: user marked STALE (\`cash\`/\`etf_m\`/\`cash_proxy\` identifiers not present in current code). Folded into T2 compact.
+
+**Round 1 — agent verification of cluster outputs (parallel sonnet dispatch):**
+- T6 (\`targets-runner\`) ran \`tar_make()\` against PR #188's momentum targets. Verdict: **WARN** — found a one-line bug. PR #188 raised the F6 overfit guard in \`decompose_momentum()\` to require \`lookback_months >= 25\`, but the caller in \`R/plan_momentum_decomposition.R:54\` still passed \`12\`. \`momentum_components\` errored on every \`tar_make()\` and 5 downstream targets cascaded (rendered vignettes silently served May-10 stale cache).
+- `#201` \`fix(momentum): bump lookback_months 12 → 25 to comply with PR #188 F6 guard\` — Opus inline 1-line fix to unblock the pipeline.
+- T7 (\`fixer\`) cluster D visual review: **partial PASS** — file-inspectable checks confirmed (XSS fix complete, shared partial wired with 2 call sites, \`_quarto.yml\` post-render contrast script registered with absolute path). Live render + \`check_dark_contrast.sh\` deferred (Bash blocked in fixer session; no local \`docs/*.html\` to point script at; recommend post-merge live-URL check on Pages deploy). Surfaced separately: \`docs/backtest.qmd\` doesn't exist (my brief named it but the actual file is \`docs/macro-defense-rotation.qmd\`).
+- T9 (\`fixer\`) PR-T pkgload sweep: actual scope **12× larger than estimated** (135 calls across 35 files, not 11+). Three files had elaborate \`reg <- pkgload::load_all(...)$env\` pattern needing \`reg$hd_*()\` → direct \`hd_*()\` rewrite.
+- `#202` \`refactor(targets): hoist pkgload::load_all() out of target bodies\` — single top-level \`pkgload::load_all()\` in \`docs/_targets.R\`, 36 files modified, 151 lines deleted. Approach (b): kept \`pkgload\` because \`requireNamespace(\"historicaldata\")\` returns FALSE in nix env. \`tar_validate()\` PASS + smoke build PASS.
+
+**Round 2 — infrastructure + correctness (4 parallel sonnet dispatch):**
+- `#204` \`feat(ctx): historicaldata API spec (ctx.yaml) for centralised llm sync\` — T3 created multi-document YAML (72 docs validated via per-doc \`yaml::yaml.load()\` after \`yaml.load_all\` API failure), 52 function records across 13 families, 7 data sources from \`hd_datasets()\`, schema reference: coMMpass.ctx.yaml v1.1. Companion \`inst/ctx/ctx-sync.md\` documents regeneration workflow.
+- `#205` \`feat(telemetry): export historical metrics to llmtelemetry dashboard\` — T4 new \`scripts/export_to_llmtelemetry.sh\` (187 lines) publishing 15 targets (leaderboard + 12 \`_metrics\` + strategy_names + strategy_correlation + pipeline_meta) to \`~/docs_gh/llmtelemetry/vignettes/data/historical/\`. Uses \`nix develop\`, DRY_RUN mode, idempotency via \`git diff\` + \`ls-files --others\`, \`tar_read_raw\` with \`tryCatch\` so missing targets skip gracefully. \`bash -n\` syntax check PASS. Mirrors \`~/.claude/scripts/export_and_deploy_data.sh\` from the llm project.
+- `#206` \`refactor(metrics): canonical calc_backtest_metrics() — compound annualisation (PR-R)\` — T8 extracted to \`R/utils_metrics.R\`; replaced 3 sites in \`plan_kelly_variants.R\` (was simple: \`mean/sd × √12\`) + 2 sites in \`plan_etf_replication.R\` (was already compound). 27/27 unit tests PASS. \`kv_*\` Sharpe values will shift DOWN slightly on next \`tar_make\` (compound CAGR < arithmetic-mean for mean-positive series); document in CHANGELOG once leaderboard rebuilds.
+- `#207` \`docs(prose): replace 19 hardcoded Sharpe/CAGR/DD values with safe_tar_read (L2)\` — T10 audit found **19 hardcoded values** vs the 6 originally scoped (13 additional discoveries). All 6 target fields verified to exist (\`drif_metrics\`, \`fm_metrics\`, \`stk_drif_metrics\`, \`stk_max_metrics\`, \`etf_a_metrics\`, \`etf_b_metrics\` × \`period\`/\`sharpe\`/\`cagr\`/\`vol\`/\`max_dd\`/\`long_cagr\`). \"42 features\" kept static per the \`dynamic-prose-values\` structural-fact exception with HTML comment.
+
+### Issues filed (3)
+
+- `#203` \`stk_universe\` Date/POSIXct \`Incompatible methods (\"Ops.POSIXt\", \"Ops.Date\")\` warning — surfaced by T6 during \`tar_make(stk_universe)\`; cross-references global \`data-validation-timeseries\` rule Section 9 (the silent failure mode).
+- `#208` docs narrative rewrite — **critical staleness surfaced by T10**: rendered vignettes now show CORRECT numbers next to potentially-WRONG interpretive claims (\"Stock DRIF has the best OOS Sharpe\" was based on old 0.79 — current value is -1.51; \"Stock MAX CAGR 12.1%\" → actual -18.7%; \"Factor MAX OOS Sharpe -0.36\" → actual +0.065). PR #207 fixes the numbers; this issue tracks the narrative re-framing.
+- `#209` llm \`local_ctx_sync()\` gap — T3 noted that the llm project's \`plan_pkgctx.R\` has no mechanism to ingest local project ctx.yaml files (only handles CRAN/Bioconductor/GitHub). Documented here for tracking; needs an issue on the llm repo proper.
+
+### Failed Approaches
+- **\`yaml::yaml.load_all()\` for multi-doc YAML validation** — the API I expected doesn't exist in this version of the yaml package. Worked around by splitting on \`---\` separators and calling \`yaml::yaml.load()\` per-doc. T3 agent's recommendation was wrong about the function name; my inline retry corrected it.
+- **\`check_dark_contrast.sh\` against local file URLs** — script requires a fetchable URL (curl-compatible) and doesn't handle \`file://\`. Deferred T7 contrast check to post-merge against the deployed Pages URL.
+- **Naive \`git pull --ff-only\` after the 4 Round 2 merges** — failed because origin had squashed merges while local had the original branch commit (from earlier fetch of \`docs/dynamic-prose-sharpe-values\`). Fixed via \`git reset --hard origin/main\`.
+
+### Accuracy / Metrics
+- 7 PRs merged: #201 + #202 + #204 + #205 + #206 + #207 + T1 commit \`270922d\`
+- 3 issues filed: #203 + #208 + #209
+- 5 momentum targets unblocked from May-10 stale-cache state (next \`tar_make()\` will rebuild)
+- New tests: 27 (T8 \`utils-metrics\`)
+- New exports: \`calc_backtest_metrics()\` from \`R/utils_metrics.R\` (PR #206)
+- New canonical API spec: \`ctx.yaml\` (~28.8 KB, 72 documents, 52 functions) for downstream llm consumption
+- New telemetry pipeline: \`scripts/export_to_llmtelemetry.sh\` (187 LOC) — first run will create \`historical/\` subdir in llmtelemetry
+- 4 worktrees cleaned (T9 orphan + 4 Round 2 returns); 4 stale \`worktree-agent-*\` local branches deleted
+
+### Known Limitations
+- **PR #207 staleness** — vignette numbers correct, but interpretive claims may not match. Tracked by #208 (docs/content rewrite).
+- **PR #205 telemetry not yet run** — \`DRY_RUN=1 ./scripts/export_to_llmtelemetry.sh\` not exercised; first session-end run will be the smoke test.
+- **PR #206 leaderboard not yet rebuilt** — Sharpe values from \`kv_*\` targets will shift on next \`tar_make\`; document the shift in CHANGELOG once that runs.
+- **PR #204 ctx.yaml not yet ingested by llm** — until llm's \`plan_pkgctx.R\` gets \`local_ctx_sync()\` (tracked by #209), manual copy required: \`cp ctx.yaml ~/docs_gh/proj/data/llm/content/inst/ctx/external/historicaldata@0.1.0.ctx.yaml\`.
+- **T7 cluster D contrast check still not run** — needs Pages deploy + URL invocation.
+- **\`roborev compact\` exhausted current open-jobs** — 75 \"failed\" verdicts on old commits remain in tracker; will need per-id explicit close or supersede via fresh review.
+
 ## 2026-05-17
 
 ### Roborev cluster sweep — 13 PRs, 4 issues, 4 worktree recoveries, ~7.5 MB freed
