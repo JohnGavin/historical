@@ -1,0 +1,786 @@
+---
+kind: context_header
+llm_instructions: >
+  This is an LLM-optimised API specification for the R package 'historicaldata'.
+  Use this context to write correct code using historicaldata functions.
+  Each 'function' record describes a public exported function with its signature,
+  arguments, and purpose. The 'package' record contains metadata and data-source
+  descriptions. All listed functions are part of the public API. The package
+  accesses financial data via DuckDB's native hf:// protocol against Parquet
+  files stored on Hugging Face Datasets — no data is bundled. Set the
+  HD_HF_REPO environment variable to override the default repo
+  (JohnGavin/finance-data). Set HD_CACHE_DIR to use a local cache.
+---
+kind: package
+schema_version: '1.1'
+name: historicaldata
+version: 0.1.0
+language: R
+description: >
+  Code-only R package providing access to historical OHLCV data for equities,
+  crypto, macro series, and factor returns. Data is stored as Parquet on
+  Hugging Face Datasets and queried via DuckDB hf:// with predicate pushdown.
+  No data is bundled — the package ships access functions and a dataset registry.
+last_synced: '2026-05-18'
+data_sources:
+  equity_daily:
+    url: hf://datasets/JohnGavin/finance-data/equity_daily.parquet
+    schema: [date, open, high, low, close, adjusted, volume, ticker, source, asset_class]
+    frequency: daily
+    description: US equities daily OHLCV (Yahoo Finance)
+  crypto_daily:
+    url: hf://datasets/JohnGavin/finance-data/crypto_daily.parquet
+    schema: [date, close, volume, market_cap, ticker, source, asset_class]
+    frequency: daily
+    description: Cryptocurrency daily prices (CoinGecko)
+  macro_daily:
+    url: hf://datasets/JohnGavin/finance-data/macro_daily.parquet
+    schema: [date, value, series_id, source]
+    frequency: mixed
+    description: FRED macro series (SP500, VIX, rates, GDP, CPI, etc.)
+  factors:
+    url: hf://datasets/JohnGavin/finance-data/factors.parquet
+    schema: [date, factor_name, value, dataset, frequency, source]
+    frequency: daily+monthly
+    description: Fama-French factors (FF3, FF5, Momentum, 1926+)
+  metadata:
+    url: hf://datasets/JohnGavin/finance-data/metadata.parquet
+    schema: [ticker, dataset, long_name, exchange, currency, instrument_type,
+             sector, industry, country, market_cap, volume_avg, fifty_two_week_high,
+             fifty_two_week_low, expense_ratio, yield_pct, category, fund_family,
+             nav_price, beta_3yr, ytd_return, three_yr_return, start_date, end_date,
+             total_obs, missing_pct]
+    frequency: static
+    description: Per-ticker metadata including exchange, sector, market cap, ETF fees/yield/returns, coverage stats
+  macro_vintages:
+    url: hf://datasets/JohnGavin/finance-data/macro_vintages.parquet
+    schema: [series_id, date, pub_date, value]
+    frequency: vintage
+    description: FRED macro revision history — value as known at each publication date (ALFRED API)
+  metadata_amendments:
+    url: hf://datasets/JohnGavin/finance-data/metadata_amendments.parquet
+    schema: [ticker, field, old_value, new_value, source, method, amended_at, amended_by, reversible]
+    frequency: append-only
+    description: PIT log of all metadata changes — computed fields, enrichments, corrections
+---
+kind: function
+name: hd_datasets
+exported: true
+signature: hd_datasets()
+returns: Named list of dataset metadata (url, schema, frequency, description) for each registered dataset
+family: discovery
+---
+kind: function
+name: hd_tickers
+exported: true
+signature: hd_tickers(dataset = "equity_daily")
+arguments:
+  dataset: Name of dataset from hd_datasets() (default "equity_daily")
+returns: Character vector of distinct ticker symbols in the dataset
+family: discovery
+---
+kind: function
+name: hd_macro_registry
+exported: true
+signature: hd_macro_registry()
+returns: >
+  Tibble with columns series_id, description, long_name, category, frequency,
+  forward_looking, market_implied, start_year, source_detail, source_type,
+  implied_from, liquidity for all 60+ macro/vol series including FRED, CBOE,
+  Eurex, and international vol indices.
+family: discovery
+---
+kind: function
+name: hd_macro_forward
+exported: true
+signature: hd_macro_forward()
+returns: Subset of hd_macro_registry() where forward_looking == TRUE
+family: discovery
+---
+kind: function
+name: hd_ohlcv
+exported: true
+signature: hd_ohlcv(ticker, from = NULL, to = NULL, dataset = NULL, local = FALSE, collect = TRUE)
+arguments:
+  ticker: Ticker symbol(s). Character scalar or vector. Single "AAPL" or batch c("AAPL","MSFT").
+  from: Start date (character or Date). Default no filter.
+  to: End date (character or Date). Default no filter.
+  dataset: Dataset name from registry. If NULL (default), auto-detected per ticker via detect_dataset().
+  local: If TRUE, query local cache instead of remote.
+  collect: If TRUE (default), materialise to tibble. If FALSE, return lazy duckplyr frame.
+returns: >
+  Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE) with OHLCV columns.
+  Mixed-dataset batches (e.g. c("AAPL","BTC")) are always materialised.
+family: data-access
+---
+kind: function
+name: hd_lazy
+exported: true
+signature: hd_lazy(dataset = "equity_daily", local = FALSE)
+arguments:
+  dataset: Dataset name from registry
+  local: If TRUE, use local cache
+returns: Unevaluated duckplyr lazy frame. Chain dplyr verbs then call collect().
+family: data-access
+---
+kind: function
+name: hd_macro
+exported: true
+signature: hd_macro(series_id, from = NULL, to = NULL, local = FALSE, collect = TRUE)
+arguments:
+  series_id: FRED series ID(s). Scalar or vector (e.g. "VIXCLS" or c("SP500","DGS10")).
+  from: Start date (character or Date). Default no filter.
+  to: End date (character or Date). Default no filter.
+  local: If TRUE, query local cache.
+  collect: If TRUE (default), materialise. If FALSE, return lazy frame.
+returns: Lazy duckplyr frame or tibble with columns date, value, series_id, source
+family: data-access
+---
+kind: function
+name: hd_macro_series
+exported: true
+signature: hd_macro_series(local = FALSE)
+arguments:
+  local: If TRUE, query local cache
+returns: Character vector of available FRED series IDs
+family: data-access
+---
+kind: function
+name: hd_factors
+exported: true
+signature: hd_factors(dataset = "FF3", frequency = "daily", from = NULL, to = NULL, local = FALSE, collect = TRUE)
+arguments:
+  dataset: Factor dataset "FF3", "FF5", or "Mom"
+  frequency: '"daily" or "monthly"'
+  from: Start date. Default no filter.
+  to: End date. Default no filter.
+  local: If TRUE, query local cache.
+  collect: If TRUE (default), materialise. If FALSE, return lazy frame.
+returns: Lazy duckplyr frame or tibble with columns date, factor_name, value, dataset, frequency, source
+family: data-access
+---
+kind: function
+name: hd_connect
+exported: true
+signature: hd_connect()
+returns: DBI connection to an ephemeral DuckDB instance with hf:// and httpfs support
+family: infrastructure
+---
+kind: function
+name: hd_connect_local
+exported: true
+signature: hd_connect_local(cache_dir = hd_cache_path())
+arguments:
+  cache_dir: Path to local cache directory (defaults to hd_cache_path())
+returns: DBI connection with parquet views registered for each cached dataset
+family: infrastructure
+---
+kind: function
+name: hd_cache_path
+exported: true
+signature: hd_cache_path()
+returns: >
+  Path to platform-appropriate cache directory. Reads HD_CACHE_DIR env var;
+  falls back to tools::R_user_dir("historicaldata","cache").
+family: infrastructure
+---
+kind: function
+name: hd_download
+exported: true
+signature: hd_download(dataset = NULL, force = FALSE)
+arguments:
+  dataset: Dataset name(s). If NULL, downloads all registered datasets.
+  force: If TRUE, re-download even if cached file exists.
+returns: Invisibly, named character vector of paths to cached parquet files
+family: infrastructure
+---
+kind: function
+name: hd_cache_clear
+exported: true
+signature: hd_cache_clear(dataset = NULL)
+arguments:
+  dataset: If NULL, clears all cached datasets. Otherwise clears named dataset(s).
+returns: Invisible NULL
+family: infrastructure
+---
+kind: function
+name: hd_search
+exported: true
+signature: hd_search(pattern, dataset = NULL, collect = TRUE)
+arguments:
+  pattern: Regex pattern (default) or glob (if contains * or ?)
+  dataset: Filter to one dataset (e.g. "equity_daily"). NULL = all.
+  collect: If TRUE (default), materialise. If FALSE, return lazy frame.
+returns: Tibble or lazy duckplyr frame of matching tickers with metadata columns
+family: discovery
+---
+kind: function
+name: hd_summary
+exported: true
+signature: hd_summary(collect = TRUE)
+arguments:
+  collect: If TRUE (default), materialise.
+returns: Tibble with dataset, n_tickers, total_obs, min_date, max_date, description
+family: discovery
+---
+kind: function
+name: hd_exchanges
+exported: true
+signature: hd_exchanges(dataset = NULL)
+arguments:
+  dataset: Filter to one dataset. NULL = all.
+returns: Tibble with exchange, full_exchange, n_tickers, datasets
+family: discovery
+---
+kind: function
+name: hd_ticker_meta
+exported: true
+signature: hd_ticker_meta(tickers, collect = TRUE)
+arguments:
+  tickers: Character vector of ticker symbols
+  collect: If TRUE (default), materialise.
+returns: Tibble with key metadata columns (ticker, long_name, currency, exchange, market_cap, volume_avg, yield_pct, beta_3yr, start_date, end_date, total_obs)
+family: discovery
+---
+kind: function
+name: hd_ticker_info
+exported: true
+signature: hd_ticker_info(ticker, collect = TRUE)
+arguments:
+  ticker: Ticker symbol (e.g. "AAPL", "BTC")
+  collect: If TRUE (default), materialise.
+returns: One-row tibble with all metadata columns for the given ticker
+family: discovery
+---
+kind: function
+name: hd_fred_meta
+exported: true
+signature: hd_fred_meta()
+returns: Tibble with series_id, frequency, units, title for common FRED macro series
+family: discovery
+---
+kind: function
+name: hd_ticker_groups
+exported: true
+signature: hd_ticker_groups()
+returns: Tibble with columns group, description, tickers (list-column of character vectors). Covers FAANG, Magnificent 7, sector ETFs, crypto groups, macro hedges, LSE ETFs.
+family: curated-groups
+---
+kind: function
+name: hd_group
+exported: true
+signature: hd_group(name)
+arguments:
+  name: Group name (e.g. "FAANG", "Magnificent 7", "Stablecoins"). See hd_ticker_groups().
+returns: Character vector of ticker symbols for the named group
+family: curated-groups
+---
+kind: function
+name: hd_jumps
+exported: true
+signature: hd_jumps(dataset = "equity_daily", threshold = 0.4, n = 100)
+arguments:
+  dataset: Dataset name (default "equity_daily")
+  threshold: Minimum absolute log return to flag (default 0.4 = ~50% price move)
+  n: Maximum number of jumps to return (default 100)
+returns: Tibble with ticker, date, prev_close, close, log_ret, pct_change
+family: quality-audit
+---
+kind: function
+name: hd_quality
+exported: true
+signature: hd_quality(dataset = "equity_daily", jump_threshold = 0.4)
+arguments:
+  dataset: Dataset name (default "equity_daily")
+  jump_threshold: Log return threshold for counting jumps (default 0.4)
+returns: Tibble with per-ticker quality metrics (n_obs, first_date, last_date, n_jumps, max_abs_log_ret, n_gaps_5d)
+family: quality-audit
+---
+kind: function
+name: hd_amendments
+exported: true
+signature: hd_amendments(ticker = NULL, collect = TRUE)
+arguments:
+  ticker: Filter to one ticker. NULL = all.
+  collect: If TRUE (default), materialise. If FALSE, return lazy frame.
+returns: Tibble or lazy frame with price amendment records (PIT tracking)
+family: quality-audit
+---
+kind: function
+name: hd_metadata_amendments
+exported: true
+signature: hd_metadata_amendments(ticker = NULL, field = NULL, collect = TRUE)
+arguments:
+  ticker: Filter to one ticker. NULL = all.
+  field: Filter to one field (e.g. "beta_3yr"). NULL = all.
+  collect: If TRUE (default), materialise. If FALSE, return lazy frame.
+returns: Tibble or lazy frame with metadata amendment PIT log (old/new values, source, method, timestamp)
+family: quality-audit
+---
+kind: function
+name: hd_top_by
+exported: true
+signature: hd_top_by(dataset, metric, n = 10, desc = TRUE)
+arguments:
+  dataset: Dataset name from registry
+  metric: Column name to rank by (e.g. "market_cap", "volume_avg")
+  n: Number of rows to return (default 10)
+  desc: If TRUE (default), return top-n descending.
+returns: Tibble of top-n tickers ranked by metric
+family: ranked
+---
+kind: function
+name: hd_most_volatile
+exported: true
+signature: hd_most_volatile(dataset = "equity_daily", n = 5, window_days = 21)
+arguments:
+  dataset: Dataset name (default "equity_daily")
+  n: Number of tickers to return (default 5)
+  window_days: Rolling window in days for volatility estimation (default 21)
+returns: Tibble of most volatile tickers with estimated annualised volatility
+family: ranked
+---
+kind: function
+name: hd_hac_tstat
+exported: true
+signature: hd_hac_tstat(r)
+arguments:
+  r: Numeric vector of returns (NAs removed internally)
+returns: >
+  Named list with t_stat (HAC t-statistic for H0: mean(r)==0), se_hac, mean_r,
+  T (observation count), lag_nw (Newey-West bandwidth). Returns NA components
+  if T < 10.
+family: falsification
+---
+kind: function
+name: hd_hac_sharpe
+exported: true
+signature: hd_hac_sharpe(r, ann_factor = 252)
+arguments:
+  r: Numeric vector of returns
+  ann_factor: Annualisation factor (default 252 for daily)
+returns: Named list with hac_tstat, annualised_mean, annualised_vol, naive_sharpe, lag_nw, T
+family: falsification
+---
+kind: function
+name: hd_null_env_white_noise
+exported: true
+signature: hd_null_env_white_noise(T_obs, M = 100, sigma_annual = 0.20, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length (post-discard).
+  M: Number of null series to generate (default 100)
+  sigma_annual: Annualised volatility (default 0.20)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors each of length T_obs (iid Gaussian null series)
+family: falsification
+---
+kind: function
+name: hd_null_env_regime_vol
+exported: true
+signature: hd_null_env_regime_vol(T_obs, M = 100, p_stay = 0.98, sigma_low = 0.10, sigma_high = 0.30, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length.
+  M: Number of null series (default 100)
+  p_stay: Probability of staying in current regime (default 0.98)
+  sigma_low: Annualised volatility in low-vol regime (default 0.10)
+  sigma_high: Annualised volatility in high-vol regime (default 0.30)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors — two-state Markov regime-switching null series with zero alpha
+family: falsification
+---
+kind: function
+name: hd_null_env_ma1
+exported: true
+signature: hd_null_env_ma1(T_obs, M = 100, theta = -0.5, sigma_annual = 0.20, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length.
+  M: Number of null series (default 100)
+  theta: MA(1) parameter for bid-ask bounce (default -0.5)
+  sigma_annual: Annualised innovation volatility (default 0.20)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors — MA(1) null series mimicking bid-ask microstructure
+family: falsification
+---
+kind: function
+name: hd_null_env_factor_null
+exported: true
+signature: hd_null_env_factor_null(T_obs, M = 100, beta = 1.0, sigma_f = 0.20, sigma_e = 0.10, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length.
+  M: Number of null series (default 100)
+  beta: Factor loading (default 1.0)
+  sigma_f: Annualised factor volatility (default 0.20)
+  sigma_e: Annualised idiosyncratic volatility (default 0.10)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors — r = beta*f + epsilon with zero alpha
+family: falsification
+---
+kind: function
+name: hd_null_env_garch11
+exported: true
+signature: hd_null_env_garch11(T_obs, M = 100, alpha_arch = 0.10, beta_garch = 0.85, sigma_annual = 0.20, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length.
+  M: Number of null series (default 100)
+  alpha_arch: ARCH parameter (default 0.10)
+  beta_garch: GARCH parameter (default 0.85)
+  sigma_annual: Annualised unconditional volatility (default 0.20)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors — GARCH(1,1) null series with 500-observation warmup, zero mean
+family: falsification
+---
+kind: function
+name: hd_null_env_gjr_garch
+exported: true
+signature: hd_null_env_gjr_garch(T_obs, M = 100, alpha_arch = 0.05, beta_garch = 0.85, gamma_gjr = 0.10, sigma_annual = 0.20, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length.
+  M: Number of null series (default 100)
+  alpha_arch: ARCH parameter (default 0.05)
+  beta_garch: GARCH parameter (default 0.85)
+  gamma_gjr: Leverage parameter (default 0.10)
+  sigma_annual: Annualised unconditional volatility (default 0.20)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors — GJR-GARCH null with asymmetric leverage effect, zero alpha
+family: falsification
+---
+kind: function
+name: hd_null_env_jump_diffusion
+exported: true
+signature: hd_null_env_jump_diffusion(T_obs, M = 100, lambda_annual = 5, mu_jump = 0, sigma_jump_annual = 0.10, sigma_annual = 0.20, seed = 42L)
+arguments:
+  T_obs: Integer. Target series length.
+  M: Number of null series (default 100)
+  lambda_annual: Expected jumps per year (default 5)
+  mu_jump: Mean log jump size (default 0)
+  sigma_jump_annual: Annualised jump size volatility (default 0.10)
+  sigma_annual: Annualised diffusion volatility (default 0.20)
+  seed: Random seed (default 42)
+returns: List of M numeric vectors — Merton jump-diffusion null, zero drift
+family: falsification
+---
+kind: function
+name: hd_null_rejection_rate
+exported: true
+signature: hd_null_rejection_rate(strategy_fn, null_series, alpha_level = 0.05)
+arguments:
+  strategy_fn: Function taking a numeric vector and returning a numeric t-statistic (or NA)
+  null_series: List of numeric vectors from any hd_null_env_* function
+  alpha_level: One-sided significance level (default 0.05)
+returns: >
+  Named list with rejection_rate, n_valid, threshold_binomial (exact binomial
+  95th-percentile), passes (logical: rejection_rate <= alpha_level*1.5), t_stats
+family: falsification
+---
+kind: function
+name: hd_keff
+exported: true
+signature: hd_keff(returns_mat)
+arguments:
+  returns_mat: Numeric matrix where columns are strategy return series (rows = time periods)
+returns: >
+  Named list with K_eff (effective number of independent strategies via eigenvalue
+  formula K^2/||Sigma||_F^2), K (total strategies), frobenius_norm_sq
+family: falsification
+---
+kind: function
+name: hd_delta_z
+exported: true
+signature: hd_delta_z(z_is, z_oos, K_eff, n_sim = 5000L, seed = 42L)
+arguments:
+  z_is: Numeric vector of in-sample HAC t-statistics across strategies
+  z_oos: Numeric vector of out-of-sample HAC t-statistics (same order as z_is)
+  K_eff: Effective number of independent strategies from hd_keff()
+  n_sim: Number of simulations for null distribution (default 5000)
+  seed: Random seed (default 42)
+returns: Named list with delta_z, z_star_is, z_star_oos, threshold_99, is_overfit (logical)
+family: falsification
+---
+kind: function
+name: hd_tail_keff
+exported: true
+signature: hd_tail_keff(returns_mat, q = 0.05)
+arguments:
+  returns_mat: Numeric matrix where columns are strategy return series, rows are time periods. Must have complete cases.
+  q: Quantile threshold defining the lower tail for crisis regime (default 0.05)
+returns: Named list with K_eff_crisis, K_eff_calm, n_crisis_days, n_calm_days, correlation_crisis, correlation_calm
+family: falsification
+---
+kind: function
+name: hd_crps_empirical
+exported: true
+signature: hd_crps_empirical(observed, forecast_samples, max_samples = 1000L)
+arguments:
+  observed: Scalar numeric. The realised observation.
+  forecast_samples: Numeric vector of simulated values from the predictive distribution (at least 2 required)
+  max_samples: Maximum samples for pairwise spread term (default 1000, limits memory use)
+returns: Scalar numeric CRPS value (non-negative). Returns NA_real_ if inputs insufficient.
+family: scoring
+---
+kind: function
+name: hd_crps_normal
+exported: true
+signature: hd_crps_normal(observed, mu, sigma)
+arguments:
+  observed: Scalar numeric. The realised observation.
+  mu: Scalar numeric. Forecast mean.
+  sigma: Scalar numeric. Forecast standard deviation (must be > 0).
+returns: Scalar numeric exact CRPS for a Gaussian forecast N(mu, sigma^2). Returns NA_real_ if sigma <= 0 or any input is NA.
+family: scoring
+---
+kind: function
+name: hd_crps_skill
+exported: true
+signature: hd_crps_skill(crps_model, crps_naive)
+arguments:
+  crps_model: Numeric scalar or vector. CRPS values for the model.
+  crps_naive: Numeric scalar or vector. CRPS values for the naive benchmark.
+returns: Scalar numeric skill score (1 - mean(crps_model)/mean(crps_naive)). Positive = skill over naive.
+family: scoring
+---
+kind: function
+name: hd_brier_score
+exported: true
+signature: hd_brier_score(observed_binary, forecast_prob)
+arguments:
+  observed_binary: Integer or numeric vector of binary outcomes (0 or 1)
+  forecast_prob: Numeric vector of probabilities in [0,1]
+returns: Scalar numeric Brier score in [0,1]. 0 = perfect, 0.25 = random 50/50. Returns NA_real_ if fewer than 2 complete pairs.
+family: scoring
+---
+kind: function
+name: hd_horizon_skill
+exported: true
+signature: hd_horizon_skill(returns, signal, horizons = 1:10, ann_factor = 252L)
+arguments:
+  returns: Numeric vector of period returns ordered chronologically
+  signal: Numeric vector of the same length as returns representing the forecast signal
+  horizons: Integer vector of forecast horizons in periods (default 1:10)
+  ann_factor: Annualisation factor (default 252L for daily; use 12L for monthly)
+returns: Tibble with columns horizon, rmse, correlation, n_obs — one row per horizon
+family: scoring
+---
+kind: function
+name: hd_kelly_bayesian
+exported: true
+signature: hd_kelly_bayesian(returns, prior_a = 1, prior_b = 1, fraction = 0.25)
+arguments:
+  returns: Numeric vector of returns
+  prior_a: Beta prior alpha for win probability (default 1)
+  prior_b: Beta prior beta for win probability (default 1)
+  fraction: Fraction of full Kelly to use (default 0.25 = quarter-Kelly)
+returns: Named numeric — Kelly fraction position size
+family: kelly
+---
+kind: function
+name: hd_kelly_rolling
+exported: true
+signature: hd_kelly_rolling(returns, window = 252L, fraction = 0.25)
+arguments:
+  returns: Numeric vector of returns
+  window: Rolling window in periods (default 252 trading days)
+  fraction: Kelly fraction multiplier (default 0.25)
+returns: Numeric vector of rolling Kelly position sizes
+family: kelly
+---
+kind: function
+name: hd_kelly_bounded
+exported: true
+signature: hd_kelly_bounded(returns, fraction = 0.25)
+arguments:
+  returns: Numeric vector of returns
+  fraction: Kelly fraction multiplier (default 0.25)
+returns: Named numeric — Kelly fraction position size bounded to [-1, 1]
+family: kelly
+---
+kind: function
+name: hd_macro_vintages
+exported: true
+signature: hd_macro_vintages(series_id, from = NULL, to = NULL, release = "all")
+arguments:
+  series_id: FRED series ID (scalar)
+  from: Start date. Default no filter.
+  to: End date. Default no filter.
+  release: Which release to return ("all", "first", or "latest")
+returns: Tibble with series_id, date, pub_date, value — point-in-time revision history
+family: vintages
+---
+kind: function
+name: hd_revision_analysis
+exported: true
+signature: hd_revision_analysis(series_id, from = "2000-01-01")
+arguments:
+  series_id: FRED series ID (scalar)
+  from: Start date for analysis (default "2000-01-01")
+returns: Tibble summarising revision magnitudes and patterns for the series
+family: vintages
+---
+kind: function
+name: hd_monthly_trades
+exported: true
+signature: hd_monthly_trades(monthly_ret)
+arguments:
+  monthly_ret: Named numeric vector of monthly returns (names = YYYY-MM)
+returns: Tibble of simulated monthly trades with entry/exit dates, return, P&L
+family: trades
+---
+kind: function
+name: hd_event_trades
+exported: true
+signature: hd_event_trades(daily_ret)
+arguments:
+  daily_ret: Named numeric vector of daily returns (names = dates)
+returns: Tibble of simulated event-driven trades based on daily return series
+family: trades
+---
+kind: function
+name: hd_shadow_trades
+exported: true
+signature: hd_shadow_trades(trades_df, ...)
+arguments:
+  trades_df: Trades tibble from hd_monthly_trades() or hd_event_trades()
+returns: Tibble of shadow/comparison trades for use in falsification comparisons
+family: trades
+---
+kind: function
+name: hd_trade_metrics
+exported: true
+signature: hd_trade_metrics(trades, ann_factor = 12L, n_years = NA_real_)
+arguments:
+  trades: Trades tibble (output of hd_monthly_trades or hd_event_trades)
+  ann_factor: Annualisation factor (default 12L for monthly trades)
+  n_years: Number of years for CAGR normalisation (NA_real_ = auto-compute)
+returns: Named list of performance metrics (CAGR, Sharpe, max drawdown, win rate, etc.)
+family: trades
+---
+kind: function
+name: hd_ecb
+exported: true
+signature: hd_ecb(series_key, start = "2000-01-01", end = NULL)
+arguments:
+  series_key: ECB Data Warehouse series key (e.g. "FM.B.U2.EUR.FR.BB.EURIBOR3MD_.HSTA")
+  start: Start date (default "2000-01-01")
+  end: End date (default NULL = today)
+returns: Tibble with date and value columns fetched from ECB Data Warehouse API
+family: external-data
+---
+kind: function
+name: hd_ecb_registry
+exported: true
+signature: hd_ecb_registry()
+returns: Tibble of common ECB series keys with labels (Euribor, ESTR, government yields, etc.)
+family: external-data
+---
+kind: function
+name: hd_guardian
+exported: true
+signature: hd_guardian(query, section = "business", ...)
+arguments:
+  query: Search query string
+  section: Guardian section to search (default "business")
+returns: Tibble of Guardian API article results (headline, date, url, section)
+family: external-data
+---
+kind: function
+name: hd_guardian_monthly
+exported: true
+signature: hd_guardian_monthly(query, section = "business", ...)
+arguments:
+  query: Search query string
+  section: Guardian section to search (default "business")
+returns: Tibble of monthly article counts for the query — useful for sentiment/news-volume signals
+family: external-data
+---
+kind: function
+name: hd_jst
+exported: true
+signature: hd_jst(cache = TRUE)
+arguments:
+  cache: If TRUE (default), cache the downloaded dataset locally
+returns: Tibble of Jorda-Schularick-Taylor macro-financial history dataset (17 countries, 1870-2020)
+family: external-data
+---
+kind: function
+name: hd_jst_variables
+exported: true
+signature: hd_jst_variables()
+returns: Tibble of JST variable definitions (name, description, units) for the Jorda-Schularick-Taylor dataset
+family: external-data
+---
+kind: function
+name: hd_alpaca_assets_snapshot
+exported: true
+signature: hd_alpaca_assets_snapshot(out_dir, ...)
+arguments:
+  out_dir: Output directory for the snapshot parquet file
+returns: Path to saved parquet file containing Alpaca assets snapshot
+family: external-data
+---
+kind: function
+name: hd_yahoo_screen_snapshot
+exported: true
+signature: hd_yahoo_screen_snapshot(region, ...)
+arguments:
+  region: Market region (e.g. "us", "gb")
+returns: Tibble of Yahoo Finance screener results for the region
+family: external-data
+---
+kind: function
+name: hd_is_online
+exported: true
+signature: hd_is_online()
+returns: Logical TRUE if the HuggingFace Datasets endpoint is reachable
+family: infrastructure
+---
+kind: function
+name: hd_sample_path
+exported: true
+signature: hd_sample_path(dataset)
+arguments:
+  dataset: Dataset name from registry
+returns: Path to bundled sample parquet file in inst/extdata/ for offline testing
+family: infrastructure
+---
+kind: function
+name: hd_results_schema
+exported: true
+signature: hd_results_schema()
+returns: Tibble with zero rows showing the expected schema for the strategy results database
+family: results-db
+---
+kind: function
+name: hd_results_append
+exported: true
+signature: hd_results_append(new_rows, results_dir = NULL)
+arguments:
+  new_rows: Tibble conforming to hd_results_schema()
+  results_dir: Directory for results parquet storage (NULL = default location)
+returns: Invisible path to the updated results parquet file
+family: results-db
+---
+kind: function
+name: hd_results_query
+exported: true
+signature: hd_results_query(results_dir = NULL)
+arguments:
+  results_dir: Directory for results parquet storage (NULL = default location)
+returns: Lazy duckplyr frame over the results database; call collect() to materialise
+family: results-db
+---
+kind: function
+name: hd_theme
+exported: true
+signature: hd_theme(base_size = 14)
+arguments:
+  base_size: Base font size in points (default 14)
+returns: ggplot2 theme object with consistent historicaldata chart styling
+family: visualisation
+---
+kind: function
+name: hd_palette
+exported: true
+signature: hd_palette(n = 10)
+arguments:
+  n: Number of colours to return (default 10)
+returns: Character vector of n hex colour codes from the package palette
+family: visualisation
