@@ -118,16 +118,20 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 | Finding | Evidence |
 |---------|----------|
 | Stock MAX has the highest raw CAGR (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`) | But with `r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$vol[m$period=="Full Period"]*100,0),"%") else "N/A" }` vol — risk-adjusted Sharpe is modest (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`) |
-| Factor DRIF has the best full-period Sharpe (`r { m <- safe_tar_read("drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`) | Stable signal from elastic net on 6 academic factors |
+| Factor DRIF has the highest full-period Sharpe among the four strategies (`r { m <- safe_tar_read("drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`) | Full-period covers the entire sample including Training. Validation Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
 | Stock DRIF full-period CAGR is only `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` | Elastic net regularisation is very aggressive at stock level |
 
 **Out-of-Sample / Validation**
 
+::: {.callout-warning}
+**Current Validation Sharpe (sealed partition):** `r { get_val <- function(tgt, col, per) { m <- safe_tar_read(tgt); v <- if (!is.null(m)) m[[col]][m$period == per] else numeric(0); if (length(v) == 1L) round(v, 2) else "N/A" }; paste0("Stock DRIF: ", get_val("stk_drif_metrics","sharpe","Validation"), " | Stock MAX: ", get_val("stk_max_metrics","sharpe","Validation"), " | Factor MAX: ", get_val("fm_metrics","sharpe","Validation"), " | Factor DRIF: ", get_val("drif_metrics","sharpe","Validation")) }`. All four strategies show negative Validation Sharpe in the post-rebuild pipeline. The Testing partition OOS results (below) reflect the calibration window used during strategy development, not the sealed evaluation.
+:::
+
 | Finding | Evidence |
 |---------|----------|
-| Stock DRIF has the best OOS Sharpe (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`) | Elastic net generalises well — low IS Sharpe but high OOS |
-| Factor MAX degrades OOS (Sharpe `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`) | Single-signal approach overfits at factor level |
-| Stock MAX OOS looks extreme (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Testing"]*100,0),"%") else "N/A" }` CAGR) | Driven by COVID recovery + meme stocks — not stable |
+| Stock DRIF showed the strongest Testing-period Sharpe during elastic net development (Testing Sharpe: `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`) | Validation Sharpe is now `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` — the elastic net that appeared to generalise in Testing has not held in the sealed Validation period |
+| Factor MAX Testing-period Sharpe: `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }` | Single-signal approach at factor level; Validation Sharpe: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
+| Stock MAX OOS CAGR looks extreme (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Testing"]*100,0),"%") else "N/A" }`) | Driven by COVID recovery + meme stocks — Validation CAGR: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }` |
 
 **Risk**
 
@@ -141,8 +145,8 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 
 | Finding | Evidence |
 |---------|----------|
-| DRIF > MAX at both levels (Sharpe, OOS) | Full daily return distribution captures more signal than single extreme |
-| Factor-level is more stable, stock-level has more upside | Classic diversification vs concentration tradeoff |
+| Full daily return distribution (42 features) carries more signal than single-day MAX on paper; whether this advantage persists in the Validation period requires checking the current metrics table | Factor-level Validation Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` vs Factor MAX Validation Sharpe: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
+| Factor-level shows lower volatility than stock-level across all periods | Classic diversification vs concentration tradeoff — confirmed by current metrics table |
 
 # Stock MAX
 
@@ -213,7 +217,7 @@ safe_tar_read("stk_max_vs_factor_plot")
 | | Detail |
 |--|--------|
 | **Pros** | Simple signal (one number per stock-month). High raw returns. Works across markets. |
-| **Cons** | Very high volatility (44%). Max drawdown -74%. Sensitive to extreme events. High turnover (~monthly full rebalance). |
+| **Cons** | Very high volatility (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$vol[m$period=="Full Period"]*100,0),"%") else "44%" }`). Max drawdown `r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$max_dd[m$period=="Full Period"]*100,0),"%") else "-74%" }`. Sensitive to extreme events. High turnover (~monthly full rebalance). |
 | **Works well** | High-volatility regimes (<abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> > 25). Small/mid-cap stocks with less analyst coverage. |
 | **Works badly** | Low-volatility, trending markets where MAX signals are noise. |
 | **Factor exposure** | Loads on size (small-cap tilt in D1), volatility, and short-term reversal. Partially explained by these factors — not pure alpha. |
@@ -278,9 +282,9 @@ if (!is.null(metrics)) {
 
 | | Detail |
 |--|--------|
-| **Pros (long-only)** | Uses full daily return information (42 features <!-- structural: 21 chronological + 21 rank daily returns — part of strategy definition, not a computed metric -->). Best OOS Sharpe (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`). Elastic net prevents overfitting. Long-only returns are positive across all periods. |
-| **Cons** | Weak in-sample long-short (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Training"]*100,1),"%") else "N/A" }` CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. |
-| **Works well** | When the cross-section is large (more stocks = better elastic net training). Post-2020 period. Long-only implementation avoids cost drag of short leg. |
+| **Pros (long-only)** | Uses full daily return information (42 features <!-- structural: 21 chronological + 21 rank daily returns — part of strategy definition, not a computed metric -->). Elastic net prevents overfitting. During strategy development (Testing period), showed Testing Sharpe of `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`. |
+| **Cons** | Weak in-sample long-short (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Training"]*100,1),"%") else "N/A" }` CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. Validation Sharpe `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` — generalisation to sealed Validation has not held. |
+| **Works well** | When the cross-section is large (more stocks = better elastic net training). Long-only implementation avoids cost drag of short leg. |
 | **Works badly** | Small universes (<100 stocks). Long-short after costs (D1-D10 spread insufficient to overcome 1.85%/month cost). |
 | **Factor exposure** | Lower factor loading than MAX (elastic net regularises out common factors). More likely to represent genuine alpha. |
 | **OOS > IS anomaly** | Possible explanations: universe composition change post-2010, elastic net needs many years to learn, or OOS window (62 months) is too short to be conclusive. |
@@ -308,7 +312,7 @@ if (!is.null(metrics)) {
 
 **Hypothesis:** XGBoost can capture non-linear relationships (interaction effects, threshold effects) that elastic net misses, while monotonic constraints preserve economic intuition.
 
-**Result:** XGBoost **underperforms** elastic net (-6.3% vs +1.3% full-period CAGR). The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.
+**Result:** XGBoost **underperforms** elastic net (XGBoost full-period CAGR: `r { m <- safe_tar_read("xgb_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "-6.3%" }` vs Elastic Net: `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "+1.3%" }`). The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.
 :::
 
 #### XGBoost vs Elastic Net
