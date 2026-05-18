@@ -55,6 +55,7 @@
             usethis
             HierPortfolios
             yfscreen
+            slider
           ];
         };
 
@@ -80,6 +81,30 @@
           ] ++ additionalTools;
 
           shellHook = ''
+            # ----------------------------------------------------------------
+            # Closure-rebuild: discard any inherited R_LIBS_SITE from outer
+            # nix shells (global nix-nested-shell-isolation rule, 2026-05-18).
+            # When this shell is entered from inside another nix-shell, the
+            # outer R_LIBS_SITE points at libraries compiled against a
+            # DIFFERENT R binary -> segfault on first native call
+            # (slider::slide_dbl, dplyr::mutate, glmnet, arrow, etc.).
+            # Fix: rebuild R_LIBS_SITE from this shell's own buildInputs
+            # closure, discarding all inherited paths. Closes #211.
+            # ----------------------------------------------------------------
+            R_LIBS_SITE=""
+            for pkg in $buildInputs; do
+              for dep in $(nix-store -qR "$pkg" 2>/dev/null); do
+                if [ -d "$dep/library" ]; then
+                  case ":$R_LIBS_SITE:" in
+                    *":$dep/library:"*) ;;
+                    *) R_LIBS_SITE="''${R_LIBS_SITE:+$R_LIBS_SITE:}$dep/library" ;;
+                  esac
+                fi
+              done
+            done
+            export R_LIBS_SITE
+            unset R_LIBS_USER
+            unset R_LIBS
             echo "=================================================="
             echo "T Project: historical_data"
             echo "=================================================="
