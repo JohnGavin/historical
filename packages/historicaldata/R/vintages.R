@@ -90,7 +90,13 @@ hd_revision_analysis <- function(series_id, from = "2000-01-01") {
   analysis <- reviser::get_revision_analysis(rev_data)
   first_efficient <- tryCatch(
     reviser::get_first_efficient_release(rev_data),
-    error = function(e) NULL
+    error = function(e) {
+      cli::cli_warn(c(
+        "!" = "vintages: get_first_efficient_release() failed for {.val {series_id}}",
+        "i" = "{conditionMessage(e)}"
+      ))
+      NULL
+    }
   )
 
   list(
