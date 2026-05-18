@@ -34,19 +34,16 @@ plan_kelly_variants <- function() {
           f <- mean(ret) / var(ret) * frac
           f <- max(0, min(1, f))
           strat_ret <- ret * f
-          n <- length(strat_ret)
+          m <- calc_backtest_metrics(strat_ret)
           tibble(
             strategy   = strat,
             method     = paste0("Fractional (", frac * 100, "%)"),
             fraction   = frac,
             f_star     = round(f, 4),
-            cagr_pct   = round((prod(1 + strat_ret)^(12 / n) - 1) * 100, 1),
-            vol_pct    = round(sd(strat_ret) * sqrt(12) * 100, 1),
-            sharpe     = round(mean(strat_ret) / sd(strat_ret) * sqrt(12), 2),
-            max_dd_pct = round(
-              min((cumprod(1 + strat_ret) -
-                     cummax(cumprod(1 + strat_ret))) /
-                    cummax(cumprod(1 + strat_ret))) * 100, 1),
+            cagr_pct   = round(m$cagr * 100, 1),
+            vol_pct    = round(m$vol * 100, 1),
+            sharpe     = round(m$sharpe, 2),
+            max_dd_pct = round(m$max_dd * 100, 1),
             bankrupt   = any(cumprod(1 + strat_ret) < 0.01)
           )
         })
@@ -68,19 +65,16 @@ plan_kelly_variants <- function() {
         bk  <- hd_kelly_bayesian(ret)
         f   <- max(0, min(1, bk$f_star))
         strat_ret <- ret * f
-        n <- length(strat_ret)
+        m <- calc_backtest_metrics(strat_ret)
         tibble(
           strategy   = strat,
           method     = "Bayesian",
           fraction   = NA_real_,
           f_star     = round(f, 4),
-          cagr_pct   = round((prod(1 + strat_ret)^(12 / n) - 1) * 100, 1),
-          vol_pct    = round(sd(strat_ret) * sqrt(12) * 100, 1),
-          sharpe     = round(mean(strat_ret) / sd(strat_ret) * sqrt(12), 2),
-          max_dd_pct = round(
-            min((cumprod(1 + strat_ret) -
-                   cummax(cumprod(1 + strat_ret))) /
-                  cummax(cumprod(1 + strat_ret))) * 100, 1),
+          cagr_pct   = round(m$cagr * 100, 1),
+          vol_pct    = round(m$vol * 100, 1),
+          sharpe     = round(m$sharpe, 2),
+          max_dd_pct = round(m$max_dd * 100, 1),
           bankrupt   = any(cumprod(1 + strat_ret) < 0.01)
         )
       })
@@ -101,19 +95,16 @@ plan_kelly_variants <- function() {
         bk  <- hd_kelly_bounded(ret, fraction = 0.25)
         f   <- max(0, min(1, bk$f_star))
         strat_ret <- ret * f
-        n <- length(strat_ret)
+        m <- calc_backtest_metrics(strat_ret)
         tibble(
           strategy   = strat,
           method     = "Bounded",
           fraction   = 0.25,
           f_star     = round(f, 4),
-          cagr_pct   = round((prod(1 + strat_ret)^(12 / n) - 1) * 100, 1),
-          vol_pct    = round(sd(strat_ret) * sqrt(12) * 100, 1),
-          sharpe     = round(mean(strat_ret) / sd(strat_ret) * sqrt(12), 2),
-          max_dd_pct = round(
-            min((cumprod(1 + strat_ret) -
-                   cummax(cumprod(1 + strat_ret))) /
-                  cummax(cumprod(1 + strat_ret))) * 100, 1),
+          cagr_pct   = round(m$cagr * 100, 1),
+          vol_pct    = round(m$vol * 100, 1),
+          sharpe     = round(m$sharpe, 2),
+          max_dd_pct = round(m$max_dd * 100, 1),
           bankrupt   = any(cumprod(1 + strat_ret) < 0.01)
         )
       })
