@@ -467,14 +467,19 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_vix_daily, {
       library(dplyr)
 
-      spy <- aw_daily_returns |> filter(ticker == "SPY") |> arrange(date)
+      # Coerce both sides to Date BEFORE joining: hd_macro() may return POSIXct,
+      # and a Date vs POSIXct left_join silently produces zero matches.
+      spy <- aw_daily_returns |>
+        filter(ticker == "SPY") |>
+        dplyr::mutate(date = as.Date(date)) |>
+        arrange(date)
       vix <- hd_macro("VIXCLS") |>
         select(date, vix = value) |>
+        dplyr::mutate(date = as.Date(date)) |>
         arrange(date)
 
       spy |>
-        left_join(vix, by = "date") |>
-        dplyr::mutate(date = as.Date(date, tz = "UTC"))
+        left_join(vix, by = "date")
     }),
 
     targets::tar_target(aw_practical_params, {
