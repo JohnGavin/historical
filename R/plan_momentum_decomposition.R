@@ -51,7 +51,7 @@ plan_momentum_decomposition <- function() {
           stock_returns = stock_returns_monthly,
           factor_returns = ff_5factors,
           industry_returns = ff_industries_12,
-          lookback_months = 12,
+          lookback_months = 25,
           min_obs = 6
         )
       }
