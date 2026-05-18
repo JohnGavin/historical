@@ -60,7 +60,7 @@ safe_tar_read("drif_cumret_plot")
 ```
 
 ::: {.fig-caption}
-**DRIF vs Market.** Y: growth of $1 (log scale). Blue = DRIF (top-2 factors by elastic net prediction, equal weight). Red = Market factor (Mkt-RF). Dashed line = OOS start (2020). Uses PCA-OLS fallback (glmnet not in current Nix shell). Source: Fama-French FF5 + Momentum via `hd_factors()`.
+**DRIF vs Market.** Y: growth of $1 (log scale). Blue = DRIF (top-2 factors by elastic net prediction, equal weight). Red = Market factor (Mkt-RF). Dashed line = OOS start (2020). Source: Fama-French FF5 + Momentum via `hd_factors()`.
 :::
 
 #### Metrics
@@ -161,7 +161,7 @@ Our factor-level implementation applies the same logic: the sequence of daily fa
 1. **Research:** [A Unified Framework for Anomalies based on Daily Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"} — Alpha Architect (2026)
 2. **Comparison:** [Factor MAX](factor-max.html) — simpler signal using only max daily return
 3. **Data:** FF5 + Momentum via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}
-4. **Methodology:** Expanding window, PCA-OLS (glmnet unavailable in current Nix shell)
+4. **Methodology:** Expanding window, elastic net (glmnet) factor selection, equal-weight top-2
 
 #### Build Info
 

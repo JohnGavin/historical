@@ -300,7 +300,7 @@ if (!is.null(ecb_raw)) {
       style = "caption-side: top; text-align: left;",
       htmltools::HTML(paste0(
         "Country-level CISS: systemic stress per country (daily, 2000-2026). ",
-        "Italy and France peaked during the eurozone debt crisis (2011-2012). All countries peaked during GFC (2008). ",
+        "Peak dates per country are shown in the Max date column. ",
         "The ECB also computes a <strong>US CISS</strong> for cross-Atlantic comparison — a potential overlay signal for US equities too. ",
         "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()</a>. ",
         "Reference: <a href='https://www.ecb.europa.eu/stats/macroprudential_indicators/systemic_risk/html/index.en.html' target='_blank'>ECB CISS dashboard</a>."
