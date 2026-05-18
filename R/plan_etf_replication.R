@@ -217,12 +217,14 @@ plan_etf_replication <- function() {
       p <- etf_a_portfolio
       calc_m <- function(df, label) {
         n <- nrow(df); if (n < 6) return(NULL)
+        m      <- calc_backtest_metrics(df$port_ret)
+        m_long <- calc_backtest_metrics(df$long_only_ret)
         tibble(period = label, months = n,
-               cagr = prod(1 + df$port_ret)^(12/n) - 1,
-               long_cagr = prod(1 + df$long_only_ret)^(12/n) - 1,
-               vol = sd(df$port_ret) * sqrt(12),
-               sharpe = (prod(1 + df$port_ret)^(12/n) - 1) / (sd(df$port_ret) * sqrt(12)),
-               max_dd = min(cumprod(1 + df$port_ret) / cummax(cumprod(1 + df$port_ret)) - 1))
+               cagr = m$cagr,
+               long_cagr = m_long$cagr,
+               vol = m$vol,
+               sharpe = m$sharpe,
+               max_dd = m$max_dd)
       }
       bind_rows(
         calc_m(p |> filter(date <= etf_params$is_end), "Training"),
@@ -301,12 +303,14 @@ plan_etf_replication <- function() {
       p <- etf_b_portfolio
       calc_m <- function(df, label) {
         n <- nrow(df); if (n < 6) return(NULL)
+        m      <- calc_backtest_metrics(df$port_ret)
+        m_long <- calc_backtest_metrics(df$long_only_ret)
         tibble(period = label, months = n,
-               cagr = prod(1 + df$port_ret)^(12/n) - 1,
-               long_cagr = prod(1 + df$long_only_ret)^(12/n) - 1,
-               vol = sd(df$port_ret) * sqrt(12),
-               sharpe = (prod(1 + df$port_ret)^(12/n) - 1) / (sd(df$port_ret) * sqrt(12)),
-               max_dd = min(cumprod(1 + df$port_ret) / cummax(cumprod(1 + df$port_ret)) - 1))
+               cagr = m$cagr,
+               long_cagr = m_long$cagr,
+               vol = m$vol,
+               sharpe = m$sharpe,
+               max_dd = m$max_dd)
       }
       bind_rows(
         calc_m(p |> filter(date <= etf_params$is_end), "Training"),
