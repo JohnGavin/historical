@@ -37,6 +37,13 @@ tar_option_set(
   format = "rds"
 )
 
+# Load local historicaldata package once at pipeline parse time.
+# historicaldata is not installed in the nix env — pkgload::load_all() is
+# the correct mechanism. Running it here (once) replaces 135 per-target
+# pkgload::load_all() calls that were wasteful and side-effectful.
+# See namespace-discipline rule and roborev PR-T.
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
 # Source Tier 1 & 2 gap functions
 # TODO: create liquidity.R, tracking_error.R, regime_correlations.R, tail_keff.R
 # source(here::here("R/liquidity.R"))

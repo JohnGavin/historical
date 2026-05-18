@@ -57,7 +57,6 @@ plan_integration <- function() {
     targets::tar_target(
       spy_returns,
       {
-        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
         hd_ohlcv("SPY") |>
           dplyr::arrange(date) |>
           dplyr::mutate(
@@ -82,7 +81,6 @@ plan_integration <- function() {
           )
 
         # Get benchmark asset returns (SPY, TLT, GLD, DBC)
-        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
         benchmark_assets <- hd_ohlcv(c("SPY", "TLT", "GLD", "DBC")) |>
           dplyr::select(date, ticker, adjusted) |>
           dplyr::arrange(ticker, date) |>
@@ -111,7 +109,6 @@ plan_integration <- function() {
     targets::tar_target(
       equity_with_adv,
       {
-        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
         # Get SPY as example - full universe would be hd_universe("equity")
         # but that's 50+ tickers and slow for demo
         equity_data <- hd_ohlcv("SPY") |>

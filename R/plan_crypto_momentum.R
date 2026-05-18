@@ -200,7 +200,6 @@ plan_crypto_momentum <- function() {
       ) |>
         select(date, strategy, cum_ret_net)
 
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       ggplot(combined, aes(date, cum_ret_net, color = strategy)) +
         geom_line(linewidth = 0.7) +
@@ -251,7 +250,6 @@ plan_crypto_momentum <- function() {
       ) |>
         select(date, strategy, roll_sharpe)
 
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       ggplot(combined, aes(date, roll_sharpe, color = strategy)) +
         geom_line(linewidth = 0.7) +

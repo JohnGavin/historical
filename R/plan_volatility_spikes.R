@@ -9,7 +9,6 @@ plan_volatility_spikes <- function() {
       vix_daily,
       {
         # VIX comes from FRED via historicaldata package (series VIXCLS)
-        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
         hd_macro("VIXCLS") |>
           dplyr::select(date, vix = value) |>

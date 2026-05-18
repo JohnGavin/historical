@@ -47,7 +47,6 @@ plan_mean_reversion <- function() {
 
     # ── Data: daily returns for universe ────────────────────────
     targets::tar_target(mr_daily, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       purrr::map_dfr(mr_params$tickers, function(tkr) {
@@ -237,7 +236,6 @@ plan_mean_reversion <- function() {
     targets::tar_target(mr_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       # SPY benchmark
       spy <- hd_ohlcv("SPY", from = as.character(mr_params$start_date)) |>

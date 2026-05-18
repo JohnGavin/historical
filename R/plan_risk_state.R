@@ -39,7 +39,6 @@ plan_risk_state <- function() {
 
     # ── Data: fetch and join all signals ─────────────────────────
     targets::tar_target(rsc_data, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # SPY daily returns
@@ -246,7 +245,6 @@ plan_risk_state <- function() {
 
     # ── Metrics: summary per partition for all strategy variants ──
     targets::tar_target(rsc_metrics, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       calc_metrics <- function(ret_vec, label, strategy_name) {
@@ -315,7 +313,6 @@ plan_risk_state <- function() {
 
     # ── Plot: equity curve SPY buy-and-hold vs SPY with overlay ──
     targets::tar_target(rsc_plot, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(ggplot2)
       library(dplyr)
 
@@ -372,7 +369,6 @@ plan_risk_state <- function() {
 
     # ── Plot: three-panel signal chart ───────────────────────────
     targets::tar_target(rsc_plot_signals, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(ggplot2)
       library(dplyr)
 
@@ -422,7 +418,6 @@ plan_risk_state <- function() {
 
     # ── Plot: overlay comparison DRIF and Factor MAX ──────────────
     targets::tar_target(rsc_overlay_comparison, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(ggplot2)
       library(dplyr)
 
@@ -505,7 +500,6 @@ plan_risk_state <- function() {
 
     # ── Alpha decay: delay signals 1-10 days ─────────────────────
     targets::tar_target(rsc_alpha_decay, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Re-run SPY overlay with signals delayed by d additional days
@@ -590,7 +584,6 @@ plan_risk_state <- function() {
 
     # ── Subperiod analysis: three sub-periods ────────────────────
     targets::tar_target(rsc_subperiod, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       calc_sp <- function(data, label) {

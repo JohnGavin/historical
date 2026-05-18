@@ -119,7 +119,6 @@ plan_kelly <- function() {
     targets::tar_target(kelly_comparison_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       kelly_metrics |>
         ggplot(aes(x = strategy, y = sharpe, fill = sizing)) +

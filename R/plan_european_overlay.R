@@ -39,7 +39,6 @@ plan_european_overlay <- function() {
 
     # ── Data: fetch European ETF returns + join RSC regime ───────────────
     targets::tar_target(eur_daily, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # rsc_regime already has: date, regime, exposure, rf_lag, spy_ret etc.
@@ -110,7 +109,6 @@ plan_european_overlay <- function() {
 
     # ── Results: overlay metrics per EU ticker ───────────────────────────
     targets::tar_target(eur_results, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       calc_metrics <- function(ret_vec, label, strategy_name, ticker) {
@@ -162,7 +160,6 @@ plan_european_overlay <- function() {
 
     # ── Fama-French regression: falsification for each EU ticker ─────────
     targets::tar_target(eur_ff_regression, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Fetch FF5 + Momentum daily factors (same as plan_falsification.R)
@@ -215,7 +212,6 @@ plan_european_overlay <- function() {
 
     # ── Comparison: US (SPY) vs European overlays ────────────────────────
     targets::tar_target(eur_comparison, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # SPY overlay OOS metrics from rsc_portfolio (Full period)
@@ -295,7 +291,6 @@ plan_european_overlay <- function() {
 
     # ── CISS overlay results ───────────────────────────────────────────
     targets::tar_target(eur_ciss_results, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       if (is.null(eur_ciss_regime)) return(NULL)

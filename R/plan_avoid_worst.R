@@ -22,7 +22,6 @@ plan_avoid_worst <- function() {
     # ── Daily returns: index ETFs ───────────────────────────────
     targets::tar_target(aw_daily_returns, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       purrr::map_dfr(aw_params$index_tickers, function(tkr) {
         d <- hd_ohlcv(tkr) |>
@@ -41,7 +40,6 @@ plan_avoid_worst <- function() {
     # ── Daily returns: Fama-French Mkt-RF (1926+) ──────────────
     targets::tar_target(aw_daily_ff, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       ff <- hd_factors() |>
         filter(factor_name == "Mkt-RF", frequency == "daily") |>
@@ -149,7 +147,6 @@ plan_avoid_worst <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       spy <- aw_daily_returns |> filter(ticker == "SPY") |> arrange(date)
       ret <- spy$ret
@@ -263,7 +260,6 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_clustering_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       worst <- aw_clustering$worst |> mutate(type = "10 Worst Days")
       best <- aw_clustering$best |> mutate(type = "10 Best Days")
@@ -377,7 +373,6 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_rolling_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       plot_data <- aw_rolling |>
         select(date, `All Days` = ret_all,
@@ -398,7 +393,6 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_net_benefit_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       plot_data <- aw_rolling |>
         select(date,
@@ -472,7 +466,6 @@ plan_avoid_worst <- function() {
     # for a cooling-off period until vol subsides
     targets::tar_target(aw_vix_daily, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       spy <- aw_daily_returns |> filter(ticker == "SPY") |> arrange(date)
       vix <- hd_macro("VIXCLS") |>
@@ -561,7 +554,6 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_practical_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       plot_data <- aw_practical_backtest |>
         select(date,
@@ -759,7 +751,6 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_walkforward_curve, {
       library(dplyr)
       library(ggplot2)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       d <- aw_vix_daily |> filter(!is.na(vix), !is.na(ret))
       wf <- aw_walkforward
@@ -911,7 +902,6 @@ plan_avoid_worst <- function() {
     # ── Cross-market validation (#45) ───────────────────────────
     targets::tar_target(aw_cross_market, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       vix <- hd_macro("VIXCLS") |> select(date, vix = value) |> arrange(date)
 

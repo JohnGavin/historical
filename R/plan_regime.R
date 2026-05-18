@@ -214,7 +214,6 @@ plan_regime <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       # Build shading rectangles for high-risk periods
       high_risk_periods <- regime_portfolio |>

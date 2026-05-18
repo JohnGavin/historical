@@ -18,7 +18,6 @@ plan_kelly_variants <- function() {
     }),
 
     targets::tar_target(kv_sweep, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       strategies <- list(
@@ -55,7 +54,6 @@ plan_kelly_variants <- function() {
     }),
 
     targets::tar_target(kv_bayesian, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       strategies <- list(
@@ -89,7 +87,6 @@ plan_kelly_variants <- function() {
     }),
 
     targets::tar_target(kv_bounded, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       strategies <- list(

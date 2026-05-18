@@ -55,7 +55,6 @@ plan_circuit_breaker <- function() {
 
     # ── Raw data: fetch all FRED series ──────────────────────────
     targets::tar_target(cb_data, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       results <- purrr::map(cb_params$fed_series, function(sid) {
@@ -241,7 +240,6 @@ plan_circuit_breaker <- function() {
     # Compare to unconditional SPY returns over the same holding windows
     # to see whether activations are a buy or sell signal.
     targets::tar_target(cb_vs_spy, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # SPY daily returns (close-to-close adjusted)
@@ -320,7 +318,6 @@ plan_circuit_breaker <- function() {
     targets::tar_target(cb_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       # Normalise each series to index = 1 at the start so they fit on
       # one panel despite different units ($B vs $T etc.)

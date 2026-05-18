@@ -73,7 +73,6 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_factors, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       ff5 <- hd_factors(dataset = "FF5", frequency = "daily")
@@ -85,7 +84,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_rf, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       hd_factors(dataset = "FF5", frequency = "daily") |>
@@ -100,12 +98,10 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_hac_sharpe(fals_avoid_worst_input$strategy_ret)
     }),
 
     targets::tar_target(fals_wn_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret    <- fals_avoid_worst_input$strategy_ret
       T_obs  <- sum(!is.na(ret))
       nulls  <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -117,7 +113,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_rv_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_avoid_worst_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -129,7 +124,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ma1_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_avoid_worst_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -141,7 +135,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_fn_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_avoid_worst_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -153,7 +146,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_garch_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_avoid_worst_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -165,7 +157,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_gjr_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_avoid_worst_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -177,7 +168,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ff_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_factor_null_test(
         strategy_daily = fals_avoid_worst_input,
         rf_daily       = fals_rf,
@@ -191,12 +181,10 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_hac_sharpe(fals_drif_input$strategy_ret)
     }),
 
     targets::tar_target(fals_wn_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_drif_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -208,7 +196,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_rv_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_drif_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -220,7 +207,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ma1_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_drif_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -232,7 +218,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_fn_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_drif_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -244,7 +229,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_garch_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_drif_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -256,7 +240,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_gjr_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_drif_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -268,7 +251,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ff_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_factor_null_test(
         strategy_daily = fals_drif_input,
         rf_daily       = fals_rf,
@@ -282,12 +264,10 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_hac_sharpe(fals_fac_max_input$strategy_ret)
     }),
 
     targets::tar_target(fals_wn_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_fac_max_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -299,7 +279,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_rv_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_fac_max_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -311,7 +290,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ma1_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_fac_max_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -323,7 +301,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_fn_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_fac_max_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -335,7 +312,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_garch_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_fac_max_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -347,7 +323,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_gjr_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_fac_max_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -359,7 +334,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ff_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_factor_null_test(
         strategy_daily = fals_fac_max_input,
         rf_daily       = fals_rf,
@@ -373,12 +347,10 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_hac_sharpe(fals_rsc_input$strategy_ret)
     }),
 
     targets::tar_target(fals_wn_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret    <- fals_rsc_input$strategy_ret
       T_obs  <- sum(!is.na(ret))
       nulls  <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -390,7 +362,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_rv_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_rsc_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -402,7 +373,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ma1_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_rsc_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -414,7 +384,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_fn_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_rsc_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -426,7 +395,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_garch_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_rsc_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -438,7 +406,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_gjr_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_rsc_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -450,7 +417,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ff_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_factor_null_test(
         strategy_daily = fals_rsc_input,
         rf_daily       = fals_rf,
@@ -464,12 +430,10 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_hac_sharpe(fals_ltr_input$strategy_ret)
     }),
 
     targets::tar_target(fals_wn_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_ltr_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -481,7 +445,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_rv_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_ltr_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -493,7 +456,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ma1_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_ltr_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -505,7 +467,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_fn_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_ltr_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -517,7 +478,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_garch_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_ltr_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -529,7 +489,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_gjr_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       ret   <- fals_ltr_input$strategy_ret
       T_obs <- sum(!is.na(ret))
       nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
@@ -541,7 +500,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_ff_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_factor_null_test(
         strategy_daily = fals_ltr_input,
         rf_daily       = fals_rf,
@@ -555,7 +513,6 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_keff, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       all_rets <- Reduce(
@@ -574,7 +531,6 @@ plan_falsification <- function() {
     }),
 
     targets::tar_target(fals_delta_z, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       z_is <- c(
         fals_hac_avoid_worst$hac_tstat,
@@ -600,7 +556,6 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_tail_independence, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       aligned <- align_period(
         series = list(
@@ -652,23 +607,18 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_dsr_avoid_worst, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_deflated_sharpe(fals_avoid_worst_input$strategy_ret, K_trials = 5L, ann_factor = 252L)
     }),
     targets::tar_target(fals_dsr_drif, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_deflated_sharpe(fals_drif_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
     }),
     targets::tar_target(fals_dsr_fac_max, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_deflated_sharpe(fals_fac_max_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
     }),
     targets::tar_target(fals_dsr_rsc, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_deflated_sharpe(fals_rsc_input$strategy_ret, K_trials = 5L, ann_factor = 252L)
     }),
     targets::tar_target(fals_dsr_ltr, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       hd_deflated_sharpe(fals_ltr_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
     }),
 
@@ -795,7 +745,6 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_spy_ret, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       hd_ohlcv("SPY") |>
@@ -811,7 +760,6 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_results_db, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # ── Helper: drawdown analysis ──────────────────────────────────

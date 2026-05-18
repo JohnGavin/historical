@@ -141,7 +141,6 @@ plan_nyt_sentiment <- function() {
       }
 
       # Load SPY daily OHLCV
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       spy_daily <- tryCatch(
         hd_ohlcv("SPY") |>
