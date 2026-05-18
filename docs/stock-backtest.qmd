@@ -117,25 +117,25 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 
 | Finding | Evidence |
 |---------|----------|
-| Stock MAX has the highest raw CAGR (12.1%) | But with 44% vol — risk-adjusted Sharpe is modest (0.23) |
-| Factor DRIF has the best full-period Sharpe (0.26) | Stable signal from elastic net on 6 academic factors |
-| Stock DRIF full-period CAGR is only 1.3% | Elastic net regularisation is very aggressive at stock level |
+| Stock MAX has the highest raw CAGR (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`) | But with `r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$vol[m$period=="Full Period"]*100,0),"%") else "N/A" }` vol — risk-adjusted Sharpe is modest (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`) |
+| Factor DRIF has the best full-period Sharpe (`r { m <- safe_tar_read("drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`) | Stable signal from elastic net on 6 academic factors |
+| Stock DRIF full-period CAGR is only `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` | Elastic net regularisation is very aggressive at stock level |
 
 **Out-of-Sample / Validation**
 
 | Finding | Evidence |
 |---------|----------|
-| Stock DRIF has the best OOS Sharpe (0.79) | Elastic net generalises well — low IS Sharpe but high OOS |
-| Factor MAX degrades OOS (Sharpe -0.36) | Single-signal approach overfits at factor level |
-| Stock MAX OOS looks extreme (45% CAGR) | Driven by COVID recovery + meme stocks — not stable |
+| Stock DRIF has the best OOS Sharpe (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`) | Elastic net generalises well — low IS Sharpe but high OOS |
+| Factor MAX degrades OOS (Sharpe `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`) | Single-signal approach overfits at factor level |
+| Stock MAX OOS looks extreme (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Testing"]*100,0),"%") else "N/A" }` CAGR) | Driven by COVID recovery + meme stocks — not stable |
 
 **Risk**
 
 | Finding | Evidence |
 |---------|----------|
-| Stock-level strategies have 2-5x higher vol than factor-level | 44% vol (stock MAX) vs 9% (factor MAX) |
-| Stock MAX max drawdown is -74% | Unacceptable for most allocators |
-| Factor strategies have drawdowns <36% | Lower risk but lower return |
+| Stock-level strategies have 2-5x higher vol than factor-level | `r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$vol[m$period=="Full Period"]*100,0),"%") else "N/A" }` vol (stock MAX) vs `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) paste0(round(m$vol[m$period=="Full Period"]*100,0),"%") else "N/A" }` (factor MAX) |
+| Stock MAX max drawdown is `r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$max_dd[m$period=="Full Period"]*100,0),"%") else "N/A" }` | Unacceptable for most allocators |
+| Factor strategies have drawdowns `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) paste0("<",round(abs(m$max_dd[m$period=="Full Period"])*100,0),"%") else "<36%" }` | Lower risk but lower return |
 
 **Robustness**
 
@@ -278,8 +278,8 @@ if (!is.null(metrics)) {
 
 | | Detail |
 |--|--------|
-| **Pros (long-only)** | Uses full daily return information (42 features). Best OOS Sharpe (0.79). Elastic net prevents overfitting. Long-only returns are positive across all periods. |
-| **Cons** | Weak in-sample long-short (1.3% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. |
+| **Pros (long-only)** | Uses full daily return information (42 features <!-- structural: 21 chronological + 21 rank daily returns — part of strategy definition, not a computed metric -->). Best OOS Sharpe (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`). Elastic net prevents overfitting. Long-only returns are positive across all periods. |
+| **Cons** | Weak in-sample long-short (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Training"]*100,1),"%") else "N/A" }` CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. |
 | **Works well** | When the cross-section is large (more stocks = better elastic net training). Post-2020 period. Long-only implementation avoids cost drag of short leg. |
 | **Works badly** | Small universes (<100 stocks). Long-short after costs (D1-D10 spread insufficient to overcome 1.85%/month cost). |
 | **Factor exposure** | Lower factor loading than MAX (elastic net regularises out common factors). More likely to represent genuine alpha. |
@@ -376,7 +376,7 @@ Stock-level long-short strategies lose ~20%/yr after realistic costs (1.85%/mont
 | **Training data** | 2013-2026 (ETF inception) | 1963-2026 (academic factors) |
 | **Key risk** | Short history (10 ETFs × 10 years) | Weak mapping (VLUE/HML cor = 0.34) |
 
-**Result:** Long-short fails for both. **Long-only works:** 13.4% CAGR (A) and 12.6% CAGR (B). The signal identifies winners, not losers.
+**Result:** Long-short fails for both. **Long-only works:** `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` CAGR (A) and `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` CAGR (B). The signal identifies winners, not losers.
 :::
 
 #### Equity Curves
@@ -387,7 +387,7 @@ safe_tar_read("etf_comparison_plot")
 ```
 
 ::: {.fig-caption}
-**ETF replication: Approach A vs B (long-short, net of costs).** Both approaches struggle as long-short because all factor ETFs have positive market beta — shorting one while longing another is mostly a bet on relative factor performance. The long-only legs (not shown) return 13%+ CAGR.
+**ETF replication: Approach A vs B (long-short, net of costs).** Both approaches struggle as long-short because all factor ETFs have positive market beta — shorting one while longing another is mostly a bet on relative factor performance. The long-only legs (not shown) return `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Full Period"]*100,0),"%+") else "13%+" }` CAGR.
 :::
 
 #### Approach A Metrics
@@ -418,9 +418,9 @@ if (!is.null(metrics_b)) {
 
 | Finding | Evidence |
 |---------|----------|
-| **Long-only is the practical strategy** | A long-only: 13.4% CAGR. B long-only: 12.6%. Compare S&P 500 ~10%. |
-| **Short leg is unprofitable** | A long-short: -0.8%. B long-short: -1.9%. ETFs all have market beta — shorting one is mostly shorting the market. |
-| **A > B** | Approach A (direct ETF signal) has higher Sharpe (-0.11 vs -0.31) and lower DD (-23.7% vs -29.0%). The VLUE/HML mapping (cor=0.34) in B adds noise. |
+| **Long-only is the practical strategy** | A long-only: `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` CAGR. B long-only: `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`. Compare S&P 500 ~10%. |
+| **Short leg is unprofitable** | A long-short: `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`. B long-short: `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`. ETFs all have market beta — shorting one is mostly shorting the market. |
+| **A > B** | Approach A (direct ETF signal) has higher Sharpe (`r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }` vs `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`) and lower DD (`r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$max_dd[m$period=="Full Period"]*100,1),"%") else "N/A" }` vs `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$max_dd[m$period=="Full Period"]*100,1),"%") else "N/A" }`). The VLUE/HML mapping (cor=0.34) in B adds noise. |
 | **Cost advantage is real** | ETF costs ~0.20%/month vs 1.85%/month stock-level. The long-only gross returns survive after costs. |
 | **Validation is strong** | Both show ~20% long-only CAGR in 2023-2026. Caveat: overlaps a bull market. |
 
