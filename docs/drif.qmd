@@ -76,6 +76,10 @@ if (!is.null(metrics)) {
 }
 ```
 
+::: {.callout-warning}
+**Current status (Validation period — sealed one-shot evaluation):** Sharpe `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, CAGR `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`, max DD `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`. The strategy is losing money in the sealed Validation partition. The in-sample and Testing Sharpes above reflect the development period; the Validation result is the unbiased estimate of live performance. Factor DRIF was developed when Testing-period Sharpe appeared promising; current pipeline rebuild (post PR #219) shows the Validation result is negative across all four strategies in this family.
+:::
+
 #### Factor Selection
 
 ```{r}
@@ -94,7 +98,7 @@ safe_tar_read("drif_vs_max_plot")
 ```
 
 ::: {.fig-caption}
-**DRIF vs Factor MAX.** Both strategies applied to the same FF5+Momentum factor universe. DRIF uses 42 features (21 chronological + 21 rank daily returns) via elastic net; Factor MAX uses only the single highest daily return. DRIF achieves higher returns by capturing the full daily return distribution.
+**DRIF vs Factor MAX.** Both strategies applied to the same FF5+Momentum factor universe. DRIF uses 42 features (21 chronological + 21 rank daily returns) via elastic net; Factor MAX uses only the single highest daily return. Full-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`. Validation-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`.
 :::
 
 # Methodology
