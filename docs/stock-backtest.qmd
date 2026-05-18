@@ -229,7 +229,7 @@ safe_tar_read("stk_max_vs_factor_plot")
 ::: {.callout-note}
 ## Strategy: Stock-Level DRIF (Daily Return Information Factor)
 
-**What:** Each month, use an <a href="https://en.wikipedia.org/wiki/Elastic_net_regularization" target="_blank"><abbr title="A regularized regression method combining L1 (lasso) and L2 (ridge) penalties">elastic net regression</abbr></a> on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.
+**What:** Each month, use an <a href="https://en.wikipedia.org/wiki/Elastic_net_regularization" target="_blank" rel="noopener noreferrer"><abbr title="A regularized regression method combining L1 (lasso) and L2 (ridge) penalties">elastic net regression</abbr></a> on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.
 
 **Rationale (Market Dynamics):** The full sequence of daily returns contains more predictive information than any single summary statistic (mean, max, volatility). Specifically:
 
@@ -290,8 +290,8 @@ if (!is.null(metrics)) {
 
 1. [DRIF: factor-level implementation](drif.html) — same methodology on 5 FF factors
 2. [Factor MAX](factor-max.html) — simpler signal, comparison benchmark
-3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank"} — original research
-4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/){target="_blank"} — MAX signal research
+3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"} — original research
+4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/){target="_blank" rel="noopener noreferrer"} — MAX signal research
 
 # XGBoost DRIF
 

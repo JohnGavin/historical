@@ -127,7 +127,7 @@ local({
 
 ## Row
 
-Historical finance database for backtesting: equities, crypto, macro, and factors. Code-only R package — data hosted on [Hugging Face](https://huggingface.co/datasets/JohnGavin/finance-data){target="_blank"}, queried via DuckDB `hf://` protocol with predicate pushdown.
+Historical finance database for backtesting: equities, crypto, macro, and factors. Code-only R package — data hosted on [Hugging Face](https://huggingface.co/datasets/JohnGavin/finance-data){target="_blank" rel="noopener noreferrer"}, queried via DuckDB `hf://` protocol with predicate pushdown.
 
 <span class="badge badge-blue">R package</span>
 <span class="badge badge-green">DuckDB + Parquet</span>
@@ -233,7 +233,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 
 ## Row
 
-Built with the [T language](https://github.com/b-rodrigues/tlang){target="_blank"} pipeline, [targets](https://docs.ropensci.org/targets/){target="_blank"}, [DuckDB](https://duckdb.org/){target="_blank"}, and [Quarto](https://quarto.org/){target="_blank"}. Data from Yahoo Finance, FRED, and Ken French Data Library.
+Built with the [T language](https://github.com/b-rodrigues/tlang){target="_blank" rel="noopener noreferrer"} pipeline, [targets](https://docs.ropensci.org/targets/){target="_blank" rel="noopener noreferrer"}, [DuckDB](https://duckdb.org/){target="_blank" rel="noopener noreferrer"}, and [Quarto](https://quarto.org/){target="_blank" rel="noopener noreferrer"}. Data from Yahoo Finance, FRED, and Ken French Data Library.
 
 # Installation
 

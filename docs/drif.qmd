@@ -41,7 +41,7 @@ source(utils_path)
 ::: {.callout-note}
 ## Daily Return Information Factor (<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>)
 
-Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-returns/){target="_blank"}: an elastic net regression on the **full distribution of past 21 daily returns** — both chronological order and rank order — predicts next-month returns. This captures more information than single-signal approaches like MAX or momentum.
+Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"}: an elastic net regression on the **full distribution of past 21 daily returns** — both chronological order and rank order — predicts next-month returns. This captures more information than single-signal approaches like MAX or momentum.
 
 **Factor-level implementation:** Each month, use an expanding-window elastic net (`glmnet::cv.glmnet`, alpha = 0.5, 5-fold CV) to predict next month's factor return from 42 features (21 chronological + 21 rank daily returns <!-- structural constant: 2 × lookback_days; kept static per dynamic-prose-values rule exception for fixed strategy properties -->). Go long the top-2 predicted factors. Monthly rebalance.
 
@@ -158,9 +158,9 @@ Our factor-level implementation applies the same logic: the sequence of daily fa
 
 #### References
 
-1. **Research:** [A Unified Framework for Anomalies based on Daily Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank"} — Alpha Architect (2026)
+1. **Research:** [A Unified Framework for Anomalies based on Daily Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"} — Alpha Architect (2026)
 2. **Comparison:** [Factor MAX](factor-max.html) — simpler signal using only max daily return
-3. **Data:** FF5 + Momentum via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank"}
+3. **Data:** FF5 + Momentum via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}
 4. **Methodology:** Expanding window, PCA-OLS (glmnet unavailable in current Nix shell)
 
 #### Build Info

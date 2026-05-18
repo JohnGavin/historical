@@ -149,7 +149,7 @@ source(utils_path)
 
 #### AAPL Moving Averages
 
-AAPL daily close with 50d and 200d simple moving averages. The [golden cross](https://www.investopedia.com/terms/g/goldencross.asp){target="_blank"} (50d above 200d) and death cross (50d below) are trend-following signals.
+AAPL daily close with 50d and 200d simple moving averages. The [golden cross](https://www.investopedia.com/terms/g/goldencross.asp){target="_blank" rel="noopener noreferrer"} (50d above 200d) and death cross (50d below) are trend-following signals.
 
 ```{r}
 #| results: asis
@@ -162,7 +162,7 @@ safe_tar_read("vig_eq_aapl")
 ```
 
 ::: {.fig-caption}
-**AAPL close + 50d/200d SMA.** Y: USD. White = close, blue = 50d SMA, red = 200d SMA. Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab. [Golden cross](https://www.investopedia.com/terms/g/goldencross.asp){target="_blank"}. Click to zoom.
+**AAPL close + 50d/200d SMA.** Y: USD. White = close, blue = 50d SMA, red = 200d SMA. Source: Yahoo Finance via `hd_ohlcv()`. See Volatility tab. [Golden cross](https://www.investopedia.com/terms/g/goldencross.asp){target="_blank" rel="noopener noreferrer"}. Click to zoom.
 :::
 
 ```{r}
@@ -208,7 +208,7 @@ safe_tar_read("vig_eq_vol")
 ```
 
 ::: {.fig-caption}
-**21d realised volatility (annualised).** Y: vol (%). Vol = SD(log ret) x sqrt(252). Source: `hd_ohlcv()`. [Realised vol](https://www.investopedia.com/terms/r/realizedvolatility.asp){target="_blank"}.
+**21d realised volatility (annualised).** Y: vol (%). Vol = SD(log ret) x sqrt(252). Source: `hd_ohlcv()`. [Realised vol](https://www.investopedia.com/terms/r/realizedvolatility.asp){target="_blank" rel="noopener noreferrer"}.
 :::
 
 ```{r}
@@ -266,7 +266,7 @@ if (!is.null(df)) hd_dt(df, "Major crypto metadata.")
 
 #### Stablecoin Peg
 
-USDC/USDT vs $1.00 peg. [Depeg](https://www.investopedia.com/terms/d/depeg.asp){target="_blank"} = liquidity crisis.
+USDC/USDT vs $1.00 peg. [Depeg](https://www.investopedia.com/terms/d/depeg.asp){target="_blank" rel="noopener noreferrer"} = liquidity crisis.
 
 ```{r}
 #| results: asis
@@ -351,7 +351,7 @@ safe_tar_read("vig_ma_rates")
 
 #### Yield Curve
 
-10Y–2Y spread. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp){target="_blank"}, precedes recessions.
+10Y–2Y spread. Negative = [inverted](https://www.investopedia.com/terms/i/invertedyieldcurve.asp){target="_blank" rel="noopener noreferrer"}, precedes recessions.
 
 ```{r}
 #| results: asis
@@ -408,7 +408,7 @@ if (!is.null(df)) {
 
 #### FF3 Daily
 
-[Fama-French 3 factors](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp){target="_blank"}: Mkt-RF, <abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>, <abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>, RF. Daily since 2020.
+[Fama-French 3 factors](https://www.investopedia.com/terms/f/famaandfrenchthreefactormodel.asp){target="_blank" rel="noopener noreferrer"}: Mkt-RF, <abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>, <abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>, RF. Daily since 2020.
 
 ```{r}
 #| results: asis
@@ -444,7 +444,7 @@ safe_tar_read("vig_fa_ff5")
 
 #### Momentum
 
-[<abbr title="Momentum — past 12-month winners minus losers">Momentum</abbr>](https://www.investopedia.com/terms/m/momentum.asp){target="_blank"} (WML). March 2009 crash, post-2020 recovery.
+[<abbr title="Momentum — past 12-month winners minus losers">Momentum</abbr>](https://www.investopedia.com/terms/m/momentum.asp){target="_blank" rel="noopener noreferrer"} (WML). March 2009 crash, post-2020 recovery.
 
 ```{r}
 #| results: asis
@@ -522,7 +522,7 @@ safe_tar_read("vig_lse_ftse_vs_global")
 ```
 
 ::: {.fig-caption}
-**FTSE 100 vs Global Equity ETFs.** Y: cumulative return (%). Solid/dashed = group. Source: `hd_ohlcv()` via `hd_group()`. See [FTSE 100](https://www.investopedia.com/terms/f/ftse.asp){target="_blank"}.
+**FTSE 100 vs Global Equity ETFs.** Y: cumulative return (%). Solid/dashed = group. Source: `hd_ohlcv()` via `hd_group()`. See [FTSE 100](https://www.investopedia.com/terms/f/ftse.asp){target="_blank" rel="noopener noreferrer"}.
 :::
 
 ```{r}
@@ -567,7 +567,7 @@ safe_tar_read("vig_lse_families")
 ```
 
 ::: {.fig-caption}
-**LSE ETF count by fund family (top 15).** X: number of ETFs. Source: metadata via `hd_search()`. [ETF](https://www.investopedia.com/terms/e/etf.asp){target="_blank"} = Exchange Traded Fund.
+**LSE ETF count by fund family (top 15).** X: number of ETFs. Source: metadata via `hd_search()`. [ETF](https://www.investopedia.com/terms/e/etf.asp){target="_blank" rel="noopener noreferrer"} = Exchange Traded Fund.
 :::
 
 #### Highest Yield
@@ -585,7 +585,7 @@ safe_tar_read("vig_lse_yield")
 ```
 
 ::: {.fig-caption}
-**Top 10 LSE ETFs by dividend yield.** X: annualised yield (%). Source: metadata via `hd_search()`. Yield = most recent trailing distribution. See [Dividend yield](https://www.investopedia.com/terms/d/dividendyield.asp){target="_blank"}.
+**Top 10 LSE ETFs by dividend yield.** X: annualised yield (%). Source: metadata via `hd_search()`. Yield = most recent trailing distribution. See [Dividend yield](https://www.investopedia.com/terms/d/dividendyield.asp){target="_blank" rel="noopener noreferrer"}.
 :::
 
 ```{r}
@@ -668,7 +668,7 @@ df = con.sql("""
 
 #### Datasets
 
-All Parquet files are hosted on [Hugging Face](https://huggingface.co/datasets/JohnGavin/finance-data){target="_blank"} and queryable via DuckDB `hf://` protocol (R or Python, no download needed):
+All Parquet files are hosted on [Hugging Face](https://huggingface.co/datasets/JohnGavin/finance-data){target="_blank" rel="noopener noreferrer"} and queryable via DuckDB `hf://` protocol (R or Python, no download needed):
 
 | Dataset | URL | Contents |
 |---------|-----|----------|
