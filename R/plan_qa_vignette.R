@@ -10,9 +10,19 @@
 plan_qa_vignette <- function() {
   list(
     # QA 1: Pipeline completion marker
+    # Depends on all metric/leaderboard/strategy targets so tar_make() only
+    # reaches this target after every upstream computation succeeds.
+    # If any listed target errored, this target is skipped (not a false "QA passed").
     targets::tar_target(qa_summary, {
-      cli::cli_inform(c("v" = "QA: pipeline completed. Run post-render checks separately."))
-      list(status = "pipeline_complete", timestamp = Sys.time())
+      invisible(list(
+        leaderboard, fm_metrics, drif_metrics,
+        stk_max_metrics, stk_drif_metrics,
+        aw_metrics, kelly_metrics, xgb_drif_metrics,
+        boot_metrics, port_metrics, ltr_metrics, decay_metrics,
+        strategy_names, strategy_correlation
+      ))
+      cli::cli_inform(c("v" = "QA: all metric targets succeeded ({format(Sys.time(), '%H:%M:%S')})"))
+      invisible(NULL)
     }, cue = targets::tar_cue(mode = "always")),
 
     # QA 2: Dataset-metadata consistency (#19)
@@ -20,9 +30,9 @@ plan_qa_vignette <- function() {
     targets::tar_target(qa_metadata_sync, {
       library(dplyr)
 
-      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
-      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
-      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+      # Note: duckplyr/glmnet/xgboost/slider/RcppRoll are provided by the dev shell.
+      # Earlier versions of this file globbed /nix/store as a fallback — removed in PR #219
+      # since it re-introduced ABI-incompatible /nix/store paths (issue #211).
 
       datasets <- c("equity_daily", "crypto_daily")
       meta_ds <- hd_datasets()[["metadata"]]
@@ -71,9 +81,9 @@ plan_qa_vignette <- function() {
       library(dplyr)
 
       ds <- hd_datasets()[["equity_daily"]]
-      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
-      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
-      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+      # Note: duckplyr/glmnet/xgboost/slider/RcppRoll are provided by the dev shell.
+      # Earlier versions of this file globbed /nix/store as a fallback — removed in PR #219
+      # since it re-introduced ABI-incompatible /nix/store paths (issue #211).
 
       # Per-ticker dollar volume
       ticker_stats <- duckplyr::read_parquet_duckdb(ds$url) |>
