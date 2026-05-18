@@ -36,7 +36,13 @@ show_code <- function(target_name) {
 #'
 #' @param name Target name to read
 #' @param strict If TRUE, stop() on missing target. Default: checks VIGNETTE_STRICT env var.
-safe_tar_read <- function(name, strict = nzchar(Sys.getenv("VIGNETTE_STRICT"))) {
+#'   Accepted truthy values: "true", "TRUE", "T".
+#'   Falsy values: "false", "FALSE", "F", "0", "1", "" (unset).
+#'   Note: as.logical() only parses "TRUE"/"FALSE"/"T"/"F" — numeric strings "0"/"1"
+#'   return NA and therefore FALSE. nzchar() is NOT used because nzchar("0") and
+#'   nzchar("false") are both TRUE, which ignores the user's intent to disable.
+safe_tar_read <- function(name,
+                          strict = isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))) {
   result <- tryCatch(
 
 targets::tar_read_raw(name),
