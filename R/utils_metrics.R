@@ -9,7 +9,7 @@
 #   vol    = sd(r) * sqrt(periods_per_year)
 #   Sharpe = CAGR / vol
 
-#' Canonical backtest annualisation metrics
+#' Annualise periodic returns — canonical helper
 #'
 #' Annualises a vector of periodic returns (monthly assumed by default).
 #' Returns include CAGR (geometric), annual vol, Sharpe (CAGR / vol),
@@ -36,7 +36,7 @@
 #'
 #' @family backtest
 #' @export
-calc_backtest_metrics <- function(ret, periods_per_year = 12L, na.rm = TRUE) {
+annualise_returns <- function(ret, periods_per_year = 12L, na.rm = TRUE) {
   if (!is.numeric(ret)) {
     cli::cli_abort(c(
       "x" = "{.arg ret} must be a numeric vector.",
