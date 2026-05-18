@@ -63,7 +63,10 @@ format:
             if (!cell) return;
             var div = document.createElement('div');
             div.className = 'fullscreen-overlay';
-            div.innerHTML = '<img src="' + img.src + '">';
+            var clone = document.createElement('img');
+            clone.src = img.src;
+            clone.alt = img.alt || '';
+            div.appendChild(clone);
             div.addEventListener('click', function() { div.remove(); });
             document.body.appendChild(div);
           });
