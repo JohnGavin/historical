@@ -40,6 +40,10 @@ Plus **#196 closed as duplicate** of PR #164 (pairwise alignment, recovered work
 
 ## Next-session task buckets
 
+### Telemetry export (new — session-end routine)
+
+- [ ] **Run `scripts/export_to_llmtelemetry.sh` at each session end** to keep the llmtelemetry dashboard current with historical backtest metrics. Script exports `leaderboard`, `*_metrics` targets, and `pipeline_meta` as JSON to `~/docs_gh/llmtelemetry/vignettes/data/historical/`, then commits + pushes the llmtelemetry repo. First run will create the `historical/` subdir. Dry-run mode: `DRY_RUN=1 ./scripts/export_to_llmtelemetry.sh`.
+
 ### High priority
 
 - [ ] **#187 F1 cash-proxy decision** — agent deferred as STALE (identifiers `cash`/`etf_m`/`cash_proxy` not found in current `R/plan_stock_backtest.R`). User must decide: was a cash-proxy fallback ever intended for OOS, or did the finding reference deleted code? If yes-intended, file Phase 2 issue + new branch.
