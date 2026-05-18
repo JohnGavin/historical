@@ -30,9 +30,9 @@ plan_qa_vignette <- function() {
     targets::tar_target(qa_metadata_sync, {
       library(dplyr)
 
-      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
-      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
-      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+      # Note: duckplyr/glmnet/xgboost/slider/RcppRoll are provided by the dev shell.
+      # Earlier versions of this file globbed /nix/store as a fallback — removed in PR #219
+      # since it re-introduced ABI-incompatible /nix/store paths (issue #211).
 
       datasets <- c("equity_daily", "crypto_daily")
       meta_ds <- hd_datasets()[["metadata"]]
@@ -81,9 +81,9 @@ plan_qa_vignette <- function() {
       library(dplyr)
 
       ds <- hd_datasets()[["equity_daily"]]
-      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
-      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
-      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+      # Note: duckplyr/glmnet/xgboost/slider/RcppRoll are provided by the dev shell.
+      # Earlier versions of this file globbed /nix/store as a fallback — removed in PR #219
+      # since it re-introduced ABI-incompatible /nix/store paths (issue #211).
 
       # Per-ticker dollar volume
       ticker_stats <- duckplyr::read_parquet_duckdb(ds$url) |>
