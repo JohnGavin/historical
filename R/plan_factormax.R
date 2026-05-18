@@ -339,8 +339,14 @@ plan_factormax <- function() {
         mutate(cum = cumprod(1 + ret)) |>
         ungroup()
 
-      # Get dates for x-axis from etf data
-      date_lookup <- etf_m |> distinct(ym, date)
+      # Get dates for x-axis from etf data. Use slice_max to guarantee one row
+      # per ym: different ETFs may have different month-end dates (holiday calendars),
+      # which makes distinct(ym, date) produce > 1 row per ym and fan-out the join.
+      date_lookup <- etf_m |>
+        dplyr::group_by(ym) |>
+        dplyr::slice_max(date, n = 1L, with_ties = FALSE) |>
+        dplyr::ungroup() |>
+        dplyr::select(ym, date)
       combined <- combined |> left_join(date_lookup, by = "ym")
 
       ggplot(combined, aes(date, cum, colour = strategy)) +

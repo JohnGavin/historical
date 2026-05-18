@@ -188,6 +188,7 @@ plan_portfolio_opt <- function() {
         tibble(
           period = label, months = n,
           opt_cagr   = prod(1 + df$optimal_ret)^(12/n) - 1,
+          opt_vol    = sd(df$optimal_ret) * sqrt(12),
           opt_sharpe = sharpe(df$optimal_ret),
           opt_maxdd  = maxdd(df$optimal_ret),
           hrp_cagr   = prod(1 + df$hrp_ret)^(12/n) - 1,
