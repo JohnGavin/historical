@@ -10,9 +10,19 @@
 plan_qa_vignette <- function() {
   list(
     # QA 1: Pipeline completion marker
+    # Depends on all metric/leaderboard/strategy targets so tar_make() only
+    # reaches this target after every upstream computation succeeds.
+    # If any listed target errored, this target is skipped (not a false "QA passed").
     targets::tar_target(qa_summary, {
-      cli::cli_inform(c("v" = "QA: pipeline completed. Run post-render checks separately."))
-      list(status = "pipeline_complete", timestamp = Sys.time())
+      invisible(list(
+        leaderboard, fm_metrics, drif_metrics,
+        stk_max_metrics, stk_drif_metrics,
+        aw_metrics, kelly_metrics, xgb_drif_metrics,
+        boot_metrics, port_metrics, ltr_metrics, decay_metrics,
+        strategy_names, strategy_correlation
+      ))
+      cli::cli_inform(c("v" = "QA: all metric targets succeeded ({format(Sys.time(), '%H:%M:%S')})"))
+      invisible(NULL)
     }, cue = targets::tar_cue(mode = "always")),
 
     # QA 2: Dataset-metadata consistency (#19)
