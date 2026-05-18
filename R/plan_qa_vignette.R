@@ -18,7 +18,6 @@ plan_qa_vignette <- function() {
     # QA 2: Dataset-metadata consistency (#19)
     # Checks that every ticker in OHLCV parquets has a metadata row
     targets::tar_target(qa_metadata_sync, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
@@ -69,7 +68,6 @@ plan_qa_vignette <- function() {
     # yfinance reports incorrect volume for non-US markets
     # Flag tickers with suspiciously high dollar volume
     targets::tar_target(qa_volume_sanity, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       ds <- hd_datasets()[["equity_daily"]]

@@ -38,10 +38,7 @@ plan_ecb <- function() {
 
     # ── Fetch all ECB series ────────────────────────────────────────────
     targets::tar_target(ecb_raw, {
-      reg <- pkgload::load_all(
-        here::here("packages/historicaldata"), quiet = TRUE
-      )$env
-      registry <- reg$hd_ecb_registry()
+      registry <- hd_ecb_registry()
 
       results <- lapply(ecb_params$series, function(nm) {
         info <- registry[[nm]]
@@ -54,7 +51,7 @@ plan_ecb <- function() {
         # but transport errors (connection refused, TCP stall) can still escape
         # as R conditions.  tryCatch here ensures the lapply continues.
         tryCatch({
-          df <- reg$hd_ecb(info$key, start = ecb_params$start_date)
+          df <- hd_ecb(info$key, start = ecb_params$start_date)
           if (!is.null(df)) {
             df$series_name <- nm
             df$description <- info$description

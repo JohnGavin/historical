@@ -15,7 +15,6 @@ plan_quiz <- function() {
     }),
 
     targets::tar_target(quiz_rounds, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
       set.seed(quiz_params$seed)
 

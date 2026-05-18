@@ -391,7 +391,6 @@ plan_stock_backtest <- function() {
 
     # ── Group 1: Top-N tickers by current market cap (#150 Option C) ──
     targets::tar_target(stk_top_tickers, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
@@ -408,7 +407,6 @@ plan_stock_backtest <- function() {
 
     # ── Group 1: Universe — top-N non-ETF stocks with sufficient history ──
     targets::tar_target(stk_universe, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
@@ -470,7 +468,6 @@ plan_stock_backtest <- function() {
 
     # ── Group 1: Risk-free rate (monthly) ─────────────────────────
     targets::tar_target(stk_rf, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       hd_factors(dataset = "FF3", frequency = "daily",
@@ -738,7 +735,6 @@ plan_stock_backtest <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       p <- stk_max_portfolio
       plot_data <- p |>
@@ -780,7 +776,6 @@ plan_stock_backtest <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       comp <- stk_max_vs_factor
       plot_data <- comp |>
@@ -970,7 +965,6 @@ plan_stock_backtest <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       p <- stk_drif_portfolio
       plot_data <- p |>
@@ -1017,7 +1011,6 @@ plan_stock_backtest <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       comp <- stk_all_comparison
       plot_data <- comp |>

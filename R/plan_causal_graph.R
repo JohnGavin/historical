@@ -146,7 +146,6 @@ plan_causal_graph <- function() {
 
     # ── Assemble test data for conditional independence tests ───────
     targets::tar_target(cg_test_data, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # ── Fama-French factors (monthly, %) → proportions ───────────

@@ -26,13 +26,10 @@ plan_guardian <- function() {
 
     # ── Monthly keyword counts ──────────────────────────────────────────
     targets::tar_target(gdn_monthly_counts, {
-      reg <- pkgload::load_all(
-        here::here("packages/historicaldata"), quiet = TRUE
-      )$env
 
       results <- lapply(gdn_params$keywords, function(kw) {
         cli::cli_inform("Fetching Guardian: {kw}")
-        reg$hd_guardian_monthly(
+        hd_guardian_monthly(
           query   = kw,
           section = gdn_params$section,
           from    = gdn_params$from,
@@ -64,13 +61,10 @@ plan_guardian <- function() {
     targets::tar_target(gdn_vs_spy, {
       if (nrow(gdn_monthly_counts) == 0L) return(NULL)
 
-      reg <- pkgload::load_all(
-        here::here("packages/historicaldata"), quiet = TRUE
-      )$env
 
       # Get SPY monthly returns
       spy <- tryCatch({
-        reg$hd_ohlcv("SPY", from = gdn_params$from, collect = TRUE) |>
+        hd_ohlcv("SPY", from = gdn_params$from, collect = TRUE) |>
           dplyr::mutate(
             year_month = format(as.Date(date), "%Y-%m")
           ) |>

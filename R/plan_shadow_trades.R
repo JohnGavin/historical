@@ -25,7 +25,6 @@ plan_shadow_trades <- function() {
     # and aw_daily_returns$SPY as the underlying daily return series.
     targets::tar_target(shadow_avoid_worst, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       # SPY daily returns (underlying for the avoid_worst strategy)
       spy <- aw_daily_returns |>

@@ -38,7 +38,6 @@ plan_rafi <- function() {
 
     # ── Data: monthly FF5 + Momentum factors ────────────────────────────────
     targets::tar_target(rafi_data, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       ff5 <- hd_factors(dataset = "FF5", frequency = "monthly") |>
@@ -201,7 +200,6 @@ plan_rafi <- function() {
 
     # ── FF regression: falsification ─────────────────────────────────────────
     targets::tar_target(rafi_ff_regression, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Build long-form factors for hd_factor_null_test

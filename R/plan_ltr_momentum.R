@@ -45,7 +45,6 @@ plan_ltr_momentum <- function() {
 
     # ── Universe: US non-ETF equities with sufficient history ─────────────
     targets::tar_target(ltr_universe, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Load xgboost path for later targets
@@ -146,7 +145,6 @@ plan_ltr_momentum <- function() {
     # ── Metrics: Training, Testing, Full ──────────────────────────────────
     targets::tar_target(ltr_metrics, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       p <- ltr_params
 
@@ -193,7 +191,6 @@ plan_ltr_momentum <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       port <- ltr_portfolio
 
@@ -332,7 +329,6 @@ plan_ltr_momentum <- function() {
     # ── Subperiod Analysis: 3 equal subperiods ───────────────────────────
     targets::tar_target(ltr_subperiod, {
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       port <- ltr_portfolio |> filter(!is.na(port_ret)) |> arrange(date)
 

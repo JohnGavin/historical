@@ -23,7 +23,6 @@ vig_pair <- function(name, code) {
       code_text
     }, list(CODE = code))),
     targets::tar_target_raw(name, substitute({
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
       library(ggplot2)
       library(scales)

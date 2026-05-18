@@ -30,7 +30,6 @@ plan_drif <- function() {
 
     # ── Data: full daily factor history in one query ──────────────
     targets::tar_target(drif_daily, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       ff5 <- hd_factors(dataset = "FF5", frequency = "daily",
@@ -281,7 +280,6 @@ plan_drif <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       plot_data <- drif_portfolio |>
         select(date, `DRIF` = port_cum, `Market (Mkt-RF)` = bench_cum) |>
@@ -334,7 +332,6 @@ plan_drif <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       plot_data <- drif_vs_max |>
         select(date, `DRIF` = drif_cum, `Factor MAX` = max_cum) |>

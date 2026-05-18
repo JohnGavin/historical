@@ -42,7 +42,6 @@ plan_forecast_eval <- function() {
     # CRPS_naive uses the full-sample unconditional distribution (all returns
     # except the current one) — a constant reference that ignores timing.
     targets::tar_target(fe_crps, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       set.seed(fe_params$seed)
@@ -113,7 +112,6 @@ plan_forecast_eval <- function() {
     # Forecast probability: rolling win rate over the previous roll_months periods.
     # Naive baseline: unconditional win rate over the full sample.
     targets::tar_target(fe_brier, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       strategy_list <- list(
@@ -187,7 +185,6 @@ plan_forecast_eval <- function() {
     # We measure how well this signal predicts actual forward SPY returns at
     # horizons 1, 2, 3, 5, 10, 21 trading days.
     targets::tar_target(fe_horizon, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Daily SPY returns

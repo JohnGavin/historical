@@ -150,7 +150,6 @@ plan_xgb_signal <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       comp <- xgb_vs_enet
       plot_data <- comp |>

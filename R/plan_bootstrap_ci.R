@@ -125,7 +125,6 @@ plan_bootstrap_ci <- function() {
     targets::tar_target(boot_sharpe_plot, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       strategy_labels <- c(
         stk_max = "Stock MAX", stk_drif = "Stock DRIF",

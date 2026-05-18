@@ -15,10 +15,7 @@ plan_jst <- function() {
 
     # ── Load JST data ─────────────────────────────────────────────────────
     targets::tar_target(jst_raw, {
-      reg <- pkgload::load_all(
-        here::here("packages/historicaldata"), quiet = TRUE
-      )$env
-      reg$hd_jst(cache = TRUE)
+      hd_jst(cache = TRUE)
     }),
 
     # ── Equity premium by country and decade ──────────────────────────────
@@ -72,9 +69,6 @@ plan_jst <- function() {
     # ── Compare JST USA with Fama-French market factor ─────────────────────
     # Overlap period: 1926-2020 (FF starts 1926, JST ends 2020)
     targets::tar_target(jst_ff_comparison, {
-      reg <- pkgload::load_all(
-        here::here("packages/historicaldata"), quiet = TRUE
-      )$env
 
       # JST USA annual equity premium
       jst_usa <- jst_raw |>
@@ -85,7 +79,7 @@ plan_jst <- function() {
         dplyr::select(year, jst_premium)
 
       # FF market premium (annual)
-      ff <- reg$hd_factors(dataset = "FF3", frequency = "annual")
+      ff <- hd_factors(dataset = "FF3", frequency = "annual")
       if (is.null(ff) || nrow(ff) == 0L) {
         cli::cli_warn("FF3 annual data not available")
         return(NULL)

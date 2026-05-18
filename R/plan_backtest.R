@@ -29,7 +29,6 @@ plan_backtest <- function() {
 
     # ── Data: monthly prices ──────────────────────────────────────
     targets::tar_target(bt_prices, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       all_tickers <- c(bt_params$tickers, bt_params$benchmark, bt_params$cash_proxy)
       raw <- hd_ohlcv(all_tickers, from = as.character(bt_params$start_date))
 

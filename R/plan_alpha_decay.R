@@ -229,7 +229,6 @@ plan_alpha_decay <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       # Normalise Sharpe to fraction of baseline (delay=1)
       baselines <- decay_metrics |>

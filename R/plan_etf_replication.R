@@ -41,7 +41,6 @@ plan_etf_replication <- function() {
 
     # ── ETF daily returns ─────────────────────────────────────────
     targets::tar_target(etf_daily, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       all_tickers <- c(etf_params$etf_tickers, etf_params$benchmark)
@@ -323,7 +322,6 @@ plan_etf_replication <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       a <- etf_a_portfolio |> select(date, `A: DRIF on ETFs` = port_cum)
       b <- etf_b_portfolio |> select(date, `B: Academic → ETFs` = port_cum)

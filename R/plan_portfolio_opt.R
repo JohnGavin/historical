@@ -212,7 +212,6 @@ plan_portfolio_opt <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       w_pso <- port_optimal_weights
       w_hrp <- port_hrp_weights

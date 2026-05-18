@@ -24,7 +24,6 @@ plan_vix_macro_overlay <- function() {
     }),
 
     targets::tar_target(vmo_daily, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # VIX

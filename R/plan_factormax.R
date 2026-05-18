@@ -27,7 +27,6 @@ plan_factormax <- function() {
 
     # ── Data: daily factor returns ────────────────────────────────
     targets::tar_target(fm_daily, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # FF5 has HML, SMB, RMW, CMA, Mkt-RF, RF
@@ -193,7 +192,6 @@ plan_factormax <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       plot_data <- fm_portfolio |>
         select(date, `Factor MAX` = port_cum, `Market (Mkt-RF)` = bench_cum) |>
@@ -216,7 +214,6 @@ plan_factormax <- function() {
     targets::tar_target(fm_heatmap, {
       library(ggplot2)
       library(dplyr)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
       # Last 3 years for readability
       recent <- fm_signal |>
@@ -248,7 +245,6 @@ plan_factormax <- function() {
 
     # ── ETF comparison: real-world factor ETFs ────────────────────
     targets::tar_target(fm_etf_data, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Factor ETFs mapped to academic factors
@@ -321,7 +317,6 @@ plan_factormax <- function() {
       library(ggplot2)
       library(dplyr)
       library(scales)
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       if (is.null(fm_etf_data)) return(NULL)
 
       # Plot VLUE vs HML and MTUM vs Mom (most interesting pair)

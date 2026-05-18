@@ -11,7 +11,6 @@ plan_strategy_decay <- function() {
 
     # ── Macro regime classification ─────────────────────────────
     targets::tar_target(decay_regimes, {
-      pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
       library(dplyr)
 
       # Monthly macro data for regime classification
