@@ -13,13 +13,36 @@ plan_qa_vignette <- function() {
     # Depends on all metric/leaderboard/strategy targets so tar_make() only
     # reaches this target after every upstream computation succeeds.
     # If any listed target errored, this target is skipped (not a false "QA passed").
+    #
+    # CANONICAL LIST — keep in sync with every tar_target(*_metrics) in R/tar_plans/.
+    # To find all *_metrics targets:
+    #   grep -rE "tar_target\(\s*[a-z_]+_metrics" R/ | grep -oP "tar_target\(\s*\K[a-z_]+"
+    # DO NOT add a new *_metrics target without also adding it here (roborev #2788).
     targets::tar_target(qa_summary, {
       invisible(list(
-        leaderboard, fm_metrics, drif_metrics,
-        stk_max_metrics, stk_drif_metrics,
-        aw_metrics, kelly_metrics, xgb_drif_metrics,
-        boot_metrics, port_metrics, ltr_metrics, decay_metrics,
-        strategy_names, strategy_correlation
+        leaderboard,
+        strategy_names, strategy_correlation,
+        # All *_metrics targets (alphabetical — add new ones here):
+        aw_metrics,
+        boot_metrics,
+        bt_metrics_is,
+        bt_replication_metrics,
+        decay_metrics,
+        drif_metrics,
+        etf_a_metrics,
+        etf_b_metrics,
+        fm_metrics,
+        kelly_metrics,
+        ltr_metrics,
+        mr_metrics,
+        ms_metrics,
+        port_metrics,
+        rafi_metrics,
+        regime_metrics,
+        rsc_metrics,
+        stk_drif_metrics,
+        stk_max_metrics,
+        xgb_drif_metrics
       ))
       cli::cli_inform(c("v" = "QA: all metric targets succeeded ({format(Sys.time(), '%H:%M:%S')})"))
       invisible(NULL)
