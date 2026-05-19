@@ -33,10 +33,13 @@ fi
 
 echo "default.post.sh: applying closure-rebuild shellHook patch to $NIX_FILE..."
 
+export NIX_FILE
+
 python3 - <<'PYEOF'
 import sys
+import os
 
-filepath = "flake.nix"
+filepath = os.environ["NIX_FILE"]
 
 with open(filepath, 'r') as f:
     content = f.read()
@@ -82,4 +85,4 @@ with open(filepath, 'w') as f:
 print(f"Patch applied: inserted closure-rebuild block ({len(insertion)} chars)")
 PYEOF
 
-echo "default.post.sh: done. Verify with: grep -c 'Closure-rebuild' flake.nix"
+echo "default.post.sh: done. Verify with: grep -c 'Closure-rebuild' $NIX_FILE"
