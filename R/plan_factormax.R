@@ -339,14 +339,21 @@ plan_factormax <- function() {
         mutate(cum = cumprod(1 + ret)) |>
         ungroup()
 
-      # Get dates for x-axis from etf data. Use slice_max to guarantee one row
-      # per ym: different ETFs may have different month-end dates (holiday calendars),
-      # which makes distinct(ym, date) produce > 1 row per ym and fan-out the join.
+      # Get dates for x-axis from only the plotted ETF tickers (VLUE and MTUM).
+      # Using all of etf_m risks picking up a later month-end date from an
+      # unrelated ticker (different holiday calendar), silently drifting every
+      # series' x-position for that month. Scope to the plotted subset first,
+      # then take the maximum date within that subset to resolve any remaining
+      # within-subset calendar differences (slice_max keeps one row per ym).
+      PLOT_TICKERS <- c("VLUE", "MTUM")
       date_lookup <- etf_m |>
+        dplyr::filter(ticker %in% PLOT_TICKERS) |>
         dplyr::group_by(ym) |>
         dplyr::slice_max(date, n = 1L, with_ties = FALSE) |>
         dplyr::ungroup() |>
         dplyr::select(ym, date)
+      # Regression guard: every ym in the lookup must come from the plotted subset.
+      stopifnot(all(date_lookup$ym %in% unique(dplyr::filter(etf_m, ticker %in% PLOT_TICKERS)$ym)))
       combined <- combined |> left_join(date_lookup, by = "ym")
 
       ggplot(combined, aes(date, cum, colour = strategy)) +
