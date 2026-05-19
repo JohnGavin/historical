@@ -1,8 +1,47 @@
 # Changelog
 
-## 2026-05-19
+## 2026-05-19 (session 2 — roborev backlog sweep, 33 verdicts closed)
 
-### Round 3 — Nix segfault chain + roborev sweep U1-U5 + #208 narrative (9 PRs, 4 issues, 98 verdicts closed)
+### Roborev sweep — rounds 1-3 across 9 grouped findings (21 commits direct-to-main)
+
+**Approach:** parallel agents in isolated git worktrees, each addressing one logical finding cluster. Round 1 spawned 7 agents; round 2 spawned 5 follow-up agents on the round-1 branches (stacked); round 3 spawned 1 agent for the only round-3 medium. All 12 fix commits + 8 merge commits + 1 final round-3 merge = 21 ahead of origin.
+
+**Round 1 (9 findings → 7 branches):**
+- `#2763 #2771 #3118` `fix(deps): RcppRoll arch` (sha 4442093 squashed onto 2da82ab) — round-1 added `RcppRoll` to `packages/historicaldata/DESCRIPTION`; round-2 review correctly pointed out that `packages/historicaldata/R/` has zero RcppRoll refs (14 refs across project-level `R/`). Net effect: no DESCRIPTION change; RcppRoll stays in `tproject.toml`/`flake.nix` where the Nix dev shell consumes it.
+- `#2784` `fix(scripts): fetch_crypto validation order` (4554975) — required-column check moved before `combined["date"]` tz access; `assert` replaced with `raise ValueError` (assert is dropped under `python -O`).
+- `#2786 #3113` `fix(scripts): yield_type derived from same source as yield_pct` (7c39ede onto 3dbb3fa) — new `_yield_fields()` helper. Handles `trailingAnnualDividendYield=0.0` correctly and prevents the trailing=0.0/yield=0.25 source-inconsistency.
+- `#2788 #3115` `fix(qa): qa_summary deps + tripwire test` (541bd10 onto bd61ed5) — `qa_summary` now references all 21 `*_metrics` targets; `tests/testthat/test-qa-summary-deps.R` is the regression guard.
+- `#2790 #2810 #3116` `fix(prose): drif/stock-backtest dynamic values + alpha param` (27b958b onto 867f73e) — 9 sites across `docs/drif.qmd` + `docs/stock-backtest.qmd`. Hardcoded interpretive claims ("losing money", "highest CAGR", "2-5x higher vol", "underperforms") replaced with neutral text or inline `safe_tar_read()` expressions. `alpha=0.5` now reads from `drif_params` at 3 sites. PCA-OLS fallback references removed (current pipeline is elastic-net only).
+- `#2779 #3114` `docs(vignette_utils): VIGNETTE_STRICT docstring` (8f254b3 onto 6ede3d9) — generic case-insensitive description of `as.logical()` acceptance. **Surprise finding:** the reviewer was right that `as.logical("1")` returns `NA`, not `TRUE` — I had dismissed this as "obviously wrong" before the agent verified. `VIGNETTE_STRICT=1` silently disables strict mode under the current parser. Documented in [`feedback_as-logical-numeric-strings`](.claude/memory/feedback_as-logical-numeric-strings.md).
+- `#2756` `fix(post-render): thread NIX_FILE into python patcher` (f17eff8) — `default.post.sh` was checking `NIX_FILE` for existence but the embedded Python patcher then opened the literal `flake.nix` in cwd. Invocation from outside the repo root passed the existence check and patched the wrong file. Fix: `export NIX_FILE` before heredoc; `os.environ["NIX_FILE"]` inside.
+
+**Round 3 (1 medium, 2 lows):**
+- `#3130` `fix(test): AST-based *_metrics extractor + 3 latent bug fixes` (713b88b → merged in c60edd1) — round-2 test used line-by-line regex that missed multiline `tar_target()` definitions (`te_ir_metrics`, `persistence_metrics`). Agent replaced with `parse()` walk + surfaced 2 more latent bugs nobody flagged: (a) `extract_declared_metrics()` used `strsplit("\\s+", ...)` without `perl=TRUE`, so `\s` was literal — function returned empty, round-2 test was trivially passing on empty-vs-empty; (b) `qa_summary` itself was missing `persistence_metrics` and `te_ir_metrics` (round-2's manual enumeration had the same multiline blind spot as the regex). 4/4 tests now pass.
+- `#3131` (low x2) closed with reasoning — "mixed L1/L2 regularisation" is accurate for the documented default; XGBoost interpretive sentence reports a stable empirical finding, not a transient ranking.
+- `#3129` (low) closed — inventing pytest + conftest + mock infrastructure for one helper function in a repo with zero pre-existing Python tests is disproportionate to the request. Deferred to a future Python-test infra ticket.
+
+**Round 4 (20 false-positive duplicates):** Auto-refine loop generated 20 near-identical reviews on `tests/testthat/test-qa-summary-deps.R`, all claiming "extract_defined_metrics still scans line-by-line" — but commit 713b88b already converted it to AST walk. One review was attached to commit 8f254b3 which doesn't even touch the test file. Bulk-closed as false positives.
+
+### Failed Approaches / Surprises
+- **Tried to dismiss roborev #2779 as reviewer error.** The reviewer claimed `as.logical("1")` returns NA. I had told the agent the claim was invalid based on intuition. The agent's reality-check (`Rscript -e 'cat(as.logical(c("1","0","true")))'`) showed the reviewer was correct. **Lesson:** verify before dismissing R coercion claims — they don't follow Python/JS/shell conventions. Memory saved.
+- **Initial backlog-script content was misleading.** The `roborev_project_backlog.sh` script returned excerpts referencing files (`wiki/swedroe-evidence-investing.md`, `R/anonymize.R`, `R/rollup_sessions.R`) that don't exist in `historical/`. I almost concluded the 9 findings were all hallucinated reviews of other projects. The DB-stored review text (via direct sqlite3 query) was completely different from what `roborev show <review_id>` displayed — and the DB text was the right one. The mapping is `reviews.id` ≠ `review_jobs.id`; `roborev show` accepts both but resolves differently. Use the DB text, not `show`.
+- **Worktree-isolation gap on `quick-fix` agents.** The Agent tool's `isolation: "worktree"` runs even for agents without Bash (haiku quick-fix), but those agents can't `git commit` inside the worktree — they edit files in the orchestrator's cwd instead. **Two of seven round-1 agents (A: RcppRoll, G: default.post.sh) left their edits uncommitted in main's working tree.** A third (D: fetch_metadata) had Bash but committed straight to `main` instead of branching first. Recovered all three via `git branch fix/... <sha>` + `git update-ref refs/heads/main d24b632` (non-destructive, no `reset --hard`) + stash-and-replay into fresh worktrees.
+
+### Accuracy / Metrics
+- Roborev resolution rate: **108/108 (100%)** for the lifetime of repo. Pass rate over 184 verdicts: 41% (76 passed, 108 failed-then-addressed).
+- `tests/testthat/test-qa-summary-deps.R`: 4/4 PASS.
+- `qa_summary` now depends on all 21 `*_metrics` targets (was 12 → 20 → 21).
+- 0 `pkgctx` regenerations needed (no R/ exports touched).
+
+### Known Limitations
+- 21 commits on `main` are unpushed at session end. `origin/main` is at `d24b632`.
+- `tar_make()` not re-run after the merges. The fixes touch test infra, prose, Python scripts, and Nix scripts — none should affect target outputs, but a full pipeline rebuild has not verified that.
+- Python regression tests for `_yield_fields()` (closed roborev #3129) intentionally deferred — no Python test infra exists in this repo yet.
+- The 1 queued/in-flight roborev job has not returned a verdict; it'll be the post-commit review of c60edd1.
+
+---
+
+## 2026-05-19 (session 1 — Nix segfault chain + roborev sweep U1-U5 + #208 narrative, 9 PRs, 4 issues, 98 verdicts closed)
 
 **The PR #206 dispatch trap (resolved by PR #212):**
 - `R/utils_metrics.R` was created by PR #206 but never sourced from `docs/_targets.R`. Worse: the new function `calc_backtest_metrics(ret_vector)` collided by name with existing `calc_backtest_metrics(df, label, rf_col)` in `R/plan_stock_backtest.R:348` (different signature, df-style). When `kv_*` targets called the new one with a numeric vector, R's dispatch picked the OLD df variant → `nrow(numeric_vector) = NULL` → `if (NULL < 12)` → "argument of length zero" abort on every `tar_make()`.

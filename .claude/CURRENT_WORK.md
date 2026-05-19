@@ -1,68 +1,54 @@
-# Current Work (Session 2026-05-18→19 — Nix segfault chain + roborev U-sweep + #208 narrative, ENDED)
+# Current Work (Session 2026-05-19 #2 — roborev backlog sweep, ENDED)
 
-**Last updated:** session end after PR #225 merge
-**Previous sessions:** 2026-05-17 (roborev cluster sweep), 2026-05-16 (Opus marathon)
+**Last updated:** session end after round-3 merge + bulk closure of round-4 false positives
+**Previous sessions:** 2026-05-19 #1 (Nix segfault chain + #208 narrative), 2026-05-18→19 (Round 3 cluster sweep)
 
 ## Final state
 
-`main` synced through `d011959` (PR #225 squash-merge). Working tree clean except for `inst/extdata/results/results_2026-05-18.parquet` (untracked pipeline output following the tracked pattern). 0 commits ahead of origin.
+`main` at `c60edd1` (Merge roborev #3130 — AST-based metrics extractor + 3 latent bug fixes). **21 commits ahead of `origin/main` — UNPUSHED.** Working tree clean. 0 open roborev findings. 1 roborev job queued (in-flight verdict for c60edd1).
 
 ## Session totals
 
-- **9 PRs merged**: #212, #214, #218, #219, #220, #221, #222, #223, #225
-- **4 issues filed**: #210 (PR-U tracking), #211 (Rcpp ABI segfault — closed by #219), #224 (15 pre-existing pipeline errors), cross-comment on #208
-- **98 roborev verdicts closed** (24 B1 + 47 B2 + 27 PR-U1..U5)
-- **Full `tar_make()` completed**: 352/502 targets succeed, 22m 57s wall
-- **Critical empirical finding surfaced**: Validation Sharpe -0.84 (every strategy loses money OOS) — drove the #208 narrative rewrite
+- **33 roborev verdicts closed**: 9 round-1 + 5 round-2 + 1 round-3 (#3130) + 2 round-3 lows closed-with-reasoning (#3131 #3129) + 20 round-4 false-positive duplicates
+- **20 commits added on top of d24b632**: 12 fix commits + 7 merge commits (`--no-ff`) + 1 round-3 merge
+- **13 agents spawned in parallel worktrees** across 3 rounds (7 + 5 + 1)
+- **3 latent bugs surfaced beyond what reviewers flagged** (test strsplit perl=FALSE; qa_summary missing 2 multi-line targets; RcppRoll added to wrong DESCRIPTION)
+- **0 pushes, 0 PRs opened**
 
-## Key technical work
+## Branches still present (delete after push if not needed)
 
-### The PR #206 dispatch trap (closed by #212)
-`calc_backtest_metrics` collision: new vector-style function had same name as df-style function in `plan_stock_backtest.R:348`. Dispatch picked wrong variant → `nrow(numeric_vector) = NULL` → `if (NULL < 12)` error. Plus `R/utils_metrics.R` was never sourced. Fix: rename to `annualise_returns` + add source line.
+All round-1 and round-2 branches were merged via `--no-ff` and the worktrees removed. The branch refs themselves still exist locally:
+- `fix/roborev-2756-postpath`, `fix/roborev-2763-rcpproll`, `fix/roborev-2786-fetch-metadata`
+- `fix/roborev-3113-yieldtype-precedence`, `fix/roborev-3114-aslogical-generic`, `fix/roborev-3115-qadeps-autocheck`, `fix/roborev-3116-prose-alpha`, `fix/roborev-3118-rcpproll-arch`
+- `fix/roborev-3130-multiline-parse`
+- 4 `worktree-agent-*` branches from round-1 (B, C, E, F agents)
 
-### The Nix segfault chain (closed by #218 + #219)
-- `*** caught segfault *** in dyn.load` on `zak_signal_percentile` — R_LIBS_SITE inherited from outer shell pointed to ABI-incompatible paths.
-- `#218`: 24-line closure-rebuild shellHook (per `nix-nested-shell-isolation` rule) + `default.post.sh` idempotent re-application script + `slider` in tproject.toml.
-- `#219`: added `RcppRoll` (the actual missing dep), removed 19-line glob hack from `docs/_targets.R` AND duplicate in `R/plan_qa_vignette.R` that re-introduced the bad paths.
-- After fix: `zak_signal_percentile` 169ms, full pipeline 22m 57s.
+All are reachable from `main`, so deleting them is purely cosmetic.
 
-### Roborev U-sweep (PR-U1..U5)
-- `#214` (U1) leaderboard `opt_vol` + factormax determinism + avoid_worst as.Date() + vintages silent tryCatch
-- `#220` (U3) XSS innerHTML + 33 target=_blank rel + VIGNETTE_STRICT footgun
-- `#221` (U4) Python `0.0 or X = X` bug → `first_present(d, *keys)` + dead rename
-- `#222` (U2) qa_summary explicit metric deps + duplicated glob removal
-- `#223` (U5) stale prose cleanup
+## Key technical findings (for next session)
 
-### #208 narrative rewrite (PR #225)
-Sonnet fixer in worktree rewrote 9 sites across stock-backtest.qmd + drif.qmd. Reversed: "best OOS Sharpe (0.79)" → -1.51. Added Validation-period callout boxes. Length-zero-safe Validation slices. Hardcoded vol/DD/CAGR replaced with `safe_tar_read` inline R. Quarto render PASS both files.
+### The `as.logical("1")` trap
+R's `as.logical()` does **not** parse numeric strings: `as.logical("1") = NA`, not `TRUE`. `VIGNETTE_STRICT=1` silently disables strict mode under `isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))`. Memory: `feedback_as-logical-numeric-strings.md`. If you want `=1` to work, the parser needs a custom helper.
 
-## Carried forward to next session
+### The roborev DB text vs `roborev show` text divergence
+`roborev_project_backlog.sh` excerpts are from `reviews.output` keyed by `reviews.id`. `roborev show <number>` accepts both `review_id` and `job_id` but resolves to different content (and the show output sometimes references files that don't exist in the project — looks like cross-project hallucination from auto-refine sessions). For real findings, query the DB directly:
+```sql
+SELECT rv.id, rv.output, rj.git_ref
+FROM reviews rv JOIN review_jobs rj ON rv.job_id = rj.id
+WHERE rj.repo_id = 16 AND rv.closed = 0 AND rv.verdict_bool = 0;
+```
 
-### High priority (smallest first)
-- **#224 PR-V1 patchwork dep** — add to tproject.toml + flake.nix; unblocks 1 vig_* target. Smallest.
-- **#224 PR-V2** — `vig_eq_vol` log-of-negative; needs `pmax(x, eps)` or filter.
-- **#210 PR-U6** — causal-diagrams.js bindFunctions + sample_data.R @param. Small docs follow-up.
-- **#224 PR-V3** — 4 `vig_*` targets need stingy duckplyr / explicit collect().
-- **#224 PR-V4** — 3 `crypto_bt_*` schema drift (ticker col join).
-- **#224 PR-V5** — `port_monthly_returns`.
+### Agent isolation pitfalls
+- `quick-fix` (haiku) agents have no Bash. With `isolation: "worktree"` set, they still edit files in the orchestrator's cwd (not the worktree), and can't `git commit`. **Use `fixer` (sonnet) for anything that must commit.** Reserve quick-fix for trivial single-line edits that the orchestrator will commit on the agent's behalf.
+- `fixer` agents with Bash can still commit straight to `main` if the worktree path isn't explicit in the prompt. Always state the worktree path AND the branch name.
 
-### Medium priority (carry-forward from prior sessions)
-- `#142` EUR Phase 1
-- `#200` OLMAR-1222 Phase 1
-- `#192` Kinlay agentic-workflows infrastructure pillars (PIT wrapper / research-log DB / 4-role agents / critic / human-gate)
-- `#194` AlphaVantage Phase 0 + alphavantager wrapper test
-- `#160` PR 3+4
-- `#171` Alpaca scrape
-- `#170` Macrosynergy
-- `#168` IBKR Phase 2
+### `--no-ff` merge topology is auditable
+7 round-1 branches merged with `--no-ff -m "Merge roborev #..."` produced a fan-out topology that's readable in `git log --oneline --graph`. Better than fast-forward when the merging is automation-generated.
 
-### Verification debt
-- **T7 cluster D dark-mode contrast** — needs Pages deploy + live URL (check_dark_contrast.sh doesn't accept file://). Run after next Pages deploy.
-- **MIDD.L #644** — group still has live references at `groups.R:65,74` beyond PR #198's fix. Reopen.
+## Next session candidates
 
-## Pipeline state
-
-- 352/502 targets succeed; 15 errors pre-existing and tracked in #224
-- Latest leaderboard Sharpes (post-rebuild): Training 0.06 / Testing 0.06 / **Validation -0.84**
-- Persistence metric (12m horizon): stock_specific_momentum rank IC 0.031, t-stat 6.52 (the dominant signal)
-- Style / industry / beta components near zero — supports the empirical case for focusing on stock-specific signals over factor rotation
+- **Push the 21 commits** (or open a single PR consolidating them).
+- **Run `tar_make()`** to verify the fixes don't break the pipeline. None should — the changes are test infra, prose, scripts, and Nix — but it hasn't been verified.
+- **Decide whether to add `1`/`0` parsing to VIGNETTE_STRICT** (custom helper) or leave the current case-insensitive-logical-literals-only semantics now that the docstring is honest.
+- **Python test infra** — `tests/test_fetch_*.py` with pytest + responses/mock would make scripts/ behaviour testable. Would address the deferred #3129 ask.
+- **Drain the 1 queued roborev review** on c60edd1 — likely fine, but check before next session.
