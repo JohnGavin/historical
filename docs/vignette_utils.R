@@ -35,12 +35,10 @@ show_code <- function(target_name) {
 #' targets early.
 #'
 #' Accepted values for VIGNETTE_STRICT use R's as.logical() semantics:
-#'   Truthy (enable strict mode): "true", "TRUE", "T" (case-insensitive word forms only)
-#'   Falsy (disable strict mode): "false", "FALSE", "F", "" (unset)
-#'   Invalid (treated as FALSE via isTRUE(NA)): "1", "0", "yes", "no", or any other string
-#'
-#' Note: VIGNETTE_STRICT=1 does NOT enable strict mode. as.logical("1") returns NA,
-#' and isTRUE(NA) is FALSE. Use VIGNETTE_STRICT=true instead.
+#'   Accepts the logical literals "TRUE"/"T" and "FALSE"/"F" (case-insensitive,
+#'   so "true", "True", "t", "false", "False", "f" all parse). Any other string
+#'   (including "1", "0", "yes", "no") yields NA, which isTRUE() treats as FALSE.
+#'   Use VIGNETTE_STRICT=true to enable strict mode; anything else disables it.
 #'
 #' @param name Target name to read
 #' @param strict If TRUE, stop() on missing target. Default: checks VIGNETTE_STRICT env var.
