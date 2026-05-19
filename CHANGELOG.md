@@ -1,5 +1,62 @@
 # Changelog
 
+## 2026-05-19
+
+### Round 3 — Nix segfault chain + roborev sweep U1-U5 + #208 narrative (9 PRs, 4 issues, 98 verdicts closed)
+
+**The PR #206 dispatch trap (resolved by PR #212):**
+- `R/utils_metrics.R` was created by PR #206 but never sourced from `docs/_targets.R`. Worse: the new function `calc_backtest_metrics(ret_vector)` collided by name with existing `calc_backtest_metrics(df, label, rf_col)` in `R/plan_stock_backtest.R:348` (different signature, df-style). When `kv_*` targets called the new one with a numeric vector, R's dispatch picked the OLD df variant → `nrow(numeric_vector) = NULL` → `if (NULL < 12)` → "argument of length zero" abort on every `tar_make()`.
+- `#212` `fix(metrics): rename calc_backtest_metrics→annualise_returns + source utils_metrics.R` — 5-file mechanical edit (R/utils_metrics.R, tests/testthat/test-utils-metrics.R 27 refs, R/plan_kelly_variants.R 3 sites, R/plan_etf_replication.R 4 sites, docs/_targets.R 1 new source() line). Function name now matches what it does (annualise periodic returns); no collision risk.
+
+**The Nix segfault chain (PR #218 → #219, closes #211):**
+- Full `tar_make()` crashed on `zak_signal_percentile` with `*** caught segfault *** address 0x0` in `dyn.load`. Root cause: R_LIBS_SITE inherited from outer global nix-shell pointed to `/nix/store/...` paths compiled against a DIFFERENT R binary's ABI (per `nix-nested-shell-isolation` rule, same R version string ≠ same ABI).
+- `#218` `fix(nix): add closure-rebuild shellHook + slider dep to prevent R_LIBS_SITE segfaults` — adopted the 24-line closure-rebuild shellHook from footbet/0002842 (scans `nix-store -qR "$pkg"` for each buildInput, rebuilds R_LIBS_SITE from scratch); new `default.post.sh` idempotent re-application script for after `t update` regenerates flake.nix; `tproject.toml` adds `"slider"` to r-dependencies.
+- **First fix incomplete** — `docs/_targets.R:14-30` had a 19-line glob hack (`Sys.glob("/nix/store/*-r-PKG-*/library")`) pre-pending ABI-incompatible paths to `.libPaths()`, re-introducing the same problem after the shellHook discarded them. Pipeline still segfaulted.
+- `#219` `fix(nix): add RcppRoll dep + remove glob hack to fully resolve #211` — added `"RcppRoll"` to `tproject.toml` (the actual missing dep; the other 4 were already in deps), removed the entire 19-line glob hack from `docs/_targets.R`, removed an identical duplicate from `R/plan_qa_vignette.R`. After fix: `zak_signal_percentile` completes in 169 ms; full `tar_make()` 22m 57s, 352/502 targets succeed.
+
+**Roborev sweep — PR-U1 through PR-U5 (cluster D follow-ups):**
+- `#214` `fix: 4 LIVE roborev bugs across leaderboard / factormax / avoid_worst / vintages` (PR-U1) — leaderboard missing `opt_vol` (fixed by `R/plan_portfolio_opt.R` adding `opt_vol = sd(df$optimal_ret) * sqrt(12)` to port_metrics); `R/plan_factormax.R:343` non-deterministic `distinct(ym, date)` replaced with `group_by(ym) |> slice_max(date, n=1L, with_ties=FALSE)`; `R/plan_avoid_worst.R:470-477` moved `as.Date()` coercion BEFORE join (date/POSIXct mismatch); `packages/historicaldata/R/vintages.R:91-94` silent tryCatch replaced with `cli::cli_warn` + `conditionMessage`.
+- `#220` `fix(docs): XSS innerHTML + 33 target=_blank rel=noopener + VIGNETTE_STRICT footgun` (PR-U3) — `docs/factor-max.qmd` XSS via `innerHTML +=` replaced with `createElement` (auto-escaped); 33 `target="_blank"` anchors across 8 qmd files got `rel="noopener noreferrer"` (reverse tabnabbing); `docs/vignette_utils.R` VIGNETTE_STRICT changed from `nzchar(Sys.getenv(...))` (returned TRUE for the string "0") to `isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))`.
+- `#221` `fix(scripts): Python fetch correctness — dead rename + 'or' on 0.0 yield` (PR-U4) — `scripts/fetch_crypto.py` removed dead `col_map = {"adj_close": "adjusted"}` (column already pre-renamed upstream); `scripts/fetch_metadata.py` added `first_present(d, *keys)` helper replacing `info.get(k) or info.get(j)` (was returning NULL when first key had legitimate value 0.0, e.g. zero dividend yield).
+- `#222` `fix(qa): qa_summary depends on all metric targets + remove duplicated nix glob` (PR-U2) — `R/plan_qa_vignette.R` `qa_summary` now declares 14 upstream metric dependencies via `invisible(list(leaderboard, fm_metrics, ...))` (was silently passing when metrics were stale); removed duplicated glob hack at lines 23 and 74.
+- `#223` `docs/chore: stale prose cleanup post-#219` (PR-U5) — minor stale-reference cleanup after the pipeline rebuild.
+
+**Issue #208 narrative rewrite (PR #225):**
+- `#225` `docs(prose): rewrite stock-backtest + drif interpretive claims to match current values` — Sonnet fixer agent in worktree rewrote 9 sites across `docs/stock-backtest.qmd` + `docs/drif.qmd` so prose matches current values. Critical reversals: "Stock DRIF has the best OOS Sharpe (0.79)" → current Validation Sharpe -1.51 (now framed as "highest at time of development; Validation Sharpe is now ..."); "Elastic net generalises well" → "appeared to generalise in Testing; now reverses"; "DRIF > MAX at both levels" → conditional framing with live Sharpes. Added Validation-period status callout boxes in both files. Hardcoded vol/DD/CAGR numbers in Stock MAX Pros and XGBoost Definition now `safe_tar_read` inline R. All Validation slices length-zero-safe (`length(v) == 1L` guard). `quarto render` PASS on both files.
+
+### Issues filed (4)
+
+- `#210` Tracking issue for the PR-U1..U5 roborev sweep + the U6 docs sub-task that's still open.
+- `#211` Pipeline `tar_make()` Rcpp ABI segfault — root cause + multi-PR resolution path. Closed by #219.
+- `#224` 15 pre-existing pipeline errors surfaced by the full rebuild — `patchwork` dep missing (PR-V1), `vig_eq_vol` log of negative (PR-V2), 4 `vig_*` stingy duckplyr issues (PR-V3), 3 `crypto_bt_*` schema drift (PR-V4), `port_monthly_returns` (PR-V5).
+- Plus the cross-comment on `#208` linking to PR #225.
+
+### Failed Approaches
+
+- **First `#218` shellHook alone** — did NOT resolve the segfault because the docs/_targets.R glob hack was actively re-introducing ABI-incompatible paths after the shellHook cleared them. Defence-in-depth requires BOTH layers (shellHook fix the outer-shell contamination, missing deps must be declared properly so no glob hack is needed). Resolved by #219.
+- **`tar_make(callr_function = NULL)` after the first segfault** — running in-process meant the segfault killed the whole orchestrator session. Restarted using normal crew workers + isolation; next worker segfault didn't kill the parent.
+- **`tar_make(names = any_of(c(...)))` with a variable named `affected`** — `any_of()` evaluates in an unfamiliar scope; "object 'affected' not found". Worked around by inlining the character vector directly inside `any_of()`.
+- **Cherry-pick to deleted branch** — committed a CHANGELOG update to `docs/dynamic-prose-sharpe-values` (deleted by GitHub after PR merge). Recovered via cherry-pick to main + force-rebase.
+- **`quick-fix` (haiku) attempted PR-Q-style commits** — no Bash tool, can only Read/Grep/Glob/Edit; edits landed on absolute paths not in worktree. Orchestrator filled the gap inline (now logged in 2026-05-18 entry as `PR #198 lesson`).
+
+### Accuracy / Metrics
+
+- 9 PRs merged today: #212 + #214 + #218 + #219 + #220 + #221 + #222 + #223 + #225
+- 4 issues filed: #210 + #211 + #224 + cross-comment on #208
+- 98 roborev verdicts closed (24 B1 + 47 B2 + 27 PR-U1..U5)
+- Full `tar_make()` completed for first time today: 352/502 targets succeed, 22m 57s wall
+- New empirical findings surfaced (now feeding #208 prose): persistence_metrics stock_specific_momentum rank IC 0.031 (12m horizon), t-stat 6.52; style/industry/beta components near zero
+- Leaderboard reality check: Training Sharpe 0.06, Testing Sharpe 0.06, **Validation Sharpe -0.84** — every strategy loses money OOS in the validation period
+- Sharpe shifts from PR #206 compound-annualisation switch (kv_* targets): 0.71→0.68, 0.54→0.50, 0.52→0.45 (small downward shifts as expected; ETF replication already compound, values unchanged)
+- Today's running totals (post-compact context): 14 PRs / 7 issues / 98 verdicts before #225, +1 PR after = 15 PRs total for the 2026-05-18→19 day
+
+### Known Limitations
+
+- **15 pre-existing pipeline errors remain** (tracked in #224) — `patchwork` not declared (PR-V1 smallest), `vig_eq_vol` log of negative (PR-V2), 4 `vig_*` need stingy duckplyr (PR-V3), 3 `crypto_bt_*` ticker join schema drift (PR-V4), `port_monthly_returns` (PR-V5).
+- **PR-U6 still open under #210** — causal-diagrams.js bindFunctions + sample_data.R @param docs; small but not yet picked up.
+- **T7 cluster D contrast check still deferred** — same as 2026-05-18 entry; needs Pages deploy + live-URL invocation.
+- **MIDD.L follow-up under #644** — group still has live references at `groups.R:65,74` beyond PR #198's fix; reopen for next session.
+
 ## 2026-05-18
 
 ### Round 1 + Round 2 cleanup — 7 PRs, 3 issues, infrastructure for centralised llm + telemetry
