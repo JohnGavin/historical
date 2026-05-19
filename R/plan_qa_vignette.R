@@ -16,9 +16,17 @@ plan_qa_vignette <- function() {
     #
     # CANONICAL LIST — keep in sync with every tar_target(*_metrics) in R/.
     # Automated check: tests/testthat/test-qa-summary-deps.R asserts both sets match.
+    #
+    # IMPORTANT: Only plan files that are source()d in docs/_targets.R belong here.
+    # Plan files that exist on disk but are NOT sourced (e.g. plan_te_ir.R,
+    # plan_integration.R) are excluded — their targets never enter the live pipeline.
+    #
     # To enumerate manually (most accurate — uses the same AST extractor as the test):
     #   Rscript -e '
-    #     plan_files <- list.files("R", pattern="^plan_.*\\.R$", full.names=TRUE)
+    #     targets_r <- readLines("docs/_targets.R")
+    #     sourced <- regmatches(targets_r, regexpr("R/plan_[^\"]+\\.R", targets_r))
+    #     plan_files <- file.path(here::here(), sourced)
+    #     plan_files <- plan_files[file.exists(plan_files)]
     #     out <- character(0)
     #     walk <- function(e) {
     #       if (is.call(e)) {
@@ -60,7 +68,6 @@ plan_qa_vignette <- function() {
         rsc_metrics,
         stk_drif_metrics,
         stk_max_metrics,
-        te_ir_metrics,
         xgb_drif_metrics
       ))
       cli::cli_inform(c("v" = "QA: all metric targets succeeded ({format(Sys.time(), '%H:%M:%S')})"))
