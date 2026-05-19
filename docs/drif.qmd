@@ -77,7 +77,7 @@ if (!is.null(metrics)) {
 ```
 
 ::: {.callout-warning}
-**Current status (Validation period — sealed one-shot evaluation):** Sharpe `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, CAGR `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`, max DD `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`. The strategy is losing money in the sealed Validation partition. The in-sample and Testing Sharpes above reflect the development period; the Validation result is the unbiased estimate of live performance. Factor DRIF was developed when Testing-period Sharpe appeared promising; current pipeline rebuild (post PR #219) shows the Validation result is negative across all four strategies in this family.
+**Current status (Validation period — sealed one-shot evaluation):** Sharpe `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, CAGR `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`, max DD `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`. The strategy is losing money in the sealed Validation partition. The in-sample and Testing Sharpes above reflect the development period; the Validation result is the unbiased estimate of live performance. Factor DRIF was developed when Testing-period Sharpe appeared promising; current pipeline rebuild (post PR #219) shows the Validation Sharpe is `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` — see the stock-backtest comparison page for all four strategies.
 :::
 
 #### Factor Selection
@@ -98,7 +98,7 @@ safe_tar_read("drif_vs_max_plot")
 ```
 
 ::: {.fig-caption}
-**DRIF vs Factor MAX.** Both strategies applied to the same FF5+Momentum factor universe. DRIF uses 42 features (21 chronological + 21 rank daily returns) via elastic net; Factor MAX uses only the single highest daily return. Full-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`. Validation-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`.
+**DRIF vs Factor MAX.** Both strategies applied to the same FF5+Momentum factor universe. DRIF uses 42 features (21 chronological + 21 rank daily returns) via elastic net; Factor MAX uses only the single highest daily return. Full-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`. Validation-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`.
 :::
 
 # Methodology
@@ -118,7 +118,7 @@ For each factor, each month:
 2. **Create two feature sets:**
    - **Chronological** (c1...c21): returns in time order (c1 = oldest, c21 = most recent)
    - **Rank** (r1...r21): returns sorted by magnitude (r1 = worst, r21 = best)
-3. **Predict** next month's return using elastic net (or PCA-OLS fallback) trained on expanding window
+3. **Predict** next month's return using elastic net (`glmnet::cv.glmnet`, alpha = 0.5) trained on expanding window
 4. **Select** top-2 factors by predicted return, equal weight
 5. **Rebalance** monthly
 
@@ -207,7 +207,7 @@ Key differences:
 - **Cross-section size:** 5 factors vs 3000+ stocks — much less statistical power for decile sorts
 - **Feature independence:** Factor daily returns are more correlated than stock returns
 - **No shorting:** We go long top-2 factors; the paper shorts bottom decile stocks
-- **PCA-OLS:** Using 5-PC OLS as fallback (glmnet would give elastic net regularisation)
+- **Elastic net only:** We use `glmnet::cv.glmnet` (alpha = 0.5) throughout; there is no PCA-OLS fallback path in the current implementation
 
 A proper stock-level implementation requires ~500+ US equity tickers (see #6 for international equities expansion).
 :::
