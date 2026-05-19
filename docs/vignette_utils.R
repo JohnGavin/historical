@@ -30,23 +30,38 @@ show_code <- function(target_name) {
 
 #' Read a vig_* target with RDS fallback
 #'
-#' In strict mode (set VIGNETTE_STRICT=true env var), fails with error instead
-#' of returning NULL. Use strict mode in CI/production renders to catch missing
-#' targets early.
+#' In strict mode (set VIGNETTE_STRICT=true or VIGNETTE_STRICT=1 env var),
+#' fails with error instead of returning a stale-marker value. Use strict mode
+#' in CI/production renders to catch missing targets early.
 #'
-#' Accepted values for VIGNETTE_STRICT use R's as.logical() semantics:
-#'   Accepts the logical literals "TRUE"/"T" and "FALSE"/"F" (case-insensitive,
-#'   so "true", "True", "t", "false", "False", "f" all parse). Any other string
-#'   (including "1", "0", "yes", "no") yields NA, which isTRUE() treats as FALSE.
-#'   Use VIGNETTE_STRICT=true to enable strict mode; anything else disables it.
+#' When a target is missing in non-strict mode, returns a stale-marker object:
+#' NA_real_ with class "stale_marker". Downstream prose and tables should check
+#' for this with is_stale_marker() and display "MISSING" rather than a number.
+#'
+#' VIGNETTE_STRICT parsing: accepts "true"/"false"/"TRUE"/"FALSE" (logical
+#' literals via as.logical()), AND "1"/"0" (numeric strings). Setting
+#' VIGNETTE_STRICT=1 or VIGNETTE_STRICT=true both enable strict mode.
+#' Any other value (e.g. unset, empty string) disables strict mode.
+#' Semantic: env var SET to a truthy value = strict mode ON.
 #'
 #' @param name Target name to read
 #' @param strict If TRUE, stop() on missing target. Default: checks VIGNETTE_STRICT env var.
-safe_tar_read <- function(name,
-                          strict = isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))) {
-  result <- tryCatch(
+.parse_vignette_strict <- function() {
+  raw <- Sys.getenv("VIGNETTE_STRICT", "")
+  if (nzchar(raw) && raw %in% c("1", "yes", "on")) return(TRUE)
+  isTRUE(as.logical(raw))
+}
 
-targets::tar_read_raw(name),
+#' @rdname safe_tar_read
+#' @export
+is_stale_marker <- function(x) {
+  inherits(x, "stale_marker")
+}
+
+safe_tar_read <- function(name,
+                          strict = .parse_vignette_strict()) {
+  result <- tryCatch(
+    targets::tar_read_raw(name),
     error = function(e) {
       rds_dirs <- c("../inst/extdata/vignettes", "inst/extdata/vignettes")
       for (d in rds_dirs) {
@@ -57,9 +72,17 @@ targets::tar_read_raw(name),
     }
   )
 
-  if (is.null(result) && strict) {
-    stop("VIGNETTE_STRICT: Target '", name, "' not found. Run tar_make() first.",
-         call. = FALSE)
+  if (is.null(result)) {
+    if (strict) {
+      stop("VIGNETTE_STRICT: Target '", name, "' not found. Run tar_make() first.",
+           call. = FALSE)
+    }
+    # Return a typed marker instead of NULL so downstream code cannot silently
+    # treat it as a real number. Check with is_stale_marker(); display "MISSING".
+    marker <- NA_real_
+    class(marker) <- "stale_marker"
+    attr(marker, "target") <- name
+    return(marker)
   }
 
   result
