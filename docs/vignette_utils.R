@@ -30,17 +30,18 @@ show_code <- function(target_name) {
 
 #' Read a vig_* target with RDS fallback
 #'
-#' In strict mode (VIGNETTE_STRICT=1 env var), fails with error instead of
-#' returning NULL. Use strict mode in CI/production renders to catch missing
+#' In strict mode (set VIGNETTE_STRICT=true env var), fails with error instead
+#' of returning NULL. Use strict mode in CI/production renders to catch missing
 #' targets early.
+#'
+#' Accepted values for VIGNETTE_STRICT use R's as.logical() semantics:
+#'   Accepts the logical literals "TRUE"/"T" and "FALSE"/"F" (case-insensitive,
+#'   so "true", "True", "t", "false", "False", "f" all parse). Any other string
+#'   (including "1", "0", "yes", "no") yields NA, which isTRUE() treats as FALSE.
+#'   Use VIGNETTE_STRICT=true to enable strict mode; anything else disables it.
 #'
 #' @param name Target name to read
 #' @param strict If TRUE, stop() on missing target. Default: checks VIGNETTE_STRICT env var.
-#'   Accepted truthy values: "true", "TRUE", "T".
-#'   Falsy values: "false", "FALSE", "F", "0", "1", "" (unset).
-#'   Note: as.logical() only parses "TRUE"/"FALSE"/"T"/"F" — numeric strings "0"/"1"
-#'   return NA and therefore FALSE. nzchar() is NOT used because nzchar("0") and
-#'   nzchar("false") are both TRUE, which ignores the user's intent to disable.
 safe_tar_read <- function(name,
                           strict = isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))) {
   result <- tryCatch(
