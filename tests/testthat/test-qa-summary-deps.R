@@ -12,19 +12,55 @@ testthat::local_edition(3)
 # HOW: both sets are derived from source text, so the test stays in sync
 # automatically as plan files evolve.
 
-# Helper: extract all target names matching *_metrics from a set of R files
+# Helper: extract all target names matching *_metrics from a set of R files.
+#
+# Uses AST-based extraction (parse() + recursive walk) instead of line-by-line
+# regex.  This correctly handles multiline tar_target() definitions such as:
+#
+#   targets::tar_target(
+#         te_ir_metrics,         # plan_integration.R:150-151
+#   tar_target(
+#       persistence_metrics,     # plan_momentum_decomposition.R:61-62
+#
+# A line-based regex misses both of these because the target name is on the
+# line *after* the tar_target( open — fixes roborev #3130.
 extract_defined_metrics <- function(plan_dir) {
   plan_files <- list.files(plan_dir, pattern = "^plan_.*\\.R$", full.names = TRUE)
-  lines <- unlist(lapply(plan_files, readLines, warn = FALSE))
-  # Match: tar_target(  <name>_metrics  ,  (whitespace-tolerant, no tar_target_raw)
-  hits <- regmatches(
-    lines,
-    regexpr("tar_target\\s*\\(\\s*[a-z][a-z0-9_]*_metrics", lines, perl = TRUE)
-  )
-  hits <- hits[nzchar(hits)]
-  # Extract just the target name (everything after the opening paren and whitespace)
-  nms <- sub("tar_target\\s*\\(\\s*", "", hits, perl = TRUE)
-  sort(unique(nms))
+  out <- character(0)
+
+  walk <- function(e) {
+    if (is.call(e)) {
+      head <- e[[1L]]
+      # Accept both  tar_target(...)  and  targets::tar_target(...)
+      is_tar <- (is.symbol(head) && identical(as.character(head), "tar_target")) ||
+                (is.call(head) && length(head) == 3L &&
+                 identical(head[[1L]], as.symbol("::")) &&
+                 identical(head[[2L]], as.symbol("targets")) &&
+                 identical(head[[3L]], as.symbol("tar_target")))
+      if (is_tar && length(e) >= 2L) {
+        nm <- e[[2L]]
+        if (is.symbol(nm)) {
+          s <- as.character(nm)
+          if (grepl("_metrics$", s)) out[[length(out) + 1L]] <<- s
+        }
+      }
+      # Recurse into every sub-expression
+      for (i in seq_along(e)) walk(e[[i]])
+    }
+  }
+
+  for (path in plan_files) {
+    exprs <- tryCatch(
+      parse(file = path, keep.source = FALSE),
+      error = function(e) {
+        warning("Parse error in ", basename(path), ": ", conditionMessage(e))
+        NULL
+      }
+    )
+    if (!is.null(exprs)) for (e in exprs) walk(e)
+  }
+
+  sort(unique(out))
 }
 
 # Helper: extract targets listed inside qa_summary's invisible(list(...)) block
@@ -46,7 +82,7 @@ extract_declared_metrics <- function(qa_vignette_path) {
 
   # Extract bare symbol names that end in _metrics (strip comments, whitespace)
   block_clean <- sub("#.*$", "", block)  # strip inline comments
-  tokens <- unlist(strsplit(block_clean, "[,\\s\\(\\)]+"))
+  tokens <- unlist(strsplit(block_clean, "[,\\s\\(\\)]+", perl = TRUE))
   tokens <- trimws(tokens)
   tokens <- tokens[nzchar(tokens)]
   metrics <- grep("^[a-z][a-z0-9_]*_metrics$", tokens, value = TRUE)
@@ -54,6 +90,27 @@ extract_declared_metrics <- function(qa_vignette_path) {
 }
 
 # ── Tests ─────────────────────────────────────────────────────────────────────
+
+# Regression guard for roborev #3130: the AST extractor must find multiline
+# tar_target() definitions that the old line-regex missed.  If someone regresses
+# extract_defined_metrics() back to a line-based regex these two assertions will
+# fail immediately.
+test_that("extract_defined_metrics catches multiline tar_target() definitions (roborev #3130)", {
+  plan_dir <- here::here("R")
+  defined  <- extract_defined_metrics(plan_dir)
+
+  # te_ir_metrics: defined across two lines in plan_integration.R (targets::tar_target)
+  # and plan_te_ir.R (tar_target) — both were invisible to the old line regex.
+  expect_true(
+    "te_ir_metrics" %in% defined,
+    label = "te_ir_metrics present (multiline targets:: form — plan_integration.R:150-151)"
+  )
+  # persistence_metrics: defined across two lines in plan_momentum_decomposition.R
+  expect_true(
+    "persistence_metrics" %in% defined,
+    label = "persistence_metrics present (multiline form — plan_momentum_decomposition.R:61-62)"
+  )
+})
 
 test_that("qa_summary declares every *_metrics target defined in plan files", {
   plan_dir    <- here::here("R")

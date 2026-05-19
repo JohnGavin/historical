@@ -16,10 +16,24 @@ plan_qa_vignette <- function() {
     #
     # CANONICAL LIST — keep in sync with every tar_target(*_metrics) in R/.
     # Automated check: tests/testthat/test-qa-summary-deps.R asserts both sets match.
-    # To enumerate manually (POSIX-portable, works on macOS and Linux):
-    #   grep -rE "tar_target\s*\(\s*[a-z_]+_metrics" R/ | awk -F'(' '{print $2}' | awk '{print $1}'
-    # Or with ripgrep:
-    #   rg -o "tar_target\s*\(\s*\K[a-z_]+_metrics" R/
+    # To enumerate manually (most accurate — uses the same AST extractor as the test):
+    #   Rscript -e '
+    #     plan_files <- list.files("R", pattern="^plan_.*\\.R$", full.names=TRUE)
+    #     out <- character(0)
+    #     walk <- function(e) {
+    #       if (is.call(e)) {
+    #         h <- e[[1L]]
+    #         is_tar <- (is.symbol(h) && identical(as.character(h), "tar_target")) ||
+    #           (is.call(h) && length(h)==3L && identical(h[[1L]], as.symbol("::")) &&
+    #            identical(h[[2L]], as.symbol("targets")) && identical(h[[3L]], as.symbol("tar_target")))
+    #         if (is_tar && length(e)>=2L && is.symbol(e[[2L]]) && grepl("_metrics$", as.character(e[[2L]])))
+    #           out[[length(out)+1L]] <<- as.character(e[[2L]])
+    #         for (i in seq_along(e)) walk(e[[i]])
+    #       }
+    #     }
+    #     for (f in plan_files) { ex <- parse(file=f, keep.source=FALSE); for (e in ex) walk(e) }
+    #     cat(paste(sort(unique(out)), collapse="\n"), "\n")
+    #   '
     # DO NOT add a new *_metrics target without also updating this list (roborev #2788).
     targets::tar_target(qa_summary, {
       invisible(list(
@@ -39,12 +53,14 @@ plan_qa_vignette <- function() {
         ltr_metrics,
         mr_metrics,
         ms_metrics,
+        persistence_metrics,
         port_metrics,
         rafi_metrics,
         regime_metrics,
         rsc_metrics,
         stk_drif_metrics,
         stk_max_metrics,
+        te_ir_metrics,
         xgb_drif_metrics
       ))
       cli::cli_inform(c("v" = "QA: all metric targets succeeded ({format(Sys.time(), '%H:%M:%S')})"))
