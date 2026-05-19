@@ -79,6 +79,12 @@ def main():
 
     combined = pd.concat(frames, ignore_index=True)
 
+    # Validate required columns immediately after concat, before any column access.
+    required = {"date", "close", "ticker"}
+    missing = required - set(combined.columns)
+    if missing:
+        raise ValueError(f"Missing required columns after reshape: {missing}")
+
     # Standardise columns
     # Note: crypto data has no adjusted-close column (CoinGecko/Yahoo crypto never
     # had one); the adj_close → adjusted rename was dead code and is removed.
@@ -89,9 +95,6 @@ def main():
 
     keep = ["date", "open", "high", "low", "close", "volume",
             "ticker", "source", "asset_class"]
-    required = {"date", "close", "ticker"}
-    missing = required - set(combined.columns)
-    assert not missing, f"Missing required columns after reshape: {missing}"
     combined = combined[[c for c in keep if c in combined.columns]]
     combined = combined.sort_values(["ticker", "date"]).reset_index(drop=True)
 
