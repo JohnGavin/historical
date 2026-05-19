@@ -1,3 +1,6 @@
+testthat::local_edition(3)
+source(here::here("R/utils_metrics.R"))
+
 test_that("annualise_returns: all-zero returns produce CAGR 0, vol 0, sharpe NA, max_dd 0", {
   ret <- rep(0, 24)
   m <- annualise_returns(ret)
