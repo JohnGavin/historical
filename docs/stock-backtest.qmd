@@ -117,7 +117,7 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 
 | Finding | Evidence |
 |---------|----------|
-| Stock MAX has the highest raw CAGR (`r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`) | But with `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }` vol — risk-adjusted Sharpe is modest (`r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`) |
+| Stock MAX full-period CAGR: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }` | Vol: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }` — full-period Sharpe: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
 | Factor DRIF full-period Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` | Full-period covers the entire sample including Training. Validation Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
 | Stock DRIF full-period CAGR is only `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` | Elastic net regularisation is very aggressive at stock level |
 
@@ -137,7 +137,7 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 
 | Finding | Evidence |
 |---------|----------|
-| Stock-level strategies have 2-5x higher vol than factor-level | `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }` vol (stock MAX) vs `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }` (factor MAX) |
+| Stock-level vol (stock MAX: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }`) vs factor-level vol (factor MAX: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }`) | Compare the two values above — see metrics table for all strategies |
 | Stock MAX max drawdown is `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }` | Unacceptable for most allocators |
 | Factor strategies have drawdowns `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0("<",round(abs(v)*100,0),"%") else "N/A" }` | Lower risk but lower return |
 
@@ -245,7 +245,7 @@ safe_tar_read("stk_max_vs_factor_plot")
 
 1. For each of 660 stocks, collect the 21 daily returns in March 2024
 2. Create 42 features: c1...c21 (chronological order) + r1...r21 (sorted by magnitude)
-3. Train elastic net (alpha=0.5, 5-fold CV) on all prior stock-months (expanding window, 60-month minimum)
+3. Train elastic net (mixed L1/L2 regularisation, 5-fold CV) on all prior stock-months (expanding window, 60-month minimum)
 4. Predict each stock's April return from its March features
 5. Rank stocks by predicted return. D1 = highest predicted, D10 = lowest
 6. April: long D1, short D10, equal weight
@@ -312,7 +312,7 @@ if (!is.null(metrics)) {
 
 **Hypothesis:** XGBoost can capture non-linear relationships (interaction effects, threshold effects) that elastic net misses, while monotonic constraints preserve economic intuition.
 
-**Result:** XGBoost **underperforms** elastic net (XGBoost full-period CAGR: `r { m <- safe_tar_read("xgb_drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }` vs Elastic Net: `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`). The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.
+**Result:** XGBoost full-period CAGR: `r { m <- safe_tar_read("xgb_drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }` vs Elastic Net: `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`. The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.
 :::
 
 #### XGBoost vs Elastic Net
@@ -344,7 +344,7 @@ if (!is.null(metrics)) {
     mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2),
            avg_long = round(avg_long), avg_short = round(avg_short))
-  hd_dt_wide(display, "XGBoost DRIF metrics. Underperforms elastic net across all periods. Negative Sharpe confirms monotonic constraints are too restrictive for cross-sectional stock returns.")
+  hd_dt_wide(display, "XGBoost DRIF metrics by partition. Compare to Stock DRIF metrics in the Stock DRIF tab.")
 }
 ```
 
