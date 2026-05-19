@@ -14,10 +14,13 @@ plan_qa_vignette <- function() {
     # reaches this target after every upstream computation succeeds.
     # If any listed target errored, this target is skipped (not a false "QA passed").
     #
-    # CANONICAL LIST — keep in sync with every tar_target(*_metrics) in R/tar_plans/.
-    # To find all *_metrics targets:
-    #   grep -rE "tar_target\(\s*[a-z_]+_metrics" R/ | grep -oP "tar_target\(\s*\K[a-z_]+"
-    # DO NOT add a new *_metrics target without also adding it here (roborev #2788).
+    # CANONICAL LIST — keep in sync with every tar_target(*_metrics) in R/.
+    # Automated check: tests/testthat/test-qa-summary-deps.R asserts both sets match.
+    # To enumerate manually (POSIX-portable, works on macOS and Linux):
+    #   grep -rE "tar_target\s*\(\s*[a-z_]+_metrics" R/ | awk -F'(' '{print $2}' | awk '{print $1}'
+    # Or with ripgrep:
+    #   rg -o "tar_target\s*\(\s*\K[a-z_]+_metrics" R/
+    # DO NOT add a new *_metrics target without also updating this list (roborev #2788).
     targets::tar_target(qa_summary, {
       invisible(list(
         leaderboard,
