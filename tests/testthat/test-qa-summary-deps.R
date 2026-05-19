@@ -17,15 +17,32 @@ testthat::local_edition(3)
 # Uses AST-based extraction (parse() + recursive walk) instead of line-by-line
 # regex.  This correctly handles multiline tar_target() definitions such as:
 #
-#   targets::tar_target(
-#         te_ir_metrics,         # plan_integration.R:150-151
 #   tar_target(
 #       persistence_metrics,     # plan_momentum_decomposition.R:61-62
 #
-# A line-based regex misses both of these because the target name is on the
-# line *after* the tar_target( open — fixes roborev #3130.
-extract_defined_metrics <- function(plan_dir) {
-  plan_files <- list.files(plan_dir, pattern = "^plan_.*\\.R$", full.names = TRUE)
+# A line-based regex misses this because the target name is on the line *after*
+# the tar_target( open — fixes roborev #3130.
+#
+# FILTER: only plan files that are source()d in docs/_targets.R are walked.
+# Plan files that exist on disk but are NOT wired in (e.g. plan_te_ir.R,
+# plan_integration.R) are excluded — their targets never enter the live
+# pipeline and must NOT appear in qa_summary.
+extract_defined_metrics <- function(plan_dir = here::here("R"),
+                                    targets_r_path = here::here("docs/_targets.R")) {
+  # plan_dir is kept for backwards-compatibility but the canonical list of
+  # files to walk comes from docs/_targets.R, not a directory glob.
+  # This ensures that plan files on disk but not sourced (plan_te_ir.R,
+  # plan_integration.R) are excluded from the result.
+  #
+  # Parse source() calls from docs/_targets.R — exclude commented-out lines.
+  all_lines <- readLines(targets_r_path, warn = FALSE)
+  active_lines <- all_lines[!grepl("^\\s*#", all_lines)]
+  sourced_paths <- regmatches(
+    active_lines,
+    regexpr('R/plan_[^"]+\\.R', active_lines)
+  )
+  plan_files <- file.path(here::here(), sourced_paths)
+  plan_files <- plan_files[file.exists(plan_files)]
   out <- character(0)
 
   walk <- function(e) {
@@ -93,22 +110,31 @@ extract_declared_metrics <- function(qa_vignette_path) {
 
 # Regression guard for roborev #3130: the AST extractor must find multiline
 # tar_target() definitions that the old line-regex missed.  If someone regresses
-# extract_defined_metrics() back to a line-based regex these two assertions will
+# extract_defined_metrics() back to a line-based regex this assertion will
 # fail immediately.
+#
+# Note: te_ir_metrics was previously used as the regression marker here, but
+# plan_te_ir.R and plan_integration.R are NOT sourced by docs/_targets.R so
+# te_ir_metrics never enters the live pipeline.  extract_defined_metrics() now
+# filters to sourced plan files only, so te_ir_metrics is correctly absent.
+# persistence_metrics (plan_momentum_decomposition.R, a sourced file) remains
+# the multiline-form regression sentinel.
 test_that("extract_defined_metrics catches multiline tar_target() definitions (roborev #3130)", {
   plan_dir <- here::here("R")
   defined  <- extract_defined_metrics(plan_dir)
 
-  # te_ir_metrics: defined across two lines in plan_integration.R (targets::tar_target)
-  # and plan_te_ir.R (tar_target) — both were invisible to the old line regex.
-  expect_true(
-    "te_ir_metrics" %in% defined,
-    label = "te_ir_metrics present (multiline targets:: form — plan_integration.R:150-151)"
-  )
   # persistence_metrics: defined across two lines in plan_momentum_decomposition.R
+  # (a sourced plan file) — invisible to the old line-based regex.
   expect_true(
     "persistence_metrics" %in% defined,
     label = "persistence_metrics present (multiline form — plan_momentum_decomposition.R:61-62)"
+  )
+
+  # te_ir_metrics must NOT appear — plan_te_ir.R and plan_integration.R are
+  # not sourced by docs/_targets.R, so their targets are not in the live pipeline.
+  expect_false(
+    "te_ir_metrics" %in% defined,
+    label = "te_ir_metrics absent (plan_te_ir.R / plan_integration.R not sourced)"
   )
 })
 
