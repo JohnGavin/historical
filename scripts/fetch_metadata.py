@@ -83,6 +83,25 @@ def first_present(d: dict, *keys):
     return None
 
 
+def _yield_fields(info: dict) -> dict:
+    """Return yield_pct and yield_type derived from the same source.
+
+    Precedence (is-not-None, so 0.0 is treated as present):
+      1. trailingAnnualDividendYield → yield_type = "trailing"
+      2. yield > 0.20               → yield_type = "synthetic"
+      3. yield present              → yield_type = "reported"
+      4. neither present            → both None
+    """
+    trailing = info.get("trailingAnnualDividendYield")
+    raw_yield = info.get("yield")
+    if trailing is not None:
+        return {"yield_pct": trailing, "yield_type": "trailing"}
+    if raw_yield is not None:
+        yield_type = "synthetic" if raw_yield > 0.20 else "reported"
+        return {"yield_pct": raw_yield, "yield_type": yield_type}
+    return {"yield_pct": None, "yield_type": None}
+
+
 def fetch_yahoo_info(yahoo_sym: str) -> dict:
     """Fetch metadata from yfinance .info dict."""
     try:
@@ -106,17 +125,12 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
             "fifty_two_week_low": info.get("fiftyTwoWeekLow"),
             # ETF-specific
             "expense_ratio": info.get("annualReportExpenseRatio"),
-            # Yield: use trailingAnnualDividendYield if available, else yield.
-            # Use first_present (not `or`) so 0.0 (no dividend) is not treated as
-            # missing and does not fall through to the next key (#646 #667).
-            "yield_pct": first_present(info, "trailingAnnualDividendYield", "yield"),
-            # yield_type mirrors the presence-check logic of yield_pct above:
-            # check `is not None` (not truthiness) so 0.0 is treated as present.
-            "yield_type": (
-                "synthetic" if (info.get("yield") or 0) > 0.20 else
-                "trailing" if info.get("trailingAnnualDividendYield") is not None else
-                "reported" if info.get("yield") is not None else None
-            ),
+            # Yield: trailingAnnualDividendYield wins when present (including 0.0);
+            # only fall through to `yield` when trailing is None (#646 #667 #3113).
+            # yield_type is derived from the same source as yield_pct so the two
+            # fields always agree — 0.20 threshold for "synthetic" only applies
+            # when `yield` is the chosen source, never when trailing is present.
+            **_yield_fields(info),
             "category": info.get("category") or info.get("legalType"),
             "fund_family": info.get("fundFamily"),
             "nav_price": info.get("navPrice"),
