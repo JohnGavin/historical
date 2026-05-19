@@ -20,6 +20,7 @@ Imports:
     duckdb (>= 0.9),
     duckplyr,
     ggplot2,
+    RcppRoll,
     rlang,
     tibble
 Suggests:
