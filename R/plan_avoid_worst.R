@@ -908,14 +908,26 @@ plan_avoid_worst <- function() {
     targets::tar_target(aw_cross_market, {
       library(dplyr)
 
-      vix <- hd_macro("VIXCLS") |> select(date, vix = value) |> arrange(date)
+      # Coerce both sides to Date BEFORE joining: hd_macro() may return POSIXct,
+      # and a Date vs POSIXct left_join silently produces zero matches.
+      # Same fix applied to aw_vix_daily (PR #221 / roborev 2749).
+      vix <- hd_macro("VIXCLS") |>
+        select(date, vix = value) |>
+        dplyr::mutate(date = as.Date(date)) |>
+        arrange(date)
 
       purrr::map_dfr(c("SPY", "QQQ", "IWM", "DIA"), function(tkr) {
         d <- aw_daily_returns |>
           filter(ticker == tkr) |>
+          dplyr::mutate(date = as.Date(date)) |>
           arrange(date) |>
           left_join(vix, by = "date") |>
           filter(!is.na(vix), !is.na(ret))
+
+        stopifnot(
+          "aw_cross_market: join produced zero rows — Date/POSIXct type mismatch?" =
+            nrow(d) > 0
+        )
 
         n <- nrow(d)
         if (n < 252) return(NULL)
