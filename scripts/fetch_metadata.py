@@ -110,10 +110,12 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
             # Use first_present (not `or`) so 0.0 (no dividend) is not treated as
             # missing and does not fall through to the next key (#646 #667).
             "yield_pct": first_present(info, "trailingAnnualDividendYield", "yield"),
+            # yield_type mirrors the presence-check logic of yield_pct above:
+            # check `is not None` (not truthiness) so 0.0 is treated as present.
             "yield_type": (
                 "synthetic" if (info.get("yield") or 0) > 0.20 else
-                "trailing" if info.get("trailingAnnualDividendYield") else
-                "reported" if info.get("yield") else None
+                "trailing" if info.get("trailingAnnualDividendYield") is not None else
+                "reported" if info.get("yield") is not None else None
             ),
             "category": info.get("category") or info.get("legalType"),
             "fund_family": info.get("fundFamily"),
