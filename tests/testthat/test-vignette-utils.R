@@ -177,7 +177,12 @@ test_that(".parse_vignette_strict: VIGNETTE_STRICT=Off returns FALSE (mixed-case
 test_that(".parse_vignette_strict: VIGNETTE_STRICT=treu returns FALSE AND triggers cli_warn (typo guard, roborev T1)", {
   # 'treu' is not in any alias list; old code did isTRUE(suppressWarnings(as.logical('treu')))
   # which silently returned FALSE. New code surfaces a cli_warn so CI typos are visible.
+  # Reset frequency tracking so this test is hermetic and not suppressed by other tests
+  # that trigger the same warning (roborev 4039).
   withr::with_envvar(list(VIGNETTE_STRICT = "treu"), {
+    rlang::reset_warning_verbosity("vignette_strict_typo_treu")
+    withr::defer(rlang::reset_warning_verbosity("vignette_strict_typo_treu"))
+
     expect_warning(
       result <- .parse_vignette_strict(),
       regexp = "Unrecognised"
@@ -214,5 +219,29 @@ test_that(".parse_vignette_strict: 'n' is unrecognised alias — warns and retur
       regexp = "Unrecognised"
     )
     expect_false(result)
+  })
+})
+
+test_that(".parse_vignette_strict: typo warning fires AT MOST ONCE across N calls (roborev #4263)", {
+  # When safe_tar_read() is called N times during a single vignette render
+  # with a typo'd VIGNETTE_STRICT value, the cli_warn must not spam the console.
+  # .frequency = "once" + .frequency_id in cli_warn() achieves this.
+  withr::with_envvar(list(VIGNETTE_STRICT = "yse"), {
+    # Reset rlang's frequency tracking so this test is hermetic
+    rlang::reset_warning_verbosity("vignette_strict_typo_yse")
+    withr::defer(rlang::reset_warning_verbosity("vignette_strict_typo_yse"))
+
+    warnings_seen <- c()
+    withCallingHandlers(
+      {
+        for (i in seq_len(5)) .parse_vignette_strict()
+      },
+      warning = function(w) {
+        warnings_seen <<- c(warnings_seen, conditionMessage(w))
+        invokeRestart("muffleWarning")
+      }
+    )
+    expect_length(warnings_seen, 1L)
+    expect_match(warnings_seen[[1]], "Unrecognised")
   })
 })

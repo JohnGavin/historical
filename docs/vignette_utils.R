@@ -36,12 +36,18 @@ show_code <- function(target_name) {
   raw <- tolower(trimws(Sys.getenv("VIGNETTE_STRICT", "")))
   if (raw %in% c("1", "yes", "on", "true", "t")) return(TRUE)
   if (raw %in% c("0", "no", "off", "false", "f", "")) return(FALSE)
-  # Unrecognised non-empty value — surface the typo instead of silently defaulting
-  cli::cli_warn(c(
-    "Unrecognised {.envvar VIGNETTE_STRICT} value {.val {raw}} — falling back to FALSE",
-    i = "Accepted truthy: 1, yes, on, true, t (case-insensitive, whitespace-tolerant)",
-    i = "Accepted falsy: 0, no, off, false, f, '' (empty)"
-  ))
+  # Unrecognised non-empty value — surface the typo instead of silently defaulting.
+  # .frequency = "once" + .frequency_id prevents spam when safe_tar_read() is
+  # called N times in a single render with the same typo'd value (roborev #4263).
+  cli::cli_warn(
+    c(
+      "Unrecognised {.envvar VIGNETTE_STRICT} value {.val {raw}} — falling back to FALSE",
+      i = "Accepted truthy: 1, yes, on, true, t (case-insensitive, whitespace-tolerant)",
+      i = "Accepted falsy: 0, no, off, false, f, '' (empty)"
+    ),
+    .frequency = "once",
+    .frequency_id = paste0("vignette_strict_typo_", raw)
+  )
   FALSE
 }
 
