@@ -10,9 +10,12 @@ import sys
 from pathlib import Path
 
 # Allow running from repo root or from tests/
+# Import from the dep-free helper module so pytest collection does not trigger
+# pandas/pyarrow/yfinance imports or the DATASETS = build_datasets() side
+# effect that lives at the top level of fetch_metadata.py.
 sys.path.insert(0, str(Path(__file__).parent.parent / "scripts"))
 
-from fetch_metadata import _yield_fields
+from metadata_helpers import _yield_fields
 
 
 class TestYieldFields:
