@@ -352,8 +352,20 @@ plan_factormax <- function() {
         dplyr::slice_max(date, n = 1L, with_ties = FALSE) |>
         dplyr::ungroup() |>
         dplyr::select(ym, date)
-      # Regression guard: every ym in the lookup must come from the plotted subset.
-      stopifnot(all(date_lookup$ym %in% unique(dplyr::filter(etf_m, ticker %in% PLOT_TICKERS)$ym)))
+      # Regression guard (#216): each date in date_lookup must equal the max date
+      # for that ym within the plotted subset — catches a foreign-calendar date
+      # being selected when an unrelated ticker (QUAL, USMV, VTV, IWD) has a
+      # later month-end on a different holiday calendar.
+      expected_dates <- etf_m |>
+        dplyr::filter(ticker %in% PLOT_TICKERS) |>
+        dplyr::group_by(ym) |>
+        dplyr::summarise(max_date = max(date), .groups = "drop")
+      check <- date_lookup |>
+        dplyr::inner_join(expected_dates, by = "ym")
+      stopifnot(
+        "plan_factormax: date_lookup contains a foreign-calendar date — guard against the #216 regression" =
+          all(check$date == check$max_date)
+      )
       combined <- combined |> left_join(date_lookup, by = "ym")
 
       ggplot(combined, aes(date, cum, colour = strategy)) +
