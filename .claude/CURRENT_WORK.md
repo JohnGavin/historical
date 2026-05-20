@@ -1,6 +1,6 @@
-# Current Work (Session 2026-05-20 #2 — round-4/5 roborev sweep + qa_summary verified, ENDED)
+# Current Work (Session 2026-05-20 #2 — round-4/5 roborev sweep + qa_summary verified, ENDED + triage addendum)
 
-**Last updated:** session end after CHANGELOG + push
+**Last updated:** post-session triage addendum (open-review backlog measured at 23, not 3)
 **Previous sessions:** 2026-05-20 #1 (issue triage, tier-2 fixes, branch hygiene, ENDED), 2026-05-19 #2 (roborev backlog sweep), 2026-05-19 #1 (Nix segfault + #208)
 
 ## Final state
@@ -27,10 +27,18 @@ Cluster C agent (round 4) re-rendered `docs/stock-backtest.html` as a plain Boot
 ### stale_marker reverted to NULL contract
 Cluster B agent audited 50+ `is.null()` callers across 9 vignette qmds before deciding which approach. Session-3's `stale_marker` sentinel would have silently bypassed every guard. Predicate `is_stale_marker()` kept for any future migration.
 
-## Next session candidates
+## Next session candidates (priority order, set by post-session triage)
 
-- **Resolve #238** — explicit sign-off on deleting 9 stale WIP branches + 7 worktrees (or partial). All 4 mapped GH issues are CLOSED so abandonment is likely correct. sonnet-0508 worktree alone is 142MB.
-- **Round-6 roborev noise** — 3 unresolved findings expected from post-merge auto-refine reviews of today's commits.
-- **Address #239** — wire pytest into CI; add raw_yield==0.20 boundary test.
-- **Capture agent-worktree-push-discipline** as a memory file or rule. Pattern: when delegating with isolation:"worktree", explicitly tell the agent to NOT push and to verify its branch is not `main`.
+| Priority | Group | Item | Effort | Blocker |
+|---|---|---|---|---|
+| **P1** | code-quality | 5 open roborev reviews on today's HEAD commits (`acd58ba`, `7cd3f90`, 3× `73770e6c`). Triage: close or fix while context is fresh. | S | — |
+| P2 | code-quality | 18 older open roborev reviews — backlog rot risk, some likely moot. | M | — |
+| P2 | CI/automation | **#239** — wire pytest into CI + add `raw_yield==0.20` boundary test. | M | CI config decisions |
+| P3 | housekeeping | **#238** — delete 9 stale WIP branches + 7 worktrees (sonnet-0508 alone = 142 MB; all 4 mapped GH issues CLOSED). | S | **User sign-off required (destructive-fs-guard)** |
+
+### Discovery: open-review backlog larger than predicted
+`roborev list --open` returned **23** open reviews at session-end, not the 3 predicted from "round-6 auto-refine noise." 5 are on today's HEAD commits; the remaining 18 pre-date today.
+
+### Carried-over follow-ups (independent of the table above)
+- **Capture agent-worktree-push-discipline** as a memory file or rule. Pattern: when delegating with `isolation:"worktree"`, explicitly tell the agent to NOT push and to verify its branch is not `main`.
 - **Retention policy** for `inst/extdata/results/results_*.parquet` artifacts.

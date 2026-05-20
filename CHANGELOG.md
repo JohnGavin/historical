@@ -23,6 +23,15 @@
 ### Accuracy / Metrics
 
 - Roborev resolution rate: **126/129 (97.7%)** at session-end. The 3 unresolved are post-merge auto-refine reviews of today's commits.
+
+### Triage addendum (post-session, same day)
+
+- **Open-review backlog larger than expected.** `roborev list --open` returned **23** open reviews, not the 3 predicted from "round-6 auto-refine noise". 5 are on today's HEAD commits (`acd58ba`, `7cd3f90`, plus 3× `73770e6c`); 18 are older and pre-date today's session.
+- **Pending work tabulated by priority** for the next session:
+  1. (P1) 5 HEAD-commit open reviews — close or fix; surrounding context still fresh.
+  2. (P2) 18 older open reviews — backlog rot risk, some likely moot.
+  3. (P2) #239 — wire pytest into CI + add `raw_yield==0.20` boundary test.
+  4. (P3) #238 — destructive branch/worktree cleanup; blocked on user sign-off per `destructive-fs-guard` rule.
 - Test suite: `test-qa-summary-deps.R` 5/5 PASS; `test-vignette-utils.R` 16/16 PASS; `test_dir("tests/testthat")` 213 PASS / 0 FAIL / 16 SKIP.
 - `qa_summary` build: 4 ran / 106 skipped / 0 errored.
 - Open GH issues: roughly unchanged (#239 added, no closures).
