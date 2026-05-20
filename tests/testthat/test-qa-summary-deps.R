@@ -34,16 +34,49 @@ extract_defined_metrics <- function(plan_dir = here::here("R"),
   # This ensures that plan files on disk but not sourced (plan_te_ir.R,
   # plan_integration.R) are excluded from the result.
   #
-  # Parse source() calls from docs/_targets.R — exclude commented-out lines.
-  all_lines <- readLines(targets_r_path, warn = FALSE)
-  active_lines <- all_lines[!grepl("^\\s*#", all_lines)]
-  sourced_paths <- regmatches(
-    active_lines,
-    regexpr('R/plan_[^"]+\\.R', active_lines)
+  # AST-walk docs/_targets.R to find source() calls — handles multi-line
+  # source() definitions and correctly excludes commented-out source() calls
+  # (which regex on active_lines cannot do reliably when comments are inline
+  # rather than line-leading).
+  targets_exprs <- tryCatch(
+    parse(file = targets_r_path, keep.source = FALSE),
+    error = function(e) {
+      testthat::fail(paste0(
+        "Fatal: could not parse ", targets_r_path, "\n",
+        conditionMessage(e)
+      ))
+    }
   )
+
+  sourced_paths <- character(0)
+  find_sources <- function(e) {
+    if (!is.call(e)) return()
+    head <- e[[1L]]
+    is_source <- is.symbol(head) && identical(as.character(head), "source")
+    if (is_source && length(e) >= 2L) {
+      arg <- e[[2L]]
+      # Handle: source("R/plan_foo.R")  or  source(here::here("R/plan_foo.R"))
+      path_str <- NULL
+      if (is.character(arg)) {
+        path_str <- arg
+      } else if (is.call(arg)) {
+        # Detect here::here("R/plan_foo.R") — the last string argument is the path
+        str_args <- Filter(is.character, as.list(arg))
+        if (length(str_args) > 0L) path_str <- str_args[[length(str_args)]]
+      }
+      if (!is.null(path_str) && grepl("^R/plan_.*\\.R$", path_str)) {
+        sourced_paths[[length(sourced_paths) + 1L]] <<- path_str
+      }
+    }
+    # Recurse into every sub-expression
+    for (i in seq_along(e)) find_sources(e[[i]])
+  }
+  for (e in targets_exprs) find_sources(e)
+
   plan_files <- file.path(here::here(), sourced_paths)
   plan_files <- plan_files[file.exists(plan_files)]
   out <- character(0)
+  parse_errors <- character(0)
 
   walk <- function(e) {
     if (is.call(e)) {
@@ -70,11 +103,22 @@ extract_defined_metrics <- function(plan_dir = here::here("R"),
     exprs <- tryCatch(
       parse(file = path, keep.source = FALSE),
       error = function(e) {
-        warning("Parse error in ", basename(path), ": ", conditionMessage(e))
+        parse_errors[[length(parse_errors) + 1L]] <<- paste0(
+          basename(path), ": ", conditionMessage(e)
+        )
         NULL
       }
     )
     if (!is.null(exprs)) for (e in exprs) walk(e)
+  }
+
+  # Fail loudly — a parse error means the test cannot guarantee completeness.
+  # Silently skipping would defeat the purpose of this tripwire.
+  if (length(parse_errors) > 0L) {
+    testthat::fail(paste0(
+      "Fatal parse error(s) in plan file(s) — qa_summary completeness cannot be verified:\n  ",
+      paste(parse_errors, collapse = "\n  ")
+    ))
   }
 
   sort(unique(out))

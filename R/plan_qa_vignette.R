@@ -21,11 +21,30 @@ plan_qa_vignette <- function() {
     # Plan files that exist on disk but are NOT sourced (e.g. plan_te_ir.R,
     # plan_integration.R) are excluded — their targets never enter the live pipeline.
     #
-    # To enumerate manually (most accurate — uses the same AST extractor as the test):
+    # To enumerate manually (uses AST walking — correctly excludes commented-out
+    # source() lines that regex on readLines() would accidentally include):
     #   Rscript -e '
-    #     targets_r <- readLines("docs/_targets.R")
-    #     sourced <- regmatches(targets_r, regexpr("R/plan_[^\"]+\\.R", targets_r))
-    #     plan_files <- file.path(here::here(), sourced)
+    #     # Step 1: AST-walk _targets.R to find active source() calls only.
+    #     # NOTE: do NOT use readLines() + regmatches() here — that approach
+    #     # re-includes commented-out lines like
+    #     #   # source(here::here("R/plan_te_ir.R"))
+    #     # if the comment marker is mid-line rather than line-leading.
+    #     targets_exprs <- parse(file = "docs/_targets.R", keep.source = FALSE)
+    #     sourced_paths <- character(0)
+    #     find_sources <- function(e) {
+    #       if (!is.call(e)) return()
+    #       if (is.symbol(e[[1L]]) && identical(as.character(e[[1L]]), "source") && length(e)>=2L) {
+    #         arg <- e[[2L]]
+    #         str_args <- Filter(is.character, as.list(arg))
+    #         path_str <- if (is.character(arg)) arg else if (length(str_args)>0L) str_args[[length(str_args)]] else NULL
+    #         if (!is.null(path_str) && grepl("^R/plan_.*\\.R$", path_str))
+    #           sourced_paths[[length(sourced_paths)+1L]] <<- path_str
+    #       }
+    #       for (i in seq_along(e)) find_sources(e[[i]])
+    #     }
+    #     for (e in targets_exprs) find_sources(e)
+    #     # Step 2: AST-walk each sourced plan file for *_metrics targets.
+    #     plan_files <- file.path(here::here(), sourced_paths)
     #     plan_files <- plan_files[file.exists(plan_files)]
     #     out <- character(0)
     #     walk <- function(e) {
