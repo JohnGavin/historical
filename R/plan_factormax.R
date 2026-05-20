@@ -361,8 +361,10 @@ plan_factormax <- function() {
         dplyr::group_by(ym) |>
         dplyr::summarise(max_date = max(date), .groups = "drop")
       stopifnot(
-        "plan_factormax: date_lookup contains months not in PLOT_TICKERS subset" =
-          setequal(date_lookup$ym, expected_dates$ym)
+        "date_lookup month set mismatch (regression #216)" =
+          setequal(date_lookup$ym, expected_dates$ym),
+        "date_lookup has duplicate months" =
+          !anyDuplicated(date_lookup$ym)
       )
       check <- date_lookup |>
         dplyr::inner_join(expected_dates, by = "ym")
