@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-05-20 (session 4 — round-4/5 roborev sweep, qa_summary verified, broken docs html re-rendered)
+
+### Completed
+
+- **qa_summary verified end-to-end PASS.** First successful `tar_make(qa_summary, ...)` since the te_ir_metrics regression fix in session 3. `QA: all metric targets succeeded`; regression test 5/5 PASS.
+- **13 roborev findings closed:**
+  - 3 closed as won't-fix / intentional with reasoning: 4003, 3510 (CURRENT_WORK/CHANGELOG self-reference meta-noise, structurally unavoidable), 3556 (`stopifnot` in `aw_cross_market` is intentional fail-loud over hardcoded tickers).
+  - 5 substantive cluster fixes via parallel worktree agents (round 4): cluster A `tests/testthat/test-qa-summary-deps.R` (AST source walk + `cli::cli_abort()` on parse errors), B `docs/vignette_utils.R` (roxygen reattach + revert `stale_marker` → `NULL` for compatibility with 50+ `is.null()` callers across 9 .qmd files), C `docs/stock-backtest.qmd` (3 stale-prose sites + `length(v)==1L` guards), D `tests/testthat.R` runner created so repo-root tests are exercised, F `R/plan_factormax.R` stronger date-equality guard.
+  - 5 follow-up findings on round-4 commits fixed in one consolidated worktree (round 5): 4023a `stock-backtest.html` re-rendered as Quarto **dashboard** (was broken on origin/main as plain Bootstrap article since cd13635), 4023b NA-handling on inline Sharpe comparison, 4024 `tests/testthat.R` cwd-relative → `here::here()`, 4026 `targets_r_path` default consistency, 4021 `setequal()` precheck before factormax date comparison.
+  - 2 closed as moot/mitigated: 4022 (criticised deleted worktree branch), 4028 (mitigated by new `tests/testthat.R` runner).
+- **Branch hygiene per #237:** removed 4 stale worktrees + deleted 9 fully-merged branches. Repo went from 13 → 8 worktrees.
+- **#238 triage written up** as issue comment — all 4 mapped issues (#102 #105 #134 #135) are CLOSED, making abandonment the likely true state for all 9 stale WIP branches. Awaiting user sign-off.
+- **#239 filed** to track Python pytest CI integration (deferred from session-3 roborev 3561).
+
+### Failed Approaches / Surprises
+
+- **Three of five round-4 fixer agents auto-pushed straight to `origin/main`** despite the prompt saying "do not merge to main; orchestrator will handle." The fixer (sonnet) agents' default behaviour ran `git push` from inside their worktree where the local branch happened to share its name with `main`. Commits `0e2c302 cd13635 eea9185 bdbcd94` landed on origin without explicit user approval. Work was good but topology is linear-on-main rather than merge-with-feature-branch. Round-5 prompt explicitly warned the agent NOT to push, AND to verify its branch was not `main`; round-5 agent complied cleanly.
+- **Cluster C agent re-rendered `stock-backtest.html` as a plain Bootstrap article** instead of the Quarto dashboard the qmd declares (`format: dashboard` with dark/light themes + `vignette-shared.css/js`). Detected by roborev round-4 finding 4023a. Round-5 agent re-rendered correctly via `nix develop --command quarto render` — output now has 27 dashboard markers. **Published docs were broken on origin/main for the duration between cd13635 push and the round-5 fix.**
+- **Cluster B agent reverted `stale_marker` sentinel back to `NULL`** after auditing 50+ `is.null()` callers across 9 vignette qmds. The earlier session-3 introduction of `stale_marker` would have silently broken every one of those guards. `is_stale_marker()` predicate retained for future migration.
+
+### Accuracy / Metrics
+
+- Roborev resolution rate: **126/129 (97.7%)** at session-end. The 3 unresolved are post-merge auto-refine reviews of today's commits.
+- Test suite: `test-qa-summary-deps.R` 5/5 PASS; `test-vignette-utils.R` 16/16 PASS; `test_dir("tests/testthat")` 213 PASS / 0 FAIL / 16 SKIP.
+- `qa_summary` build: 4 ran / 106 skipped / 0 errored.
+- Open GH issues: roughly unchanged (#239 added, no closures).
+- Local branches: 33 → 24 (9 deleted via #237).
+- Worktrees: 13 → 8 (4 stale removed via #237).
+
+### Known Limitations
+
+- **Agent worktree isolation is unreliable for the `fixer` subagent.** When `Agent(isolation: "worktree")` creates a worktree, the agent's HEAD inside that worktree may end up named `main`, and a default `git push` then targets `origin/main`. The hook layer doesn't prevent this. Workaround discovered this session: explicit prompt that says "verify your branch is NOT main; do NOT push." Worth tracking as a feedback memory.
+- **`tar_make()` build had 6 warnings** (`..1`/`..2`/`..3 may be used in an incorrect context`) — pre-existing, in upstream factor targets, did not block qa_summary.
+- **8 worktrees remain** for the 9 #238 stale WIP branches (sonnet-0508 is 142MB). Pending user sign-off on the bulk-delete recommendation in the #238 issue comment.
+- **No retention policy** still — `inst/extdata/results/results_*.parquet` continues to grow.
+
 ## 2026-05-20 (session 3 — issue triage, tier-2 bugs, te_ir_metrics regression, branch hygiene)
 
 ### Completed
