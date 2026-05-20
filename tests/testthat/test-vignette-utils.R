@@ -44,6 +44,42 @@ test_that(".parse_vignette_strict: VIGNETTE_STRICT=on returns TRUE (common truth
   })
 })
 
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=YES returns TRUE (uppercase alias, roborev 4046)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "YES"), {
+    expect_true(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=ON returns TRUE (uppercase alias, roborev 4046)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "ON"), {
+    expect_true(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=Yes returns TRUE (mixed-case alias, roborev 4046)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "Yes"), {
+    expect_true(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=' yes ' returns TRUE (whitespace-tolerant, roborev 4046)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = " yes "), {
+    expect_true(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=FALSE returns FALSE (uppercase falsy, roborev 4046)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "FALSE"), {
+    expect_false(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=No returns FALSE (mixed-case falsy, roborev 4046)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "No"), {
+    expect_false(.parse_vignette_strict())
+  })
+})
+
 test_that(".parse_vignette_strict: VIGNETTE_STRICT=false returns FALSE", {
   withr::with_envvar(list(VIGNETTE_STRICT = "false"), {
     expect_false(.parse_vignette_strict())
@@ -59,7 +95,8 @@ test_that(".parse_vignette_strict: VIGNETTE_STRICT=0 returns FALSE", {
 
 # ---------------------------------------------------------------------------
 # safe_tar_read NULL fallback — issue #231
-# Missing targets must return a stale_marker, NOT NULL or a real number
+# Missing targets return NULL (preserved contract; stale_marker sentinel was
+# reverted — see roborev 3558)
 # ---------------------------------------------------------------------------
 
 test_that("safe_tar_read: returns NULL when target and RDS files are absent (non-strict mode)", {
