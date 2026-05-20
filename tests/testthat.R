@@ -12,4 +12,7 @@
 #   nix develop --command Rscript tests/testthat.R
 library(here)
 library(testthat)
+# Resolve tests/testthat directory relative to THIS script file, not cwd.
+# here::here() anchors on DESCRIPTION and is robust when Rscript is called
+# with an absolute path from an arbitrary working directory.
 testthat::test_dir(here::here("tests", "testthat"))
