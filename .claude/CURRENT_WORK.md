@@ -5,7 +5,7 @@
 
 ## Final state
 
-`main` at `d2ab8d1` (Merge round-5 roborev fixes). Pushed to `origin/main`. Working tree clean. 8 worktrees remain (1 main + 7 stale per #238).
+`main` at `3c2400b` (post-session triage addendum). Last pushed code commit was `d2ab8d1` (Merge round-5 roborev fixes); subsequent doc-only commits `acd58ba` (session 4 changelog) and `3c2400b` (triage addendum) extend the head. Working tree clean. 8 worktrees remain (1 main + 7 stale per #238).
 
 ## Session totals
 
