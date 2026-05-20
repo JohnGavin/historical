@@ -1,5 +1,50 @@
 # Changelog
 
+## 2026-05-20 (session 5 — roborev cascade fix + P1 backlog clear + folder hygiene)
+
+### Completed
+
+- **Cascade root cause identified and fixed (two bugs, llm#198):**
+  - **Bug 1** — `CHANGELOG.md` + `.claude/CURRENT_WORK.md` are session-ledger files; reviewers reliably found audit-drift findings on every doc commit, each fix bred new reviews. Shipped `.roborev.toml` `exclude_patterns = ["CHANGELOG.md", ".claude/CURRENT_WORK.md"]` (commit `4906b6d`). Probe-verified: `roborev review --dirty` of a CHANGELOG-only edit returns `no uncommitted changes to review`. Daemon picks up per-repo config without restart.
+  - **Bug 2** — `com.claude.roborev-poll-merges` (StartInterval=900s) re-enqueued range reviews of the same start commit every 15 min because `last_sha` resolves to range-start (range reviews store `commit_id`=start). Fix shipped in llm-side `roborev_poll_merges.sh` (HEAD-anchored idempotency SQL, llm@43c8904). Dry-run verified: historical drops from `behind` to `skipped` after fix.
+- **P1 backlog cleared (4 worktrees, 16 reviews closed this session):**
+  - W2 — `docs/vignette_utils.R` + tests: `cli::cli_warn()` on unrecognised `VIGNETTE_STRICT` value + 6 new tests for `t/T/f/off/Off/treu` (merge `80325fe`, test count 23 → 29 PASS).
+  - W3 — `tests/testthat.R`: replaced `here::here()` with `sys.frame(1)$ofile` + `commandArgs("--file=")` fallback (merge `d4fb72b`). Verified identical 236 PASS / 0 FAIL / 16 SKIP from inside repo and from `/tmp`.
+  - W4 — `scripts/metadata_helpers.py` new stdlib-only module; `_yield_fields()` + `first_present()` extracted from `scripts/fetch_metadata.py` (merge `a8f1802`). `tests/test_fetch_metadata.py` import path updated; test collection no longer triggers pandas/pyarrow/yfinance or `DATASETS = build_datasets()` side effect.
+  - Closures: 4036, 4046, 4047, 4056, 4075, 4082, 4089, 4096, 4103, 4110, 4117, 4124, 4131, 4138, 4145, 4153, 4160, 4162, 4233 (19 reviews this session, all annotated with merge SHAs).
+- **Earlier this session — Doc/code follow-ups from session 4:** W-B `CHANGELOG.md` + `.claude/CURRENT_WORK.md` audit-count reconciliation (13 → 15 closures, 4 → 5 worktrees removed delta, 126/129 scoped to session, `main` HEAD updated to `3c2400b`); W-C `vignette_utils.R` case-insensitivity + test comment; W-D `stock-backtest.qmd` NA guard (`is.finite()`), `plan_factormax.R` `setequal()` augmented with `!anyDuplicated()`, `tests/testthat.R` here::here() partial mitigation (later replaced by W3's script-anchor).
+- **Folder hygiene (historical#241):** Inventoried 11 `historical-*` entries in `~/docs_gh/proj/finance/data/`. Removed 3 nested agent worktrees (a11934, a15e7f, a24df — all from today's earlier session work, already merged). Removed cluster-c worktree + branch (0 unique commits). Merged cluster-b (88 lines pytest regression for #233 → `bae59b2`) and cluster-d (3 doc-prose sites for #228, conflict-resolved at L132 to keep Group D's NA guard plus cluster-d's prose simplification → `1fca531`). Stray `historical symlink` (literal name with space, self-referencing, dated Apr 17) moved to `.archive/2026-05-20/`. Disk: 2.7 GB → 2.1 GB (~600 MB reclaimed).
+- **Issues filed during the session:**
+  - JohnGavin/historical#240 — Mermaid diagram click links should anchor to function line, not file root (template for global rule)
+  - JohnGavin/historical#241 — Folder hygiene options table (CLOSED — recommendation executed)
+  - JohnGavin/llm#193 — global rule companion to historical#240 for all projects' diagrams
+  - JohnGavin/llm#198 — cascade root-cause analysis + 6 fix options for the poll-merge SQL bug (CLOSED — Bug 1 + Bug 2 both shipped)
+  - JohnGavin/llm#199 — worktree hygiene proposal (centralize under `~/worktrees/<project>/<branch>/`, 6 strategy options + migration recipe)
+
+### Failed Approaches
+
+- **Quick-fix/haiku agent for the doc provenance edit (Group B v1) had no Bash access**, so its edits to `CHANGELOG.md` + `.claude/CURRENT_WORK.md` were made but never committed; the worktree auto-cleaned and the edits were lost. Re-dispatched as fixer/sonnet (Group B v2). Lesson: when the task requires `git add`+`git commit`, do not use the quick-fix agent — it lacks Bash. Use fixer/sonnet instead, or do the commit from the orchestrator after the haiku Edit.
+- **Treating 13 reviews on `11cf813` as 13 commits' worth of issues was wrong.** They were a single 15-min-poll cascade re-firing range reviews of the same start commit because of the `commit_id`=range-start storage convention. Diagnosing once (via launchd plist + DB SQL inspection) was 10× cheaper than fixing each review individually.
+- **Bulk `roborev close` on 20 status=failed jobs returned 404** ("review not found for job") because failed jobs never produce a review row to mark resolved. Comments WERE attached. The daemon's close API is review-row-scoped; there is no job-level dismiss. Tracked as outstanding daemon feature; the 20 failed-job ghosts persist in `--open` until that feature lands.
+- **Cluster-d merge had a real conflict at `docs/stock-backtest.qmd:132`** that needed proper resolution (preserve Group D's NA guard logic, accept cluster-d's prose simplification). Delegated to fixer/sonnet rather than orchestrator manual edit; resolved in `1fca531`.
+
+### Accuracy / Metrics
+
+- **Roborev open queue: 24 → 20** (16 closures via merge SHAs; 0 net change in failed-ghost cohort which is API-blocked).
+- Roborev session resolution rate: **19/19 reviewed-and-closed findings this session** (cleanly all P1 + clean review 4162).
+- Test counts: `test-vignette-utils.R` 22 → **29 PASS** (+7 this session — t/T/f/off/Off + treu typo warning); full repo `testthat::test_dir` **236 PASS / 0 FAIL / 16 SKIP** (verified identical from inside repo and from `/tmp` post-W3).
+- Disk: `~/docs_gh/proj/finance/data/historical*` from ~2.7 GB → **~2.1 GB** (~600 MB reclaimed via worktree cleanup).
+- Cascade firing rate: 1 review every 15 min on `historical` → expected near-zero after Bug 2 fix lands in production launchd (next tick should show `skip: HEAD already reviewed`).
+
+### Known Limitations
+
+- **One new Low-severity roborev finding open (4263):** `.parse_vignette_strict()` now `cli::cli_warn()`s on unrecognised non-empty values, but `safe_tar_read()` re-evaluates the parser through its default argument on each call. During a vignette render with `VIGNETTE_STRICT=treu`, the warning fires once per `safe_tar_read()` call. Fix: cache parsed value or use `rlang::warn(.frequency = "once")`. Deferred to next session — the existing behaviour is still strictly better than the prior silent-FALSE.
+- **20 status=failed roborev review-ghosts persist** in `--open` (688, 765, 806, 808, 810, 813, 815, 816, 819, 820, 821, 822, 828, 829, 831, 832, 833, 834, 835, 839 — vintages Apr 12 – May 8). Comments attached. Daemon API requires a review row to call `close`; failed jobs never produced one. Needs roborev infra change (job-level dismiss subcommand) — out of scope here.
+- **JohnGavin/historical#238 still open** for the 5 WIP folders (commodities, crypto, momentum-vol, sonnet, zakamulin — 697 MB combined). Per-branch verdict-then-merge-or-delete pending.
+- **JohnGavin/historical#240** (Mermaid line-anchor links) and **JohnGavin/llm#193** (global rule for same) — open, not yet implemented.
+- **JohnGavin/llm#199** (worktree-location migration) — open, conventional decision pending.
+- **`.archive/` retention policy** — currently has the May 20 stray symlink only. No cron / cleanup yet. Adopt a 30-day manual cleanup convention OR formalise option 6 (cron-based 7d grace) when next reviewing.
+
 ## 2026-05-20 (session 4 — round-4/5 roborev sweep, qa_summary verified, broken docs html re-rendered)
 
 ### Completed
