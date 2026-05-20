@@ -5,12 +5,12 @@
 ### Completed
 
 - **qa_summary verified end-to-end PASS.** First successful `tar_make(qa_summary, ...)` since the te_ir_metrics regression fix in session 3. `QA: all metric targets succeeded`; regression test 5/5 PASS.
-- **13 roborev findings closed:**
+- **15 roborev findings closed:**
   - 3 closed as won't-fix / intentional with reasoning: 4003, 3510 (CURRENT_WORK/CHANGELOG self-reference meta-noise, structurally unavoidable), 3556 (`stopifnot` in `aw_cross_market` is intentional fail-loud over hardcoded tickers).
   - 5 substantive cluster fixes via parallel worktree agents (round 4): cluster A `tests/testthat/test-qa-summary-deps.R` (AST source walk + `cli::cli_abort()` on parse errors), B `docs/vignette_utils.R` (roxygen reattach + revert `stale_marker` → `NULL` for compatibility with 50+ `is.null()` callers across 9 .qmd files), C `docs/stock-backtest.qmd` (3 stale-prose sites + `length(v)==1L` guards), D `tests/testthat.R` runner created so repo-root tests are exercised, F `R/plan_factormax.R` stronger date-equality guard.
-  - 5 follow-up findings on round-4 commits fixed in one consolidated worktree (round 5): 4023a `stock-backtest.html` re-rendered as Quarto **dashboard** (was broken on origin/main as plain Bootstrap article since cd13635), 4023b NA-handling on inline Sharpe comparison, 4024 `tests/testthat.R` cwd-relative → `here::here()`, 4026 `targets_r_path` default consistency, 4021 `setequal()` precheck before factormax date comparison.
+  - 5 follow-up findings on round-4 commits fixed in one consolidated worktree (round 5): 4023a `stock-backtest.html` re-rendered as Quarto **dashboard** (was broken on origin/main as plain Bootstrap article since cd13635), 4023b NA-handling on inline Sharpe comparison, 4024 `tests/testthat.R` cwd-relative → `here::here()` (partial mitigation; full script-relative resolution tracked in next round), 4026 `targets_r_path` default consistency, 4021 `setequal()` precheck before factormax date comparison.
   - 2 closed as moot/mitigated: 4022 (criticised deleted worktree branch), 4028 (mitigated by new `tests/testthat.R` runner).
-- **Branch hygiene per #237:** removed 4 stale worktrees + deleted 9 fully-merged branches. Repo went from 13 → 8 worktrees.
+- **Branch hygiene per #237:** removed 5 stale worktrees + deleted 9 fully-merged branches. Repo went from 13 → 8 worktrees.
 - **#238 triage written up** as issue comment — all 4 mapped issues (#102 #105 #134 #135) are CLOSED, making abandonment the likely true state for all 9 stale WIP branches. Awaiting user sign-off.
 - **#239 filed** to track Python pytest CI integration (deferred from session-3 roborev 3561).
 
@@ -22,7 +22,7 @@
 
 ### Accuracy / Metrics
 
-- Roborev resolution rate: **126/129 (97.7%)** at session-end. The 3 unresolved are post-merge auto-refine reviews of today's commits.
+- Roborev session resolution rate: **15/15 reviewed findings closed (100%)** for findings raised against this session's work. Separate `roborev list --open` backlog (24 reviews — 4 with findings on today's commits, 20 status=failed with no findings) reported in the Triage addendum below.
 
 ### Triage addendum (post-session, same day)
 
@@ -36,7 +36,7 @@
 - `qa_summary` build: 4 ran / 106 skipped / 0 errored.
 - Open GH issues: roughly unchanged (#239 added, no closures).
 - Local branches: 33 → 24 (9 deleted via #237).
-- Worktrees: 13 → 8 (4 stale removed via #237).
+- Worktrees: 13 → 8 (5 stale removed via #237).
 
 ### Known Limitations
 
