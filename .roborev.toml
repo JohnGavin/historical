@@ -5,7 +5,23 @@ fix_min_severity = "high"
 refine_min_severity = "high"
 max_prompt_size = 200000
 
-# ── Review-exclusion policy ──────────────────────────────────────────────────
+# ── Path-based review exclusion ──────────────────────────────────────────────
+# Files that drove cascading review noise on every commit because they are
+# self-referential operational records — reviewers flag "audit count drift"
+# and "stale SHA" findings on every doc-update commit, each fix-commit
+# triggers another wave of the same findings. See the cascade analysis
+# in JohnGavin/llm#<TBD> for the diagnosis and option-set.
+#
+# Concrete history: between 2026-05-13 and 2026-05-20 these two files
+# produced ~50+ Medium-severity reviews that all said the same five things
+# (count off by 2, SHA stale, "13 closed" vs "15 closed" breakdown, etc.).
+# None surfaced a real code or doc bug.
+exclude_patterns = [
+  "CHANGELOG.md",
+  ".claude/CURRENT_WORK.md",
+]
+
+# ── Review-exclusion policy (prose) ──────────────────────────────────────────
 # Some patterns reviewers will keep flagging are intentional in this project.
 # Document them here so future review prompts can be told not to re-flag.
 #
