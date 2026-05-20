@@ -36,8 +36,13 @@ show_code <- function(target_name) {
   raw <- tolower(trimws(Sys.getenv("VIGNETTE_STRICT", "")))
   if (raw %in% c("1", "yes", "on", "true", "t")) return(TRUE)
   if (raw %in% c("0", "no", "off", "false", "f", "")) return(FALSE)
-  # Defensive fallback for any unexpected value:
-  isTRUE(suppressWarnings(as.logical(raw)))
+  # Unrecognised non-empty value — surface the typo instead of silently defaulting
+  cli::cli_warn(c(
+    "Unrecognised {.envvar VIGNETTE_STRICT} value {.val {raw}} — falling back to FALSE",
+    i = "Accepted truthy: 1, yes, on, true, t (case-insensitive, whitespace-tolerant)",
+    i = "Accepted falsy: 0, no, off, false, f, '' (empty)"
+  ))
+  FALSE
 }
 
 #' Read a vig_* target with RDS fallback
