@@ -28,11 +28,13 @@ testthat::local_edition(3)
 # plan_integration.R) are excluded — their targets never enter the live
 # pipeline and must NOT appear in qa_summary.
 extract_defined_metrics <- function(plan_dir = here::here("R"),
-                                    targets_r_path = here::here("docs/_targets.R")) {
+                                    targets_r_path = here::here("docs/_targets.R"),
+                                    project_root = here::here()) {
   # plan_dir is kept for backwards-compatibility but the canonical list of
   # files to walk comes from docs/_targets.R, not a directory glob.
   # This ensures that plan files on disk but not sourced (plan_te_ir.R,
   # plan_integration.R) are excluded from the result.
+  # project_root is exposed so the helper is testable in a tempdir.
   #
   # Parse source() calls from docs/_targets.R — exclude commented-out lines.
   all_lines <- readLines(targets_r_path, warn = FALSE)
@@ -41,7 +43,7 @@ extract_defined_metrics <- function(plan_dir = here::here("R"),
     active_lines,
     regexpr('R/plan_[^"]+\\.R', active_lines)
   )
-  plan_files <- file.path(here::here(), sourced_paths)
+  plan_files <- file.path(project_root, sourced_paths)
   plan_files <- plan_files[file.exists(plan_files)]
   out <- character(0)
 
@@ -66,15 +68,22 @@ extract_defined_metrics <- function(plan_dir = here::here("R"),
     }
   }
 
+  # Parse failures must NOT be silently swallowed: a syntax error in any
+  # sourced plan_*.R would otherwise drop its *_metrics targets from the
+  # completeness check, allowing qa_summary regressions to pass silently.
+  # roborev #3509/#3501 — surface the parse error loudly.
   for (path in plan_files) {
     exprs <- tryCatch(
       parse(file = path, keep.source = FALSE),
       error = function(e) {
-        warning("Parse error in ", basename(path), ": ", conditionMessage(e))
-        NULL
+        cli::cli_abort(c(
+          "x" = "Parse error in {.file {basename(path)}}",
+          "i" = "{conditionMessage(e)}",
+          "i" = "A broken plan_*.R file would silently remove *_metrics targets from the qa_summary completeness check; failing loudly instead."
+        ))
       }
     )
-    if (!is.null(exprs)) for (e in exprs) walk(e)
+    for (e in exprs) walk(e)
   }
 
   sort(unique(out))
@@ -136,6 +145,39 @@ test_that("extract_defined_metrics catches multiline tar_target() definitions (r
     "te_ir_metrics" %in% defined,
     label = "te_ir_metrics absent (plan_te_ir.R / plan_integration.R not sourced)"
   )
+})
+
+# Regression guard for roborev #3509/#3501: a syntax error in a sourced
+# plan_*.R must abort the helper, NOT be silently swallowed.  Previous
+# behaviour (tryCatch -> warning -> NULL) caused targets from broken plan
+# files to silently disappear from the completeness check.
+test_that("extract_defined_metrics aborts on parse error in a sourced plan file (roborev #3509)", {
+  withr::with_tempdir({
+    dir.create("R")
+    dir.create("docs")
+    # Deliberately malformed R syntax — unclosed tar_target() call
+    writeLines(
+      c(
+        "plan_broken <- list(",
+        "  tar_target(broken_metrics,",
+        "  # missing closing parens"
+      ),
+      "R/plan_broken.R"
+    )
+    writeLines(
+      'source("R/plan_broken.R")',
+      "docs/_targets.R"
+    )
+
+    expect_error(
+      extract_defined_metrics(
+        plan_dir = "R",
+        targets_r_path = "docs/_targets.R",
+        project_root = "."
+      ),
+      regexp = "Parse error in"
+    )
+  })
 })
 
 test_that("qa_summary declares every *_metrics target defined in plan files", {
