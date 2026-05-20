@@ -29,12 +29,15 @@ show_code <- function(target_name) {
 }
 
 # Private helper: parse VIGNETTE_STRICT env var.
-# Accepts "true"/"false"/"TRUE"/"FALSE" (via as.logical()), AND "1"/"0"/"yes"/"on".
-# Any other value (e.g. unset, empty string) disables strict mode.
+# Accepts truthy aliases case-insensitively: "1"/"yes"/"on"/"true"/"t"
+# and falsy aliases: "0"/"no"/"off"/"false"/"f"/"" (unset/empty).
+# Whitespace around the value is stripped before matching.
 .parse_vignette_strict <- function() {
-  raw <- Sys.getenv("VIGNETTE_STRICT", "")
-  if (nzchar(raw) && raw %in% c("1", "yes", "on")) return(TRUE)
-  isTRUE(as.logical(raw))
+  raw <- tolower(trimws(Sys.getenv("VIGNETTE_STRICT", "")))
+  if (raw %in% c("1", "yes", "on", "true", "t")) return(TRUE)
+  if (raw %in% c("0", "no", "off", "false", "f", "")) return(FALSE)
+  # Defensive fallback for any unexpected value:
+  isTRUE(suppressWarnings(as.logical(raw)))
 }
 
 #' Read a vig_* target with RDS fallback
@@ -46,10 +49,10 @@ show_code <- function(target_name) {
 #' When a target is missing in non-strict mode, returns NULL. Callers should
 #' guard with `if (!is.null(result))` before using the value.
 #'
-#' VIGNETTE_STRICT parsing: accepts "true"/"false"/"TRUE"/"FALSE" (logical
-#' literals via as.logical()), AND "1"/"0"/"yes"/"on". Setting
-#' VIGNETTE_STRICT=1 or VIGNETTE_STRICT=true both enable strict mode.
-#' Any other value (e.g. unset, empty string) disables strict mode.
+#' VIGNETTE_STRICT parsing: case-insensitive and whitespace-tolerant.
+#' Truthy: "1", "yes", "YES", "on", "ON", "true", "TRUE", "t", "T".
+#' Falsy: "0", "no", "off", "false", "f", or unset/empty string.
+#' Setting VIGNETTE_STRICT=1 or VIGNETTE_STRICT=YES both enable strict mode.
 #' Semantic: env var SET to a truthy value = strict mode ON.
 #'
 #' @param name Target name to read
