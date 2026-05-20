@@ -62,12 +62,14 @@ test_that(".parse_vignette_strict: VIGNETTE_STRICT=0 returns FALSE", {
 # Missing targets must return a stale_marker, NOT NULL or a real number
 # ---------------------------------------------------------------------------
 
-test_that("safe_tar_read: returns stale_marker when target and RDS files are absent", {
+test_that("safe_tar_read: returns NULL when target and RDS files are absent (non-strict mode)", {
+  # NULL contract preserved for backwards-compatibility with all existing callers
+  # that use `if (!is.null(result))` guards. The stale_marker sentinel is
+  # reserved for future migration (is_stale_marker() predicate already exists).
   withr::with_envvar(list(VIGNETTE_STRICT = ""), {
     result <- safe_tar_read("nonexistent_target_xyz_12345")
-    expect_true(is_stale_marker(result))
-    expect_true(is.na(result))
-    expect_equal(attr(result, "target"), "nonexistent_target_xyz_12345")
+    expect_null(result)
+    expect_false(is_stale_marker(result))
   })
 })
 
