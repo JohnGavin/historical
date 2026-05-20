@@ -360,6 +360,10 @@ plan_factormax <- function() {
         dplyr::filter(ticker %in% PLOT_TICKERS) |>
         dplyr::group_by(ym) |>
         dplyr::summarise(max_date = max(date), .groups = "drop")
+      stopifnot(
+        "plan_factormax: date_lookup contains months not in PLOT_TICKERS subset" =
+          setequal(date_lookup$ym, expected_dates$ym)
+      )
       check <- date_lookup |>
         dplyr::inner_join(expected_dates, by = "ym")
       stopifnot(

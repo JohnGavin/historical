@@ -28,8 +28,13 @@ testthat::local_edition(3)
 # plan_integration.R) are excluded — their targets never enter the live
 # pipeline and must NOT appear in qa_summary.
 extract_defined_metrics <- function(plan_dir = here::here("R"),
-                                    targets_r_path = here::here("docs/_targets.R"),
+                                    targets_r_path = NULL,
                                     project_root = here::here()) {
+  # targets_r_path defaults to NULL; derived from project_root so that
+  # callers overriding only project_root always read the matching _targets.R.
+  if (is.null(targets_r_path)) {
+    targets_r_path <- file.path(project_root, "docs/_targets.R")
+  }
   # plan_dir is kept for backwards-compatibility but the canonical list of
   # files to walk comes from docs/_targets.R, not a directory glob.
   # This ensures that plan files on disk but not sourced (plan_te_ir.R,
