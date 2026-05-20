@@ -31,10 +31,20 @@ ul.task-list li input[type="checkbox"] {
 <script src="stock-backtest_files/libs/quarto-html/tippy.umd.min.js"></script>
 <script src="stock-backtest_files/libs/quarto-html/anchor.min.js"></script>
 <link href="stock-backtest_files/libs/quarto-html/tippy.css" rel="stylesheet">
-<link href="stock-backtest_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<link href="stock-backtest_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="stock-backtest_files/libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
 <script src="stock-backtest_files/libs/bootstrap/bootstrap.min.js"></script>
 <link href="stock-backtest_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
-<link href="stock-backtest_files/libs/bootstrap/bootstrap-d5fa03fb90ac27921a6d47853be462c0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+<link href="stock-backtest_files/libs/bootstrap/bootstrap-28163b1fbaa4d35fdae8b703aca03440.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="stock-backtest_files/libs/bootstrap/bootstrap-dark-824d01da7c3efbad1b87ea45a7763824.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<script src="stock-backtest_files/libs/quarto-dashboard/quarto-dashboard.js"></script>
+<script src="stock-backtest_files/libs/quarto-dashboard/stickythead.js"></script>
+
+
+
+<script src="stock-backtest_files/libs/quarto-dashboard/web-components.js" type="module"></script>
+<script src="stock-backtest_files/libs/quarto-dashboard/components.js"></script>
+
 <link href="stock-backtest_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
 <script src="stock-backtest_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
 <link href="stock-backtest_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
@@ -49,36 +59,198 @@ ul.task-list li input[type="checkbox"] {
 <script src="stock-backtest_files/libs/selectize-0.12.0/selectize.min.js"></script>
 <link href="stock-backtest_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
 <script src="stock-backtest_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
+<link rel="stylesheet" href="vignette-shared.css">
+<script src="vignette-shared.js"></script>
 
 
 </head>
 
-<body class="fullcontent quarto-light">
+<body class="quarto-dashboard dashboard-fill fullcontent quarto-dark"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = true;
+    const darkModeDefault = authorPrefersDark;
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
 
-<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
-
-<main class="content" id="quarto-document-content">
-
-<header id="title-block-header" class="quarto-title-block default">
-<div class="quarto-title">
-<h1 class="title">Stock-Level Backtests</h1>
-</div>
+<header id="quarto-dashboard-header">
+<nav class="navbar navbar-expand-md slim" data-bs-theme="dark">
+  <div class="navbar-container container-fluid">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboard-collapse" aria-controls="dashboard-collapse" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>    
 
 
-
-<div class="quarto-title-meta">
-
-    
-  
-    
-  </div>
-  
+    <div class="navbar-brand-container">
 
 
+      <div class="navbar-title">
+        <div class="navbar-title-text"><a href="#">Stock-Level Backtests</a></div>
+        
+        
+      </div>
+    </div>
+<a class="quarto-color-scheme-toggle" href="" onclick="window.quartoToggleColorScheme(); return false;"><i class="bi"></i></a><div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-comparison" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#comparison" data-scrolling="false" href="#comparison" aria-controls="comparison" aria-selected="true"><span class="nav-link-text">Comparison</span></a></li><li class="nav-item" role="presentation"><a id="tab-stock-max" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#stock-max" data-scrolling="false" href="#stock-max" aria-controls="stock-max" aria-selected="false"><span class="nav-link-text">Stock MAX</span></a></li><li class="nav-item" role="presentation"><a id="tab-stock-drif" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#stock-drif" data-scrolling="false" href="#stock-drif" aria-controls="stock-drif" aria-selected="false"><span class="nav-link-text">Stock DRIF</span></a></li><li class="nav-item" role="presentation"><a id="tab-xgboost-drif" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#xgboost-drif" data-scrolling="false" href="#xgboost-drif" aria-controls="xgboost-drif" aria-selected="false"><span class="nav-link-text">XGBoost DRIF</span></a></li><li class="nav-item" role="presentation"><a id="tab-etf-replication" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#etf-replication" data-scrolling="false" href="#etf-replication" aria-controls="etf-replication" aria-selected="false"><span class="nav-link-text">ETF Replication</span></a></li><li class="nav-item" role="presentation"><a id="tab-details" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#details" data-scrolling="false" href="#details" aria-controls="details" aria-selected="false"><span class="nav-link-text">Details</span></a></li></ul></div></div>
+</nav>
 </header>
+<div class="page-layout-custom quarto-dashboard-content bslib-gap-spacing html-fill-container bslib-page-fill quarto-dashboard-pages">  
 
 
-<div class="callout callout-style-default callout-warning callout-titled" title="Survivorship bias">
+<div class="callout callout-style-default callout-warning callout-titled bslib-grid-item" title="Survivorship bias">
 <div class="callout-header d-flex align-content-center" data-bs-toggle="collapse" data-bs-target=".callout-1-contents" aria-controls="callout-1" aria-expanded="true" aria-label="Toggle callout">
 <div class="callout-icon-container">
 <i class="callout-icon"></i>
@@ -90,18 +262,27 @@ ul.task-list li input[type="checkbox"] {
 </div>
 <div id="callout-1" class="callout-1-contents callout-collapse collapse show">
 <div class="callout-body-container callout-body">
-<p><strong>⚠ Survivorship-biased universe.</strong> <code>stk_universe</code> now restricts to the top-100 tickers by <em>current</em> market cap (#150 Option C) to limit forward survivorship exposure. Historical backtest results remain survivorship-biased — delisted firms (Lehman, Bear Stearns, Enron, WorldCom, old GM, etc.) were never in the dataset and cannot be reconstructed without point-in-time membership data. Literature estimates residual bias at +1 to +3 pp/year for long-only US equity. See <a href="https://github.com/JohnGavin/historical/issues/150">issue #150</a> for remediation status (Option A — point-in-time data — remains open).</p>
+<p><strong>⚠ Survivorship-biased universe.</strong> <code>stk_universe</code> now restricts to the top-N tickers by <em>current</em> market cap (#150 Option C) to limit forward survivorship exposure. Historical backtest results remain survivorship-biased — delisted firms (Lehman, Bear Stearns, Enron, WorldCom, old GM, etc.) were never in the dataset and cannot be reconstructed without point-in-time membership data. Literature estimates residual bias at +1 to +3 pp/year for long-only US equity. See <a href="https://github.com/JohnGavin/historical/issues/150">issue #150</a> for remediation status (Option A — point-in-time data — remains open).</p>
 </div>
 </div>
 </div>
-<section id="comparison" class="level1">
-<h1>Comparison</h1>
-<section id="row" class="level2">
-<h2 class="anchored" data-anchor-id="row">Row</h2>
-<section id="section" class="level3 tabset">
-<h3 class="tabset anchored" data-anchor-id="section"></h3>
-<section id="summary" class="level4">
-<h4 class="anchored" data-anchor-id="summary">Summary</h4>
+<div class="bslib-grid-item html-fill-item tab-content bslib-grid" data-layout="fill" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div id="comparison" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-comparison">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-1"><li class="nav-item" role="presentation"><a href="#card-tabset-1-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Summary" aria-selected="true" class="nav-link active">Summary</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-1-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Equity Curves" aria-selected="false" class="nav-link">Equity Curves</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-1-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-1-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Key Findings" aria-selected="false" class="nav-link">Key Findings</a></li></ul></div>
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-1"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-1"><div class="card-body html-fill-item html-fill-container" data-title="Summary">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <p>Two signals applied at two levels, producing four strategies:</p>
 <table class="caption-top table">
 <thead>
@@ -129,34 +310,62 @@ ul.task-list li input[type="checkbox"] {
 </table>
 <p><strong>Stock-level:</strong> Each month, rank all 660 stocks by signal. Long top decile (~38 stocks), short bottom decile. Monthly rebalance. Equal weight within each decile.</p>
 <p><strong>Factor-level:</strong> Each month, rank 5 Fama-French factors (<abbr title="High Minus Low — value factor (cheap stocks minus expensive stocks)">HML</abbr>, <abbr title="Small Minus Big — size factor (small-cap minus large-cap returns)">SMB</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>, <abbr title="Conservative Minus Aggressive — investment factor">CMA</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>) by signal. Long top 2. Monthly rebalance. Equal weight.</p>
-</section>
-<section id="equity-curves" class="level4">
-<h4 class="anchored" data-anchor-id="equity-curves">Equity Curves</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="stock-backtest_files/figure-html/unnamed-chunk-1-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-2"><div class="card-body html-fill-item html-fill-container" data-title="Equity Curves">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="stock-backtest_files/figure-html/unnamed-chunk-1-1.png" class="img-fluid quarto-dashboard-img-contain">
 </div>
 </div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="fig-caption html-fill-item html-fill-container">
+<p><strong>Equity curves (4 factor/stock strategies).</strong> Growth of $1, log scale, 51 years (1975–2026). Stock-level strategies lose money net of costs: Stock MAX ends at ~$0 (vol 15%), Stock DRIF at ~$0 (vol 13%). Factor-level strategies survive costs: Factor MAX at $5.19 (CAGR 3.3%, vol 9%), Factor DRIF at $20 (CAGR 6.1%, vol 10%). The difference is execution cost, not diversification: stock-level decile sorts produce ~80% monthly turnover across ~130 positions at 0.50%/trade = ~1.85%/month (~22%/yr). Factor-level trades 2–4 positions with ~40% turnover at 0.10%/trade = ~0.16%/month (~2%/yr). Dashed line = test partition start (2020).</p>
 </div>
-<div class="fig-caption">
-<p><strong>Equity curves (4 factor/stock strategies).</strong> Growth of $1, log scale, 33 years (1992–2026). Stock-level strategies lose money net of costs: Stock MAX ends at $0.01 (vol 21%), Stock DRIF at ~$0 (vol 19%). Factor-level strategies survive costs: Factor MAX at $1.94 (CAGR 2%, vol 10%), Factor DRIF at $4.98 (CAGR 4.9%, vol 11%). The difference is execution cost, not diversification: stock-level decile sorts produce ~80% monthly turnover across ~130 positions at 0.50%/trade = ~1.85%/month (~22%/yr). Factor-level trades 2–4 positions with ~40% turnover at 0.10%/trade = ~0.16%/month (~2%/yr). Dashed line = test partition start (2020).</p>
 </div>
-</section>
-<section id="metrics" class="level4">
-<h4 class="anchored" data-anchor-id="metrics">Metrics</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-7cf44894f9fd65d42773" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-7cf44894f9fd65d42773">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"number\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n    <div style=\"display: none;position: absolute;width: 200px;opacity: 1\">\n      <div data-min=\"-1.51\" data-max=\"1\" data-scale=\"2\"><\/div>\n      <span style=\"float: left;\"><\/span>\n      <span style=\"float: right;\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">All strategies by partition (Training / Testing / Validation / Full). Factor-level links: Factor MAX, Factor DRIF. Stock MAX and Stock DRIF draw on `stk_universe` (survivorship-biased — see issue #150).<\/caption>","data":[["Stock MAX","Stock MAX","Stock MAX","Stock MAX","Stock DRIF","Stock DRIF","Stock DRIF","Stock DRIF","Factor MAX","Factor MAX","Factor MAX","Factor MAX","Factor DRIF","Factor DRIF","Factor DRIF","Factor DRIF"],["Training","Testing","Validation","Full Period","Training","Testing","Validation","Full Period","Training","Testing","Validation","Full Period","Training","Testing","Validation","Full Period"],["-17.7%","-26.9%","5.9%","-16.5%","-24.4%","-5.6%","17.6%","-19.8%","5.1%","1.3%","-2.3%","4.5%","7.6%","11.7%","-5.3%","7%"],["21.3%","18.2%","18.4%","20.9%","19.9%","14%","18.8%","19.7%","8.8%","10.5%","8.7%","8.9%","10.3%","11.1%","9.2%","10.3%"],[-0.89,-1.51,0.05,-0.87,-1.28,-0.45,0.67,-1.09,0.06,0.06,-0.84,0.01,0.29,1,-1.11,0.26],["-99.6%","-60.3%","-28%","-99.8%","-99.4%","-19.2%","-6.9%","-99.4%","-35.6%","-18.7%","-8.2%","-35.6%","-16.4%","-5.3%","-17.7%","-22%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Strategy<\/th>\n      <th>Period<\/th>\n      <th>CAGR<\/th>\n      <th>Vol<\/th>\n      <th>Sharpe<\/th>\n      <th>Max DD<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"CAGR":2,"Vol":3,"Sharpe":4,"Max DD":5}},{"name":"Strategy","targets":0},{"name":"Period","targets":1},{"name":"CAGR","targets":2},{"name":"Vol","targets":3},{"name":"Sharpe","targets":4},{"name":"Max DD","targets":5}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-3"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-07757707ffe61d005041" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-07757707ffe61d005041">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"number\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n    <div style=\"display: none;position: absolute;width: 200px;opacity: 1\">\n      <div data-min=\"-0.36\" data-max=\"0.79\" data-scale=\"2\"><\/div>\n      <span style=\"float: left;\"><\/span>\n      <span style=\"float: right;\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">All strategies by partition (Training / Testing / Validation / Full). Factor-level links: Factor MAX, Factor DRIF. Stock MAX and Stock DRIF draw on `stk_universe` (survivorship-biased — see issue #150).<\/caption>","data":[["Stock MAX","Stock MAX","Stock MAX","Stock DRIF","Stock DRIF","Stock DRIF","Factor MAX","Factor MAX","Factor MAX","Factor DRIF","Factor DRIF","Factor DRIF"],["In-Sample","Out-of-Sample","Full Period","In-Sample","Out-of-Sample","Full Period","In-Sample","Out-of-Sample","Full Period","In-Sample","Out-of-Sample","Full Period"],["8.5%","45.3%","12.1%","-0.8%","16.7%","1.3%","5.1%","-0.6%","4.5%","7.6%","2.6%","7%"],["27%","108.7%","44.4%","24.8%","17.5%","24%","8.8%","9.6%","8.9%","10.3%","10.4%","10.3%"],[0.27,0.39,0.23,-0.08,0.79,-0.02,0.06,-0.36,0.01,0.29,-0.02,0.26],["-74.3%","-23.9%","-74.3%","-77.6%","-10%","-76.5%","-35.6%","-18.7%","-35.6%","-16.4%","-22%","-22%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Strategy<\/th>\n      <th>Period<\/th>\n      <th>CAGR<\/th>\n      <th>Vol<\/th>\n      <th>Sharpe<\/th>\n      <th>Max DD<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"CAGR":2,"Vol":3,"Sharpe":4,"Max DD":5}},{"name":"Strategy","targets":0},{"name":"Period","targets":1},{"name":"CAGR","targets":2},{"name":"Vol","targets":3},{"name":"Sharpe","targets":4},{"name":"Max DD","targets":5}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
 </div>
 </div>
-</section>
-<section id="key-findings" class="level4">
-<h4 class="anchored" data-anchor-id="key-findings">Key Findings</h4>
-<p><strong>P&amp;L</strong></p>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-1-4"><div class="card-body html-fill-item html-fill-container" data-title="Key Findings">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<strong>P&amp;L</strong>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 47%">
@@ -170,31 +379,31 @@ ul.task-list li input[type="checkbox"] {
 </thead>
 <tbody>
 <tr class="odd">
-<td>Stock MAX full-period CAGR: -16.5%</td>
-<td>Vol: 21% — full-period Sharpe: -0.87</td>
+<td>Stock MAX full-period CAGR: 12.1%</td>
+<td>Vol: 44% — full-period Sharpe: 0.23</td>
 </tr>
 <tr class="even">
 <td>Factor DRIF full-period Sharpe: 0.26</td>
-<td>Full-period covers the entire sample including Training. Validation Sharpe: -1.11</td>
+<td>Full-period covers the entire sample including Training. Validation Sharpe: N/A</td>
 </tr>
 <tr class="odd">
-<td>Stock DRIF full-period CAGR is only -19.8%</td>
+<td>Stock DRIF full-period CAGR is only 1.3%</td>
 <td>Elastic net regularisation is very aggressive at stock level</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Out-of-Sample / Validation</strong></p>
+<strong>Out-of-Sample / Validation</strong>
 <div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
 Warning
 </div>
 </div>
-<div class="callout-body-container callout-body">
-<p><strong>Current Validation Sharpe (sealed partition):</strong> Stock DRIF: 0.67 | Stock MAX: 0.05 | Factor MAX: -0.84 | Factor DRIF: -1.11. Validation Sharpe values are shown above for each strategy. The Testing partition OOS results (below) reflect the calibration window used during strategy development, not the sealed evaluation.</p>
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
+<p><strong>Current Validation Sharpe (sealed partition):</strong> Stock DRIF: N/A | Stock MAX: N/A | Factor MAX: N/A | Factor DRIF: N/A. Validation Sharpe values are shown above for each strategy. The Testing partition OOS results (below) reflect the calibration window used during strategy development, not the sealed evaluation.</p>
 </div>
 </div>
 <table class="caption-top table">
@@ -210,20 +419,20 @@ Warning
 </thead>
 <tbody>
 <tr class="odd">
-<td>Stock DRIF showed the strongest Testing-period Sharpe during elastic net development (Testing Sharpe: -0.45)</td>
-<td>Validation Sharpe is 0.67 — Validation Sharpe met or exceeded Testing.</td>
+<td>Stock DRIF showed the strongest Testing-period Sharpe during elastic net development (Testing Sharpe: N/A)</td>
+<td>Validation Sharpe is N/A — Validation vs Testing comparison unavailable.</td>
 </tr>
 <tr class="even">
-<td>Factor MAX Testing-period Sharpe: 0.06</td>
-<td>Single-signal approach at factor level; Validation Sharpe: -0.84</td>
+<td>Factor MAX Testing-period Sharpe:</td>
+<td>Single-signal approach at factor level; Validation Sharpe: N/A</td>
 </tr>
 <tr class="odd">
-<td>Stock MAX OOS CAGR looks extreme (-27%)</td>
-<td>Driven by COVID recovery + meme stocks — Validation CAGR: 5.9%</td>
+<td>Stock MAX OOS CAGR looks extreme (%)</td>
+<td>Driven by COVID recovery + meme stocks — Validation CAGR: N/A</td>
 </tr>
 </tbody>
 </table>
-<p><strong>Risk</strong></p>
+<strong>Risk</strong>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 47%">
@@ -237,11 +446,11 @@ Warning
 </thead>
 <tbody>
 <tr class="odd">
-<td>Stock-level vol (stock MAX: 21%) vs factor-level vol (factor MAX: 9%)</td>
+<td>Stock-level vol (stock MAX: 44%) vs factor-level vol (factor MAX: 9%)</td>
 <td>Compare the two values above — see metrics table for all strategies</td>
 </tr>
 <tr class="even">
-<td>Stock MAX max drawdown is -100%</td>
+<td>Stock MAX max drawdown is -74%</td>
 <td>Unacceptable for most allocators</td>
 </tr>
 <tr class="odd">
@@ -250,7 +459,7 @@ Warning
 </tr>
 </tbody>
 </table>
-<p><strong>Robustness</strong></p>
+<strong>Robustness</strong>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 47%">
@@ -265,7 +474,7 @@ Warning
 <tbody>
 <tr class="odd">
 <td>Full daily return distribution (42 features) carries more signal than single-day MAX on paper; whether this advantage persists in the Validation period requires checking the current metrics table</td>
-<td>Factor-level Validation Sharpe: -1.11 vs Factor MAX Validation Sharpe: -0.84</td>
+<td>Factor-level Validation Sharpe: N/A vs Factor MAX Validation Sharpe: N/A</td>
 </tr>
 <tr class="even">
 <td>Factor-level shows lower volatility than stock-level across all periods</td>
@@ -273,28 +482,50 @@ Warning
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-</section>
-</section>
-<section id="stock-max" class="level1">
-<h1>Stock MAX</h1>
-<section id="row-1" class="level2">
-<h2 class="anchored" data-anchor-id="row-1">Row</h2>
-<section id="section-1" class="level3 tabset">
-<h3 class="tabset anchored" data-anchor-id="section-1"></h3>
-<section id="definition" class="level4">
-<h4 class="anchored" data-anchor-id="definition">Definition</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="stock-max" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-stock-max">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-7"><li class="nav-item" role="presentation"><a href="#card-tabset-7-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Definition" aria-selected="true" class="nav-link active">Definition</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Performance" aria-selected="false" class="nav-link">Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="vs Factor MAX" aria-selected="false" class="nav-link">vs Factor MAX</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-7-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Pros &amp; Cons" aria-selected="false" class="nav-link">Pros &amp; Cons</a></li></ul></div>
+
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-7"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-1"><div class="card-body html-fill-item html-fill-container" data-title="Definition">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
 <span class="screen-reader-only">Note</span>Strategy: Stock-Level Factor MAX
 </div>
 </div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
 <p><strong>What:</strong> Each month, sort all stocks by the maximum daily return observed in the prior month. Go long the top decile, short the bottom decile.</p>
 <p><strong>Rationale (Market Dynamics):</strong> A stock with an unusually high single-day return signals that new information arrived — an earnings surprise, an upgrade, a sector rotation. Markets underreact to this information at the individual stock level because:</p>
 <ol type="1">
@@ -302,7 +533,7 @@ Warning
 <li><strong>Anchoring</strong> — after a large daily move, investors anchor to the pre-move price, underweighting the new information</li>
 <li><strong>Liquidity friction</strong> — the initial move is partially driven by liquidity demand, not fully by information. The price continues to adjust over the following month.</li>
 </ol>
-<p><strong>Step-by-step example (one month):</strong></p>
+<strong>Step-by-step example (one month):</strong>
 <ol type="1">
 <li>Collect daily returns for all 660 stocks in March 2024</li>
 <li>For each stock, find the single highest daily return in March (the “MAX”)</li>
@@ -313,48 +544,88 @@ Warning
 </ol>
 </div>
 </div>
-</section>
-<section id="performance" class="level4">
-<h4 class="anchored" data-anchor-id="performance">Performance</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="stock-backtest_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-2"><div class="card-body html-fill-item html-fill-container" data-title="Performance">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="stock-backtest_files/figure-html/unnamed-chunk-4-1.png" class="img-fluid quarto-dashboard-img-contain">
 </div>
 </div>
-</div>
-<div class="fig-caption">
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="fig-caption html-fill-item html-fill-container">
 <p><strong>Stock-level MAX: D1 long / D10 short, ~38 stocks per decile.</strong> Blue = long-short spread, red = long-only (D1). Signal: maximum daily return in prior month. Source: 660 stocks from HuggingFace equity_daily.</p>
 </div>
-</section>
-<section id="metrics-1" class="level4">
-<h4 class="anchored" data-anchor-id="metrics-1">Metrics</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-1adbe5842d8d00734641" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-1adbe5842d8d00734641">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Stock MAX metrics by partition.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short","survivorship_biased"],["329","-17.7%","21.3%","-0.89","-99.6%","9","8","TRUE"],["36","-26.9%","18.2%","-1.51","-60.3%","10","9","TRUE"],["40","5.9%","18.4%","0.05","-28%","10","10","TRUE"],["405","-16.5%","20.9%","-0.87","-99.8%","9","8","TRUE"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Validation<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"Training":1,"Testing":2,"Validation":3,"Full Period":4}},{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Validation","targets":3},{"name":"Full Period","targets":4}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-3"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-1fdd9421f703317cdac3" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-1fdd9421f703317cdac3">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Stock MAX metrics by partition.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short"],["599","8.5%","27%","0.27","-74.3%","35","34"],["75","45.3%","108.7%","0.39","-23.9%","67","66"],["674","12.1%","44.4%","0.23","-74.3%","38","37"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>In-Sample<\/th>\n      <th>Out-of-Sample<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"In-Sample":1,"Out-of-Sample":2,"Full Period":3}},{"name":"Metric","targets":0},{"name":"In-Sample","targets":1},{"name":"Out-of-Sample","targets":2},{"name":"Full Period","targets":3}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
 </div>
 </div>
-</section>
-<section id="vs-factor-max" class="level4">
-<h4 class="anchored" data-anchor-id="vs-factor-max">vs Factor MAX</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="stock-backtest_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-4"><div class="card-body html-fill-item html-fill-container" data-title="vs Factor MAX">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="stock-backtest_files/figure-html/unnamed-chunk-6-1.png" class="img-fluid quarto-dashboard-img-contain">
 </div>
 </div>
-</div>
-<div class="fig-caption">
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="fig-caption html-fill-item html-fill-container">
 <p><strong>Stock vs Factor MAX.</strong> Stock-level exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Same MAX signal, different universes. Factor-level definition: <a href="factor-max.html">Factor MAX</a>.</p>
 </div>
-</section>
-<section id="pros-cons" class="level4">
-<h4 class="anchored" data-anchor-id="pros-cons">Pros &amp; Cons</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-7-5"><div class="card-body html-fill-item html-fill-container" data-title="Pros &amp; Cons">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <table class="caption-top table">
 <colgroup>
 <col style="width: 20%">
@@ -373,7 +644,7 @@ Warning
 </tr>
 <tr class="even">
 <td><strong>Cons</strong></td>
-<td>Very high volatility (21%). Max drawdown -100%. Sensitive to extreme events. High turnover (~monthly full rebalance).</td>
+<td>Very high volatility (44%). Max drawdown -74%. Sensitive to extreme events. High turnover (~monthly full rebalance).</td>
 </tr>
 <tr class="odd">
 <td><strong>Works well</strong></td>
@@ -389,28 +660,50 @@ Warning
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-</section>
-</section>
-<section id="stock-drif" class="level1">
-<h1>Stock DRIF</h1>
-<section id="row-2" class="level2">
-<h2 class="anchored" data-anchor-id="row-2">Row</h2>
-<section id="section-2" class="level3 tabset">
-<h3 class="tabset anchored" data-anchor-id="section-2"></h3>
-<section id="definition-1" class="level4">
-<h4 class="anchored" data-anchor-id="definition-1">Definition</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="stock-drif" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-stock-drif">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-15"><li class="nav-item" role="presentation"><a href="#card-tabset-15-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Definition" aria-selected="true" class="nav-link active">Definition</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Performance" aria-selected="false" class="nav-link">Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Metrics" aria-selected="false" class="nav-link">Metrics</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Pros &amp; Cons" aria-selected="false" class="nav-link">Pros &amp; Cons</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-15-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="References" aria-selected="false" class="nav-link">References</a></li></ul></div>
+
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-15"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-1"><div class="card-body html-fill-item html-fill-container" data-title="Definition">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
 <span class="screen-reader-only">Note</span>Strategy: Stock-Level DRIF (Daily Return Information Factor)
 </div>
 </div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
 <p><strong>What:</strong> Each month, use an <a href="https://en.wikipedia.org/wiki/Elastic_net_regularization" target="_blank" rel="noopener noreferrer"><abbr title="A regularized regression method combining L1 (lasso) and L2 (ridge) penalties">elastic net regression</abbr></a> on the past 21 daily returns (both in chronological order and ranked by magnitude — 42 features total) to predict next-month stock returns. Go long the top decile by predicted return, short the bottom decile.</p>
 <p><strong>Rationale (Market Dynamics):</strong> The full sequence of daily returns contains more predictive information than any single summary statistic (mean, max, volatility). Specifically:</p>
 <ol type="1">
@@ -418,7 +711,7 @@ Warning
 <li><strong>Rank features</strong> (r1…r21) capture how extreme returns were — behavioral biases cause investors to overweight tail events</li>
 <li><strong>Elastic net</strong> combines these 42 features with regularisation, avoiding overfitting while capturing non-obvious interactions</li>
 </ol>
-<p><strong>Step-by-step example (one month):</strong></p>
+<strong>Step-by-step example (one month):</strong>
 <ol type="1">
 <li>For each of 660 stocks, collect the 21 daily returns in March 2024</li>
 <li>Create 42 features: c1…c21 (chronological order) + r1…r21 (sorted by magnitude)</li>
@@ -431,33 +724,61 @@ Warning
 <p><strong>Key distinction from MAX:</strong> MAX uses 1 feature (the single highest daily return). DRIF uses 42 features (the full daily return distribution). The Alpha Architect paper shows DRIF subsumes MAX — MAX is a special case of DRIF.</p>
 </div>
 </div>
-</section>
-<section id="performance-1" class="level4">
-<h4 class="anchored" data-anchor-id="performance-1">Performance</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="stock-backtest_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-2"><div class="card-body html-fill-item html-fill-container" data-title="Performance">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<img src="stock-backtest_files/figure-html/unnamed-chunk-7-1.png" class="img-fluid quarto-dashboard-img-contain">
 </div>
 </div>
-</div>
-<div class="fig-caption">
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="fig-caption html-fill-item html-fill-container">
 <p><strong>Stock-level DRIF: pooled elastic net, D1/D10 decile spread.</strong> Blue = long-short, red = long-only (D1). Expanding window with 60-month minimum training. Source: 660 stocks, 42 features per stock-month.</p>
 </div>
-</section>
-<section id="metrics-2" class="level4">
-<h4 class="anchored" data-anchor-id="metrics-2">Metrics</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-4e7d0b89c7b783ef0964" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-4e7d0b89c7b783ef0964">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Stock DRIF metrics by partition.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short","survivorship_biased"],["223","-24.4%","19.9%","-1.28","-99.4%","8","7","TRUE"],["26","-5.6%","14%","-0.45","-19.2%","10","9","TRUE"],["23","17.6%","18.8%","0.67","-6.9%","10","9","TRUE"],["272","-19.8%","19.7%","-1.09","-99.4%","9","8","TRUE"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Validation<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"Training":1,"Testing":2,"Validation":3,"Full Period":4}},{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Validation","targets":3},{"name":"Full Period","targets":4}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-3"><div class="card-body html-fill-item html-fill-container" data-title="Metrics">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-35c709df1532c6d37e25" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-35c709df1532c6d37e25">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Stock DRIF metrics by partition.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short"],["436","-0.8%","24.8%","-0.08","-77.6%","36","35"],["62","16.7%","17.5%","0.79","-10%","54","53"],["498","1.3%","24%","-0.02","-76.5%","38","37"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>In-Sample<\/th>\n      <th>Out-of-Sample<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"In-Sample":1,"Out-of-Sample":2,"Full Period":3}},{"name":"Metric","targets":0},{"name":"In-Sample","targets":1},{"name":"Out-of-Sample","targets":2},{"name":"Full Period","targets":3}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
 </div>
 </div>
-</section>
-<section id="pros-cons-1" class="level4">
-<h4 class="anchored" data-anchor-id="pros-cons-1">Pros &amp; Cons</h4>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-4"><div class="card-body html-fill-item html-fill-container" data-title="Pros &amp; Cons">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <table class="caption-top table">
 <colgroup>
 <col style="width: 20%">
@@ -472,11 +793,11 @@ Warning
 <tbody>
 <tr class="odd">
 <td><strong>Pros (long-only)</strong></td>
-<td>Uses full daily return information (42 features <!-- structural: 21 chronological + 21 rank daily returns — part of strategy definition, not a computed metric -->). Elastic net prevents overfitting. During strategy development (Testing period), showed Testing Sharpe of -0.45.</td>
+<td>Uses full daily return information (42 features <!-- structural: 21 chronological + 21 rank daily returns — part of strategy definition, not a computed metric -->). Elastic net prevents overfitting. During strategy development (Testing period), showed Testing Sharpe of .</td>
 </tr>
 <tr class="even">
 <td><strong>Cons</strong></td>
-<td>Weak in-sample long-short (-24.4% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. Validation Sharpe 0.67 — generalisation to sealed Validation has not held.</td>
+<td>Weak in-sample long-short (% CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. Validation Sharpe N/A — generalisation to sealed Validation has not held.</td>
 </tr>
 <tr class="odd">
 <td><strong>Works well</strong></td>
@@ -500,85 +821,139 @@ Warning
 </tr>
 </tbody>
 </table>
-</section>
-<section id="references" class="level4">
-<h4 class="anchored" data-anchor-id="references">References</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-15-5"><div class="card-body html-fill-item html-fill-container" data-title="References">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <ol type="1">
 <li><a href="drif.html">DRIF: factor-level implementation</a> — same methodology on 5 FF factors</li>
 <li><a href="factor-max.html">Factor MAX</a> — simpler signal, comparison benchmark</li>
 <li><a href="https://alphaarchitect.com/daily-stock-returns/" target="_blank" rel="noopener noreferrer">Alpha Architect: Daily Stock Returns</a> — original research</li>
 <li><a href="https://alphaarchitect.com/factor-max/" target="_blank" rel="noopener noreferrer">Alpha Architect: Factor MAX</a> — MAX signal research</li>
 </ol>
-</section>
-</section>
-</section>
-</section>
-<section id="xgboost-drif" class="level1">
-<h1>XGBoost DRIF</h1>
-<section id="row-3" class="level2">
-<h2 class="anchored" data-anchor-id="row-3">Row</h2>
-<section id="section-3" class="level3 tabset">
-<h3 class="tabset anchored" data-anchor-id="section-3"></h3>
-<section id="definition-2" class="level4">
-<h4 class="anchored" data-anchor-id="definition-2">Definition</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="xgboost-drif" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-xgboost-drif">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-22"><li class="nav-item" role="presentation"><a href="#card-tabset-22-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Definition" aria-selected="true" class="nav-link active">Definition</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-22-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="XGBoost vs Elastic Net" aria-selected="false" class="nav-link">XGBoost vs Elastic Net</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-22-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Why It Fails" aria-selected="false" class="nav-link">Why It Fails</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-22-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Tab 4" aria-selected="false" class="nav-link">Tab 4</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-22-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Pros &amp; Cons" aria-selected="false" class="nav-link">Pros &amp; Cons</a></li></ul></div>
+
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-22"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-1"><div class="card-body html-fill-item html-fill-container" data-title="Definition">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
 <span class="screen-reader-only">Note</span>Strategy: XGBoost DRIF (Monotonic Constraints)
 </div>
 </div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
 <p><strong>What:</strong> Replace elastic net with XGBoost (gradient boosted trees) on the same 42 DRIF features. All features are constrained to be monotonically increasing — higher feature value must always predict higher return.</p>
 <p><strong>Hypothesis:</strong> XGBoost can capture non-linear relationships (interaction effects, threshold effects) that elastic net misses, while monotonic constraints preserve economic intuition.</p>
-<p><strong>Result:</strong> XGBoost full-period CAGR: -22.7% vs Elastic Net: -19.8%. The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.</p>
-</div>
-</div>
-</section>
-<section id="xgboost-vs-elastic-net" class="level4">
-<h4 class="anchored" data-anchor-id="xgboost-vs-elastic-net">XGBoost vs Elastic Net</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="stock-backtest_files/figure-html/unnamed-chunk-9-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
+<p><strong>Result:</strong> XGBoost full-period CAGR: N/A vs Elastic Net: 1.3%. The monotonic constraints are likely too restrictive for cross-sectional stock returns where the relationship between daily return features and next-month returns is not universally monotonic.</p>
 </div>
 </div>
 </div>
-<div class="fig-caption">
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-2"><div class="card-body html-fill-item html-fill-container" data-title="XGBoost vs Elastic Net">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>NULL</code></pre>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="fig-caption html-fill-item html-fill-container">
 <p><strong>XGBoost (monotonic) vs Elastic Net</strong> on same 42 DRIF features, stock-level D1-D10. The XGBoost curve shows occasional extreme monthly spikes — these are months where monotonic constraints force all 42 features into the same direction, creating artificially concentrated decile predictions. The two large jumps likely reflect months where the constrained model’s predictions became highly correlated across stocks, amplifying the D1-D10 spread beyond what the underlying signal supports.</p>
 </div>
-</section>
-<section id="why-it-fails" class="level4">
-<h4 class="anchored" data-anchor-id="why-it-fails">Why It Fails</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-3"><div class="card-body html-fill-item html-fill-container" data-title="Why It Fails">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <div class="callout callout-style-default callout-warning callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
 <span class="screen-reader-only">Warning</span>XGBoost Feature Importance Is Unreliable Here
 </div>
 </div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
 <p>Feature importance from this model is <strong>not shown</strong> because it is misleading. With all 42 features forced monotonically increasing and depth=3 trees, XGBoost routes most splits through whichever single feature best separates training data. The result (one feature appearing to explain ~50% of variation) is an artifact of the constraints, not a real finding. Different training windows produce different “dominant” features. The elastic net — which can assign negative coefficients — is better suited for this cross-sectional task.</p>
 </div>
 </div>
-</section>
-<section id="metrics-3" class="level4">
-<h4 class="anchored" data-anchor-id="metrics-3">Metrics</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-d05633e612017c6db446" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-d05633e612017c6db446">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">XGBoost DRIF metrics by partition. Compare to Stock DRIF metrics in the Stock DRIF tab.<\/caption>","data":[["months","cagr","vol","sharpe","max_dd","avg_long","avg_short","survivorship_biased"],["539","-23.6%","20.2%","-1.23","-100%","7","6","TRUE"],["36","-20%","10.4%","-1.99","-49.1%","10","9","TRUE"],["615","-22.7%","19.5%","-1.25","-100%","7","6","TRUE"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"Training":1,"Testing":2,"Full Period":3}},{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Full Period","targets":3}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
 </div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</section>
-<section id="pros-cons-2" class="level4">
-<h4 class="anchored" data-anchor-id="pros-cons-2">Pros &amp; Cons</h4>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-4"><div class="card-body html-fill-item html-fill-container flow">
+
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-22-5"><div class="card-body html-fill-item html-fill-container" data-title="Pros &amp; Cons">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <table class="caption-top table">
 <colgroup>
 <col style="width: 20%">
@@ -613,30 +988,52 @@ Warning
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-</section>
-</section>
-<section id="etf-replication" class="level1">
-<h1>ETF Replication</h1>
-<section id="row-4" class="level2">
-<h2 class="anchored" data-anchor-id="row-4">Row</h2>
-<section id="section-4" class="level3 tabset">
-<h3 class="tabset anchored" data-anchor-id="section-4"></h3>
-<section id="definition-3" class="level4">
-<h4 class="anchored" data-anchor-id="definition-3">Definition</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="etf-replication" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-etf-replication">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-28"><li class="nav-item" role="presentation"><a href="#card-tabset-28-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Definition" aria-selected="true" class="nav-link active">Definition</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-28-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Equity Curves" aria-selected="false" class="nav-link">Equity Curves</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-28-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Tab 3" aria-selected="false" class="nav-link">Tab 3</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-28-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Tab 4" aria-selected="false" class="nav-link">Tab 4</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-28-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Key Findings" aria-selected="false" class="nav-link">Key Findings</a></li></ul></div>
+
+
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-28"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-28-1"><div class="card-body html-fill-item html-fill-container" data-title="Definition">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <div class="callout callout-style-default callout-note callout-titled">
-<div class="callout-header d-flex align-content-center">
-<div class="callout-icon-container">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
 <i class="callout-icon"></i>
 </div>
-<div class="callout-title-container flex-fill">
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
 <span class="screen-reader-only">Note</span>Why ETFs?
 </div>
 </div>
-<div class="callout-body-container callout-body">
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
 <p>Stock-level long-short strategies lose ~20%/yr after realistic costs (1.85%/month for 660-stock decile sort). Factor ETFs (VLUE, MTUM, QUAL, etc.) offer institutional liquidity at ~0.20%/month — 10x cheaper.</p>
-<p><strong>Two approaches tested:</strong></p>
+<strong>Two approaches tested:</strong>
 <table class="caption-top table">
 <colgroup>
 <col style="width: 4%">
@@ -673,45 +1070,52 @@ Warning
 </tr>
 </tbody>
 </table>
-<p><strong>Result:</strong> Long-short fails for both. <strong>Long-only works:</strong> 13.4% CAGR (A) and 12.6% CAGR (B). The signal identifies winners, not losers.</p>
-</div>
-</div>
-</section>
-<section id="equity-curves-1" class="level4">
-<h4 class="anchored" data-anchor-id="equity-curves-1">Equity Curves</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div>
-<figure class="figure">
-<p><img src="stock-backtest_files/figure-html/unnamed-chunk-11-1.png" class="img-fluid figure-img" width="672"></p>
-</figure>
+<p><strong>Result:</strong> Long-short fails for both. <strong>Long-only works:</strong> N/A CAGR (A) and N/A CAGR (B). The signal identifies winners, not losers.</p>
 </div>
 </div>
 </div>
-<div class="fig-caption">
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-28-2"><div class="card-body html-fill-item html-fill-container" data-title="Equity Curves">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>NULL</code></pre>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="fig-caption html-fill-item html-fill-container">
 <p><strong>ETF replication: Approach A vs B (long-short, net of costs).</strong> Both approaches struggle as long-short because all factor ETFs have positive market beta — shorting one while longing another is mostly a bet on relative factor performance. The long-only legs (not shown) return 13%+ CAGR.</p>
 </div>
-</section>
-<section id="approach-a-metrics" class="level4">
-<h4 class="anchored" data-anchor-id="approach-a-metrics">Approach A Metrics</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-473080b517612f1b6479" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-473080b517612f1b6479">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Approach A: DRIF applied directly to 9 factor ETF daily returns. Long-short (L/S) and long-only metrics. Cost: 0.10%/trade, 0.5%/yr borrow.<\/caption>","data":[["months","cagr","long_cagr","vol","sharpe","max_dd"],["43","-5%","12.4%","4.4%","-1.12","-19.8%"],["36","0.6%","7.6%","8%","0.08","-9.4%"],["40","2.7%","20%","8.1%","0.34","-12.7%"],["119","-0.8%","13.4%","7%","-0.11","-23.7%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Validation<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"Training":1,"Testing":2,"Validation":3,"Full Period":4}},{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Validation","targets":3},{"name":"Full Period","targets":4}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
 </div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</section>
-<section id="approach-b-metrics" class="level4">
-<h4 class="anchored" data-anchor-id="approach-b-metrics">Approach B Metrics</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-62ef250aeee7df5c3e86" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-62ef250aeee7df5c3e86">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Approach B: Academic factor DRIF signal mapped to ETFs via ETF_FACTOR_MAP. Mapping: HML→VLUE/VTV/IWD, Mom→MTUM, RMW→QUAL, etc.<\/caption>","data":[["months","cagr","long_cagr","vol","sharpe","max_dd"],["79","-0.7%","12.9%","3.5%","-0.2","-11.6%"],["36","-3.7%","5%","8.5%","-0.44","-13.6%"],["38","-2.7%","19.8%","7.5%","-0.36","-18.6%"],["153","-1.9%","12.6%","6.1%","-0.31","-29%"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Metric<\/th>\n      <th>Training<\/th>\n      <th>Testing<\/th>\n      <th>Validation<\/th>\n      <th>Full Period<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":{"Training":1,"Testing":2,"Validation":3,"Full Period":4}},{"name":"Metric","targets":0},{"name":"Training","targets":1},{"name":"Testing","targets":2},{"name":"Validation","targets":3},{"name":"Full Period","targets":4}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
-</div>
-</div>
-</section>
-<section id="key-findings-1" class="level4">
-<h4 class="anchored" data-anchor-id="key-findings-1">Key Findings</h4>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-28-3"><div class="card-body html-fill-item html-fill-container flow">
+
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-28-4"><div class="card-body html-fill-item html-fill-container flow">
+
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-28-5"><div class="card-body html-fill-item html-fill-container" data-title="Key Findings">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <table class="caption-top table">
 <colgroup>
 <col style="width: 47%">
@@ -726,15 +1130,15 @@ Warning
 <tbody>
 <tr class="odd">
 <td><strong>Long-only is the practical strategy</strong></td>
-<td>A long-only: 13.4% CAGR. B long-only: 12.6%. Compare S&amp;P 500 ~10%.</td>
+<td>A long-only: N/A CAGR. B long-only: N/A. Compare S&amp;P 500 ~10%.</td>
 </tr>
 <tr class="even">
 <td><strong>Short leg is unprofitable</strong></td>
-<td>A long-short: -0.8%. B long-short: -1.9%. ETFs all have market beta — shorting one is mostly shorting the market.</td>
+<td>A long-short: N/A. B long-short: N/A. ETFs all have market beta — shorting one is mostly shorting the market.</td>
 </tr>
 <tr class="odd">
 <td><strong>A &gt; B</strong></td>
-<td>Approach A (direct ETF signal) has higher Sharpe (-0.11 vs -0.31) and lower DD (-23.7% vs -29%). See metrics table for factor-mapping details.</td>
+<td>Approach A (direct ETF signal) has higher Sharpe (N/A vs N/A) and lower DD (N/A vs N/A). See metrics table for factor-mapping details.</td>
 </tr>
 <tr class="even">
 <td><strong>Cost advantage is real</strong></td>
@@ -742,22 +1146,42 @@ Warning
 </tr>
 <tr class="odd">
 <td><strong>Validation is strong</strong></td>
-<td>A long-only Validation CAGR: 20%. B long-only Validation CAGR: 19.8%. Caveat: Validation window overlaps a bull market.</td>
+<td>A long-only Validation CAGR: N/A. B long-only Validation CAGR: N/A. Caveat: Validation window overlaps a bull market.</td>
 </tr>
 </tbody>
 </table>
-</section>
-</section>
-</section>
-</section>
-<section id="details" class="level1">
-<h1>Details</h1>
-<section id="row-5" class="level2">
-<h2 class="anchored" data-anchor-id="row-5">Row</h2>
-<section id="section-5" class="level3 tabset">
-<h3 class="tabset anchored" data-anchor-id="section-5"></h3>
-<section id="universe" class="level4">
-<h4 class="anchored" data-anchor-id="universe">Universe</h4>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="details" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-details">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-header dashboard-card-no-title bslib-navs-card-title">
+
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-33"><li class="nav-item" role="presentation"><a href="#card-tabset-33-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Universe" aria-selected="true" class="nav-link active">Universe</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-33-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Partitions" aria-selected="false" class="nav-link">Partitions</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-33-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Build Info" aria-selected="false" class="nav-link">Build Info</a></li></ul></div>
+
+
+
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-33"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-33-1"><div class="card-body html-fill-item html-fill-container" data-title="Universe">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
 <p>660 individual stocks from HuggingFace <code>equity_daily</code>:</p>
 <table class="caption-top table">
 <thead>
@@ -791,28 +1215,73 @@ Warning
 </tbody>
 </table>
 <p>Minimum 252 trading days (1 year) to enter universe. Monthly rebalance. ~38 stocks per decile.</p>
-</section>
-<section id="partitions" class="level4">
-<h4 class="anchored" data-anchor-id="partitions">Partitions</h4>
-<div class="cell">
-<div class="cell-output-display">
-<div class="datatables html-widget html-fill-item" id="htmlwidget-72f020f8694d11d7db43" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-72f020f8694d11d7db43">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Shared parameters. Training: model fitting. Testing: calibration. Validation: sealed one-shot evaluation.<\/caption>","data":[["Training","Testing","Validation","Min History","Lookback Days","Deciles"],["2005-01-01 to 2019-12-31","2020-01-01 to 2022-12-31","2023-01-01 to 2026-12-31","252 days","21","10"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Parameter<\/th>\n      <th>Value<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"pageLength":15,"scrollX":true,"autoWidth":false,"dom":"frtip","search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":[]},{"name":"Parameter","targets":0},{"name":"Value","targets":1}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-33-2"><div class="card-body html-fill-item html-fill-container" data-title="Partitions">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-ab31055225b8e83ff30b" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-ab31055225b8e83ff30b">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold; color: #888;\">Shared parameters. Training: model fitting. Testing: calibration. Validation: sealed one-shot evaluation.<\/caption>","data":[["Training","Testing","Validation","Min History","Lookback Days","Deciles"],["2005-01-01 to 2019-12-31"," to "," to ","252 days","21","10"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Parameter<\/th>\n      <th>Value<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"scrollX":true,"autoWidth":false,"search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"className":"dt-right","targets":[]},{"name":"Parameter","targets":0},{"name":"Value","targets":1}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,15,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
 </div>
 </div>
-</section>
-<section id="build-info" class="level4">
-<h4 class="anchored" data-anchor-id="build-info">Build Info</h4>
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/vdev">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/0e2c3020758428ad9ef07489bf0c8809c891fca3"><code>0e2c302</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-05-20 12:01:26”</p>
-</section>
-</section>
-</section>
-</section>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-33-3"><div class="card-body html-fill-item html-fill-container" data-title="Build Info">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/vdev">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/bdbcd947e493a24743422c345a58b3f07acd1441"><code>bdbcd94</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-05-20 12:14:41”</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div id="3ade8a4a-fb1d-4a6c-8409-ac45482d5fc9" class="hidden html-fill-item html-fill-container">
 
-</main>
-<!-- /main column -->
+</div>
+</div>
+</div></div></div><bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+</div>
+
+
 <script id="quarto-html-after-body" type="application/javascript">
   window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
     const icon = "";
     const anchorJS = new window.AnchorJS();
     anchorJS.options = {
@@ -1211,8 +1680,16 @@ Warning
     }
   });
   </script>
-</div> <!-- /content -->
+</div> <!-- /container fluid -->
 
+<script type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (_event) {
+  if (window.bslib.Card) {
+    window.bslib.Card.initializeAllCards();
+  }
+}); 
+</script>
+  
 
 
 

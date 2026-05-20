@@ -10,5 +10,6 @@
 #   nix develop --command Rscript -e 'testthat::test_dir("tests/testthat")'
 # or:
 #   nix develop --command Rscript tests/testthat.R
+library(here)
 library(testthat)
-testthat::test_dir("tests/testthat")
+testthat::test_dir(here::here("tests", "testthat"))
