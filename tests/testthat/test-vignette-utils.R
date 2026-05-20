@@ -138,3 +138,50 @@ test_that("safe_tar_read: VIGNETTE_STRICT=1 triggers strict error (issue #232 + 
     )
   })
 })
+
+# ---------------------------------------------------------------------------
+# .parse_vignette_strict — t/f/off aliases + typo warning (roborev T1+T2)
+# Group C added aliases but never tested t/f/off; T1 adds cli_warn for typos.
+# ---------------------------------------------------------------------------
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=t returns TRUE (short truthy alias)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "t"), {
+    expect_true(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=T returns TRUE (uppercase short alias, case-insensitive)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "T"), {
+    expect_true(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=f returns FALSE (short falsy alias)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "f"), {
+    expect_false(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=off returns FALSE (off alias)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "off"), {
+    expect_false(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=Off returns FALSE (mixed-case off alias, case-insensitive)", {
+  withr::with_envvar(list(VIGNETTE_STRICT = "Off"), {
+    expect_false(.parse_vignette_strict())
+  })
+})
+
+test_that(".parse_vignette_strict: VIGNETTE_STRICT=treu returns FALSE AND triggers cli_warn (typo guard, roborev T1)", {
+  # 'treu' is not in any alias list; old code did isTRUE(suppressWarnings(as.logical('treu')))
+  # which silently returned FALSE. New code surfaces a cli_warn so CI typos are visible.
+  withr::with_envvar(list(VIGNETTE_STRICT = "treu"), {
+    expect_warning(
+      result <- .parse_vignette_strict(),
+      regexp = "Unrecognised"
+    )
+    expect_false(result)
+  })
+})
