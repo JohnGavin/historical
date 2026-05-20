@@ -1,4 +1,7 @@
 testthat::local_edition(3)
+# source() is correct here: R/utils_metrics.R is a standalone repo-root script,
+# not part of the packages/historicaldata package namespace. Sourcing exercises
+# the actual file used by the targets pipeline rather than any package export.
 source(here::here("R/utils_metrics.R"))
 
 test_that("annualise_returns: all-zero returns produce CAGR 0, vol 0, sharpe NA, max_dd 0", {
