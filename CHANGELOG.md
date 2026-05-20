@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-05-20 (session 3 — issue triage, tier-2 bugs, te_ir_metrics regression, branch hygiene)
+
+### Completed
+
+- **Closed 8 GitHub issues** matching session-2 commits:
+  - 5 cleanly fixed (#227 #228 #229 #230 #233) — each with detailed closing comment naming the fix commit
+  - 3 partial / decided (#226 won't-add, #231 partial-resolution, #232 won't-fix-parser)
+- **Tier-2 production bugs fixed in parallel worktrees** (3 fixer agents): #213 (source utils_metrics), #215 (aw_cross_market Date/POSIXct), #216 (factormax date_lookup scope) — each with `stopifnot()` regression guards. Auto-closed by GitHub on push.
+- **te_ir_metrics regression** I introduced in commit `713b88b` (session 2) detected by `tar_make()` verification: AST extractor added `te_ir_metrics` to `qa_summary` deps, but `R/plan_te_ir.R` is not sourced by `docs/_targets.R`. Fixer agent in worktree filtered the extractor to sourced plans only and rewrote the regression-guard assertion (`expect_false('te_ir_metrics' %in% defined)`).
+- **Push** `bec25f9..c713a82` — 8 commits to `origin/main`. Auto-closed #213 #215 #216.
+- **17 merged branches deleted** locally (this session's fix/* + worktree-agent-* refs).
+- **ctx_sync** generated 10 ctx files (3 created: `haven`, `HierPortfolios`, `yfscreen`; 7 refreshed) — addressed last session's MISSING gaps.
+- **2 housekeeping issues filed**: #237 (delete 9 merged-but-undeleted branches + 4 stale worktrees), #238 (triage 9 stale WIP branches >7 days old with unique commits).
+
+### Failed Approaches / Surprises
+
+- **Initially dismissed roborev #2779 as reviewer error.** I had told the agent the claim `as.logical("1") = NA` was wrong based on intuition. Agent verified — reviewer was correct. R `as.logical()` doesn't parse numeric strings. Saved to memory `feedback_as-logical-numeric-strings.md`.
+- **Introduced a regression while fixing one.** Round-3 commit `713b88b` (session 2) correctly converted the metrics extractor from line-regex to AST walk, but the new extractor was too inclusive: it found `*_metrics` targets declared in plan files that aren't sourced by `docs/_targets.R`. `qa_summary` then referenced symbols that don't exist in the live pipeline → "object 'te_ir_metrics' not found". Caught by `tar_make()` verification at the start of session 3. Fix: extractor now reads `docs/_targets.R` and walks only the plan files that are actually `source()`d.
+- **Round-4 reviewer noise.** Auto-refine generated 20 near-duplicate reviews against commits where the fix was already merged (one review didn't even touch the file it claimed to review). Bulk-closed as false positives, but the pattern repeats every commit-push cycle.
+
+### Accuracy / Metrics
+
+- Roborev resolution rate over lifetime: **108/119 (91%)** at session-end. 11 new open findings from post-commit review of the 8 pushed commits — deferred to next session.
+- Test suite: `test-qa-summary-deps.R` 4/4 PASS; `test-utils-metrics.R` 27/27 PASS standalone.
+- Open GH issues: 61 → **48** (closed 11 directly + 3 auto-close on push + 2 new = -11 net).
+- Local branches: 50 → 33 (17 deleted).
+
+### Known Limitations
+
+- **`tar_make()` 15 pre-existing errored targets** (tracked in #224) still fail. Today's run added zero new errors after the te_ir_metrics fix.
+- **`fix/qa-summary-parse-errors` worktree** appeared at `.claude/worktrees/agent-qa-summary-fix` — looks roborev-auto-refine spawned but at main HEAD c713a82 (no unique commits). Listed in #237 for cleanup.
+- **11 new roborev open findings** — likely round-4 auto-refine noise on the 8 pushed commits; defer triage to next session.
+- **9 stale WIP branches >7 days old** with unique commits — tracked in #238 for explicit triage (merge/rebase/abandon).
+- **No retention policy** for `inst/extdata/results/results_YYYY-MM-DD.parquet` artifacts — 6 dated parquets tracked going back to April; today's `results_2026-05-19.parquet` is still untracked.
+
 ## 2026-05-19 (session 2 — roborev backlog sweep, 33 verdicts closed)
 
 ### Roborev sweep — rounds 1-3 across 9 grouped findings (21 commits direct-to-main)

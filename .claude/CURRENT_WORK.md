@@ -1,54 +1,37 @@
-# Current Work (Session 2026-05-19 #2 — roborev backlog sweep, ENDED)
+# Current Work (Session 2026-05-20 — issue triage, tier-2 fixes, regression catch, branch hygiene, ENDED)
 
-**Last updated:** session end after round-3 merge + bulk closure of round-4 false positives
-**Previous sessions:** 2026-05-19 #1 (Nix segfault chain + #208 narrative), 2026-05-18→19 (Round 3 cluster sweep)
+**Last updated:** session end after issue-237/238 file + branch cleanup
+**Previous sessions:** 2026-05-19 #2 (roborev backlog sweep), 2026-05-19 #1 (Nix segfault chain + #208)
 
 ## Final state
 
-`main` at `c60edd1` (Merge roborev #3130 — AST-based metrics extractor + 3 latent bug fixes). **21 commits ahead of `origin/main` — UNPUSHED.** Working tree clean. 0 open roborev findings. 1 roborev job queued (in-flight verdict for c60edd1).
+`main` at `c713a82` (Merge te_ir_metrics regression fix). Synced with `origin/main`. Working tree clean except for `inst/extdata/results/results_2026-05-19.parquet` (yesterday's pipeline output, follows tracked pattern — sessions decide whether to commit).
 
 ## Session totals
 
-- **33 roborev verdicts closed**: 9 round-1 + 5 round-2 + 1 round-3 (#3130) + 2 round-3 lows closed-with-reasoning (#3131 #3129) + 20 round-4 false-positive duplicates
-- **20 commits added on top of d24b632**: 12 fix commits + 7 merge commits (`--no-ff`) + 1 round-3 merge
-- **13 agents spawned in parallel worktrees** across 3 rounds (7 + 5 + 1)
-- **3 latent bugs surfaced beyond what reviewers flagged** (test strsplit perl=FALSE; qa_summary missing 2 multi-line targets; RcppRoll added to wrong DESCRIPTION)
-- **0 pushes, 0 PRs opened**
+- **11 GH issues closed** (5 cleanly-fixed + 3 partial + 3 auto-closed by push)
+- **2 new GH issues filed** (#237 #238 housekeeping)
+- **4 tier-2 fixes committed in parallel worktrees**: #213 #215 #216 + te_ir_metrics regression
+- **17 merged branches deleted** locally
+- **8 commits pushed** to origin/main
+- **1 regression caught + fixed** before it landed in users' rebuilds (te_ir_metrics not in sourced plan)
 
-## Branches still present (delete after push if not needed)
+## Key technical events
 
-All round-1 and round-2 branches were merged via `--no-ff` and the worktrees removed. The branch refs themselves still exist locally:
-- `fix/roborev-2756-postpath`, `fix/roborev-2763-rcpproll`, `fix/roborev-2786-fetch-metadata`
-- `fix/roborev-3113-yieldtype-precedence`, `fix/roborev-3114-aslogical-generic`, `fix/roborev-3115-qadeps-autocheck`, `fix/roborev-3116-prose-alpha`, `fix/roborev-3118-rcpproll-arch`
-- `fix/roborev-3130-multiline-parse`
-- 4 `worktree-agent-*` branches from round-1 (B, C, E, F agents)
+### te_ir_metrics regression
+Round-3 commit `713b88b` (session 2) converted the metrics extractor from line-regex to AST walk. The new extractor was too inclusive — it found `*_metrics` targets in plan files that `docs/_targets.R` doesn't source. `qa_summary`'s `invisible(list(..., te_ir_metrics, ...))` failed at eval time. Caught by `tar_make()` verification this session, fixed in `f46b404`. Extractor now reads `docs/_targets.R` and walks only sourced plans.
 
-All are reachable from `main`, so deleting them is purely cosmetic.
+### Stale-WIP and merged-branch debris
+Branch audit (2026-05-20) found 9 fully-merged branches with no worktree (delete-on-confirm) + 4 stale worktrees on merged branches + 9 WIP branches >7 days old with unique commits. Filed as #237 (delete) and #238 (triage) because some merged branches mapped to open issues — needed explicit user sign-off rather than just deleting them.
 
-## Key technical findings (for next session)
-
-### The `as.logical("1")` trap
-R's `as.logical()` does **not** parse numeric strings: `as.logical("1") = NA`, not `TRUE`. `VIGNETTE_STRICT=1` silently disables strict mode under `isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))`. Memory: `feedback_as-logical-numeric-strings.md`. If you want `=1` to work, the parser needs a custom helper.
-
-### The roborev DB text vs `roborev show` text divergence
-`roborev_project_backlog.sh` excerpts are from `reviews.output` keyed by `reviews.id`. `roborev show <number>` accepts both `review_id` and `job_id` but resolves to different content (and the show output sometimes references files that don't exist in the project — looks like cross-project hallucination from auto-refine sessions). For real findings, query the DB directly:
-```sql
-SELECT rv.id, rv.output, rj.git_ref
-FROM reviews rv JOIN review_jobs rj ON rv.job_id = rj.id
-WHERE rj.repo_id = 16 AND rv.closed = 0 AND rv.verdict_bool = 0;
-```
-
-### Agent isolation pitfalls
-- `quick-fix` (haiku) agents have no Bash. With `isolation: "worktree"` set, they still edit files in the orchestrator's cwd (not the worktree), and can't `git commit`. **Use `fixer` (sonnet) for anything that must commit.** Reserve quick-fix for trivial single-line edits that the orchestrator will commit on the agent's behalf.
-- `fixer` agents with Bash can still commit straight to `main` if the worktree path isn't explicit in the prompt. Always state the worktree path AND the branch name.
-
-### `--no-ff` merge topology is auditable
-7 round-1 branches merged with `--no-ff -m "Merge roborev #..."` produced a fan-out topology that's readable in `git log --oneline --graph`. Better than fast-forward when the merging is automation-generated.
+### Round-4 review noise pattern
+Each push-cycle, the auto-refine reviewer generates ~5-20 near-duplicate findings, often against the wrong commit (commits that don't touch the file being criticised). Bulk-close-as-false-positive worked but adds friction. Worth investigating whether to disable auto-refine for the historical project or add a noise filter.
 
 ## Next session candidates
 
-- **Push the 21 commits** (or open a single PR consolidating them).
-- **Run `tar_make()`** to verify the fixes don't break the pipeline. None should — the changes are test infra, prose, scripts, and Nix — but it hasn't been verified.
-- **Decide whether to add `1`/`0` parsing to VIGNETTE_STRICT** (custom helper) or leave the current case-insensitive-logical-literals-only semantics now that the docstring is honest.
-- **Python test infra** — `tests/test_fetch_*.py` with pytest + responses/mock would make scripts/ behaviour testable. Would address the deferred #3129 ask.
-- **Drain the 1 queued roborev review** on c60edd1 — likely fine, but check before next session.
+- **Resolve #237 + #238** — explicit branch hygiene sign-off.
+- **Drain 11 round-4 open roborev findings** — likely auto-refine noise but worth confirming before another push triggers more.
+- **Decide on VIGNETTE_STRICT custom parser** — closed as won't-fix unless requested (#232). If you want `=1` to work, file a follow-up.
+- **Commit/skip `results_2026-05-19.parquet`** — follow the established daily-commit pattern or document a retention policy.
+- **Run `tar_make()` once more after the te_ir_metrics fix** to confirm `qa_summary` builds cleanly end-to-end (today's verification run hit unrelated upstream errors and didn't reach qa_summary completion).
+- **9 stale WIP branches in #238** need triage (merge / rebase / abandon).
