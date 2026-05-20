@@ -28,25 +28,36 @@ show_code <- function(target_name) {
   ))
 }
 
+# Private helper: parse VIGNETTE_STRICT env var.
+# Accepts "true"/"false"/"TRUE"/"FALSE" (via as.logical()), AND "1"/"0"/"yes"/"on".
+# Any other value (e.g. unset, empty string) disables strict mode.
+.parse_vignette_strict <- function() {
+  raw <- Sys.getenv("VIGNETTE_STRICT", "")
+  if (nzchar(raw) && raw %in% c("1", "yes", "on")) return(TRUE)
+  isTRUE(as.logical(raw))
+}
+
 #' Read a vig_* target with RDS fallback
 #'
-#' In strict mode (set VIGNETTE_STRICT=true env var), fails with error instead
-#' of returning NULL. Use strict mode in CI/production renders to catch missing
-#' targets early.
+#' In strict mode (set VIGNETTE_STRICT=true or VIGNETTE_STRICT=1 env var),
+#' fails with error instead of returning NULL. Use strict mode in CI/production
+#' renders to catch missing targets early.
 #'
-#' Accepted values for VIGNETTE_STRICT use R's as.logical() semantics:
-#'   Accepts the logical literals "TRUE"/"T" and "FALSE"/"F" (case-insensitive,
-#'   so "true", "True", "t", "false", "False", "f" all parse). Any other string
-#'   (including "1", "0", "yes", "no") yields NA, which isTRUE() treats as FALSE.
-#'   Use VIGNETTE_STRICT=true to enable strict mode; anything else disables it.
+#' When a target is missing in non-strict mode, returns NULL. Callers should
+#' guard with `if (!is.null(result))` before using the value.
+#'
+#' VIGNETTE_STRICT parsing: accepts "true"/"false"/"TRUE"/"FALSE" (logical
+#' literals via as.logical()), AND "1"/"0"/"yes"/"on". Setting
+#' VIGNETTE_STRICT=1 or VIGNETTE_STRICT=true both enable strict mode.
+#' Any other value (e.g. unset, empty string) disables strict mode.
+#' Semantic: env var SET to a truthy value = strict mode ON.
 #'
 #' @param name Target name to read
 #' @param strict If TRUE, stop() on missing target. Default: checks VIGNETTE_STRICT env var.
 safe_tar_read <- function(name,
-                          strict = isTRUE(as.logical(Sys.getenv("VIGNETTE_STRICT", "false")))) {
+                          strict = .parse_vignette_strict()) {
   result <- tryCatch(
-
-targets::tar_read_raw(name),
+    targets::tar_read_raw(name),
     error = function(e) {
       rds_dirs <- c("../inst/extdata/vignettes", "inst/extdata/vignettes")
       for (d in rds_dirs) {
@@ -63,6 +74,17 @@ targets::tar_read_raw(name),
   }
 
   result
+}
+
+#' Test whether an object is a stale-marker sentinel
+#'
+#' Predicate for future use; safe_tar_read() currently returns NULL for missing
+#' targets. Reserved for when callers migrate to typed sentinel returns.
+#'
+#' @rdname safe_tar_read
+#' @export
+is_stale_marker <- function(x) {
+  inherits(x, "stale_marker")
 }
 
 #' Format large numbers as human-readable (1.2T, 345M, 12K)
