@@ -185,3 +185,34 @@ test_that(".parse_vignette_strict: VIGNETTE_STRICT=treu returns FALSE AND trigge
     expect_false(result)
   })
 })
+
+# ---------------------------------------------------------------------------
+# Security audit: issue #210 Tier C — verify all canonical falsy aliases
+# The critic report required confirming "0"/"false"/"FALSE"/"off"/"no"/"n"/""
+# map to FALSE. "n" is NOT a recognised alias — it triggers cli_warn + FALSE
+# (unrecognised value), which is the correct safe-default behaviour.
+# ---------------------------------------------------------------------------
+
+test_that(".parse_vignette_strict: all #210 required falsy aliases return FALSE", {
+  # "0", "false", "FALSE", "off", "no" are first-class aliases in the falsy list
+  for (val in c("0", "false", "FALSE", "off", "no")) {
+    withr::with_envvar(list(VIGNETTE_STRICT = val), {
+      expect_false(.parse_vignette_strict(), label = paste0("VIGNETTE_STRICT=", val))
+    })
+  }
+  # "" (unset/empty) is the default-off case
+  withr::with_envvar(list(VIGNETTE_STRICT = ""), {
+    expect_false(.parse_vignette_strict(), label = "VIGNETTE_STRICT='' (empty)")
+  })
+})
+
+test_that(".parse_vignette_strict: 'n' is unrecognised alias — warns and returns FALSE (safe default)", {
+  # "n" is not in the canonical falsy list; correct behaviour is warn + default FALSE
+  withr::with_envvar(list(VIGNETTE_STRICT = "n"), {
+    expect_warning(
+      result <- .parse_vignette_strict(),
+      regexp = "Unrecognised"
+    )
+    expect_false(result)
+  })
+})
