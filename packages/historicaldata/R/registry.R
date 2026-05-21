@@ -13,7 +13,16 @@ hd_datasets <- function() {
       schema = c("date", "open", "high", "low", "close", "adjusted",
                  "volume", "ticker", "source", "asset_class"),
       frequency = "daily",
-      description = "US equities daily OHLCV (Yahoo Finance)"
+      description = paste0(
+        "US equities daily OHLCV (Yahoo Finance). ",
+        "WARNING: survivorship-biased — universe reflects currently-listed ",
+        "tickers only. 0 delistings observed across 56 years (1970-2026). ",
+        "Known failed firms (Enron, Lehman, Bear Stearns, WorldCom, WaMu) ",
+        "are absent. Per-stock Sharpe / CAGR / drawdown metrics overstate ",
+        "achievable performance. See GitHub issue #150."
+      ),
+      survivorship_biased = TRUE,
+      known_delistings    = 0L
     ),
     crypto_daily = list(
       url = hd_base_url("crypto_daily.parquet"),
