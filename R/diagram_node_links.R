@@ -40,8 +40,13 @@ diagram_node_links <- function() {
     # ── Regime states ─────────────────────────────────────────────────────────
     # Vol regime: rsc_regime inside plan_risk_state (line 131 = tar_target(rsc_regime))
     # Rate regime: regime_classification inside plan_regime (line 96)
+    # Vol_regime / Rate_regime: aliases used in causal-implication label text
+    # (plan_causal_graph.R emits labels like "VIX_level ⊥ DRIF_return | Vol_regime").
+    # The link_node() function in falsification.qmd matches on these longer names.
     "VolR",       "R/plan_risk_state.R",                         131L,
     "RateR",      "R/plan_regime.R",                              96L,
+    "Vol_regime", "R/plan_risk_state.R",                         131L,
+    "Rate_regime","R/plan_regime.R",                              96L,
 
     # ── Strategy Signals / Returns (DRIF) ────────────────────────────────────
     "DRIF",       "R/plan_drif.R",                                12L,
@@ -69,17 +74,20 @@ diagram_node_links <- function() {
     "VIX_overlay","R/plan_vix_macro_overlay.R",                   48L,
 
     # ── Portfolio outcomes ─────────────────────────────────────────────────────
+    # PORT/SR/MDD/RISK: multi-strategy portfolio plan (ms_params = line 10)
+    # MKT_R: market benchmark return, computed in plan_backtest (bt_returns = line 47)
     "PORT",       "R/plan_multi_strategy.R",                      10L,
-    "MKT_R",      "R/plan_multi_strategy.R",                      10L,
+    "MKT_R",      "R/plan_backtest.R",                            47L,
     "SR",         "R/plan_multi_strategy.R",                      10L,
     "MDD",        "R/plan_multi_strategy.R",                      10L,
     "RISK",       "R/plan_multi_strategy.R",                      10L,
 
     # ── Structural factors (decay / crowding) ────────────────────────────────
+    # Cost: transaction/rebalance cost in alpha decay plan (decay_params = line 20)
     "Structural", "R/plan_strategy_decay.R",                      13L,
     "Crowd",      "R/plan_strategy_decay.R",                      13L,
     "Decay",      "R/plan_strategy_decay.R",                      13L,
-    "Cost",       "R/plan_strategy_decay.R",                      13L,
+    "Cost",       "R/plan_alpha_decay.R",                         20L,
 
     # ── Diagram 1 overview aggregate nodes ───────────────────────────────────
     # "Factors", "Macro", "Market" are aggregate grouping nodes; point to the
@@ -106,6 +114,12 @@ gh_url <- function(node,
     cli::cli_abort(c(
       "x" = "Node {.val {node}} not found in {.fn diagram_node_links}.",
       "i" = "Add a row to {.file R/diagram_node_links.R} for this node."
+    ))
+  }
+  if (nrow(row) > 1L) {
+    cli::cli_abort(c(
+      "x" = "Node {.val {node}} has {nrow(row)} duplicate entries in {.fn diagram_node_links}.",
+      "i" = "Each node must appear exactly once in {.file R/diagram_node_links.R}."
     ))
   }
   base <- sprintf("https://github.com/%s/blob/%s/%s", repo, ref, row$file)
