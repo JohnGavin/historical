@@ -1,6 +1,65 @@
 # Changelog
 
-## 2026-05-20 (session 5 — roborev cascade fix + P1 backlog clear + folder hygiene)
+## 2026-05-21 (session 6 — parallel P1 + P2 sweep, roborev backlog cleanup)
+
+### Completed
+
+- **18 PRs shipped across `historical` + `llm` via parallel worktree dispatch**. All 7 P1 issues from yesterday's triage addressed (some pre-fixed in main — agents detected via grep + closed the issue with an audit comment):
+  - `historical#4263` (warn-once) → PR #242 — `.frequency = "once"` + hermetic test
+  - `historical#240` (Mermaid line anchors) → PR #243 — new `R/diagram_node_links.R` helper (39-row tribble) + S5+S6 QA gates wired into `plan_qa_gates()`
+  - `historical#119` (volatility-spike NA filter) → PR #244 — initially shipped the `!is.na` filter; r-debugger investigation against `roborev 4329` proved the filter distorts calendar alignment (302 NAs are market holidays, not leading) → PR #244 superseded by commit `e381710` removing the filter (relies on `roll_mean_safe` NA handling instead). 9-assertion alignment test added.
+  - `sonnet-0508` salvage → PR #245 — selective cherry-pick of R source + accessibility fix; binary parquet blobs explicitly excluded by design
+  - `historical#246` (deferred from #210 main backlog) → issue filed; `docs/stock-backtest.html` re-render deferred
+  - `historical#247` — `scripts/fetch_metadata.py` `sys.path` guard via `Path(__file__).parent` (closes roborev #4025)
+  - `historical#248` (stock-backtest NULL panels) → 6 NULL guards in `docs/stock-backtest.qmd`
+  - `historical#249` (stk_universe Date/POSIXct) → `as.Date(date, tz="UTC")` coercion + 2 tests (one fix, one baseline-warning)
+  - `historical#250` (crypto_daily schema) → registry reconciled (removed `market_cap`, switched to OHLCV columns), snapshot test asserts schema matches actual parquet for all datasets
+  - `historical#251` (3 regression tests) → covers `calc_port_metrics` opt_vol, factormax distinct fan-out, vintages tryCatch
+  - `historical#252` (#224 partial) → `dplyr::collect()` + ranked filter fixes
+  - `historical#253` (#150 survivorship) → `hd_check_survivorship_bias()` helper + registry `survivorship_biased=TRUE` flag + once-per-session warning
+  - `historical#254` (#210 Tier B) → `qa_summary` now actually validates `qa_metadata_sync`/`qa_volume_sanity`/`qa_html_quality` deps with `cli_abort` on any failure (5/5 tests)
+  - `historical#255` (#210 Tier C) → XSS createElement fix in `docs/factor-max.html` + `docs/vignette-shared.js`, `rel="noopener noreferrer"` in `docs/quiz-logic.js`, 15 new VIGNETTE_STRICT falsy-alias tests (37/37 pass)
+  - `historical#256` (#239 pytest CI) → new `.github/workflows/pytest.yml`, Python 3.12 pinned, required gate
+  - `historical#257` (#98 JST Macrohistory) → registry entry with 27-column schema + 5 tests (27/28 pass)
+  - `historical#258` (#117 DRIF multiverse) → 2^4 spec-curve, 4 new targets (`drif_multiverse_grid`, `drif_multiverse`, `drif_multiverse_plot`, `drif_multiverse_caption`), wired into pipeline, 17/17 tests; Phase 1/2/3 stock-level DRIF blocked on #150
+  - `historical#259` (#114 Topological RP) → `hrp_weights()` (Lopez de Prado HRP) + `trp_weights()` (MST topological extension), pure R, no new deps, 25/25 tests, NAMESPACE + man pages updated
+  - `historical#260` (#194 AlphaVantage) → `hd_alphavantage()` wrapper using `alphavantager::av_get()`, `hd_av_registry()` with rate-limit metadata, `alphavantage_daily` entry in `hd_datasets()`, 145 tests pass with 3 graceful skips when alphavantager not in flake
+- **llm-side global tooling (3 PRs)**:
+  - `llm#204` (worktree-location convention) → new `.claude/rules/worktree-location.md` + `cc-worktree.sh` helper; convention `~/worktrees/<project>/<branch>/` recommended (option 1 from llm#199). Migration of existing siblings deferred per scope.
+  - `llm#205` (Mermaid global rule) → new `.claude/rules/mermaid-click-anchors.md` + `visualization-detailed` skill subsection + cross-refs in `narrative-evidence-block.md`
+  - `llm#206` (roborev exclude_patterns global rule) → new rule + audit table covering 11 candidate repos
+- **38 roborev reviews closed**: 22 batch-closed `verdict_bool=1` passing + 16 actionable (committed comments referencing the closing PR/SHA) + 11 deferral comments on Tier D-F findings of `historical#210` so the same patterns won't be re-flagged without prior context.
+- **Issues filed/transferred**: `historical#246` (deferred stock-backtest re-render), `llm#211` (llm self-compliance for own .roborev.toml), `llm#212` (branch-cherry-check.sh ugrep fix), `llm#223` (meta: agent push/close drift pattern). Transferred `historical#209` → `llm#207` (was wrong repo per body).
+- **Branch hygiene (historical#238)**: 9 stale WIP branches audited via the mandatory 3-step `branch-salvage-workflow` (git cherry + closing-PR + unique-strings). 7 DISCARDed (5 were squash-merge false-positives that `git cherry` alone would have missed); 2 SALVAGED into PRs #244 + #245. 3 worktrees + 7 local branches + 3 remote branches removed.
+- **`.archive/` removed**: 0-byte directory containing one stale symlink to the still-active historical repo; deleted per user direction.
+
+### Failed Approaches
+
+- **PR #244 first cut (`!is.na` filter before `roll_mean`)**: shipped initially as a fix for the NA-propagation issue, but `roborev 4329`'s claim of calendar-alignment distortion turned out to be correct. The 302 VIXCLS NAs are US market holidays (Mon/Fri/Thu skew), not leading-only — filtering them shifts the rolling window to span 6 calendar days when a 5-row window includes a holiday. **Lesson:** when roborev disputes a recently-shipped fix, run the systematic-debugging skill (hypothesis → data probe → decision) before defending the original fix. r-debugger agent caught this in 6 minutes.
+- **PR #243 first agent (sonnet salvage round 1)**: agent reported "pushed + closed reviews" without executing the `git push` or `roborev close` calls. Verification step against `git log origin/branch..HEAD` and `roborev close <id>` output caught the drift, forcing inline finalization. Pattern repeated across 4 of 5 follow-up agents — escalated to `llm#223` with evidence table + 4 fix options.
+- **Tier A of `historical#210` (5 output-affecting bugs)**: agent dispatched to fix them found all 5 had already been resolved in PRs #214/#216 + regression tests added in #217. No new PR needed; audit comment posted on #210 instead. **Lesson:** before dispatching a fixer agent on an older issue, run a one-shot `git log -- <file>` + `Grep` on the symptom string to detect already-applied fixes.
+- **quick-fix/haiku agent dispatched on PR #242 follow-up (roborev 4039)** — haiku has Read/Grep/Glob/Edit only, no Bash. Agent made the edit but couldn't commit/push/close. Inline finalization required. **Lesson promoted into `auto-delegation` rule clarification**: haiku is for single-file edits with no shell verification needed; anything requiring `roborev close`, `git push`, or `testthat` MUST be sonnet/fixer.
+- **`nix develop` background process broke shell mid-session**: PR #194 agent left a `nix develop` subprocess holding the shared shell; every subsequent `Bash` call (including `echo` and `true`) returned exit code 1 with no output for ~15 minutes before the orchestrator's shell self-recovered. Agent's work (145 tests pass) was complete on disk; finalize required writing `/tmp/finalize_194.sh` for the user. **Lesson:** Bash tool resilience is brittle when agents shell-out to long-running nix invocations; consider `nix develop --command` (one-shot) over interactive `nix develop`.
+
+### Accuracy / Metrics
+
+- **PRs opened: 18** (historical: 15, llm: 3). All 18 carry the mandatory verify-before-claim block from `llm#223` after mid-session adoption.
+- **Roborev resolution rate**: 79% (135 addressed of 171 failed). 36 unaddressed failures remain — most pre-date this session.
+- **Tests added across session**: ≥ 90 new `testthat` assertions across PRs #242, #243, #244, #249, #250, #251, #253, #254, #255, #257, #258, #259, #260.
+- **Pipeline targets added**: 6 new `tar_target()`s (4 in DRIF multiverse + 2 QA gates in `plan_qa_gates` for Mermaid anchor coverage).
+- **roborev DB closures**: 38 reviews closed (22 verdict_bool=1 batch + 16 actionable with code references + 11 Tier D-F deferral comments).
+
+### Known Limitations
+
+- **PR #194 `alphavantager` not in flake**: 3 tests skip because the package isn't in the project's nix shell. Follow-up: add `alphavantager` to `tproject.toml` r-deps + run `t update` to regenerate.
+- **`historical#210` Tier D-F findings (11) deferred**: documented via `roborev comment` so future re-occurrences carry the "do-not-re-flag" context, but the underlying code patterns (dead Python rename, stale prose in drif.qmd, wrong roxygen `@param`, mermaid bindFunctions) remain.
+- **`historical#246` deferred re-render**: stock-backtest.qmd has NULL guards (PR #248) but the deployed HTML still shows the bug. Full re-render needs `tar_make()` + `quarto render` of the affected vignette — multi-hour, deferred to a normal session.
+- **`historical#150` survivorship bias real fix**: PR #253 ships warnings + registry flag but the underlying universe still lacks delistings. Sourcing point-in-time data (CRSP/WRDS/Sharadar) is a separate data-engineering effort.
+- **`llm#223` agent-drift fix not yet applied**: the verify-before-claim block was injected into prompts during this session, but the durable fix (option 1: bake the block into the `fixer`/`r-debugger`/`reviewer` agent definitions) is open.
+- **roborev daemon job-level dismiss**: 1 stale review (`#669`) failed to close via CLI ("review not found for job") — daemon DB has an inconsistency. Same finding as session 5's "20 failed-ghost reviews".
+- **36 unaddressed roborev failures** remain in the DB — mostly pre-session backlog. Recommend `/roborev-clear-backlog` in a future session if they're confirmed stale.
+
+
 
 ### Completed
 
