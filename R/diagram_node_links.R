@@ -40,9 +40,11 @@ diagram_node_links <- function() {
     # ── Regime states ─────────────────────────────────────────────────────────
     # Vol regime: rsc_regime inside plan_risk_state (line 131 = tar_target(rsc_regime))
     # Rate regime: regime_classification inside plan_regime (line 96)
-    # Vol_regime / Rate_regime: aliases used in causal-implication label text
-    # (plan_causal_graph.R emits labels like "VIX_level ⊥ DRIF_return | Vol_regime").
-    # The link_node() function in falsification.qmd matches on these longer names.
+    # VolR / RateR: Mermaid node IDs used in click directives
+    # Vol_regime / Rate_regime: token aliases used in causal-implication label text
+    #   (plan_causal_graph.R emits labels like "VIX_level ⊥ DRIF_return | Vol_regime").
+    #   The link_node() function in falsification.qmd matches on these longer names.
+    #   Without these aliases the implication table rows lose their hyperlinks.
     "VolR",       "R/plan_risk_state.R",                         131L,
     "RateR",      "R/plan_regime.R",                              96L,
     "Vol_regime", "R/plan_risk_state.R",                         131L,
