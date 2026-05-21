@@ -65,6 +65,7 @@ MAX_YIELD_PCT  <- 0.20   # 20% cap — yields above this are likely synthetic
 # Dynamically pick the largest equity by market cap
 top_ticker <- hd_top_by("equity_daily", "market_cap", 1)$ticker
 aapl <- hd_ohlcv(top_ticker, from = "2023-01-01") |>
+  dplyr::collect() |>
   arrange(date) |>
   mutate(
     cs = cumsum(close),
@@ -175,6 +176,7 @@ ggplot(stable, aes(date, close, colour = ticker)) +
 # Top 6 crypto by average volume — single batch query
 corr_tickers <- hd_top_by("crypto_daily", "volume_avg", 6)$ticker
 wide <- hd_ohlcv(corr_tickers, from = "2023-01-01") |>
+  dplyr::collect() |>
   group_by(ticker) |> arrange(date) |>
   mutate(ret = log(close / lag(close))) |>
   filter(!is.na(ret)) |> ungroup() |>

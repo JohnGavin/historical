@@ -30,7 +30,7 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
     lf <- lf |> dplyr::arrange(.data[[metric]])
   }
 
-  lf |> utils::head(n) |> dplyr::collect()
+  lf |> dplyr::slice_head(n = n) |> dplyr::collect()
 }
 
 #' Most volatile tickers by recent realised volatility
@@ -59,8 +59,9 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
   sql <- sprintf("
     WITH returns AS (
       SELECT ticker, date, %s as price,
-        LN(%s / LAG(%s) OVER (PARTITION BY ticker ORDER BY date)) AS log_ret
+        TRY(LN(%s / NULLIF(LAG(%s) OVER (PARTITION BY ticker ORDER BY date), 0))) AS log_ret
       FROM %s
+      WHERE %s > 0
     ),
     vol AS (
       SELECT ticker, date, log_ret,
@@ -81,7 +82,7 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
     WHERE vol_21d IS NOT NULL
     ORDER BY vol_21d DESC
     LIMIT %d",
-    price_col, price_col, price_col, hd_read_parquet_sql(con, ds$url),
+    price_col, price_col, price_col, hd_read_parquet_sql(con, ds$url), price_col,
     as.integer(window_days) - 1L, as.integer(n)
   )
 
