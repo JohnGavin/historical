@@ -21,7 +21,7 @@ SOL_LEVERAGE   <- 1.0    # unleveraged (configurable)
 SOL_COST_BPS   <- 30L    # 0.3% per trade
 SOL_N_LONG     <- 2L     # longs in 4-token universe
 SOL_N_SHORT    <- 2L     # shorts in 4-token universe
-SOL_PARQUET    <- "/Users/johngavin/docs_gh/proj/finance/data/historical-crypto/data/raw/crypto_all.parquet"
+SOL_PARQUET    <- here::here("data", "raw", "crypto_all.parquet")
 SOL_VOL_WIN    <- 63L    # 63-day vol for position sizing
 
 plan_solana_momentum <- function() {
