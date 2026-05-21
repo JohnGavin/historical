@@ -51,7 +51,7 @@ table caption, .dataTables_wrapper caption { caption-side: top !important; }
 
 /* Captions: wrap text to window width */
 .fig-caption {
-  display: block; font-size: 0.85em; color: #888;
+  display: block; font-size: 0.85em; color: #ffffff;
   margin-top: 0.4em; text-align: left; line-height: 1.5;
   word-wrap: break-word; overflow-wrap: break-word;
   max-width: 100%;
@@ -59,6 +59,7 @@ table caption, .dataTables_wrapper caption { caption-side: top !important; }
 table caption, .dataTables_wrapper caption {
   word-wrap: break-word; overflow-wrap: break-word;
   white-space: normal !important; max-width: 100%;
+  color: #ffffff !important;
 }
 
 /* Click-to-zoom overlay */
