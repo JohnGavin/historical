@@ -81,6 +81,17 @@ hd_datasets <- function() {
         "bills; plus macro, credit, FX, and financial crisis indicators. ",
         "Free download from macrohistory.net. Use hd_jst() to fetch."
       )
+    ),
+    alphavantage_daily = list(
+      url = NA_character_,
+      schema = c("date", "open", "high", "low", "close",
+                 "adjusted_close", "volume", "ticker"),
+      frequency = "daily",
+      description = paste0(
+        "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). ",
+        "Use hd_alphavantage(ticker) to fetch. ",
+        "Free tier: 5 req/min, 500/day. Requires ALPHAVANTAGE_API_KEY in ~/.Renviron."
+      )
     )
   )
 }

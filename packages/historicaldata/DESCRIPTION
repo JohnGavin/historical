@@ -23,6 +23,7 @@ Imports:
     rlang,
     tibble
 Suggests:
+    alphavantager,
     arrow (>= 14.0),
     curl,
     DT,

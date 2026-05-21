@@ -20,6 +20,8 @@ then call \code{collect()} to execute.
 }
 \seealso{
 Other data-access: 
+\code{\link{hd_alphavantage}()},
+\code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},
 \code{\link{hd_guardian}()},
