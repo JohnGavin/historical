@@ -8,14 +8,22 @@ plan_volatility_spikes <- function() {
     targets::tar_target(
       vix_daily,
       {
-        # hd_macro("VIXCLS") from HuggingFace has ~302 NULL values scattered
-        # across the value column. RcppRoll::roll_mean (na.rm=FALSE by default)
-        # propagates NAs: any window containing a NULL returns NA, leaving most
-        # of the 3-month MA as NA and causing near-zero spike detection.
-        # Filtering NAs before the rolling mean fixes this.
-        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+        # hd_macro("VIXCLS") from HuggingFace has ~302 NULL values on US market
+        # holidays (Presidents' Day, Good Friday, Memorial Day, etc.) interleaved
+        # throughout the full 1990-present date range.
+        #
+        # DO NOT filter(!is.na(value)) here. Removing holiday rows collapses the
+        # time index so that roll_mean_safe(vix, n = 63) operates on "63 non-NA
+        # rows" rather than "63 calendar rows", producing a shorter calendar span
+        # per window and distorting the 3-month MA and spike thresholds.
+        #
+        # roll_mean_safe() uses slider::slide_dbl(na.rm = TRUE) with a min_frac
+        # coverage gate — it handles interleaved NAs correctly without removing
+        # rows. Keep all rows here and let roll_mean_safe() manage the NAs.
+        #
+        # historicaldata is loaded once at pipeline parse time in docs/_targets.R;
+        # pkgload::load_all() inside a target body is redundant and side-effectful.
         hd_macro("VIXCLS") |>
-          dplyr::filter(!is.na(value)) |>
           dplyr::select(date, vix = value) |>
           dplyr::arrange(date)
       }
