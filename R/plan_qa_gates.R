@@ -97,8 +97,11 @@ check_no_forward_cumulative <- function(files) {
 
 #' Scan rendered HTML for diagram click URLs that lack a line anchor (S5)
 #'
-#' Matches GitHub blob URLs pointing to repo R files that do NOT end in
-#' `#L<digits>`. Any hit means diagram_node_links.R has a missing or NA line.
+#' Only inspects Mermaid `click` directive lines — lines that match
+#' `click <NODE> "URL" _blank`. This avoids false positives from ordinary
+#' source-code links and caption links that appear elsewhere in rendered HTML.
+#'
+#' Any hit means a node in diagram_node_links.R has a missing or NA line.
 #'
 #' @param html_dir Character. Directory to scan for *.html files.
 #' @param repo Character. GitHub owner/repo slug (used to scope the pattern).
@@ -107,22 +110,33 @@ check_no_bare_diagram_urls <- function(html_dir,
                                         repo = "JohnGavin/historical") {
   html_files <- list.files(html_dir, pattern = "\\.html$",
                             full.names = TRUE, recursive = TRUE)
-  # Pattern: a github.com blob URL for a .R file with NO trailing #L<n>
+  # Pattern: a Mermaid click directive whose URL lacks a #L<n> anchor.
+  # Must start with (optional whitespace +) "click " so we only match
+  # diagram nodes, not prose links or caption anchors.
   pat <- sprintf(
-    "https://github\\.com/%s/blob/[^\"' ]+\\.R(?!#L[0-9])",
+    "^\\s*click\\s+\\S+\\s+\"(https://github\\.com/%s/blob/[^\"]+\\.R)\"",
     gsub("/", "\\\\/", repo)
   )
   results <- purrr::map(html_files, function(f) {
     lines <- readLines(f, warn = FALSE)
     m     <- grep(pat, lines, perl = TRUE)
     if (length(m) == 0L) return(NULL)
-    # Extract matching URLs for reporting
+    # Extract just the URL from the first capture group
     urls <- regmatches(lines[m],
-                       gregexpr(pat, lines[m], perl = TRUE))
+                       regexpr(
+                         sprintf(
+                           "https://github\\.com/%s/blob/[^\"]+\\.R",
+                           gsub("/", "\\\\/", repo)
+                         ),
+                         lines[m], perl = TRUE
+                       ))
+    # Keep only URLs that lack the #L<n> anchor
+    no_anchor <- !grepl("#L[0-9]+$", urls, perl = TRUE)
+    if (!any(no_anchor)) return(NULL)
     tibble::tibble(
       file = f,
-      line = rep(m, lengths(urls)),
-      url  = unlist(urls)
+      line = m[no_anchor],
+      url  = urls[no_anchor]
     )
   })
   dplyr::bind_rows(results)
@@ -159,7 +173,11 @@ check_anchor_in_range <- function(html_dir,
         rel_path   <- sub("#L[0-9]+$", "", rel_path)
         anchor_n   <- as.integer(sub(".*#L", "", url))
         abs_path   <- file.path(repo_root, rel_path)
-        if (!file.exists(abs_path)) return(NULL)
+        if (!file.exists(abs_path)) {
+          # Missing file is itself a violation — stale or renamed source link
+          return(tibble::tibble(file = f, line = ln, url = url,
+                                anchor_line = anchor_n, max_line = NA_integer_))
+        }
         max_ln     <- length(readLines(abs_path, warn = FALSE))
         if (anchor_n > max_ln) {
           tibble::tibble(file = f, line = ln, url = url,
@@ -264,8 +282,13 @@ plan_qa_gates <- function() {
           msgs <- purrr::pmap_chr(
             hits[, c("file", "line", "url", "anchor_line", "max_line")],
             function(file, line, url, anchor_line, max_line) {
-              sprintf("  S6: %s:%d -- #L%d exceeds file max %d -- %s",
-                      basename(file), line, anchor_line, max_line, url)
+              if (is.na(max_line)) {
+                sprintf("  S6: %s:%d -- target file not found -- %s",
+                        basename(file), line, url)
+              } else {
+                sprintf("  S6: %s:%d -- #L%d exceeds file max %d -- %s",
+                        basename(file), line, anchor_line, max_line, url)
+              }
             }
           )
           cli::cli_abort(c(
