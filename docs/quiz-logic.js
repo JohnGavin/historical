@@ -194,7 +194,7 @@ function guess(choice) {
 
 function showReveal(r, correct) {
   var v = correct ? "<span style='color:#1a9850;font-weight:bold'>Correct!</span>" : "<span style='color:#d73027;font-weight:bold'>Wrong.</span>";
-  var realLink = r.real_url ? "<a href='" + r.real_url + "' target='_blank' style='color:#6c9bd2;'>" + r.real_source + "</a>" : r.real_source;
+  var realLink = r.real_url ? "<a href='" + r.real_url + "' target='_blank' rel='noopener noreferrer' style='color:#6c9bd2;'>" + r.real_source + "</a>" : r.real_source;
   document.getElementById("reveal-text").innerHTML = v + " Series " + r.answer + " was real.<br>" +
     "<b>Real:</b> " + realLink + "<br>" +
     "<b>Simulated:</b> " + r.sim_source;
@@ -242,7 +242,7 @@ function showResults() {
     var skipped = (ans === null);
     var icon = skipped ? "—" : (correct ? "&#10004;" : "&#10008;");
     var color = skipped ? "#666" : (correct ? "#1a9850" : "#d73027");
-    var link = r.real_url ? "<a href='" + r.real_url + "' target='_blank' style='color:#6c9bd2;'>" + r.real_name + "</a>" : r.real_name;
+    var link = r.real_url ? "<a href='" + r.real_url + "' target='_blank' rel='noopener noreferrer' style='color:#6c9bd2;'>" + r.real_name + "</a>" : r.real_name;
     detail += "<tr style='border-bottom:1px solid #333;'><td style='padding:6px;'>" + (i+1) + "</td>" +
       "<td>" + link + "</td><td>" + r.null_env + "</td>" +
       "<td style='text-align:center;'>" + (ans || "skipped") + "</td>" +
