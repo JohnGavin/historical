@@ -7,7 +7,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 
 ### Research Findings
 
-- [Momentum Decomposition (Cross-Asset)](wiki/momentum-decomposition-cross-asset.md) — 30-hour research: FAILED in equities/commodities, SUCCESS in crypto, regime-aware baseline shows promise
+- [Momentum Decomposition (Cross-Asset)](wiki/momentum-decomposition-cross-asset.md) — 20-hour research: FAILED in equities/commodities, pipeline complete in crypto, regime-aware baseline shows promise
 - [JST-DMS Comparison](wiki/jst-dms-comparison.md) — Free alternative to DMS, survivorship bias correction, multi-decade underperformance norms
 - [TAA Selection Research](wiki/taa-selection-research.md) — Tactical asset allocation strategy selection
 - [Regime Trend Following](wiki/regime-trend-following.md) — Regime-dependent trend following analysis
