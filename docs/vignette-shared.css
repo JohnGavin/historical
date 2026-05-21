@@ -56,10 +56,17 @@ table caption, .dataTables_wrapper caption { caption-side: top !important; }
   word-wrap: break-word; overflow-wrap: break-word;
   max-width: 100%;
 }
-table caption, .dataTables_wrapper caption {
+table caption, .dataTables_wrapper caption, .dt-caption {
   word-wrap: break-word; overflow-wrap: break-word;
   white-space: normal !important; max-width: 100%;
   color: #ffffff !important;
+}
+[data-bs-theme="light"] table caption,
+[data-bs-theme="light"] .dataTables_wrapper caption {
+  color: #1a1a1a !important;
+}
+@media (prefers-color-scheme: light) {
+  table caption, .dataTables_wrapper caption { color: #1a1a1a !important; }
 }
 
 /* Click-to-zoom overlay */
