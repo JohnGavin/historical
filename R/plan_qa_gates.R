@@ -95,6 +95,82 @@ check_no_forward_cumulative <- function(files) {
   dplyr::bind_rows(results)
 }
 
+#' Scan rendered HTML for diagram click URLs that lack a line anchor (S5)
+#'
+#' Matches GitHub blob URLs pointing to repo R files that do NOT end in
+#' `#L<digits>`. Any hit means diagram_node_links.R has a missing or NA line.
+#'
+#' @param html_dir Character. Directory to scan for *.html files.
+#' @param repo Character. GitHub owner/repo slug (used to scope the pattern).
+#' @return A tibble with columns file, line, url. Zero rows = no hits.
+check_no_bare_diagram_urls <- function(html_dir,
+                                        repo = "JohnGavin/historical") {
+  html_files <- list.files(html_dir, pattern = "\\.html$",
+                            full.names = TRUE, recursive = TRUE)
+  # Pattern: a github.com blob URL for a .R file with NO trailing #L<n>
+  pat <- sprintf(
+    "https://github\\.com/%s/blob/[^\"' ]+\\.R(?!#L[0-9])",
+    gsub("/", "\\\\/", repo)
+  )
+  results <- purrr::map(html_files, function(f) {
+    lines <- readLines(f, warn = FALSE)
+    m     <- grep(pat, lines, perl = TRUE)
+    if (length(m) == 0L) return(NULL)
+    # Extract matching URLs for reporting
+    urls <- regmatches(lines[m],
+                       gregexpr(pat, lines[m], perl = TRUE))
+    tibble::tibble(
+      file = f,
+      line = rep(m, lengths(urls)),
+      url  = unlist(urls)
+    )
+  })
+  dplyr::bind_rows(results)
+}
+
+#' Verify that every #L<n> anchor is within the target file's line count (S6)
+#'
+#' Reads each R file referenced by a `#L<n>` URL and checks that `<n>` does
+#' not exceed the file's actual line count.
+#'
+#' @param html_dir Character. Directory to scan for *.html files.
+#' @param repo_root Character. Absolute path to the repository root.
+#' @param repo Character. GitHub owner/repo slug (used to scope the pattern).
+#' @return A tibble with columns file, line, url, anchor_line, max_line. Zero rows = no violations.
+check_anchor_in_range <- function(html_dir,
+                                   repo_root,
+                                   repo = "JohnGavin/historical") {
+  html_files <- list.files(html_dir, pattern = "\\.html$",
+                            full.names = TRUE, recursive = TRUE)
+  # Pattern: a github.com blob URL for a .R file with a #L<n> anchor
+  pat <- sprintf(
+    "https://github\\.com/%s/blob/[^\"' ]+\\.R#L([0-9]+)",
+    gsub("/", "\\\\/", repo)
+  )
+  results <- purrr::map(html_files, function(f) {
+    lines <- readLines(f, warn = FALSE)
+    m     <- grep(pat, lines, perl = TRUE)
+    if (length(m) == 0L) return(NULL)
+    url_matches <- regmatches(lines[m], gregexpr(pat, lines[m], perl = TRUE))
+    purrr::map2_dfr(m, url_matches, function(ln, urls) {
+      purrr::map_dfr(urls, function(url) {
+        # Extract relative file path from URL (everything after /blob/<ref>/)
+        rel_path   <- sub(sprintf("https://github\\.com/%s/blob/[^/]+/", repo), "", url)
+        rel_path   <- sub("#L[0-9]+$", "", rel_path)
+        anchor_n   <- as.integer(sub(".*#L", "", url))
+        abs_path   <- file.path(repo_root, rel_path)
+        if (!file.exists(abs_path)) return(NULL)
+        max_ln     <- length(readLines(abs_path, warn = FALSE))
+        if (anchor_n > max_ln) {
+          tibble::tibble(file = f, line = ln, url = url,
+                         anchor_line = anchor_n, max_line = max_ln)
+        } else NULL
+      })
+    })
+  })
+  dplyr::bind_rows(results)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -141,6 +217,65 @@ plan_qa_gates <- function() {
 
         cli::cli_inform(c("v" = "qa_look_ahead_bias: all 4 checks passed (0 patterns detected)"))
         nrow(all_hits)  # 0 on success; downstream gates can depend on this value target
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: diagram click URLs must have #L<n> anchors (S5)
+    #
+    # Runs whenever docs/ HTML changes. Aborts if any GitHub blob URL for
+    # a .R file lacks a #L<n> anchor — which means diagram_node_links.R
+    # has a missing or NA line number entry.
+    targets::tar_target(
+      qa_no_bare_diagram_urls,
+      command = {
+        html_dir <- here::here("docs")
+        hits <- check_no_bare_diagram_urls(html_dir)
+        if (nrow(hits) > 0L) {
+          msgs <- purrr::pmap_chr(
+            hits[, c("file", "line", "url")],
+            function(file, line, url) {
+              sprintf("  S5: %s:%d -- %s", basename(file), line, url)
+            }
+          )
+          cli::cli_abort(c(
+            "x" = "Diagram click URLs without #L<n> anchors in {nrow(hits)} place(s):",
+            "i" = "Add line numbers to R/diagram_node_links.R for each node.",
+            setNames(msgs, rep("i", length(msgs)))
+          ))
+        }
+        cli::cli_inform(c("v" = "qa_no_bare_diagram_urls: S5 passed (0 bare URLs detected)"))
+        nrow(hits)
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every #L<n> anchor must be within the target file's line count (S6)
+    #
+    # Catches stale line numbers after code edits. Aborts if any anchor points
+    # beyond the file's actual line count.
+    targets::tar_target(
+      qa_anchor_in_range,
+      command = {
+        html_dir  <- here::here("docs")
+        repo_root <- here::here()
+        hits <- check_anchor_in_range(html_dir, repo_root)
+        if (nrow(hits) > 0L) {
+          msgs <- purrr::pmap_chr(
+            hits[, c("file", "line", "url", "anchor_line", "max_line")],
+            function(file, line, url, anchor_line, max_line) {
+              sprintf("  S6: %s:%d -- #L%d exceeds file max %d -- %s",
+                      basename(file), line, anchor_line, max_line, url)
+            }
+          )
+          cli::cli_abort(c(
+            "x" = "Stale #L<n> anchors in {nrow(hits)} place(s):",
+            "i" = "Update line numbers in R/diagram_node_links.R.",
+            setNames(msgs, rep("i", length(msgs)))
+          ))
+        }
+        cli::cli_inform(c("v" = "qa_anchor_in_range: S6 passed (all anchors in range)"))
+        nrow(hits)
       },
       cue = targets::tar_cue(mode = "always")
     )
