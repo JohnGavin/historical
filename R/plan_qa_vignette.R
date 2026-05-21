@@ -70,6 +70,33 @@ plan_qa_vignette <- function() {
         stk_max_metrics,
         xgb_drif_metrics
       ))
+
+      # Validate QA sub-targets.  Each returns a list with at minimum an
+      # $n_issues or $issues field.  Collect any failures and abort once so
+      # the developer sees all problems in one run.
+      qa_failures <- character(0)
+
+      if (isTRUE(qa_metadata_sync$issues > 0)) {
+        qa_failures <- c(qa_failures,
+          sprintf("qa_metadata_sync: %d dataset issue(s)", qa_metadata_sync$issues))
+      }
+      if (isTRUE(qa_volume_sanity$flagged > 0)) {
+        qa_failures <- c(qa_failures,
+          sprintf("qa_volume_sanity: %d ticker(s) with suspicious volume", qa_volume_sanity$flagged))
+      }
+      if (isTRUE(qa_html_quality$n_issues > 0)) {
+        qa_failures <- c(qa_failures,
+          sprintf("qa_html_quality: %d HTML issue(s) across %d file(s)",
+                  qa_html_quality$n_issues, qa_html_quality$n_files))
+      }
+
+      if (length(qa_failures) > 0L) {
+        cli::cli_abort(c(
+          "x" = "QA summary: {length(qa_failures)} QA target(s) reported failures:",
+          setNames(qa_failures, rep("i", length(qa_failures)))
+        ))
+      }
+
       cli::cli_inform(c("v" = "QA: all metric targets succeeded ({format(Sys.time(), '%H:%M:%S')})"))
       invisible(NULL)
     }, cue = targets::tar_cue(mode = "always")),
@@ -130,9 +157,6 @@ plan_qa_vignette <- function() {
       library(dplyr)
 
       ds <- hd_datasets()[["equity_daily"]]
-      # Note: duckplyr/glmnet/xgboost/slider/RcppRoll are provided by the dev shell.
-      # Earlier versions of this file globbed /nix/store as a fallback — removed in PR #219
-      # since it re-introduced ABI-incompatible /nix/store paths (issue #211).
 
       # Per-ticker dollar volume
       ticker_stats <- duckplyr::read_parquet_duckdb(ds$url) |>
