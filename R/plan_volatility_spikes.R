@@ -8,9 +8,14 @@ plan_volatility_spikes <- function() {
     targets::tar_target(
       vix_daily,
       {
-        # VIX comes from FRED via historicaldata package (series VIXCLS)
-
+        # hd_macro("VIXCLS") from HuggingFace has ~302 NULL values scattered
+        # across the value column. RcppRoll::roll_mean (na.rm=FALSE by default)
+        # propagates NAs: any window containing a NULL returns NA, leaving most
+        # of the 3-month MA as NA and causing near-zero spike detection.
+        # Filtering NAs before the rolling mean fixes this.
+        pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
         hd_macro("VIXCLS") |>
+          dplyr::filter(!is.na(value)) |>
           dplyr::select(date, vix = value) |>
           dplyr::arrange(date)
       }
