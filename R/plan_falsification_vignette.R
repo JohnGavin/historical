@@ -327,22 +327,22 @@ plan_falsification_vignette <- function() {
     }),
 
 
-    # ── K_eff and Delta-Z ────────────────────────────────────────────
+    # ── K_eff_frob and Delta-Z ────────────────────────────────────────────
     targets::tar_target(fals_vig_multiplicity, {
-      harvey_t <- round(sqrt(2 * log(fals_keff$K_eff)), 2)
+      harvey_t <- round(sqrt(2 * log(fals_keff$K_eff_frob)), 2)
 
       tibble::tibble(
         Metric = c(
-          "K (strategies tested)", "K_eff (independent strategies)",
-          "Independence ratio (K_eff/K)",
+          "K (strategies tested)", "K_eff_frob (independent strategies)",
+          "Independence ratio (K_eff_frob/K)",
           "Best IS t-stat", "Best OOS t-stat",
           "Delta-Z (IS-OOS gap)",
-          "Harvey threshold (sqrt(2*log(K_eff)))"
+          "Harvey threshold (sqrt(2*log(K_eff_frob)))"
         ),
         Value = as.character(c(
           5,
-          round(fals_keff$K_eff, 2),
-          round(fals_keff$K_eff / 5, 2),
+          round(fals_keff$K_eff_frob, 2),
+          round(fals_keff$K_eff_frob / 5, 2),
           round(fals_delta_z$z_star_is, 2),
           round(fals_delta_z$z_star_oos, 2),
           round(fals_delta_z$delta_z, 2),
@@ -352,22 +352,22 @@ plan_falsification_vignette <- function() {
     }),
 
     targets::tar_target(fals_vig_multiplicity_caption, {
-      keff <- round(fals_keff$K_eff, 2)
+      keff <- round(fals_keff$K_eff_frob, 2)
       dz   <- round(fals_delta_z$delta_z, 2)
-      harvey_t <- round(sqrt(2 * log(fals_keff$K_eff)), 2)
+      harvey_t <- round(sqrt(2 * log(fals_keff$K_eff_frob)), 2)
 
       gh <- "https://github.com/JohnGavin/historical/blob/main"
 
       paste0(
         "Multiple testing adjustment. ",
-        "K_eff = ", keff,
+        "K_eff_frob = ", keff,
         " (spectral participation ratio from pairwise correlation matrix) ",
         "measures how many truly independent strategies exist among the 5 tested. ",
         "Delta-Z = ", dz, " measures the gap between the best in-sample and best ",
         "out-of-sample t-statistics. ",
-        "Harvey et al. (2016) threshold = sqrt(2*log(K_eff)) = ", harvey_t,
+        "Harvey et al. (2016) threshold = sqrt(2*log(K_eff_frob)) = ", harvey_t,
         ". A strategy's HAC t must exceed this to survive multiplicity correction. ",
-        "Source: [hd_keff()](", gh,
+        "Source: [hd_keff_frob()](", gh,
         "/packages/historicaldata/R/falsification.R), ",
         "[hd_delta_z()](", gh,
         "/packages/historicaldata/R/falsification.R)."

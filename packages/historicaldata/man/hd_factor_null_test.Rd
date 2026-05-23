@@ -32,7 +32,7 @@ Other falsification:
 \code{\link{hd_drawdown_overlap}()},
 \code{\link{hd_hac_sharpe}()},
 \code{\link{hd_hac_tstat}()},
-\code{\link{hd_keff}()},
+\code{\link{hd_keff_frob}()},
 \code{\link{hd_null_env_factor_null}()},
 \code{\link{hd_null_env_garch11}()},
 \code{\link{hd_null_env_gjr_garch}()},
@@ -42,6 +42,6 @@ Other falsification:
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_null_rejection_rate}()},
 \code{\link{hd_tail_dependence}()},
-\code{\link{hd_tail_keff}()}
+\code{\link{hd_tail_keff_frob}()}
 }
 \concept{falsification}
