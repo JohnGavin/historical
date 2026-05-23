@@ -32,7 +32,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (navContainer) {
       var homeItem = document.createElement('li');
       homeItem.className = 'nav-item navbar-home-link';
-      homeItem.innerHTML = '<a class="nav-link" href="index.html" title="Home">Home</a>';
+      var homeLink = document.createElement('a');
+      homeLink.className = 'nav-link';
+      homeLink.href = 'index.html';
+      homeLink.title = 'Home';
+      homeLink.textContent = 'Home';
+      homeItem.appendChild(homeLink);
       navContainer.insertBefore(homeItem, navContainer.firstChild);
     }
   }
