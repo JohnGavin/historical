@@ -77,6 +77,7 @@ source(here::here("R/plan_vignette.R"))
 source(here::here("R/plan_backtest.R"))
 source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_drif.R"))
+source(here::here("R/plan_drif_v2.R"))
 source(here::here("R/plan_stock_backtest.R"))
 source(here::here("R/plan_xgb_signal.R"))
 source(here::here("R/plan_portfolio_opt.R"))
@@ -122,7 +123,7 @@ source(here::here("R/plan_crypto_momentum.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
-  plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(),
+  plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(), plan_drif_v2(),
   plan_stock_backtest(), plan_xgb_signal(), plan_portfolio_opt(),
   plan_etf_replication(), plan_kelly(), plan_bootstrap_ci(),
   plan_regime(), plan_alpha_decay(),
