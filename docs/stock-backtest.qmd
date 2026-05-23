@@ -65,7 +65,7 @@ Two signals applied at two levels, producing four strategies:
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("stk_all_comparison_plot")
+{ p <- safe_tar_read("stk_all_comparison_plot"); if (!is.null(p)) p else cat("*Chart not available — run tar_make() to generate.*\n") }
 ```
 
 ::: {.fig-caption}
@@ -181,7 +181,7 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("stk_max_plot")
+{ p <- safe_tar_read("stk_max_plot"); if (!is.null(p)) p else cat("*Chart not available — run tar_make() to generate.*\n") }
 ```
 
 ::: {.fig-caption}
@@ -205,7 +205,7 @@ if (!is.null(metrics)) {
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("stk_max_vs_factor_plot")
+{ p <- safe_tar_read("stk_max_vs_factor_plot"); if (!is.null(p)) p else cat("*Chart not available — run tar_make() to generate.*\n") }
 ```
 
 ::: {.fig-caption}
@@ -258,7 +258,7 @@ safe_tar_read("stk_max_vs_factor_plot")
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("stk_drif_plot")
+{ p <- safe_tar_read("stk_drif_plot"); if (!is.null(p)) p else cat("*Chart not available — run tar_make() to generate.*\n") }
 ```
 
 ::: {.fig-caption}
@@ -319,7 +319,7 @@ if (!is.null(metrics)) {
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("xgb_vs_enet_plot")
+{ p <- safe_tar_read("xgb_vs_enet_plot"); if (!is.null(p)) p else cat("*Chart not available — run tar_make() to generate.*\n") }
 ```
 
 ::: {.fig-caption}
@@ -387,7 +387,7 @@ Stock-level long-short strategies lose ~20%/yr after realistic costs (1.85%/mont
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("etf_comparison_plot")
+{ p <- safe_tar_read("etf_comparison_plot"); if (!is.null(p)) p else cat("*Chart not available — run tar_make() to generate.*\n") }
 ```
 
 ::: {.fig-caption}
