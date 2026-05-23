@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-05-23 (session 7 — merge-queue drain, worktree GC, knowledge-base build-out)
+
+### Completed
+
+- **Issue triage**: grouped 48 open issues by similarity + priority; identified that the entire P0/P1 bug tier already had work sitting unmerged in worktrees (a merge queue, not new coding).
+- **25 PRs merged** in priority order (P0→P4), re-polling mergeability between merges to catch sequential conflicts:
+  - P0 (5): #248 #252 #253 #250 #249 · P1 (4): #251 #254 #255 #244 · P2 (4): #259 #258 #257 #260 · P4 (2): #243 #256
+  - Remaining backlog (4): #247 #245 #177 #242
+  - Knowledge base (5): #261 #262 #263 #264 #265 · Session docs (1): #266
+- **2 rebase conflicts resolved via `fixer` agents** (overlapping files surfaced only after the first of each pair merged):
+  - #260 (#194 AlphaVantage) vs #257 (#98 JST) — registry/NAMESPACE/snapshot; kept both entries, regenerated docs + snapshot, 41/45 registry tests pass (4 pre-existing parquet-schema failures unrelated).
+  - #242 (warn-once) vs #255 (VIGNETTE_STRICT parser hardening) — composed both behaviours, 39/39 tests pass.
+- **P1 enablers via 5 parallel `fixer`/sonnet agents in isolated worktrees** (knowledge-base build-out, doc-only): #118 Cakici coverage audit (verified DRIF `alpha=0.5`; multiverse already in `plan_drif_v2.R`), #143 Tinsley 14-pillar audit (found `strategy_correlation` already exists at `plan_leaderboard.R:129`), #192 Kinlay agentic-workflow gap-check (research-log DB confirmed MISSING), #127 research-ROI tracker, #97 INDEX.md (15 pages) + LOG.md.
+- **Worktree GC**: 25 → 2 worktrees. Removed 2 empty + 2 superseded (`feat/momentum-volatility-spikes`, `sonnet-0508`) + 18 merged + 5 agent worktrees; pruned ~26 merged local + remote branches. Recovery SHAs recorded before each delete.
+- **4 follow-up issues filed**: #267 (active EUR/USD hedge — BeyondPassive, follow-up to #142), #268 (surface `strategy_correlation` + redundancy/incremental Sharpe, #143 Pillar 7), #269 (loss-clustering + drawdown-duration, #143 Pillar 8), #270 (Kinlay research-log DB, #192, first use case #200).
+- **#160 status recorded**: PR 2 (#177) shipped the K_eff helpers + disambiguation; PR 3 (leaderboard wiring) + PR 4 (rule updates) remain — helpers are defined but unwired, deflated Sharpe uses hardcoded `K_trials=5L`.
+- **Local `main` fast-forwarded** 6f2dce8 → f8e64c1 (28 server-side merges synced).
+
+### Failed Approaches
+
+- **Trusting agent self-reported pwd**: both rebase-fixer agents reported their *launch* cwd (the orchestrator's worktree) rather than their isolated worktree path. Resolved by verifying isolation via Tier-3 HEAD snapshots + force-push refspec rather than the agent's self-check line. **Lesson:** verify worktree isolation from the orchestrator side, not the agent's report.
+- **Assuming all-clean merge queue stays clean**: #260 and #242 each flipped CONFLICTING only *after* the first PR touching the shared file merged. Re-polling `mergeable` between every merge (not once up front) is mandatory for overlapping-file batches.
+
+### Accuracy / Metrics
+
+- 25 PRs merged; 0 open PRs at session end. Open issues 48 → 36 (4 newly filed). Worktrees 25 → 2. Local main synced.
+
+### Known Limitations
+
+- #160: K_eff helpers unwired (PR 3/4 pending) — see issue comment.
+- Roborev backlog: 41 unaddressed failures (175 failed − 134 addressed) — pre-existing, not from this session's (doc/merge-only) changes.
+- #260 registry: 4 pre-existing parquet-schema test failures (`updated_at`, `full_exchange`) flagged by the fixer — separate from the merge.
+
 ## 2026-05-21 (session 6 — parallel P1 + P2 sweep, roborev backlog cleanup)
 
 ### Completed
