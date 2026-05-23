@@ -2,6 +2,8 @@
 
 Trigger: issue [#118](https://github.com/JohnGavin/historical/issues/118). Paper: Cakici, Fieberg, Metko, Zaremba — "Daily Return Information and the Cross-Section of Expected Stock Returns" (SSRN 6005614, 2024).
 
+**Related:** [#117](https://github.com/JohnGavin/historical/issues/117), [#118](https://github.com/JohnGavin/historical/issues/118), [#157](https://github.com/JohnGavin/historical/issues/157).
+
 Purpose: document what this repo already does on each of the paper's 8 keyword categories before starting #117 (the main implementation issue), to avoid duplicating work.
 
 Method: `Grep` sweep across `R/` and `packages/historicaldata/R/` plus `gh issue list --search` for each keyword. Cross-checked against `tar_target` enumerations and the existing wiki.
@@ -160,3 +162,120 @@ Gap: No bibliographic citations in code or vignettes for the well-known anomalie
 - [Issue #117](https://github.com/JohnGavin/historical/issues/117) — paper implementation tracking
 - [Issue #150](https://github.com/JohnGavin/historical/issues/150) — PIT data blocker for paper-faithful stock-level cross-section
 - Related wiki pages: [[priced-in-signals]], [[regime-trend-following]], [[market-behavior-gap-analysis]]
+
+---
+
+## Verified Code Audit — Round 2 (2026-05-23, closes #118)
+
+The round-1 audit above was generated from `Grep` sweeps with some `⚠ AI-inferred` tags.
+This section replaces those inferences with direct code quotes and corrects one stale status entry.
+
+### Correction 1: Multiverse Analysis — ✅ IMPLEMENTED (was: ❌ Not implemented)
+
+`plan_drif_v2.R` exists and implements the full 2^4 = 16-cell specification curve
+described in issue #157. It is NOT an advisory document — it is executable targets code.
+
+Key targets in `R/plan_drif_v2.R`:
+
+| Target | What it does |
+|---|---|
+| `drif_multiverse_grid` | `tidyr::expand_grid(alpha = c(0.5, 1.0), nfolds = c(5L, 10L), feature_set = c("chrono", "both"), lambda_rule = c("lambda.min", "lambda.1se"))` — 16 rows |
+| `drif_multiverse` | Expanding-window elastic-net run for each of the 16 specs, OOS-only metrics (CAGR, vol, Sharpe, max-DD, hit-rate) |
+| `drif_multiverse_plot` | Fan chart sorted by OOS Sharpe, current spec highlighted |
+| `drif_multiverse_caption` | Dynamic caption per `dynamic-prose-values` rule |
+
+File header quote confirming scope (L1–4):
+
+```
+# plan_drif_v2.R — DRIF multiverse / specification-curve analysis
+# Implements the 2^4 = 16-cell specification curve described in issue #157,
+# motivated by Cakici et al. 2024 (SSRN 6005614, issue #117).
+# Four dimensions varied: alpha, nfolds, feature_set, lambda_rule
+```
+
+Status update: keyword 7 (Multiverse Analysis) moves from `❌ Not implemented`
+to `✅ IMPLEMENTED`.
+
+---
+
+### Correction 2: Elastic-Net alpha — VERIFIED = 0.5 (was: AI-inferred)
+
+The round-1 entry tagged `alpha = 0.5` as `⚠ AI-inferred`. It is now verified directly from code.
+
+**`R/plan_drif.R` L19** (the `drif_params` target):
+```r
+alpha = 0.5,
+```
+
+**`R/plan_drif.R` L154–156** (the `cv.glmnet` call):
+```r
+fit <- glmnet::cv.glmnet(X_train, y_train,
+                          alpha = drif_params$alpha,
+                          nfolds = 5, type.measure = "mse")
+```
+
+**`R/plan_drif.R` L163** (lambda selection):
+```r
+pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))
+```
+
+**`R/plan_stock_backtest.R` L904** (stock-level elastic net, hardcoded, not parameterised):
+```r
+glmnet::cv.glmnet(X_train, y_train, alpha = 0.5,
+                  nfolds = 5, type.measure = "mse")
+```
+
+**`R/plan_etf_replication.R` L28** (ETF replication):
+```r
+alpha = 0.5,           # elastic net
+```
+
+**Summary of all verified `cv.glmnet` hyperparameters:**
+
+| Parameter | Value | Source |
+|---|---|---|
+| `alpha` | **0.5** (equal L1/L2 mix — true elastic net) | `plan_drif.R` L19, `plan_stock_backtest.R` L904, `plan_etf_replication.R` L28 |
+| `nfolds` | **5** | `plan_drif.R` L156 |
+| `type.measure` | **"mse"** | `plan_drif.R` L156 |
+| `lambda` selection | **`"lambda.min"`** | `plan_drif.R` L163, `plan_stock_backtest.R` L912 |
+| Training window | **Expanding** (all history to month M-1) | `plan_drif.R` L134–136 |
+| Min training months | **60** | `plan_drif.R` L20 |
+| Feature count (production) | **21 chronological + 21 rank = 42** | `plan_drif.R` L96–99 |
+| Feature count (multiverse "chrono" spec) | **21 chronological only** | `plan_drif_v2.R` L79 |
+
+The `⚠ AI-inferred` tag on the round-1 entry is now retired. `alpha = 0.5` is a verified code fact.
+
+---
+
+### Updated 8-Topic Status Table
+
+| # | Keyword | Status | Primary file | Key evidence |
+|---|---|---|---|---|
+| 1 | Elastic-Net Forecasting | ✅ IMPLEMENTED | `R/plan_drif.R` | `alpha=0.5`, `nfolds=5`, `lambda.min`, 42 features, expanding window |
+| 2 | Daily Return Information (DRIF) | ✅ Factor-level; ⚠ Stock-level (XGBoost, not EN) | `R/plan_drif.R`, `R/plan_stock_backtest.R` | Factor-level: paper-faithful EN; stock-level: XGBoost analogue |
+| 3 | Cross-Sectional Asset Pricing | ⚠ PARTIAL | `R/plan_falsification.R`, `R/plan_drif.R` | Decile sorts + tail-independence; no Fama-MacBeth |
+| 4 | Short-Horizon Return Predictability | ⚠ PARTIAL | `R/plan_alpha_decay.R`, `R/plan_drif.R` | Alpha-decay targets; 21-day lookback; no 1-day/1-week explicit experiment |
+| 5 | Factor Zoo | ⚠ AWARENESS | `R/disclosures.R`, `R/plan_forecast_eval.R` | 6 FF factors + 6 custom strategies; no external zoo dataset |
+| 6 | Return Reversal | ⚠ PARTIAL | `R/plan_mean_reversion.R` | Time-series z-score strategy; not cross-sectional short-term reversal |
+| 7 | Multiverse Analysis | ✅ IMPLEMENTED | `R/plan_drif_v2.R` | 16-cell 2^4 grid; `drif_multiverse`, `drif_multiverse_plot` targets |
+| 8 | Asset Pricing Anomalies | ⚠ PARTIAL | `R/disclosures.R` | DRIF, FacMAX, LTR, RSC, VIXO; no IVOL, salience, lottery; no academic citations in code |
+
+**Net change from round 1:** Keyword 7 (Multiverse) upgraded from `❌` to `✅`. Keyword 1 `alpha` value promoted from AI-inferred to verified.
+
+---
+
+### Remaining Gaps (unchanged from round 1)
+
+1. Stock-level DRIF uses XGBoost, not elastic-net — blocked on #150 (PIT universe) before a fair paper-faithful comparison is possible.
+2. No Fama-MacBeth cross-sectional regressions.
+3. No dedicated short-term reversal factor (Jegadeesh 1990 style).
+4. No academic citations for FacMAX (Bali 2011), LTR (De Bondt-Thaler 1985), mean-reversion (Lehmann 1990) in code or vignettes.
+5. No external anomaly dataset (Hou-Xue-Zhang 153, or Cakici's 207).
+
+### Additional Sources (Round 2)
+
+- `R/plan_drif.R` — read directly; L19 (`alpha`), L154–163 (`cv.glmnet` call, `lambda.min`)
+- `R/plan_drif_v2.R` — read directly; L1–44 (multiverse grid header and `drif_multiverse_grid` target)
+- `R/plan_stock_backtest.R` — read directly; L904 (`alpha = 0.5` hardcoded)
+- `R/plan_etf_replication.R` — L28 (`alpha = 0.5`)
+- `R/plan_mean_reversion.R` — read directly; confirms time-series z-score, not cross-sectional reversal
