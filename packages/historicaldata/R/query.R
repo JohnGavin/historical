@@ -1,3 +1,47 @@
+# ── Survivorship-bias guard ───────────────────────────────────────────────────
+
+#' Warn when a dataset is known to be survivorship-biased
+#'
+#' Emits a `cli::cli_warn()` if `dataset` is flagged with
+#' `survivorship_biased = TRUE` in the registry. Call this before computing
+#' per-stock Sharpe / CAGR / drawdown metrics so that callers are reminded the
+#' numbers overstate achievable performance.
+#'
+#' The `equity_daily` dataset is survivorship-biased: the 672-ticker universe
+#' reflects currently-listed stocks only. Known failed firms (Enron, Lehman
+#' Brothers, Bear Stearns, WorldCom, Washington Mutual) are absent. Across 56
+#' years of history (1970-2026), zero delistings are recorded. Per-stock
+#' performance metrics derived from this dataset overstate returns by an
+#' unquantified but non-trivial amount (literature estimate: +1 to +3 pp/year
+#' CAGR for long-only strategies). See GitHub issue #150 for full analysis and
+#' remediation roadmap.
+#'
+#' @param dataset Dataset name from [hd_datasets()].
+#' @return `dataset` invisibly. Called for its warning side-effect.
+#' @family data-access
+#' @family quality-audit
+#' @export
+#' @examples
+#' hd_check_survivorship_bias("equity_daily")  # emits a warning
+#' hd_check_survivorship_bias("factors")       # silent
+hd_check_survivorship_bias <- function(dataset) {
+  ds <- hd_datasets()[[dataset]]
+  if (is.null(ds)) {
+    cli::cli_abort("Unknown dataset: {.val {dataset}}. See {.fn hd_datasets}.")
+  }
+  if (isTRUE(ds[["survivorship_biased"]])) {
+    n_del <- ds[["known_delistings"]]
+    cli::cli_warn(c(
+      "{.val {dataset}} is survivorship-biased: {n_del} delisting event{?s} recorded across full history.",
+      "i" = "Universe contains only currently-listed tickers.",
+      "i" = "Known failed firms (Enron, Lehman, Bear Stearns, WorldCom, WaMu) are absent.",
+      "x" = "Per-stock Sharpe / CAGR / drawdown metrics OVER-ESTIMATE achievable performance.",
+      ">" = "True fix requires a point-in-time universe with delisting records (CRSP/WRDS/Sharadar). See GitHub issue #150."
+    ))
+  }
+  invisible(dataset)
+}
+
 #' Query OHLCV data for one or more tickers
 #'
 #' Returns a duckplyr lazy frame by default. Call `collect()` to materialise,
@@ -70,6 +114,15 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
   ds <- hd_datasets()[[dataset]]
   if (is.null(ds)) {
     cli::cli_abort("Unknown dataset: {dataset}. See {.fn hd_datasets}.")
+  }
+
+  # Emit a once-per-session survivorship-bias warning for equity_daily (#150)
+  if (isTRUE(ds[["survivorship_biased"]])) {
+    warn_key <- paste0("hd_survivorship_warned_", dataset)
+    if (!isTRUE(getOption(warn_key))) {
+      hd_check_survivorship_bias(dataset)
+      options(stats::setNames(list(TRUE), warn_key))
+    }
   }
 
   source_path <- if (local) {
