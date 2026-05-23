@@ -11,9 +11,9 @@
         ..$ description: chr "US equities daily OHLCV (Yahoo Finance)"
        $ crypto_daily       :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/crypto_daily.parquet"
-        ..$ schema     : chr [1:7] "date" "close" "volume" "market_cap" ...
+        ..$ schema     : chr [1:9] "date" "open" "high" "low" ...
         ..$ frequency  : chr "daily"
-        ..$ description: chr "Cryptocurrency daily prices (CoinGecko)"
+        ..$ description: chr "Cryptocurrency daily OHLCV (Yahoo Finance)"
        $ macro_daily        :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/macro_daily.parquet"
         ..$ schema     : chr [1:4] "date" "value" "series_id" "source"

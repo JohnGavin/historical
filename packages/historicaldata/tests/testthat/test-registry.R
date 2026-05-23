@@ -30,3 +30,36 @@ test_that("hd_cache_path returns a path", {
 test_that("hd_datasets snapshot", {
   expect_snapshot(str(hd_datasets()))
 })
+
+test_that("registry schema matches actual parquet columns for all datasets", {
+  skip_on_cran()
+  skip_if_offline()
+
+  ds_list <- hd_datasets()
+  for (nm in names(ds_list)) {
+    ds <- ds_list[[nm]]
+    # Read one row to get column names without downloading full parquet
+    actual_cols <- tryCatch(
+      duckplyr::read_parquet_duckdb(ds$url) |>
+        utils::head(1) |>
+        dplyr::collect() |>
+        names(),
+      error = function(e) {
+        testthat::skip(paste("Cannot reach", nm, "parquet:", conditionMessage(e)))
+        character(0)
+      }
+    )
+    if (!length(actual_cols)) next
+    missing_from_parquet <- setdiff(ds$schema, actual_cols)
+    extra_in_parquet     <- setdiff(actual_cols, ds$schema)
+    msg <- paste0(
+      "dataset '", nm, "': ",
+      if (length(missing_from_parquet)) paste("in schema not in parquet:", paste(missing_from_parquet, collapse=", ")),
+      if (length(extra_in_parquet))     paste("in parquet not in schema:", paste(extra_in_parquet, collapse=", "))
+    )
+    expect_true(
+      setequal(actual_cols, ds$schema),
+      label = msg
+    )
+  }
+})

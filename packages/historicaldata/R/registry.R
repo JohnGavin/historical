@@ -26,10 +26,10 @@ hd_datasets <- function() {
     ),
     crypto_daily = list(
       url = hd_base_url("crypto_daily.parquet"),
-      schema = c("date", "close", "volume", "market_cap",
+      schema = c("date", "open", "high", "low", "close", "volume",
                  "ticker", "source", "asset_class"),
       frequency = "daily",
-      description = "Cryptocurrency daily prices (CoinGecko)"
+      description = "Cryptocurrency daily OHLCV (Yahoo Finance)"
     ),
     macro_daily = list(
       url = hd_base_url("macro_daily.parquet"),
