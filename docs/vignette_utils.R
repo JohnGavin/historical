@@ -141,7 +141,8 @@ hd_dt <- function(df, caption_text) {
   DT::datatable(
     df,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #888;",
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption",
       caption_text
     ),
     rownames = FALSE,
