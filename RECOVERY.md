@@ -24,13 +24,17 @@ reproducible.
 ### Location
 
 ```
-packages/historicaldata/inst/extdata/research_log/
+inst/extdata/research_log/
   hypotheses/          one parquet file per append call
   implementations/
   results/
   critiques/
   robustness/
 ```
+
+The path resolves via `here::here()` at runtime, so it lives at the **repo
+root** (`inst/extdata/research_log/`), the same anchoring as the `results_db`
+store at `inst/extdata/results/` — not under `packages/historicaldata/`.
 
 ### Format
 
@@ -72,25 +76,25 @@ Update this table when a cross-domain backup destination is established.
 2. Verify the research-log directory exists:
 
    ```bash
-   ls <repo>/packages/historicaldata/inst/extdata/research_log/
+   ls <repo>/inst/extdata/research_log/
    ```
 
 3. If the directory is missing or corrupted, restore from git:
 
    ```bash
-   git -C <repo> checkout HEAD -- packages/historicaldata/inst/extdata/research_log/
+   git -C <repo> checkout HEAD -- inst/extdata/research_log/
    ```
 
 4. If files are missing beyond HEAD (e.g. accidental `git rm`), find the
    last commit that touched them and restore:
 
    ```bash
-   git -C <repo> log --all -- "packages/historicaldata/inst/extdata/research_log/**"
-   git -C <repo> checkout <commit-sha> -- packages/historicaldata/inst/extdata/research_log/
+   git -C <repo> log --all -- "inst/extdata/research_log/**"
+   git -C <repo> checkout <commit-sha> -- inst/extdata/research_log/
    ```
 
 5. If recovering from a cross-domain backup copy, place the files under
-   `packages/historicaldata/inst/extdata/research_log/<table>/` and
+   `inst/extdata/research_log/<table>/` and
    verify each table loads:
 
    ```r
