@@ -15,8 +15,17 @@
 
 # ── Internal helpers ────────────────────────────────────────────────────────
 
-# Generate a UUID-v4 using base R (no uuid package).
-# 16 random bytes, version nibble set to 4, variant bits set to 10xx.
+#' Generate a UUID-v4 using base R
+#'
+#' Generates a version-4 UUID using base R's random number generator only.
+#' No external packages are required.  Useful for pre-generating ids before
+#' calling \code{hd_rlog_append()} so that parent-child lineage chains can be
+#' set before any row is written.
+#'
+#' @return A single character string in the canonical 8-4-4-4-12 lowercase
+#'   hex format (e.g. \code{"550e8400-e29b-41d4-a716-446655440000"}).
+#' @family research-log
+#' @export
 hd_rlog_uuid <- function() {
   b <- sample(0:255L, 16L, replace = TRUE)
   # Set version nibble (byte 7, high nibble) to 4
