@@ -2,6 +2,28 @@
 
 Chronological record of findings. Wiki pages synthesise these into structured knowledge.
 
+## 2026-05-23
+
+### Cakici et al. (2024) Coverage Audit (#118)
+- **Source:** GitHub issue #118 (audit spec); Cakici, Fieberg, Metko, Zaremba — SSRN 6005614
+- **Finding:** Grep sweep across `R/` and `packages/historicaldata/R/` shows elastic-net forecasting (DRIF), short-term reversal, and anomaly-sorting already implemented; long-run reversal, option-implied vol, analyst forecast dispersion, and earnings surprises have zero coverage
+- **Action:** Wiki page created at `wiki/cakici-2024-coverage-audit.md`; implementation gaps tracked in #117 and #157
+
+### Tinsley Backtest Framework Audit (#143)
+- **Source:** GitHub issue #143 (audit spec); Martyn Tinsley's seven-pillar backtest quality framework
+- **Finding:** 8-pillar audit: HAVE on simplicity, walk-forward, logic-before-patterns; PARTIAL on data quality (survivorship bias flagged not filtered), parameter sensitivity (only Avoid Worst swept), implementation realism (cost inconsistency 0.50% vs 0.20%), portfolio context (correlation matrix not wired into ranking), risk-as-architecture (loss clustering absent)
+- **Action:** Wiki page created at `wiki/tinsley-backtest-framework-audit.md`; two confirmed gaps (survivorship bias filter, loss clustering) have proposed fixes in the audit page
+
+### Kinlay Agentic Workflow Audit (#192)
+- **Source:** GitHub issue #192 (audit spec); Kinlay (2026-05), "Agentic Workflows for Alpha Research"
+- **Finding:** 5-pillar gap-check: PIT wrapper PARTIAL (vintages module exists, no systematic registry for all targets); critic covers 1 of 6 Kinlay defect classes; research-log DB entirely MISSING (highest-priority gap for issue #200 OLMAR use case)
+- **Action:** Wiki page created at `wiki/kinlay-agentic-workflow-audit.md`; research-log DB tracked in #200
+
+### Knowledge Base INDEX.md and LOG.md (#97)
+- **Source:** GitHub issue #97 (knowledge/ structure spec)
+- **Finding:** 15 wiki pages existed across 4 thematic groups; INDEX.md was partial (missing cakici, tinsley, daloopa pages and the research-roi placeholder); LOG.md had no 2026-05-23 entry
+- **Action:** Complete INDEX.md written with all 15 pages catalogued + research-roi.md placeholder; LOG.md seeded with this entry
+
 ## 2026-05-08
 
 ### Tier 1 Data Integration Test Validation (PR #111)
