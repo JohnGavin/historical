@@ -5,6 +5,10 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 
 ## Wiki Pages
 
+### Workflow & Infrastructure
+
+- [Kinlay Agentic Workflow Audit](wiki/kinlay-agentic-workflow-audit.md) — 5-pillar gap-check vs current stack; research-log DB is MISSING and highest-priority; PIT wrapper PARTIAL; Critic covers 1 of 6 defect classes
+
 ### Research Findings
 
 - [Momentum Decomposition (Cross-Asset)](wiki/momentum-decomposition-cross-asset.md) — 20-hour research: FAILED in equities/commodities, pipeline complete in crypto, regime-aware baseline shows promise
