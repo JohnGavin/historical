@@ -86,3 +86,48 @@ test_that("apply_adv_cap: no cap binds when weights are small", {
   expect_false(any(result$hit_cap))
   expect_equal(sum(result$capped_w), 1, tolerance = 1e-9)
 })
+
+# ── F4: stk_universe date coercion — no Ops.POSIXt/Ops.Date warning (#203) ───
+
+test_that("date >= Date threshold emits no Ops.POSIXt/Ops.Date warning", {
+  # Reproduce the stk_universe filter pattern: DuckDB returns POSIXct;
+  # stk_params$start_date is Date (from as.Date() in plan_partitions.R).
+  # Before fix, this produced:
+  #   Warning: Incompatible methods ("Ops.POSIXt", "Ops.Date") for ">="
+  library(dplyr)
+
+  posixct_dates <- as.POSIXct(c("2005-01-03", "2006-06-15", "2020-01-02"), tz = "UTC")
+  df <- tibble::tibble(
+    date   = posixct_dates,
+    ticker = c("AAPL", "MSFT", "GOOG"),
+    close  = c(1.0, 2.0, 3.0)
+  )
+  start_date <- as.Date("2006-01-01")   # Date, as set by bt_partitions$equity$train_start
+
+  # After fix: coerce POSIXct -> Date before comparison
+  df_coerced <- df |> mutate(date = as.Date(date, tz = "UTC"))
+
+  expect_no_warning(
+    df_coerced |> filter(date >= start_date),
+    message = "Incompatible methods"
+  )
+
+  # Confirm the filter actually works correctly: only 2006-06-15 and 2020-01-02 survive
+  result <- df_coerced |> filter(date >= start_date)
+  expect_equal(nrow(result), 2L)
+  expect_equal(class(result$date), "Date")
+})
+
+test_that("raw POSIXct vs Date comparison emits Ops.POSIXt warning (baseline)", {
+  # Confirm the original bug is detectable — raw POSIXct warns.
+  library(dplyr)
+
+  posixct_dates <- as.POSIXct(c("2005-01-03", "2020-01-02"), tz = "UTC")
+  df <- tibble::tibble(date = posixct_dates, value = 1:2)
+  start_date <- as.Date("2006-01-01")
+
+  expect_warning(
+    df |> filter(date >= start_date),
+    regexp = "Incompatible methods"
+  )
+})

@@ -419,7 +419,8 @@ plan_stock_backtest <- function() {
       all_data <- duckplyr::read_parquet_duckdb(ds$url) |>
         filter(!grepl("\\.L$", ticker), ticker %in% stk_top_tickers) |>
         select(date, ticker, close, adjusted, volume) |>
-        collect()
+        collect() |>
+        mutate(date = as.Date(date, tz = "UTC"))  # coerce POSIXct -> Date before any comparison (#203)
 
       # Filter to tickers with enough history
       ticker_stats <- all_data |>
@@ -432,8 +433,7 @@ plan_stock_backtest <- function() {
       all_data |>
         filter(ticker %in% ticker_stats$ticker,
                date >= stk_params$start_date) |>
-        arrange(ticker, date) |>
-        mutate(date = as.Date(date, tz = "UTC"))   # coerce POSIXct from DuckDB TIMESTAMP
+        arrange(ticker, date)
     }),
 
     # ── Group 1: Monthly returns for all stocks ───────────────────
