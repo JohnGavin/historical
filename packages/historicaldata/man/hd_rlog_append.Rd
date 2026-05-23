@@ -38,6 +38,7 @@ Other research-log:
 \code{\link{hd_rlog_path}()},
 \code{\link{hd_rlog_query}()},
 \code{\link{hd_rlog_schema}()},
-\code{\link{hd_rlog_tables}()}
+\code{\link{hd_rlog_tables}()},
+\code{\link{hd_rlog_uuid}()}
 }
 \concept{research-log}
