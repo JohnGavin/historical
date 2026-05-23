@@ -17,6 +17,8 @@ List available macro series
 }
 \seealso{
 Other data-access: 
+\code{\link{hd_alphavantage}()},
+\code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},
 \code{\link{hd_guardian}()},
@@ -29,6 +31,7 @@ Other data-access:
 
 Other discovery: 
 \code{\link{hd_alpaca_assets_snapshot}()},
+\code{\link{hd_av_registry}()},
 \code{\link{hd_datasets}()},
 \code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},

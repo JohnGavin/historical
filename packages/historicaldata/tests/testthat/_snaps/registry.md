@@ -3,12 +3,14 @@
     Code
       str(hd_datasets())
     Output
-      List of 7
-       $ equity_daily       :List of 4
-        ..$ url        : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
-        ..$ schema     : chr [1:10] "date" "open" "high" "low" ...
-        ..$ frequency  : chr "daily"
-        ..$ description: chr "US equities daily OHLCV (Yahoo Finance)"
+      List of 9
+       $ equity_daily       :List of 6
+        ..$ url                : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
+        ..$ schema             : chr [1:10] "date" "open" "high" "low" ...
+        ..$ frequency          : chr "daily"
+        ..$ description        : chr "US equities daily OHLCV (Yahoo Finance). WARNING: survivorship-biased — universe reflects currently-listed tick"| __truncated__
+        ..$ survivorship_biased: logi TRUE
+        ..$ known_delistings   : int 0
        $ crypto_daily       :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/crypto_daily.parquet"
         ..$ schema     : chr [1:9] "date" "open" "high" "low" ...
@@ -39,4 +41,14 @@
         ..$ schema     : chr [1:9] "ticker" "field" "old_value" "new_value" ...
         ..$ frequency  : chr "append-only"
         ..$ description: chr "PIT log of all metadata changes: computed fields, enrichments, corrections"
+       $ jst_macrohistory   :List of 4
+        ..$ url        : chr "https://www.macrohistory.net/app/download/9834512469/JSTdatasetR6.dta"
+        ..$ schema     : chr [1:27] "iso" "year" "eq_tr" "bond_tr" ...
+        ..$ frequency  : chr "annual"
+        ..$ description: chr "Jorda-Schularick-Taylor Macrohistory Database (Release 6): 18 countries, 1870-2020, annual returns for equity, "| __truncated__
+       $ alphavantage_daily :List of 4
+        ..$ url        : chr NA
+        ..$ schema     : chr [1:8] "date" "open" "high" "low" ...
+        ..$ frequency  : chr "daily"
+        ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
 

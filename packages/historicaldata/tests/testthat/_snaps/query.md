@@ -21,7 +21,7 @@
     Code
       str(hd_datasets())
     Output
-      List of 7
+      List of 8
        $ equity_daily       :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
         ..$ schema     : chr [1:10] "date" "open" "high" "low" ...
@@ -57,6 +57,11 @@
         ..$ schema     : chr [1:9] "ticker" "field" "old_value" "new_value" ...
         ..$ frequency  : chr "append-only"
         ..$ description: chr "PIT log of all metadata changes: computed fields, enrichments, corrections"
+       $ alphavantage_daily :List of 4
+        ..$ url        : chr NA
+        ..$ schema     : chr [1:8] "date" "open" "high" "low" ...
+        ..$ frequency  : chr "daily"
+        ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
 
 # hd_ohlcv split-and-bind: collect=FALSE informs user
 

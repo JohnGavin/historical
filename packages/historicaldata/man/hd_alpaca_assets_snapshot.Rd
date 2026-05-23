@@ -81,6 +81,7 @@ to build a point-in-time universe (see issue #150).
 
 \seealso{
 Other discovery: 
+\code{\link{hd_av_registry}()},
 \code{\link{hd_datasets}()},
 \code{\link{hd_ecb_registry}()},
 \code{\link{hd_exchanges}()},
