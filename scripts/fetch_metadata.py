@@ -22,6 +22,14 @@ try:
 except ImportError:
     sys.exit("yfinance required: pip install yfinance")
 
+# Ensure metadata_helpers is importable regardless of invocation mode:
+#   python scripts/fetch_metadata.py   → scripts/ not on sys.path by default
+#   python -m scripts.fetch_metadata   → relative import would fail at top-level
+# Inserting the script's own directory supports both modes.
+_scripts_dir = str(Path(__file__).parent)
+if _scripts_dir not in sys.path:
+    sys.path.insert(0, _scripts_dir)
+
 from metadata_helpers import _yield_fields, first_present  # noqa: E402
 
 # US equity tickers
