@@ -66,6 +66,21 @@ hd_datasets <- function() {
                  "source", "method", "amended_at", "amended_by", "reversible"),
       frequency = "append-only",
       description = "PIT log of all metadata changes: computed fields, enrichments, corrections"
+    ),
+    jst_macrohistory = list(
+      url = "https://www.macrohistory.net/app/download/9834512469/JSTdatasetR6.dta",
+      schema = c("iso", "year", "eq_tr", "bond_tr", "housing_tr", "bill_rate",
+                 "eq_capgain", "eq_dp", "housing_capgain", "housing_rent_yd",
+                 "capital_tr", "risky_tr", "safe_tr", "cpi", "gdp", "rgdpmad",
+                 "pop", "unemp", "stir", "ltrate", "xrusd", "debtgdp",
+                 "tloans", "tmort", "crisisJST", "money", "narrowm"),
+      frequency = "annual",
+      description = paste0(
+        "Jorda-Schularick-Taylor Macrohistory Database (Release 6): ",
+        "18 countries, 1870-2020, annual returns for equity, bonds, housing, ",
+        "bills; plus macro, credit, FX, and financial crisis indicators. ",
+        "Free download from macrohistory.net. Use hd_jst() to fetch."
+      )
     )
   )
 }
