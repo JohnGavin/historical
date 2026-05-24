@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-05-24 (session 8 — research-log DB #270, OLMAR #200, roborev review analysis)
+
+### Completed
+- Issue triage R2: filed #271 (turn-of-month overlay), #272 (news event-extraction
+  FinBERT+Claude), #273 (Commodity QIS transcript→KB); reframed #271/#272 as build
+  tasks; created `research` label, applied to ~25 literature issues; digested+closed
+  reading roundups #126, #103 (spawned #274 dispersion-alpha); annotated #116. 40→39 open.
+- #270 research-log DB (PR #275): 5 typed parquet tables (hypotheses/implementations/
+  results/critiques/robustness) + lineage cols (uuid/parent_uuid/timestamp/git_commit/
+  sandbox_image_hash), `hd_rlog_*` API, DuckDB-views query helper, RECOVERY.md. 65 tests,
+  no new deps (base-R UUID, system2 git, tools::md5sum(flake.lock) env hash).
+- #200 OLMAR-1 (PR #276): pure look-ahead-safe core (olmar_simplex_project/update/backtest)
+  + plan_olmar.R targets + first research-log lineage write (olmar_research_log); exported
+  hd_rlog_uuid. 41 tests.
+- Real-data run (PR #277): inaugural lineage committed. OLMAR-1, 20 liquid large-cap+ETF
+  tickers, 0.2x leverage, 10bps → full net CAGR 15.89%, Sharpe 0.88 (OOS 0.80), MDD -33.8%.
+  Order of magnitude below author's 106% small-cap headline (edge is small-cap-specific;
+  survivorship-inflated, #150). Filed #278 (S&P 600 Phase 4, gated on #150).
+- roborev analysis (~/.roborev/reviews.db, 4,463 reviews): tabulated by agent (codex 87% /
+  claude-code 13% / gemini 1), review_type (monomorphic: 4,460 default + 1 security +
+  1 design, both micromort), verdict + time-to-close. Filed llm#283 (fallback rotation
+  misconfigured: should be codex→gemini→claude-code) and llm#285 (auto-close 810 open
+  clean-verdict reviews). Pruned 2 stray roborev repos (.llmtelemetry-data-backup,
+  llmtelemetry-hook-sync); kept content + hello_t (real dirs).
+
+### Failed Approaches
+- Ran tar_make() with setwd("docs") → failed: here::here() anchored to docs/, so
+  pkgload::load_all(here::here("packages/historicaldata")) looked for docs/packages/
+  historicaldata. FIX: run from REPO ROOT — root _targets.yaml points script→docs/_targets.R,
+  store→docs/_targets, and here() then anchors to root. Root _targets.R is a SEPARATE
+  data-validation pipeline (decoy). Saved to project memory (pipeline-invocation).
+
+### Accuracy / Metrics
+- historicaldata pkg: +2 source files (research_log.R, olmar.R), +106 tests (65 research-log
+  + 41 olmar), 0 regressions. 3 PRs merged (#275/#276/#277).
+- OLMAR-1: net CAGR 15.89%, Sharpe 0.88 full / 0.80 OOS, MDD -33.8% (survivorship-inflated).
+
+### Known Limitations
+- OLMAR metrics survivorship-inflated (#150); real test needs S&P 600 + delisting records (#278).
+- research-log hd_rlog_path() resolves via here::here() to repo-root inst/extdata/research_log/
+  (not packages/), documented in RECOVERY.md.
+- roborev: gemini fallback effectively unused (llm#283); 810 clean reviews sitting open (llm#285).
+- Deferred OLMAR phases: leverage sweep, S&P 600, cross-geography, leaderboard/vignette.
+
 ## 2026-05-23 (session 7 — merge-queue drain, worktree GC, knowledge-base build-out)
 
 ### Completed

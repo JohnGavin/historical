@@ -1,35 +1,36 @@
-# Current Work (Session 2026-05-23 #7 — merge-queue drain + worktree GC + knowledge-base build-out, ENDED)
+# Current Work (Session 2026-05-24 #8 — research-log DB + OLMAR + roborev analysis, ENDED)
 
 **Last updated:** session end
-**Previous sessions:** 2026-05-21 #6 (parallel P1+P2 sweep, 18 PRs), 2026-05-20 #5 (roborev cascade fix), #4 (round-4/5 sweep), #3 (tier-2 fixes), #2 (issue triage), #1 (Nix segfault + #208)
+**Previous sessions:** 2026-05-23 #7 (merge-queue drain, 25 PRs, worktree GC), #6 (parallel P1+P2 sweep), #5 (roborev cascade fix), #4 (round-4/5 sweep), #3 (tier-2), #2 (triage), #1 (Nix segfault)
 
 ## Final state
 
-`main` at `f8e64c1`, local checkout synced (was 28 commits behind after server-side merges). **0 open PRs.** Worktrees: 2 (main + this session's `feat/cc-20260523-100245`). Open issues: 36.
+`main` at `623c570`, both checkouts clean & synced. **0 open PRs.** Worktrees: main + this session's `feat/cc-20260523-170240`. Open issues: 41 (incl. 4 new: #271/#272/#273/#274/#278; +llm#283/#285).
 
 ## Session totals
 
-- **25 PRs merged** in priority order: P0 #248/#252/#253/#250/#249, P1 #251/#254/#255/#244, P2 #259/#258/#257/#260, P4 #243/#256, backlog #247/#245/#177/#242, knowledge #261/#262/#263/#264/#265, session-docs #266.
-- **2 rebase conflicts resolved via fixer agents**: #260 (registry, vs #98) and #242 (vignette-utils, vs #255). Both verified green.
-- **5 P1 enabler issues closed** via 5 parallel fixer/sonnet agents (doc-only knowledge-base build-out): #97, #118, #127, #143, #192.
-- **Worktree GC**: 25 → 2. ~26 merged local + remote branches pruned. Recovery SHAs recorded before deletes.
-- **4 follow-up issues filed**: #267 (active EUR/USD hedge), #268 (surface strategy_correlation), #269 (loss-clustering/DD-duration), #270 (Kinlay research-log DB).
-- **#160 status comment** posted (PR 3/4 remain — helpers unwired).
+- **3 PRs merged** (all infra/strategy, built via isolated sonnet `fixer` worktrees, Tier-3 verified):
+  - #275 (#270 research-log DB phase 1 — 5 typed parquet tables + `hd_rlog_*` lineage API, 65 tests)
+  - #276 (#200 OLMAR-1 — pure look-ahead-safe core + plan_olmar.R + first DB lineage write, 41 tests)
+  - #277 (inaugural OLMAR lineage committed + RECOVERY.md path fix)
+- **Real-data tar_make** run from repo root → wrote first research-log lineage. OLMAR-1 (20 liquid tickers, 0.2x, 10bps): net CAGR 15.89%, Sharpe 0.88 / 0.80 OOS, MDD -33.8% — far below author's 106% small-cap claim (survivorship-inflated, #150).
+- **Issue triage R2**: filed #271/#272/#273 (reframed #271/#272 as build tasks), #274 (dispersion-alpha), #278 (OLMAR S&P 600). Created `research` label, applied to ~25 issues. Closed reading roundups #126, #103. 40→39 then +new.
+- **roborev review analysis** (4,463 reviews): by agent / review_type / verdict+TTC. Filed llm#283 (fallback rotation), llm#285 (auto-close clean verdicts). Pruned 2 stray repos.
 
 ## Key technical events
 
-### Merge queue, not new code
-The reconciliation found the P0/P1 bug tier was already written and sitting unmerged in worktrees. Draining it required re-polling `mergeable` between each merge — #260 and #242 only flipped CONFLICTING after the first PR touching their shared file merged (registry trio; VIGNETTE_STRICT parser).
+### docs/_targets.R is the real pipeline — run from REPO ROOT
+Two `_targets.R` + two `_targets.yaml`. Root `_targets.yaml` selects `docs/_targets.R` (script) + `docs/_targets` (store); root `_targets.R` is a separate data-validation pipeline. `setwd("docs")` breaks `here::here()` → `pkgload::load_all(here::here("packages/historicaldata"))` fails. Run from root. (Saved to memory: pipeline-invocation.)
 
-### Verify worktree isolation from orchestrator side
-Both rebase-fixer agents reported their launch cwd (orchestrator's worktree), not their isolated worktree. Isolation was confirmed via Tier-3 main-HEAD snapshots + the force-push refspec — not the agent's self-check line.
+### research-log DB design
+Parquet-backed (mirrors results_db.R) + DuckDB-views query helper. Lands at repo-root `inst/extdata/research_log/` via `here::here()` (NOT packages/). No new deps. `hd_rlog_uuid()` exported so lineage callers can pre-generate parent_uuid chains.
 
-### Audits corrected their own issue assumptions
-#143 found `strategy_correlation` already exists (`plan_leaderboard.R:129`); #118 verified DRIF `alpha=0.5` and that the multiverse is already built (`plan_drif_v2.R`). Code gaps were noted as follow-up issues (#268/#269), not silently implemented.
+### OLMAR finding
+Headline 1222%/106% is small-cap-specific; on liquid large-caps Sharpe ~0.88, survivorship-inflated. Real test = S&P 600 + delisting universe → #278 (gated on #150).
 
 ## Next session
 
-- Continue on `main` (fast-forwarded). No active feature branch.
-- Highest-value open work (P1 enabler outputs): **#270** Kinlay research-log DB (pairs #200, first use case), **#160** PR 3/4 (wire K_eff into leaderboard `deflated_sharpe` — coordinate with #268), **#268/#269** Tinsley leaderboard gaps.
-- New planning issue **#267** (active EUR/USD hedge) ready to scope.
-- Roborev backlog: 41 unaddressed failures (pre-existing) — candidate for a `/roborev-clear-backlog` pass.
+- Continue on `main`. Highest-value: **#278** (OLMAR S&P 600, needs #150 delisting universe), **#268/#269** (Tinsley leaderboard gaps), **#160** (wire K_eff deflated_sharpe).
+- llm-side roborev follow-ups: **llm#283** (fix fallback codex→gemini→claude), **llm#285** (auto-close clean verdicts, backfill 810).
+- New research issues awaiting scope: #271 (TOM overlay), #272 (news events — gated on ticker-feed), #273 (Commodity QIS transcript), #274 (dispersion-alpha).
+- Roborev backlog: 44 unaddressed failures (pre-existing) — candidate for `/roborev-clear-backlog`.
