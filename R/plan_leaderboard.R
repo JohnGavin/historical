@@ -6,6 +6,8 @@
 plan_leaderboard <- function() {
   list(
     # Explicit deps — targets must be named as function args
+    # strat_corr_augment from plan_strategy_correlation.R provides:
+    #   correlation_max, redundant, incremental_sharpe (joined by strategy_label)
     targets::tar_target(leaderboard, {
       library(dplyr)
 
@@ -120,6 +122,25 @@ plan_leaderboard <- function() {
           )
         all_metrics <- all_metrics |>
           left_join(boot_join, by = "strategy")
+      }
+
+      # ── Correlation augmentation (Pillar 7, #268) ────────────────────────
+      # Join correlation_max, redundant, incremental_sharpe from
+      # plan_strategy_correlation.R. strat_corr_augment is keyed by strategy_label
+      # which matches the display names used in all_metrics$strategy.
+      # Only "Full Period" rows get meaningful values; other periods receive NA
+      # (incremental Sharpe is a portfolio-level concept, not a sub-period one).
+      if (!is.null(strat_corr_augment) && nrow(strat_corr_augment) > 0) {
+        corr_join <- strat_corr_augment |>
+          select(strategy = strategy_label, correlation_max, redundant, incremental_sharpe)
+        all_metrics <- all_metrics |>
+          left_join(corr_join, by = "strategy") |>
+          # Zero out incremental_sharpe for sub-period rows (it's a Full-Period stat)
+          mutate(
+            correlation_max    = ifelse(period == "Full Period", correlation_max, NA_real_),
+            redundant          = ifelse(period == "Full Period", redundant,       NA),
+            incremental_sharpe = ifelse(period == "Full Period", incremental_sharpe, NA_real_)
+          )
       }
 
       all_metrics
