@@ -89,6 +89,7 @@ source(here::here("R/plan_regime.R"))
 source(here::here("R/plan_alpha_decay.R"))
 source(here::here("R/plan_kelly_variants.R"))
 source(here::here("R/plan_leaderboard.R"))
+source(here::here("R/plan_strategy_correlation.R"))
 source(here::here("R/plan_avoid_worst.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
@@ -146,6 +147,7 @@ c(plan_strategy_names(),
   plan_european_overlay(),
   plan_rafi(),
   plan_forecast_eval(),
+  plan_strategy_correlation(),
   plan_leaderboard(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
