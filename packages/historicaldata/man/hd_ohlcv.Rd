@@ -45,6 +45,13 @@ are filled with \code{NA} for rows from the other dataset. When the batch
 spans multiple datasets, the result is always materialised — \code{collect = FALSE} cannot be honoured because lazy frames from distinct parquet
 sources cannot be bound.
 }
+\section{Point-in-time guard}{
+
+Passing \code{to > Sys.Date()} raises a classed error (\code{"hd_future_date"}).
+Future-dated requests imply look-ahead knowledge and are forbidden to
+prevent silent backtest contamination.
+}
+
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
