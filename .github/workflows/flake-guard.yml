@@ -1,0 +1,51 @@
+name: Flake Guard
+
+# Guards against `t update` silently stripping the nix-nested-shell-isolation
+# closure-rebuild shellHook from flake.nix (#211). `t update` regenerates
+# flake.nix wholesale; the hand-applied shellHook must be re-applied via
+# `default.post.sh`. This job fails the PR if the marker is missing.
+# Root-cause fix (bake into T-lang template) tracked in JohnGavin/llm#303.
+
+on:
+  push:
+    paths:
+      - 'flake.nix'
+      - 'tproject.toml'
+      - 'default.post.sh'
+      - '.github/workflows/flake-guard.yml'
+  pull_request:
+    paths:
+      - 'flake.nix'
+      - 'tproject.toml'
+      - 'default.post.sh'
+      - '.github/workflows/flake-guard.yml'
+  workflow_dispatch:
+
+jobs:
+  closure-rebuild-present:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assert closure-rebuild shellHook present in flake.nix
+        run: |
+          fail=0
+          if ! grep -q "Closure-rebuild" flake.nix; then
+            echo "::error file=flake.nix::Missing the 'Closure-rebuild' marker comment."
+            fail=1
+          fi
+          if ! grep -q 'R_LIBS_SITE=""' flake.nix; then
+            echo "::error file=flake.nix::Missing the R_LIBS_SITE closure-rebuild block."
+            fail=1
+          fi
+          if [ "$fail" -ne 0 ]; then
+            echo "----------------------------------------------------------------"
+            echo "flake.nix is missing the nix-nested-shell-isolation closure-rebuild"
+            echo "shellHook (#211). 't update' strips it on regeneration."
+            echo "Re-apply it with:  bash default.post.sh"
+            echo "Root cause / template fix: JohnGavin/llm#303"
+            echo "----------------------------------------------------------------"
+            exit 1
+          fi
+          echo "OK: closure-rebuild shellHook present in flake.nix."

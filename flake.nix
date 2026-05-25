@@ -32,6 +32,8 @@
             devtools
             ggplot2
             glmnet
+            lubridate
+            patchwork
             pkgload
             pointblank
             reviser
@@ -71,6 +73,7 @@
         # Additional Tools
         additionalTools = with pkgs; [
           quarto
+          poppler-utils
         ];
       in
       {
