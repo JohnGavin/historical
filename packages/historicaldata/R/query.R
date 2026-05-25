@@ -1,3 +1,36 @@
+# ── Point-in-time hard-error guard ────────────────────────────────────────────
+
+#' Abort if a requested end-date is in the future
+#'
+#' Raises a classed error (`"hd_future_date"`) when `to` is strictly after
+#' `Sys.Date()`. This prevents accidental look-ahead in backtesting and
+#' strategy research: requesting data "to" a future date implies knowledge
+#' of prices that do not yet exist, silently corrupting any analysis that
+#' depends on point-in-time correctness.
+#'
+#' @param to Date or character. The upper bound passed to a data-access
+#'   function. `NULL` is silently allowed (no upper filter).
+#' @param arg_name Character scalar used in the error message.
+#' @return Invisibly `NULL` when `to <= Sys.Date()` or `to` is `NULL`.
+#' @noRd
+.hd_check_pit <- function(to, arg_name = "to") {
+  if (is.null(to)) return(invisible(NULL))
+  to_date <- tryCatch(as.Date(to), error = function(e) NULL)
+  if (is.null(to_date) || is.na(to_date)) return(invisible(NULL))
+  if (to_date > Sys.Date()) {
+    cli::cli_abort(
+      c(
+        "Future-dated request: {.arg {arg_name}} = {.val {as.character(to_date)}} is after today ({.val {as.character(Sys.Date())}}).",
+        "x" = "Requesting data beyond today is a look-ahead risk: prices for {.val {as.character(to_date)}} do not exist yet.",
+        "i" = "Use {.code to = Sys.Date()} or an earlier date."
+      ),
+      class = "hd_future_date",
+      call = rlang::caller_env()
+    )
+  }
+  invisible(NULL)
+}
+
 # ── Survivorship-bias guard ───────────────────────────────────────────────────
 
 #' Warn when a dataset is known to be survivorship-biased
@@ -66,6 +99,10 @@ hd_check_survivorship_bias <- function(dataset) {
 #' = FALSE` cannot be honoured because lazy frames from distinct parquet
 #' sources cannot be bound.
 #' @return Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
+#' @section Point-in-time guard:
+#'   Passing `to > Sys.Date()` raises a classed error (`"hd_future_date"`).
+#'   Future-dated requests imply look-ahead knowledge and are forbidden to
+#'   prevent silent backtest contamination.
 #' @family data-access
 #' @export
 #' @examplesIf interactive()
@@ -74,6 +111,7 @@ hd_check_survivorship_bias <- function(dataset) {
 #' hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-01")  # mixed equity + crypto
 hd_ohlcv <- function(ticker, from = NULL, to = NULL,
                      dataset = NULL, local = FALSE, collect = TRUE) {
+  .hd_check_pit(to)
   ticker <- as.character(ticker)
   if (length(ticker) == 0L) {
     cli::cli_abort("{.arg ticker} must be a non-empty character vector.")
@@ -181,12 +219,17 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
 #' @param local If TRUE, query local cache instead of remote.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Lazy duckplyr frame or tibble
+#' @section Point-in-time guard:
+#'   Passing `to > Sys.Date()` raises a classed error (`"hd_future_date"`).
+#'   Future-dated requests imply look-ahead knowledge and are forbidden to
+#'   prevent silent backtest contamination.
 #' @family data-access
 #' @export
 #' @examplesIf interactive()
 #' hd_macro("SP500", from = "2024-01-01") |> head()
 hd_macro <- function(series_id, from = NULL, to = NULL,
                      local = FALSE, collect = TRUE) {
+  .hd_check_pit(to)
   series_id <- as.character(series_id)
   ds <- hd_datasets()[["macro_daily"]]
 

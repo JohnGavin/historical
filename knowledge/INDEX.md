@@ -18,6 +18,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 
 | Topic | Page | Status |
 |-------|------|--------|
+| Long-Run Commodity Futures Index (1871–2025) | [commodity-futures-long-run.md](wiki/commodity-futures-long-run.md) | Reference |
 | Momentum Decomposition (Cross-Asset) | [momentum-decomposition-cross-asset.md](wiki/momentum-decomposition-cross-asset.md) | Reference |
 | Regime-Dependent Trend Following | [regime-trend-following.md](wiki/regime-trend-following.md) | Reference |
 | TAA Selection, Mid-Caps, Lazy Prices | [taa-selection-research.md](wiki/taa-selection-research.md) | Reference |

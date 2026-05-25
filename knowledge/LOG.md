@@ -2,6 +2,17 @@
 
 Chronological record of findings. Wiki pages synthesise these into structured knowledge.
 
+## 2026-05-25
+
+### Long-Run Commodity Futures Index Digest (#280)
+- **Source:** `raw/commodity-futures-index-since-1871-janardanan-2026.md` (Janardanan, Qiao, Rouwenhorst, January 2026 — SSRN 6276738)
+- **Finding:** 155-year EW collateralised index from 230 hand-collected contracts (1871–2025); 5.5% risk premium over RF, Sharpe 0.38 (vs equities 0.41 at 6.6%/16.2%); beats equities 40% of years and decades; futures > spot on interest-adjusted carry basis despite aggregate negative roll yield. Key decomposition: Futures ER = Spot Return + Roll Yield; Roll Yield = Convenience Yield − (interest + storage).
+- **Data access scan:** AQR Levine et al. dataset (1877–present, free, no registration, Excel) is the recommended free alternative to proprietary SummerHaven data. BGR 2021 paper is free but data is request-only. CRB/Barchart starts 1959, commercial. Recommendation: adopt AQR series (mirrors DMS→JST decision in #98).
+- **AI-inferred markers added:** 3
+- **Consensus level:** direct (single source)
+- **Pages touched:** `wiki/commodity-futures-long-run.md` (new), `INDEX.md` (update), `LOG.md` (this entry)
+- **Related issues:** #280, #273, #138, #134, #98, #150
+
 ## 2026-05-23
 
 ### Cakici et al. (2024) Coverage Audit (#118)
