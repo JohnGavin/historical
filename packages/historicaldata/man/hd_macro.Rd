@@ -23,6 +23,13 @@ Lazy duckplyr frame or tibble
 \description{
 Query FRED macro series
 }
+\section{Point-in-time guard}{
+
+Passing \code{to > Sys.Date()} raises a classed error (\code{"hd_future_date"}).
+Future-dated requests imply look-ahead knowledge and are forbidden to
+prevent silent backtest contamination.
+}
+
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_macro("SP500", from = "2024-01-01") |> head()
