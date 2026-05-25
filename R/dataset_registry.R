@@ -64,6 +64,16 @@ DATASET_REGISTRY <- tibble::tribble(
   # NOTE: jst_raw excluded — panel data (year × country), not a single time series
   # with a `date` join key. Schema is keyed by (year, country); not a candidate
   # for cross-series date alignment.
+
+  # --- long-run commodity futures benchmark ---
+  # Parquet at data/raw/commodities_long_run.parquet; populated by scripts/fetch_commodities_long_run.R.
+  # Source: Levine, Ooi, Richardson & Sasseville (2018) — "Commodities for the Long Run", FAJ 74(2):55-68.
+  # Free download from AQR Insights (no registration required).
+  # Equal-weight collateralised futures index, 1877+, survivorship-aware (includes delisted contracts).
+  # Columns: ret_ew (excess return), ret_spot_ew, carry_ir_ew, carry_ew, ret_ls (long/short), state.
+  # Pre-1900 AQR Excel dates stored as ISO text; numeric serial for post-1900. See #280.
+  "commodities_long_run",  "returns",  "monthly",   "end_calendar",  "USD",     "decimal",  NA,
+  "AQR/Levine et al.(2018); 1877+; EW collateralised futures; survivorship-aware; carry decomp; #280"
 )
 
 #' Dataset registry for cross-series alignment validation
