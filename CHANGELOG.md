@@ -1,5 +1,59 @@
 # Changelog
 
+## 2026-05-25 (session 9 — external-source digests, Cloudflare/PDF workflow, parallel batch: 8 PRs)
+
+### Completed
+- Source digests from blocked pages: filed #279 (Anomaly-Driven Demand — **rewritten**
+  after the real `/factor-strategies/` page turned out to be a Swedroe ADD blog post, not a
+  factor catalogue), #280 (long-run 1871 commodity index), #281 (Kinlay buildout umbrella,
+  Steps 2–5 — the article was already digested in #192). Relabeled #160 (removed low-priority).
+- PR #282: `knowledge/raw/` ADD + commodity sources (PDF-extracted), `poppler-utils` in dev
+  shell, **flake-guard CI** (fails PR if `t update` strips the #211 closure-rebuild shellHook).
+- PR #283/#285: wiki digests — `anomaly-driven-demand.md` (recommends Angle A crowding-warning),
+  `commodity-futures-long-run.md` (data-access scan → AQR "Commodities for the Long Run" is free).
+- PR #284: Kinlay Step 2 — point-in-time hard-error guard (`hd_ohlcv`/`hd_macro` abort on
+  `to > Sys.Date()`, classed `hd_future_date`) + 11 tests.
+- PR #287: green `main` — reconciled `R/registry.R` schema (was missing parquet columns:
+  `updated_at` ×3 + 6 metadata cols) + 2 justified snapshot accepts.
+- PR #290: onboarded AQR long-run commodity index → `commodities_long_run` (1,780 monthly
+  rows, 1877–2025, 0 NA); added `readxl` to env.
+- PR #289: `plan_turn_of_month.R` (#271) — TOM overlay + `fals_tom_input` falsification bridge.
+- PR #291: `plan_strategy_correlation.R` (#268) — `strat_corr_matrix` (5 monthly strategies),
+  redundancy flag, incremental Sharpe → leaderboard columns. Foundation for #160.
+- llm#296 (poppler in global dev shell → fixes Read tool), llm#303 (T-lang template should
+  bake in the closure-rebuild so no project needs `default.post.sh`).
+
+### Failed Approaches
+- WebFetch + curl both blocked by Cloudflare **managed JS challenge** on alphaarchitect.com
+  and SSRN (the UA-spoof trick clears basic bot checks, NOT the JS challenge). Wayback had
+  `/focusedfactors/` (2025-08-04) but NEVER archived `/factor-strategies/`. Workaround: user
+  saved pages as PDFs → extracted with `pdftotext` via `nix-shell -p poppler-utils` (no PDF
+  tools or Quartz/PDFKit in the shell).
+- R-test CI gate (added in #287) failed twice: (1) `magic-nix-cache-action` hit a GitHub-cache
+  rate-limit (HTTP 418) → substituter disabled; removed it. (2) `nix develop` then ran tests
+  but `test-query.R` failed — duckdb can't autoload `httpfs` offline (network/integration
+  tests, not unit). The suite is **not CI-portable** → split the gate to #288, landed #287
+  with the fixes only. Also: cachix substituter was ignored as "untrusted" (rebuild from source).
+- `t update` strips the hand-applied #211 shellHook on EVERY regen (hit again in #290).
+  Mitigations: `default.post.sh` re-applies; flake-guard CI enforces; llm#303 for the root fix.
+
+### Accuracy / Metrics
+- `historicaldata` local `devtools::test()`: **FAIL 0 | PASS 345 | SKIP 5** (was 5 failing).
+- New dataset `commodities_long_run`: 1,780 rows, 1877-02→2025-05, 0 NA.
+- 8 PRs merged to `main` (#282/#283/#284/#285/#287/#289/#290/#291); 2 llm issues filed.
+
+### Known Limitations
+- #288: R-test CI not portable (duckdb `httpfs`/network tests; cachix trust) — **no R-test CI
+  gate yet**, so #271/#268 plan code is parse-validated only, not `tar_make`-built.
+- Leaderboard chain remainder: **#160** (Vertox K_eff + deflated Sharpe; requires renaming the
+  existing time-based `K_eff` → `K_eff_time` across tail_keff/plan_integration + backtest-robustness
+  rule) and **#279** (crowding column + `priced-in-prohibition` ADD clause) — `strat_corr_matrix`
+  is ready for #160 to consume. Paused here per user (resume after #288).
+- `strat_corr_matrix` excludes daily-frequency strategies (avoid_worst, rsc) to avoid
+  daily↔monthly aggregation look-ahead.
+- Cloudflare blocks recur for alphaarchitect/SSRN; Claude Read tool can't render PDFs until
+  llm#296 lands poppler in the global shell.
+
 ## 2026-05-24 (session 8 — research-log DB #270, OLMAR #200, roborev review analysis)
 
 ### Completed

@@ -1,36 +1,37 @@
-# Current Work (Session 2026-05-24 #8 — research-log DB + OLMAR + roborev analysis, ENDED)
+# Current Work (Session 2026-05-25 #9 — external-source digests + Cloudflare/PDF workflow + parallel batch, ENDED)
 
 **Last updated:** session end
-**Previous sessions:** 2026-05-23 #7 (merge-queue drain, 25 PRs, worktree GC), #6 (parallel P1+P2 sweep), #5 (roborev cascade fix), #4 (round-4/5 sweep), #3 (tier-2), #2 (triage), #1 (Nix segfault)
+**Previous sessions:** 2026-05-24 #8 (research-log DB #270, OLMAR #200, roborev analysis), #7 (merge-queue drain, 25 PRs), #6 (parallel P1+P2 sweep), #5 (roborev cascade fix)
 
-## Final state
+## This session (8 PRs merged to main)
+- Digested 3 Cloudflare-blocked sources from user-saved PDFs (extracted via `pdftotext`
+  in `nix-shell -p poppler-utils`): ADD (#279), 1871 commodity index (#280), Kinlay (#281).
+- Landed: flake-guard CI + poppler-utils + raw sources (#282); ADD & commodity wiki digests
+  (#283/#285); PIT hard-error guard / Kinlay Step 2 (#284); green main / registry schema
+  fix (#287); AQR long-run commodity dataset 1877–2025 (#290); Turn-of-the-Month overlay
+  (#289); leaderboard correlation + redundancy + incremental Sharpe (#291 = #268).
+- Filed llm#296 (global-shell poppler → Read tool PDFs) and llm#303 (T-lang template
+  closure-rebuild root fix).
 
-`main` at `623c570`, both checkouts clean & synced. **0 open PRs.** Worktrees: main + this session's `feat/cc-20260523-170240`. Open issues: 41 (incl. 4 new: #271/#272/#273/#274/#278; +llm#283/#285).
+## Next task (resume here)
+**Leaderboard chain remainder — paused per user, resume after #288:**
+1. **#160** — Vertox K_eff (consume `strat_corr_matrix` from #291) + deflated Sharpe leaderboard
+   column. Requires renaming the existing time-based `K_eff` → `K_eff_time`/`K_eff_acf` across
+   `R/tail_keff.R`, `R/plan_tail_keff.R`, `R/plan_integration.R`, and the `backtest-robustness`
+   rule; port the quadrature + Brent-inversion numerical method; name the new one `strat_keff`.
+2. **#279** — add a crowding column to the leaderboard + an ADD/flow-pressure clause to the
+   `priced-in-prohibition` rule. Cross-link #160/#271.
 
-## Session totals
+## Open follow-ups (filed this session)
+- **#288** — R-test CI gate: suite not CI-portable (duckdb `httpfs`/network tests; cachix
+  trust). Do first so #271/#268 plan code gets runtime verification.
+- **#271** — TOM plan is parse-validated only; build + falsify in pipeline, then leaderboard.
+- **#280** — use `commodities_long_run` as the long-run benchmark; re-test commodity
+  momentum (#134/#138) + a carry signal over 1877–2025.
+- llm#296, llm#303 (cross-project, owned by the llm session).
 
-- **3 PRs merged** (all infra/strategy, built via isolated sonnet `fixer` worktrees, Tier-3 verified):
-  - #275 (#270 research-log DB phase 1 — 5 typed parquet tables + `hd_rlog_*` lineage API, 65 tests)
-  - #276 (#200 OLMAR-1 — pure look-ahead-safe core + plan_olmar.R + first DB lineage write, 41 tests)
-  - #277 (inaugural OLMAR lineage committed + RECOVERY.md path fix)
-- **Real-data tar_make** run from repo root → wrote first research-log lineage. OLMAR-1 (20 liquid tickers, 0.2x, 10bps): net CAGR 15.89%, Sharpe 0.88 / 0.80 OOS, MDD -33.8% — far below author's 106% small-cap claim (survivorship-inflated, #150).
-- **Issue triage R2**: filed #271/#272/#273 (reframed #271/#272 as build tasks), #274 (dispersion-alpha), #278 (OLMAR S&P 600). Created `research` label, applied to ~25 issues. Closed reading roundups #126, #103. 40→39 then +new.
-- **roborev review analysis** (4,463 reviews): by agent / review_type / verdict+TTC. Filed llm#283 (fallback rotation), llm#285 (auto-close clean verdicts). Pruned 2 stray repos.
-
-## Key technical events
-
-### docs/_targets.R is the real pipeline — run from REPO ROOT
-Two `_targets.R` + two `_targets.yaml`. Root `_targets.yaml` selects `docs/_targets.R` (script) + `docs/_targets` (store); root `_targets.R` is a separate data-validation pipeline. `setwd("docs")` breaks `here::here()` → `pkgload::load_all(here::here("packages/historicaldata"))` fails. Run from root. (Saved to memory: pipeline-invocation.)
-
-### research-log DB design
-Parquet-backed (mirrors results_db.R) + DuckDB-views query helper. Lands at repo-root `inst/extdata/research_log/` via `here::here()` (NOT packages/). No new deps. `hd_rlog_uuid()` exported so lineage callers can pre-generate parent_uuid chains.
-
-### OLMAR finding
-Headline 1222%/106% is small-cap-specific; on liquid large-caps Sharpe ~0.88, survivorship-inflated. Real test = S&P 600 + delisting universe → #278 (gated on #150).
-
-## Next session
-
-- Continue on `main`. Highest-value: **#278** (OLMAR S&P 600, needs #150 delisting universe), **#268/#269** (Tinsley leaderboard gaps), **#160** (wire K_eff deflated_sharpe).
-- llm-side roborev follow-ups: **llm#283** (fix fallback codex→gemini→claude), **llm#285** (auto-close clean verdicts, backfill 810).
-- New research issues awaiting scope: #271 (TOM overlay), #272 (news events — gated on ticker-feed), #273 (Commodity QIS transcript), #274 (dispersion-alpha).
-- Roborev backlog: 44 unaddressed failures (pre-existing) — candidate for `/roborev-clear-backlog`.
+## Notes
+- `t update` strips the #211 closure-rebuild shellHook every regen → run `default.post.sh`
+  after; flake-guard CI now enforces it.
+- `strat_corr_matrix` covers 5 monthly strategies only (daily ones excluded for look-ahead).
+- roborev backlog: 133 failed / 80 addressed — standing backlog (#176/#210), not this session.
