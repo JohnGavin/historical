@@ -11,7 +11,7 @@ hd_datasets <- function() {
     equity_daily = list(
       url = hd_base_url("equity_daily.parquet"),
       schema = c("date", "open", "high", "low", "close", "adjusted",
-                 "volume", "ticker", "source", "asset_class"),
+                 "volume", "ticker", "source", "asset_class", "updated_at"),
       frequency = "daily",
       description = paste0(
         "US equities daily OHLCV (Yahoo Finance). ",
@@ -27,7 +27,7 @@ hd_datasets <- function() {
     crypto_daily = list(
       url = hd_base_url("crypto_daily.parquet"),
       schema = c("date", "open", "high", "low", "close", "volume",
-                 "ticker", "source", "asset_class"),
+                 "ticker", "source", "asset_class", "updated_at"),
       frequency = "daily",
       description = "Cryptocurrency daily OHLCV (Yahoo Finance)"
     ),
@@ -39,7 +39,7 @@ hd_datasets <- function() {
     ),
     factors = list(
       url = hd_base_url("factors.parquet"),
-      schema = c("date", "factor_name", "value", "dataset", "frequency", "source"),
+      schema = c("date", "factor_name", "value", "dataset", "frequency", "source", "updated_at"),
       frequency = "daily+monthly",
       description = "Fama-French factors (FF3, FF5, Momentum, 1926+)"
     ),
@@ -50,7 +50,9 @@ hd_datasets <- function() {
                  "market_cap", "volume_avg", "fifty_two_week_high", "fifty_two_week_low",
                  "expense_ratio", "yield_pct", "category", "fund_family",
                  "nav_price", "beta_3yr", "ytd_return", "three_yr_return",
-                 "start_date", "end_date", "total_obs", "missing_pct"),
+                 "start_date", "end_date", "total_obs", "missing_pct",
+                 "full_exchange", "yield_type", "short_name", "quote_type",
+                 "asset_class", "source"),
       frequency = "static",
       description = "Per-ticker metadata: exchange, sector, market cap, ETF fees/yield/returns, coverage stats"
     ),

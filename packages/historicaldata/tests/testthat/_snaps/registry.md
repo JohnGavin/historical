@@ -6,14 +6,14 @@
       List of 9
        $ equity_daily       :List of 6
         ..$ url                : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
-        ..$ schema             : chr [1:10] "date" "open" "high" "low" ...
+        ..$ schema             : chr [1:11] "date" "open" "high" "low" ...
         ..$ frequency          : chr "daily"
         ..$ description        : chr "US equities daily OHLCV (Yahoo Finance). WARNING: survivorship-biased — universe reflects currently-listed tick"| __truncated__
         ..$ survivorship_biased: logi TRUE
         ..$ known_delistings   : int 0
        $ crypto_daily       :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/crypto_daily.parquet"
-        ..$ schema     : chr [1:9] "date" "open" "high" "low" ...
+        ..$ schema     : chr [1:10] "date" "open" "high" "low" ...
         ..$ frequency  : chr "daily"
         ..$ description: chr "Cryptocurrency daily OHLCV (Yahoo Finance)"
        $ macro_daily        :List of 4
@@ -23,12 +23,12 @@
         ..$ description: chr "FRED macro series (SP500, VIX, rates, GDP, CPI, etc.)"
        $ factors            :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/factors.parquet"
-        ..$ schema     : chr [1:6] "date" "factor_name" "value" "dataset" ...
+        ..$ schema     : chr [1:7] "date" "factor_name" "value" "dataset" ...
         ..$ frequency  : chr "daily+monthly"
         ..$ description: chr "Fama-French factors (FF3, FF5, Momentum, 1926+)"
        $ metadata           :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/metadata.parquet"
-        ..$ schema     : chr [1:25] "ticker" "dataset" "long_name" "exchange" ...
+        ..$ schema     : chr [1:31] "ticker" "dataset" "long_name" "exchange" ...
         ..$ frequency  : chr "static"
         ..$ description: chr "Per-ticker metadata: exchange, sector, market cap, ETF fees/yield/returns, coverage stats"
        $ macro_vintages     :List of 4
