@@ -20,8 +20,10 @@ jobs:
 
       - uses: DeterminateSystems/nix-installer-action@main
 
-      - uses: DeterminateSystems/magic-nix-cache-action@main
-
+      # NOTE: magic-nix-cache-action removed — it is sunset/rate-limited and
+      # was disabling the substituter in CI (HTTP 418 / ResourceExhausted),
+      # breaking package fetches. We rely on the rstats-on-nix Cachix +
+      # cache.nixos.org substituters configured below instead.
       - name: Configure Nix binary cache
         run: |
           mkdir -p ~/.config/nix
