@@ -49,6 +49,7 @@
             knitr
             purrr
             reticulate
+            readxl
             testthat
             tidyr
             xgboost
