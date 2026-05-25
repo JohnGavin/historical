@@ -34,6 +34,7 @@ Suggests:
     httr2,
     jsonlite,
     purrr,
+    readxl,
     reviser,
     scales,
     targets,
