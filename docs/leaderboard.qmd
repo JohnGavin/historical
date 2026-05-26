@@ -330,6 +330,35 @@ if (!is.null(boot_ci)) {
 }
 ```
 
+#### Deflated Sharpe
+
+The Deflated Sharpe Ratio (<abbr title="Deflated Sharpe Ratio: Sharpe adjusted for non-normality (skewness, kurtosis) and multiple testing across K trials — Lopez de Prado 2018">DSR</abbr>) adjusts the naive Sharpe for both non-normality of returns (skewness and kurtosis) and multiple testing, answering the question: given that we tested K strategies, is this Sharpe ratio statistically significant? The multiple-testing penalty uses the Vertox correlation-aware effective count K_eff_strat (not the raw count M = 4), because the 4 strategies are correlated — using the raw count would over-penalise and reject strategies that carry genuine independent signal. See [Lopez de Prado (2018)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2460551) for the DSR derivation and [Vertox — The Effective Number of Tested Strategies](https://www.vertoxquant.com/p/the-effective-number-of-tested-strategies) for the K_eff_strat methodology.
+
+```{r}
+#| label: deflated-sharpe
+x <- safe_tar_read("strat_deflated_sharpe")
+if (!is.null(x)) {
+  keff <- round(x$k_eff_strat[1], 2)
+  kraw <- x$k_raw[1]
+  cap <- paste0(
+    "Deflated Sharpe (Lopez de Prado 2018). ",
+    "Multiple-testing penalty uses Vertox K_eff_strat = ", keff,
+    " effective strategies vs ", kraw,
+    " raw — the 4 strategies are correlated, so the raw count over-penalises. ",
+    "DSR adjusts for skewness, kurtosis, and the effective number of trials."
+  )
+  display <- x |>
+    transmute(
+      Strategy        = strategy,
+      `Naive Sharpe`  = round(naive_sharpe, 2),
+      `Deflated Sharpe` = round(deflated_sharpe, 2),
+      `Haircut %`     = paste0(round(dsr_haircut_pct, 1), "%"),
+      `DSR p-value`   = round(dsr_pvalue, 3)
+    )
+  hd_dt(display, cap)
+}
+```
+
 #### Alpha Decay
 
 ```{r}

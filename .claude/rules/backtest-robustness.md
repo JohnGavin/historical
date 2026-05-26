@@ -95,14 +95,54 @@ against simulated environments where no real edge exists.
 
 | Metric | Description | Fail threshold |
 |--------|-------------|---------------|
-| K_eff_acf | Effective sample size after autocorrelation adjustment | < 30 |
-| Delta_Z | Z-score gap between strategy and null | < 1.96 (not significant) |
+| K_eff_acf | Effective sample size *in time* after autocorrelation adjustment (Newey-West, per series) | < 30 |
+| K_eff_strat | Effective *number of independent strategies* tested, correlation-aware (Vertox) | (input to deflated Sharpe, not a pass/fail) |
+| Delta_Z | Z-score gap between strategy and null | < 1.96 |
 | Stage 1 rejection rate | % of 5 simulation environments where strategy is rejected as noise | < 80% (must reject in 4/5) |
-| Adjusted Sharpe | Sharpe ratio corrected for multiple testing / look-ahead | < 0.5 |
+| Deflated Sharpe (DSR) | Sharpe corrected for non-normality AND multiple testing, using `K_eff_strat` (not raw M) as the trial count | DSR p-value > 0.05 |
 | CVaR (95%) | Conditional Value at Risk | Worse than benchmark |
 
+**Two distinct `K_eff` quantities — never conflate:** `K_eff_acf`
+(`calculate_keff()`, autocorrelation-adjusted effective sample size *in time*,
+per strategy) and `K_eff_strat` (`hd_strat_keff_vertox()`, correlation-aware
+effective *count of strategies* across the tested portfolio). Bare `K_eff` is
+reserved — always use a method-suffixed name. The deflated Sharpe ratio
+(`hd_deflated_sharpe(r, K_trials = round(K_eff_strat))`) takes `K_eff_strat`,
+NOT the raw strategy count `M`: on a correlated portfolio the raw count
+over-penalises (the strategies are not independent tests).
+
 Report these in a dedicated table in every backtest output, not just the
-equity curve and raw Sharpe. Reference: [Backtests Lie](https://www.vertoxquant.com/p/backtests-lie).
+equity curve and raw Sharpe. References: [Backtests Lie](https://www.vertoxquant.com/p/backtests-lie),
+[The Effective Number of Tested Strategies](https://www.vertoxquant.com/p/the-effective-number-of-tested-strategies) (Vertox), Lopez de Prado (2018) Deflated Sharpe Ratio.
+
+### 5. K_eff-Guided Search Stopping (Correlated-Variant Multiple Testing)
+
+When you iteratively add variants of an already-tested strategy (HRP Phase 1 →
+Phase 2 → Phase 3, ADV-cap on/off, multiple Kelly fractions, universe
+restrictions), each new variant is **highly correlated** with the prior ones.
+Vertox's monotonicity axiom says such a variant adds **< 1** to `K_eff_strat`
+even though it adds 1 to the raw count `M`. Reporting each variant's Sharpe as
+an independent gain inflates apparent edge — the gains are partly a
+multiple-testing artefact.
+
+**Stop rule:** halt hyperparameter / variant search when the *marginal*
+`K_eff_strat` gain from adding a variant falls below a threshold (default: a
+new variant must raise `K_eff_strat` by ≥ 0.25 to justify a separate reported
+result). Track `K_eff_strat / M` (the independence ratio) across the search:
+when it drops sharply, you are mining correlated variants, not discovering
+independent edge.
+
+```r
+# Before reporting a new strategy variant as a distinct result:
+k_before <- hd_strat_keff_vertox(corr_without_variant, seed = 160L)
+k_after  <- hd_strat_keff_vertox(corr_with_variant,    seed = 160L)
+if (k_after - k_before < 0.25) {
+  cli::cli_warn(c(
+    "!" = "Variant adds only {round(k_after - k_before, 2)} to K_eff_strat",
+    "i" = "Highly correlated with existing strategies; its Sharpe gain is partly a multiple-testing artefact. Apply deflated Sharpe before reporting."
+  ))
+}
+```
 
 ## Robustness Heatmap
 
