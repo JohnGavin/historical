@@ -143,6 +143,18 @@ plan_leaderboard <- function() {
           )
       }
 
+      # ── Deflated Sharpe (full-sample; K_trials = Vertox K_eff_strat, not raw M) — #160 ──
+      # DSR is a full-sample statistic, so it broadcasts to all period rows; the
+      # vignette surfaces it only in the Full-Period view.
+      if (!is.null(strat_deflated_sharpe) && nrow(strat_deflated_sharpe) > 0) {
+        all_metrics <- all_metrics |>
+          left_join(
+            strat_deflated_sharpe |>
+              select(strategy, deflated_sharpe, dsr_pvalue, k_eff_strat),
+            by = "strategy"
+          )
+      }
+
       all_metrics
     }),
 
@@ -162,6 +174,39 @@ plan_leaderboard <- function() {
       as.data.frame(cor_mat) |>
         tibble::rownames_to_column("strategy") |>
         as_tibble()
+    }),
+
+    # ── Vertox K_eff_strat: correlation-aware effective strategy count ────────
+    # Uses strat_corr_matrix from plan_strategy_correlation (available as dep).
+    # seed = 160 for reproducibility (issue #160).
+    targets::tar_target(strat_keff_vertox, {
+      historicaldata::hd_strat_keff_vertox(strat_corr_matrix, n_sim = 20000L, seed = 160L)
+    }),
+
+    # ── Deflated Sharpe per strategy (#160) ───────────────────────────────────
+    # K_trials = K_eff_strat (Vertox correlation-aware count, rounded to integer),
+    # NOT raw M=4: correlated strategies → raw count over-penalises.
+    # ann_factor = 12 (monthly returns in port_returns).
+    # col_map keys match port_returns column names; values match leaderboard labels.
+    targets::tar_target(strat_deflated_sharpe, {
+      library(dplyr)
+      k_eff <- max(1L, round(strat_keff_vertox))
+      col_map <- c(stk_max = "Stock MAX", stk_drif = "Stock DRIF",
+                   fac_max = "Factor MAX", fac_drif = "Factor DRIF")
+      bind_rows(lapply(names(col_map), function(col) {
+        r <- port_returns[[col]]
+        r <- r[!is.na(r)]
+        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff, ann_factor = 12L)
+        tibble::tibble(
+          strategy        = unname(col_map[[col]]),
+          naive_sharpe    = d$naive_sharpe,
+          deflated_sharpe = d$dsr,
+          dsr_pvalue      = d$dsr_pvalue,
+          dsr_haircut_pct = d$haircut_pct,
+          k_eff_strat     = strat_keff_vertox,
+          k_raw           = length(col_map)
+        )
+      }))
     })
   )
 }
