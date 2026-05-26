@@ -1,6 +1,5 @@
 test_that("hd_ohlcv returns tibble for AAPL", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   result <- hd_ohlcv("AAPL", from = "2026-04-01", to = "2026-04-10")
   expect_s3_class(result, "tbl_df")
@@ -12,8 +11,7 @@ test_that("hd_ohlcv returns tibble for AAPL", {
 test_that("hd_ohlcv auto-detects crypto dataset", {
   expect_equal(historicaldata:::detect_dataset("BONK"), "crypto_daily")
 
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   result <- hd_ohlcv("BTC", from = "2026-04-01", to = "2026-04-10")
   expect_s3_class(result, "tbl_df")
@@ -22,8 +20,7 @@ test_that("hd_ohlcv auto-detects crypto dataset", {
 })
 
 test_that("hd_macro returns data for SP500", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   result <- hd_macro("SP500", from = "2026-04-01")
   expect_s3_class(result, "tbl_df")
@@ -33,8 +30,7 @@ test_that("hd_macro returns data for SP500", {
 })
 
 test_that("hd_factors returns FF3 daily data", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   result <- hd_factors("FF3", "daily", from = "2026-01-01")
   expect_s3_class(result, "tbl_df")
@@ -44,8 +40,7 @@ test_that("hd_factors returns FF3 daily data", {
 })
 
 test_that("hd_tickers returns character vector", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   tickers <- hd_tickers("equity_daily")
   expect_type(tickers, "character")
@@ -54,8 +49,7 @@ test_that("hd_tickers returns character vector", {
 })
 
 test_that("hd_macro_series returns series IDs", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   series <- hd_macro_series()
   expect_type(series, "character")
@@ -64,8 +58,7 @@ test_that("hd_macro_series returns series IDs", {
 })
 
 test_that("hd_ohlcv snapshot of AAPL structure", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   result <- hd_ohlcv("AAPL", from = "2026-04-07", to = "2026-04-10")
   expect_snapshot(str(result))
@@ -90,8 +83,7 @@ test_that("hd_connect_local handles quoted parquet paths", {
 })
 
 test_that("hd_ohlcv split-and-bind: mixed equity + crypto batch", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-10")
   expect_s3_class(result, "tbl_df")
@@ -107,8 +99,7 @@ test_that("hd_ohlcv split-and-bind: mixed equity + crypto batch", {
 })
 
 test_that("hd_ohlcv split-and-bind: collect=FALSE informs user", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   expect_snapshot(
     result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01",
@@ -118,8 +109,7 @@ test_that("hd_ohlcv split-and-bind: collect=FALSE informs user", {
 })
 
 test_that("hd_ohlcv split-and-bind: single-dataset batch keeps fast path", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   # Two equity tickers — no inform message, no split, normal collect respected
   result <- hd_ohlcv(c("AAPL", "MSFT"), from = "2026-04-01", to = "2026-04-05")
