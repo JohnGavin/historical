@@ -204,7 +204,7 @@ plan_leaderboard <- function() {
           dsr_pvalue      = d$dsr_pvalue,
           dsr_haircut_pct = d$haircut_pct,
           k_eff_strat     = strat_keff_vertox,
-          k_raw           = length(col_map)
+          k_raw           = nrow(strat_corr_matrix)
         )
       }))
     })
