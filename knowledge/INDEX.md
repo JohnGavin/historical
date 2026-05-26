@@ -21,6 +21,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 | Momentum Decomposition (Cross-Asset) | [momentum-decomposition-cross-asset.md](wiki/momentum-decomposition-cross-asset.md) | Reference |
 | Regime-Dependent Trend Following | [regime-trend-following.md](wiki/regime-trend-following.md) | Reference |
 | TAA Selection, Mid-Caps, Lazy Prices | [taa-selection-research.md](wiki/taa-selection-research.md) | Reference |
+| Anomaly-Driven Demand (ADD) Crowding | [anomaly-driven-demand.md](wiki/anomaly-driven-demand.md) | Reference |
 | Cakici et al. (2024) Coverage Audit | [cakici-2024-coverage-audit.md](wiki/cakici-2024-coverage-audit.md) | Audit |
 
 ### Backtest Methodology & Gap Analysis
