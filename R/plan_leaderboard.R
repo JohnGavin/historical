@@ -122,6 +122,16 @@ plan_leaderboard <- function() {
           left_join(boot_join, by = "strategy")
       }
 
+      # Deflated Sharpe (full-sample; K_trials = Vertox K_eff_strat, not raw M) — #160
+      if (!is.null(strat_deflated_sharpe)) {
+        all_metrics <- all_metrics |>
+          left_join(
+            strat_deflated_sharpe |>
+              select(strategy, deflated_sharpe, dsr_pvalue, k_eff_strat),
+            by = "strategy"
+          )
+      }
+
       all_metrics
     }),
 
@@ -141,6 +151,44 @@ plan_leaderboard <- function() {
       as.data.frame(cor_mat) |>
         tibble::rownames_to_column("strategy") |>
         as_tibble()
+    }),
+
+    # ── Vertox K_eff_strat → Deflated Sharpe chain — #160 ─────────────
+
+    # Numeric matrix form of strategy_correlation (feeds hd_strat_keff_vertox)
+    targets::tar_target(strat_corr_matrix, {
+      cm <- as.matrix(strategy_correlation[, setdiff(names(strategy_correlation), "strategy")])
+      rownames(cm) <- strategy_correlation$strategy
+      cm
+    }),
+
+    # Correlation-aware effective count of strategies (fixed seed for reproducible MC)
+    targets::tar_target(strat_keff_vertox, {
+      historicaldata::hd_strat_keff_vertox(strat_corr_matrix, n_sim = 20000L, seed = 160L)
+    }),
+
+    # Per-strategy Deflated Sharpe using K_eff_strat as K_trials (not raw M=4)
+    targets::tar_target(strat_deflated_sharpe, {
+      library(dplyr)
+      k_eff <- max(1L, round(strat_keff_vertox))
+      col_map <- c(stk_max = "Stock MAX", stk_drif = "Stock DRIF",
+                   fac_max = "Factor MAX", fac_drif = "Factor DRIF")
+      bind_rows(lapply(seq_along(col_map), function(i) {
+        col   <- names(col_map)[i]
+        label <- col_map[i]
+        r <- port_returns[[col]]
+        r <- r[!is.na(r)]
+        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff, ann_factor = 12L)
+        tibble::tibble(
+          strategy        = label,
+          naive_sharpe    = d$naive_sharpe,
+          deflated_sharpe = d$dsr,
+          dsr_pvalue      = d$dsr_pvalue,
+          dsr_haircut_pct = d$haircut_pct,
+          k_eff_strat     = strat_keff_vertox,
+          k_raw           = length(col_map)
+        )
+      }))
     })
   )
 }

@@ -330,6 +330,38 @@ if (!is.null(boot_ci)) {
 }
 ```
 
+#### Deflated Sharpe
+
+The Deflated Sharpe Ratio (DSR; Lopez de Prado 2018) adjusts the naive Sharpe for non-normality (skewness and excess kurtosis in the return distribution) and for the multiple-testing problem that arises when several strategies are evaluated on the same data. The multiple-testing penalty here uses the Vertox correlation-aware effective count `K_eff_strat` rather than the raw strategy count M = 4, because the four strategies share factor exposures and are positively correlated — using the raw count would over-penalise and produce an artificially conservative DSR.
+
+```{r}
+#| label: deflated-sharpe
+keff_raw <- safe_tar_read("strat_keff_vertox")
+dsr_tbl  <- safe_tar_read("strat_deflated_sharpe")
+if (!is.null(dsr_tbl) && !is.null(keff_raw)) {
+  keff  <- keff_raw
+  k_raw <- dsr_tbl$k_raw[1]
+  display <- dsr_tbl |>
+    transmute(
+      Strategy         = strategy,
+      `Naive Sharpe`   = round(naive_sharpe, 2),
+      `Deflated Sharpe` = round(deflated_sharpe, 2),
+      `Haircut %`      = round(dsr_haircut_pct, 1),
+      `DSR p-value`    = round(dsr_pvalue, 3)
+    )
+  cap <- paste0(
+    "Deflated Sharpe (Lopez de Prado 2018). ",
+    "Multiple-testing penalty uses Vertox K_eff_strat = ",
+    round(keff, 2),
+    " effective strategies vs ",
+    k_raw,
+    " raw — the 4 strategies are correlated, so the raw count would over-penalise. ",
+    "DSR adjusts for skewness, kurtosis, and the effective number of trials."
+  )
+  hd_dt(display, cap)
+}
+```
+
 #### Alpha Decay
 
 ```{r}
