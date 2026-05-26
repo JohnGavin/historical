@@ -29,6 +29,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 | Topic | Page | Status |
 |-------|------|--------|
 | Tinsley Backtest Framework Audit | [tinsley-backtest-framework-audit.md](wiki/tinsley-backtest-framework-audit.md) | Audit |
+| Walk Forward Correlation (WFC) | [walk-forward-correlation.md](wiki/walk-forward-correlation.md) | Reference |
 | Market Behavior Gap Analysis | [market-behavior-gap-analysis.md](wiki/market-behavior-gap-analysis.md) | Audit |
 | Daloopa/investing Gap Analysis | [daloopa-gap-analysis.md](wiki/daloopa-gap-analysis.md) | Audit |
 | JST vs DMS Dataset Comparison | [jst-dms-comparison.md](wiki/jst-dms-comparison.md) | Reference |
