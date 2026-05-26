@@ -32,8 +32,7 @@ test_that("hd_datasets snapshot", {
 })
 
 test_that("registry schema matches actual parquet columns for all datasets", {
-  skip_on_cran()
-  skip_if_offline()
+  skip_if_no_remote_data()
 
   ds_list <- hd_datasets()
   for (nm in names(ds_list)) {

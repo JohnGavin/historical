@@ -1,0 +1,36 @@
+name: R Package Tests
+
+on:
+  push:
+    paths:
+      - 'packages/historicaldata/**'
+      - '.github/workflows/r-tests.yml'
+  pull_request:
+    paths:
+      - 'packages/historicaldata/**'
+      - '.github/workflows/r-tests.yml'
+  workflow_dispatch:
+
+jobs:
+  r-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Supply the rstats-on-nix Cachix substituter via the installer's
+          # TRUSTED system config (/etc/nix/nix.conf), and add the runner to
+          # trusted-users so the flake's own nixConfig.extra-substituters is
+          # honoured too. Supplying substituters post-hoc in
+          # ~/.config/nix/nix.conf is UNtrusted and was ignored
+          # ("ignoring untrusted ... extra-substituters"), forcing a slow
+          # from-source rebuild of R (issue #288).
+          extra-conf: |
+            trusted-users = root runner
+            extra-substituters = https://rstats-on-nix.cachix.org
+            extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
+
+      - name: Run R package tests (unit only; integration tests skip on CI)
+        run: |
+          nix develop --command bash -c 'cd packages/historicaldata && Rscript -e "devtools::test(stop_on_failure = TRUE)"'
