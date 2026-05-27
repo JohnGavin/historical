@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-05-26/27 (session 10 — #288 CI gate, #160 deflated Sharpe, WFC digest, roborev clean-up: 4 PRs)
+
+### Completed
+- **#288 (PR #293):** CI-portable test suite. `skip_if_no_remote_data()` helper
+  (`skip_on_cran`+`skip_on_ci`+`skip_if_offline`) separates the duckdb-`httpfs`
+  integration tests; restored `.github/workflows/r-tests.yml` with the rstats-on-nix
+  Cachix supplied via the **trusted** installer `extra-conf` + `trusted-users` (fixes the
+  "ignoring untrusted extra-substituters" from-source rebuild). CI green → #288 closed.
+- **#160 (PR #296):** Vertox `K_eff_strat` → deflated Sharpe. New `strat_keff_vertox` +
+  `strat_deflated_sharpe` targets (reuse #268's `strat_corr_matrix`), `deflated_sharpe`
+  leaderboard column (K_trials = `K_eff_strat`, NOT raw M), "Deflated Sharpe" vignette tab,
+  `backtest-robustness` §5 K_eff-guided stop rule + K_eff_acf/K_eff_strat disambiguation.
+  Verified: `K_eff_strat(rho=0.5,M=4)=3.25`; DSR K_eff=3 (0.557) > raw M=4 (0.488). #160 closed.
+- **#297 (PR #298):** Walk-Forward Correlation digest (Tinsley SSRN 6324079, supplied as PDF
+  after Cloudflare blocked WebFetch/curl). `raw/` excerpts + `wiki/walk-forward-correlation.md`
+  + gap analysis (no `wf_correlation` target; complements deflated Sharpe; CPCV gap -> #299).
+- **#279 (PR #300):** flow-pressure (ADD) crowding clause in `priced-in-prohibition`
+  (crowding != information-priced-in). #279 left open (Angle B / Chen-Zimmermann data layer).
+- **Filed:** #297 (WFC gap), #299 (CPCV — Combinatorial Purged Cross-Validation, purge/embargo
+  + PBO; confirmed we have none), llm#309 (clean-verdict autoclose gap).
+- **Roborev clean-up:** diagnosed why clean PASS reviews never auto-close — the severity
+  parser (`roborev_severity_autoclose.sh`) SKIPs no-finding reviews (can't parse a severity),
+  so "No issues found" verdicts linger. Closed 39 clean PASS reviews via `roborev close`.
+  Closure rate 80.0% -> **88.0%**; PASS closure 68.8% -> **100%**. 58 open FAIL remain (triage
+  plan in CURRENT_WORK).
+
+### Failed Approaches
+- **Built PRs #294/#295 on a stale base** (e47de52, end of session #8). Session #9 had merged 9
+  commits to `origin/main` meanwhile, so #294 conflicted (#268 reworked `plan_leaderboard.R`)
+  and #295 duplicated work already on main (#279 ADD wiki). Discarded both; redid #160 cleanly
+  as #296 on current main; deleted the dead branch. **Lesson saved** as memory
+  `feedback_fetch-before-building` — fetch origin/main + diff for overlap BEFORE writing code.
+- **Mis-reported** the #279 `priced-in-prohibition` clause as "already on main" (a `grep -ic`
+  substring false positive). Corrected via direct file check; added the clause in #300.
+- **SSRN Cloudflare JS challenge** ("Just a moment...") unbypassable by WebFetch or curl+browser-UA.
+  Resolved only by the maintainer saving the PDF locally.
+
+### Accuracy / Metrics
+- Roborev (repo `historical`): 426/484 reviews closed (88.0%); 58 open, all FAIL (genuine findings).
+- 509 review jobs total (484 done, 25 failed); findings severity: 27 High, 50 Medium, 22 Low.
+
+### Known Limitations
+- **58 open FAIL roborev reviews** — full triage plan (file-disjoint worktree groups, priority
+  ordered, stale-check first) in `.claude/CURRENT_WORK.md`. Stale-check sizing done: 39/58
+  commits are ancestors of origin/main; 19 are squash-merged-content or superseded (e.g. r4497 =
+  discarded #295, NOT on main -> obsolete-close).
+- llm#309 (clean-verdict autoclose) — fix is in the llm-managed global script; llm-session work.
+- Deferred: #299 (CPCV), #297 remaining acceptance (build `wf_correlation` target), #279 Angle B,
+  global `statistical-reporting` §2 K_eff-FDR update (llm session).
+
 ## 2026-05-25 (session 9 — external-source digests, Cloudflare/PDF workflow, parallel batch: 8 PRs)
 
 ### Completed
