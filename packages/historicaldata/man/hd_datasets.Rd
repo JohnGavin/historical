@@ -13,6 +13,30 @@ Named list of dataset metadata
 Maps dataset names to HF URLs, schemas, and metadata.
 Adding a new asset class = adding an entry here.
 }
+\details{
+\subsection{Column naming conventions}{
+
+Each dataset uses a canonical column name for the dividend/split-adjusted
+close price.  The names differ by source because the upstream APIs use
+different identifiers; renames happen at ingest, not in this package.\tabular{llll}{
+   Dataset \tab Column name \tab Source API field \tab Rename location \cr
+   \code{equity_daily} \tab \code{adjusted} \tab \code{adj_close} (yfinance) \tab \code{scripts/fetch_equity.py} \cr
+   \code{alphavantage_daily} \tab \code{adjusted_close} \tab \code{adjusted_close} (AV API) \tab none — native name \cr
+}
+
+
+\code{alphavantage_daily} keeps \code{adjusted_close} (the full, unambiguous name)
+because the AlphaVantage \code{TIME_SERIES_DAILY_ADJUSTED} endpoint returns it
+natively.  \code{equity_daily} uses the shorter \code{adjusted} because yfinance
+(the underlying data source) calls the field \code{adj_close} and
+\code{fetch_equity.py} renames it to \code{adjusted} for compactness.
+The two datasets are intentionally separate; callers must be aware of
+the column-name difference when joining them.
+
+See \code{inst/COLUMN_NAMING.md} for the full canonical-column table and all
+source-system synonyms (GitHub issue \href{https://github.com/JohnGavin/historical/issues/316}{#316}).
+}
+}
 \seealso{
 Other discovery: 
 \code{\link{hd_alpaca_assets_snapshot}()},
