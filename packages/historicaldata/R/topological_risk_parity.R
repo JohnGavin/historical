@@ -302,48 +302,86 @@ trp_weights <- function(cov_mat, fallback_to_hrp = TRUE) {
   w / sum(w)
 }
 
-#' Depth-first traversal order of MST assets
+#' Depth-first traversal order of MST assets (heap-based, deterministic)
 #'
 #' Produces a linear ordering of all assets by traversing the MST depth-first
-#' starting from the root (asset with highest degree = most connections).
+#' starting from the root (asset with highest degree = most connections in the
+#' MST; ties broken alphabetically by asset name).
+#'
+#' **Traversal order contract:**
+#' At each node the unvisited neighbours are pushed onto the priority stack in
+#' sorted order so that the **first neighbour popped** (i.e. visited next) is
+#' the one with the **smallest edge weight** (closest in correlation distance).
+#' When two neighbours share identical edge weights the tie is broken
+#' **alphabetically** by asset name.  This comparator is explicit and
+#' deterministic: identical inputs always produce identical output regardless
+#' of internal data-structure ordering.
 #'
 #' @param assets Character vector of all asset names.
-#' @param mst_edges Data frame with columns `from`, `to` (character).
+#' @param mst_edges Data frame with columns `from`, `to`, `weight` (character,
+#'   character, numeric).
 #' @return Character vector of all assets in DFS order.
 #' @noRd
 .mst_dfs_order <- function(assets, mst_edges) {
   n <- length(assets)
 
-  # Build adjacency list from undirected MST edges
+  # Build weighted adjacency list: adj[[node]] is a data.frame(to, weight)
   adj <- setNames(vector("list", n), assets)
-  for (a in assets) adj[[a]] <- character(0)
+  for (a in assets) {
+    adj[[a]] <- data.frame(to = character(0), weight = numeric(0),
+                           stringsAsFactors = FALSE)
+  }
 
   for (i in seq_len(nrow(mst_edges))) {
     f <- mst_edges$from[i]
     t <- mst_edges$to[i]
-    adj[[f]] <- c(adj[[f]], t)
-    adj[[t]] <- c(adj[[t]], f)
+    w <- mst_edges$weight[i]
+    adj[[f]] <- rbind(adj[[f]], data.frame(to = t, weight = w,
+                                           stringsAsFactors = FALSE))
+    adj[[t]] <- rbind(adj[[t]], data.frame(to = f, weight = w,
+                                           stringsAsFactors = FALSE))
   }
 
-  # Root: asset with highest degree (most connections in MST)
-  degrees <- vapply(adj, length, integer(1L))
-  root    <- assets[which.max(degrees)]
+  # Root: asset with highest degree (most connections in MST).
+  # Tie-break: alphabetically first asset name (deterministic).
+  degrees <- vapply(adj, nrow, integer(1L))
+  max_deg  <- max(degrees)
+  tied     <- assets[degrees == max_deg]
+  root     <- sort(tied)[1L]
 
-  # Iterative DFS
+  # Iterative DFS with explicit priority ordering.
+  # Stack entries are character(1) node names.  Before pushing the children of
+  # a node we sort them by (weight ascending, name ascending) so that after
+  # rev() the lowest-priority child ends up deepest in the stack (last popped).
+  # The highest-priority child (smallest weight, then smallest name) is pushed
+  # last and therefore popped first — matching the contract above.
   visited <- character(0)
   stack   <- root
+
   while (length(stack) > 0L) {
     node  <- stack[length(stack)]
     stack <- stack[-length(stack)]
+
     if (node %in% visited) next
     visited <- c(visited, node)
-    neighbours <- setdiff(adj[[node]], visited)
-    # Push in reverse so we visit smallest-distance neighbour first
-    stack <- c(stack, rev(neighbours))
+
+    neighbours_df <- adj[[node]]
+    unvisited_idx <- !(neighbours_df$to %in% visited)
+    neighbours_df <- neighbours_df[unvisited_idx, , drop = FALSE]
+
+    if (nrow(neighbours_df) == 0L) next
+
+    # Sort by (weight ASC, name ASC) — explicit, documented comparator
+    ord <- order(neighbours_df$weight, neighbours_df$to)
+    sorted_neighbours <- neighbours_df$to[ord]
+
+    # Push in reverse priority order so the highest-priority child is on top
+    stack <- c(stack, rev(sorted_neighbours))
   }
 
-  # Any isolated assets (shouldn't happen with a valid MST) go at the end
-  remaining <- setdiff(assets, visited)
+  # Any isolated assets (shouldn't happen with a valid MST) go at the end,
+  # sorted alphabetically for determinism.
+  remaining <- sort(setdiff(assets, visited))
   c(visited, remaining)
 }
 
