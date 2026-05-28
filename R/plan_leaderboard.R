@@ -179,6 +179,32 @@ plan_leaderboard <- function() {
           )
       }
 
+      # ── Pillar 8: risk-architecture columns (#269) ────────────────────────
+      # Join avg_dd_days, max_dd_days, loss_clustered from fals_results_db.
+      # fals_results_db uses strategy_id (internal code); map to leaderboard labels.
+      # Only "Full Period" rows carry meaningful full-history risk values.
+      if (!is.null(fals_results_db) && nrow(fals_results_db) > 0) {
+        fals_id_to_label <- c(
+          fac_max     = "Factor MAX",
+          drif        = "Factor DRIF"
+          # avoid_worst, rsc, ltr, tom are not yet in the leaderboard
+        )
+        pillar8_join <- fals_results_db |>
+          filter(strategy_id %in% names(fals_id_to_label)) |>
+          mutate(strategy = fals_id_to_label[strategy_id]) |>
+          select(strategy,
+                 avg_dd_days    = avg_dd_duration_days,
+                 max_dd_days    = max_dd_duration_days,
+                 loss_clustered = loss_clustered)
+        all_metrics <- all_metrics |>
+          left_join(pillar8_join, by = "strategy") |>
+          mutate(
+            avg_dd_days    = ifelse(period == "Full Period", avg_dd_days, NA_real_),
+            max_dd_days    = ifelse(period == "Full Period", max_dd_days, NA_real_),
+            loss_clustered = ifelse(period == "Full Period", loss_clustered, NA)
+          )
+      }
+
       all_metrics
     }),
 
