@@ -200,3 +200,105 @@ test_that("pct_positive_oos matches manual calculation", {
 
   expect_equal(result$pct_positive_oos, 3 / 5)
 })
+
+
+# ── 8. wfc_all_summary shape (smoke tests for #318 — DRIF extension) ──────────
+#
+# These tests verify that hd_wf_correlation() accepts grids in the shape
+# that wfc_drif_grid_is / wfc_drif_grid_oos / wfc_drif_grid will produce:
+# 5 rows (alpha ∈ {0.00, 0.25, 0.50, 0.75, 1.00}), integer theta_id,
+# character theta_label of the form "alpha=X.XX".
+
+make_drif_grid <- function() {
+  alpha_grid <- c(0.00, 0.25, 0.50, 0.75, 1.00)
+  # Simulate plausible IS and OOS Sharpe values (positive, partial correlation)
+  set.seed(318L)
+  is_vals  <- 0.3 + 0.4 * seq_along(alpha_grid) + stats::rnorm(5L, sd = 0.05)
+  oos_vals <- 0.1 + 0.3 * seq_along(alpha_grid) + stats::rnorm(5L, sd = 0.10)
+  data.frame(
+    theta_id    = seq_along(alpha_grid),
+    theta_label = paste0("alpha=", alpha_grid),
+    IS_metric   = is_vals,
+    OOS_metric  = oos_vals
+  )
+}
+
+test_that("DRIF-shaped grid (5 alpha values) produces well-formed WFC result", {
+  grid   <- make_drif_grid()
+  result <- hd_wf_correlation(grid)
+
+  # Must have all required return fields
+  expect_named(result,
+    c("pearson", "spearman", "n_points", "classification",
+      "wfc_category", "median_oos", "pct_positive_oos"),
+    ignore.order = TRUE
+  )
+
+  # n_points = 5 (all rows complete)
+  expect_equal(result$n_points, 5L)
+
+  # Pearson and Spearman are in [-1, 1]
+  expect_true(result$pearson  >= -1 & result$pearson  <= 1)
+  expect_true(result$spearman >= -1 & result$spearman <= 1)
+})
+
+test_that("DRIF-shaped grid: classification is one of the four valid labels", {
+  grid   <- make_drif_grid()
+  result <- hd_wf_correlation(grid)
+
+  valid_labels <- c("structural_edge", "consistently_loss_making",
+                    "spurious_luck",   "noise")
+  expect_true(result$classification %in% valid_labels)
+})
+
+test_that("DRIF-shaped grid: wfc_category is one of 'high', 'moderate', 'low'", {
+  grid   <- make_drif_grid()
+  result <- hd_wf_correlation(grid)
+
+  expect_true(result$wfc_category %in% c("high", "moderate", "low"))
+})
+
+test_that("wfc_all_summary shape: two-strategy tibble has expected columns", {
+  # Simulate wfc_all_summary structure as produced by plan_wf_correlation.R
+  # (one row per strategy, same columns for FM and DRIF)
+  grid_fm   <- make_grid(c(0.2, 0.5, 1.0, 1.5, 1.8),
+                          c(0.1, 0.4, 0.9, 1.3, 1.6))
+  grid_drif <- make_drif_grid()
+
+  res_fm   <- hd_wf_correlation(grid_fm)
+  res_drif <- hd_wf_correlation(grid_drif)
+
+  make_row <- function(strategy, res) {
+    tibble::tibble(
+      strategy       = strategy,
+      wfc_pearson    = res$pearson,
+      wfc_spearman   = res$spearman,
+      wfc_n_points   = res$n_points,
+      wfc_category   = res$wfc_category,
+      classification = res$classification,
+      median_oos     = res$median_oos,
+      pct_pos_oos    = res$pct_positive_oos
+    )
+  }
+
+  summary_tbl <- dplyr::bind_rows(
+    make_row("Factor MAX",  res_fm),
+    make_row("Factor DRIF", res_drif)
+  )
+
+  # Two rows — one per strategy
+  expect_equal(nrow(summary_tbl), 2L)
+
+  # strategy column contains both names
+  expect_true("Factor MAX"  %in% summary_tbl$strategy)
+  expect_true("Factor DRIF" %in% summary_tbl$strategy)
+
+  # All numeric WFC columns are finite or NA (no NaN or Inf)
+  numeric_cols <- c("wfc_pearson", "wfc_spearman", "wfc_n_points",
+                    "median_oos", "pct_pos_oos")
+  for (col in numeric_cols) {
+    vals <- summary_tbl[[col]]
+    expect_true(all(is.finite(vals) | is.na(vals)),
+                info = paste0("Column '", col, "' contains non-finite value"))
+  }
+})
