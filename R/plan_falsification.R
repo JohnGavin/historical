@@ -1,14 +1,15 @@
 # Plan: Falsification Framework — Phase 1
 #
-# Five strategies: avoid_worst (VIX protection), drif (factor rotation),
-# fac_max (factor momentum), rsc (risk-state condition), ltr (LambdaMART CS momentum).
+# Six strategies: avoid_worst (VIX protection), drif (factor rotation),
+# fac_max (factor momentum), rsc (risk-state condition), ltr (LambdaMART CS momentum),
+# tom (Turn-of-the-Month overlay — #314).
 # Tests each strategy against:
 #   - HAC t-statistic (Newey-West)
 #   - 5 null environments (white noise, regime vol, MA(1), factor null, GARCH)
 #   - 2 GARCH variants (GARCH(1,1) and GJR-GARCH)
 #   - Fama-French 5-factor + Momentum alpha regression
 #
-# Total (with ltr): 1 + 4 + 2 + 32 + 2 + 1 = 42 targets
+# Total (with tom): 1 + 4 + 2 + 32 + 2 + 1 + 8 = 50 targets
 #
 # Reference: Harvey, Liu & Zhu (2016), Lopez de Prado (2018).
 
@@ -509,6 +510,91 @@ plan_falsification <- function() {
 
 
     # ═══════════════════════════════════════════════════════════════════
+    # Per-strategy tests: tom (Turn-of-the-Month overlay — #314)
+    # Bridge target fals_tom_input lives in plan_turn_of_month.R.
+    # TOM is daily (ann_factor = 252), same as avoid_worst and rsc.
+    # ═══════════════════════════════════════════════════════════════════
+
+    targets::tar_target(fals_hac_tom, {
+      hd_hac_sharpe(fals_tom_input$strategy_ret)
+    }),
+
+    targets::tar_target(fals_wn_tom, {
+      ret   <- fals_tom_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_rv_tom, {
+      ret   <- fals_tom_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_ma1_tom, {
+      ret   <- fals_tom_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_fn_tom, {
+      ret   <- fals_tom_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_garch_tom, {
+      ret   <- fals_tom_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_gjr_tom, {
+      ret   <- fals_tom_input$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+
+    targets::tar_target(fals_ff_tom, {
+      hd_factor_null_test(
+        strategy_daily = fals_tom_input,
+        rf_daily       = fals_rf,
+        factors_daily  = fals_factors
+      )
+    }),
+
+
+    # ═══════════════════════════════════════════════════════════════════
     # Cross-strategy targets
     # ═══════════════════════════════════════════════════════════════════
 
@@ -522,11 +608,12 @@ plan_falsification <- function() {
           fals_drif_input        |> dplyr::rename(drif        = strategy_ret),
           fals_fac_max_input     |> dplyr::rename(fac_max     = strategy_ret),
           fals_rsc_input         |> dplyr::rename(rsc         = strategy_ret),
-          fals_ltr_input         |> dplyr::rename(ltr         = strategy_ret)
+          fals_ltr_input         |> dplyr::rename(ltr         = strategy_ret),
+          fals_tom_input         |> dplyr::rename(tom         = strategy_ret)
         )
       )
 
-      mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max", "rsc", "ltr")])
+      mat <- as.matrix(all_rets[, c("avoid_worst", "drif", "fac_max", "rsc", "ltr", "tom")])
       hd_keff_frob(mat)
     }),
 
@@ -537,14 +624,16 @@ plan_falsification <- function() {
         fals_hac_drif$hac_tstat,
         fals_hac_fac_max$hac_tstat,
         fals_hac_rsc$hac_tstat,
-        fals_hac_ltr$hac_tstat
+        fals_hac_ltr$hac_tstat,
+        fals_hac_tom$hac_tstat
       )
       z_oos <- c(
         fals_ff_avoid_worst$alpha_tstat_hac,
         fals_ff_drif$alpha_tstat_hac,
         fals_ff_fac_max$alpha_tstat_hac,
         fals_ff_rsc$alpha_tstat_hac,
-        fals_ff_ltr$alpha_tstat_hac
+        fals_ff_ltr$alpha_tstat_hac,
+        fals_ff_tom$alpha_tstat_hac
       )
 
       hd_delta_z(z_is, z_oos, k_eff_count = fals_keff$K_eff_frob)
@@ -563,7 +652,8 @@ plan_falsification <- function() {
           drif        = fals_drif_input,
           fac_max     = fals_fac_max_input,
           rsc         = fals_rsc_input,
-          ltr         = fals_ltr_input
+          ltr         = fals_ltr_input,
+          tom         = fals_tom_input
         ),
         to_period = "month",
         anchor    = "end_bizday",
@@ -572,7 +662,7 @@ plan_falsification <- function() {
         min_obs   = 1L
       )
 
-      strategies <- c("avoid_worst", "drif", "fac_max", "rsc", "ltr")
+      strategies <- c("avoid_worst", "drif", "fac_max", "rsc", "ltr", "tom")
       mat <- as.matrix(aligned[, strategies])
       mat <- mat[stats::complete.cases(mat), ]
 
@@ -621,6 +711,9 @@ plan_falsification <- function() {
     targets::tar_target(fals_dsr_ltr, {
       hd_deflated_sharpe(fals_ltr_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
     }),
+    targets::tar_target(fals_dsr_tom, {
+      hd_deflated_sharpe(fals_tom_input$strategy_ret, K_trials = 6L, ann_factor = 252L)
+    }),
 
 
     # ═══════════════════════════════════════════════════════════════════
@@ -629,7 +722,7 @@ plan_falsification <- function() {
 
     targets::tar_target(fals_summary, {
       tibble::tibble(
-        strategy = c("avoid_worst", "drif", "fac_max", "rsc", "ltr"),
+        strategy = c("avoid_worst", "drif", "fac_max", "rsc", "ltr", "tom"),
 
         # HAC t-statistics
         hac_tstat = c(
@@ -637,14 +730,16 @@ plan_falsification <- function() {
           fals_hac_drif$hac_tstat,
           fals_hac_fac_max$hac_tstat,
           fals_hac_rsc$hac_tstat,
-          fals_hac_ltr$hac_tstat
+          fals_hac_ltr$hac_tstat,
+          fals_hac_tom$hac_tstat
         ),
         hac_sharpe = c(
           fals_hac_avoid_worst$naive_sharpe,
           fals_hac_drif$naive_sharpe,
           fals_hac_fac_max$naive_sharpe,
           fals_hac_rsc$naive_sharpe,
-          fals_hac_ltr$naive_sharpe
+          fals_hac_ltr$naive_sharpe,
+          fals_hac_tom$naive_sharpe
         ),
 
         # Null rejection rates (ideally <= 0.075)
@@ -653,42 +748,48 @@ plan_falsification <- function() {
           fals_wn_drif$rejection_rate,
           fals_wn_fac_max$rejection_rate,
           fals_wn_rsc$rejection_rate,
-          fals_wn_ltr$rejection_rate
+          fals_wn_ltr$rejection_rate,
+          fals_wn_tom$rejection_rate
         ),
         rej_rate_rv = c(
           fals_rv_avoid_worst$rejection_rate,
           fals_rv_drif$rejection_rate,
           fals_rv_fac_max$rejection_rate,
           fals_rv_rsc$rejection_rate,
-          fals_rv_ltr$rejection_rate
+          fals_rv_ltr$rejection_rate,
+          fals_rv_tom$rejection_rate
         ),
         rej_rate_ma1 = c(
           fals_ma1_avoid_worst$rejection_rate,
           fals_ma1_drif$rejection_rate,
           fals_ma1_fac_max$rejection_rate,
           fals_ma1_rsc$rejection_rate,
-          fals_ma1_ltr$rejection_rate
+          fals_ma1_ltr$rejection_rate,
+          fals_ma1_tom$rejection_rate
         ),
         rej_rate_fn = c(
           fals_fn_avoid_worst$rejection_rate,
           fals_fn_drif$rejection_rate,
           fals_fn_fac_max$rejection_rate,
           fals_fn_rsc$rejection_rate,
-          fals_fn_ltr$rejection_rate
+          fals_fn_ltr$rejection_rate,
+          fals_fn_tom$rejection_rate
         ),
         rej_rate_garch = c(
           fals_garch_avoid_worst$rejection_rate,
           fals_garch_drif$rejection_rate,
           fals_garch_fac_max$rejection_rate,
           fals_garch_rsc$rejection_rate,
-          fals_garch_ltr$rejection_rate
+          fals_garch_ltr$rejection_rate,
+          fals_garch_tom$rejection_rate
         ),
         rej_rate_gjr = c(
           fals_gjr_avoid_worst$rejection_rate,
           fals_gjr_drif$rejection_rate,
           fals_gjr_fac_max$rejection_rate,
           fals_gjr_rsc$rejection_rate,
-          fals_gjr_ltr$rejection_rate
+          fals_gjr_ltr$rejection_rate,
+          fals_gjr_tom$rejection_rate
         ),
 
         # FF5+Mom alpha regression
@@ -697,21 +798,24 @@ plan_falsification <- function() {
           fals_ff_drif$alpha_annual,
           fals_ff_fac_max$alpha_annual,
           fals_ff_rsc$alpha_annual,
-          fals_ff_ltr$alpha_annual
+          fals_ff_ltr$alpha_annual,
+          fals_ff_tom$alpha_annual
         ),
         ff_alpha_tstat = c(
           fals_ff_avoid_worst$alpha_tstat_hac,
           fals_ff_drif$alpha_tstat_hac,
           fals_ff_fac_max$alpha_tstat_hac,
           fals_ff_rsc$alpha_tstat_hac,
-          fals_ff_ltr$alpha_tstat_hac
+          fals_ff_ltr$alpha_tstat_hac,
+          fals_ff_tom$alpha_tstat_hac
         ),
         ff_r_squared = c(
           fals_ff_avoid_worst$r_squared,
           fals_ff_drif$r_squared,
           fals_ff_fac_max$r_squared,
           fals_ff_rsc$r_squared,
-          fals_ff_ltr$r_squared
+          fals_ff_ltr$r_squared,
+          fals_ff_tom$r_squared
         ),
 
         # Deflated Sharpe Ratio (Lopez de Prado 2018)
@@ -720,21 +824,24 @@ plan_falsification <- function() {
           fals_dsr_drif$dsr,
           fals_dsr_fac_max$dsr,
           fals_dsr_rsc$dsr,
-          fals_dsr_ltr$dsr
+          fals_dsr_ltr$dsr,
+          fals_dsr_tom$dsr
         ),
         dsr_pvalue = c(
           fals_dsr_avoid_worst$dsr_pvalue,
           fals_dsr_drif$dsr_pvalue,
           fals_dsr_fac_max$dsr_pvalue,
           fals_dsr_rsc$dsr_pvalue,
-          fals_dsr_ltr$dsr_pvalue
+          fals_dsr_ltr$dsr_pvalue,
+          fals_dsr_tom$dsr_pvalue
         ),
         dsr_haircut_pct = c(
           fals_dsr_avoid_worst$haircut_pct,
           fals_dsr_drif$haircut_pct,
           fals_dsr_fac_max$haircut_pct,
           fals_dsr_rsc$haircut_pct,
-          fals_dsr_ltr$haircut_pct
+          fals_dsr_ltr$haircut_pct,
+          fals_dsr_tom$haircut_pct
         )
       )
     }),
@@ -947,13 +1054,14 @@ plan_falsification <- function() {
 
       # ── Per-strategy ann_factors ───────────────────────────────────
       # avoid_worst=daily(252), drif=monthly(12), fac_max=monthly(12),
-      # rsc=daily(252), ltr=monthly(12)
+      # rsc=daily(252), ltr=monthly(12), tom=daily(252)
       strategy_ann <- c(
         avoid_worst = 252L,
         drif        = 12L,
         fac_max     = 12L,
         rsc         = 252L,
-        ltr         = 12L
+        ltr         = 12L,
+        tom         = 252L
       )
 
       strategy_inputs <- list(
@@ -961,7 +1069,8 @@ plan_falsification <- function() {
         drif        = fals_drif_input,
         fac_max     = fals_fac_max_input,
         rsc         = fals_rsc_input,
-        ltr         = fals_ltr_input
+        ltr         = fals_ltr_input,
+        tom         = fals_tom_input
       )
 
       ff_results <- list(
@@ -969,7 +1078,8 @@ plan_falsification <- function() {
         drif        = fals_ff_drif,
         fac_max     = fals_ff_fac_max,
         rsc         = fals_ff_rsc,
-        ltr         = fals_ff_ltr
+        ltr         = fals_ff_ltr,
+        tom         = fals_ff_tom
       )
 
       # ── Compute metrics for each strategy ─────────────────────────
@@ -989,10 +1099,10 @@ plan_falsification <- function() {
       rows <- tibble::tibble(
         run_date    = Sys.Date(),
         strategy_id = summary$strategy,
-        asset_class = c("overlay", "factor", "factor", "overlay", "equity"),
+        asset_class = c("overlay", "factor", "factor", "overlay", "equity", "overlay"),
         partition   = "full",
         benchmark   = "SPY",
-        is_negative = c(TRUE, FALSE, FALSE, TRUE, FALSE),
+        is_negative = c(TRUE, FALSE, FALSE, TRUE, FALSE, FALSE),
 
         # Performance metrics (backfilled)
         start_date            = as.Date(sapply(metrics_list, `[[`, "start_date")),
@@ -1044,10 +1154,11 @@ plan_falsification <- function() {
           "Genuine alpha",
           "Genuine alpha",
           "Pure market beta (R\u00b2=88%)",
-          "Cross-sectional momentum (~51 US stocks, demo)"
+          "Cross-sectional momentum (~51 US stocks, demo)",
+          "Calendar overlay on SPY (McConnell & Xu 2008)"
         ),
-        tag_1 = c("vol-timing", "momentum", "momentum", "vol-timing", "cross-sectional"),
-        tag_2 = c("daily", "monthly", "monthly", "daily", "monthly")
+        tag_1 = c("vol-timing", "momentum", "momentum", "vol-timing", "cross-sectional", "calendar"),
+        tag_2 = c("daily", "monthly", "monthly", "daily", "monthly", "daily")
       )
 
       # K_eff_frob and delta_z (same for all strategies in a run)

@@ -9,11 +9,11 @@ plan_strategy_names <- function() {
     targets::tar_target(strategy_names, {
       tibble::tibble(
         code_name = c(
-          "avoid_worst", "drif", "fac_max", "rsc", "ltr",
+          "avoid_worst", "drif", "fac_max", "rsc", "ltr", "tom",
           "stk_max", "stk_drif", "xgb_drif", "pso_optimal"
         ),
         short_name = c(
-          "Avoid Worst", "DRIF", "Factor MAX", "Risk State", "LTR",
+          "Avoid Worst", "DRIF", "Factor MAX", "Risk State", "LTR", "TOM",
           "Stock MAX", "Stock DRIF", "XGB DRIF", "PSO Optimal"
         ),
         long_name = c(
@@ -22,23 +22,24 @@ plan_strategy_names <- function() {
           "Factor MAX (Factor Momentum)",
           "Risk State (VIX Overlay)",
           "LTR (Cross-Sectional Momentum)",
+          "Turn-of-the-Month (TOM Overlay)",
           "Stock MAX (Daily Return Sorting)",
           "Stock DRIF (Elastic Net Stock Selection)",
           "XGB DRIF (XGBoost Stock Selection)",
           "PSO Optimal (Portfolio Optimisation)"
         ),
         asset_class = c(
-          "overlay", "factor", "factor", "overlay", "equity",
+          "overlay", "factor", "factor", "overlay", "equity", "overlay",
           "equity", "equity", "equity", "combined"
         ),
         frequency = c(
-          "daily", "monthly", "monthly", "daily", "monthly",
+          "daily", "monthly", "monthly", "daily", "monthly", "daily",
           "monthly", "monthly", "monthly", "monthly"
         ),
-        ann_factor = c(252L, 12L, 12L, 252L, 12L, 12L, 12L, 12L, 12L),
+        ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L),
         vignette_url = c(
           "avoid-worst-days.html", "drif.html", "factor-max.html",
-          "leaderboard.html", "leaderboard.html",
+          "leaderboard.html", "leaderboard.html", "turn-of-month.html",
           "stock-backtest.html", "stock-backtest.html",
           "stock-backtest.html", "leaderboard.html"
         )

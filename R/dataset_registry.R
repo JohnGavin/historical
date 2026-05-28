@@ -29,6 +29,7 @@ DATASET_REGISTRY <- tibble::tribble(
   "fals_fac_max_input",    "returns",  "monthly",   "end_bizday",    "USD",     "decimal", NA,              NA,
   "fals_ltr_input",        "returns",  "monthly",   "end_calendar",  "USD",     "decimal", NA,              "POSIXct stamps! see #146 close",
   "fals_rsc_input",        "returns",  "daily",     "trading_day",   "USD",     "decimal", NA,              NA,
+  "fals_tom_input",        "returns",  "daily",     "trading_day",   "USD",     "decimal", NA,              "TOM bridge: ret_net from tom_portfolio; #314",
   # --- circuit breaker (currently broken — see #145) ---
   "cb_data",               "macro",    "weekly",    "release_day",   NA,        "index",   NA,              "broken until #145 layer 2",
   "cb_regime",             "derived",  "weekly",    "release_day",   NA,        "count",   NA,              "depends on cb_data",

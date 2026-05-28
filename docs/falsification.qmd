@@ -377,7 +377,7 @@ if (!is.null(mult_tbl)) fals_dt(mult_tbl, cap)
 
 **The multiple testing problem:**
 
-Testing 5 strategies inflates Type I error. The chance that *at least one* strategy exceeds t = 2.0 by pure luck is much higher than 5%.
+Testing 6 strategies inflates Type I error. The chance that *at least one* strategy exceeds t = 2.0 by pure luck is much higher than 5%.
 
 **<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr> (effective multiplicity):**
 
