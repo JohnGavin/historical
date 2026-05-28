@@ -400,6 +400,73 @@ Delta-Z = max(t_IS) - max(t_OOS) — the gap between the best in-sample and best
 In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" = FF alpha t-stat (after removing known factor exposure). The OOS test is not a temporal holdout but a *structural* holdout — does the signal survive factor decomposition?
 
 
+# Walk-Forward Correlation {#wfc}
+
+## Row
+
+### {.tabset}
+
+#### WFC 2×2 Matrix
+
+```{r}
+#| label: wfc-table
+#| results: asis
+wfc_tbl <- safe_tar_read("wfc_all_summary")
+if (!is.null(wfc_tbl) && nrow(wfc_tbl) > 0) {
+  library(dplyr)
+  display_tbl <- wfc_tbl |>
+    transmute(
+      Strategy      = strategy,
+      `Pearson ρ`   = round(wfc_pearson,  3),
+      `Spearman ρ`  = round(wfc_spearman, 3),
+      `N grid pts`  = wfc_n_points,
+      `WFC category` = wfc_category,
+      `Median OOS`  = round(median_oos,   3),
+      `% OOS > 0`   = paste0(round(pct_pos_oos * 100, 0), "%"),
+      Verdict       = classification
+    )
+  caption_text <- paste0(
+    "Walk-Forward Correlation diagnostic (Tinsley 2026, SSRN 6324079). ",
+    "Pearson ρ computed across IS↔OOS annualised Sharpe for every parameter ",
+    "combination in each strategy’s grid. ",
+    "IS window ends ", format(wfc_tbl$is_end[[1]], "%Y-%m-%d"), "; ",
+    "OOS window ", format(wfc_tbl$oos_start[[1]], "%Y-%m-%d"),
+    " – ", format(wfc_tbl$oos_end[[1]], "%Y-%m-%d"), ". ",
+    "Computed ", format(wfc_tbl$computed_on[[1]], "%Y-%m-%d"), "."
+  )
+  fals_dt(display_tbl, caption_text)
+} else {
+  cat("*WFC summary not yet computed — run `tar_make()` to build `wfc_all_summary`.*")
+}
+```
+
+#### Methodology
+
+**What Walk-Forward Correlation measures:**
+
+[WFC](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6324079){target="_blank" rel="noopener noreferrer"} (Martyn Tinsley, 2026) is a single-number diagnostic for over-fitting across the *whole* optimisation surface. Traditional walk-forward analysis asks "does the best in-sample parameter survive out-of-sample?" WFC instead asks "across *every* parameter combination, does in-sample performance predict out-of-sample performance?"
+
+**Calculation:** For each strategy with a tunable parameter vector θ, compute the in-sample Sharpe X(θ) and out-of-sample Sharpe Y(θ) for every point on the grid. WFC = Pearson ρ(X, Y) over all θ.
+
+**Diagnostic 2×2 matrix (Tinsley p.4):**
+
+|              | High WFC (ρ ≥ 0.70)               | Low WFC (ρ < 0.40)                    |
+|--------------|-----------------------------------|---------------------------------------|
+| **+OOS**     | `structural_edge` — low over-fitting | `spurious_luck` — high over-fitting  |
+| **−OOS**     | `consistently_loss_making`         | `noise` — no edge                    |
+
+**Calibration points from the paper (Figure 4):** high ≈ 0.881, moderate ≈ 0.581, low ≈ 0.234. This project uses 0.70 as the high/moderate boundary (midpoint of moderate–high range).
+
+**Strategies included:**
+
+- **Factor MAX** — parameter grid: `top_n ∈ {1, 2, 3, 4, 5}` (5 grid points)
+- **Factor DRIF** — parameter grid: `alpha ∈ {0.00, 0.25, 0.50, 0.75, 1.00}` (5 grid points); lambda chosen by `cv.glmnet` internal CV
+
+**Strategies not included:** OLMAR, TOM, and other non-parametric strategies have no tunable grid. XGB DRIF operates at the stock level (not a factor-rotation grid); factor-level XGB is tracked as a follow-up to [#318](https://github.com/JohnGavin/historical/issues/318){target="_blank" rel="noopener noreferrer"}.
+
+**Reference:** Tinsley, M. (2026). "Walk Forward Correlation." Trade Like A Machine Ltd. [SSRN 6324079](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6324079){target="_blank" rel="noopener noreferrer"}. Implemented in [`hd_wf_correlation()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/wf_correlation.R){target="_blank" rel="noopener noreferrer"}.
+
+
 # Assumptions {#assumptions}
 
 ## Row
