@@ -17,7 +17,7 @@ plan_falsification_vignette <- function() {
     targets::tar_target(fals_vig_names, {
       strategy_names |>
         dplyr::filter(
-          code_name %in% c("avoid_worst", "drif", "fac_max", "rsc", "ltr")
+          code_name %in% c("avoid_worst", "drif", "fac_max", "rsc", "ltr", "tom")
         )
     }),
 
@@ -197,7 +197,7 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       hac_results <- list(
         fals_hac_avoid_worst, fals_hac_drif, fals_hac_fac_max,
-        fals_hac_rsc, fals_hac_ltr
+        fals_hac_rsc, fals_hac_ltr, fals_hac_tom
       )
 
       # Naive t-stat = naive_sharpe * sqrt(T / ann_factor)
@@ -221,7 +221,7 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       hac_results <- list(
         fals_hac_avoid_worst, fals_hac_drif, fals_hac_fac_max,
-        fals_hac_rsc, fals_hac_ltr
+        fals_hac_rsc, fals_hac_ltr, fals_hac_tom
       )
       hac_t <- sapply(hac_results, `[[`, "hac_tstat")
       all_pass <- all(hac_t > 2.0)
@@ -242,7 +242,7 @@ plan_falsification_vignette <- function() {
         "NW Lag = Newey-West bandwidth (Bartlett kernel, auto: ",
         "floor(4*(T/100)^(2/9))), average lag: ", avg_lag, ". ",
         if (all_pass) paste0(
-          "All 5 strategies exceed the HAC t > 2.0 threshold, ",
+          "All 6 strategies exceed the HAC t > 2.0 threshold, ",
           "ranging from ", min_name, " (t = ", min_t, ") to ",
           max_name, " (t = ", max_t, "). "
         ) else paste0(
@@ -262,7 +262,7 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       ff_results <- list(
         fals_ff_avoid_worst, fals_ff_drif, fals_ff_fac_max,
-        fals_ff_rsc, fals_ff_ltr
+        fals_ff_rsc, fals_ff_ltr, fals_ff_tom
       )
 
       factor_names <- c("Mkt_RF", "SMB", "HML", "RMW", "CMA", "Mom")
@@ -295,7 +295,7 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       ff_results <- list(
         fals_ff_avoid_worst, fals_ff_drif, fals_ff_fac_max,
-        fals_ff_rsc, fals_ff_ltr
+        fals_ff_rsc, fals_ff_ltr, fals_ff_tom
       )
 
       r2_vals <- sapply(ff_results, `[[`, "r_squared")
@@ -340,9 +340,9 @@ plan_falsification_vignette <- function() {
           "Harvey threshold (sqrt(2*log(K_eff_frob)))"
         ),
         Value = as.character(c(
-          5,
+          6,
           round(fals_keff$K_eff_frob, 2),
-          round(fals_keff$K_eff_frob / 5, 2),
+          round(fals_keff$K_eff_frob / 6, 2),
           round(fals_delta_z$z_star_is, 2),
           round(fals_delta_z$z_star_oos, 2),
           round(fals_delta_z$delta_z, 2),
@@ -362,7 +362,7 @@ plan_falsification_vignette <- function() {
         "Multiple testing adjustment. ",
         "K_eff_frob = ", keff,
         " (spectral participation ratio from pairwise correlation matrix) ",
-        "measures how many truly independent strategies exist among the 5 tested. ",
+        "measures how many truly independent strategies exist among the 6 tested. ",
         "Delta-Z = ", dz, " measures the gap between the best in-sample and best ",
         "out-of-sample t-statistics. ",
         "Harvey et al. (2016) threshold = sqrt(2*log(K_eff_frob)) = ", harvey_t,
@@ -382,7 +382,7 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       hac_results <- list(
         fals_hac_avoid_worst, fals_hac_drif, fals_hac_fac_max,
-        fals_hac_rsc, fals_hac_ltr
+        fals_hac_rsc, fals_hac_ltr, fals_hac_tom
       )
 
       naive_t <- sapply(seq_along(hac_results), function(i) {
@@ -392,7 +392,7 @@ plan_falsification_vignette <- function() {
 
       df_long <- data.frame(
         strategy = factor(rep(nms$short_name, 2), levels = rev(nms$short_name)),
-        type = factor(rep(c("Naive t", "HAC t"), each = 5),
+        type = factor(rep(c("Naive t", "HAC t"), each = 6),
                       levels = c("Naive t", "HAC t")),
         t_stat = c(naive_t, hac_t)
       )
@@ -434,7 +434,7 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       ff_results <- list(
         fals_ff_avoid_worst, fals_ff_drif, fals_ff_fac_max,
-        fals_ff_rsc, fals_ff_ltr
+        fals_ff_rsc, fals_ff_ltr, fals_ff_tom
       )
 
       df <- data.frame(
