@@ -144,6 +144,38 @@ if (k_after - k_before < 0.25) {
 }
 ```
 
+
+### 6. Walk-Forward Correlation (WFC) across the Full Grid
+
+The checks above (ss1 sweep, heatmap) evaluate robustness locally or
+visually.  WFC quantifies whether the IS optimisation surface has
+structural predictive power by computing the Pearson and Spearman
+correlation between IS and OOS metric across every parameter combination
+(Tinsley 2026, SSRN 6324079).
+
+WFC = rho(X, Y) over all theta in P, where X(theta) is the IS Sharpe
+and Y(theta) is the OOS Sharpe for that parameter combination.
+
+2x2 diagnostic matrix (Tinsley p.4):
+
+High WFC + positive OOS  ->  Structural edge
+High WFC + negative OOS  ->  Consistently loss-making
+Low  WFC + positive OOS  ->  Spurious luck / over-fit
+Low  WFC + negative OOS  ->  Noise
+
+Calibration thresholds from paper Figure 4: high approx 0.881,
+moderate approx 0.581, low approx 0.234.  Project working threshold: 0.70
+(midpoint of moderate-high range).  See backtest-robustness rule for
+the project-level hd_wf_correlation() wrapper.
+
+Correlation is not edge: high WFC proves predictive consistency, not
+profitability.  High WFC + positive OOS is the target.
+
+WFC complements, not replaces, ss1-5 above.  See
+knowledge/wiki/walk-forward-correlation.md for the full digest and
+R/plan_wf_correlation.R + packages/historicaldata/R/wf_correlation.R
+for the implementation (issue 297).
+
 ## Robustness Heatmap
 
 When reporting results with a tuned parameter, include a heatmap of
