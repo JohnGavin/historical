@@ -43,6 +43,11 @@ plan_factormax <- function() {
     }),
 
     # ── MAX signal: max daily return per factor per month ──────────
+    # NOTE(#299 CPCV): MAX signal is computed from current-month daily returns
+    # and predicts NEXT month's return (portfolio rebalances at month-end for
+    # t+1). Label horizon = 0 within the outer CV scheme (signal = current
+    # month, label = next month = a different outer target). No label-window
+    # purging needed here. CPCV multi-path integration deferred to #299 follow-up.
     targets::tar_target(fm_signal, {
       library(dplyr)
 
