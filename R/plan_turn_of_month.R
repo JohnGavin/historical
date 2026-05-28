@@ -176,13 +176,14 @@ plan_turn_of_month <- function() {
         )
       }
 
-      port <- tom_portfolio |>
+      port     <- tom_portfolio |>
         dplyr::mutate(date = as.Date(date))
-      oos  <- as.Date(tom_params$oos_start)
+      oos      <- as.Date(tom_params$oos_start)
+      oos_end  <- as.Date(tom_params$oos_end)
 
       dplyr::bind_rows(
-        calc(port |> dplyr::filter(date < oos),  "Training"),
-        calc(port |> dplyr::filter(date >= oos), "Testing"),
+        calc(port |> dplyr::filter(date < oos),                       "Training"),
+        calc(port |> dplyr::filter(date >= oos & date <= oos_end),    "Testing"),
         calc(port, "Full Period")
       )
     }),
