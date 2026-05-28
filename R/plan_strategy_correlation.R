@@ -50,21 +50,26 @@ plan_strategy_correlation <- function() {
 
       # Core four strategies already aligned in port_returns.
       # Columns: ym, stk_max, stk_drif, fac_max, fac_drif, rf_ret, date
+      # NOTE: port_returns\ is a synthetic ym-15 anchor (paste0(ym, "-15")),
+      # while ltr_portfolio\ is the actual trading date from the parquet.
+      # Joining on raw date produces an empty or near-empty result (#147/#215).
+      # Fix: derive ym from both sides and join on ym; use port_returns\ as
+      # the canonical date column.
       base <- port_returns |>
-        select(date, stk_max, stk_drif, fac_max, fac_drif) |>
+        select(ym, date, stk_max, stk_drif, fac_max, fac_drif) |>
         filter(!is.na(stk_max), !is.na(stk_drif),
                !is.na(fac_max), !is.na(fac_drif))
 
-      # LTR momentum: port_ret column, Date-typed date
+      # LTR momentum: derive ym for stable join key
       ltr_col <- ltr_portfolio |>
         filter(!is.na(port_ret)) |>
-        select(date, ltr = port_ret) |>
-        mutate(date = as.Date(date))  # ensure Date type (#147/#215)
+        mutate(ym = format(as.Date(date), "%Y-%m")) |>
+        select(ym, ltr = port_ret)
 
-      # Inner-join: only periods where both series are available
+      # Inner-join on ym (stable month key, not date) then drop ym
       aligned <- base |>
-        mutate(date = as.Date(date)) |>
-        inner_join(ltr_col, by = "date") |>
+        inner_join(ltr_col, by = "ym") |>
+        select(-ym) |>
         arrange(date)
 
       aligned
