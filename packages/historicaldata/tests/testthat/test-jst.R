@@ -50,13 +50,15 @@ test_that("hd_jst returns cached data when cache file exists", {
 })
 
 test_that("hd_jst aborts when cache missing and haven not installed", {
-  cache_file <- file.path(hd_cache_path(), "jst_macrohistory.rds")
-  skip_if(file.exists(cache_file), "Cache exists — skip abort test")
-
-  # Simulate missing haven by pointing cache to an empty tempdir
-  # and checking the error path via requireNamespace
+  # with_envvar opens the scoped env BEFORE skip_if so the skip predicate
+  # evaluates against the temp cache dir, not the user's real cache dir.
+  # Previously the outer skip_if fired against hd_cache_path() before
+  # HD_CACHE_DIR was overridden, causing the test to silently skip even when
+  # the real cache exists but the temp dir (used by the test body) does not.
+  # Fix: move skip_if inside with_envvar so both see the same HD_CACHE_DIR.
+  # (Issue #315)
   withr::with_envvar(c(HD_CACHE_DIR = tempdir()), {
-    tmp_cache <- file.path(tempdir(), "jst_macrohistory.rds")
+    tmp_cache <- file.path(hd_cache_path(), "jst_macrohistory.rds")
     if (file.exists(tmp_cache)) file.remove(tmp_cache)
 
     skip_if(requireNamespace("haven", quietly = TRUE) &&
@@ -65,4 +67,21 @@ test_that("hd_jst aborts when cache missing and haven not installed", {
 
     expect_error(hd_jst(cache = FALSE), "required")
   })
+})
+
+# Regression test for issue #315: skip-guard timing with with_envvar
+# Verifies that hd_cache_path() reads HD_CACHE_DIR from the scoped env set by
+# with_envvar, not from the outer (user) env. This is the prerequisite for the
+# skip_if inside with_envvar pattern above to work correctly.
+test_that("hd_cache_path reads HD_CACHE_DIR from with_envvar scope (regression #315)", {
+  sentinel <- file.path(tempdir(), "hd_skip_guard_timing_test")
+  withr::with_envvar(c(HD_CACHE_DIR = sentinel), {
+    observed <- hd_cache_path()
+    expect_equal(observed, sentinel,
+      info = "hd_cache_path() must see the HD_CACHE_DIR set by with_envvar, not the outer env")
+  })
+  # Outside the scope, hd_cache_path() must revert to the previous value
+  outer_path <- hd_cache_path()
+  expect_false(outer_path == sentinel,
+    info = "hd_cache_path() must revert after with_envvar scope closes")
 })
