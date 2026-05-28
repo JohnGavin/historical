@@ -9,7 +9,7 @@
 Tested momentum decomposition across three asset classes. Found universal failure:
 - Equities: Decomposition destroyed value
 - Commodities: Both baseline AND decomposition failed
-- Crypto: Pipeline debugged and completed (PR #136 merged); result expected negative given cross-asset pattern
+- Crypto: Pipeline debugged and completed (PR #136 merged); quantitative results not separately reported — see Evidence section
 
 ## Evidence
 
