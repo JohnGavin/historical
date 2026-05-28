@@ -160,7 +160,7 @@ def fetch_batch(tickers: list[str], batch_size: int = 0) -> pd.DataFrame:
     # Standardise columns
     col_map = {
         "date": "date", "open": "open", "high": "high", "low": "low",
-        "close": "close", "adj_close": "adjusted", "volume": "volume",
+        "close": "close", "adj_close": "adjusted_close", "volume": "volume",
     }
     combined = combined.rename(columns=col_map)
     combined["source"] = "yahoo"
@@ -171,7 +171,7 @@ def fetch_batch(tickers: list[str], batch_size: int = 0) -> pd.DataFrame:
         combined["date"] = combined["date"].dt.tz_localize(None)
 
     # Keep only standard columns
-    keep = ["date", "open", "high", "low", "close", "adjusted", "volume",
+    keep = ["date", "open", "high", "low", "close", "adjusted_close", "volume",
             "ticker", "source", "asset_class"]
     combined = combined[[c for c in keep if c in combined.columns]]
 

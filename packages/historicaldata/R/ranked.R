@@ -54,7 +54,7 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
   if (is.null(ds)) cli::cli_abort("Unknown dataset: {dataset}")
 
   # Use adjusted if available (equity), else close
-  price_col <- if ("adjusted" %in% ds$schema) "adjusted" else "close"
+  price_col <- if ("adjusted_close" %in% ds$schema) "adjusted_close" else "close"
 
   sql <- sprintf("
     WITH returns AS (

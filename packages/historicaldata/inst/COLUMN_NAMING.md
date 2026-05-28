@@ -5,8 +5,9 @@ all datasets in this package.  It documents source-system synonyms and records
 where each rename happens.
 
 See GitHub issue [#316](https://github.com/JohnGavin/historical/issues/316)
-for the design decision that prompted this document (option A: keep
-`adjusted_close` for `alphavantage_daily`).
+for the original design discussion, and
+[#325](https://github.com/JohnGavin/historical/issues/325) for the decision
+to normalise to `adjusted_close` across all datasets.
 
 ---
 
@@ -24,48 +25,43 @@ for the design decision that prompted this document (option A: keep
 
 ---
 
-## Adjusted-close column — per dataset
+## Adjusted-close column — canonical name
 
-This is the column that records the dividend- and split-adjusted close.  The
-name differs by dataset because each upstream API uses a different identifier;
-the rename (where needed) happens at ingest, not inside this package.
+`adjusted_close` is the single canonical column name for the dividend- and
+split-adjusted close across **all** datasets (#325).
 
 | Dataset | Column name | Upstream API field | Rename location | Note |
 |---|---|---|---|---|
-| `equity_daily` | `adjusted` | `adj_close` (yfinance) | [`scripts/fetch_equity.py`](../../../scripts/fetch_equity.py) L163 | Yahoo Finance source; renamed for compactness |
+| `equity_daily` | `adjusted_close` | `adj_close` (yfinance) | [`scripts/fetch_equity.py`](../../../scripts/fetch_equity.py) L163 | Renamed from `adj_close` at fetch time (new parquets from #325 onwards) |
 | `alphavantage_daily` | `adjusted_close` | `adjusted_close` (AV API) | none — native name | AlphaVantage returns this name natively; no rename needed |
 
-### Why the names differ
+### Backward compatibility
 
-`equity_daily` is built from yfinance (Python), which calls the field
-`adj_close`.  The ingest script `fetch_equity.py` renames it to `adjusted`
-(shorter; avoids confusion with the raw `close`).
+Cached parquet files produced before #325 may still contain a column named
+`adjusted` (the old yfinance rename).  The read-time alias in `hd_lazy()` and
+`hd_ohlcv()` transparently renames `adjusted` to `adjusted_close` at load time,
+so callers always see the canonical name without a full re-fetch.
 
-`alphavantage_daily` is built from the AlphaVantage
-`TIME_SERIES_DAILY_ADJUSTED` endpoint, which returns a column literally named
-`adjusted_close`.  We keep that name unchanged — it is explicit and matches
-the schema declared in `hd_datasets()$alphavantage_daily$schema`.
+### Cross-dataset joins (no rename needed from #325 onwards)
 
-### Design decision (issue #316, option A)
-
-The two datasets are intentionally separate and are never joined internally.
-Callers that need to join them must rename one side:
+Both datasets now share `adjusted_close`.  A join that previously required an
+explicit rename:
 
 ```r
-# Joining alphavantage_daily to equity_daily — rename AV side first
+# OLD (before #325): required rename on one side
 av   <- hd_alphavantage("AAPL") |> dplyr::rename(adjusted = adjusted_close)
-eq   <- hd_equity_daily |> dplyr::filter(ticker == "AAPL")
+eq   <- hd_ohlcv("AAPL")
 both <- dplyr::full_join(av, eq, by = c("date", "ticker", "adjusted"))
 ```
 
-Alternatively, use `adjusted_close` as the canonical name on the equity side
-by renaming in the other direction:
+now works without any rename:
 
 ```r
-eq_renamed <- eq |> dplyr::rename(adjusted_close = adjusted)
+# NEW (#325 onwards): column names match — no rename needed
+av   <- hd_alphavantage("AAPL")
+eq   <- hd_ohlcv("AAPL")
+both <- dplyr::full_join(av, eq, by = c("date", "ticker", "adjusted_close"))
 ```
-
-Either approach is valid; be explicit and consistent within a single analysis.
 
 ---
 
@@ -73,7 +69,7 @@ Either approach is valid; be explicit and consistent within a single analysis.
 
 | Concept | This package | Yahoo Finance (yfinance) | AlphaVantage API | Alpaca API |
 |---|---|---|---|---|
-| Adjusted close | `adjusted` or `adjusted_close` (see above) | `Adj Close` | `adjusted_close` | `vwap` (no split-adj close) |
+| Adjusted close | `adjusted_close` | `Adj Close` | `adjusted_close` | `vwap` (no split-adj close) |
 | Unadjusted close | `close` | `Close` | `close` | `close` |
 | Trade date | `date` | `Date` | `timestamp` | `timestamp` |
 | Volume | `volume` | `Volume` | `volume` | `volume` |
@@ -84,9 +80,8 @@ Either approach is valid; be explicit and consistent within a single analysis.
 
 When adding a new data source that includes an adjusted-close concept:
 
-1. Pick a canonical column name (`adjusted_close` preferred for new datasets;
-   it is explicit).
+1. Use `adjusted_close` as the canonical column name.
 2. Document the source API field in this table.
 3. Note the rename location in the ingest script.
-4. Update `hd_datasets()` in `R/registry.R` to include the chosen name in
+4. Update `hd_datasets()` in `R/registry.R` to include `adjusted_close` in
    the `schema` vector.

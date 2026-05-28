@@ -19,7 +19,7 @@ hd_jumps <- function(dataset = "equity_daily", threshold = 0.4, n = 100) {
   ds <- hd_datasets()[[dataset]]
   if (is.null(ds)) cli::cli_abort("Unknown dataset: {dataset}")
 
-  price_col <- if ("adjusted" %in% ds$schema) "adjusted" else "close"
+  price_col <- if ("adjusted_close" %in% ds$schema) "adjusted_close" else "close"
 
   sql <- sprintf("
     WITH returns AS (
@@ -59,7 +59,7 @@ hd_quality <- function(dataset = "equity_daily", jump_threshold = 0.4) {
   ds <- hd_datasets()[[dataset]]
   if (is.null(ds)) cli::cli_abort("Unknown dataset: {dataset}")
 
-  price_col <- if ("adjusted" %in% ds$schema) "adjusted" else "close"
+  price_col <- if ("adjusted_close" %in% ds$schema) "adjusted_close" else "close"
 
   sql <- sprintf("
     WITH data AS (

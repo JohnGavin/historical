@@ -12,16 +12,24 @@
 #' @param static_data Validated equity data from static source (Kaggle)
 #' @return Cleaned, deduplicated tibble
 clean_equity <- function(api_data, static_data) {
-  # Ensure both have adjusted column
-  if (!"adjusted" %in% names(static_data)) {
-    static_data$adjusted <- static_data$close
+  # Ensure both have adjusted_close column; alias old 'adjusted' for backward compat (#325)
+  if ("adjusted" %in% names(static_data) && !"adjusted_close" %in% names(static_data)) {
+    static_data$adjusted_close <- static_data$adjusted
+    static_data$adjusted <- NULL
   }
-  if (!"adjusted" %in% names(api_data)) {
-    api_data$adjusted <- api_data$close
+  if (!"adjusted_close" %in% names(static_data)) {
+    static_data$adjusted_close <- static_data$close
+  }
+  if ("adjusted" %in% names(api_data) && !"adjusted_close" %in% names(api_data)) {
+    api_data$adjusted_close <- api_data$adjusted
+    api_data$adjusted <- NULL
+  }
+  if (!"adjusted_close" %in% names(api_data)) {
+    api_data$adjusted_close <- api_data$close
   }
 
   # Standardise to common schema
-  schema_cols <- c("date", "open", "high", "low", "close", "adjusted",
+  schema_cols <- c("date", "open", "high", "low", "close", "adjusted_close",
                    "volume", "ticker", "source", "asset_class")
 
   api_std <- api_data |>

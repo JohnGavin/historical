@@ -6,22 +6,19 @@
 #' @details
 #' ## Column naming conventions
 #'
-#' Each dataset uses a canonical column name for the dividend/split-adjusted
-#' close price.  The names differ by source because the upstream APIs use
-#' different identifiers; renames happen at ingest, not in this package.
+#' All datasets use `adjusted_close` as the canonical column name for the
+#' dividend/split-adjusted close price (GitHub issue
+#' \href{https://github.com/JohnGavin/historical/issues/325}{#325}).
 #'
 #' | Dataset | Column name | Source API field | Rename location |
 #' |---|---|---|---|
-#' | `equity_daily` | `adjusted` | `adj_close` (yfinance) | `scripts/fetch_equity.py` |
+#' | `equity_daily` | `adjusted_close` | `adj_close` (yfinance) | `scripts/fetch_equity.py` L163 |
 #' | `alphavantage_daily` | `adjusted_close` | `adjusted_close` (AV API) | none — native name |
 #'
-#' `alphavantage_daily` keeps `adjusted_close` (the full, unambiguous name)
-#' because the AlphaVantage `TIME_SERIES_DAILY_ADJUSTED` endpoint returns it
-#' natively.  `equity_daily` uses the shorter `adjusted` because yfinance
-#' (the underlying data source) calls the field `adj_close` and
-#' `fetch_equity.py` renames it to `adjusted` for compactness.
-#' The two datasets are intentionally separate; callers must be aware of
-#' the column-name difference when joining them.
+#' Cached parquets written before \href{https://github.com/JohnGavin/historical/issues/325}{#325}
+#' may still contain an `adjusted` column.  The read-time alias in
+#' \code{hd_lazy()} and \code{hd_ohlcv()} transparently renames `adjusted`
+#' to `adjusted_close` so callers see a consistent schema without re-fetching.
 #'
 #' See `inst/COLUMN_NAMING.md` for the full canonical-column table and all
 #' source-system synonyms (GitHub issue \href{https://github.com/JohnGavin/historical/issues/316}{#316}).
@@ -33,7 +30,7 @@ hd_datasets <- function() {
   list(
     equity_daily = list(
       url = hd_base_url("equity_daily.parquet"),
-      schema = c("date", "open", "high", "low", "close", "adjusted",
+      schema = c("date", "open", "high", "low", "close", "adjusted_close",
                  "volume", "ticker", "source", "asset_class", "updated_at"),
       frequency = "daily",
       description = paste0(
@@ -116,23 +113,12 @@ hd_datasets <- function() {
         "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). ",
         "Use hd_alphavantage(ticker) to fetch. ",
         "Free tier: 5 req/min, 500/day. Requires ALPHAVANTAGE_API_KEY in ~/.Renviron."
-      ),
-      # Column naming note (issue #316, option A):
-      # AlphaVantage's TIME_SERIES_DAILY_ADJUSTED endpoint natively returns
-      # 'adjusted_close' — no rename is needed at ingest (hd_alphavantage()
-      # passes the column through unchanged).  We chose to keep 'adjusted_close'
-      # as our canonical schema name rather than truncating to 'adjusted',
-      # because the full name is unambiguous alongside the unadjusted 'close'.
-      # Contrast with equity_daily (Yahoo Finance / HF parquet), which uses the
-      # shorter 'adjusted' column: yfinance emits 'adj_close'; fetch_equity.py
-      # renames it to 'adjusted' at ingest.  The two datasets are intentionally
-      # separate and carry different column names.  See inst/COLUMN_NAMING.md
-      # for the canonical column name table and source-system synonym mapping.
-      adjusted_close_note = paste0(
-        "Column 'adjusted_close': canonical schema name retained from the ",
-        "AlphaVantage API response (which natively uses 'adjusted_close'). ",
-        "Contrast with equity_daily which uses 'adjusted' (renamed from ",
-        "yfinance 'Adj Close' at ingest). See inst/COLUMN_NAMING.md (#316)."
+        # Column naming note (issue #325):
+        # 'adjusted_close' is the canonical name across all datasets.
+        # AlphaVantage's TIME_SERIES_DAILY_ADJUSTED endpoint natively returns
+        # 'adjusted_close' — no rename needed.  equity_daily now also uses
+        # 'adjusted_close' (renamed from yfinance 'adj_close' at fetch time in
+        # fetch_equity.py L163; #325).  See inst/COLUMN_NAMING.md.
       )
     )
   )
