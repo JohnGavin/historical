@@ -61,6 +61,7 @@ plan_qa_vignette <- function() {
         ltr_metrics,
         mr_metrics,
         ms_metrics,
+        olmar_metrics,
         persistence_metrics,
         port_metrics,
         rafi_metrics,
@@ -68,6 +69,7 @@ plan_qa_vignette <- function() {
         rsc_metrics,
         stk_drif_metrics,
         stk_max_metrics,
+        tom_metrics,
         xgb_drif_metrics
       ))
 
