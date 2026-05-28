@@ -98,3 +98,25 @@ test_that("hd_loss_clustering: all same sign returns p=0 (degenerate single run)
   expect_false(is.na(res$runs_test_p))
   expect_equal(res$runs_test_p, 0)
 })
+
+# ── hd_trade_metrics: max_consecutive_losses is populated (#331) ─────────────
+
+test_that("hd_trade_metrics: max_consecutive_losses is non-NA for any strategy with trades", {
+  # Build a minimal monthly-strategy data frame with mixed wins and losses
+  set.seed(77)
+  n_months <- 24L
+  monthly_ret <- tibble::tibble(
+    date         = seq.Date(as.Date("2020-01-01"), by = "month", length.out = n_months),
+    strategy_ret = c(rep(0.02, 6), rep(-0.01, 3), rep(0.015, 5),
+                     rep(-0.008, 4), rep(0.01, 6))
+  )
+  trades  <- hd_monthly_trades(monthly_ret)
+  metrics <- hd_trade_metrics(trades, ann_factor = 12L, n_years = n_months / 12)
+
+  # Core contract: max_consecutive_losses must be a non-NA integer
+  expect_false(is.na(metrics$max_consecutive_losses),
+    info = "max_consecutive_losses should be populated for any strategy with trade data")
+  expect_type(metrics$max_consecutive_losses, "integer")
+  # With 3 and 4 consecutive loss runs, max must be >= 3
+  expect_gte(metrics$max_consecutive_losses, 3L)
+})
