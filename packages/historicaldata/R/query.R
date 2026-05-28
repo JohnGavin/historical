@@ -93,7 +93,7 @@ hd_check_survivorship_bias <- function(dataset) {
 #' @details
 #' Mixed-dataset batches (e.g. `c("AAPL", "BTC")`) are split by detected
 #' dataset, queried separately, and `bind_rows`'d. Columns that exist in
-#' only one dataset (e.g. `adjusted` in equities, `market_cap` in crypto)
+#' only one dataset (e.g. `adjusted_close` in equities, `market_cap` in crypto)
 #' are filled with `NA` for rows from the other dataset. When the batch
 #' spans multiple datasets, the result is always materialised — `collect
 #' = FALSE` cannot be honoured because lazy frames from distinct parquet
@@ -180,6 +180,14 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
     dplyr::filter(ticker %in% !!ticker) |>
     dplyr::arrange(ticker, date)
 
+  # Backward-compat alias: cached parquets written before #325 use 'adjusted'.
+  # New parquets use 'adjusted_close'.  Alias here so callers always see
+  # 'adjusted_close'. (#325)
+  col_names <- lf |> head(0) |> dplyr::collect() |> names()
+  if ("adjusted" %in% col_names && !("adjusted_close" %in% col_names)) {
+    lf <- lf |> dplyr::rename(adjusted_close = adjusted)
+  }
+
   if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!as.character(from))
   if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!as.character(to))
 
@@ -227,7 +235,19 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
     ds$url
   }
 
-  duckplyr::read_parquet_duckdb(path)
+  lf <- duckplyr::read_parquet_duckdb(path)
+
+  # Backward-compat alias: cached parquets written before #325 use 'adjusted'
+  # (the old yfinance column name from fetch_equity.py).  New parquets use
+  # 'adjusted_close' (canonical, matching alphavantage_daily).  Callers always
+  # see 'adjusted_close' regardless of the underlying parquet column name.
+  # (#325)
+  col_names <- lf |> head(0) |> dplyr::collect() |> names()
+  if ("adjusted" %in% col_names && !("adjusted_close" %in% col_names)) {
+    lf <- lf |> dplyr::rename(adjusted_close = adjusted)
+  }
+
+  lf
 }
 
 #' Query FRED macro series
