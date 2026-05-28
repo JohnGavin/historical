@@ -29,3 +29,14 @@ jobs:
 
       - name: Run pytest
         run: pytest tests/test_fetch_metadata.py -v
+
+  # No-op job that always completes so required-check gates never stall on
+  # PRs that don't touch Python files (path filter skips `pytest` but does
+  # not report a status — this job ensures `Python Tests` always concludes).
+  # Roborev j4602: a path-filtered workflow used as a required check leaves
+  # unrelated PRs stuck waiting; this fallback job always reports a conclusion.
+  noop:
+    runs-on: ubuntu-latest
+    steps:
+      - name: No Python files changed — skipping tests
+        run: echo "No Python-related files changed; pytest skipped."
