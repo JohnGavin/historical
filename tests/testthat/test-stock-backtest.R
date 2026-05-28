@@ -42,21 +42,27 @@ test_that("apply_adv_cap converges below cap after redistribution", {
   expect_equal(sum(result$capped_w), 1, tolerance = 1e-9)
 })
 
-test_that("apply_adv_cap converges when redistribution overshoots cap", {
+test_that("apply_adv_cap: all-capped names leave residual as cash, not over-cap renorm (#r2122)", {
   # 3 names with equal ADV; cap = adv_pct_cap * (1/3) * 3 = adv_pct_cap = 0.30.
   # w = c(0.01, 0.01, 0.98). After clip: (0.01, 0.01, 0.30), residual = 0.68.
   # Distribute among a,b: each gets 0.34 → BOTH exceed 0.30.
   # Second iteration clips a and b to 0.30; residual = 0.08 but NO uncapped left.
-  # When all positions hit cap, residual is absorbed via renormalisation → 1/3 each.
-  # This is the mathematical limit: max weight = 1/n when all names are cap-constrained.
-  # The key property is (a) no further redistribution is possible and (b) sum = 1.
+  # Feasible total = 3 × 0.30 = 0.90 < 1. The 0.10 gap is uninvested cash.
+  # Dividing by 0.90 would give 1/3 > 0.30 — a cap violation. Correct: leave as-is.
   w <- c(a = 0.01, b = 0.01, c = 0.98)
   adv <- c(a = 1, b = 1, c = 1)
-  result <- apply_adv_cap(w, adv, adv_pct_cap = 0.30)
-  # All three hit the cap in this degenerate case; renorm gives 1/3 each.
-  # Verify: all three are equal (symmetric) and sum to 1.
-  expect_equal(sum(result$capped_w), 1, tolerance = 1e-9,
-    label = "Weights still sum to 1 after convergence")
+  # 10% residual cash → warns (10% > 5% threshold)
+  result <- expect_warning(
+    apply_adv_cap(w, adv, adv_pct_cap = 0.30),
+    regexp = "uninvested cash",
+    label = "warns when residual cash exceeds 5%"
+  )
+  # Each weight must be ≤ cap (not 1/3 ≈ 0.333 > 0.30).
+  expect_lte(max(result$capped_w), 0.30 + 1e-9,
+    label = "No weight exceeds cap even when all names are cap-constrained")
+  # Total may be < 1 (uninvested cash) but must not exceed 1.
+  expect_lte(sum(result$capped_w), 1 + 1e-9,
+    label = "Total weight does not exceed 1")
   expect_true(all(result$hit_cap),
     label = "All positions flagged as capped when all exceed limit")
   # When there is headroom (4 names, only 1 large), redistribution MUST stay under cap:
@@ -66,9 +72,34 @@ test_that("apply_adv_cap converges when redistribution overshoots cap", {
   # cap = 0.30 * 0.25 * 4 = 0.30 for each; d clipped, residual to a,b,c.
   # a,b,c each get 0.01 + (0.97-0.30)/3 = 0.01 + 0.2233 = 0.2333 < 0.30. No overshoot.
   result2 <- apply_adv_cap(w2, adv2, adv_pct_cap = 0.30)
-  expect_true(max(result2$capped_w) <= 0.30 + 1e-9,
+  expect_lte(max(result2$capped_w), 0.30 + 1e-9,
     label = "No position exceeds cap when there is sufficient headroom in other names")
   expect_equal(sum(result2$capped_w), 1, tolerance = 1e-9)
+})
+
+test_that("apply_adv_cap: 4 names × 0.20 cap leaves 20% as uninvested cash (#r2122)", {
+  # 4 names, equal ADV, all capped at 0.20.
+  # cap = 0.20 * (1/4) * 4 = 0.20 for each.
+  # Initial w heavily concentrated: w = c(0.01, 0.01, 0.01, 0.97).
+  # After convergence all 4 hit cap at 0.20; feasible total = 0.80.
+  # Correct: weights stay at 0.20 each; 0.20 residual is uninvested cash.
+  w <- c(a = 0.01, b = 0.01, c = 0.01, d = 0.97)
+  adv <- c(a = 1, b = 1, c = 1, d = 1)
+  # 20% residual cash → warns (20% > 5% threshold)
+  result <- expect_warning(
+    apply_adv_cap(w, adv, adv_pct_cap = 0.20),
+    regexp = "uninvested cash",
+    label = "warns when 20% residual cash"
+  )
+  # Each weight ≤ 0.20
+  expect_lte(max(result$capped_w), 0.20 + 1e-9,
+    label = "No weight exceeds 0.20 cap")
+  # Total = 0.80 (4 × 0.20), not 1.0
+  expect_equal(sum(result$capped_w), 0.80, tolerance = 1e-9,
+    label = "Total is 0.80, with 0.20 as uninvested cash")
+  # All positions flagged as capped
+  expect_true(all(result$hit_cap),
+    label = "All positions flagged as capped")
 })
 
 test_that("apply_adv_cap: empty input returns empty output", {
@@ -78,10 +109,11 @@ test_that("apply_adv_cap: empty input returns empty output", {
 })
 
 test_that("apply_adv_cap: no cap binds when weights are small", {
-  # All weights well below cap; nothing should be clipped
-  w <- setNames(rep(0.1, 5), letters[1:5])  # 0.10 each
+  # All weights well below cap; nothing should be clipped.
+  # Input must sum to 1 (contract: w is a portfolio weight vector).
+  w <- setNames(rep(0.2, 5), letters[1:5])  # 0.20 each, sums to 1
   adv <- setNames(rep(1, 5), letters[1:5])
-  # cap = 0.50 * 0.2 * 5 = 0.50 — well above 0.10
+  # cap = 0.50 * 0.2 * 5 = 0.50 — well above 0.20
   result <- apply_adv_cap(w, adv, adv_pct_cap = 0.50)
   expect_false(any(result$hit_cap))
   expect_equal(sum(result$capped_w), 1, tolerance = 1e-9)
