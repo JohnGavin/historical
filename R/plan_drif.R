@@ -111,6 +111,14 @@ plan_drif <- function() {
     }),
 
     # ── DRIF signal: expanding window elastic net predictions ─────
+    # FIXME(#299 CPCV): The inner cv.glmnet(..., nfolds = 5) call uses
+    # standard k-fold CV on the expanding training window without purging.
+    # For monthly non-overlapping labels this is low-risk (label horizon = 1 month,
+    # train window terminates strictly at m-1), but inner CV folds could overlap
+    # with outer test fold boundary by up to 1 month if the last training month's
+    # label window extends into the test period. Full CPCV integration
+    # (wrapping signal construction with hd_cpcv_paths + hd_cpcv_purge) is
+    # deferred to the follow-up integration PR for #299.
     targets::tar_target(drif_signal, {
       library(dplyr)
 

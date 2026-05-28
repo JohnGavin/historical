@@ -165,9 +165,61 @@ optimal cell is an isolated peak surrounded by negative performance.
 - Deploying a strategy that fails in the first high-vol regime
 - Confusing in-sample parameter mining with genuine edge
 
+## §6 PBO and Path-DSR via CPCV
+
+The deflated Sharpe and K_eff_strat tools (§4) correct the *reported* Sharpe
+for multiple testing across the strategy set. CPCV (Combinatorial Purged
+Cross-Validation, López de Prado 2018, AFML Ch. 12) adds a complementary
+diagnostic: instead of one OOS path, generate a **distribution** of OOS paths
+and compute:
+
+### §6.1 Probability of Backtest Overfitting (PBO)
+
+PBO is the fraction of CPCV paths on which the in-sample (IS) best strategy
+ranks below the OOS median (Bailey et al. 2014). It diagnoses whether the
+*resampling scheme itself* repeatedly selects the same strategy — a different
+angle from K_eff_strat (which asks about the strategy *set*).
+
+```r
+paths     <- hd_cpcv_paths(n_groups = 6L, n_test_groups = 2L)  # 15 paths
+pbo_res   <- hd_pbo(is_scores, oos_scores)
+# pbo near 1 → strong evidence of overfitting
+# pbo near 0 → IS-best tends to rank above OOS median
+```
+
+### §6.2 Path-DSR
+
+> See `knowledge/wiki/cpcv-purged-embargo.md` §Path-DSR for the derivation.
+
+Compute the deflated Sharpe using the **distribution of path Sharpes** as the
+estimate of the underlying Sharpe distribution, rather than the single OOS
+Sharpe. This provides a more conservative DSR estimate that accounts for path
+uncertainty:
+
+```r
+path_sharpes <- sapply(paths, function(p) mean(p$ret) / sd(p$ret) * sqrt(12))
+path_dsr     <- hd_deflated_sharpe(path_sharpes, K_trials = round(K_eff_strat))
+```
+
+### §6.3 Two complementary layers — report both
+
+| Layer | Tool | What it guards against |
+|---|---|---|
+| Multiple testing (strategy set) | DSR via `K_eff_strat` | Choosing the luckiest strategy from a correlated set |
+| Resampling over-fitting | PBO via CPCV | IS-selection bias in the CV scheme itself |
+| Path variability | Path-DSR | Single-path Sharpe estimate variance |
+
+Neither supersedes the other. Report all three in every robustness summary.
+
+### §6.4 Project status
+
+CPCV helpers scaffolded in `packages/historicaldata/R/cpcv.R` (#299).
+Full pipeline integration (plan_*.R targets per strategy) is deferred to
+the #299 follow-up PR. Cross-reference: #297 (WFC), #160 (K_eff_strat).
+
 ## Related Rules
 
-- `look-ahead-bias-prevention` — temporal leakage
+- `look-ahead-bias-prevention` — temporal leakage; §5 covers purge + embargo
 - `backtest-partitions` — train/test/validation splits
 - `statistical-reporting` — FPR, effect sizes
 - `resulting-prohibition` — judge revisions by process, not outcome

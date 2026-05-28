@@ -121,6 +121,65 @@ If `metric_is` improves but `metric_oos` doesn't, the improvement is likely memo
 - **`quality-gates` skill**: Deduct 20 points if `qa_look_ahead_bias` target
   is missing from a backtest pipeline. Deduct 50 if check 2 (divergence) fails.
 
+## §5 Purge + Embargo for Overlapping-Label Strategies
+
+The three leakage types above cover decision-time cutoffs. CPCV (Combinatorial
+Purged Cross-Validation, López de Prado 2018, AFML Ch. 7) adds two further
+remedies for strategies whose *label construction* creates temporal overlap
+across fold boundaries:
+
+### §5.1 Purging (label-window overlap)
+
+When the target variable (e.g., next-month return) is computed over a window
+that extends forward in time, training observations near the fold boundary
+have labels that "see" into the test fold. **Purging** removes these
+observations before fitting:
+
+```r
+# Remove training obs whose label reaches into test
+clean_train <- hd_cpcv_purge(
+  train_idx     = which(date <= train_end),
+  test_idx      = which(date >= test_start),
+  label_horizon = label_horizon_periods  # e.g., 1L for monthly
+)
+```
+
+For monthly non-overlapping labels (label = current month's return, prediction
+target = next month) the purge removes the single month immediately before
+the test fold.
+
+### §5.2 Embargo (serial-correlation leakage)
+
+Even after purging, serial autocorrelation between observations just after
+the test fold and those preceding it can leak test information into training.
+**Embargo** removes a further gap after the test fold:
+
+```r
+clean_train <- hd_cpcv_embargo(
+  train_idx = clean_train,
+  test_idx  = which(date >= test_start & date <= test_end),
+  embargo_n = 1L  # 1 month for monthly data; scale with autocorrelation
+)
+```
+
+### §5.3 When to apply
+
+| Strategy type | Purge? | Embargo? |
+|---|---|---|
+| Monthly non-overlapping labels | Yes (1 period) | Recommended (1 period) |
+| Daily returns, monthly rebalance | Yes (21 days) | Recommended (5 days) |
+| Signals with no forward-looking window | No | No |
+
+See `knowledge/wiki/cpcv-purged-embargo.md` for the full CPCV framework,
+including combinatorial multi-path OOS distributions and PBO.
+
+### §5.4 Project status
+
+DRIF (plan_drif.R) and MAX (plan_factormax.R) have been audited (#299).
+Both use strictly prior-period training (expanding window, terminate at m-1).
+Label-window overlap is low-risk for monthly non-overlapping labels.
+Full CPCV integration is deferred to the #299 follow-up PR.
+
 ## Related Rules
 
 - `model-evaluation-calibration` — scoring rules and walk-forward methodology
@@ -128,3 +187,4 @@ If `metric_is` improves but `metric_oos` doesn't, the improvement is likely memo
 - `verification-before-completion` — no claims without evidence
 - `feature-leakage-temporal` (wiki) — the three leakage types
 - `priced-in-prohibition` — information already reflected in prices
+- `backtest-robustness` — §5 PBO and path-DSR via CPCV
