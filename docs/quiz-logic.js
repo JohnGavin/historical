@@ -100,6 +100,15 @@ document.addEventListener("keydown", function(e) {
 // ── Helpers ─────────────────────────────────────────────────
 function cumGrowth(ret) { var c=[1]; for(var i=0;i<ret.length;i++) c.push(c[i]*(1+ret[i])); return c; }
 
+// Validate that a URL uses http: or https: — returns the URL or '#' for anything else.
+function safeUrl(u) {
+  try {
+    var url = new URL(u);
+    if (url.protocol === 'http:' || url.protocol === 'https:') return url.href;
+  } catch (_) { /* fallthrough */ }
+  return '#';
+}
+
 function nextOrFinish() {
   if (S.current < S.rounds.length - 1) { S.current++; renderRound(); }
   else showResults();
@@ -194,10 +203,39 @@ function guess(choice) {
 
 function showReveal(r, correct) {
   var v = correct ? "<span style='color:#1a9850;font-weight:bold'>Correct!</span>" : "<span style='color:#d73027;font-weight:bold'>Wrong.</span>";
-  var realLink = r.real_url ? "<a href='" + r.real_url + "' target='_blank' rel='noopener noreferrer' style='color:#6c9bd2;'>" + r.real_source + "</a>" : r.real_source;
-  document.getElementById("reveal-text").innerHTML = v + " Series " + r.answer + " was real.<br>" +
-    "<b>Real:</b> " + realLink + "<br>" +
-    "<b>Simulated:</b> " + r.sim_source;
+
+  // Build the reveal-text node using DOM APIs to avoid innerHTML injection.
+  var revealEl = document.getElementById("reveal-text");
+  revealEl.innerHTML = "";
+
+  // Verdict + series answer (static strings only — no user data)
+  var verdictSpan = document.createElement("span");
+  verdictSpan.innerHTML = v + " Series " + r.answer + " was real.<br>";
+  revealEl.appendChild(verdictSpan);
+
+  // "Real:" label + safe link
+  var realLabel = document.createElement("b");
+  realLabel.textContent = "Real:";
+  revealEl.appendChild(realLabel);
+  revealEl.appendChild(document.createTextNode(" "));
+  if (r.real_url) {
+    var realA = document.createElement("a");
+    realA.href = safeUrl(r.real_url);
+    realA.textContent = r.real_source;
+    realA.target = "_blank";
+    realA.rel = "noopener noreferrer";
+    realA.style.color = "#6c9bd2";
+    revealEl.appendChild(realA);
+  } else {
+    revealEl.appendChild(document.createTextNode(r.real_source));
+  }
+  revealEl.appendChild(document.createElement("br"));
+
+  // "Simulated:" label + sim_source (plain text — no URL)
+  var simLabel = document.createElement("b");
+  simLabel.textContent = "Simulated:";
+  revealEl.appendChild(simLabel);
+  revealEl.appendChild(document.createTextNode(" " + r.sim_source));
   document.getElementById("reveal").className = "explanation-panel show";
 
   Plotly.react("reveal-chart", [
@@ -242,9 +280,20 @@ function showResults() {
     var skipped = (ans === null);
     var icon = skipped ? "—" : (correct ? "&#10004;" : "&#10008;");
     var color = skipped ? "#666" : (correct ? "#1a9850" : "#d73027");
-    var link = r.real_url ? "<a href='" + r.real_url + "' target='_blank' rel='noopener noreferrer' style='color:#6c9bd2;'>" + r.real_name + "</a>" : r.real_name;
+    var linkCell;
+    if (r.real_url) {
+      var la = document.createElement("a");
+      la.href = safeUrl(r.real_url);
+      la.textContent = r.real_name;
+      la.target = "_blank";
+      la.rel = "noopener noreferrer";
+      la.style.color = "#6c9bd2";
+      linkCell = la.outerHTML;
+    } else {
+      linkCell = document.createTextNode(r.real_name).textContent;
+    }
     detail += "<tr style='border-bottom:1px solid #333;'><td style='padding:6px;'>" + (i+1) + "</td>" +
-      "<td>" + link + "</td><td>" + r.null_env + "</td>" +
+      "<td>" + linkCell + "</td><td>" + r.null_env + "</td>" +
       "<td style='text-align:center;'>" + (ans || "skipped") + "</td>" +
       "<td style='text-align:center;color:" + color + ";'>" + icon + "</td></tr>";
   });
