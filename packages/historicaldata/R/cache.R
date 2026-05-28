@@ -37,6 +37,13 @@ hd_download <- function(dataset = NULL, force = FALSE) {
       cli::cli_warn("Unknown dataset: {ds_name}, skipping.")
       next
     }
+    # Skip non-HF-parquet datasets: API-only (alphavantage_daily, url=NA) and
+    # non-parquet URLs (jst_macrohistory .dta). These must be fetched via
+    # their own dedicated helpers (hd_alphavantage(), hd_jst()).
+    if (is.na(ds$url) || !grepl("hf://", ds$url, fixed = TRUE)) {
+      cli::cli_inform(c("i" = "Skipping {ds_name}: not an HF parquet dataset. Use the dedicated helper instead."))
+      next
+    }
 
     local_path <- file.path(cache_dir, paste0(ds_name, ".parquet"))
     paths[ds_name] <- local_path

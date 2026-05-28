@@ -202,6 +202,25 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
     cli::cli_abort("Unknown dataset: {dataset}. See {.fn hd_datasets}.")
   }
 
+  # Emit a once-per-session survivorship-bias warning for equity_daily (#150)
+  if (isTRUE(ds[["survivorship_biased"]])) {
+    warn_key <- paste0("hd_survivorship_warned_", dataset)
+    if (!isTRUE(getOption(warn_key))) {
+      hd_check_survivorship_bias(dataset)
+      options(stats::setNames(list(TRUE), warn_key))
+    }
+  }
+
+  # Guard against API-only and non-HF datasets when using remote path.
+  # alphavantage_daily has url=NA; jst_macrohistory has a .dta URL.
+  # Both fail with cryptic errors from read_parquet_duckdb if not caught here.
+  if (!local && (is.na(ds$url) || !grepl("hf://", ds$url, fixed = TRUE))) {
+    cli::cli_abort(c(
+      "{.val {dataset}} is not an HF parquet dataset and cannot be queried with {.fn hd_lazy}.",
+      "i" = "Use the dedicated helper for this dataset (e.g. {.fn hd_alphavantage}, {.fn hd_jst})."
+    ))
+  }
+
   path <- if (local) {
     file.path(hd_cache_path(), paste0(dataset, ".parquet"))
   } else {

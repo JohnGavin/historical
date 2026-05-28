@@ -112,6 +112,14 @@ hd_tickers <- function(dataset = "equity_daily") {
   if (is.null(ds)) {
     cli::cli_abort("Unknown dataset: {dataset}. See {.fn hd_datasets}.")
   }
+  # Guard against API-only datasets (e.g. alphavantage_daily, url=NA) and
+  # non-HF datasets (e.g. jst_macrohistory, .dta URL with no ticker column).
+  if (is.na(ds$url) || !grepl("hf://", ds$url, fixed = TRUE)) {
+    cli::cli_abort(c(
+      "{.val {dataset}} is not an HF parquet dataset and does not support {.fn hd_tickers}.",
+      "i" = "Use the dedicated helper for this dataset (e.g. {.fn hd_alphavantage}, {.fn hd_jst})."
+    ))
+  }
 
   duckplyr::read_parquet_duckdb(ds$url) |>
     dplyr::distinct(ticker) |>
