@@ -48,7 +48,9 @@ fetch_birdeye_spot <- function(tokens, start_date, end_date,
   )
 
   start_unix <- as.numeric(as.POSIXct(start_date))
-  end_unix <- as.numeric(as.POSIXct(end_date))
+  # Use end-of-day (23:59:59) so we include the full final day; midnight would
+  # drop almost all data from the last day (off-by-one in Birdeye time filter).
+  end_unix <- as.numeric(as.POSIXct(end_date)) + 86399L
 
   results <- purrr::map_dfr(tokens, function(token) {
     mint <- mint_map[[token]]
@@ -193,17 +195,22 @@ calculate_liquidity_metrics <- function(spot_data, perp_data,
     dplyr::mutate(ticker = sub("-PERP", "", market)) |>
     dplyr::group_by(ticker) |>
     dplyr::summarise(
-      avg_daily_volume_perp = mean(open_interest * mark_price, na.rm = TRUE),
+      # NOTE: Drift API does not provide perp traded volume directly; using
+      # open_interest * mark_price as a proxy for OI notional (USD).
+      # This is NOT traded volume — rename to clarify, and adjust thresholds
+      # if actual volume data becomes available.
+      avg_oi_notional_perp = mean(open_interest * mark_price, na.rm = TRUE),
       .groups = "drop"
     )
 
   spot_liquidity |>
     dplyr::left_join(perp_liquidity, by = "ticker") |>
     dplyr::mutate(
-      avg_daily_volume_perp = tidyr::replace_na(avg_daily_volume_perp, 0),
-      liquidity_ratio = avg_daily_volume_perp / avg_daily_volume_spot,
+      avg_oi_notional_perp = tidyr::replace_na(avg_oi_notional_perp, 0),
+      # liquidity_ratio: OI notional relative to spot volume (proxy, not like-for-like)
+      liquidity_ratio = avg_oi_notional_perp / avg_daily_volume_spot,
       is_liquid = avg_daily_volume_spot >= min_daily_volume &
-                  avg_daily_volume_perp >= min_daily_volume &
+                  avg_oi_notional_perp >= min_daily_volume &
                   liquidity_ratio >= 0.5 &
                   liquidity_ratio <= 2.0
     )
