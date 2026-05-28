@@ -159,9 +159,18 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
     w_capped[uncapped] <- w_capped[uncapped] + residual * (w_capped[uncapped] / uncapped_sum)
   }
 
-  # Renormalise to sum to 1 (guard against floating-point drift)
+  # Renormalise DOWN only when weights sum above 1 (floating-point drift or
+  # over-budget after redistribution). When w_total < 1 the gap is uninvested
+  # cash — dividing by w_total would push capped weights above w_max (#r2122).
   w_total <- sum(w_capped)
-  if (w_total > 0) w_capped <- w_capped / w_total
+  if (w_total > 1 + 1e-10) {
+    w_capped <- w_capped / w_total
+  } else if (w_total < 1 - 0.05) {
+    cli::cli_warn(c(
+      "!" = "apply_adv_cap: {round((1 - w_total) * 100, 1)}% of portfolio left as uninvested cash.",
+      "i" = "ADV caps are too tight to fully invest. Increase {.arg adv_pct_cap} or accept the cash drag."
+    ))
+  }
 
   # hit_cap reflects any position that was clipped in any iteration
   hit_cap <- hit_cap_any
