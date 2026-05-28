@@ -111,14 +111,12 @@ plan_drif <- function() {
     }),
 
     # ── DRIF signal: expanding window elastic net predictions ─────
-    # FIXME(#299 CPCV): The inner cv.glmnet(..., nfolds = 5) call uses
-    # standard k-fold CV on the expanding training window without purging.
-    # For monthly non-overlapping labels this is low-risk (label horizon = 1 month,
-    # train window terminates strictly at m-1), but inner CV folds could overlap
-    # with outer test fold boundary by up to 1 month if the last training month's
-    # label window extends into the test period. Full CPCV integration
-    # (wrapping signal construction with hd_cpcv_paths + hd_cpcv_purge) is
-    # deferred to the follow-up integration PR for #299.
+    # NOTE(#319 CPCV integrated): label horizon = 1 month, training window
+    # terminates strictly at m-1 (ym < m), so classical label-window overlap
+    # is absent. The inner cv.glmnet(nfolds=5) uses the expanding training
+    # window without purging of folds; for monthly non-overlapping labels the
+    # risk is low. Outer CPCV multi-path evaluation is added below as
+    # drif_cpcv_params → drif_path_sharpe → drif_pbo (#319).
     targets::tar_target(drif_signal, {
       library(dplyr)
 
@@ -352,6 +350,147 @@ plan_drif <- function() {
         labs(x = NULL, y = "Growth of $1 (log scale)", colour = NULL,
              title = "DRIF vs Factor MAX: both applied to FF5+Momentum factors") +
         hd_theme()
+    }),
+
+    # ── CPCV: parameters ─────────────────────────────────────────
+    # C(6,2) = 15 paths.  n_groups and n_test_groups are exposed as a
+    # tar_target so they can be tuned without touching plan_drif.R.
+    targets::tar_target(drif_cpcv_params, {
+      list(
+        n_groups      = 6L,
+        n_test_groups = 2L,
+        label_horizon = 1L,   # monthly labels → 1 month horizon
+        embargo_n     = 1L    # 1-month embargo after each test fold
+      )
+    }),
+
+    # ── CPCV: per-path OOS Sharpe distribution ───────────────────
+    # Divides the full timeline of drif_portfolio into n_groups equal groups,
+    # enumerates all C(n_groups, n_test_groups) train/test index combinations,
+    # applies purge + embargo on each, and computes OOS Sharpe per path.
+    # Result: a numeric vector of length C(n_groups, n_test_groups).
+    targets::tar_target(drif_path_sharpe, {
+      library(dplyr)
+
+      port   <- drif_portfolio
+      params <- drif_cpcv_params
+      n      <- nrow(port)
+
+      if (n < params$n_groups * 2L) {
+        cli::cli_abort(c(
+          "x" = "drif_portfolio has only {n} rows; need >= {params$n_groups * 2L} for CPCV.",
+          "i" = "Reduce n_groups or wait for more history."
+        ))
+      }
+
+      # Assign each row to one of n_groups equally-sized chronological groups
+      group_id <- cut(seq_len(n),
+                      breaks = params$n_groups,
+                      labels = FALSE,
+                      include.lowest = TRUE)
+
+      # Map group number → row indices
+      group_rows <- lapply(seq_len(params$n_groups), function(g) which(group_id == g))
+
+      # Enumerate C(n_groups, n_test_groups) paths (group-index level)
+      paths <- hd_cpcv_paths(
+        n_groups      = params$n_groups,
+        n_test_groups = params$n_test_groups
+      )
+
+      # For each path, translate group indices to row indices, apply purge +
+      # embargo, then compute annualised Sharpe on the OOS test rows.
+      vapply(paths, function(p) {
+        # Row indices for this path's training and test groups
+        train_rows <- sort(unlist(group_rows[p$train]))
+        test_rows  <- sort(unlist(group_rows[p$test]))
+
+        # Purge: drop training rows whose label window overlaps the test fold
+        train_purged <- hd_cpcv_purge(
+          train_idx     = train_rows,
+          test_idx      = test_rows,
+          label_horizon = params$label_horizon
+        )
+
+        # Embargo: drop training rows immediately after test fold end
+        train_clean <- hd_cpcv_embargo(
+          train_idx = train_purged,
+          test_idx  = test_rows,
+          embargo_n = params$embargo_n
+        )
+
+        # OOS portfolio returns for this path's test rows
+        oos_ret <- port$portfolio_ret[test_rows]
+        oos_ret <- oos_ret[!is.na(oos_ret)]
+
+        if (length(oos_ret) < 3L) return(NA_real_)
+
+        # Annualised Sharpe (monthly data → multiply by sqrt(12))
+        ann_ret <- prod(1 + oos_ret)^(12 / length(oos_ret)) - 1
+        ann_vol <- sd(oos_ret) * sqrt(12)
+        if (ann_vol <= 0) return(NA_real_)
+        ann_ret / ann_vol
+      }, numeric(1L))
+    }),
+
+    # ── CPCV: Probability of Backtest Overfitting ────────────────
+    # Uses the benchmark (Mkt-RF) as the reference strategy so hd_pbo() has
+    # the required 2 columns (n_strategies >= 2).  DRIF is strategy 1;
+    # Benchmark is strategy 2.  PBO near 0 means DRIF tends to rank above
+    # the benchmark OOS on the same path where it ranks best IS — evidence
+    # that DRIF's IS selection is not overfitting.
+    targets::tar_target(drif_pbo, {
+      library(dplyr)
+
+      port   <- drif_portfolio
+      params <- drif_cpcv_params
+      n      <- nrow(port)
+
+      # Assign groups (same split as drif_path_sharpe)
+      group_id  <- cut(seq_len(n),
+                       breaks = params$n_groups,
+                       labels = FALSE,
+                       include.lowest = TRUE)
+      group_rows <- lapply(seq_len(params$n_groups), function(g) which(group_id == g))
+
+      paths <- hd_cpcv_paths(
+        n_groups      = params$n_groups,
+        n_test_groups = params$n_test_groups
+      )
+
+      # Build IS and OOS score matrices (n_paths × 2 strategies)
+      n_paths    <- length(paths)
+      is_mat     <- matrix(NA_real_, nrow = n_paths, ncol = 2L,
+                           dimnames = list(NULL, c("DRIF", "Benchmark")))
+      oos_mat    <- is_mat
+
+      for (i in seq_len(n_paths)) {
+        p          <- paths[[i]]
+        train_rows <- sort(unlist(group_rows[p$train]))
+        test_rows  <- sort(unlist(group_rows[p$test]))
+
+        train_purged <- hd_cpcv_purge(train_rows, test_rows, params$label_horizon)
+        train_clean  <- hd_cpcv_embargo(train_purged, test_rows, params$embargo_n)
+
+        sharpe_monthly <- function(ret) {
+          ret <- ret[!is.na(ret)]
+          if (length(ret) < 3L) return(NA_real_)
+          ann_ret <- prod(1 + ret)^(12 / length(ret)) - 1
+          ann_vol <- sd(ret) * sqrt(12)
+          if (ann_vol <= 0) return(NA_real_)
+          ann_ret / ann_vol
+        }
+
+        # IS scores (training folds after purge + embargo)
+        is_mat[i, "DRIF"]      <- sharpe_monthly(port$portfolio_ret[train_clean])
+        is_mat[i, "Benchmark"] <- sharpe_monthly(port$benchmark_ret[train_clean])
+
+        # OOS scores (test fold)
+        oos_mat[i, "DRIF"]      <- sharpe_monthly(port$portfolio_ret[test_rows])
+        oos_mat[i, "Benchmark"] <- sharpe_monthly(port$benchmark_ret[test_rows])
+      }
+
+      hd_pbo(is_scores = is_mat, oos_scores = oos_mat)
     })
   )
 }
