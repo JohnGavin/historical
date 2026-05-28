@@ -179,9 +179,10 @@ plan_leaderboard <- function() {
           )
       }
 
-      # ── Pillar 8: risk-architecture columns (#269) ────────────────────────
-      # Join avg_dd_days, max_dd_days, loss_clustered from fals_results_db.
-      # fals_results_db uses strategy_id (internal code); map to leaderboard labels.
+      # ── Pillar 8: risk-architecture columns (#269, #331) ─────────────────────
+      # Join avg_dd_days, max_dd_days, loss_clustered, max_cons_losses from
+      # fals_results_db. fals_results_db uses strategy_id (internal code); map
+      # to leaderboard labels.
       # Only "Full Period" rows carry meaningful full-history risk values.
       if (!is.null(fals_results_db) && nrow(fals_results_db) > 0) {
         fals_id_to_label <- c(
@@ -193,15 +194,17 @@ plan_leaderboard <- function() {
           filter(strategy_id %in% names(fals_id_to_label)) |>
           mutate(strategy = fals_id_to_label[strategy_id]) |>
           select(strategy,
-                 avg_dd_days    = avg_dd_duration_days,
-                 max_dd_days    = max_dd_duration_days,
-                 loss_clustered = loss_clustered)
+                 avg_dd_days      = avg_dd_duration_days,
+                 max_dd_days      = max_dd_duration_days,
+                 loss_clustered   = loss_clustered,
+                 max_cons_losses  = max_consecutive_losses)
         all_metrics <- all_metrics |>
           left_join(pillar8_join, by = "strategy") |>
           mutate(
-            avg_dd_days    = ifelse(period == "Full Period", avg_dd_days, NA_real_),
-            max_dd_days    = ifelse(period == "Full Period", max_dd_days, NA_real_),
-            loss_clustered = ifelse(period == "Full Period", loss_clustered, NA)
+            avg_dd_days     = ifelse(period == "Full Period", avg_dd_days,     NA_real_),
+            max_dd_days     = ifelse(period == "Full Period", max_dd_days,     NA_real_),
+            loss_clustered  = ifelse(period == "Full Period", loss_clustered,  NA),
+            max_cons_losses = ifelse(period == "Full Period", max_cons_losses, NA_integer_)
           )
       }
 

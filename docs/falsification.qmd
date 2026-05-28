@@ -696,16 +696,18 @@ exhausting capital before recovery). Two metrics quantify this distinction:
 fals_db <- safe_tar_read("fals_results_db")
 if (!is.null(fals_db) && nrow(fals_db) > 0 &&
     all(c("avg_dd_duration_days", "max_dd_duration_days",
-          "loss_runs_p", "loss_acf_lag1", "loss_clustered") %in% names(fals_db))) {
+          "loss_runs_p", "loss_acf_lag1", "loss_clustered",
+          "max_consecutive_losses") %in% names(fals_db))) {
 
   risk_tbl <- fals_db |>
     dplyr::select(
-      Strategy     = strategy_id,
+      Strategy         = strategy_id,
       `Avg DD days`    = avg_dd_duration_days,
       `Max DD days`    = max_dd_duration_days,
       `Runs p-val`     = loss_runs_p,
       `ACF lag-1`      = loss_acf_lag1,
-      `Clustered`      = loss_clustered
+      `Clustered`      = loss_clustered,
+      `Max Cons. Losses` = max_consecutive_losses
     ) |>
     dplyr::mutate(
       Strategy  = dplyr::case_match(
@@ -742,6 +744,14 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
   } else {
     paste(clustered_strats, collapse = ", ")
   }
+  worst_cons_losses_strat <- risk_tbl |>
+    dplyr::filter(!is.na(`Max Cons. Losses`)) |>
+    dplyr::slice_max(`Max Cons. Losses`, n = 1L) |>
+    dplyr::pull(Strategy)
+  worst_cons_losses_n <- risk_tbl |>
+    dplyr::filter(!is.na(`Max Cons. Losses`)) |>
+    dplyr::slice_max(`Max Cons. Losses`, n = 1L) |>
+    dplyr::pull(`Max Cons. Losses`)
 
   DT::datatable(
     risk_tbl,
@@ -756,10 +766,15 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
         worst_max_dd_days, " days). ",
         "Strategies with clustered losses (runs p &lt; 0.05 AND ACF lag-1 &gt; 0.2): <b>",
         clustered_label, "</b>. ",
+        "Longest consecutive losing run: <b>",
+        worst_cons_losses_strat, "</b> (",
+        worst_cons_losses_n, " trades). ",
         "Clustering indicates losses arrive in bursts rather than uniformly, ",
         "reducing practical survivability. ",
         "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R' target='_blank'>",
-        "hd_dd_duration() + hd_loss_clustering()</a> in packages/historicaldata, ",
+        "hd_dd_duration() + hd_loss_clustering()</a> + ",
+        "<a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/trades.R' target='_blank'>",
+        "hd_trade_metrics()</a> in packages/historicaldata, ",
         "wired via <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R' target='_blank'>",
         "plan_falsification.R</a>."
       ))
