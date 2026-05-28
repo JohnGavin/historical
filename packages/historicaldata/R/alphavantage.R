@@ -65,6 +65,17 @@ hd_av_registry <- function() {
 #' This function makes a live API call. Do NOT call from CI on every push.
 #' Gate on `AV_REFRESH=1` environment variable or use a scheduled workflow.
 #'
+#' @section Column naming (adjusted close):
+#' The `adjusted_close` column name is kept as-is from the AlphaVantage API
+#' response — no rename is performed at ingest.  This differs from the
+#' `equity_daily` dataset (Yahoo Finance / HF parquet), which uses the shorter
+#' `adjusted` column.  The difference is intentional: each dataset retains its
+#' source API's natural column name.  When joining `alphavantage_daily` to
+#' `equity_daily`, rename one side explicitly:
+#' \code{dplyr::rename(av_df, adjusted = adjusted_close)}.
+#' See \code{inst/COLUMN_NAMING.md} and GitHub issue #316 for the full
+#' rationale and the canonical column-name table.
+#'
 #' @param ticker A single ticker symbol (e.g. `"AAPL"`, `"IBM"`).
 #' @param from Start date (character `"YYYY-MM-DD"` or `Date`). Default: 20
 #'   years ago. AlphaVantage returns ~20 years on the full output size.

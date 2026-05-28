@@ -52,6 +52,19 @@ This function makes a live API call. Do NOT call from CI on every push.
 Gate on \code{AV_REFRESH=1} environment variable or use a scheduled workflow.
 }
 
+\section{Column naming (adjusted close)}{
+
+The \code{adjusted_close} column name is kept as-is from the AlphaVantage API
+response — no rename is performed at ingest.  This differs from the
+\code{equity_daily} dataset (Yahoo Finance / HF parquet), which uses the shorter
+\code{adjusted} column.  The difference is intentional: each dataset retains its
+source API's natural column name.  When joining \code{alphavantage_daily} to
+\code{equity_daily}, rename one side explicitly:
+\code{dplyr::rename(av_df, adjusted = adjusted_close)}.
+See \code{inst/COLUMN_NAMING.md} and GitHub issue #316 for the full
+rationale and the canonical column-name table.
+}
+
 \examples{
 \dontshow{if (interactive() && nzchar(Sys.getenv("ALPHAVANTAGE_API_KEY"))) withAutoprint(\{ # examplesIf}
 hd_alphavantage("IBM", from = "2024-01-01")
