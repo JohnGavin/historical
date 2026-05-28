@@ -155,6 +155,30 @@ plan_leaderboard <- function() {
           )
       }
 
+      # ── Walk-Forward Correlation columns (#318) ────────────────────────────
+      # wf_corr:    Pearson IS↔OOS correlation across the full parameter grid.
+      # wfc_verdict: 2×2 classification from hd_wf_correlation() —
+      #   "structural_edge", "consistently_loss_making", "spurious_luck", "noise".
+      #
+      # Strategies without a tunable parameter grid (OLMAR, TOM, Stock MAX,
+      # Stock DRIF, XGB DRIF, PSO Optimal) receive NA for both columns.
+      # XGB DRIF operates at the stock level (stk_drif_features) — no
+      # factor-rotation grid exists; factor-level XGB is a follow-up to #318.
+      #
+      # wfc_all_summary is keyed by strategy (display label).  Only the
+      # "Full Period" leaderboard row gets meaningful values; sub-period rows
+      # receive NA (WFC is a full-history property, not a sub-period one).
+      if (!is.null(wfc_all_summary) && nrow(wfc_all_summary) > 0) {
+        wfc_join <- wfc_all_summary |>
+          select(strategy, wf_corr = wfc_pearson, wfc_verdict = classification)
+        all_metrics <- all_metrics |>
+          left_join(wfc_join, by = "strategy") |>
+          mutate(
+            wf_corr    = ifelse(period == "Full Period", wf_corr,    NA_real_),
+            wfc_verdict = ifelse(period == "Full Period", wfc_verdict, NA_character_)
+          )
+      }
+
       all_metrics
     }),
 
