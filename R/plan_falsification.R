@@ -875,6 +875,7 @@ plan_falsification <- function() {
         if (length(ret) == 0L) {
           return(list(max_dd = NA_real_, avg_dd = NA_real_,
                       max_dd_duration_days = NA_integer_,
+                      avg_dd_duration_obs  = NA_real_,
                       n_drawdowns = NA_integer_,
                       recovery_days = NA_integer_))
         }
@@ -892,8 +893,9 @@ plan_falsification <- function() {
         n_drawdowns <- length(dd_runs)
         avg_dd <- if (any(in_dd)) mean(dd[in_dd], na.rm = TRUE) else NA_real_
 
-        # Max drawdown duration in observations (calendar days proxy: *1 for daily, *21 for monthly)
+        # Max and avg drawdown duration in observations
         max_dd_duration <- if (n_drawdowns > 0L) as.integer(max(dd_runs)) else NA_integer_
+        avg_dd_duration <- if (n_drawdowns > 0L) mean(dd_runs) else NA_real_
 
         # Recovery: obs from max_dd trough to first recovery above prior peak
         trough_idx <- which.min(dd)
@@ -908,6 +910,7 @@ plan_falsification <- function() {
           max_dd               = max_dd,
           avg_dd               = avg_dd,
           max_dd_duration_obs  = max_dd_duration,
+          avg_dd_duration_obs  = avg_dd_duration,
           n_drawdowns          = as.integer(n_drawdowns),
           recovery_obs         = recovery_obs
         )
@@ -928,8 +931,13 @@ plan_falsification <- function() {
             sortino = NA_real_, calmar = NA_real_,
             correlation_benchmark = NA_real_,
             max_dd = NA_real_, avg_dd = NA_real_,
-            max_dd_duration_days = NA_integer_, n_drawdowns = NA_integer_,
+            max_dd_duration_days = NA_integer_,
+            avg_dd_duration_days = NA_integer_,
+            n_drawdowns = NA_integer_,
             recovery_days = NA_integer_,
+            loss_runs_p   = NA_real_,
+            loss_acf_lag1 = NA_real_,
+            loss_clustered = NA,
             cvar_5pct = NA_real_, skewness = NA_real_, kurtosis = NA_real_,
             beta_mkt = NA_real_, best_month = NA_real_, worst_month = NA_real_,
             hit_rate_months = NA_real_
@@ -975,9 +983,18 @@ plan_falsification <- function() {
         max_dd_duration_days <- if (!is.na(dd_list$max_dd_duration_obs)) {
           as.integer(round(dd_list$max_dd_duration_obs * (365.25 / ann_factor)))
         } else NA_integer_
+        avg_dd_duration_days <- if (!is.na(dd_list$avg_dd_duration_obs)) {
+          as.integer(round(dd_list$avg_dd_duration_obs * (365.25 / ann_factor)))
+        } else NA_integer_
         recovery_days <- if (!is.na(dd_list$recovery_obs)) {
           as.integer(round(dd_list$recovery_obs * (365.25 / ann_factor)))
         } else NA_integer_
+
+        # Loss clustering (Tinsley Pillar 8: survivable steady vs clustered drawdowns)
+        lc <- hd_loss_clustering(ret)
+        loss_runs_p    <- lc$runs_test_p
+        loss_acf_lag1  <- lc$acf_lag1
+        loss_clustered <- lc$clustered
 
         # Calmar
         calmar <- if (!is.na(max_dd) && max_dd < 0) cagr / abs(max_dd) else NA_real_
@@ -1040,8 +1057,12 @@ plan_falsification <- function() {
           max_dd                = max_dd,
           avg_dd                = avg_dd,
           max_dd_duration_days  = max_dd_duration_days,
+          avg_dd_duration_days  = avg_dd_duration_days,
           n_drawdowns           = n_drawdowns,
           recovery_days         = recovery_days,
+          loss_runs_p           = loss_runs_p,
+          loss_acf_lag1         = loss_acf_lag1,
+          loss_clustered        = loss_clustered,
           cvar_5pct             = cvar_5,
           skewness              = skewness,
           kurtosis              = kurtosis,
@@ -1125,8 +1146,14 @@ plan_falsification <- function() {
         max_dd               = as.double(sapply(metrics_list, `[[`, "max_dd")),
         avg_dd               = as.double(sapply(metrics_list, `[[`, "avg_dd")),
         max_dd_duration_days = as.integer(sapply(metrics_list, `[[`, "max_dd_duration_days")),
+        avg_dd_duration_days = as.integer(sapply(metrics_list, `[[`, "avg_dd_duration_days")),
         n_drawdowns          = as.integer(sapply(metrics_list, `[[`, "n_drawdowns")),
         recovery_days        = as.integer(sapply(metrics_list, `[[`, "recovery_days")),
+
+        # Loss clustering (Pillar 8: survivable vs unsurvivable clustered drawdowns)
+        loss_runs_p    = as.double(sapply(metrics_list, `[[`, "loss_runs_p")),
+        loss_acf_lag1  = as.double(sapply(metrics_list, `[[`, "loss_acf_lag1")),
+        loss_clustered = as.logical(sapply(metrics_list, `[[`, "loss_clustered")),
 
         # Risk metrics (backfilled)
         cvar_5pct       = as.double(sapply(metrics_list, `[[`, "cvar_5pct")),
@@ -1213,7 +1240,6 @@ plan_falsification <- function() {
         1 + m$total_return_pct / 100  # approximate
       }, double(1L))
       rows$exposure_adj_return <- rows$cagr  # fully invested = cagr
-      rows$avg_dd_duration_days <- NA_integer_  # complex to compute
       rows$n_drawdowns_per_year <- vapply(seq_along(metrics_list), function(i) {
         nd <- metrics_list[[i]]$n_drawdowns
         dur <- metrics_list[[i]]$duration_days
