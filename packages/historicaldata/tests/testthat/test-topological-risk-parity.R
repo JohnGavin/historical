@@ -175,3 +175,51 @@ test_that("trp_weights and hrp_weights produce similar weights on low-correlatio
   # Both should give near equal weights on diagonal cov
   expect_true(max(abs(w_hrp - w_trp)) < 0.05)
 })
+
+# ── Heap-based DFS: determinism + tie-break regression tests (#313) ───────────
+
+# Star MST with identical edge weights: C1 is hub connected to C2, C3, C4
+# with equal correlation (0.5), so all MST edges have identical weight.
+# The alphabetical tie-break contract requires DFS to visit C2 before C3 before C4.
+make_star_cov <- function() {
+  R <- matrix(c(
+    1.0, 0.5, 0.5, 0.5,
+    0.5, 1.0, 0.0, 0.0,
+    0.5, 0.0, 1.0, 0.0,
+    0.5, 0.0, 0.0, 1.0
+  ), nrow = 4, byrow = TRUE)
+  sds <- rep(0.02, 4)
+  cov_mat <- diag(sds) %*% R %*% diag(sds)
+  rownames(cov_mat) <- colnames(cov_mat) <- c("C1", "C2", "C3", "C4")
+  cov_mat
+}
+
+test_that(".mst_dfs_order: tied-weight edges resolve alphabetically (#313)", {
+  # All MST edges from hub C1 to spokes C2, C3, C4 have identical weight 0.5.
+  # Contract: primary sort = weight ascending, secondary sort = name ascending.
+  # => DFS visits C1 (hub, highest degree) then C2, C3, C4 in alphabetical order.
+  cov_mat  <- make_star_cov()
+  dist_mat <- .cov_to_corr_dist(cov_mat)
+  mst      <- .build_mst_prim(dist_mat)
+  assets   <- colnames(cov_mat)
+  dfs_ord  <- .mst_dfs_order(assets, mst)
+
+  # C1 must be first (highest degree = root)
+  expect_equal(dfs_ord[1L], "C1")
+  # C2 before C3 before C4 (alphabetical tie-break)
+  expect_equal(dfs_ord, c("C1", "C2", "C3", "C4"))
+})
+
+test_that("trp_weights: identical inputs produce identical outputs 10 times (#313)", {
+  # Determinism regression: heap-based DFS must be stable across repeated calls.
+  cov_mat <- make_5asset_cov()
+  results <- replicate(10L, {
+    w <- trp_weights(cov_mat)
+    round(w[sort(names(w))], 14)
+  }, simplify = FALSE)
+
+  # Every replicate must be numerically identical to the first
+  for (i in seq(2L, 10L)) {
+    expect_equal(results[[i]], results[[1L]], tolerance = 0)
+  }
+})
