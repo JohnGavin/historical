@@ -666,3 +666,148 @@ if (!is.null(split) && !is.null(split$comparison)) {
 ```
 
 `r { cap <- safe_tar_read("cg_caption"); if (!is.null(cap)) cap else "" }`
+
+# Risk Architecture {#risk-arch}
+
+## Row
+
+### {.tabset}
+
+#### Drawdown Duration + Loss Clustering
+
+The Tinsley framework (Pillar 8) distinguishes two types of drawdown:
+**survivable steady drawdowns** (losses spread across many periods, allowing
+recovery) versus **unsurvivable clustered drawdowns** (losses arrive in bursts,
+exhausting capital before recovery). Two metrics quantify this distinction:
+
+- **Avg / Max DD duration** — how long drawdowns last on average and at worst.
+  Longer durations imply the strategy requires patience to survive; very long
+  max-duration periods indicate structural fragility.
+- **Loss clustering** (`clustered = TRUE`) — detected when the Wald-Wolfowitz
+  runs test rejects independence of the sign-of-return sequence (p < 0.05)
+  *and* the lag-1 autocorrelation exceeds 0.2. Both signals must agree: the
+  runs test catches non-random alternation patterns; the ACF catches momentum /
+  persistence. A clustered strategy has correlated losses — a drawdown predicts
+  more drawdown.
+
+```{r}
+#| label: risk-arch-table
+#| echo: false
+fals_db <- safe_tar_read("fals_results_db")
+if (!is.null(fals_db) && nrow(fals_db) > 0 &&
+    all(c("avg_dd_duration_days", "max_dd_duration_days",
+          "loss_runs_p", "loss_acf_lag1", "loss_clustered") %in% names(fals_db))) {
+
+  risk_tbl <- fals_db |>
+    dplyr::select(
+      Strategy     = strategy_id,
+      `Avg DD days`    = avg_dd_duration_days,
+      `Max DD days`    = max_dd_duration_days,
+      `Runs p-val`     = loss_runs_p,
+      `ACF lag-1`      = loss_acf_lag1,
+      `Clustered`      = loss_clustered
+    ) |>
+    dplyr::mutate(
+      Strategy  = dplyr::case_match(
+        Strategy,
+        "avoid_worst" ~ "Avoid Worst",
+        "drif"        ~ "DRIF",
+        "fac_max"     ~ "Factor MAX",
+        "rsc"         ~ "RSC",
+        "ltr"         ~ "LTR",
+        "tom"         ~ "TOM",
+        .default      = Strategy
+      ),
+      Clustered = dplyr::case_when(
+        is.na(Clustered)  ~ "N/A",
+        isTRUE(Clustered) ~ "YES",
+        TRUE              ~ "no"
+      )
+    )
+
+  # Dynamic caption values
+  worst_max_dd_strat <- risk_tbl |>
+    dplyr::filter(!is.na(`Max DD days`)) |>
+    dplyr::slice_max(`Max DD days`, n = 1L) |>
+    dplyr::pull(Strategy)
+  worst_max_dd_days <- risk_tbl |>
+    dplyr::filter(!is.na(`Max DD days`)) |>
+    dplyr::slice_max(`Max DD days`, n = 1L) |>
+    dplyr::pull(`Max DD days`)
+  clustered_strats <- risk_tbl |>
+    dplyr::filter(Clustered == "YES") |>
+    dplyr::pull(Strategy)
+  clustered_label <- if (length(clustered_strats) == 0L) {
+    "none"
+  } else {
+    paste(clustered_strats, collapse = ", ")
+  }
+
+  DT::datatable(
+    risk_tbl,
+    rownames = FALSE, filter = "none",
+    options = list(pageLength = 10, dom = "t"),
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left;",
+      htmltools::HTML(paste0(
+        "Tinsley Pillar 8 risk-architecture metrics. ",
+        "Worst max drawdown duration: <b>",
+        worst_max_dd_strat, "</b> (",
+        worst_max_dd_days, " days). ",
+        "Strategies with clustered losses (runs p &lt; 0.05 AND ACF lag-1 &gt; 0.2): <b>",
+        clustered_label, "</b>. ",
+        "Clustering indicates losses arrive in bursts rather than uniformly, ",
+        "reducing practical survivability. ",
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R' target='_blank'>",
+        "hd_dd_duration() + hd_loss_clustering()</a> in packages/historicaldata, ",
+        "wired via <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R' target='_blank'>",
+        "plan_falsification.R</a>."
+      ))
+    )
+  ) |>
+    DT::formatRound(c("Runs p-val", "ACF lag-1"), digits = 3) |>
+    DT::formatStyle(
+      "Clustered",
+      backgroundColor = DT::styleEqual(
+        c("YES", "no", "N/A"),
+        c("#c0392b", "transparent", "transparent")
+      ),
+      color = DT::styleEqual(
+        c("YES", "no", "N/A"),
+        c("#ffffff", "inherit", "inherit")
+      )
+    )
+} else {
+  cat("*Risk architecture metrics not yet built. Run `tar_make(names = 'fals_results_db')`.*")
+}
+```
+
+#### Methodology
+
+**Drawdown duration** uses the high-water mark (HWM) definition: a drawdown
+begins when cumulative returns fall below the prior peak and ends when they
+recover to within 0.1% of that peak. Durations are converted from strategy
+observations to calendar days using each strategy's annualisation factor (252
+for daily, 12 for monthly).
+
+**Loss clustering test** combines two signals:
+
+1. [Wald-Wolfowitz runs test](https://en.wikipedia.org/wiki/Wald%E2%80%93Wolfowitz_runs_test)
+   on the sign of returns. Under independence, the number of sign-runs follows
+   an approximately normal distribution. Too few runs = clustered
+   losses/wins; too many = alternating.
+2. Lag-1 autocorrelation of raw returns. Positive ACF(1) > 0.2 indicates
+   momentum (losses predict more losses).
+
+The `clustered` flag requires **both** signals to agree to reduce false
+positives. The runs test has power against any non-random pattern; ACF
+specifically targets persistence.
+
+**Source code:**
+[`hd_dd_duration()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R)
+and
+[`hd_loss_clustering()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R)
+in `packages/historicaldata/R/risk_metrics.R`. Tests in
+[`test-risk-metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/tests/testthat/test-risk-metrics.R).
+Issue [#269](https://github.com/JohnGavin/historical/issues/269).
+
