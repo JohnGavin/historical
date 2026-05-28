@@ -24,7 +24,8 @@ detect_volatility_spikes <- function(vix_daily, threshold = 1.5, window_days = 6
     dplyr::mutate(
       vix_ma = roll_mean_safe(vix, n = window_days),
       spike_threshold = vix_ma * threshold,
-      is_spike = !is.na(vix_ma) & vix >= spike_threshold
+      # NA-safe: holiday rows have vix = NA; treat as non-spike (FALSE) to keep cumsum clean
+      is_spike = !is.na(vix_ma) & !is.na(vix) & vix >= spike_threshold
     )
 
   # Assign spike_id to consecutive spike periods

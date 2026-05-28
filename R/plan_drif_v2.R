@@ -36,9 +36,10 @@ plan_drif_v2 <- function() {
       ) |>
         dplyr::mutate(
           spec_id = sprintf("S%02d", dplyr::row_number()),
+          # Production plan_drif.R uses feat_cols = c(chrono_cols, rank_cols) = "both"
           is_current = alpha == 0.5 &
                        nfolds == 5L &
-                       feature_set == "chrono" &
+                       feature_set == "both" &
                        lambda_rule == "lambda.min"
         )
     }),
@@ -140,7 +141,8 @@ plan_drif_v2 <- function() {
 
         ann_ret <- prod(1 + ret)^(12 / n) - 1
         ann_vol <- sd(ret) * sqrt(12)
-        sharpe  <- if (ann_vol > 0) ann_ret / ann_vol else NA_real_
+        ann_xret <- prod(1 + xret)^(12 / n) - 1
+        sharpe  <- if (ann_vol > 0) ann_xret / ann_vol else NA_real_
         cum     <- cumprod(1 + ret)
         max_dd  <- min(cum / cummax(cum) - 1)
         hit     <- mean(ret > 0, na.rm = TRUE)

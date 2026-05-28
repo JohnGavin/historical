@@ -121,6 +121,11 @@ plan_solana_momentum <- function() {
 
     # -------------------------------------------------------------------------
     # Backtest targets: 3 signals x 2 frequencies = 6 targets
+    # NOTE (roborev j4568): vol_weight is computed and stored in sol_signals but
+    # not yet threaded into the backtest functions. backtest_crypto_momentum() and
+    # backtest_weekly_momentum() currently use rank-based equal weighting. To apply
+    # volatility-adjusted sizing, extend those helpers to accept a weight column
+    # from the signals tibble. Tracked in issue #??? (TODO: file).
     # -------------------------------------------------------------------------
 
     # 8. Monthly: Baseline (total) momentum
