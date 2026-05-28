@@ -140,19 +140,22 @@
 
 #' Cluster inverse-variance (scalar)
 #'
-#' For a sub-cluster of assets, returns 1 / Var(equal-weight portfolio).
-#' Used during recursive bisection to split risk between two sub-clusters.
+#' For a sub-cluster of assets, returns 1 / Var(inverse-variance-weight portfolio).
+#' Uses inverse-variance (IVP) weights as required by Lopez de Prado (2016) HRP
+#' recursive bisection. Equal-weight was incorrect: when cluster variances differ,
+#' it produced wrong capital splits between sub-clusters.
 #'
 #' @param cov_mat Full covariance matrix (named).
 #' @param assets Character vector of asset names in this sub-cluster.
-#' @return Scalar: inverse of the equal-weight sub-cluster portfolio variance.
+#' @return Scalar: inverse of the IVP sub-cluster portfolio variance.
 #' @noRd
 .cluster_inv_var <- function(cov_mat, assets) {
   sub <- cov_mat[assets, assets, drop = FALSE]
-  k   <- length(assets)
-  w   <- rep(1 / k, k)
+  diag_var <- diag(sub)
+  # Inverse-variance portfolio weights (Lopez de Prado 2016)
+  ivp <- (1 / diag_var) / sum(1 / diag_var)
   # portfolio variance = w' Sigma w
-  pvar <- as.numeric(t(w) %*% sub %*% w)
+  pvar <- as.numeric(t(ivp) %*% sub %*% ivp)
   if (!is.finite(pvar) || pvar <= 0) return(1e-12)
   1 / pvar
 }
@@ -378,6 +381,25 @@ trp_weights <- function(cov_mat, fallback_to_hrp = TRUE) {
     cli::cli_abort(c(
       "x" = "{.arg cov_mat} must have at least 2 assets.",
       "i" = "Got {nrow(cov_mat)} asset(s)."
+    ))
+  }
+  if (!is.numeric(cov_mat)) {
+    cli::cli_abort(c(
+      "x" = "{.arg cov_mat} must be numeric.",
+      "i" = "Got storage mode {.val {storage.mode(cov_mat)}}."
+    ))
+  }
+  if (anyNA(cov_mat) || any(!is.finite(cov_mat))) {
+    cli::cli_abort(c(
+      "x" = "{.arg cov_mat} must contain only finite, non-NA values.",
+      "i" = "Found {sum(!is.finite(cov_mat) | is.na(cov_mat))} non-finite or NA element(s)."
+    ))
+  }
+  # Symmetry check (tolerance-based to handle floating-point rounding)
+  if (max(abs(cov_mat - t(cov_mat))) > sqrt(.Machine$double.eps) * max(abs(cov_mat))) {
+    cli::cli_abort(c(
+      "x" = "{.arg cov_mat} must be symmetric.",
+      "i" = "Maximum asymmetry: {.val {max(abs(cov_mat - t(cov_mat)))}}."
     ))
   }
   invisible(TRUE)
