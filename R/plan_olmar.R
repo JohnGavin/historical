@@ -143,12 +143,13 @@ plan_olmar <- function() {
         )
       }
 
-      port   <- olmar_portfolio |> dplyr::mutate(date = as.Date(date))
-      oos    <- as.Date(olmar_params$test_start)
+      port     <- olmar_portfolio |> dplyr::mutate(date = as.Date(date))
+      oos      <- as.Date(olmar_params$test_start)
+      test_end <- as.Date(olmar_params$test_end)
 
       dplyr::bind_rows(
-        calc(port |> dplyr::filter(date < oos), "Training"),
-        calc(port |> dplyr::filter(date >= oos), "Testing"),
+        calc(port |> dplyr::filter(date < oos),                         "Training"),
+        calc(port |> dplyr::filter(date >= oos & date <= test_end),     "Testing"),
         calc(port, "Full Period")
       )
     }),
