@@ -1,68 +1,84 @@
-# Current Work (Session 2026-05-26/27 #10 — #288 CI gate + #160 deflated Sharpe + WFC digest + roborev clean-up, ENDED)
+# Current Work (Session 2026-05-28/29 #11 — robustness stack + Pillar 8 + bug sweep + roborev clear, ENDED)
 
 **Last updated:** session end
-**Previous sessions:** #9 (external-source digests, Cloudflare/PDF), #8 (research-log DB #270, OLMAR #200), #7 (merge-queue drain)
+**Previous sessions:** #10 (#288 CI gate, #160 deflated Sharpe, WFC digest, roborev clean-up), #9 (external-source digests), #8 (research-log DB, OLMAR-1), #7 (merge-queue drain)
 
-## This session (4 PRs merged)
-- **#293 → closed #288:** CI-portable tests (`skip_if_no_remote_data()`) + restored `r-tests.yml`
-  with trusted Cachix (installer `extra-conf` + `trusted-users`). CI gate now active.
-- **#296 → closed #160:** `strat_keff_vertox` + `strat_deflated_sharpe` targets (reuse #268
-  `strat_corr_matrix`), `deflated_sharpe` leaderboard column, "Deflated Sharpe" vignette tab,
-  `backtest-robustness` §5 K_eff-guided stop rule.
-- **#298 (#297):** WFC digest from Tinsley SSRN PDF → `wiki/walk-forward-correlation.md`.
-- **#300 (#279):** flow-pressure ADD clause in `priced-in-prohibition` (#279 still open: Angle B).
-- **Filed:** #297 (WFC gap), #299 (CPCV gap), llm#309 (clean-verdict autoclose gap).
-- **Roborev:** closed 39 lingering clean PASS reviews (closure 80%→88%; PASS 68.8%→100%).
-  Root cause of the lingering: `roborev_severity_autoclose.sh` skips no-finding reviews → llm#309.
-- **Lesson (memory `feedback_fetch-before-building`):** #294/#295 were built on a stale base and
-  discarded; ALWAYS `git fetch origin main` + diff for overlap before writing code.
+## This session — 23 PRs merged
 
-## NEXT TASK (resume here) — triage the 58 open FAIL roborev reviews
+### Initial 10-PR triage wave (executed session-#10's 58-FAIL plan)
+- **#302** wiki crypto outcome clarity (r4333)
+- **#303** docs/stock-backtest NULL leak (r3828, r4296)
+- **#304** pytest required-check stall (r4328/4331/4369/4476)
+- **#305** ADD signal scaffold (closes #279 Angle B work) — `hd_compute_add` + 33 tests + plan
+- **#306** WT-B strategy plans — 5 fixed (NA-safe is_spike, OLMAR test_end cap, join key `ym` not `date`, Sharpe-from-excess), 3 partials → follow-ups
+- **#307** **(critical)** `apply_adv_cap` respects `w_max` (r2122 cap-violation bug)
+- **#308** WT-A data layer — rlang `%||%` import, `hd_lazy` survivorship warn, non-HF guards
+- **#309** WFC scaffold (#297 build piece) — `hd_wf_correlation()` + 25 tests + plan
+- **#310** CPCV scaffold (#299 build piece) — purge + embargo + paths + PBO + 105 tests
+- **#311** quiz-logic.js XSS hardening (r4366) — `safeUrl()` allowlist + DOM APIs
 
-The only roborev gap left for `historical`. Plan = **stale-check first, then parallel
-file-disjoint worktrees, priority-ordered**. Severity totals: 22 High / 26 Medium / 10 Low
-(max per review); all <7d old. Get the finding text per review with `roborev show <job_id>`
-(or `roborev log <job_id>`); review id = `r####`, job id = `j####`.
+### P0 + design-driven follow-ups
+- **#321 (#317)** `qa_summary` includes olmar_metrics + tom_metrics (silently failing test now passes)
+- **#322 (#315)** `with_envvar` scope encloses `skip_if` in test-jst.R (other tests audited)
+- **#323 (#314)** TOM wired into the full 8-test falsification gauntlet (mirrors LTR sibling pattern)
+- **#324 (#316)** documented `adjusted_close` schema choice — surfaced a cross-dataset divergence (→ #325)
+- **#327 (#313)** heap-based DFS in TRP with explicit comparator (deterministic tie-break)
 
-### CRITICAL caveat — many are already-merged / obsolete
-39 of 58 review commits are ancestors of origin/main; 19 are squash-merged-content or superseded.
-**Being "on main" ≠ finding fixed** — check each finding against CURRENT main code. Known-obsolete:
-- **r4497 (j4730, 9b45019)** = the discarded #295 commit — NOT on main, superseded by #296/#300 → **close**.
-- **r4484 (j4717, 3f33f9b)** "drop r-tests.yml" — reverted by #293 which restored it → **close**.
-- **r4495/r4496/r4498/r4499** (#288/#160 commits) + **r4482** (#287) — now merged; verify findings
-  addressed, else fix-forward.
+### Robustness trio + Pillar 8 + hygiene
+- **#326 (#319)** CPCV integration into plan_drif — `drif_path_sharpe` (15 paths, C(6,2)) + `drif_pbo`; factormax confirmed exempt
+- **#328 (#318)** WFC extended to DRIF elastic-net + `wfc_all_summary` + leaderboard `wf_corr` + `wfc_verdict` columns
+- **#330 (#269)** Pillar 8 risk architecture — `hd_dd_duration` + `hd_loss_clustering` + leaderboard columns
+- **#331/#333** Pillar 8 capstone — surfaced `max_consecutive_losses` (was computed but hidden)
+- **#332 (#325)** cross-dataset column normalisation — single canonical `adjusted_close` with read-time backward-compat alias
 
-### Phase 0 — obsolete/prose sweep (orchestrator, no worktree, `roborev close <job_id>`)
-Verify-then-close: r4497, r4484 (definite); then the Low/Med knowledge-prose findings on
-already-merged wiki pages if the page is fine: r4479, r4480, r4396, r4389, r4391, r4388, r4397,
-r4462, r4346. Expect to clear ~12–18 of the 58 cheaply.
+## Key technical events
 
-### Worktree groups (file-disjoint → no cross-WT merge conflict). Each agent: fetch origin/main,
-branch fresh, per review read finding → check current main → fix-if-live (commit) → report
-obsolete review-ids for orchestrator to close. Then re-tabulate.
+### Three real latent bugs caught
+- **r2122 ADV cap renorm** — `apply_adv_cap()` unconditionally divided by `w_total`, pushing weights above `w_max` when `sum(w_max) < 1`. Tests blessed the violation as "mathematical limit". Fix: conditional renorm + new regression test (4×0.20 = 80% invested + 20% cash).
+- **r4366 quiz-logic.js XSS** — `innerHTML` string-concat with untrusted `r.real_url`. Fix: `safeUrl()` http/https allowlist + DOM APIs.
+- **qa_summary gap** — `olmar_metrics` and `tom_metrics` missing since OLMAR (#276) and TOM (#289) shipped. test-qa-summary-deps.R was failing pre-#307 (surfaced during r2122 fix).
 
-| WT | Priority | Theme / files | Reviews (job ids in parens) | Agent |
-|----|----------|---------------|------------------------------|-------|
-| **A** | P1 | Package data-layer `packages/historicaldata/R/{alphavantage,registry,query,ranked,research_log}.R` | r4380(j4613) r4373(j4606) r4370(j4603) r4359(j4592) r4362(j4595) r4361(j4594) r4458(j4690) r4481(j4713) | `r-debugger` |
-| **B** | P1 | Strategy pipelines `R/plan_{turn_of_month,olmar,drif,drif_v2,solana_momentum,volatility_spikes,strategy_correlation,qa_vignette}.R` + `R/solana_defi_data.R` + pkg `olmar.R`/`topological_risk_parity.R` | r4485(j4718) r4461(j4694) r4372(j4605) r4371(j4604) r4337(j4568) r4334(j4567) r4355(j4589) r4329(j4561) r4489(j4721) r4368(j4600) | `r-debugger` |
-| **C** | P2 | CI/build `.github/workflows/{pytest,data-poll}.yml`, `flake.nix`, `scripts/` | r4476(j4709, flake→`nix-env`) r4369(j4602) r4331(j4564) r4328(j4562) r4347(j4580) r4025(j4257) | `fixer`+`nix-env` |
-| **D** | P3 | Docs/render + Mermaid anchors `docs/{stock-backtest,falsification}.qmd`, `R/diagram_node_links.R`, `R/plan_qa_gates.R`, `docs/vignette_utils.R`, `tests/testthat/test-vignette-utils.R` | r3828(j4037) r4357(j4590) r4296(j4530) r4348(j4582) r4353(j4583) r4294(j4528) r4293(j4529) r4354(j4585) r4344(j4578) r4336(j4570) r4039(j4270) r4030(j4263) r4026(j4250) | `fixer` |
-| **E** | P4 | Knowledge prose (whatever Phase 0 didn't close) `knowledge/` | r4333(j4566) + Phase-0 leftovers | `quick-fix` |
+### Robustness layer now complete on the leaderboard
+- **WFC** (Pearson + Spearman + 2×2 verdict) for Factor MAX + Factor DRIF
+- **CPCV / PBO** for DRIF (15 paths)
+- **Deflated Sharpe** via `K_eff_strat` (#296 prior session)
+- **Pillar 8**: max DD + avg DD duration + max DD duration + loss clustering (runs test + lag-1 ACF) + max consecutive losses
 
-**Unassigned / needs finding-read first** (empty file in parse): r4366(j4599, H — `rel=noopener`
-security, likely a qmd/generated HTML → put in D), r3854(j4067, tests/testthat.R → A or D),
-r4347/r4025 (scripts → C). Read the full finding to locate before assigning.
+### Roborev
+58 FAIL reviews closed in bulk (17 session-#10 stale-closes done early; 41 cascade-on-merged-PR closures done at end). 1 residual: r4371 (DRIF Cakici rank-before-filter — deferred per user, tracked in #312).
 
-**Notes for execution:** `plan_qa_gates.R` lives only in WT-D (keep out of B). `plan_leaderboard.R`
-findings (r4499/4498/4496) are #160 just-merged → verify in Phase 0, don't re-edit in a WT.
-Re-run the roborev tabulation (Python, `~/.roborev/reviews.db` repo_id 16) after each wave.
+### CI
+Main is green. Transient failure on #330 post-merge (alphavantage_daily snapshot mismatch) was incidentally fixed by #332's `adjusted` → `adjusted_close` rename in `registry.R`.
 
-## Open follow-ups
-- llm#309 (clean-verdict autoclose) · #299 (CPCV) · #297 (build `wf_correlation` target) · #279 Angle B
-- llm#296/#303, global `statistical-reporting` §2 K_eff-FDR — **llm session** (cross-project scope).
+## Follow-ups filed (12)
 
-## Notes
-- Session-end skipped (cross-project, own-tree-only): `export_and_deploy_data.sh` (pushes to
-  llmtelemetry) and `ctx_sync` (reads ~/docs_gh/llm). Leave for the llm session.
-- roborev `close <job_id>` (not review id); recoverable with `--reopen`. No `closed_at` column —
-  time-to-close is an `updated_at` proxy (true fix = roborev change → out of scope).
+- **#312** DRIF Cakici rank-before-filter — **deferred per user** ("investigate first")
+- **#313** TRP DFS sort — closed via #327
+- **#314** TOM falsification wiring — closed via #323
+- **#315** skip-guard timing — closed via #322
+- **#316** adjusted_close design — closed via #324
+- **#317** qa_summary gap — closed via #321
+- **#318** WFC extension — closed via #328
+- **#319** CPCV integration — closed via #326
+- **#320** ADD URL + backtest + leaderboard — **blocked on Chen-Zimmermann data acquisition**
+- **#325** cross-dataset normalisation — closed via #332
+- **#329** XGB factor-level WFC — **architecture decision needed**
+- **#331** surface max_cons_losses — closed via #333
+
+## Last PR of session
+
+- **#334 (#138)** — Commodities mean-reversion strategy + falsification wiring. Counterpart to #134's failed momentum (Sharpe -0.85). 36 tests pass. Numbers (does MR actually work in commodities?) determined at next `tar_make` — that is the actual research question.
+
+## Next session candidates
+
+- **#271** TOM acceptance gates — wiring is in (#323); needs `tar_make` run to produce numbers (heavy)
+- **#138 verification** — read `cmr_vs_mom_compare` output once `tar_make` has run; either celebrate or honest-negative result
+- **#278** OLMAR S&P 600 — blocked on #150 Option A (PIT data, deferred — paid source)
+- **#329** XGB factor-level WFC — needs architecture decision (3 options outlined in issue body)
+- **#157** specification-curve multiverse on plan_drif
+- **#267** BeyondPassive EUR/USD hedge overlay
+- **#280** Long-run commodity index 1871–2025
+
+## Open issue counts (post-session)
+
+~50 open. Robustness-stack work complete. Remaining open is research backlog (P3/P4) + the 5 blocked/deferred items above. See the priority groups posted in the session transcript for the full triage view.
