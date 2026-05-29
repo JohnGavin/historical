@@ -1,0 +1,199 @@
+# Plan: Commodities Mean Reversion (Issue #138)
+#
+# Counterpart to plan_commodities_momentum.R (#134).
+# #134 found commodity momentum is broken (Sharpe -0.85 baseline,
+# -0.89 to -0.91 decomposed). This plan tests the counter-hypothesis:
+# if momentum doesn't work, mean reversion might — commodities have
+# backwardation/contango cycles, supply/demand seasonality, and supply
+# shocks that reverse.
+#
+# A clear negative result is fine and valuable.
+#
+# Data: re-uses commodities_raw + commodities_returns from
+#       plan_commodities_momentum.R (DO NOT re-define those targets here).
+# Frequency: monthly (ann_factor = 12).
+# Look-ahead safety: signal at t uses returns through t-1 only.
+# Execution: signal at t -> trade at t+1 close.
+# Transaction cost: 0.2% per trade (same as commodity momentum, #134).
+
+plan_commodities_mean_reversion <- function() {
+  list(
+
+    # ── Signals: three lookback windows ──────────────────────────────────
+    # Re-uses commodities_returns from plan_commodities_momentum.R.
+    # Each signal: mr_signal = -(cumulative return over prior L months).
+    # Higher signal -> bigger recent loser -> long candidate.
+
+    targets::tar_target(cmr_signals_1m, {
+      hd_commodity_mr_signal(commodities_returns, lookback_months = 1L)
+    }),
+
+    targets::tar_target(cmr_signals_3m, {
+      hd_commodity_mr_signal(commodities_returns, lookback_months = 3L)
+    }),
+
+    targets::tar_target(cmr_signals_6m, {
+      hd_commodity_mr_signal(commodities_returns, lookback_months = 6L)
+    }),
+
+
+    # ── Portfolios: long-losers / short-winners ───────────────────────────
+    # t+1 execution: signal at t -> trade executes at t+1 closing prices.
+    # 10 long + 10 short, equal weight within each leg.
+    # 0.2% one-way transaction cost.
+
+    targets::tar_target(cmr_portfolio_1m, {
+      hd_commodity_mr_portfolio(
+        signal_tbl  = cmr_signals_1m,
+        returns_tbl = commodities_returns,
+        n_long      = 10L,
+        n_short     = 10L,
+        cost_bps    = 20
+      )
+    }),
+
+    targets::tar_target(cmr_portfolio_3m, {
+      hd_commodity_mr_portfolio(
+        signal_tbl  = cmr_signals_3m,
+        returns_tbl = commodities_returns,
+        n_long      = 10L,
+        n_short     = 10L,
+        cost_bps    = 20
+      )
+    }),
+
+    targets::tar_target(cmr_portfolio_6m, {
+      hd_commodity_mr_portfolio(
+        signal_tbl  = cmr_signals_6m,
+        returns_tbl = commodities_returns,
+        n_long      = 10L,
+        n_short     = 10L,
+        cost_bps    = 20
+      )
+    }),
+
+
+    # ── Monthly net returns (thin wrappers for falsification bridge) ──────
+
+    targets::tar_target(cmr_returns_1m, {
+      cmr_portfolio_1m |>
+        dplyr::select(date, strategy_ret = net_ret)
+    }),
+
+    targets::tar_target(cmr_returns_3m, {
+      cmr_portfolio_3m |>
+        dplyr::select(date, strategy_ret = net_ret)
+    }),
+
+    targets::tar_target(cmr_returns_6m, {
+      cmr_portfolio_6m |>
+        dplyr::select(date, strategy_ret = net_ret)
+    }),
+
+
+    # ── Performance metrics per lookback ──────────────────────────────────
+    # Sharpe, MDD, max DD duration (hd_dd_duration from risk_metrics.R).
+
+    targets::tar_target(cmr_metrics_1m, {
+      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", ann_factor = 12L)
+    }),
+
+    targets::tar_target(cmr_metrics_3m, {
+      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", ann_factor = 12L)
+    }),
+
+    targets::tar_target(cmr_metrics_6m, {
+      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", ann_factor = 12L)
+    }),
+
+
+    # ── Summary: comparison across lookbacks ─────────────────────────────
+
+    targets::tar_target(cmr_summary, {
+      dplyr::bind_rows(cmr_metrics_1m, cmr_metrics_3m, cmr_metrics_6m) |>
+        dplyr::arrange(lookback)
+    }),
+
+
+    # ── Head-to-head: mean reversion vs momentum (Part C) ─────────────────
+    # Joins commodity-momentum metrics (from plan_commodities_momentum.R)
+    # with MR metrics. Lightweight: no new data fetch.
+    # Momentum baseline = 12m lookback (Sharpe -0.85 per #134).
+
+    targets::tar_target(cmr_vs_mom_compare, {
+      library(dplyr)
+
+      mom_metrics <- commodities_perf_summary |>
+        dplyr::filter(strategy == "baseline") |>
+        dplyr::transmute(
+          lookback     = "12m (momentum)",
+          mom_sharpe   = round(sharpe, 3),
+          mom_mdd      = round(max_dd, 3)
+        )
+
+      mr_metrics <- cmr_summary |>
+        dplyr::transmute(
+          lookback   = paste0(lookback, " (MR)"),
+          mr_sharpe  = round(sharpe, 3),
+          mr_mdd     = round(max_dd, 3)
+        )
+
+      # One row per configuration; NA where comparison doesn't apply.
+      tibble::tibble(
+        lookback    = c(mr_metrics$lookback, mom_metrics$lookback),
+        type        = c(rep("mean_reversion", nrow(mr_metrics)), "momentum"),
+        sharpe      = c(mr_metrics$mr_sharpe, mom_metrics$mom_sharpe),
+        max_dd      = c(mr_metrics$mr_mdd,    mom_metrics$mom_mdd)
+      ) |>
+        dplyr::arrange(type, lookback)
+    })
+
+  )
+}
+
+
+# ── Internal helper ────────────────────────────────────────────────────────────
+# Not exported; called only within this plan's targets.
+
+.compute_cmr_metrics <- function(portfolio_tbl, lookback, ann_factor = 12L) {
+  library(dplyr)
+
+  r    <- portfolio_tbl$net_ret
+  r    <- r[!is.na(r)]
+  n    <- length(r)
+
+  if (n < 12L) {
+    return(tibble::tibble(
+      lookback = lookback, n_months = n,
+      sharpe = NA_real_, cagr = NA_real_, vol = NA_real_,
+      max_dd = NA_real_, avg_dd_duration = NA_real_, max_dd_duration = NA_real_
+    ))
+  }
+
+  monthly_rf <- (1.02)^(1 / ann_factor) - 1
+  mean_r     <- mean(r)
+  sd_r       <- sd(r)
+  sharpe     <- if (sd_r > 0) (mean_r - monthly_rf) / sd_r * sqrt(ann_factor) else NA_real_
+
+  cum        <- cumprod(1 + r)
+  years      <- n / ann_factor
+  cagr       <- (cum[n])^(1 / years) - 1
+  vol        <- sd_r * sqrt(ann_factor)
+
+  cum_max    <- cummax(cum)
+  dd         <- (cum - cum_max) / cum_max
+  max_dd     <- min(dd)
+
+  dd_stats   <- hd_dd_duration(r)
+
+  tibble::tibble(
+    lookback        = lookback,
+    n_months        = n,
+    sharpe          = round(sharpe, 3),
+    cagr            = round(cagr * 100, 1),
+    vol             = round(vol * 100, 1),
+    max_dd          = round(max_dd * 100, 1),
+    avg_dd_duration = dd_stats$avg_dd_duration,
+    max_dd_duration = dd_stats$max_dd_duration
+  )
+}
