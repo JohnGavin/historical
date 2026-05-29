@@ -124,12 +124,15 @@ plan_drif_v2 <- function() {
         all_preds <- bind_rows(Filter(Negate(is.null), preds))
         if (nrow(all_preds) == 0L) return(NULL)
 
-        # Long top-N predicted factors each month (same rule as production)
-        port <- all_preds |>
-          filter(factor_name %in% params$factors) |>
+        # Long top-N predicted factors each month.
+        # Delegates to hd_drif_select_topn() so this multiverse path uses
+        # the identical rank-all-then-filter-benchmark-then-top_n logic as
+        # the production target in plan_drif.R (#r4371).
+        selected_preds <- historicaldata::hd_drif_select_topn(
+          all_preds, params, params$top_n
+        )
+        port <- selected_preds |>
           group_by(ym) |>
-          mutate(pred_rank = rank(-predicted, ties.method = "min")) |>
-          filter(pred_rank <= params$top_n) |>
           summarise(port_ret = mean(actual), .groups = "drop") |>
           left_join(rf_monthly, by = "ym")
 
