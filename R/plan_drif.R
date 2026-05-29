@@ -187,8 +187,11 @@ plan_drif <- function() {
     targets::tar_target(drif_portfolio, {
       library(dplyr)
 
-      signal <- drif_signal |>
-        filter(factor_name %in% drif_params$factors)
+      # Shared selection logic: rank-all-then-filter-benchmark-then-top_n.
+      # Delegates to hd_drif_select_topn() so plan_drif_v2.R uses the same path.
+      signal <- historicaldata::hd_drif_select_topn(
+        drif_signal, drif_params, drif_params$top_n
+      )
 
       rf <- drif_daily |>
         filter(factor_name == "RF") |>
@@ -206,8 +209,7 @@ plan_drif <- function() {
         month_signal <- signal |> filter(ym == m)
         if (nrow(month_signal) == 0) return(NULL)
 
-        selected <- month_signal |>
-          filter(pred_rank <= drif_params$top_n)
+        selected <- month_signal
 
         port_ret <- mean(selected$actual_ret)
         b <- bench |> filter(ym == m)
