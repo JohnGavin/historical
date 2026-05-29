@@ -10,11 +10,13 @@ plan_strategy_names <- function() {
       tibble::tibble(
         code_name = c(
           "avoid_worst", "drif", "fac_max", "rsc", "ltr", "tom",
-          "stk_max", "stk_drif", "xgb_drif", "pso_optimal"
+          "stk_max", "stk_drif", "xgb_drif", "pso_optimal",
+          "cmr"
         ),
         short_name = c(
           "Avoid Worst", "DRIF", "Factor MAX", "Risk State", "LTR", "TOM",
-          "Stock MAX", "Stock DRIF", "XGB DRIF", "PSO Optimal"
+          "Stock MAX", "Stock DRIF", "XGB DRIF", "PSO Optimal",
+          "MR"
         ),
         long_name = c(
           "Avoid Worst Days (VIX Protection)",
@@ -26,22 +28,26 @@ plan_strategy_names <- function() {
           "Stock MAX (Daily Return Sorting)",
           "Stock DRIF (Elastic Net Stock Selection)",
           "XGB DRIF (XGBoost Stock Selection)",
-          "PSO Optimal (Portfolio Optimisation)"
+          "PSO Optimal (Portfolio Optimisation)",
+          "Commodities Mean Reversion"
         ),
         asset_class = c(
           "overlay", "factor", "factor", "overlay", "equity", "overlay",
-          "equity", "equity", "equity", "combined"
+          "equity", "equity", "equity", "combined",
+          "commodities"
         ),
         frequency = c(
           "daily", "monthly", "monthly", "daily", "monthly", "daily",
-          "monthly", "monthly", "monthly", "monthly"
+          "monthly", "monthly", "monthly", "monthly",
+          "monthly"
         ),
-        ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L),
+        ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L, 12L),
         vignette_url = c(
           "avoid-worst-days.html", "drif.html", "factor-max.html",
           "leaderboard.html", "leaderboard.html", "turn-of-month.html",
           "stock-backtest.html", "stock-backtest.html",
-          "stock-backtest.html", "leaderboard.html"
+          "stock-backtest.html", "leaderboard.html",
+          "commodities-mean-reversion.html"
         )
       )
     })

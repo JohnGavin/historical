@@ -595,6 +595,293 @@ plan_falsification <- function() {
 
 
     # ═══════════════════════════════════════════════════════════════════
+    # Per-strategy tests: cmr (Commodities Mean Reversion — #138)
+    # Monthly strategy. Three lookback variants (1m, 3m, 6m).
+    # Bridge targets fals_cmr_input_*m live in plan_commodities_mean_reversion.R
+    # via the cmr_returns_*m targets.
+    # Note: FF alpha test is omitted for CMR — the commodity universe does
+    # not overlap with the Fama-French equity factor universe, so the
+    # FF5+Mom regression is not meaningful here.
+    # ═══════════════════════════════════════════════════════════════════
+
+    # Bridge target: use 3m lookback as the primary CMR series (middle ground).
+    # Individual lookback variants are tested via fals_hac_cmr_*m targets below.
+    targets::tar_target(fals_cmr_input, {
+      library(dplyr)
+      cmr_returns_3m |>
+        dplyr::select(date, strategy_ret)
+    }),
+
+    # ── 1m lookback ──────────────────────────────────────────────────────
+    targets::tar_target(fals_hac_cmr_1m, {
+      hd_hac_sharpe(cmr_returns_1m$strategy_ret, ann_factor = 12L)
+    }),
+    targets::tar_target(fals_wn_cmr_1m, {
+      ret   <- cmr_returns_1m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_rv_cmr_1m, {
+      ret   <- cmr_returns_1m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_ma1_cmr_1m, {
+      ret   <- cmr_returns_1m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_fn_cmr_1m, {
+      ret   <- cmr_returns_1m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_garch_cmr_1m, {
+      ret   <- cmr_returns_1m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_gjr_cmr_1m, {
+      ret   <- cmr_returns_1m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_dsr_cmr_1m, {
+      hd_deflated_sharpe(cmr_returns_1m$strategy_ret, K_trials = 3L, ann_factor = 12L)
+    }),
+
+    # ── 3m lookback ──────────────────────────────────────────────────────
+    targets::tar_target(fals_hac_cmr_3m, {
+      hd_hac_sharpe(cmr_returns_3m$strategy_ret, ann_factor = 12L)
+    }),
+    targets::tar_target(fals_wn_cmr_3m, {
+      ret   <- cmr_returns_3m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_rv_cmr_3m, {
+      ret   <- cmr_returns_3m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_ma1_cmr_3m, {
+      ret   <- cmr_returns_3m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_fn_cmr_3m, {
+      ret   <- cmr_returns_3m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_garch_cmr_3m, {
+      ret   <- cmr_returns_3m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_gjr_cmr_3m, {
+      ret   <- cmr_returns_3m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_dsr_cmr_3m, {
+      hd_deflated_sharpe(cmr_returns_3m$strategy_ret, K_trials = 3L, ann_factor = 12L)
+    }),
+
+    # ── 6m lookback ──────────────────────────────────────────────────────
+    targets::tar_target(fals_hac_cmr_6m, {
+      hd_hac_sharpe(cmr_returns_6m$strategy_ret, ann_factor = 12L)
+    }),
+    targets::tar_target(fals_wn_cmr_6m, {
+      ret   <- cmr_returns_6m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_white_noise(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_rv_cmr_6m, {
+      ret   <- cmr_returns_6m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_regime_vol(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_ma1_cmr_6m, {
+      ret   <- cmr_returns_6m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_ma1(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_fn_cmr_6m, {
+      ret   <- cmr_returns_6m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_factor_null(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_garch_cmr_6m, {
+      ret   <- cmr_returns_6m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_garch11(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_gjr_cmr_6m, {
+      ret   <- cmr_returns_6m$strategy_ret
+      T_obs <- sum(!is.na(ret))
+      nulls <- hd_null_env_gjr_garch(T_obs, M = fals_params$M, seed = fals_params$seed)
+      hd_null_rejection_rate(
+        strategy_fn = function(r) hd_hac_tstat(r)$t_stat,
+        null_series = nulls,
+        alpha_level = fals_params$alpha_level
+      )
+    }),
+    targets::tar_target(fals_dsr_cmr_6m, {
+      hd_deflated_sharpe(cmr_returns_6m$strategy_ret, K_trials = 3L, ann_factor = 12L)
+    }),
+
+    # ── CMR falsification summary (standalone; not in main fals_summary) ──
+    # Separate from fals_summary to avoid breaking the existing 6-strategy table.
+    # Used by plan_falsification_vignette.R to append a CMR section.
+    targets::tar_target(fals_cmr_summary, {
+      tibble::tibble(
+        lookback = c("1m", "3m", "6m"),
+        hac_tstat = c(
+          fals_hac_cmr_1m$hac_tstat,
+          fals_hac_cmr_3m$hac_tstat,
+          fals_hac_cmr_6m$hac_tstat
+        ),
+        hac_sharpe = c(
+          fals_hac_cmr_1m$naive_sharpe,
+          fals_hac_cmr_3m$naive_sharpe,
+          fals_hac_cmr_6m$naive_sharpe
+        ),
+        rej_rate_wn = c(
+          fals_wn_cmr_1m$rejection_rate,
+          fals_wn_cmr_3m$rejection_rate,
+          fals_wn_cmr_6m$rejection_rate
+        ),
+        rej_rate_rv = c(
+          fals_rv_cmr_1m$rejection_rate,
+          fals_rv_cmr_3m$rejection_rate,
+          fals_rv_cmr_6m$rejection_rate
+        ),
+        rej_rate_ma1 = c(
+          fals_ma1_cmr_1m$rejection_rate,
+          fals_ma1_cmr_3m$rejection_rate,
+          fals_ma1_cmr_6m$rejection_rate
+        ),
+        rej_rate_fn = c(
+          fals_fn_cmr_1m$rejection_rate,
+          fals_fn_cmr_3m$rejection_rate,
+          fals_fn_cmr_6m$rejection_rate
+        ),
+        rej_rate_garch = c(
+          fals_garch_cmr_1m$rejection_rate,
+          fals_garch_cmr_3m$rejection_rate,
+          fals_garch_cmr_6m$rejection_rate
+        ),
+        rej_rate_gjr = c(
+          fals_gjr_cmr_1m$rejection_rate,
+          fals_gjr_cmr_3m$rejection_rate,
+          fals_gjr_cmr_6m$rejection_rate
+        ),
+        dsr = c(
+          fals_dsr_cmr_1m$dsr,
+          fals_dsr_cmr_3m$dsr,
+          fals_dsr_cmr_6m$dsr
+        ),
+        dsr_pvalue = c(
+          fals_dsr_cmr_1m$dsr_pvalue,
+          fals_dsr_cmr_3m$dsr_pvalue,
+          fals_dsr_cmr_6m$dsr_pvalue
+        ),
+        dsr_haircut_pct = c(
+          fals_dsr_cmr_1m$haircut_pct,
+          fals_dsr_cmr_3m$haircut_pct,
+          fals_dsr_cmr_6m$haircut_pct
+        )
+      )
+    }),
+
+
+    # ═══════════════════════════════════════════════════════════════════
     # Cross-strategy targets
     # ═══════════════════════════════════════════════════════════════════
 

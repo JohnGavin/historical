@@ -471,6 +471,85 @@ plan_falsification_vignette <- function() {
           panel.grid.major = element_line(color = "#333"),
           panel.grid.minor = element_blank()
         )
+    }),
+
+
+    # ── CMR: Commodities Mean Reversion (#138) ───────────────────────────
+    # Separate section appended to falsification.qmd.
+    # Uses fals_cmr_summary (from plan_falsification.R) and
+    # cmr_vs_mom_compare (from plan_commodities_mean_reversion.R).
+
+    targets::tar_target(fals_vig_cmr_table, {
+      library(dplyr)
+
+      fals_cmr_summary |>
+        dplyr::transmute(
+          Lookback   = lookback,
+          `HAC t`    = round(hac_tstat, 2),
+          `Naive Sharpe` = round(hac_sharpe, 2),
+          `WN rej`   = round(rej_rate_wn, 3),
+          `RV rej`   = round(rej_rate_rv, 3),
+          `MA1 rej`  = round(rej_rate_ma1, 3),
+          `FN rej`   = round(rej_rate_fn, 3),
+          `GARCH rej` = round(rej_rate_garch, 3),
+          `GJR rej`  = round(rej_rate_gjr, 3),
+          DSR        = round(dsr, 3),
+          `DSR p`    = round(dsr_pvalue, 3)
+        )
+    }),
+
+    targets::tar_target(fals_vig_cmr_caption, {
+      best_lb  <- fals_cmr_summary$lookback[which.max(fals_cmr_summary$hac_sharpe)]
+      best_sh  <- round(max(fals_cmr_summary$hac_sharpe, na.rm = TRUE), 3)
+      mom_sh   <- round(
+        cmr_vs_mom_compare$sharpe[cmr_vs_mom_compare$type == "momentum"][1],
+        3
+      )
+      paste0(
+        "Commodities Mean Reversion falsification scorecard (Issue #138). ",
+        "Three lookback windows (1m, 3m, 6m); long-losers / short-winners, ",
+        "0.2% transaction cost, monthly (ann_factor = 12). ",
+        "Best lookback: ", best_lb, " (naive Sharpe ", best_sh, "). ",
+        "Commodity momentum baseline (12m) had Sharpe ", mom_sh, " (Issue #134). ",
+        "Columns: HAC t = Newey-West t-statistic; ",
+        "WN/RV/MA1/FN/GARCH/GJR = null-environment rejection rates ",
+        "(ideally <= 0.075); DSR = Deflated Sharpe Ratio (K=3 lookbacks). ",
+        "FF alpha omitted: Fama-French equity factors are not appropriate for ",
+        "the commodity universe."
+      )
+    }),
+
+    targets::tar_target(fals_vig_cmr_head_to_head, {
+      library(dplyr)
+
+      cmr_vs_mom_compare |>
+        dplyr::transmute(
+          Configuration = lookback,
+          Type          = type,
+          Sharpe        = sharpe,
+          `Max DD (%)`  = max_dd
+        )
+    }),
+
+    targets::tar_target(fals_vig_cmr_head_to_head_caption, {
+      mr_sharpes  <- fals_cmr_summary$hac_sharpe
+      mom_sharpe  <- round(
+        cmr_vs_mom_compare$sharpe[cmr_vs_mom_compare$type == "momentum"][1],
+        3
+      )
+      best_mr     <- round(max(mr_sharpes, na.rm = TRUE), 3)
+      verdict     <- if (best_mr > mom_sharpe) "outperforms" else "does not outperform"
+      paste0(
+        "Head-to-head: Commodities Mean Reversion (1m/3m/6m lookbacks) vs ",
+        "Commodity Momentum (12m baseline, Issue #134). ",
+        "Best MR Sharpe (naive): ", best_mr, "; ",
+        "Momentum baseline Sharpe: ", mom_sharpe, ". ",
+        "Mean reversion ", verdict, " momentum in this commodity universe. ",
+        "Source: ",
+        gh_base,
+        "/R/plan_commodities_mean_reversion.R",
+        " | Transaction costs: 0.2% one-way for both strategies."
+      )
     })
 
   )
