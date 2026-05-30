@@ -150,3 +150,90 @@ test_that("check_artefact_registry skips draft and NA html_path rows", {
   issues <- check_artefact_registry(s$con, docs_dir = docs, strict = TRUE)
   expect_equal(nrow(issues), 0L)
 })
+
+# ── New tests (#347 follow-up) ─────────────────────────────────────────────
+
+test_that("hd_art_diagram_upsert is idempotent on (diagram_id)", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  s <- .init_art_registry()
+  withr::defer({ DBI::dbDisconnect(s$con, shutdown = TRUE); unlink(s$tmp) })
+
+  # Prerequisite: vignette row must exist first (FK constraint).
+  hd_art_vignette_upsert(s$con,
+    list(vignette_id = "leaderboard", html_path = "leaderboard.html"))
+
+  row <- list(
+    diagram_id   = "leaderboard-keff-vertox",
+    vignette_id  = "leaderboard",
+    section      = "robustness",
+    diagram_type = "plotly",
+    target_name  = "strat_keff_vertox",
+    purpose      = "Effective number of strategies (Vertox)"
+  )
+  hd_art_diagram_upsert(s$con, row)
+  hd_art_diagram_upsert(s$con, row)  # second call — must be a no-op
+
+  n <- DBI::dbGetQuery(s$con, "SELECT COUNT(*) AS n FROM art.diagram")$n
+  expect_equal(n, 1L)
+})
+
+test_that("hd_art_diagram_upsert accepts NA target_name", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  s <- .init_art_registry()
+  withr::defer({ DBI::dbDisconnect(s$con, shutdown = TRUE); unlink(s$tmp) })
+
+  hd_art_vignette_upsert(s$con,
+    list(vignette_id = "causal-dag", html_path = "causal-dag.html"))
+
+  hd_art_diagram_upsert(s$con, list(
+    diagram_id   = "causal-dag-mermaid",
+    vignette_id  = "causal-dag",
+    section      = "overview",
+    diagram_type = "mermaid",
+    target_name  = NA_character_,  # hand-authored, no targets target
+    purpose      = "Causal-DAG project overview"
+  ))
+
+  got <- DBI::dbGetQuery(s$con,
+    "SELECT target_name FROM art.diagram WHERE diagram_id = 'causal-dag-mermaid'")
+  expect_equal(nrow(got), 1L)
+  expect_true(is.na(got$target_name))
+})
+
+test_that("hd_art_vignette_upsert handles qmd_path = NA", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  s <- .init_art_registry()
+  withr::defer({ DBI::dbDisconnect(s$con, shutdown = TRUE); unlink(s$tmp) })
+
+  hd_art_vignette_upsert(s$con, list(
+    vignette_id = "quiz-app",
+    qmd_path    = NA_character_,
+    html_path   = "quiz-app.html",
+    status      = "published"
+  ))
+
+  got <- DBI::dbGetQuery(s$con,
+    "SELECT qmd_path, html_path FROM art.vignette WHERE vignette_id = 'quiz-app'")
+  expect_equal(nrow(got), 1L)
+  expect_true(is.na(got$qmd_path))
+  expect_equal(got$html_path, "quiz-app.html")
+})
+
+test_that("check_artefact_registry strict-mode error message", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  s <- .init_art_registry()
+  withr::defer({ DBI::dbDisconnect(s$con, shutdown = TRUE); unlink(s$tmp) })
+
+  docs <- tempfile("docs_"); dir.create(docs)
+  withr::defer(unlink(docs, recursive = TRUE))
+
+  hd_art_vignette_upsert(s$con,
+    list(vignette_id = "missing-vignette", html_path = "missing-vignette.html",
+         status = "published"))
+
+  expect_snapshot(
+    error = TRUE,
+    check_artefact_registry(s$con, docs_dir = docs, strict = TRUE),
+    transform = function(x) gsub(docs, "<docs_dir>", x, fixed = TRUE)
+  )
+})
