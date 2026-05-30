@@ -363,11 +363,21 @@ if (!is.null(x)) {
 
 ```{r}
 #| fig-height: 6
-# #356: only render the plot if the upstream metric target produced rows
+# #356: Alpha decay needs a positive base Sharpe (decay is the fraction
+# of base Sharpe that survives delay; if base is negative, the metric
+# is meaningless). Surface the actual reason in the callout.
 dp <- safe_tar_read("decay_plot")
 decay_metrics <- safe_tar_read("decay_metrics")
-if (!is.null(dp) && !is.null(decay_metrics) && nrow(decay_metrics) > 0) {
+neg_base <- !is.null(decay_metrics) && nrow(decay_metrics) > 0 &&
+            all(decay_metrics$sharpe[decay_metrics$delay == min(decay_metrics$delay)] <= 0, na.rm = TRUE)
+if (!is.null(dp) && !is.null(decay_metrics) && nrow(decay_metrics) > 0 && !neg_base) {
   print(dp)
+} else if (neg_base) {
+  cat("::: callout-warning\n",
+      "**Alpha decay not meaningful — base Sharpe is non-positive for every strategy on the page.** ",
+      "Decay measures the *fraction of base Sharpe that survives execution delay*; if base Sharpe ≤ 0 there is no alpha to decay. ",
+      "Investigate the strategies' base Sharpe before re-running this tab. See [#356](https://github.com/JohnGavin/historical/issues/356).\n",
+      ":::\n", sep = "")
 } else {
   cat("::: callout-note\n",
       "**Alpha decay analysis not yet computed.** ",
