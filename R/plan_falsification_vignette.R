@@ -448,11 +448,16 @@ plan_falsification_vignette <- function() {
 
       ggplot(df, aes(x = r_squared, y = alpha_annual, color = verdict)) +
         geom_point(size = 6) +
-        geom_text(aes(label = strategy), vjust = -1.2, size = 4, color = "#e0e0e0") +
+        # #351: check_overlap hides colliding labels; vjust positions above point
+        geom_text(aes(label = strategy), vjust = -1.2, size = 4,
+                  color = "#e0e0e0", check_overlap = FALSE) +
         geom_hline(yintercept = 0, color = "#666", linetype = "dashed") +
         geom_vline(xintercept = 15, color = "#666", linetype = "dashed") +
         scale_color_manual(values = c("Genuine alpha" = "#69d4a0",
                                        "No alpha (beta)" = "#e74c3c")) +
+        # #351: expand y axis so top labels (e.g., LTR) aren't clipped at plot edge
+        scale_y_continuous(expand = expansion(mult = c(0.08, 0.18))) +
+        scale_x_continuous(expand = expansion(mult = c(0.05, 0.08))) +
         labs(
           title = "Alpha (%) vs Factor Exposure R² (%)",
           subtitle = "Genuine alpha = top-left (low R², positive Alpha). Beta = right (high R²).",
@@ -465,11 +470,13 @@ plan_falsification_vignette <- function() {
           panel.background = element_rect(fill = "black", color = NA),
           text = element_text(color = "#e0e0e0"),
           axis.text = element_text(color = "#e0e0e0"),
-          legend.position = "top",
+          # #351: legend at bottom frees the top of the panel for labels
+          legend.position = "bottom",
           legend.background = element_rect(fill = "black"),
           legend.text = element_text(color = "#e0e0e0"),
           panel.grid.major = element_line(color = "#333"),
-          panel.grid.minor = element_blank()
+          panel.grid.minor = element_blank(),
+          plot.margin = margin(10, 15, 10, 10)
         )
     }),
 

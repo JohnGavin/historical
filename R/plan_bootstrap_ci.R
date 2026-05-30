@@ -136,7 +136,7 @@ plan_bootstrap_ci <- function() {
         ggplot(aes(x = sharpe, fill = strategy_label)) +
         geom_histogram(bins = 50, alpha = 0.7) +
         geom_vline(xintercept = 0, linetype = "dashed", colour = "red") +
-        facet_wrap(~strategy_label, scales = "free_y", ncol = 2) +
+        facet_wrap(~strategy_label, ncol = 2) +  # #355: fixed scales (default) so sub-plots are visually comparable
         scale_fill_manual(values = hd_palette(4)) +
         labs(x = "Bootstrapped Sharpe Ratio", y = "Count",
              title = paste0("Bootstrap CI (", boot_params$n_draws,
