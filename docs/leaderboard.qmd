@@ -95,7 +95,7 @@ cap <- safe_tar_read("fals_vig_ff_caption")
 if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 ```
 
-#### Full Dashboard
+#### See Also
 
 For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr>, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
 

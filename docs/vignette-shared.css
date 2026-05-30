@@ -35,10 +35,22 @@ body { font-size: 1.1em; }
   overflow: visible !important; margin-bottom: 1em;
 }
 
-/* Plot height: constrain to reasonable aspect ratio */
+/* Plot height (#349): raised cap 500 → 700 so plots aren't compressed */
 .cell-output-display img {
   display: block; width: 100%; height: auto;
-  min-height: auto; max-height: 500px; object-fit: contain;
+  min-height: auto; max-height: 700px; object-fit: contain;
+  margin-bottom: 1em;
+}
+
+/* #349: Plotly/DT widgets need explicit min-height so they don't collapse onto captions */
+.plotly.html-widget, .dataTables_wrapper {
+  min-height: 400px;
+  margin-bottom: 1em;
+}
+
+/* #349: Tab content has room for plot + caption; vertical scroll if needed */
+.tab-content, .tab-pane {
+  min-height: 700px !important;
 }
 
 /* Tables: block, scrollable */
@@ -49,12 +61,13 @@ body { font-size: 1.1em; }
 table.dataTable { white-space: nowrap; }
 table caption, .dataTables_wrapper caption { caption-side: top !important; }
 
-/* Captions: wrap text to window width; font-size matches body text (#348) */
+/* Captions: wrap text to window width; font-size matches body (#348); margin-top avoids overlap with plot (#349) */
 .fig-caption {
   display: block; font-size: 1em; color: #ffffff;
-  margin-top: 0.4em; text-align: left; line-height: 1.5;
+  margin-top: 1em; text-align: left; line-height: 1.5;
   word-wrap: break-word; overflow-wrap: break-word;
   max-width: 100%;
+  clear: both;
 }
 table caption, .dataTables_wrapper caption, .dt-caption {
   word-wrap: break-word; overflow-wrap: break-word;
