@@ -251,16 +251,25 @@ plan_commodities_mean_reversion <- function() {
   historicaldata::hd_strategy_upsert(con, cmr_row)
 
   partitions <- unique(cmr_summary$lookback)
-  uuids <- vapply(
-    partitions,
-    function(p) historicaldata::hd_run_record(
+  uuids <- character(length(partitions))
+  for (i in seq_along(partitions)) {
+    p <- partitions[i]
+    uu <- historicaldata::hd_run_record(
       con,
-      strategy_id     = "cmr",
-      partition       = p,
+      strategy_id      = "cmr",
+      partition        = p,
       pipeline_version = "phase1"
-    ),
-    character(1)
-  )
+    )
+    uuids[i] <- uu
+
+    # PR 3/4 — record long-form metrics for this partition.
+    row <- cmr_summary[cmr_summary$lookback == p, , drop = FALSE]
+    if (nrow(row) == 1L) {
+      metric_cols <- setdiff(names(row), "lookback")
+      wide <- row[, metric_cols, drop = FALSE]
+      historicaldata::hd_metric_record(con, uu, wide)
+    }
+  }
 
   tibble::tibble(partition = partitions, run_uuid = uuids)
 }
