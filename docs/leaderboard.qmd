@@ -285,8 +285,8 @@ if (!is.null(monthly)) {
   ) |>
     DT::formatStyle(
       columns = num_cols,
-      color = DT::styleInterval(0, c("#e74c3c", "#2ecc71")),
-      border = DT::styleInterval(0, c("2px solid #e74c3c", "2px solid #2ecc71"))
+      color = DT::styleInterval(0, c("#e74c3c", "#69d4a0")),
+      border = DT::styleInterval(0, c("2px solid #e74c3c", "2px solid #69d4a0"))
     )
 }
 ```

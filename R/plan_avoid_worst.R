@@ -268,7 +268,7 @@ plan_avoid_worst <- function() {
       ggplot(events, aes(x = date, y = ret_pct, colour = type)) +
         geom_segment(aes(xend = date, yend = 0), linewidth = 1.2) +
         geom_point(size = 2) +
-        scale_colour_manual(values = c("10 Best Days" = "#2ecc71",
+        scale_colour_manual(values = c("10 Best Days" = "#69d4a0",
                                         "10 Worst Days" = "#e74c3c")) +
         labs(x = NULL, y = "Daily Return (%)", colour = NULL,
              title = "SPY: 10 Worst and 10 Best Days (Temporal Clustering)") +
@@ -405,7 +405,7 @@ plan_avoid_worst <- function() {
         geom_line(linewidth = 0.5, alpha = 0.8) +
         geom_hline(yintercept = 0, linetype = "dotted", colour = "grey50") +
         scale_colour_manual(values = c(
-          "Gain (avoid worst)" = "#2ecc71",
+          "Gain (avoid worst)" = "#69d4a0",
           "Loss (miss best)" = "#e74c3c",
           "Net benefit" = hd_palette(1)
         )) +

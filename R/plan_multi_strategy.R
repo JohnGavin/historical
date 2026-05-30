@@ -100,7 +100,7 @@ plan_multi_strategy <- function() {
         geom_line(linewidth = 0.7) +
         scale_y_log10(labels = scales::dollar) +
         scale_colour_manual(values = c(
-          "Weighted" = "#2ecc71", "Equal Weight" = "#e6a817",
+          "Weighted" = "#69d4a0", "Equal Weight" = "#e6a817",
           "DRIF" = "#4a90d9", "LTR" = "#e74c3c"
         )) +
         labs(x = NULL, y = "Growth of $1 (log)", colour = NULL,

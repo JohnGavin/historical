@@ -260,7 +260,7 @@ plan_mean_reversion <- function() {
         geom_vline(xintercept = mr_params$test_start, linetype = "dashed",
                    colour = "grey50") +
         scale_y_log10(labels = scales::dollar) +
-        scale_colour_manual(values = c("Mean Reversion (net)" = "#2ecc71",
+        scale_colour_manual(values = c("Mean Reversion (net)" = "#69d4a0",
                                         "SPY Buy & Hold" = "#4a90d9")) +
         labs(x = NULL, y = "Growth of $1 (log)", colour = NULL,
              title = "Mean Reversion vs SPY") +

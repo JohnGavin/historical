@@ -404,7 +404,7 @@ plan_falsification_vignette <- function() {
         geom_point(size = 5, position = position_dodge(width = 0.5)) +
         annotate("text", x = 2.2, y = 0.5, label = "t = 2.0",
                  color = "#e74c3c", hjust = 0, size = 4) +
-        scale_colour_manual(values = c("Naive t" = "#4a90d9", "HAC t" = "#2ecc71")) +
+        scale_colour_manual(values = c("Naive t" = "#4a90d9", "HAC t" = "#69d4a0")) +
         scale_shape_manual(values = c("Naive t" = 16, "HAC t" = 17)) +
         labs(
           title = "Naive vs HAC t-Statistics (Cleveland Dot Plot)",
@@ -451,7 +451,7 @@ plan_falsification_vignette <- function() {
         geom_text(aes(label = strategy), vjust = -1.2, size = 4, color = "#e0e0e0") +
         geom_hline(yintercept = 0, color = "#666", linetype = "dashed") +
         geom_vline(xintercept = 15, color = "#666", linetype = "dashed") +
-        scale_color_manual(values = c("Genuine alpha" = "#2ecc71",
+        scale_color_manual(values = c("Genuine alpha" = "#69d4a0",
                                        "No alpha (beta)" = "#e74c3c")) +
         labs(
           title = "Alpha (%) vs Factor Exposure R² (%)",
