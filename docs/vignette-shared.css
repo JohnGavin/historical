@@ -49,9 +49,9 @@ body { font-size: 1.1em; }
 table.dataTable { white-space: nowrap; }
 table caption, .dataTables_wrapper caption { caption-side: top !important; }
 
-/* Captions: wrap text to window width */
+/* Captions: wrap text to window width; font-size matches body text (#348) */
 .fig-caption {
-  display: block; font-size: 0.85em; color: #ffffff;
+  display: block; font-size: 1em; color: #ffffff;
   margin-top: 0.4em; text-align: left; line-height: 1.5;
   word-wrap: break-word; overflow-wrap: break-word;
   max-width: 100%;
