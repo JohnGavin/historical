@@ -122,6 +122,7 @@ source(here::here("R/plan_regime_momentum.R"))
 source(here::here("R/plan_zakamulin_allocation.R"))
 source(here::here("R/plan_commodities_momentum.R"))
 source(here::here("R/plan_commodities_mean_reversion.R"))
+source(here::here("R/plan_mom_prepeak.R"))
 source(here::here("R/plan_crypto_momentum.R"))
 source(here::here("R/plan_solana_momentum.R"))
 source(here::here("R/plan_olmar.R"))
@@ -169,6 +170,7 @@ c(plan_strategy_names(),
   plan_zakamulin_allocation(),
   plan_commodities_momentum(),
   plan_commodities_mean_reversion(),
+  plan_mom_prepeak(),
   plan_crypto_momentum(),
   plan_solana_momentum(),
   plan_olmar(),
