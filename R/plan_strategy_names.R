@@ -48,6 +48,63 @@ plan_strategy_names <- function() {
           "stock-backtest.html", "stock-backtest.html",
           "stock-backtest.html", "leaderboard.html",
           "commodities-mean-reversion.html"
+        ),
+        # ── #346 strategy registry keywords (rough first-pass; refine after a full tar_make) ──
+        # Order matches code_name above (1 avoid_worst .. 11 cmr).
+        time_horizon_days_avg = c(
+          1L,  21L, 21L, 1L,  252L, 1L,
+          21L, 21L, 21L, 90L,
+          21L
+        ),
+        trades_per_year_avg = c(
+          12,  12,  12,  12,  12,  12,
+          12,  12,  12,   4,
+          12
+        ),
+        liquidity_tier = factor(
+          c("high", "high", "high", "high", "med", "high",
+            "med",  "med",  "med",  "high",
+            "med"),
+          levels = c("high", "med", "low")
+        ),
+        turnover_pct_per_period_avg = c(
+          50, 30, 30, 50, 20, 10,
+          100, 100, 100, 10,
+          100
+        ),
+        directionality = factor(
+          c("overlay",    "long_only",  "long_only",  "overlay",    "long_short", "overlay",
+            "long_short", "long_short", "long_short", "long_only",
+            "long_short"),
+          levels = c("long_only", "long_short", "market_neutral", "overlay")
+        ),
+        # Tags as JSON-encoded character vectors so duckplyr can pick them
+        # up as VARCHAR and a future hd_strategy_tags() helper can parse.
+        tags = c(
+          '["vix","market_timing","overlay"]',
+          '["factor_rotation","elastic_net","monthly"]',
+          '["factor_rotation","monthly"]',
+          '["vix","market_timing","overlay"]',
+          '["momentum","cross_sectional","monthly"]',
+          '["calendar","seasonal","overlay"]',
+          '["momentum","cross_sectional","stock_level"]',
+          '["elastic_net","ml","stock_level"]',
+          '["xgboost","ml","stock_level","monotonic"]',
+          '["portfolio","pso","optimisation","combined"]',
+          '["mean_reversion","commodities"]'
+        ),
+        research_paper_doi = c(
+          NA_character_,                  # 1 avoid_worst (folk wisdom; no single paper)
+          "10.2139/ssrn.5520615",         # 2 drif (Cakici et al. 2024 — placeholder)
+          "10.2139/ssrn.5520615",         # 3 fac_max
+          NA_character_,                  # 4 rsc (VIX overlay variant)
+          "10.1016/0304-405X(93)90023-5", # 5 ltr (Jegadeesh & Titman 1993 placeholder)
+          NA_character_,                  # 6 tom (TradeQuantix newsletter — no DOI)
+          "10.2139/ssrn.5520615",         # 7 stk_max (Cakici family at stock level)
+          "10.2139/ssrn.5520615",         # 8 stk_drif
+          NA_character_,                  # 9 xgb_drif (no paper)
+          NA_character_,                  # 10 pso_optimal (PSO is engineering)
+          NA_character_                   # 11 cmr (internal — #134/#138)
         )
       )
     })
