@@ -20,6 +20,8 @@ Imports:
     duckdb (>= 0.9),
     duckplyr,
     ggplot2,
+    lubridate,
+    purrr,
     rlang,
     tibble
 Suggests:
@@ -33,7 +35,6 @@ Suggests:
     HierPortfolios,
     httr2,
     jsonlite,
-    purrr,
     readxl,
     reviser,
     scales,
