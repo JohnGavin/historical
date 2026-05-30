@@ -1,84 +1,38 @@
-# Current Work (Session 2026-05-28/29 #11 — robustness stack + Pillar 8 + bug sweep + roborev clear, ENDED)
+# Current Work (Session 2026-05-30 #12 — #347 backtest-tracking DuckDB umbrella, ENDED)
 
 **Last updated:** session end
-**Previous sessions:** #10 (#288 CI gate, #160 deflated Sharpe, WFC digest, roborev clean-up), #9 (external-source digests), #8 (research-log DB, OLMAR-1), #7 (merge-queue drain)
+**Previous sessions:** #11 (robustness trio, Pillar 8, 21 PRs), #10 (CI gate, deflated Sharpe), #9 (external-source digests), #8 (research-log DB, OLMAR-1)
 
-## This session — 23 PRs merged
+## This session — 5 PRs merged + 1 issue filed
 
-### Initial 10-PR triage wave (executed session-#10's 58-FAIL plan)
-- **#302** wiki crypto outcome clarity (r4333)
-- **#303** docs/stock-backtest NULL leak (r3828, r4296)
-- **#304** pytest required-check stall (r4328/4331/4369/4476)
-- **#305** ADD signal scaffold (closes #279 Angle B work) — `hd_compute_add` + 33 tests + plan
-- **#306** WT-B strategy plans — 5 fixed (NA-safe is_spike, OLMAR test_end cap, join key `ym` not `date`, Sharpe-from-excess), 3 partials → follow-ups
-- **#307** **(critical)** `apply_adv_cap` respects `w_max` (r2122 cap-violation bug)
-- **#308** WT-A data layer — rlang `%||%` import, `hd_lazy` survivorship warn, non-HF guards
-- **#309** WFC scaffold (#297 build piece) — `hd_wf_correlation()` + 25 tests + plan
-- **#310** CPCV scaffold (#299 build piece) — purge + embargo + paths + PBO + 105 tests
-- **#311** quiz-logic.js XSS hardening (r4366) — `safeUrl()` allowlist + DOM APIs
+### #347 backtest-tracking DuckDB — closed via 4 sub-PRs
+- **#364 PR 1/4** schema + bootstrap — 12 tables in `bt.*` + `art.*` + `schema_version`. Exports `hd_registry_path/init/open/schema_version`.
+- **#366 PR 2/4** `bt.strategy` + `bt.run` writers + CMR pilot sentinel — `hd_strategy_upsert` (idempotent), `hd_run_record` (UUIDv4, git_sha auto-resolve). `cmr_registry_run` target writes strategy + 3 partition runs (1m/3m/6m).
+- **#367 PR 3/4** `bt.metric` + `bt.diagnostic` + `hd_leaderboard_from_registry()` — long-form recorders accept wide- or long-form input, idempotent per (run_uuid, metric_name). CMR sentinel now records 21 metric rows (7 × 3 partitions).
+- **#368 PR 4/4** `art.*` writers + `check_artefact_registry()` QA gate — the mermaid-test.html / examples.html regression catch.
 
-### P0 + design-driven follow-ups
-- **#321 (#317)** `qa_summary` includes olmar_metrics + tom_metrics (silently failing test now passes)
-- **#322 (#315)** `with_envvar` scope encloses `skip_if` in test-jst.R (other tests audited)
-- **#323 (#314)** TOM wired into the full 8-test falsification gauntlet (mirrors LTR sibling pattern)
-- **#324 (#316)** documented `adjusted_close` schema choice — surfaced a cross-dataset divergence (→ #325)
-- **#327 (#313)** heap-based DFS in TRP with explicit comparator (deterministic tie-break)
+### #347 follow-up — pipeline wiring
+- **#369** seeded `art.vignette` (12 docs/*.qmd registered) via new `plan_artefact_registry.R` (`art_vignette_seed` + `qa_artefact_registry` targets); negative control confirmed gate aborts on missing HTML.
 
-### Robustness trio + Pillar 8 + hygiene
-- **#326 (#319)** CPCV integration into plan_drif — `drif_path_sharpe` (15 paths, C(6,2)) + `drif_pbo`; factormax confirmed exempt
-- **#328 (#318)** WFC extended to DRIF elastic-net + `wfc_all_summary` + leaderboard `wf_corr` + `wfc_verdict` columns
-- **#330 (#269)** Pillar 8 risk architecture — `hd_dd_duration` + `hd_loss_clustering` + leaderboard columns
-- **#331/#333** Pillar 8 capstone — surfaced `max_consecutive_losses` (was computed but hidden)
-- **#332 (#325)** cross-dataset column normalisation — single canonical `adjusted_close` with read-time backward-compat alias
+### Issue filed
+- **#365** mom_prepeak — Büsing/Mohrschladt/Siedhoff 2022 "Decomposing Momentum: The Forgotten Component". 84% of standard 12-2 momentum alpha is in the pre-peak portion; positively skewed, crash-avoiding, market-state-independent. Three sibling strategies scoped (`mom_prepeak`, `mom_postpeak`, `mom_combined`).
 
-## Key technical events
+## Metrics
 
-### Three real latent bugs caught
-- **r2122 ADV cap renorm** — `apply_adv_cap()` unconditionally divided by `w_total`, pushing weights above `w_max` when `sum(w_max) < 1`. Tests blessed the violation as "mathematical limit". Fix: conditional renorm + new regression test (4×0.20 = 80% invested + 20% cash).
-- **r4366 quiz-logic.js XSS** — `innerHTML` string-concat with untrusted `r.real_url`. Fix: `safeUrl()` http/https allowlist + DOM APIs.
-- **qa_summary gap** — `olmar_metrics` and `tom_metrics` missing since OLMAR (#276) and TOM (#289) shipped. test-qa-summary-deps.R was failing pre-#307 (surfaced during r2122 fix).
+- **92 PASS / 0 FAIL / 0 WARN / 2 SKIP** across registry test suite
+- **12 vignettes registered** in `art.vignette`, all status='published'
+- **End-to-end registry path** verified: schema → bootstrap → strategy upsert → run record → metric record → leaderboard read → vignette seed → QA gate
 
-### Robustness layer now complete on the leaderboard
-- **WFC** (Pearson + Spearman + 2×2 verdict) for Factor MAX + Factor DRIF
-- **CPCV / PBO** for DRIF (15 paths)
-- **Deflated Sharpe** via `K_eff_strat` (#296 prior session)
-- **Pillar 8**: max DD + avg DD duration + max DD duration + loss clustering (runs test + lag-1 ACF) + max consecutive losses
+## Next session
 
-### Roborev
-58 FAIL reviews closed in bulk (17 session-#10 stale-closes done early; 41 cascade-on-merged-PR closures done at end). 1 residual: r4371 (DRIF Cakici rank-before-filter — deferred per user, tracked in #312).
+### Open umbrella to start
+- **#365 mom_prepeak** — first non-CMR strategy through the registry. Likely PR 1: signal extraction (`peak_date`, `pre_peak_return`, `post_peak_return`) + tests against synthetic price series. PR 2: targets + sentinel writing to registry.
 
-### CI
-Main is green. Transient failure on #330 post-merge (alphavantage_daily snapshot mismatch) was incidentally fixed by #332's `adjusted` → `adjusted_close` rename in `registry.R`.
+### Smaller follow-ups (no umbrella)
+- Seed `art.diagram` — scan qmd files for mermaid/plotly chunks
+- Register the 3 non-qmd HTMLs (`causal-dag`, `causal-dag-all`, `quiz-app`) in `art.vignette`
+- Add registry sentinels for the other 10 strategies in `strategy_names` so the legacy `leaderboard` target can be retired in favour of `hd_leaderboard_from_registry()`
 
-## Follow-ups filed (12)
+## Working branch
 
-- **#312** DRIF Cakici rank-before-filter — **deferred per user** ("investigate first")
-- **#313** TRP DFS sort — closed via #327
-- **#314** TOM falsification wiring — closed via #323
-- **#315** skip-guard timing — closed via #322
-- **#316** adjusted_close design — closed via #324
-- **#317** qa_summary gap — closed via #321
-- **#318** WFC extension — closed via #328
-- **#319** CPCV integration — closed via #326
-- **#320** ADD URL + backtest + leaderboard — **blocked on Chen-Zimmermann data acquisition**
-- **#325** cross-dataset normalisation — closed via #332
-- **#329** XGB factor-level WFC — **architecture decision needed**
-- **#331** surface max_cons_losses — closed via #333
-
-## Last PR of session
-
-- **#334 (#138)** — Commodities mean-reversion strategy + falsification wiring. Counterpart to #134's failed momentum (Sharpe -0.85). 36 tests pass. Numbers (does MR actually work in commodities?) determined at next `tar_make` — that is the actual research question.
-
-## Next session candidates
-
-- **#271** TOM acceptance gates — wiring is in (#323); needs `tar_make` run to produce numbers (heavy)
-- **#138 verification** — read `cmr_vs_mom_compare` output once `tar_make` has run; either celebrate or honest-negative result
-- **#278** OLMAR S&P 600 — blocked on #150 Option A (PIT data, deferred — paid source)
-- **#329** XGB factor-level WFC — needs architecture decision (3 options outlined in issue body)
-- **#157** specification-curve multiverse on plan_drif
-- **#267** BeyondPassive EUR/USD hedge overlay
-- **#280** Long-run commodity index 1871–2025
-
-## Open issue counts (post-session)
-
-~50 open. Robustness-stack work complete. Remaining open is research backlog (P3/P4) + the 5 blocked/deferred items above. See the priority groups posted in the session transcript for the full triage view.
+`main` — this session committed nothing to `feat/cc-20260528-101554`; all work merged directly via #364, #366, #367, #368, #369. Working tree is clean except for one untracked PDF in `knowledge/raw/` (append-only, owned by separate workflow).

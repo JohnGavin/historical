@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-05-30 (session 12 — #347 backtest-tracking DuckDB umbrella: 5 PRs + #365 mom_prepeak issue)
+
+### Completed
+- **#347 umbrella (backtest-tracking DuckDB) — closed via 4 sub-PRs in one session**:
+  - **PR 1/4 #364** schema + bootstrap: 12 tables in 2 namespaces (`bt.*` strategy/universe/cost_model/run/params/metric/diagnostic/output + `art.*` vignette/diagram/deploy/dependency) + `schema_version`. Exports `hd_registry_path/init/open/schema_version`. 14/14 tests.
+  - **PR 2/4 #366** `bt.strategy` + `bt.run` writers + **CMR pilot sentinel**: `hd_strategy_upsert` (idempotent), `hd_run_record` (UUIDv4, auto-resolves git_sha). `cmr_registry_run` target writes 1 strategy row + 3 run rows (1m/3m/6m) on each tar_make. 13/13 new tests; 27/27 cumulative.
+  - **PR 3/4 #367** `bt.metric` + `bt.diagnostic` recorders + `hd_leaderboard_from_registry()` reader: long-form writers accept wide- or long-form tibbles, idempotent per `(run_uuid, metric_name)`. CMR sentinel now also writes 7 metrics × 3 partitions = 21 long-form metric rows. 16/16 new tests; 80/80 cumulative.
+  - **PR 4/4 #368** `art.*` writers + **`check_artefact_registry()` QA gate**: vignette + diagram upserts (FK enforced), gate validates every registered HTML resolves on disk. **This is the exact check that would have caught mermaid-test.html / examples.html regressions.** 12/12 new tests; 92/92 cumulative.
+- **#347 follow-up (PR #369)**: seeded `art.vignette` via new `plan_artefact_registry.R` (`art_vignette_seed` + `qa_artefact_registry` targets), wired into `_targets.R` after `plan_wf_correlation()`. 12 docs/*.qmd files registered as `published`; gate runs on every tar_make. Negative control (phantom row) confirmed gate aborts with explicit missing-HTML error.
+- **#365 mom_prepeak strategy issue filed**: Büsing/Mohrschladt/Siedhoff 2022 "Decomposing Momentum: The Forgotten Component" via Klement substack. Headline: **84%** of standard 12-2 momentum profit comes from the pre-peak portion (start → highest formation-window price); pre-peak L/S is positively skewed, avoids momentum crashes, no market-state dependence, holds internationally. Scoped 3 sibling strategies (`mom_prepeak`, `mom_postpeak`, `mom_combined`) to empirically reproduce the 84/16 split before claiming alpha. First non-CMR strategy queued for the new registry.
+
+### Failed Approaches
+- **None this session.** Five PRs in sequence, each squash-merged on first push; all tests passed first-run.
+- **Skipped PDF read of #365 paper** because `pdftotext`/`poppler-utils` is not in the global shell and the PDF is local-only. Worked from the abstract supplied in the user message. Verbatim quotes will land in the eventual vignette's Methodology section against the local PDF.
+
+### Accuracy / Metrics
+- **Registry tests: 92 PASS / 0 FAIL / 0 WARN / 2 SKIP** (across `test-registry-db.R`, `test-registry-writers.R`, `test-registry-metrics.R`, `test-registry-artefacts.R`; the 2 skips are pre-existing CRAN guards in the legacy `test-registry.R`).
+- **Vignettes registered**: 12 (avoid-worst-days, drif, european-overlay, factor-max, falsification, index, jst-dashboard, leaderboard, macro-defense-rotation, negative-results, quiz, stock-backtest). All `status='published'`.
+- **End-to-end registry path verified**: schema → bootstrap → strategy upsert → run record → metric record → leaderboard read → vignette seed → QA gate. Negative control passed (phantom HTML correctly aborts).
+
+### Known Limitations
+- `art.diagram` table is populated by writer machinery but **empty** — needs a follow-up plan to scan qmd files for mermaid/plotly chunks and seed one row per diagram.
+- **3 non-qmd HTMLs** (`causal-dag.html`, `causal-dag-all.html`, `quiz-app.html`) are not in `art.vignette` because the seed only scans `docs/*.qmd`. Out of gate scope until manually registered.
+- **Legacy `leaderboard` target** still computes from per-strategy `*_metrics` targets directly; `hd_leaderboard_from_registry()` is parallel-only. Migration deferred until every strategy has its own registry sentinel.
+- **Only CMR has a registry sentinel.** Adding sentinels for the other 10 strategies in `strategy_names` is per-strategy work and depends on each strategy's metric target shape.
+- **mom_prepeak (#365)** is filed but not implemented. Will be the second strategy through the registry once the daily-price feed is verified for the formation window.
+
+### Next Session
+- Continue on branch: `main` (this session merged everything directly to main via PRs)
+- Open umbrella to start: **#365 mom_prepeak** (PR 1 likely: signal extraction function + tests; PR 2: targets + sentinel via the new registry)
+- Open follow-ups (no umbrella): `art.diagram` seeding, register the 3 non-qmd HTMLs
+
 ## 2026-05-28/29 (session 11 — robustness stack + Pillar 8 + bug sweep + roborev clear: 21 PRs)
 
 ### Completed
