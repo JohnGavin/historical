@@ -1,0 +1,3 @@
+# Append-only parquet shards for each backtest run land here.
+# Convention (Phase 2): year=YYYY/month=MM/run_<uuid>.parquet
+# Committed empty so the directory exists in the package tree.

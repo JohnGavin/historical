@@ -54,6 +54,7 @@ Other falsification:
 \code{\link{hd_null_env_regime_vol}()},
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_null_rejection_rate}()},
-\code{\link{hd_tail_dependence}()}
+\code{\link{hd_tail_dependence}()},
+\code{\link{hd_wf_correlation}()}
 }
 \concept{falsification}

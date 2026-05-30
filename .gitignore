@@ -24,6 +24,16 @@ result
 .RData
 *.Rproj.user
 
+# Backtest registry — runtime DuckDB file (#347 PR 1/4)
+# Schema definition is committed at packages/historicaldata/inst/extdata/
+# registry/schema.sql; the runtime .duckdb is rebuildable from the parquet
+# shards (committed at runs/) plus the schema.
+inst/extdata/registry/registry.duckdb*
+packages/historicaldata/inst/extdata/registry/registry.duckdb*
+**/registry.duckdb
+**/registry.duckdb.wal
+**/registry.duckdb.tmp
+
 # Python
 __pycache__/
 *.pyc
