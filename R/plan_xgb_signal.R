@@ -137,7 +137,14 @@ plan_xgb_signal <- function() {
       xgb <- xgb_drif_portfolio |> select(ym, xgb_ret = port_ret)
       enet <- stk_drif_portfolio |> select(ym, enet_ret = port_ret)
 
+      # #354: inner_join does NOT preserve chronological order; without an
+      # explicit arrange(ym) the subsequent cumprod() runs over rows in
+      # whatever order inner_join leaves them. The plot then draws a line
+      # by date through the out-of-order cumulative series, producing the
+      # ~2005 vertical jump and the apparent "2026 drop" (just the last
+      # out-of-order row plotted at the end of the x-axis).
       inner_join(xgb, enet, by = "ym") |>
+        arrange(ym) |>
         mutate(
           xgb_cum = cumprod(1 + xgb_ret),
           enet_cum = cumprod(1 + enet_ret),
