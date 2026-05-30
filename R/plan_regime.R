@@ -233,8 +233,13 @@ plan_regime <- function() {
         ) |>
         tidyr::pivot_longer(-date, names_to = "strategy", values_to = "growth")
 
-      p <- ggplot(plot_data, aes(date, growth, colour = strategy)) +
-        geom_line(linewidth = 0.6)
+      # #357: linetype distinction so the two series are visible even when
+      # regime_cum and base_cum are identical (e.g., all-low-regime periods)
+      p <- ggplot(plot_data, aes(date, growth, colour = strategy,
+                                  linetype = strategy)) +
+        geom_line(linewidth = 0.6, alpha = 0.85) +
+        scale_linetype_manual(values = c("Regime-Adjusted" = "solid",
+                                          "Base Portfolio"  = "dashed"))
 
       # Add high-risk shading if any periods exist
       if (nrow(high_risk_periods) > 0) {

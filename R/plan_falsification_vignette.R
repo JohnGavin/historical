@@ -121,8 +121,10 @@ plan_falsification_vignette <- function() {
         geom_text(aes(label = round(pct, 0), colour = text_col),
                   size = 4.5, fontface = "bold", show.legend = FALSE) +
         scale_colour_identity() +
+        # #350: mid 'pale yellow' #ffffbf was near-white in the legend —
+        # use a saturated amber so the green→yellow→red gradient is visible
         scale_fill_gradient2(
-          low = "#1a9850", mid = "#ffffbf", high = "#d73027",
+          low = "#1a9850", mid = "#fee08b", high = "#d73027",
           midpoint = 8, limits = c(0, 100),
           name = "Rejection (%)"
         ) +
