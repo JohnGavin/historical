@@ -54,15 +54,15 @@ Gate on \code{AV_REFRESH=1} environment variable or use a scheduled workflow.
 
 \section{Column naming (adjusted close)}{
 
-The \code{adjusted_close} column name is kept as-is from the AlphaVantage API
-response — no rename is performed at ingest.  This differs from the
-\code{equity_daily} dataset (Yahoo Finance / HF parquet), which uses the shorter
-\code{adjusted} column.  The difference is intentional: each dataset retains its
-source API's natural column name.  When joining \code{alphavantage_daily} to
-\code{equity_daily}, rename one side explicitly:
-\code{dplyr::rename(av_df, adjusted = adjusted_close)}.
+\code{adjusted_close} is the canonical column name across all datasets in this
+package (GitHub issue
+\href{https://github.com/JohnGavin/historical/issues/325}{#325}).
+AlphaVantage's \code{TIME_SERIES_DAILY_ADJUSTED} endpoint returns this name
+natively — no rename is needed.  The \code{equity_daily} dataset (Yahoo Finance /
+HF parquet) also uses \code{adjusted_close} from #325 onwards.  Cross-dataset
+joins no longer require any rename.
 See \code{inst/COLUMN_NAMING.md} and GitHub issue #316 for the full
-rationale and the canonical column-name table.
+canonical-column table and source-system synonym mapping.
 }
 
 \examples{

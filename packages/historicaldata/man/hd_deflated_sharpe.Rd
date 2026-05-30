@@ -61,6 +61,7 @@ Other falsification:
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_null_rejection_rate}()},
 \code{\link{hd_tail_dependence}()},
-\code{\link{hd_tail_keff_frob}()}
+\code{\link{hd_tail_keff_frob}()},
+\code{\link{hd_wf_correlation}()}
 }
 \concept{falsification}

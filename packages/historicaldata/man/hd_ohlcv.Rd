@@ -40,7 +40,7 @@ or chain additional dplyr verbs for server-side computation.
 \details{
 Mixed-dataset batches (e.g. \code{c("AAPL", "BTC")}) are split by detected
 dataset, queried separately, and \code{bind_rows}'d. Columns that exist in
-only one dataset (e.g. \code{adjusted} in equities, \code{market_cap} in crypto)
+only one dataset (e.g. \code{adjusted_close} in equities, \code{market_cap} in crypto)
 are filled with \code{NA} for rows from the other dataset. When the batch
 spans multiple datasets, the result is always materialised — \code{collect = FALSE} cannot be honoured because lazy frames from distinct parquet
 sources cannot be bound.
