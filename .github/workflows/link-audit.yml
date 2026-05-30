@@ -1,0 +1,94 @@
+name: Link audit (lychee)
+
+# Closes #344. Catches deep-link / anchor-fragment / inbound-href breakage
+# that the manual URL-status sweep missed (e.g., examples.html#equity 404
+# from a homepage card after examples.qmd was archived).
+#
+# Two trigger modes:
+#   - daily (cron): full re-crawl of the deployed Pages site
+#   - on push to main touching docs/: in-repo crawl of docs/*.html before deploy
+
+on:
+  schedule:
+    - cron: '17 6 * * *'      # daily at 06:17 UTC
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/link-audit.yml'
+
+permissions:
+  contents: read
+  issues: write               # to auto-file an issue on failure
+
+jobs:
+  link-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Lychee — in-repo HTML pre-deploy check
+        if: github.event_name == 'push'
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --verbose
+            --max-redirects 5
+            --max-concurrency 8
+            --accept 200,206,429
+            --exclude-mail
+            './docs/**/*.html'
+            './docs/**/*.qmd'
+            './*.md'
+          fail: true
+          format: markdown
+          output: ./lychee-out.md
+          jobSummary: true
+
+      - name: Lychee — live Pages crawl (scheduled / manual)
+        if: github.event_name != 'push'
+        uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress
+            --verbose
+            --max-redirects 5
+            --max-concurrency 8
+            --accept 200,206,429
+            --exclude-mail
+            --base 'https://johngavin.github.io/historical/'
+            'https://johngavin.github.io/historical/'
+            'https://johngavin.github.io/historical/leaderboard.html'
+            'https://johngavin.github.io/historical/falsification.html'
+            'https://johngavin.github.io/historical/factor-max.html'
+            'https://johngavin.github.io/historical/drif.html'
+            'https://johngavin.github.io/historical/stock-backtest.html'
+            'https://johngavin.github.io/historical/avoid-worst-days.html'
+            'https://johngavin.github.io/historical/macro-defense-rotation.html'
+            'https://johngavin.github.io/historical/jst-dashboard.html'
+            'https://johngavin.github.io/historical/negative-results.html'
+            'https://johngavin.github.io/historical/quiz.html'
+            'https://johngavin.github.io/historical/european-overlay.html'
+          fail: true
+          format: markdown
+          output: ./lychee-out.md
+          jobSummary: true
+
+      - name: Upload lychee report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lychee-output
+          path: ./lychee-out.md
+          retention-days: 14
+
+      - name: Create issue on schedule failure
+        if: failure() && github.event_name == 'schedule'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "link-audit: broken links detected on Pages site"
+          content-filepath: ./lychee-out.md
+          labels: bug, deploy, link-audit
