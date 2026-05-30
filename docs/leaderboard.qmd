@@ -363,12 +363,23 @@ if (!is.null(x)) {
 
 ```{r}
 #| fig-height: 6
-safe_tar_read("decay_plot")
+# #356: only render the plot if the upstream metric target produced rows
+dp <- safe_tar_read("decay_plot")
+decay_metrics <- safe_tar_read("decay_metrics")
+if (!is.null(dp) && !is.null(decay_metrics) && nrow(decay_metrics) > 0) {
+  print(dp)
+} else {
+  cat("::: callout-note\n",
+      "**Alpha decay analysis not yet computed.** ",
+      "Run `tar_make(c(\"decay_metrics\", \"decay_plot\", \"decay_half_life\"))` ",
+      "to populate this tab. See [#356](https://github.com/JohnGavin/historical/issues/356).\n",
+      ":::\n", sep = "")
+}
 ```
 
 ```{r}
 decay_hl <- safe_tar_read("decay_half_life")
-if (!is.null(decay_hl)) {
+if (!is.null(decay_hl) && nrow(decay_hl) > 0) {  # #356: don't render an empty DT
   display <- decay_hl |>
     transmute(
       Strategy = dplyr::recode(strategy, stk_max = "Stock MAX", stk_drif = "Stock DRIF"),
