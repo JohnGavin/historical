@@ -309,51 +309,12 @@ plan_mom_prepeak <- function() {
 }
 
 
-#' Compute annualised performance metrics for one sibling strategy
-#'
-#' @param returns_tbl Tibble from .mom_prepeak_compute_returns().
-#' @param strategy Character. Strategy code_name label.
-#' @param ann_factor Integer. Annualisation factor (12 for monthly).
-#'
-#' @return One-row tibble: strategy, n_months, sharpe, cagr, vol, max_dd.
-#' @noRd
-.mom_prepeak_compute_metrics <- function(returns_tbl,
-                                          strategy,
-                                          ann_factor = 12L) {
-  r <- returns_tbl$ret_ls
-  r <- r[!is.na(r)]
-  n <- length(r)
-
-  if (n < 12L) {
-    return(tibble::tibble(
-      strategy = strategy, n_months = n,
-      sharpe = NA_real_, cagr = NA_real_, vol = NA_real_, max_dd = NA_real_
-    ))
-  }
-
-  monthly_rf <- (1.02)^(1 / ann_factor) - 1
-  mean_r     <- mean(r)
-  sd_r       <- sd(r)
-  sharpe     <- if (sd_r > 0) (mean_r - monthly_rf) / sd_r * sqrt(ann_factor) else NA_real_
-
-  cum        <- cumprod(1 + r)
-  years      <- n / ann_factor
-  cagr       <- cum[[n]]^(1 / years) - 1
-  vol        <- sd_r * sqrt(ann_factor)
-
-  cum_max    <- cummax(cum)
-  dd         <- (cum - cum_max) / cum_max
-  max_dd     <- min(dd)
-
-  tibble::tibble(
-    strategy = strategy,
-    n_months = n,
-    sharpe   = round(sharpe, 3),
-    cagr     = round(cagr * 100, 1),
-    vol      = round(vol * 100, 1),
-    max_dd   = round(max_dd * 100, 1)
-  )
-}
+# .mom_prepeak_compute_metrics() is defined in
+# packages/historicaldata/R/utils_mom_prepeak_metrics.R and loaded via
+# pkgload::load_all() / library(historicaldata) at pipeline run time.
+# The implementation was extracted there so it can be unit-tested
+# independently of the plan file's tar_target library() calls.
+# See also: packages/historicaldata/tests/testthat/test-mom-prepeak-metrics.R
 
 
 #' Registry sentinel: upsert 3 sibling strategies + record runs + metrics
