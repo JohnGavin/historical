@@ -146,6 +146,21 @@ plan_commodities_mean_reversion <- function() {
         max_dd      = c(mr_metrics$mr_mdd,    mom_metrics$mom_mdd)
       ) |>
         dplyr::arrange(type, lookback)
+    }),
+
+
+    # ── Registry sentinel (#347 PR 2/4) ───────────────────────────────────
+    # First strategy to write into the bt.* registry. One bt.strategy row
+    # + three bt.run rows (one per lookback partition: 1m, 3m, 6m). The
+    # registry path is overridable via HD_REGISTRY_PATH so CI / tests can
+    # point it at a tempfile. Returns a tibble of the run_uuids for
+    # inspection via tar_read(cmr_registry_run).
+
+    targets::tar_target(cmr_registry_run, {
+      .cmr_register_runs(
+        strategy_names = strategy_names,
+        cmr_summary    = cmr_summary
+      )
     })
 
   )
@@ -196,4 +211,56 @@ plan_commodities_mean_reversion <- function() {
     avg_dd_duration = dd_stats$avg_dd_duration,
     max_dd_duration = dd_stats$max_dd_duration
   )
+}
+
+
+# ── Registry sentinel helper (#347 PR 2/4) ────────────────────────────────
+# Initialises (idempotent) + upserts CMR strategy + records one bt.run
+# row per lookback partition. Returns a tibble of (partition, run_uuid).
+.cmr_register_runs <- function(strategy_names, cmr_summary) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      partition = character(),
+      run_uuid  = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  cmr_row <- strategy_names |>
+    dplyr::filter(.data$code_name == "cmr") |>
+    dplyr::transmute(
+      strategy_id       = .data$code_name,
+      short_name        = .data$short_name,
+      long_name         = .data$long_name,
+      asset_class       = .data$asset_class,
+      frequency         = .data$frequency,
+      ann_factor        = as.integer(.data$ann_factor),
+      directionality    = as.character(.data$directionality),
+      liquidity_tier    = as.character(.data$liquidity_tier),
+      time_horizon_days = as.integer(.data$time_horizon_days_avg),
+      trades_per_year   = as.numeric(.data$trades_per_year_avg),
+      turnover_pct      = as.numeric(.data$turnover_pct_per_period_avg),
+      tags              = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+  historicaldata::hd_strategy_upsert(con, cmr_row)
+
+  partitions <- unique(cmr_summary$lookback)
+  uuids <- vapply(
+    partitions,
+    function(p) historicaldata::hd_run_record(
+      con,
+      strategy_id     = "cmr",
+      partition       = p,
+      pipeline_version = "phase1"
+    ),
+    character(1)
+  )
+
+  tibble::tibble(partition = partitions, run_uuid = uuids)
 }
