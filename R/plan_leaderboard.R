@@ -1,3 +1,12 @@
+# DEPRECATED: This plan assembles a hand-coded leaderboard from individual
+# strategy metric targets. The registry-backed replacement is:
+#
+#   historicaldata::hd_leaderboard_from_registry()
+#
+# Once the registry covers all strategies, this target can be retired.
+# Monitor parity via the `qa_legacy_leaderboard_sentinel` target in
+# R/plan_artefact_registry.R.
+#
 # Model leaderboard: collects metrics from all strategies into one table
 #
 # Transposed format: metrics as rows, strategies as columns
