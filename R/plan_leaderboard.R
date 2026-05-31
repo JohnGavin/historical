@@ -25,6 +25,93 @@ plan_leaderboard <- function() {
         m |> mutate(strategy = name, level = level, signal = signal, definition = url)
       }
 
+      # ── Schema-normalisation helpers for strategies with non-standard schemas ──
+      # Each helper returns a tibble with at minimum: period, months, cagr, vol,
+      # sharpe, max_dd. Extra columns are preserved so the final bind_rows()
+      # fills NA for columns absent in some strategies.
+
+      # ltr_metrics has hac_sharpe instead of sharpe; no months column
+      .norm_ltr <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |> rename(sharpe = hac_sharpe)
+      }
+
+      # olmar_metrics has `days` instead of `months`; daily ann_factor
+      .norm_olmar <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |> rename(months = days)
+      }
+
+      # tom_metrics uses cagr_tom, vol_tom, sharpe_tom, max_dd_tom
+      # Drop benchmark columns; keep TOM strategy row only
+      .norm_tom <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |> transmute(
+          period = period,
+          months = n_days,
+          cagr   = cagr_tom,
+          vol    = vol_tom,
+          sharpe = sharpe_tom,
+          max_dd = max_dd_tom
+        )
+      }
+
+      # cmr_summary has lookback (1m/3m/6m) instead of period; no period column.
+      # Pick the best-Sharpe lookback for the leaderboard row.
+      # We create one synthetic "Full Period" row = the best lookback.
+      .norm_cmr <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        best <- m |> filter(!is.na(sharpe)) |> arrange(desc(sharpe)) |> slice(1)
+        if (nrow(best) == 0L) return(NULL)
+        best |> transmute(
+          period = "Full Period",
+          months = n_months,
+          cagr   = cagr,
+          vol    = vol,
+          sharpe = sharpe,
+          max_dd = max_dd,
+          cmr_lookback = lookback  # preserve for inspection
+        )
+      }
+
+      # rsc_metrics contains multiple internal strategy variants (SPY_overlay,
+      # DRIF_overlay, etc.). Pick only the SPY_overlay rows which represent the
+      # strategy's own performance.
+      .norm_rsc <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |>
+          filter(strategy == "SPY_overlay") |>
+          select(-strategy) |>
+          rename(sharpe = hac_sharpe)
+      }
+
+      # mom_prepeak_metrics / siblings have no period column (one row per
+      # strategy); column n_months not months; no period. Synthesise
+      # "Full Period" as the single row.
+      .norm_mom_sibling <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |>
+          select(-any_of("strategy")) |>  # strategy is set by add_meta name=
+          transmute(
+            period = "Full Period",
+            months = n_months,
+            cagr   = cagr,
+            vol    = vol,
+            sharpe = sharpe,
+            max_dd = max_dd
+          )
+      }
+
+      # aw_metrics has scenario × period; keep the "Remove 10 Worst" rows
+      # (the protection scenario) and drop the extra scenario column.
+      .norm_aw <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |>
+          filter(scenario == "Remove 10 Worst") |>
+          select(-scenario) |>
+          rename(months = n_days)
+      }
+
       all_metrics <- bind_rows(
         add_meta(fm_metrics, "Factor MAX", "Factor", "Max daily return",
                  "factor-max.html"),
@@ -35,7 +122,34 @@ plan_leaderboard <- function() {
         add_meta(stk_drif_metrics, "Stock DRIF", "Stock", "Elastic net (42 feat)",
                  "stock-backtest.html#stock-drif"),
         add_meta(xgb_drif_metrics, "XGB DRIF", "Stock", "XGBoost monotonic (42 feat)",
-                 "stock-backtest.html#stock-drif")
+                 "stock-backtest.html#stock-drif"),
+        # ── Added in #345: wire missing strategies ──
+        add_meta(.norm_ltr(ltr_metrics), "LTR", "Equity", "Cross-sectional momentum",
+                 "leaderboard.html"),
+        add_meta(.norm_olmar(olmar_metrics), "OLMAR-1", "Equity",
+                 "Online mean-reversion (Li & Hoi 2012)",
+                 "leaderboard.html"),
+        add_meta(.norm_tom(tom_metrics), "TOM", "Overlay",
+                 "Turn-of-the-month calendar effect",
+                 "turn-of-month.html"),
+        add_meta(.norm_cmr(cmr_summary), "CMR", "Commodities",
+                 "Commodities mean reversion (best lookback)",
+                 "commodities-mean-reversion.html"),
+        add_meta(.norm_rsc(rsc_metrics), "Risk State", "Overlay",
+                 "VIX regime overlay on SPY",
+                 "leaderboard.html"),
+        add_meta(.norm_aw(aw_metrics), "Avoid Worst", "Overlay",
+                 "VIX protection: remove 10 worst days",
+                 "avoid-worst-days.html"),
+        add_meta(.norm_mom_sibling(mom_prepeak_metrics), "Mom Pre-Peak", "Equity",
+                 "Pre-peak 12-2 momentum (Büsing 2022)",
+                 "momentum-prepeak.html"),
+        add_meta(.norm_mom_sibling(mom_postpeak_metrics), "Mom Post-Peak", "Equity",
+                 "Post-peak 12-2 momentum (Büsing 2022)",
+                 "momentum-prepeak.html"),
+        add_meta(.norm_mom_sibling(mom_combined_metrics), "Mom 12-2", "Equity",
+                 "Standard 12-2 momentum (Büsing baseline)",
+                 "momentum-prepeak.html")
       )
 
       # Add portfolio optimal
@@ -196,8 +310,13 @@ plan_leaderboard <- function() {
       if (!is.null(fals_results_db) && nrow(fals_results_db) > 0) {
         fals_id_to_label <- c(
           fac_max     = "Factor MAX",
-          drif        = "Factor DRIF"
-          # avoid_worst, rsc, ltr, tom are not yet in the leaderboard
+          drif        = "Factor DRIF",
+          # ── #345: added to leaderboard ──
+          avoid_worst = "Avoid Worst",
+          rsc         = "Risk State",
+          ltr         = "LTR",
+          tom         = "TOM"
+          # cmr, olmar, mom_prepeak siblings: not yet in fals_results_db
         )
         pillar8_join <- fals_results_db |>
           filter(strategy_id %in% names(fals_id_to_label)) |>
