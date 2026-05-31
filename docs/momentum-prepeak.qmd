@@ -804,8 +804,8 @@ wfc_result <- safe_tar_read("mom_prepeak_wfc_result")
 wfc_available <- !is.null(wfc_grid) && !is.null(wfc_result)
 
 if (wfc_available) {
-  pearson_rho   <- round(wfc_result$pearson_rho,   3)
-  spearman_rho  <- round(wfc_result$spearman_rho,  3)
+  pearson_rho   <- round(wfc_result$pearson,   3)
+  spearman_rho  <- round(wfc_result$spearman,  3)
   wfc_class_val <- wfc_result$classification
   median_oos    <- round(wfc_result$median_oos, 3)
 
