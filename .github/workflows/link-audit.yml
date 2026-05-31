@@ -7,6 +7,9 @@ name: Link audit (lychee)
 # Two trigger modes:
 #   - daily (cron): full re-crawl of the deployed Pages site
 #   - on push to main touching docs/: in-repo crawl of docs/*.html before deploy
+#
+# lychee is pinned via flake.nix (additional-tools) so version is stable across
+# dev and CI (#392). .lycheeignore handles DOI/publisher-wall bot-blocks.
 
 on:
   schedule:
@@ -25,55 +28,56 @@ permissions:
 jobs:
   link-audit:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            trusted-users = root runner
+            extra-substituters = https://rstats-on-nix.cachix.org
+            extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
+
       - name: Lychee — in-repo HTML pre-deploy check
         if: github.event_name == 'push'
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: >-
-            --no-progress
-            --verbose
-            --max-redirects 5
-            --max-concurrency 8
-            --accept 200,206,403,429
-            './docs/**/*.html'
-            './docs/**/*.qmd'
+        run: |
+          nix develop --command lychee \
+            --no-progress \
+            --verbose \
+            --max-redirects 5 \
+            --max-concurrency 8 \
+            --accept 200,206,403,429 \
+            --output ./lychee-out.md \
+            --format markdown \
+            './docs/**/*.html' \
+            './docs/**/*.qmd' \
             './*.md'
-          fail: true
-          format: markdown
-          output: ./lychee-out.md
-          jobSummary: true
 
       - name: Lychee — live Pages crawl (scheduled / manual)
         if: github.event_name != 'push'
-        uses: lycheeverse/lychee-action@v2
-        with:
-          args: >-
-            --no-progress
-            --verbose
-            --max-redirects 5
-            --max-concurrency 8
-            --accept 200,206,403,429
-            --base 'https://johngavin.github.io/historical/'
-            'https://johngavin.github.io/historical/'
-            'https://johngavin.github.io/historical/leaderboard.html'
-            'https://johngavin.github.io/historical/falsification.html'
-            'https://johngavin.github.io/historical/factor-max.html'
-            'https://johngavin.github.io/historical/drif.html'
-            'https://johngavin.github.io/historical/stock-backtest.html'
-            'https://johngavin.github.io/historical/avoid-worst-days.html'
-            'https://johngavin.github.io/historical/macro-defense-rotation.html'
-            'https://johngavin.github.io/historical/jst-dashboard.html'
-            'https://johngavin.github.io/historical/negative-results.html'
-            'https://johngavin.github.io/historical/quiz.html'
+        run: |
+          nix develop --command lychee \
+            --no-progress \
+            --verbose \
+            --max-redirects 5 \
+            --max-concurrency 8 \
+            --accept 200,206,403,429 \
+            --output ./lychee-out.md \
+            --format markdown \
+            --base 'https://johngavin.github.io/historical/' \
+            'https://johngavin.github.io/historical/' \
+            'https://johngavin.github.io/historical/leaderboard.html' \
+            'https://johngavin.github.io/historical/falsification.html' \
+            'https://johngavin.github.io/historical/factor-max.html' \
+            'https://johngavin.github.io/historical/drif.html' \
+            'https://johngavin.github.io/historical/stock-backtest.html' \
+            'https://johngavin.github.io/historical/avoid-worst-days.html' \
+            'https://johngavin.github.io/historical/macro-defense-rotation.html' \
+            'https://johngavin.github.io/historical/jst-dashboard.html' \
+            'https://johngavin.github.io/historical/negative-results.html' \
+            'https://johngavin.github.io/historical/quiz.html' \
             'https://johngavin.github.io/historical/european-overlay.html'
-          fail: true
-          format: markdown
-          output: ./lychee-out.md
-          jobSummary: true
 
       - name: Upload lychee report
         if: always()
