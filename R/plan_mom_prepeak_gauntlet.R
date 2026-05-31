@@ -231,17 +231,25 @@ plan_mom_prepeak_gauntlet <- function() {
 
     # FF5+Momentum alpha regression for mom_prepeak
     # Input to hd_factor_null_test: {date, strategy_ret} using exec_date.
+    # FF factors arrive at month-start; strategy returns are stamped at month-end.
+    # floor_date aligns both to month-key for the join.
     targets::tar_target(mom_prepeak_ff_reg, {
       library(dplyr)
       strategy_monthly <- mom_prepeak_returns |>
         dplyr::select(date = "exec_date", strategy_ret = "ret_ls") |>
         dplyr::filter(!is.na(.data$strategy_ret)) |>
-        dplyr::mutate(date = as.Date(.data$date))
+        dplyr::mutate(date = lubridate::floor_date(as.Date(.data$date), "month"))
+
+      rf_keyed <- mom_prepeak_rf_monthly |>
+        dplyr::mutate(date = lubridate::floor_date(.data$date, "month"))
+
+      ff_keyed <- mom_prepeak_ff_factors_monthly |>
+        dplyr::mutate(date = lubridate::floor_date(.data$date, "month"))
 
       hd_factor_null_test(
         strategy_daily = strategy_monthly,
-        rf_daily       = mom_prepeak_rf_monthly,
-        factors_daily  = mom_prepeak_ff_factors_monthly
+        rf_daily       = rf_keyed,
+        factors_daily  = ff_keyed
       )
     }),
 
