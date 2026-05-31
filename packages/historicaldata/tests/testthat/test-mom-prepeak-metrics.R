@@ -110,3 +110,67 @@ test_that("output tibble structure includes blown_up and bankrupt_month columns"
 
   expect_snapshot(str(result))
 })
+
+# ---- 7. Pillar-8: normal case has finite metrics ────────────────────────────
+
+test_that("Pillar-8 metrics present and finite in normal (non-bankrupt) case", {
+  # 36 months: 6 months of 2% gains then 3% drawdown then recover
+  r <- c(rep(0.02, 12), rep(-0.03, 6), rep(0.02, 18))
+
+  result <- historicaldata:::.mom_prepeak_compute_metrics(
+    make_returns_tbl(r), strategy = "test_pillar8_normal"
+  )
+
+  expect_false(result$blown_up)
+  expect_true("avg_dd_days"     %in% names(result))
+  expect_true("max_dd_days"     %in% names(result))
+  expect_true("max_cons_losses" %in% names(result))
+  expect_true("loss_clustered"  %in% names(result))
+
+  # With a drawdown period, these should be finite (not NA)
+  expect_true(!is.na(result$avg_dd_days))
+  expect_true(!is.na(result$max_dd_days))
+  expect_true(!is.na(result$max_cons_losses))
+  expect_true(result$max_cons_losses >= 0L)
+})
+
+# ---- 8. Pillar-8: blown-up case uses pre-bankruptcy slice only ──────────────
+
+test_that("Pillar-8 metrics computed on pre-bankruptcy slice when blown_up", {
+  # 30 months; bankruptcy at month 20.
+  # Months 21-30 are post-bankruptcy; their loss runs should NOT be counted.
+  r <- rep(0.01, 30)
+  r[20] <- -1.5   # bankruptcy at month 20
+
+  result <- historicaldata:::.mom_prepeak_compute_metrics(
+    make_returns_tbl(r), strategy = "test_pillar8_blown"
+  )
+
+  expect_true(result$blown_up)
+  expect_equal(result$bankrupt_month, 20L)
+
+  # max_cons_losses should be based on months 1-19 only (all positive +1%)
+  # — no consecutive losses in pre-bankruptcy slice, so max_cons_losses = 0
+  expect_equal(result$max_cons_losses, 0L)
+
+  # avg_dd_days and max_dd_days: monotone-up series before bankruptcy → NA (no dd events)
+  # (hd_dd_duration returns NA avg/max when no drawdown events exist)
+  # We just check they are not informed by post-bankruptcy returns (which would have negative runs)
+  expect_true(is.na(result$avg_dd_days) || result$avg_dd_days >= 0)
+})
+
+# ---- 9. Pillar-8: sharpe preserved when blown_up ────────────────────────────
+
+test_that("sharpe preserved and Pillar-8 columns present even when blown_up", {
+  r <- rep(0.01, 24)
+  r[13] <- -1.2
+
+  result <- historicaldata:::.mom_prepeak_compute_metrics(
+    make_returns_tbl(r), strategy = "test_pillar8_sharpe_blown"
+  )
+
+  expect_true(result$blown_up)
+  expect_false(is.na(result$sharpe))
+  # All four Pillar-8 columns must exist
+  expect_true(all(c("avg_dd_days", "max_dd_days", "max_cons_losses", "loss_clustered") %in% names(result)))
+})

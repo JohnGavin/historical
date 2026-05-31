@@ -705,16 +705,355 @@ The following analyses are **not included in this PR** and are tracked in issue 
 | Pillar-8 risk metrics (skewness of daily returns, tail ratio) | Deferred to PR 4/4 |
 | Full CRSP-scale replication (60/40 result matching paper's 84/16) | Open question in #365 |
 
+# Pillar-8 Risk Metrics
+
+## Row
+
+### {.tabset}
+
+#### Risk Metrics Table
+
+```{r}
+# Read gauntlet summary: mom_prepeak_summary now includes Pillar-8 columns
+# (avg_dd_days, max_dd_days, max_cons_losses, loss_clustered).
+p8_cols <- c("avg_dd_days", "max_dd_days", "max_cons_losses", "loss_clustered")
+
+p8_available <- !is.null(summary_tbl) && all(p8_cols %in% names(summary_tbl))
+
+if (p8_available) {
+  p8_display <- summary_tbl |>
+    dplyr::left_join(
+      mom_names |> dplyr::select("code_name", "short_name"),
+      by = c("strategy" = "code_name")
+    ) |>
+    dplyr::mutate(
+      Strategy          = dplyr::coalesce(.data$short_name, .data$strategy),
+      `Avg DD (months)` = dplyr::if_else(
+        is.na(.data$avg_dd_days), "—", as.character(round(.data$avg_dd_days, 1))),
+      `Max DD (months)` = dplyr::if_else(
+        is.na(.data$max_dd_days), "—", as.character(round(.data$max_dd_days, 1))),
+      `Max Consec Losses` = dplyr::if_else(
+        is.na(.data$max_cons_losses), "—", as.character(.data$max_cons_losses)),
+      `Loss Clustered` = dplyr::case_when(
+        is.na(.data$loss_clustered)   ~ "—",
+        isTRUE(.data$loss_clustered)  ~ "YES",
+        TRUE                          ~ "No"
+      ),
+      Sharpe = round(.data$sharpe, 2),
+      `Blown Up` = dplyr::if_else(.data$blown_up, "YES", "No")
+    ) |>
+    dplyr::select(
+      Strategy, Sharpe, `Blown Up`,
+      `Avg DD (months)`, `Max DD (months)`, `Max Consec Losses`, `Loss Clustered`
+    )
+
+  # Extract pre-peak values for dynamic prose
+  pre_p8 <- summary_tbl[summary_tbl$strategy == "mom_prepeak", , drop = FALSE]
+  pre_avg_dd  <- if (nrow(pre_p8) == 1L && !is.na(pre_p8$avg_dd_days))
+    round(pre_p8$avg_dd_days, 1) else "N/A"
+  pre_max_dd_d <- if (nrow(pre_p8) == 1L && !is.na(pre_p8$max_dd_days))
+    round(pre_p8$max_dd_days, 1) else "N/A"
+  pre_max_cons <- if (nrow(pre_p8) == 1L && !is.na(pre_p8$max_cons_losses))
+    pre_p8$max_cons_losses else "N/A"
+
+  DT::datatable(
+    p8_display,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      paste0(
+        "Pillar-8 risk metrics for all three momentum decomposition strategies. ",
+        "Avg/Max DD duration is measured in months (index positions, no date column). ",
+        "Max Consecutive Losses = longest losing streak in the pre-bankruptcy slice. ",
+        "Loss Clustered = TRUE when both the Wald-Wolfowitz runs test p < 0.05 AND ",
+        "lag-1 autocorrelation > 0.2 (dual-signal composite). ",
+        "Metrics for blown-up strategies are computed on the pre-bankruptcy slice only."
+      )
+    ),
+    rownames = FALSE,
+    options  = list(pageLength = 5, scrollX = TRUE, dom = "t")
+  )
+} else {
+  cat("*Pillar-8 metrics not available — run tar_make() after PR 4/4 merge.*")
+  pre_avg_dd <- pre_max_dd_d <- pre_max_cons <- "N/A"
+}
+```
+
+#### Interpretation
+
+The Pillar-8 risk framework adds three drawdown-duration and loss-clustering metrics beyond the standard max_dd percentage reported in the summary table:
+
+- **Avg DD duration** — average number of months spent in a drawdown event (defined as a contiguous run below the prior peak by more than 1%). For the pre-peak strategy this is `r pre_avg_dd` months on average.
+- **Max DD duration** — longest single drawdown event: `r pre_max_dd_d` months. This captures the "pain duration" dimension of drawdown risk that the peak loss percentage alone does not convey.
+- **Max consecutive losses** — longest uninterrupted run of negative monthly returns: `r pre_max_cons` months. A high count warns of momentum-crash-style tail events.
+
+Blown-up strategies (mom_postpeak, mom_combined) have these metrics computed only on the pre-bankruptcy slice because post-bankruptcy returns are economically meaningless — the portfolio has zero equity.
+
+
+# Walk-Forward Correlation
+
+## Row
+
+### {.tabset}
+
+#### WFC Grid
+
+```{r}
+wfc_grid   <- safe_tar_read("mom_prepeak_wfc_grid")
+wfc_result <- safe_tar_read("mom_prepeak_wfc_result")
+
+wfc_available <- !is.null(wfc_grid) && !is.null(wfc_result)
+
+if (wfc_available) {
+  pearson_rho   <- round(wfc_result$pearson_rho,   3)
+  spearman_rho  <- round(wfc_result$spearman_rho,  3)
+  wfc_class_val <- wfc_result$classification
+  median_oos    <- round(wfc_result$median_oos, 3)
+
+  wfc_display <- wfc_grid |>
+    dplyr::mutate(
+      `N Quantiles`  = .data$theta_label,
+      `IS Sharpe`    = round(.data$IS_metric,  3),
+      `OOS Sharpe`   = round(.data$OOS_metric, 3)
+    ) |>
+    dplyr::select(`N Quantiles`, `IS Sharpe`, `OOS Sharpe`)
+
+  DT::datatable(
+    wfc_display,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      paste0(
+        "Walk-Forward Correlation grid for mom_prepeak over n_quantiles ∈ {5, 10, 20}. ",
+        "IS = annualised Sharpe on the first half of the sample (~1973–mid). ",
+        "OOS = annualised Sharpe on the second half. ",
+        "Pearson ρ = ", pearson_rho, "; Spearman ρ = ", spearman_rho, ". ",
+        "WFC classification: ", wfc_class_val, ". ",
+        "A positive Pearson ρ with positive OOS Sharpe = 'structural_edge'; ",
+        "a classification of 'spurious_luck' or 'noise' would flag concern."
+      )
+    ),
+    rownames = FALSE,
+    options  = list(pageLength = 5, scrollX = TRUE, dom = "t")
+  )
+} else {
+  cat("*WFC results not available — run tar_make() after PR 4/4 merge.*")
+  pearson_rho <- spearman_rho <- wfc_class_val <- median_oos <- "N/A"
+}
+```
+
+#### WFC Chart
+
+```{r}
+#| fig-height: 4
+#| fig-alt: "Scatter plot of IS Sharpe vs OOS Sharpe across 3 n_quantiles values (5, 10, 20) for the mom_prepeak strategy. Each point represents one parameter configuration. A positive correlation between IS and OOS Sharpe supports structural edge; a negative correlation would suggest overfitting. The Pearson correlation coefficient is annotated on the chart."
+if (wfc_available && !is.null(wfc_grid)) {
+  ggplot(wfc_grid, aes(x = .data$IS_metric, y = .data$OOS_metric,
+                       label = .data$theta_label)) +
+    geom_point(colour = PALETTE["mom_prepeak"], size = 4) +
+    ggplot2::geom_text(
+      colour = "#e0e0e0", size = 3.5,
+      nudge_y = 0.02
+    ) +
+    geom_hline(yintercept = 0, colour = "white", linetype = "dotted") +
+    geom_vline(xintercept = 0, colour = "white", linetype = "dotted") +
+    annotate("text",
+      x = min(wfc_grid$IS_metric, na.rm = TRUE),
+      y = max(wfc_grid$OOS_metric, na.rm = TRUE),
+      label = paste0("Pearson ρ = ", if (is.character(pearson_rho)) pearson_rho else round(as.numeric(pearson_rho), 3)),
+      colour = "#e0e0e0", hjust = 0, vjust = 1, size = 4
+    ) +
+    labs(
+      x     = "IS Sharpe (first half)",
+      y     = "OOS Sharpe (second half)",
+      title = paste0("Walk-Forward Correlation — mom_prepeak (n_quantiles grid)")
+    ) +
+    theme_dark() +
+    theme(
+      panel.background  = element_rect(fill = "#1a1a1a", colour = NA),
+      plot.background   = element_rect(fill = "#1a1a1a", colour = NA),
+      text              = element_text(colour = "#e0e0e0"),
+      axis.text         = element_text(colour = "#cccccc"),
+      panel.grid.major  = element_line(colour = "#333333"),
+      panel.grid.minor  = element_line(colour = "#222222"),
+      plot.title        = element_text(size = 11, face = "bold")
+    )
+} else {
+  cat("*WFC chart not available — run tar_make() after PR 4/4 merge.*")
+}
+```
+
+::: {.fig-caption}
+**Walk-forward correlation scatter** for mom_prepeak over 3 n_quantiles values. Pearson ρ = `r pearson_rho`, Spearman ρ = `r spearman_rho`. WFC classification: **`r wfc_class_val`**. The Tinsley (2024) framework labels a strategy as having "structural edge" when WFC Pearson ≥ 0.70 AND the median OOS Sharpe is positive. A classification of "spurious_luck" (high WFC, negative OOS) or "noise" (low WFC) would raise concern about the strategy's robustness. This WFC grid uses n_quantiles as the sole tuning dimension; a v2 follow-up will expand the grid over formation-window parameters.
+:::
+
+#### Verdict
+
+The Walk-Forward Correlation test asks: when we vary the portfolio-construction parameter (number of quantile buckets), does IS performance predict OOS performance? A positive correlation indicates that what works in training also works out of sample — a sign of structural edge rather than parameter overfitting.
+
+WFC result for mom_prepeak:
+
+- **Pearson ρ:** `r pearson_rho` (IS vs OOS Sharpe across n_quantiles ∈ {5, 10, 20})
+- **Spearman ρ:** `r spearman_rho`
+- **Classification:** `r wfc_class_val`
+- **Median OOS Sharpe:** `r median_oos`
+
+`r if (is.character(wfc_class_val) && wfc_class_val == "structural_edge") "The classification of structural_edge supports robustness of the pre-peak momentum signal across portfolio-formation choices." else if (is.character(wfc_class_val) && wfc_class_val %in% c("spurious_luck", "noise")) paste0("The classification of ", wfc_class_val, " warrants caution — the strategy may not be robust to n_quantiles choice.") else "WFC classification not available — run tar_make()."`
+
+Note: only n_quantiles is varied here; WFC over lookback-window parameters (which require re-running the signal computation) is deferred to the v2 follow-up.
+
+
+# Random-Day-as-Peak Null
+
+## Row
+
+### {.tabset}
+
+#### Null Test Result
+
+```{r}
+rand_peak_test    <- safe_tar_read("mom_prepeak_random_peak_test")
+rand_peak_metrics <- safe_tar_read("mom_prepeak_random_peak_metrics")
+
+rand_available <- !is.null(rand_peak_test)
+
+if (rand_available) {
+  actual_s <- round(rand_peak_test$actual_sharpe, 3)
+  random_s <- round(rand_peak_test$random_sharpe, 3)
+  null_dom  <- rand_peak_test$null_dominates
+
+  null_display <- tibble::tibble(
+    Strategy        = c("mom_prepeak (actual)", "Random-day-as-peak null"),
+    Sharpe          = c(actual_s, random_s),
+    `Null Dominates` = c("—", if (isTRUE(null_dom)) "YES — edge may be spurious" else "No — peak-finding adds alpha")
+  )
+
+  DT::datatable(
+    null_display,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      paste0(
+        "Random-day-as-peak null test. The null strategy uses the same ",
+        "formation window, portfolio construction, and transaction costs, ",
+        "but selects a uniformly random day as the 'peak' instead of the ",
+        "actual price maximum (set.seed(42) for reproducibility). ",
+        "If the null Sharpe >= actual Sharpe, peak-finding adds no edge. ",
+        "Actual Sharpe = ", actual_s, "; ",
+        "Random-peak Sharpe = ", random_s, "."
+      )
+    ),
+    rownames = FALSE,
+    options  = list(pageLength = 5, scrollX = TRUE, dom = "t")
+  )
+} else {
+  cat("*Random-peak null test not available — run tar_make() after PR 4/4 merge.*")
+  actual_s <- random_s <- null_dom <- "N/A"
+}
+```
+
+#### Interpretation
+
+The random-day-as-peak null is a strategy-specific falsification test. The logic:
+
+1. Take the same 10-month formation window for every stock.
+2. Instead of finding the actual price peak (maximum adjusted price), pick a **uniformly random day** within the window and treat it as the "peak."
+3. Compute pre-peak return (price from day 1 to the random day) and post-peak return (price from the random day to formation end).
+4. Sort stocks on this randomised pre-peak return and form the same long-short portfolio.
+
+If the actual mom_prepeak Sharpe (**`r actual_s`**) is substantially higher than the random-peak Sharpe (**`r random_s`**), the true peak-finding is doing real work. If they are similar, the alpha likely comes from some other feature of the formation window (e.g., early-window momentum, late-window reversal) that the decomposition happens to capture but doesn't require an accurate peak date.
+
+`r if (!is.null(null_dom) && is.logical(null_dom)) { if (isTRUE(null_dom)) "The null dominates: random-peak Sharpe ≥ actual Sharpe. This is a warning sign that peak-finding may be spurious or that the pre-peak signal is robust to how the 'peak' is defined." else "The null does NOT dominate: actual Sharpe > random-peak Sharpe. Peak-finding adds measurable alpha — the strategy is identifying a genuine signal from the true price-peak location." } else "Result not available — run tar_make()."`
+
+
+# HAC + FF5 + CPCV PBO
+
+## Row
+
+### {.tabset}
+
+#### Statistical Hardening
+
+```{r}
+hac_res  <- safe_tar_read("mom_prepeak_hac")
+ff_reg   <- safe_tar_read("mom_prepeak_ff_reg")
+pbo_res  <- safe_tar_read("mom_prepeak_pbo")
+
+hac_available <- !is.null(hac_res)
+ff_available  <- !is.null(ff_reg) && nrow(ff_reg) == 1L
+pbo_available <- !is.null(pbo_res)
+
+# Dynamic values for prose
+hac_tstat  <- if (hac_available && !is.null(hac_res$hac_tstat))   round(hac_res$hac_tstat, 3)   else "N/A"
+hac_sharpe <- if (hac_available && !is.null(hac_res$naive_sharpe)) round(hac_res$naive_sharpe, 3) else "N/A"
+ff5_alpha  <- if (ff_available) round(ff_reg$alpha_annual, 4)    else "N/A"
+ff5_alpha_t <- if (ff_available) round(ff_reg$alpha_tstat_hac, 3) else "N/A"
+ff5_r2     <- if (ff_available) round(ff_reg$r_squared, 3)       else "N/A"
+pbo_val    <- if (pbo_available) round(pbo_res$pbo, 3)           else "N/A"
+pbo_paths  <- if (pbo_available) pbo_res$n_paths                 else "N/A"
+
+stat_display <- tibble::tibble(
+  Test    = c(
+    "HAC Sharpe (Newey-West)",
+    "HAC t-stat",
+    "FF5+Mom alpha (annualised)",
+    "FF5+Mom alpha t-stat (HAC)",
+    "FF5+Mom R²",
+    "CPCV PBO (n_quantiles grid)"
+  ),
+  Value   = c(
+    as.character(hac_sharpe),
+    as.character(hac_tstat),
+    as.character(ff5_alpha),
+    as.character(ff5_alpha_t),
+    as.character(ff5_r2),
+    as.character(pbo_val)
+  ),
+  Interpretation = c(
+    "Annualised Sharpe from monthly returns (12× ann factor)",
+    "t-statistic for H0: mean(ret_ls) = 0; HAC-robust to serial correlation",
+    "Intercept from FF5+Momentum regression (monthly factors); annualised",
+    "HAC t-stat on the regression alpha",
+    "Fraction of return variance explained by FF5+Momentum factors",
+    paste0("Fraction of CPCV paths (n=", pbo_paths, ") where IS-best n_quantiles ranks below OOS median; 0 = no overfitting, 1 = full overfitting")
+  )
+)
+
+DT::datatable(
+  stat_display,
+  caption = htmltools::tags$caption(
+    style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+    paste0(
+      "Statistical hardening metrics for mom_prepeak. ",
+      "HAC inference uses Newey-West bandwidth (floor(4*(T/100)^(2/9))). ",
+      "FF5 regression uses monthly Fama-French 5-factor + Momentum factors from Kenneth French's data library. ",
+      "CPCV PBO uses C(6,2) = 15 paths over n_quantiles ∈ {5, 10, 20}, with 1-month purge + 1-month embargo."
+    )
+  ),
+  rownames = FALSE,
+  options  = list(pageLength = 8, scrollX = TRUE, dom = "t")
+)
+```
+
+#### Interpretation
+
+**HAC Inference (Newey-West):** The strategy's mean monthly return is tested against H0: μ = 0 using a heteroskedasticity- and autocorrelation-consistent standard error. HAC t-stat = **`r hac_tstat`**. A t-stat above 1.96 indicates significance at the 5% level. Monthly returns can exhibit serial correlation (especially in momentum strategies), so HAC inference is more reliable than a naive OLS t-stat.
+
+**Fama-French 5-Factor + Momentum Regression:** The monthly excess returns are regressed on Mkt-RF, SMB, HML, RMW, CMA, and the UMD (momentum) factor. The intercept (alpha) measures the strategy's return not explained by standard systematic risks. Alpha = **`r ff5_alpha`** (annualised), with HAC t-stat = **`r ff5_alpha_t`**. R² = **`r ff5_r2`**. A positive alpha with a t-stat > 2 provides statistical evidence of genuine risk-adjusted returns. The UMD factor captures conventional momentum exposure; a positive alpha after including UMD would suggest pre-peak momentum captures something beyond standard momentum.
+
+**CPCV PBO:** The Combinatorial Purged Cross-Validation Probability of Backtest Overfitting measures how often the IS-best configuration (n_quantiles value) underperforms the OOS median. PBO = **`r pbo_val`** (across `r pbo_paths` paths). PBO near 0 means the IS-best choice also tends to be OOS-best — little evidence of overfitting. PBO near 1 means IS selection is anti-predictive for OOS — strong evidence of overfitting. Since mom_prepeak is not a highly tuned strategy, this PBO is more of a sanity check than a critical test.
+
 ## Methodology
 
 ### What this vignette computes
 
-This vignette reads the pre-computed `mom_prepeak_signal_raw`, `mom_prepeak_summary`, `mom_prepeak_returns`, `mom_postpeak_returns`, and `mom_combined_returns` targets from the targets pipeline, then builds four charts inline: a peak-date distribution histogram (replicating paper Figure 1), a 84/16 decomposition table from `mom_prepeak_summary`, a cumulative-return chart for all three strategies with bankruptcy annotation at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"`, and a skewness comparison across strategies.
+This vignette reads pre-computed targets from the pipeline and builds eight sections: a peak-date distribution histogram (replicating paper Figure 1); a 84/16 decomposition table from `mom_prepeak_summary`; cumulative-return curves for all three strategies with bankruptcy annotation at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"`; a skewness comparison; Pillar-8 risk metrics (dd duration, consecutive losses, loss clustering) from the extended `mom_prepeak_summary`; a Walk-Forward Correlation grid over n_quantiles ∈ {5, 10, 20}; a random-day-as-peak null test; and a statistical hardening panel (HAC Sharpe, FF5+Momentum regression alpha, CPCV PBO).
 
 ### Data sources
 
 - `mom_prepeak_signal_raw` — output of [`historicaldata::hd_mom_prepeak_signal()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/strategy_mom_prepeak.R#L67) applied to `ltr_universe` (~51 US non-ETF equities, daily adjusted prices, 1973-onwards). One row per (ticker, as_of_date) with columns `pre_peak_return`, `post_peak_return`, `total_return`, `peak_position`.
-- `mom_prepeak_summary`, `mom_*_returns` targets — computed by [`R/plan_mom_prepeak.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak.R) using `.mom_prepeak_compute_metrics()` from [`packages/historicaldata/R/utils_mom_prepeak_metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/utils_mom_prepeak_metrics.R#L1).
+- `mom_prepeak_summary`, `mom_*_returns` targets — computed by [`R/plan_mom_prepeak.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak.R) using [`.mom_prepeak_compute_metrics()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/utils_mom_prepeak_metrics.R#L24) from `packages/historicaldata/R/utils_mom_prepeak_metrics.R`, extended in PR 4/4 to include Pillar-8 columns.
+- `mom_prepeak_wfc_grid`, `mom_prepeak_wfc_result` — Walk-Forward Correlation targets from [`R/plan_mom_prepeak_gauntlet.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R), using [`hd_wf_correlation()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/wf_correlation.R#L84).
+- `mom_prepeak_random_peak_test`, `mom_prepeak_random_peak_metrics` — random-day-as-peak null from [`.mom_prepeak_random_peak_signal()`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R) in the gauntlet plan.
+- `mom_prepeak_hac`, `mom_prepeak_ff_reg` — HAC Sharpe and FF5+Momentum regression via [`hd_hac_sharpe()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L80) and [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L738) on monthly Fama-French factors from `hd_factors(frequency="monthly")`.
+- `mom_prepeak_pbo` — CPCV Probability of Backtest Overfitting via [`hd_pbo()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/cpcv.R#L267) over n_quantiles ∈ {5, 10, 20}.
 - `strategy_names` — single source of truth for display names, defined in [`R/plan_strategy_names.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_names.R).
 - Paper: Büsing, Mohrschladt & Siedhoff (2022), *Pre-peak and post-peak momentum*, [SSRN 4298538](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4298538).
 
