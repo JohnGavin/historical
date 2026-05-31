@@ -239,6 +239,19 @@ plan_mom_prepeak <- function() {
 #' @param cost_per_trade Numeric. One-way transaction cost fraction.
 #'
 #' @return Tibble with: as_of_date, exec_date, ret_long, ret_short, ret_ls.
+#'
+#' @details
+#' **Short-leg return cap convention:** Each per-position short return is
+#' capped at +100% (i.e. `fwd_ret <= 1`) before aggregation. This reflects
+#' the financial reality that a short position can lose at most 100% of
+#' its notional in a single period (price doubles). Without this cap, an
+#' extreme single-name short squeeze (price triples, fwd_ret = +2) would
+#' produce `ret_ls < -1`, implying losing more than 100% of capital in one
+#' month — unrealistic for an equity L/S portfolio. The cap is applied per
+#' position, not on the aggregate `ret_short`, so the cap can attenuate
+#' some short positions while others retain their unscaled returns.
+#'
+#' Cost convention is unchanged: 2 × cost_per_trade ≈ full turnover round-trip.
 #' @noRd
 .mom_prepeak_compute_returns <- function(portfolio_tbl,
                                           universe_tbl,
@@ -291,6 +304,19 @@ plan_mom_prepeak <- function() {
     ) |>
     dplyr::filter(!is.na(.data$fwd_ret))
 
+  # Cap per-position short returns at +100%: a short loses at most 100% of
+  # notional (price doubles, fwd_ret = 1). Without this, a short squeeze
+  # (price triples, fwd_ret = 2) would produce ret_ls < -1, which is
+  # unrealistic for an equity L/S portfolio. Cap is per position, not aggregate.
+  port_with_ret <- port_with_ret |>
+    dplyr::mutate(
+      fwd_ret_short_capped = dplyr::if_else(
+        .data$weight < 0 & .data$fwd_ret > 1,
+        1,
+        .data$fwd_ret
+      )
+    )
+
   # Aggregate to monthly long-short return
   port_with_ret |>
     dplyr::group_by(.data$as_of_date, .data$exec_date) |>
@@ -298,7 +324,7 @@ plan_mom_prepeak <- function() {
       ret_long  = sum(.data$weight[.data$weight > 0] *
                         .data$fwd_ret[.data$weight > 0]),
       ret_short = sum(abs(.data$weight[.data$weight < 0]) *
-                        .data$fwd_ret[.data$weight < 0]),
+                        .data$fwd_ret_short_capped[.data$weight < 0]),
       .groups   = "drop"
     ) |>
     dplyr::mutate(
