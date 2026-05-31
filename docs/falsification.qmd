@@ -584,7 +584,9 @@ cg_impl <- safe_tar_read("cg_test_implications")
 if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
   # Add source code links to implication labels.
   # Node → file + line is the single source of truth in R/diagram_node_links.R.
-  source(here::here("R/diagram_node_links.R"))
+  diag_links_path <- if (file.exists("../R/diagram_node_links.R")) "../R/diagram_node_links.R" else
+    file.path(here::here(), "R/diagram_node_links.R")
+  source(diag_links_path)
   .dnl <- diagram_node_links()
   # Build a named vector: node → full GitHub URL with #L anchor
   node_links <- stats::setNames(
