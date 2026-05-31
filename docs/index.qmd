@@ -144,22 +144,22 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 ## Row
 
 <div class="card-grid">
-<a href="examples.html#equity" class="info-card">
+<div class="info-card">
 <h4>Equity</h4>
 <p>1,022 tickers (51 US + 949 LSE ETFs + 13 macro ETFs + 9 factor ETFs). Daily OHLCV from 1980. Includes Vanguard, iShares, SPDR UCITS ETFs. 44 MB Parquet.</p>
-</a>
-<a href="examples.html#crypto" class="info-card">
+</div>
+<div class="info-card">
 <h4>Crypto</h4>
 <p>14 tokens (BTC, ETH, SOL, BNB, stablecoins, Solana DeFi). Daily from 2014. 1.1 MB.</p>
-</a>
-<a href="examples.html#macro" class="info-card">
+</div>
+<div class="info-card">
 <h4>Macro</h4>
 <p>19 FRED series: SP500, <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr>, Treasury yields, credit spreads, GDP, CPI, oil, USD. From 1947.</p>
-</a>
-<a href="examples.html#factors" class="info-card">
+</div>
+<div class="info-card">
 <h4>Factors</h4>
 <p>Fama-French FF3, <abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr>, Momentum. Daily + monthly. Back to 1926. Ken French Data Library.</p>
-</a>
+</div>
 </div>
 
 # Articles
@@ -170,10 +170,6 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <a href="leaderboard.html" class="info-card">
 <h4>Strategy Leaderboard</h4>
 <p>Rankings, equity curves, and feature importance across all 6 strategies. Transposed metrics table, PSO optimal portfolio weights, XGBoost feature analysis.</p>
-</a>
-<a href="examples.html" class="info-card">
-<h4>Usage Examples</h4>
-<p>Interactive dashboard with code examples for all 6 datasets: equity, crypto, macro, factors, LSE ETFs, and metadata queries.</p>
 </a>
 <a href="macro-defense-rotation.html" class="info-card">
 <h4>Macro Defense Rotation</h4>
@@ -221,7 +217,6 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [Hugging Face Dataset](https://huggingface.co/datasets/JohnGavin/finance-data) — Parquet files, dataset card
 - [Strategy Leaderboard](leaderboard.html) — rankings, equity curves, cost-adjusted metrics
 - [API Reference](https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R) — function source code
-- [Examples](examples.html) — interactive dashboard with all datasets
 - [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
 - [Factor MAX](factor-max.html) — factor rotation strategy
 - [DRIF](drif.html) — daily return information factor
