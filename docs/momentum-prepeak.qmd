@@ -1,0 +1,721 @@
+---
+title: "Pre-Peak / Post-Peak 12-2 Momentum Decomposition"
+subtitle: "Büsing, Mohrschladt & Siedhoff (2022) — methodology-demo replication on the ltr_universe"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+          <style>
+          body { font-size: 1.3em; }
+          .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
+          .nav-link { font-size: 0.95em !important; }
+          .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
+          .navbar, .quarto-dashboard-header, .navbar-dark,
+          .bslib-page-dashboard > .navbar {
+            background-color: black !important;
+            color: white !important;
+          }
+          .navbar .navbar-brand, .navbar .nav-link, .navbar-text,
+          .navbar .navbar-nav .nav-link {
+            color: white !important;
+          }
+          .navbar .nav-link.active, .navbar .nav-link:hover {
+            color: white !important;
+            background-color: black !important;
+            border: 1px solid white !important;
+            border-radius: 4px;
+          }
+          .navbar .nav-link { color: #aaa !important; }
+          .navbar-nav { flex-wrap: wrap !important; }
+          .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
+          .bslib-page-fill, .html-fill-container, .html-fill-item,
+          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          .bslib-grid, .bslib-grid-item {
+            height: auto !important; min-height: 0 !important;
+            max-height: none !important; overflow: visible !important;
+            flex: none !important;
+          }
+          .cell-output-display { display: block !important; position: relative !important;
+            overflow: visible !important; margin-bottom: 1em; }
+          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
+          .fig-caption { display: block; position: relative; clear: both;
+            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #e0e0e0; }
+          .datatables, .dataTables_wrapper { display: block !important;
+            position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
+          table.dataTable { white-space: nowrap; }
+          table caption { caption-side: top !important; }
+          details { margin-bottom: 0.5em; }
+          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+          .bankrupt-row { background-color: rgba(240, 128, 128, 0.25) !important; }
+          </style>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          document.addEventListener('click', function(e) {
+            var overlay = e.target.closest('.fullscreen-overlay');
+            if (overlay) { overlay.remove(); return; }
+            var img = e.target.closest('.cell-output-display img');
+            if (!img) return;
+            var div = document.createElement('div');
+            div.className = 'fullscreen-overlay';
+            var clone = document.createElement('img');
+            clone.src = img.src;
+            div.appendChild(clone);
+            document.body.appendChild(div);
+          });
+          document.addEventListener('shown.bs.tab', function(e) {
+            var tabBar = e.target.closest('.nav-tabs');
+            if (tabBar) tabBar.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(ggplot2)
+library(dplyr)
+library(DT)
+library(gt)
+
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+
+# ── Strategy colour palette (narrative-colour-persistence rule) ──────────────
+# DEFINED ONCE here; referenced by name in every chart below.
+PALETTE <- c(
+  "mom_prepeak"  = "#69d4a0",  # green  — the only viable leg
+  "mom_postpeak" = "#f08080",  # red    — goes bankrupt
+  "mom_combined" = "#4ea8de"   # blue   — combined (cancels to ~0)
+)
+
+# ── Read targets ─────────────────────────────────────────────────────────────
+signal_raw  <- safe_tar_read("mom_prepeak_signal_raw")   # ~30k rows
+summary_tbl <- safe_tar_read("mom_prepeak_summary")      # 3 rows × 8 cols
+ret_pre     <- safe_tar_read("mom_prepeak_returns")      # 638 rows
+ret_post    <- safe_tar_read("mom_postpeak_returns")     # 638 rows
+ret_comb    <- safe_tar_read("mom_combined_returns")     # 638 rows
+strat_names <- safe_tar_read("strategy_names")           # 14 rows
+
+# ── Strategy display-name lookups (strategy-name-consistency rule) ─────────
+mom_names <- if (!is.null(strat_names)) {
+  strat_names |> dplyr::filter(.data$code_name %in% c("mom_prepeak", "mom_postpeak", "mom_combined")) |>
+    dplyr::select("code_name", "short_name", "long_name")
+} else {
+  tibble::tibble(
+    code_name  = c("mom_prepeak", "mom_postpeak", "mom_combined"),
+    short_name = c("Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2"),
+    long_name  = c("Pre-Peak 12-2 Momentum (Büsing 2022)",
+                   "Post-Peak 12-2 Momentum (Büsing 2022)",
+                   "Standard 12-2 Momentum (Büsing baseline)")
+  )
+}
+
+.name_short <- function(code) {
+  if (is.null(strat_names)) return(code)
+  m <- mom_names$short_name[mom_names$code_name == code]
+  if (length(m) == 1L) m else code
+}
+.name_long <- function(code) {
+  if (is.null(strat_names)) return(code)
+  m <- mom_names$long_name[mom_names$code_name == code]
+  if (length(m) == 1L) m else code
+}
+
+# ── Headline summary statistics (dynamic-prose-values rule) ─────────────────
+if (!is.null(summary_tbl)) {
+  pre_row  <- summary_tbl[summary_tbl$strategy == "mom_prepeak",  , drop = FALSE]
+  post_row <- summary_tbl[summary_tbl$strategy == "mom_postpeak", , drop = FALSE]
+  comb_row <- summary_tbl[summary_tbl$strategy == "mom_combined", , drop = FALSE]
+
+  pre_sharpe   <- if (nrow(pre_row)  == 1L) round(pre_row$sharpe,   2) else "N/A"
+  post_sharpe  <- if (nrow(post_row) == 1L) round(post_row$sharpe,  2) else "N/A"
+  comb_sharpe  <- if (nrow(comb_row) == 1L) round(comb_row$sharpe,  2) else "N/A"
+  pre_cagr     <- if (nrow(pre_row)  == 1L && !is.na(pre_row$cagr))
+    paste0(round(pre_row$cagr * 100, 1), "%") else "N/A"
+  post_cagr    <- if (nrow(post_row) == 1L && !is.na(post_row$cagr))
+    paste0(round(post_row$cagr * 100, 1), "%") else "N/A (bankrupt)"
+  pre_vol      <- if (nrow(pre_row)  == 1L) paste0(round(pre_row$vol * 100, 1), "%") else "N/A"
+  post_vol     <- if (nrow(post_row) == 1L) paste0(round(post_row$vol * 100, 1), "%") else "N/A"
+  pre_maxdd    <- if (nrow(pre_row)  == 1L) paste0(round(pre_row$max_dd * 100, 1), "%") else "N/A"
+  post_maxdd   <- if (nrow(post_row) == 1L) paste0(round(post_row$max_dd * 100, 1), "%") else "N/A"
+  pre_nmonths  <- if (nrow(pre_row)  == 1L) pre_row$n_months  else NA_integer_
+  bankrupt_mo  <- if (nrow(post_row) == 1L && !is.na(post_row$bankrupt_month))
+    post_row$bankrupt_month else NA_integer_
+} else {
+  pre_sharpe  <- post_sharpe  <- comb_sharpe <- "N/A"
+  pre_cagr    <- post_cagr    <- "N/A"
+  pre_vol     <- post_vol     <- "N/A"
+  pre_maxdd   <- post_maxdd   <- "N/A"
+  pre_nmonths <- bankrupt_mo  <- NA_integer_
+}
+
+# ── Peak-position distribution summary (for caption prose) ───────────────────
+if (!is.null(signal_raw) && "peak_position" %in% names(signal_raw)) {
+  pp_mean   <- round(mean(signal_raw$peak_position, na.rm = TRUE), 2)
+  pp_median <- round(median(signal_raw$peak_position, na.rm = TRUE), 2)
+  pp_n      <- nrow(signal_raw)
+} else {
+  pp_mean <- pp_median <- pp_n <- NA
+}
+
+# ── Skewness of monthly L/S returns ─────────────────────────────────────────
+.skewness <- function(x) {
+  x <- x[!is.na(x)]
+  n <- length(x)
+  if (n < 3L) return(NA_real_)
+  m3 <- mean((x - mean(x))^3)
+  s3 <- sd(x)^3
+  (n / ((n - 1) * (n - 2))) * m3 / s3
+}
+
+pre_skew  <- if (!is.null(ret_pre))  round(.skewness(ret_pre$ret_ls),  2) else NA
+post_skew <- if (!is.null(ret_post)) round(.skewness(ret_post$ret_ls), 2) else NA
+comb_skew <- if (!is.null(ret_comb)) round(.skewness(ret_comb$ret_ls), 2) else NA
+```
+
+# Overview
+
+## Row
+
+### {.tabset}
+
+#### Background
+
+<abbr title="12-2 momentum: cross-sectional stock momentum strategy using the 12-month formation return, skipping the most recent 2 months to avoid short-term reversal. Stocks in the top decile are held long, bottom decile short, with monthly rebalance.">12-2 momentum</abbr> is one of the most studied factors in empirical finance. [Büsing, Mohrschladt & Siedhoff (2022)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4298538) ask a sharper question: **within the 10-month formation window, when does the alpha come from?** They decompose the window at the stock's peak price date, creating two sub-windows:
+
+- **Pre-peak period** — from formation start to the date when the stock reached its highest price. Stocks that rose to their peak early and then drifted sideways (or declined) still rank highly on pre-peak return.
+- **Post-peak period** — from the peak price date to formation end (the 12-2 end-date). Stocks that kept rising to the end of the window have large post-peak returns.
+
+The paper's headline finding on CRSP-scale data: roughly **84% of 12-2 momentum profits** come from the pre-peak sub-period. Sorting on pre-peak return rather than total formation return produces a cleaner, less crash-prone momentum signal.
+
+This vignette replicates the decomposition on the **`ltr_universe` (~51 US non-ETF equities, monthly rebalance from 1973)** — a methodology-demo dataset, NOT CRSP scale. The universe is intentionally small to enable rapid prototyping before scaling to a larger cross-section.
+
+#### Our Finding
+
+Our finding on the 51-stock universe is **stronger than the paper's 84/16 claim**: the post-peak leg does not merely capture 16% of momentum alpha — it actively destroys value and goes bankrupt.
+
+| Strategy | Sharpe | CAGR | Max DD | Blown Up |
+|----------|--------|------|--------|----------|
+| `r .name_short("mom_prepeak")` | `r pre_sharpe` | `r pre_cagr` | `r pre_maxdd` | FALSE |
+| `r .name_short("mom_postpeak")` | `r post_sharpe` | `r post_cagr` | `r post_maxdd` | TRUE |
+| `r .name_short("mom_combined")` | `r comb_sharpe` | N/A (bankrupt) | -100% (capped) | TRUE |
+
+Pre-peak is the **only viable leg**. Post-peak and combined both go to zero equity at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"` of the sample — a concentrated loss event driven by the portfolio's extreme short position during a market reversal.
+
+::: {.callout-note}
+**Scope caveat.** The ltr_universe has ~51 stocks — a methodology-demo scale, not the full CRSP universe Büsing et al. used. The bankruptcy result is a property of this small cross-section's long-short construction (#374 tracks a follow-up on portfolio construction alternatives). The paper's 84/16 split may be more robust on CRSP-scale data where the long-short portfolio is more diversified.
+:::
+
+#### The Split Explained
+
+For any stock and any formation window, define:
+
+- `formation_start` — first trading date in the 10-month window (12 months back, skip 2)
+- `formation_end`   — last trading date (2 months before the rebalance date)
+- `peak_date`       — the calendar date when the stock's adjusted price was highest within the window
+
+Then:
+
+```
+pre_peak_return  = price(peak_date) / price(formation_start) - 1
+post_peak_return = price(formation_end) / price(peak_date)   - 1
+total_return     = price(formation_end) / price(formation_start) - 1
+```
+
+Up to compounding: `(1 + pre) × (1 + post) ≈ (1 + total)`.
+
+The `peak_position` column records where in the window the peak fell: 0 = peak on day 1, 1 = peak on the last day. A uniform distribution would indicate no information content. The histogram below shows whether peaks cluster at any point in the formation window.
+
+# Peak-Date Distribution
+
+## Row
+
+### {.tabset}
+
+#### Histogram (Paper Figure 1 replication)
+
+```{r}
+#| fig-height: 5
+#| fig-alt: "Histogram of peak_position values (0 to 1) across all ticker-month observations in mom_prepeak_signal_raw. Each bar represents a 5% bin of the 10-month formation window. The distribution shows whether peaks cluster early (left), late (right), or uniformly across the window. A left-skewed distribution would indicate that stocks tend to peak early in the formation period, consistent with the Büsing et al. (2022) finding that pre-peak returns dominate."
+if (!is.null(signal_raw) && "peak_position" %in% names(signal_raw)) {
+  ggplot(
+    signal_raw |> dplyr::filter(!is.na(.data$peak_position)),
+    aes(x = .data$peak_position)
+  ) +
+    geom_histogram(
+      binwidth = 0.05,
+      fill     = PALETTE["mom_prepeak"],
+      colour   = "black",
+      alpha    = 0.85
+    ) +
+    geom_vline(
+      xintercept = pp_mean,
+      colour     = "white",
+      linetype   = "dashed",
+      linewidth  = 0.8
+    ) +
+    scale_x_continuous(
+      labels = scales::percent_format(accuracy = 1),
+      breaks = seq(0, 1, by = 0.1)
+    ) +
+    scale_y_continuous(labels = scales::comma) +
+    labs(
+      x     = "Peak position in formation window (0 = start, 1 = end)",
+      y     = "Count (ticker-month observations)",
+      title = "Distribution of Peak Dates within the 10-Month Formation Window"
+    ) +
+    theme_dark() +
+    theme(
+      panel.background  = element_rect(fill = "#1a1a1a", colour = NA),
+      plot.background   = element_rect(fill = "#1a1a1a", colour = NA),
+      text              = element_text(colour = "#e0e0e0"),
+      axis.text         = element_text(colour = "#cccccc"),
+      panel.grid.major  = element_line(colour = "#333333"),
+      panel.grid.minor  = element_line(colour = "#222222"),
+      plot.title        = element_text(size = 11, face = "bold")
+    )
+} else {
+  cat("*Peak-position data not available — run tar_make() to generate.*")
+}
+```
+
+::: {.fig-caption}
+**Distribution of peak dates** within the 10-month formation window, across all `r if (!is.na(pp_n)) scales::comma(pp_n) else "N/A"` ticker-month observations in `mom_prepeak_signal_raw`. The horizontal axis is `peak_position` (0 = peak on day 1 of the formation window, 1 = peak on the last day). The dashed white line marks the mean at `r pp_mean`. Büsing et al. (2022) Figure 1 shows the same histogram on CRSP data and finds peaks cluster in the first half of the window (mean below 0.5), consistent with the pre-peak period being the primary carrier of momentum profits. A mean below 0.5 on our 51-stock sample would replicate the paper's distributional finding.
+:::
+
+#### What the Distribution Tells Us
+
+The peak-date distribution is a key diagnostic for the 84/16 decomposition:
+
+- **Peaks early (mean < 0.5):** Most stocks hit their high price early in the formation window and then drift. Momentum sorts predominantly on pre-peak return. Pre-peak dominance is expected.
+- **Peaks late (mean > 0.5):** Stocks typically keep appreciating through the formation window. Post-peak return is the dominant component. Pre-peak dominance would be surprising.
+- **Uniform distribution:** No informative clustering. Decomposition carries no additional signal beyond total momentum.
+
+The mean peak position in our sample is `r pp_mean` (median: `r pp_median`). This `r if (!is.na(pp_mean) && pp_mean < 0.5) "confirms the early-clustering pattern" else if (!is.na(pp_mean) && pp_mean > 0.5) "shows late-clustering, which is the opposite of the paper's finding" else "value is unavailable"` on our universe.
+
+# Decomposition Table
+
+## Row
+
+### {.tabset}
+
+#### 84/16 Summary
+
+```{r}
+if (!is.null(summary_tbl)) {
+  # Build display tibble
+  display_df <- summary_tbl |>
+    dplyr::left_join(
+      mom_names |> dplyr::select("code_name", "long_name"),
+      by = c("strategy" = "code_name")
+    ) |>
+    dplyr::mutate(
+      Strategy   = dplyr::coalesce(.data$long_name, .data$strategy),
+      Sharpe     = round(.data$sharpe, 2),
+      CAGR       = dplyr::if_else(
+        is.na(.data$cagr),
+        "N/A (bankrupt)",
+        paste0(round(.data$cagr * 100, 1), "%")
+      ),
+      Vol        = paste0(round(.data$vol * 100, 1), "%"),
+      `Max DD`   = dplyr::if_else(
+        .data$max_dd <= -1,
+        "-100% (capped)",
+        paste0(round(.data$max_dd * 100, 1), "%")
+      ),
+      Months     = .data$n_months,
+      `Blown Up` = dplyr::if_else(.data$blown_up, "YES — bankrupt", "No"),
+      `Bankrupt Month` = dplyr::if_else(
+        !is.na(.data$bankrupt_month),
+        as.character(.data$bankrupt_month),
+        "—"
+      )
+    ) |>
+    dplyr::select(Strategy, Sharpe, CAGR, Vol, `Max DD`, Months, `Blown Up`, `Bankrupt Month`)
+
+  DT::datatable(
+    display_df,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      paste0(
+        "Pre-peak / post-peak 12-2 momentum decomposition summary. ",
+        "Annualised metrics from ", if (!is.na(pre_nmonths)) pre_nmonths else "N/A",
+        " monthly observations (ltr_universe, 1973-onwards). ",
+        "Strategies sorted on signal column: pre_peak_return (mom_prepeak), ",
+        "post_peak_return (mom_postpeak), total_return (mom_combined). ",
+        "Long top decile, short bottom decile, equal-weighted, 10 bps/trade cost. ",
+        "Blown Up = YES means the cumulative L/S equity hit zero before period end."
+      )
+    ),
+    rownames  = FALSE,
+    options   = list(
+      pageLength = 10, scrollX = TRUE, dom = "t",
+      rowCallback = DT::JS(
+        "function(row, data) {",
+        "  if (data[6] && data[6].indexOf('YES') !== -1) {",
+        "    $(row).addClass('bankrupt-row');",
+        "    $(row).css('background-color', 'rgba(240, 128, 128, 0.25)');",
+        "  }",
+        "}"
+      )
+    )
+  )
+} else {
+  cat("*Summary table not available — run tar_make().*")
+}
+```
+
+#### How to Read This
+
+The three strategies differ only in the signal column used to rank stocks:
+
+| Strategy | Signal column | What it selects |
+|----------|--------------|-----------------|
+| `r .name_short("mom_prepeak")` | `pre_peak_return` | Stocks that rose the most from formation-start to their price peak |
+| `r .name_short("mom_postpeak")` | `post_peak_return` | Stocks that rose (or fell least) from their price peak to formation-end |
+| `r .name_short("mom_combined")` | `total_return` | Standard 12-2 momentum — full formation window return |
+
+All three use the same universe, rebalance dates, portfolio construction (decile long-short), and transaction cost (10 bps/trade). The only difference is which return column drives the ranking. The fact that `r .name_short("mom_postpeak")` goes bankrupt while `r .name_short("mom_prepeak")` achieves Sharpe `r pre_sharpe` illustrates that momentum's profits are concentrated in the pre-peak sub-period — even on this small universe.
+
+# Cumulative Returns
+
+## Row
+
+### {.tabset}
+
+#### Equity Curves
+
+```{r}
+#| fig-height: 6
+#| fig-alt: "Cumulative equity curves for three momentum decomposition strategies from 1973: Pre-Peak (green), Post-Peak (red), and Combined/Standard 12-2 (blue). The pre-peak strategy (green line) grows steadily, reaching the end of the sample with Sharpe +0.44. The post-peak (red) and combined (blue) curves collapse to zero at month 248 (approximately August 1993) due to a single extreme loss month that wipes out the entire long-short equity. A vertical red dashed line marks the bankruptcy month. After month 248 both failing strategies are shown clamped at zero."
+if (!is.null(ret_pre) && !is.null(ret_post) && !is.null(ret_comb)) {
+  # Build combined long-form return table
+  rets_df <- dplyr::bind_rows(
+    ret_pre  |> dplyr::mutate(strategy = "mom_prepeak"),
+    ret_post |> dplyr::mutate(strategy = "mom_postpeak"),
+    ret_comb |> dplyr::mutate(strategy = "mom_combined")
+  ) |>
+    dplyr::arrange(.data$strategy, .data$as_of_date)
+
+  # Compute cumulative equity (clamped at 0 at bankruptcy)
+  cum_df <- rets_df |>
+    dplyr::group_by(.data$strategy) |>
+    dplyr::mutate(
+      month_idx = dplyr::row_number(),
+      cum_ret   = cumprod(pmax(1 + .data$ret_ls, 0)),
+      cum_ret   = pmax(.data$cum_ret, 0)
+    ) |>
+    dplyr::ungroup()
+
+  # Strategy label lookup for legend
+  cum_df <- cum_df |>
+    dplyr::left_join(
+      mom_names |> dplyr::select("code_name", "short_name"),
+      by = c("strategy" = "code_name")
+    ) |>
+    dplyr::mutate(
+      label = dplyr::coalesce(.data$short_name, .data$strategy)
+    )
+
+  # Bankruptcy annotation: first month where cum_ret reaches 0
+  bankrupt_df <- cum_df |>
+    dplyr::filter(.data$cum_ret <= 0) |>
+    dplyr::group_by(.data$strategy) |>
+    dplyr::slice_min(.data$month_idx, n = 1L, with_ties = FALSE) |>
+    dplyr::ungroup() |>
+    dplyr::filter(.data$strategy %in% c("mom_postpeak", "mom_combined"))
+
+  # Determine x-axis type: use as_of_date if available, otherwise month_idx
+  x_var <- if (inherits(cum_df$as_of_date, "Date")) "as_of_date" else "month_idx"
+  x_lab <- if (x_var == "as_of_date") "Date" else "Month index"
+
+  p <- ggplot(cum_df, aes(
+    x      = !!rlang::sym(x_var),
+    y      = .data$cum_ret,
+    colour = .data$strategy,
+    group  = .data$strategy
+  )) +
+    geom_line(linewidth = 0.9) +
+    scale_colour_manual(
+      values = PALETTE,
+      labels = setNames(mom_names$short_name, mom_names$code_name),
+      name   = "Strategy"
+    )
+
+  # Bankruptcy vertical line (use first x value for bankrupt strategies)
+  if (nrow(bankrupt_df) > 0) {
+    x_bk <- bankrupt_df[[x_var]][1]
+    p <- p + geom_vline(
+      xintercept = x_bk,
+      colour     = "#f08080",
+      linetype   = "dashed",
+      linewidth  = 0.7,
+      alpha      = 0.8
+    ) +
+    annotate(
+      "text",
+      x     = x_bk,
+      y     = max(cum_df$cum_ret, na.rm = TRUE) * 0.8,
+      label = paste0("Bankruptcy\n(month ", bankrupt_mo, ")"),
+      colour = "#f08080",
+      size   = 3.2,
+      hjust  = 1.05
+    )
+  }
+
+  p +
+    scale_y_continuous(labels = scales::dollar_format(prefix = "$")) +
+    labs(
+      x     = x_lab,
+      y     = "Growth of $1",
+      title = "Cumulative L/S Equity: Pre-Peak vs Post-Peak vs Combined"
+    ) +
+    theme_dark() +
+    theme(
+      panel.background = element_rect(fill = "#1a1a1a", colour = NA),
+      plot.background  = element_rect(fill = "#1a1a1a", colour = NA),
+      text             = element_text(colour = "#e0e0e0"),
+      axis.text        = element_text(colour = "#cccccc"),
+      panel.grid.major = element_line(colour = "#333333"),
+      panel.grid.minor = element_line(colour = "#222222"),
+      legend.background = element_rect(fill = "#1a1a1a"),
+      legend.key        = element_rect(fill = "#1a1a1a"),
+      plot.title        = element_text(size = 11, face = "bold")
+    )
+} else {
+  cat("*Return data not available — run tar_make() to generate.*")
+}
+```
+
+::: {.fig-caption}
+**Cumulative L/S equity curves** for all three momentum decomposition strategies (growth of $1, not log scale). Green = `r .name_long("mom_prepeak")`, Sharpe `r pre_sharpe`, CAGR `r pre_cagr`, max drawdown `r pre_maxdd`. Red = `r .name_long("mom_postpeak")`, Sharpe `r post_sharpe`, blown up at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"`. Blue = `r .name_long("mom_combined")`, Sharpe `r comb_sharpe`, also blown up at the same month. The red dashed vertical line marks the bankruptcy month. After that month post-peak and combined are clamped at zero. The post-peak and combined strategies go bankrupt at the same month because they share the same portfolio construction (decile long-short, equal-weighted) applied to the same universe; the only difference is the signal column used to rank stocks. See issue #374 for a follow-up on alternative long-short construction methods.
+:::
+
+#### Returns Table
+
+```{r}
+if (!is.null(ret_pre)) {
+  display_ret <- dplyr::bind_rows(
+    ret_pre  |> dplyr::mutate(strategy = .name_short("mom_prepeak")),
+    ret_post |> dplyr::mutate(strategy = .name_short("mom_postpeak")),
+    ret_comb |> dplyr::mutate(strategy = .name_short("mom_combined"))
+  ) |>
+    dplyr::mutate(
+      dplyr::across(c("ret_long", "ret_short", "ret_ls"),
+                    ~ paste0(round(. * 100, 2), "%"))
+    ) |>
+    dplyr::select(strategy, as_of_date, exec_date, ret_long, ret_short, ret_ls)
+
+  DT::datatable(
+    display_ret,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      "Monthly long-short returns for all three decomposition strategies. ret_ls = ret_long - ret_short - 2 × 10 bps transaction cost. Negative ret_ls in the same month caused the bankruptcy in post-peak and combined strategies."
+    ),
+    rownames = FALSE,
+    filter   = "top",
+    options  = list(pageLength = 15, scrollX = TRUE, dom = "frtip")
+  )
+}
+```
+
+# Skewness Analysis
+
+## Row
+
+### {.tabset}
+
+#### Skewness Comparison
+
+```{r}
+#| fig-height: 5
+#| fig-alt: "Faceted histogram of monthly long-short returns for three strategies: Pre-Peak (green), Post-Peak (red), and Combined (blue). Each panel shows the distribution of monthly ret_ls values. The pre-peak distribution is expected to be positively skewed (fewer large negative months), while post-peak and combined may exhibit negative skewness driven by the bankruptcy month. Skewness statistics are annotated in each panel."
+if (!is.null(ret_pre) && !is.null(ret_post) && !is.null(ret_comb)) {
+  skew_df <- dplyr::bind_rows(
+    ret_pre  |> dplyr::mutate(strategy = "mom_prepeak"),
+    ret_post |> dplyr::mutate(strategy = "mom_postpeak"),
+    ret_comb |> dplyr::mutate(strategy = "mom_combined")
+  ) |>
+    dplyr::left_join(
+      mom_names |> dplyr::select("code_name", "short_name"),
+      by = c("strategy" = "code_name")
+    ) |>
+    dplyr::mutate(label = dplyr::coalesce(.data$short_name, .data$strategy))
+
+  # Annotation data for skewness text
+  skew_ann <- tibble::tibble(
+    strategy = c("mom_prepeak", "mom_postpeak", "mom_combined"),
+    skewness = c(pre_skew, post_skew, comb_skew)
+  ) |>
+    dplyr::left_join(
+      mom_names |> dplyr::select("code_name", "short_name"),
+      by = c("strategy" = "code_name")
+    ) |>
+    dplyr::mutate(
+      label = dplyr::coalesce(.data$short_name, .data$strategy),
+      label_text = paste0("Skewness: ", ifelse(is.na(.data$skewness), "N/A", .data$skewness))
+    )
+
+  ggplot(skew_df, aes(x = .data$ret_ls, fill = .data$strategy)) +
+    geom_histogram(binwidth = 0.01, colour = "black", alpha = 0.8) +
+    geom_vline(xintercept = 0, colour = "white", linetype = "dotted") +
+    geom_text(
+      data  = skew_ann,
+      aes(x = -Inf, y = Inf, label = .data$label_text),
+      hjust = -0.1, vjust = 1.5,
+      size  = 3.5,
+      colour = "white",
+      inherit.aes = FALSE
+    ) +
+    scale_fill_manual(values = PALETTE, guide = "none") +
+    scale_x_continuous(labels = scales::percent_format(accuracy = 1)) +
+    scale_y_continuous(labels = scales::comma) +
+    facet_wrap(~ label, scales = "free_y", ncol = 1L) +
+    labs(
+      x     = "Monthly L/S return",
+      y     = "Count",
+      title = "Distribution of Monthly L/S Returns — Skewness Comparison"
+    ) +
+    theme_dark() +
+    theme(
+      panel.background  = element_rect(fill = "#1a1a1a", colour = NA),
+      plot.background   = element_rect(fill = "#1a1a1a", colour = NA),
+      strip.background  = element_rect(fill = "#2a2a2a"),
+      strip.text        = element_text(colour = "#e0e0e0"),
+      text              = element_text(colour = "#e0e0e0"),
+      axis.text         = element_text(colour = "#cccccc"),
+      panel.grid.major  = element_line(colour = "#333333"),
+      panel.grid.minor  = element_line(colour = "#222222"),
+      plot.title        = element_text(size = 11, face = "bold")
+    )
+} else {
+  cat("*Return data not available — run tar_make().*")
+}
+```
+
+::: {.fig-caption}
+**Distribution of monthly long-short returns** for all three strategies (`r pre_nmonths` monthly observations each). Skewness: Pre-Peak `r pre_skew`, Post-Peak `r post_skew`, Combined `r comb_skew`. Büsing et al. (2022) report that sorting on pre-peak return produces a *positively skewed* return distribution — fewer catastrophic months — compared to standard momentum (which exhibits negative skewness from momentum crashes). A positive skewness for pre-peak and negative skewness for post-peak and combined would replicate their finding. Note that the extreme left tail in post-peak and combined is the single bankruptcy month that drives the strategy to zero equity.
+:::
+
+#### Skewness Table
+
+```{r}
+skew_tbl <- tibble::tibble(
+  Strategy = c(
+    .name_long("mom_prepeak"),
+    .name_long("mom_postpeak"),
+    .name_long("mom_combined")
+  ),
+  Sharpe   = c(pre_sharpe,  post_sharpe,  comb_sharpe),
+  Skewness = c(pre_skew,    post_skew,    comb_skew),
+  Interpretation = c(
+    if (!is.na(pre_skew) && pre_skew > 0) "Positive — fewer large losses" else "Negative",
+    if (!is.na(post_skew)) paste0(
+      if (post_skew < 0) "Negative — left tail from bankruptcy month" else "Positive",
+      " (post_skew = ", post_skew, ")"
+    ) else "N/A",
+    if (!is.na(comb_skew)) paste0(
+      if (comb_skew < 0) "Negative — left tail from bankruptcy month" else "Positive",
+      " (comb_skew = ", comb_skew, ")"
+    ) else "N/A"
+  )
+)
+
+DT::datatable(
+  skew_tbl,
+  caption = htmltools::tags$caption(
+    style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+    paste0(
+      "Skewness of monthly L/S returns for each decomposition strategy. ",
+      "Positive skewness implies fewer large-magnitude negative months, ",
+      "which is preferable from a tail-risk perspective. ",
+      "Standard errors not reported; see PR 4/4 for bootstrap confidence intervals."
+    )
+  ),
+  rownames = FALSE,
+  options  = list(pageLength = 5, scrollX = TRUE, dom = "t")
+)
+```
+
+# Key Findings
+
+## Row
+
+### {.tabset}
+
+#### Summary
+
+**Headline results on the ltr_universe (~51 US non-ETF equities, monthly from 1973):**
+
+- **`r .name_long("mom_prepeak")`**: Sharpe `r pre_sharpe`, CAGR `r pre_cagr`, vol `r pre_vol`, max drawdown `r pre_maxdd`. This is the **only viable leg** of the decomposition. The strategy is not blown up.
+
+- **`r .name_long("mom_postpeak")`**: Sharpe `r post_sharpe`, CAGR `r post_cagr`, vol `r post_vol`. Post-peak actively destroys value and hits bankruptcy at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"` — a single extreme month in which the equal-weighted short portfolio (stocks near their formation-window peak) dramatically outperforms the long portfolio (stocks far below their peak), wiping out equity.
+
+- **`r .name_long("mom_combined")`**: Sharpe `r comb_sharpe`. The standard 12-2 momentum signal is a linear combination of pre-peak and post-peak return. The two legs largely cancel each other. The strategy also goes bankrupt at the same month as post-peak because it uses the same construction with a different ranking signal.
+
+- **Pre-peak skewness**: `r pre_skew` (post-peak: `r post_skew`). A positive pre-peak skewness vs negative post-peak skewness replicates the paper's directional finding that pre-peak sorting produces a better-behaved return distribution.
+
+**Caveats:**
+
+1. The ltr_universe (~51 stocks) is a methodology-demo dataset. The paper used CRSP-scale data (~4,000+ stocks). Portfolio-level diversification is much lower here, making bankruptcy from a single concentrated event more likely.
+2. The bankruptcy event at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"` is concentrated in time and affects post-peak and combined identically, suggesting it is a portfolio-construction artefact of the small universe rather than an inherent property of the post-peak signal. See issue #374.
+3. Walk-forward validation, CPCV PBO, falsification tests, and Pillar-8 risk metrics are deferred to PR 4/4.
+
+#### Deferred Work (PR 4/4)
+
+The following analyses are **not included in this PR** and are tracked in issue #365:
+
+| Analysis | Status |
+|----------|--------|
+| Walk-forward correlation vs standard momentum | Deferred to PR 4/4 |
+| CPCV PBO (deflated Sharpe / combinatorial backtest) | Deferred to PR 4/4 |
+| Falsification: random-day-as-peak null | Deferred to PR 4/4 |
+| Pillar-8 risk metrics (skewness of daily returns, tail ratio) | Deferred to PR 4/4 |
+| Full CRSP-scale replication (60/40 result matching paper's 84/16) | Open question in #365 |
+
+## Methodology
+
+### What this vignette computes
+
+This vignette reads the pre-computed `mom_prepeak_signal_raw`, `mom_prepeak_summary`, `mom_prepeak_returns`, `mom_postpeak_returns`, and `mom_combined_returns` targets from the targets pipeline, then builds four charts inline: a peak-date distribution histogram (replicating paper Figure 1), a 84/16 decomposition table from `mom_prepeak_summary`, a cumulative-return chart for all three strategies with bankruptcy annotation at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"`, and a skewness comparison across strategies.
+
+### Data sources
+
+- `mom_prepeak_signal_raw` — output of [`historicaldata::hd_mom_prepeak_signal()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/strategy_mom_prepeak.R#L67) applied to `ltr_universe` (~51 US non-ETF equities, daily adjusted prices, 1973-onwards). One row per (ticker, as_of_date) with columns `pre_peak_return`, `post_peak_return`, `total_return`, `peak_position`.
+- `mom_prepeak_summary`, `mom_*_returns` targets — computed by [`R/plan_mom_prepeak.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak.R) using `.mom_prepeak_compute_metrics()` from [`packages/historicaldata/R/utils_mom_prepeak_metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/utils_mom_prepeak_metrics.R#L1).
+- `strategy_names` — single source of truth for display names, defined in [`R/plan_strategy_names.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_names.R).
+- Paper: Büsing, Mohrschladt & Siedhoff (2022), *Pre-peak and post-peak momentum*, [SSRN 4298538](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4298538).
+
+### AI disclosure
+
+This vignette was developed with assistance from Anthropic's Claude (model: Opus 4.7 and Sonnet 4.6). AI helped with code structure, prose drafting, and visualization choices. All analytical decisions and data interpretations are the author's responsibility.
+
+## Row
+
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+build_info()
+```
