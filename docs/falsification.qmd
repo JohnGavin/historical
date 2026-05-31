@@ -83,8 +83,9 @@ library(ggplot2)
 library(DT)
 library(dplyr)
 
-pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
-
+# Path-checked store + utils (cwd is docs/ under quarto render, project
+# root under tar_make). Same pattern as docs/leaderboard.qmd:29-39 and
+# the #379 fix for momentum-prepeak.qmd.
 store_path <- if (dir.exists("_targets")) "_targets" else
   file.path(here::here(), "docs/_targets")
 tar_config_set(store = store_path)
