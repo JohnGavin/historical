@@ -1,0 +1,7 @@
+# Publisher walls bot-block academic DOIs; legitimate for human readers.
+^https://doi\.org/
+^https://www\.journals\.uchicago\.edu/
+
+# Morningstar returns 202 Accepted for bot requests (content-delivery hold).
+# The article is valid and accessible in a browser.
+^https://www\.morningstar\.com/
