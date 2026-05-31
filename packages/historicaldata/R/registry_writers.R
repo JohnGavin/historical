@@ -4,6 +4,7 @@
 # Adds:
 #   hd_strategy_upsert(con, strategy_row)
 #   hd_run_record(con, strategy_id, ...) → run_uuid
+#   hd_run_upsert(con, strategy_id, ...) → run_uuid  [idempotent, #375]
 #
 # These are the writer-side primitives. Per-strategy targets call them
 # from a sentinel tar_target (see plan_commodities_mean_reversion.R for the
@@ -133,6 +134,102 @@ hd_run_record <- function(con,
   )
 
   run_uuid
+}
+
+#' Idempotently upsert a backtest run
+#'
+#' Like [hd_run_record()], but safe to call repeatedly with the same
+#' `(strategy_id, partition, pipeline_version)` tuple. On a re-run:
+#'
+#' 1. Looks up the existing `run_uuid` in `bt.run`.
+#' 2. Deletes any `bt.metric` rows for that UUID (the caller re-inserts
+#'    fresh metrics immediately after).
+#' 3. Updates `finished_at`, `duration_sec`, `status`, and `notes` on the
+#'    existing run row.
+#' 4. Returns the existing `run_uuid` — callers that subsequently call
+#'    [hd_metric_record()] with this UUID will write updated metrics.
+#'
+#' If no existing row matches, falls back to [hd_run_record()] (insert path).
+#'
+#' This function fixes the deterministic-RNG UUID collision when `targets`
+#' calls `set.seed(<target_hash>)` before a sentinel target, causing
+#' [.new_uuid()] to return the same UUID on every re-run (#375).
+#'
+#' @param con DBI connection (writable).
+#' @param strategy_id The strategy this run belongs to. Must already exist
+#'   in `bt.strategy` (FK enforced).
+#' @param started_at,finished_at POSIXct timestamps. Defaults: now / now.
+#' @param status Character. `"success"`, `"failed"`, `"partial"`. Default
+#'   `"success"`.
+#' @param git_sha Character. Defaults to `Sys.getenv("HD_GIT_SHA")` or
+#'   `git rev-parse HEAD` if the env var is unset and `git` is on PATH.
+#' @param git_dirty Logical. Defaults to `FALSE` if not provided.
+#' @param pipeline_version Character. Optional pipeline tag. Defaults to NA.
+#' @param partition Character. Optional sub-config tag. Defaults to NA.
+#' @param universe_id,cost_model_id FK refs. Default NA.
+#' @param parent_uuid Optional parent run for nested / dependency runs.
+#' @param notes Optional free text.
+#' @return Character — the `run_uuid` (existing or newly minted UUID v4).
+#' @export
+hd_run_upsert <- function(con,
+                          strategy_id,
+                          started_at      = Sys.time(),
+                          finished_at     = Sys.time(),
+                          status          = "success",
+                          git_sha         = NULL,
+                          git_dirty       = FALSE,
+                          pipeline_version = NA_character_,
+                          partition       = NA_character_,
+                          universe_id     = NA_character_,
+                          cost_model_id   = NA_character_,
+                          parent_uuid     = NA_character_,
+                          notes           = NA_character_) {
+  rlang::check_installed("DBI")
+
+  existing <- DBI::dbGetQuery(
+    con,
+    "SELECT run_uuid FROM bt.run
+     WHERE strategy_id = ?
+       AND COALESCE(partition, '') = COALESCE(?, '')
+       AND COALESCE(pipeline_version, '') = COALESCE(?, '')
+     LIMIT 1",
+    params = list(strategy_id, partition, pipeline_version)
+  )
+
+  if (nrow(existing) > 0L) {
+    run_uuid     <- existing$run_uuid[[1L]]
+    duration_sec <- as.numeric(difftime(finished_at, started_at, units = "secs"))
+    DBI::dbExecute(
+      con,
+      "DELETE FROM bt.metric WHERE run_uuid = ?",
+      params = list(run_uuid)
+    )
+    DBI::dbExecute(
+      con,
+      "UPDATE bt.run
+         SET finished_at = ?, duration_sec = ?, status = ?, notes = ?
+       WHERE run_uuid = ?",
+      params = list(finished_at, duration_sec, status, notes, run_uuid)
+    )
+    return(run_uuid)
+  }
+
+  # No existing row — fall back to insert.
+  hd_run_record(
+    con              = con,
+    strategy_id      = strategy_id,
+    started_at       = started_at,
+    finished_at      = finished_at,
+    status           = status,
+    git_sha          = git_sha,
+    git_dirty        = git_dirty,
+    pipeline_version = pipeline_version,
+    partition        = partition,
+    universe_id      = universe_id,
+    cost_model_id    = cost_model_id,
+    parent_uuid      = parent_uuid,
+    notes            = notes
+  )
 }
 
 # ── internals ─────────────────────────────────────────────────────────────
