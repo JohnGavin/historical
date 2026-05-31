@@ -1,4 +1,5 @@
 # Tests for plan_drif.R (factor-level) and plan_drif_v2.R (multiverse)
+testthat::local_edition(3)
 
 test_that("plan_drif cumprod survives scattered NA in returns", {
   df <- tibble::tibble(
@@ -95,6 +96,8 @@ test_that("drif_multiverse_caption is a non-empty string", {
   expect_gt(nchar(caption), 50L)
   expect_true(grepl("SSRN 6005614", caption))
   expect_true(grepl("plan_drif_v2", caption))
+  # Snapshot guard: catches format/wording drift in the assembled caption (#340)
+  expect_snapshot(cat(caption))
 })
 
 test_that("run_spec helper computes OOS Sharpe from a toy dataset", {
