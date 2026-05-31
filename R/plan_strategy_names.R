@@ -19,14 +19,14 @@ plan_strategy_names <- function() {
           "mom_prepeak", "mom_postpeak", "mom_combined"
         ),
         short_name = c(
-          "Avoid Worst", "DRIF", "Factor MAX", "Risk State", "LTR", "TOM",
+          "Avoid Worst", "Factor DRIF", "Factor MAX", "Risk State", "LTR", "TOM",
           "Stock MAX", "Stock DRIF", "XGB DRIF", "PSO Optimal",
-          "MR",
+          "CMR",
           "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2"
         ),
         long_name = c(
           "Avoid Worst Days (VIX Protection)",
-          "DRIF (Factor Rotation)",
+          "Factor DRIF (Factor Rotation)",
           "Factor MAX (Factor Momentum)",
           "Risk State (VIX Overlay)",
           "LTR (Cross-Sectional Momentum)",

@@ -44,7 +44,7 @@ plan_turn_of_month <- function() {
         dplyr::arrange(date) |>
         dplyr::mutate(
           date = as.Date(date, tz = "UTC"),
-          ret  = adjusted / dplyr::lag(adjusted) - 1
+          ret  = adjusted_close / dplyr::lag(adjusted_close) - 1  # hd_ohlcv returns adjusted_close since #325
         ) |>
         dplyr::filter(!is.na(ret)) |>
         dplyr::select(date, ret)
