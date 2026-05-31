@@ -1,5 +1,72 @@
 # Changelog
 
+## 2026-05-31 (session 13 — #365 mom_prepeak umbrella closed end-to-end: 14 PRs + 6 follow-up issues)
+
+### Completed
+
+Cross-midnight session starting 2026-05-30 21:42Z; carried into 2026-05-31. Closed #365 (Büsing/Mohrschladt/Siedhoff pre-peak / post-peak 12-2 momentum decomposition) end-to-end on the 51-stock `ltr_universe` (methodology-demo scope; CRSP-scale replication deferred to v2 via #380).
+
+#### #347 follow-ups (carried over from session #12)
+- **#370** `art_diagram_seed` target (4 seed rows) + register 3 non-qmd HTMLs (`causal-dag`, `causal-dag-all`, `quiz-app`) via Pass-2 of `.art_seed_vignettes()` + `qa_legacy_leaderboard_sentinel` soft-sunset target + `R/plan_leaderboard.R` DEPRECATED header pointing at `hd_leaderboard_from_registry()`.
+
+#### #365 mom_prepeak umbrella (4 PRs + 2 inline bug-fix PRs)
+- **#371 PR 1/4** `hd_mom_prepeak_signal()` — pure decomposition function, 10-column output (`ticker, as_of_date, formation_start/end, peak_date, n_obs, pre_peak_return, post_peak_return, total_return, peak_position`). Look-ahead-safe `[t-12mo, t-2mo]` window. 10 tests / 24 expectations / 3 snapshots; ast-grep + jarl clean.
+- **#372 PR 2/4** `plan_mom_prepeak` — 14 targets (params, as_of_dates, signal_raw, 3 portfolios, 3 returns, 3 metrics, summary, registry sentinel). 3 sibling strategies (`mom_prepeak`, `mom_postpeak`, `mom_combined`) added to `strategy_names` (11→14 rows). 5 portfolio-formation tests + snapshot.
+- **#373** bankruptcy guard for CAGR / max_dd — `.mom_prepeak_compute_metrics()` extracted to package helper `utils_mom_prepeak_metrics.R`; capped max_dd at -100%, returned NA cagr for blown-up series, added `blown_up` + `bankrupt_month` columns. 6 new tests including bankruptcy snapshot. (Filed alongside as #374 — separate L/S construction caps follow-up.)
+- **#378 PR 3/4** `docs/momentum-prepeak.qmd` — 721-LOC dashboard vignette with peak-date histogram, 84/16 decomposition table, cumulative chart (with bankruptcy annotation), skewness comparison, Methodology block per `narrative-evidence-block` rule, PALETTE per `narrative-colour-persistence` rule, dynamic prose values.
+- **#379** path-checked `tar_config_set()` + `vignette_utils.R` setup — fixed render-time `pkgload::load_all(here::here("packages/historicaldata"))` failure (Quarto cwd = `docs/`, not project root); applied the canonical pattern from `leaderboard.qmd:29-39`.
+- **#381 PR 4/4** gauntlet — `R/plan_mom_prepeak_gauntlet.R` with 17 targets covering Pillar-8 risk metrics (`avg_dd_days`, `max_dd_days`, `max_cons_losses`, `loss_clustered`) for all 3 siblings; WFC over 3-point `n_quantiles ∈ {5,10,20}` grid; random-day-as-peak null (strategy-specific falsification); HAC Sharpe + FF5+Mom regression; CPCV PBO. Vignette extended with 4 new gauntlet sections.
+
+#### Adjacent fixes uncovered during gauntlet materialisation
+- **#382** lychee `--exclude-mail` removed in v0.23.0 — closed by removing the flag from both `args:` blocks in `.github/workflows/link-audit.yml`. (Closed #377.)
+- **#384** 3 link content fixes — `JohnGavin/historicaldata` → `JohnGavin/historical` typo (2 occurrences in `docs/jst-dashboard.qmd`) + `blob/main/../../.claude/rules/...` bad relative path in `docs/falsification.qmd:491` + added `403` to `--accept` in `.github/workflows/link-audit.yml` for DOI publisher walls. (Originally shipped as #383 but rebased after stale-base merge conflict.)
+- **#385** `mom_prepeak_ff_reg` month-end alignment — FF factors at month-start (`1963-07-01`) vs strategy `exec_date` at month-end (`1973-02-28`) silently joined to 0 rows. Fixed via `lubridate::floor_date(., "month")` on both sides + doc-style test pinning the pattern.
+- **#386** WFC field names — vignette read `wfc_result$pearson_rho` / `$spearman_rho`; actual fields are `$pearson` / `$spearman`. 2-character rename unblocked the render.
+- **#388** `docs/falsification.qmd` setup chunk — same `pkgload::load_all(here::here())` bug as #379, in a different vignette. Applied path-checked pattern. (Filed #387 for the 4 latent-bug vignettes that ship working committed HTML but would break on re-render: `avoid-worst-days`, `european-overlay`, `index`, `macro-defense-rotation`.)
+- **#390** `falsification.qmd` `[causal-implications]` chunk — separate `source(here::here("R/diagram_node_links.R"))` failed under render with cwd = `docs/`. Same path-checked pattern.
+- **#391** deploy — regenerated `docs/momentum-prepeak.html` (new, full gauntlet sections populated), `docs/jst-dashboard.html` (link fix), `docs/falsification.html` (link fix + setup fix). 53 files / +24,059 / -47 (mostly new bootstrap/crosstalk asset bundle for momentum-prepeak's dashboard format). Pages deploy of `28dfea7` confirmed successful via `gh api /pages/builds/latest`.
+
+#### Pipeline materialisation (tar_make in main checkout)
+- **Round 1 (13m 7s)** — 15 targets completed (mom_prepeak signal_raw 5.95 MB; portfolios 510 kB each; returns 16.87 kB each; metrics + summary + register).
+- **Round 2 (~40m, with ff_reg error + register cascade)** — 17 gauntlet targets (random-peak signal 11m 47s; PBO 25m 18s — 15 CPCV paths with portfolio re-formation per path).
+- **Round 3 (2.3s)** — refreshed metrics + summary + register after #373's Pillar-8 helper change (targets didn't auto-invalidate; manual `tar_invalidate` + clean of mom_* `bt.run`/`bt.metric` rows worked around #375 idempotency bug).
+- **Round 4 (2.2s)** — re-ran ff_reg + gauntlet_register after #385 month-alignment fix.
+
+### Failed Approaches
+
+- **Render 3 qmds in one `quarto render` call** — quarto changes cwd to the first file's directory after processing it, then can't find subsequent files. Rendered each separately. (Documenting so future sessions don't retry this.)
+- **`tar_make(names = c("mom_prepeak_metrics", ...))` to pick up the new Pillar-8 columns from the merged #381 helper** — targets did NOT detect the in-package helper source change automatically. Manual `tar_invalidate` was required. This is a known targets gotcha for helpers living in package code rather than the targets script's environment. Workflow: after any change to a package helper that downstream targets call, explicitly `tar_invalidate` the affected targets before `tar_make`.
+- **PR #383 (first attempt at link content fixes)** — agent worktree base was the orchestrator's session-start SHA (pre-#382), so the diff included a context line with `--exclude-mail`. GitHub three-way-merge produced a CONFLICTING state against current main. Closed and reapplied off current main as #384. Lesson: agents that follow another merge MUST `fetch + reset --hard origin/main` at startup.
+
+### Accuracy / Metrics
+
+- **mom_prepeak gauntlet headline** (on 51-stock universe, 638 monthly returns, 1973-onwards):
+  - mom_prepeak Sharpe **+0.44**, max_dd -69.1%, blown_up FALSE; HAC t-stat 3.69; FF5+Mom alpha 1.46%/yr (t=2.46, R²=0.4%)
+  - mom_postpeak Sharpe **-0.46**, blown_up TRUE at month 248 (≈Aug 1993)
+  - mom_combined Sharpe **-0.00**, blown_up TRUE at month 248
+  - Random-day-as-peak null: actual 0.44 vs random 0.06 → peak-finding IS the alpha source
+  - WFC 3-point grid: Pearson -0.92, Spearman -1.0, classification "spurious_luck" (small N caveat documented in vignette)
+  - CPCV PBO 0.40 over 10 paths (5 of 15 excluded due to NA scores)
+- **Registry state**: `bt.strategy` now contains 3 mom_* siblings; `bt.run` has 3 success runs; `bt.metric` has Pillar-8 + sharpe + n_months per run.
+- **PRs**: 14 merged + 1 closed-and-replaced (#383→#384). 13 sequential squash-merges to main, 1 cross-PR closeout.
+- **Test count delta**: ~40 new tests across PR 1/4, 2/4, the bankruptcy guard, gauntlet (Pillar-8 + random-peak + FF-join doc-test).
+
+### Known Limitations
+
+- **`mom_postpeak` and `mom_combined` portfolios go bankrupt** at the same month (248) on the L/S construction. Underlying issue: no leg-return cap in `.mom_prepeak_form_portfolio()` allows `ret_ls < -1` in extreme months (short squeeze). Tracked as #374 (L/S construction caps); metric formulas are now robust to bankruptcy but the underlying construction issue remains.
+- **`*_register_runs` sentinels are not idempotent** — targets sets deterministic RNG before each target body, so `.new_uuid()` returns the same UUID on re-run → PK violation against existing `bt.run` row. Workaround: manually `DELETE FROM bt.metric WHERE run_uuid IN (...)` + `DELETE FROM bt.run WHERE strategy_id LIKE '...'` + `tar_invalidate` + `tar_make`. Tracked as #375.
+- **lychee long-tail dead links** — 8+ pre-existing broken links exposed once #382/#384 unblocked lychee (Wikipedia article moved, `examples.html` archived in #9ea4193 but still referenced, ECB site reorg, DOI redirect-then-403, `vdev` release tag never existed, workshop GitHub Action run IDs aged out). Tracked as #392 (bundled with `.lycheeignore` + adding `lychee` to `tproject.toml` for nix-pinned local + CI parity).
+- **4 vignettes have latent `pkgload::load_all(here::here())` bug** — `avoid-worst-days`, `european-overlay`, `index`, `macro-defense-rotation`. Committed HTML works on the deployed site; next re-render of any of these will fail with the #379-style error. Tracked as #387.
+- **Gauntlet v2 deferred** — 7-null-environment falsification across all 3 siblings; WFC grid over signal-params (`lookback_months_start`, `min_obs_days`) not just `n_quantiles` (requires re-running expensive signal); CRSP-equivalent daily-price plumbing for paper-replication. Tracked as #380.
+
+### Next Session
+
+- Continue on branch: `main` (this session merged everything to main via PRs)
+- **#392 lychee cleanup** — most user-visible (scheduled-run failure notifications continue until this lands)
+- **#375 registry sentinel idempotency** — quality-of-life fix; affects every `*_register_runs` re-run
+- **#374 L/S construction caps** — makes the bankrupt-strategy story honest at construction time, not just metric reporting
+- Or pick from #340 (snapshot test policy), #339 (inter-vignette cross-refs), #345 (leaderboard 5-strategy display gap), #362 (Lazy Man's Momentum — second crash-avoidance momentum variant for side-by-side comparison)
+
 ## 2026-05-30 (session 12 — #347 backtest-tracking DuckDB umbrella: 5 PRs + #365 mom_prepeak issue)
 
 ### Completed
