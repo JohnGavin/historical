@@ -488,7 +488,7 @@ if (!is.null(wfc_tbl) && nrow(wfc_tbl) > 0) {
 
 **What this framework does NOT do:**
 
-- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R){target="_blank" rel="noopener noreferrer"} (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/../../.claude/rules/look-ahead-bias-prevention.md){target="_blank" rel="noopener noreferrer"} rule)
+- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R){target="_blank" rel="noopener noreferrer"} (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/look-ahead-bias-prevention.md){target="_blank" rel="noopener noreferrer"} rule)
 - Does not test for transaction cost sensitivity (handled by [`execution-delay-sensitivity`](https://github.com/JohnGavin/historical/blob/main/R/plan_alpha_decay.R){target="_blank" rel="noopener noreferrer"} — alpha decay analysis)
 - Does not test for parameter sensitivity (handled by [`backtest-robustness`](https://github.com/JohnGavin/historical/blob/main/R/plan_bootstrap_ci.R){target="_blank" rel="noopener noreferrer"} — bootstrap CI)
 - Does not test for temporal stability (handled by [`backtest-partitions`](https://github.com/JohnGavin/historical/blob/main/R/plan_partitions.R){target="_blank" rel="noopener noreferrer"} — train/test/validation split)
