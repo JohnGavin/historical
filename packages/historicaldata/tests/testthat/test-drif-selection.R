@@ -181,22 +181,46 @@ test_that("helper ranks internally from 'predicted' column (multiverse style)", 
 # ── input validation ──────────────────────────────────────────────────────────
 
 test_that("non-data-frame predictions throws cli_abort", {
+  # Existing guard: class check (algorithmic)
   expect_error(
     hd_drif_select_topn("not_a_df", make_params(), 2L),
     class = "rlang_error"
   )
+  # Snapshot guard: exact error wording (#340)
+  expect_snapshot(
+    error = TRUE,
+    hd_drif_select_topn("not_a_df", make_params(), 2L)
+  )
 })
 
 test_that("missing params$factors throws cli_abort", {
+  # Existing guard: class check (algorithmic)
   expect_error(
     hd_drif_select_topn(make_preds(), list(), 2L),
     class = "rlang_error"
   )
+  # Snapshot guard: exact error wording (#340)
+  expect_snapshot(
+    error = TRUE,
+    hd_drif_select_topn(make_preds(), list(), 2L)
+  )
 })
 
 test_that("non-positive top_n throws cli_abort", {
+  # Existing guard: class check (algorithmic)
   expect_error(
     hd_drif_select_topn(make_preds(), make_params(), 0L),
     class = "rlang_error"
   )
+  # Snapshot guard: exact error wording (#340)
+  expect_snapshot(
+    error = TRUE,
+    hd_drif_select_topn(make_preds(), make_params(), 0L)
+  )
+})
+
+# ── API stability ──────────────────────────────────────────────────────────────
+
+test_that("hd_drif_select_topn function signature is stable (catches API drift)", {
+  expect_snapshot(args(hd_drif_select_topn))
 })
