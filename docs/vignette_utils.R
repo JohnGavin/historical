@@ -222,8 +222,15 @@ build_info <- function(pkg_name = "historicaldata") {
   r_ver <- as.character(getRversion())
   build_time <- format(Sys.time(), "%Y-%m-%d %H:%M:%S")
 
-  ver_link <- if (!is.null(gh_url)) {
+  # Only link to a release tag when pkg_ver looks like a real semver (e.g.
+  # "0.1.0", "1.2.3"). When packageVersion() errors the fallback is "dev",
+  # which produces releases/tag/vdev — a 404. Link to the releases index
+  # instead so the footer is always a valid URL. (#392)
+  is_semver <- grepl("^[0-9]+\\.[0-9]+(\\.[0-9]+)?", pkg_ver)
+  ver_link <- if (!is.null(gh_url) && is_semver) {
     sprintf("[%s](%s/releases/tag/v%s)", pkg_ver, gh_url, pkg_ver)
+  } else if (!is.null(gh_url)) {
+    sprintf("[%s](%s/releases)", pkg_ver, gh_url)
   } else pkg_ver
 
   sha_link <- if (!is.null(gh_url) && git_sha_short != "N/A") {

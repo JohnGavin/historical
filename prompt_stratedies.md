@@ -58,8 +58,8 @@
 + /Users/johngavin/docs_gh/blogs/quantitiativo.com/inst/qmd/quantitativo.com_spy_2.11_sharpe.qmd
   + **https://github.com/JohnGavin/quantitiativo.com/actions**
     + https://github.com/JohnGavin/llm
-    + https://github.com/JohnGavin/r.package.example/actions/runs/10037744340
-      + https://github.com/user-workshop-cicd/r.pkg.template/actions/runs/9466913950
+    + https://github.com/JohnGavin/r.package.example/actions
+      + https://github.com/user-workshop-cicd/r.pkg.template/actions
 
 
 

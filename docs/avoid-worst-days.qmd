@@ -543,4 +543,4 @@ The strategy is not overfit to VIX > 30 specifically. It works across a range of
 - [Morningstar: "You Can Beat the Stock Market by Avoiding Its Worst Days. You Won't."](https://www.morningstar.com/funds/you-can-beat-stock-market-by-avoiding-its-worst-days-you-wont)
 - [Macro Defense Rotation](macro-defense-rotation.html) -- a practical downside-protection strategy
 - [Strategy Leaderboard](leaderboard.html) -- comparison of all strategies
-- Data: [`historicaldata` R package](https://johngavin.github.io/historical/examples.html)
+- Data: [`historicaldata` R package](https://github.com/JohnGavin/historical/tree/main/packages/historicaldata)

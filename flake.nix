@@ -75,6 +75,7 @@
         additionalTools = with pkgs; [
           quarto
           poppler-utils
+          lychee
         ];
       in
       {
