@@ -3,13 +3,17 @@
     Code
       str(result)
     Output
-      tibble [1 x 8] (S3: tbl_df/tbl/data.frame)
-       $ strategy      : chr "test_struct"
-       $ n_months      : int 24
-       $ sharpe        : num -0.59
-       $ cagr          : num NA
-       $ vol           : num 85.6
-       $ max_dd        : num -100
-       $ blown_up      : logi TRUE
-       $ bankrupt_month: int 13
+      tibble [1 x 12] (S3: tbl_df/tbl/data.frame)
+       $ strategy       : chr "test_struct"
+       $ n_months       : int 24
+       $ sharpe         : num -0.59
+       $ cagr           : num NA
+       $ vol            : num 85.6
+       $ max_dd         : num -100
+       $ blown_up       : logi TRUE
+       $ bankrupt_month : int 13
+       $ avg_dd_days    : num NA
+       $ max_dd_days    : num NA
+       $ max_cons_losses: int 0
+       $ loss_clustered : logi NA
 
