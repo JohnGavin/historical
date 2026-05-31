@@ -89,12 +89,23 @@ library(targets)
 library(ggplot2)
 library(dplyr)
 library(DT)
-library(gt)
 
-pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
-
-store_path <- if (dir.exists("_targets")) "_targets" else
-  file.path(here::here(), "docs/_targets")
+# Path-checked store + utils (cwd is docs/ under quarto render, project
+# root under tar_make). Three-way fallback handles worktree renders where
+# here::here() resolves to the worktree docs/ rather than project root.
+store_path <- local({
+  if (dir.exists("_targets")) return("_targets")
+  # Worktree: git --git-common-dir points to main .git; strip /.git for root
+  gc <- tryCatch(
+    trimws(system("git rev-parse --git-common-dir 2>/dev/null", intern = TRUE)),
+    error = function(e) character(0)
+  )
+  if (length(gc) == 1L && nzchar(gc)) {
+    cand <- file.path(dirname(gc), "docs", "_targets")
+    if (dir.exists(cand)) return(cand)
+  }
+  file.path(here::here(), "docs/_targets")  # fallback (works from project root)
+})
 tar_config_set(store = store_path)
 
 utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
