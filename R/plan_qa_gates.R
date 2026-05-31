@@ -189,6 +189,40 @@ check_anchor_in_range <- function(html_dir,
   dplyr::bind_rows(results)
 }
 
+#' Check that every strategy in strategy_names appears in the leaderboard (S7)
+#'
+#' Exported as a standalone helper so unit tests can exercise the logic without
+#' running `tar_make()`.  The `qa_leaderboard_coverage` target calls this
+#' function directly.
+#'
+#' @param strategy_names Tibble with at least `short_name` and `code_name`
+#'   columns (the output of the `strategy_names` targets pipeline target).
+#' @param leaderboard Tibble with at least a `strategy` column (the output of
+#'   the `leaderboard` targets pipeline target).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_coverage <- function(strategy_names, leaderboard) {
+  expected <- strategy_names$short_name
+  observed <- unique(leaderboard$strategy)
+  missing  <- setdiff(expected, observed)
+
+  if (length(missing) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard missing {length(missing)}/{length(expected)} strategy/strategies:",
+      setNames(
+        sprintf("  %s (code_name: %s)",
+                missing,
+                strategy_names$code_name[match(missing, strategy_names$short_name)]),
+        rep("i", length(missing))
+      ),
+      "i" = "Add the corresponding add_meta() calls in R/plan_leaderboard.R."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -299,6 +333,27 @@ plan_qa_gates <- function() {
         }
         cli::cli_inform(c("v" = "qa_anchor_in_range: S6 passed (all anchors in range)"))
         nrow(hits)
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every strategy in strategy_names must appear in the leaderboard (S7)
+    #
+    # strategy_names$short_name holds the canonical display labels.
+    # leaderboard$strategy holds the labels set by add_meta(name = ...).
+    # Both sets MUST match; missing strategies indicate a wiring gap in
+    # plan_leaderboard.R. (#345)
+    targets::tar_target(
+      qa_leaderboard_coverage,
+      command = {
+        check_leaderboard_coverage(strategy_names, leaderboard)
+        cli::cli_inform(c(
+          "v" = paste0(
+            "qa_leaderboard_coverage: S7 passed — all ",
+            length(strategy_names$short_name), " strategies present in leaderboard"
+          )
+        ))
+        TRUE
       },
       cue = targets::tar_cue(mode = "always")
     )
