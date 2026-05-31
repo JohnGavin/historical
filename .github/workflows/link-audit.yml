@@ -38,7 +38,7 @@ jobs:
             --verbose
             --max-redirects 5
             --max-concurrency 8
-            --accept 200,206,429
+            --accept 200,206,403,429
             --exclude-mail
             './docs/**/*.html'
             './docs/**/*.qmd'
@@ -57,7 +57,7 @@ jobs:
             --verbose
             --max-redirects 5
             --max-concurrency 8
-            --accept 200,206,429
+            --accept 200,206,403,429
             --exclude-mail
             --base 'https://johngavin.github.io/historical/'
             'https://johngavin.github.io/historical/'
