@@ -12,7 +12,7 @@ version = "python313"
 packages = ["yfinance", "pandas", "pyarrow", "pytest"]
 
 [additional-tools]
-packages = ["quarto", "poppler-utils"]
+packages = ["quarto", "poppler-utils", "lychee"]
 
 [t]
 min_version = "0.51.2"
