@@ -130,6 +130,7 @@ source(here::here("R/plan_olmar.R"))
 source(here::here("R/plan_turn_of_month.R"))
 source(here::here("R/plan_wf_correlation.R"))
 source(here::here("R/plan_artefact_registry.R"))
+source(here::here("R/plan_qa_gates.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -179,6 +180,7 @@ c(plan_strategy_names(),
   plan_turn_of_month(),
   plan_wf_correlation(),
   plan_artefact_registry(),
+  plan_qa_gates(),
 
   # Phase 1 of #149: date-type consistency across all registered datasets.
   # tar_target_raw + explicit deps so targets schedules dv_join_key_types
