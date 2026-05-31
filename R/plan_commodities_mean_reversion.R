@@ -254,7 +254,7 @@ plan_commodities_mean_reversion <- function() {
   uuids <- character(length(partitions))
   for (i in seq_along(partitions)) {
     p <- partitions[i]
-    uu <- historicaldata::hd_run_record(
+    uu <- historicaldata::hd_run_upsert(
       con,
       strategy_id      = "cmr",
       partition        = p,

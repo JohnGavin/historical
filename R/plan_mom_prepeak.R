@@ -368,7 +368,7 @@ plan_mom_prepeak <- function() {
 
     historicaldata::hd_strategy_upsert(con, strat_row)
 
-    uu <- historicaldata::hd_run_record(
+    uu <- historicaldata::hd_run_upsert(
       con,
       strategy_id      = cn,
       partition        = "phase1",
