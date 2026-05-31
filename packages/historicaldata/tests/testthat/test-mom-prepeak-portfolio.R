@@ -189,3 +189,141 @@ test_that("portfolio output structure is stable", {
 
   expect_snapshot(str(result))
 })
+
+
+# ---- Setup: convenience extractor for compute_returns ----------------------
+
+compute_returns <- function(...) {
+  skip_no_plan()
+  plan_env$.mom_prepeak_compute_returns(...)
+}
+
+
+# ---- Helper: build a minimal universe_tbl for compute_returns tests --------
+
+# .mom_prepeak_compute_returns computes fwd_ret = lead(adjusted)/adjusted - 1
+# for each ticker row-by-row.  The portfolio's as_of_date signals at month-end
+# t; the exec_date is the NEXT month-end t+1 (where we enter), and the return
+# is the move from t+1 to t+2 (exit).  Therefore we need THREE month-ends:
+#   month1 = as_of_date (signal formation)
+#   month2 = exec_date  (entry; fwd_ret at this row = month3/month2 - 1)
+#   month3 = exit       (exit prices; fwd_ret here is NA — last row)
+# month1_prices, month2_prices, month3_prices: named numeric vectors (ticker->price).
+make_universe_tbl <- function(tickers,
+                               month1_date   = as.Date("2026-01-31"),
+                               month2_date   = as.Date("2026-02-28"),
+                               month3_date   = as.Date("2026-03-31"),
+                               month1_prices,
+                               month2_prices,
+                               month3_prices) {
+  tibble::tibble(
+    ticker   = rep(tickers, 3L),
+    date     = c(rep(month1_date, length(tickers)),
+                 rep(month2_date, length(tickers)),
+                 rep(month3_date, length(tickers))),
+    adjusted = c(month1_prices[tickers],
+                 month2_prices[tickers],
+                 month3_prices[tickers])
+  )
+}
+
+# Returns a minimal portfolio_tbl (one as_of_date, explicit weights).
+make_portfolio_tbl <- function(tickers, weights,
+                                as_of_date = as.Date("2026-01-31")) {
+  tibble::tibble(
+    as_of_date   = as_of_date,
+    ticker       = tickers,
+    signal_value = seq_along(tickers) / length(tickers),
+    decile       = ifelse(weights > 0, 10L, 1L),
+    weight       = weights
+  )
+}
+
+
+# ---- 6. Short-leg return cap: squeezed short contributes at most 100% ------
+
+test_that(".mom_prepeak_compute_returns caps short returns at +100%", {
+  skip_no_plan()
+
+  # Universe needs 3 month-ends: as_of_date (Jan), exec_date (Feb), exit (Mar).
+  # The exec_date fwd_ret = exit_price / exec_price - 1.
+  # Long:  T_LONG,  exec_price=100, exit_price=110  => fwd_ret = +10%
+  # Short: T_SHORT, exec_price=100, exit_price=300  => fwd_ret = +200%
+  #   Uncapped: ret_short = 1 * 2.0 = 2.0  =>  ret_ls = 0.10 - 2.0 = -1.90
+  #   Capped:   ret_short = 1 * 1.0 = 1.0  =>  ret_ls = 0.10 - 1.0 = -0.90
+  tickers <- c("T_LONG", "T_SHORT")
+  month1  <- c(T_LONG = 100, T_SHORT = 100)  # as_of_date prices (any value)
+  month2  <- c(T_LONG = 100, T_SHORT = 100)  # exec_date entry prices
+  month3  <- c(T_LONG = 110, T_SHORT = 300)  # exit prices
+
+  port <- make_portfolio_tbl(
+    tickers = tickers,
+    weights = c(1, -1)  # equal-weight: 1 long, 1 short
+  )
+  univ <- make_universe_tbl(
+    tickers       = tickers,
+    month1_prices = month1,
+    month2_prices = month2,
+    month3_prices = month3
+  )
+
+  result <- compute_returns(
+    portfolio_tbl  = port,
+    universe_tbl   = univ,
+    cost_per_trade = 0
+  )
+
+  expect_equal(nrow(result), 1L, info = "Should have exactly 1 monthly row")
+  expect_equal(result$ret_short, 1.0, tolerance = 1e-10,
+    info = "Short-leg contribution capped at 1.0 (100% loss of notional)")
+  expect_gt(result$ret_ls, -1,
+    info = "ret_ls must be > -1 even with a +200% squeeze on the short leg")
+  expect_equal(result$ret_ls, 0.10 - 1.0, tolerance = 1e-10,
+    info = "ret_ls = ret_long (0.10) - ret_short_capped (1.0)")
+})
+
+
+# ---- 7. Cap is identity on normal months (no fwd_ret > 1 for shorts) -------
+
+test_that(".mom_prepeak_compute_returns: cap does not alter normal-month returns", {
+  skip_no_plan()
+
+  # Universe needs 3 month-ends: as_of_date (Jan), exec_date (Feb), exit (Mar).
+  # All fwd_ret (Mar/Feb - 1) are in [-1, 1] — the cap should be a no-op.
+  # Long:  T_LONG1 +10%, T_LONG2 +5%
+  # Short: T_SH1   +20% (loss on short; < 100% so no cap), T_SH2 -10% (profit)
+  tickers  <- c("T_LONG1", "T_LONG2", "T_SH1", "T_SH2")
+  weights  <- c(0.5, 0.5, -0.5, -0.5)  # equal-weight within each leg
+
+  # month2 = exec_date entry prices (all 100)
+  month1   <- c(T_LONG1 = 100, T_LONG2 = 100, T_SH1 = 100, T_SH2 = 100)
+  month2   <- c(T_LONG1 = 100, T_LONG2 = 100, T_SH1 = 100, T_SH2 = 100)
+  # month3 = exit prices
+  month3   <- c(T_LONG1 = 110, T_LONG2 = 105, T_SH1 = 120, T_SH2 = 90)
+
+  port <- make_portfolio_tbl(tickers = tickers, weights = weights)
+  univ <- make_universe_tbl(
+    tickers       = tickers,
+    month1_prices = month1,
+    month2_prices = month2,
+    month3_prices = month3
+  )
+
+  result <- compute_returns(
+    portfolio_tbl  = port,
+    universe_tbl   = univ,
+    cost_per_trade = 0
+  )
+
+  # Manual calculation (no cap triggered):
+  # ret_long  = 0.5 * 0.10 + 0.5 * 0.05 = 0.075
+  # ret_short = 0.5 * 0.20 + 0.5 * (-0.10) = 0.05   (all within [-1, 1])
+  # ret_ls    = 0.075 - 0.05 = 0.025
+  expect_equal(nrow(result), 1L)
+  expect_equal(result$ret_long,  0.075, tolerance = 1e-10,
+    info = "ret_long unaffected by cap (long leg)")
+  expect_equal(result$ret_short, 0.05, tolerance = 1e-10,
+    info = "ret_short unaffected by cap — all fwd_ret <= 1 for shorts")
+  expect_equal(result$ret_ls,    0.025, tolerance = 1e-10,
+    info = "ret_ls matches manual calculation; cap is a no-op in normal months")
+})
