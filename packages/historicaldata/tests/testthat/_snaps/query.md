@@ -4,17 +4,17 @@
       str(result)
     Output
       tibble [3 x 11] (S3: tbl_df/tbl/data.frame)
-       $ date       : POSIXct[1:3], format: "2026-04-07" "2026-04-08" ...
-       $ open       : num [1:3] 256 258 259
-       $ high       : num [1:3] 256 260 261
-       $ low        : num [1:3] 246 257 256
-       $ close      : num [1:3] 254 259 260
-       $ adjusted   : num [1:3] 254 259 260
-       $ volume     : num [1:3] 62148000 41032800 28121600
-       $ ticker     : chr [1:3] "AAPL" "AAPL" "AAPL"
-       $ source     : chr [1:3] "yahoo" "yahoo" "yahoo"
-       $ asset_class: chr [1:3] "equity" "equity" "equity"
-       $ updated_at : POSIXct[1:3], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
+       $ date          : POSIXct[1:3], format: "2026-04-07" "2026-04-08" ...
+       $ open          : num [1:3] 256 258 259
+       $ high          : num [1:3] 256 260 261
+       $ low           : num [1:3] 246 257 256
+       $ close         : num [1:3] 254 259 260
+       $ adjusted_close: num [1:3] 254 259 260
+       $ volume        : num [1:3] 62148000 41032800 28121600
+       $ ticker        : chr [1:3] "AAPL" "AAPL" "AAPL"
+       $ source        : chr [1:3] "yahoo" "yahoo" "yahoo"
+       $ asset_class   : chr [1:3] "equity" "equity" "equity"
+       $ updated_at    : POSIXct[1:3], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
 
 # hd_datasets snapshot
 
