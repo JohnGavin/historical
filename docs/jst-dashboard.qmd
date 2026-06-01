@@ -274,3 +274,8 @@ jst_crises |>
 - **Data period**: `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]` (`r format(jst_summary$n_obs, big.mark = ",")` country-year observations)
 
 All target computations are defined in [`R/plan_jst.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_jst.R).
+
+## Related Vignettes
+
+- **[Strategy Falsification](falsification.html)** — 155-year JST evidence underpins the factor design tested here; falsification applies the HAC + FF5 gauntlet to current strategies
+- **[Factor MAX](factor-max.html)** — applies cross-sectional factor rotation to the same academic factors whose long-run premia are documented in the JST data
