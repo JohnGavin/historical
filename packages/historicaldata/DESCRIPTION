@@ -23,6 +23,7 @@ Imports:
     lubridate,
     purrr,
     rlang,
+    slider,
     tibble
 Suggests:
     alphavantager,
