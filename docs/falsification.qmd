@@ -829,3 +829,9 @@ in `packages/historicaldata/R/risk_metrics.R`. Tests in
 [`test-risk-metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/tests/testthat/test-risk-metrics.R).
 Issue [#269](https://github.com/JohnGavin/historical/issues/269).
 
+#### Related Vignettes
+
+- **[Strategy Leaderboard](leaderboard.html)** — displays the falsification scorecard verdicts alongside performance rankings; leaderboard surfaces what this page proves
+- **[Negative Results](negative-results.html)** — catalogues strategies that failed the falsification gauntlet; companion document to this page's verdicts
+- **[Momentum Pre-Peak](momentum-prepeak.html)** — the most recent gauntlet run; applies HAC, FF5, CPCV PBO, and Walk-Forward Correlation from this framework
+

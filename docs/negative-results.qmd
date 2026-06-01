@@ -194,6 +194,11 @@ if (!is.null(summary) && !is.null(nms)) {
 - Strategy leaderboard: [leaderboard.html](leaderboard.html)
 - Harvey, Liu & Zhu (2016). "...and the Cross-Section of Expected Returns"
 
+## Related Vignettes
+
+- **[Strategy Falsification](falsification.html)** — the full statistical framework that produced these negative results: HAC t-stats, null rejection rates, and FF5 alpha
+- **[Strategy Leaderboard](leaderboard.html)** — ranks the strategies that passed falsification alongside those catalogued here as failures
+
 ```{r}
 #| label: build-info
 #| results: asis
