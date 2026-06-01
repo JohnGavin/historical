@@ -35,7 +35,10 @@ library(ggplot2)
 library(DT)
 library(dplyr)
 
-pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+# Path-checked pkgload (cwd-trap fix: here::here() returns docs/ under quarto render)
+pkg_path <- if (dir.exists("packages/historicaldata")) "packages/historicaldata" else
+  file.path(dirname(here::here()), "packages/historicaldata")
+pkgload::load_all(pkg_path, quiet = TRUE)
 
 store_path <- if (dir.exists("_targets")) "_targets" else
   file.path(here::here(), "docs/_targets")
