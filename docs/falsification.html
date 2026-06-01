@@ -742,7 +742,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/e7ace63b499e54ef6ea48a5905ab500923b39ecf"><code>e7ace63</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-05-31 19:12:28”</p>
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/f9f4c016aba26c71e305869db53176033f7343e2"><code>f9f4c01</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-06-01 10:45:28”</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -799,7 +799,7 @@ grid-auto-rows: minmax(0, 1fr);">
 </div>
 <p>Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: <a href="https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R">plan_causal_graph.R</a>.</p>
 <p style="color:#888;font-size:0.8em;">
-Full DAG tab rendered: 2026-05-31 19:12:28 BST | commit: e7ace63
+Full DAG tab rendered: 2026-06-01 10:45:28 BST | commit: f9f4c01
 </p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -818,7 +818,7 @@ Full DAG tab rendered: 2026-05-31 19:12:28 BST | commit: e7ace63
 </div>
 <p><abbr title="Dynamic Rotation Into Factors — each month selects the FF factor with highest trailing return">DRIF</abbr> selects the best-performing FF factor each month. Loads on <abbr title="High Minus Low — value factor: cheap stocks minus expensive stocks">HML</abbr>, <abbr title="Small Minus Big — size factor: small-cap minus large-cap returns">SMB</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>. Yellow dashed edge: VIX affects HML in crises (<abbr title="Partial correlation between HML and VIX = -0.17, indicating they co-move in crises">r=-0.17</abbr>). Source: <a href="https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R">plan_drif.R</a>.</p>
 <p style="color:#888;font-size:0.8em;">
-DRIF tab rendered: 2026-05-31 19:12:28 BST | commit: e7ace63
+DRIF tab rendered: 2026-06-01 10:45:28 BST | commit: f9f4c01
 </p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -952,7 +952,8 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header dashboard-card-no-title bslib-navs-card-title">
 
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-29"><li class="nav-item" role="presentation"><a href="#card-tabset-29-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Drawdown Duration + Loss Clustering" aria-selected="true" class="nav-link active">Drawdown Duration + Loss Clustering</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-29-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Methodology" aria-selected="false" class="nav-link">Methodology</a></li></ul></div>
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-29"><li class="nav-item" role="presentation"><a href="#card-tabset-29-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Drawdown Duration + Loss Clustering" aria-selected="true" class="nav-link active">Drawdown Duration + Loss Clustering</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-29-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Methodology" aria-selected="false" class="nav-link">Methodology</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-29-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Related Vignettes" aria-selected="false" class="nav-link">Related Vignettes</a></li></ul></div>
+
 
 
 <div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-29"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-29-1"><div class="card-body html-fill-item html-fill-container" data-title="Drawdown Duration + Loss Clustering">
@@ -996,6 +997,23 @@ grid-auto-rows: minmax(0, 1fr);">
 </ol>
 <p>The <code>clustered</code> flag requires <strong>both</strong> signals to agree to reduce false positives. The runs test has power against any non-random pattern; ACF specifically targets persistence.</p>
 <p><strong>Source code:</strong> <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R"><code>hd_dd_duration()</code></a> and <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R"><code>hd_loss_clustering()</code></a> in <code>packages/historicaldata/R/risk_metrics.R</code>. Tests in <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/tests/testthat/test-risk-metrics.R"><code>test-risk-metrics.R</code></a>. Issue <a href="https://github.com/JohnGavin/historical/issues/269">#269</a>.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-29-3"><div class="card-body html-fill-item html-fill-container" data-title="Related Vignettes">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<ul>
+<li><strong><a href="leaderboard.html">Strategy Leaderboard</a></strong> — displays the falsification scorecard verdicts alongside performance rankings; leaderboard surfaces what this page proves</li>
+<li><strong><a href="negative-results.html">Negative Results</a></strong> — catalogues strategies that failed the falsification gauntlet; companion document to this page’s verdicts</li>
+<li><strong><a href="momentum-prepeak.html">Momentum Pre-Peak</a></strong> — the most recent gauntlet run; applies HAC, FF5, CPCV PBO, and Walk-Forward Correlation from this framework</li>
+</ul>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
