@@ -49,6 +49,14 @@ test_that("registry schema matches actual parquet columns for all datasets", {
       }
     )
     if (!length(actual_cols)) next
+    # Apply the same backward-compat alias that hd_lazy()/hd_ohlcv_single()
+    # applies at read time (#325 / #397): parquets written before the rename
+    # still contain 'adjusted'; the schema declares the post-alias canonical
+    # name 'adjusted_close'.  Normalise before comparing so this test checks
+    # the caller-visible schema, not the raw parquet column names.
+    if ("adjusted" %in% actual_cols && !("adjusted_close" %in% actual_cols)) {
+      actual_cols[actual_cols == "adjusted"] <- "adjusted_close"
+    }
     missing_from_parquet <- setdiff(ds$schema, actual_cols)
     extra_in_parquet     <- setdiff(actual_cols, ds$schema)
     msg <- paste0(
