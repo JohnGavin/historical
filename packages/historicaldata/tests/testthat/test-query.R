@@ -91,11 +91,11 @@ test_that("hd_ohlcv split-and-bind: mixed equity + crypto batch", {
   expect_true("AAPL" %in% result$ticker)
   expect_true("BTC" %in% result$ticker)
   # Union of schemas: equity-only columns are NA for crypto rows
-  expect_true("adjusted" %in% names(result))     # equity-only column
+  expect_true("adjusted_close" %in% names(result))     # equity-only column (#397)
   aapl_rows <- result[result$ticker == "AAPL", ]
   btc_rows  <- result[result$ticker == "BTC",  ]
-  expect_true(all(!is.na(aapl_rows$adjusted)))   # AAPL has adjusted prices
-  expect_true(all(is.na(btc_rows$adjusted)))     # BTC rows get NA for equity-only col
+  expect_true(all(!is.na(aapl_rows$adjusted_close)))   # AAPL has adjusted prices
+  expect_true(all(is.na(btc_rows$adjusted_close)))     # BTC rows get NA for equity-only col
 })
 
 test_that("hd_ohlcv split-and-bind: collect=FALSE informs user", {
