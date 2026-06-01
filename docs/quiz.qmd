@@ -94,6 +94,10 @@ if (!is.null(quiz_json)) {
 }
 ```
 
+## Related Vignettes
+
+- **[Strategy Leaderboard](leaderboard.html)** — see how your calibration compares to actual strategy risk-adjusted return rankings
+
 ```{r}
 #| label: build-info
 #| results: asis

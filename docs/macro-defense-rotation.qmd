@@ -693,6 +693,12 @@ ggplot(both, aes(date, cum, colour = method)) +
 6. **UUP:** [Invesco DB US Dollar Index Bullish Fund](https://www.invesco.com/us/financial-products/etfs/product-detail?audienceType=Investor&productId=ETF-UUP)
 7. **Backtesting methodology:** Expanding window to avoid lookahead bias. See [Advances in Financial Machine Learning](https://www.wiley.com/en-us/Advances+in+Financial+Machine+Learning-p-9781119482086) (de Prado, 2018) for methodology.
 
+#### Related Vignettes
+
+- **[Avoid Worst Days](avoid-worst-days.html)** — theoretical analysis of return asymmetry; Macro Defense Rotation is the practical, tradeable counterpart
+- **[European Overlay](european-overlay.html)** — applies a similar regime-detection logic using ECB CISS systemic-stress data across European equities
+- **[Strategy Leaderboard](leaderboard.html)** — comparative ranking of Macro Defense Rotation against all other strategies
+
 #### Build Info
 
 {{< include _includes/build-info-footer.qmd >}}

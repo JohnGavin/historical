@@ -167,6 +167,12 @@ Our factor-level implementation applies the same logic: the sequence of daily fa
 3. **Data:** FF5 + Momentum via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}
 4. **Methodology:** Expanding window, elastic net (glmnet) factor selection, equal-weight top-2
 
+#### Related Vignettes
+
+- **[Factor MAX](factor-max.html)** — cross-sectional MAX signal counterpart; simpler signal, same factor universe as DRIF
+- **[Stock Backtest](stock-backtest.html)** — applies DRIF cross-sectionally to 660 individual equities rather than 5 academic factors
+- **[Strategy Leaderboard](leaderboard.html)** — ranks DRIF alongside all other strategies on risk-adjusted return and falsification scorecard
+
 #### Build Info
 
 ```{r}

@@ -544,3 +544,9 @@ The strategy is not overfit to VIX > 30 specifically. It works across a range of
 - [Macro Defense Rotation](macro-defense-rotation.html) -- a practical downside-protection strategy
 - [Strategy Leaderboard](leaderboard.html) -- comparison of all strategies
 - Data: [`historicaldata` R package](https://github.com/JohnGavin/historical/tree/main/packages/historicaldata)
+
+#### Related Vignettes
+
+- **[Macro Defense Rotation](macro-defense-rotation.html)** — structural alternative that rotates among TLT/GLD/DBC/UUP to capture the same downside-protection rationale with a tradeable signal
+- **[European Overlay](european-overlay.html)** — applies a similar regime-detection overlay using ECB CISS systemic-stress data across European markets
+- **[Strategy Leaderboard](leaderboard.html)** — comparative ranking of Avoid Worst Days against all other strategies

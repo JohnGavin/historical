@@ -499,6 +499,12 @@ if (!is.null(params)) {
 }
 ```
 
+#### Related Vignettes
+
+- **[Strategy Falsification](falsification.html)** — provides the statistical survival verdict (HAC t-stat, null rejection rate, FF5 alpha) underlying the leaderboard scorecard
+- **[Stock Backtest](stock-backtest.html)** — per-asset equity-level view of Factor MAX and DRIF strategies ranked here
+- **[Factor MAX](factor-max.html)** — detailed breakdown of the top-ranked factor rotation strategy
+
 #### Build Info
 
 ```{r}

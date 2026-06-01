@@ -281,6 +281,12 @@ if (!is.null(params)) {
 2. **Data:** Fama-French factors via [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}, accessed through `hd_factors()`
 3. **Methodology:** Expanding window backtest with OOS holdout, same pattern as [Macro Defense Rotation](macro-defense-rotation.html)
 
+#### Related Vignettes
+
+- **[DRIF (Factor Rotation)](drif.html)** — elastic-net factor-rotation counterpart; Factor MAX uses cross-sectional MAX signal while DRIF uses 42-feature elastic-net selection
+- **[Strategy Leaderboard](leaderboard.html)** — ranks Factor MAX alongside all other strategies on risk-adjusted return and falsification scorecard
+- **[Stock Backtest](stock-backtest.html)** — per-asset view of Factor MAX and DRIF applied cross-sectionally to 660 individual equities
+
 #### Build Info
 
 ```{r}

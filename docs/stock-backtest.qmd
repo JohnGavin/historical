@@ -468,6 +468,12 @@ if (!is.null(params)) {
 }
 ```
 
+#### Related Vignettes
+
+- **[Factor MAX](factor-max.html)** — factor-level MAX signal; this page applies that signal cross-sectionally to 660 individual equities
+- **[DRIF (Factor Rotation)](drif.html)** — factor-level DRIF; this page applies the same elastic-net selection to individual stocks
+- **[Strategy Leaderboard](leaderboard.html)** — overall strategy rankings across all strategies including stock-level implementations
+
 #### Build Info
 
 ```{r}

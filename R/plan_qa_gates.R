@@ -223,6 +223,39 @@ check_leaderboard_coverage <- function(strategy_names, leaderboard) {
 }
 
 
+#' Assert every vignette has at least one inter-vignette link (S8)
+#'
+#' Scans all .qmd files in `vignettes_dir` (excluding index.qmd, which is the
+#' homepage) for a `## Related vignettes` or `#### Related Vignettes` section.
+#' Aborts with a message naming the missing files if any are found.
+#'
+#' @param vignettes_dir Character. Directory to scan for *.qmd files.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_vignette_cross_refs <- function(vignettes_dir = here::here("docs")) {
+  qmd_files <- list.files(vignettes_dir, pattern = "\\.qmd$", full.names = TRUE)
+  # Skip index.qmd — homepage navigation covers the entire site
+  qmd_files <- qmd_files[basename(qmd_files) != "index.qmd"]
+  missing <- character(0)
+  for (f in qmd_files) {
+    txt <- paste(readLines(f, warn = FALSE), collapse = "\n")
+    has_section <- grepl("## Related [Vv]ignettes", txt) ||
+                   grepl("#### Related [Vv]ignettes", txt)
+    if (!has_section) {
+      missing <- c(missing, basename(f))
+    }
+  }
+  if (length(missing) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Vignettes missing 'Related Vignettes' section ({length(missing)} file{?s}):",
+      setNames(sprintf("  %s", missing), rep("i", length(missing))),
+      "i" = "Add a '## Related vignettes' or '#### Related Vignettes' section to each."
+    ))
+  }
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -353,6 +386,22 @@ plan_qa_gates <- function() {
             length(strategy_names$short_name), " strategies present in leaderboard"
           )
         ))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every vignette has a Related Vignettes section (S8)
+    #
+    # Ensures inter-vignette navigation is present in all published .qmd files.
+    # Scans docs/*.qmd for a '## Related vignettes' or '#### Related Vignettes'
+    # section marker. Skips index.qmd (homepage has site-level navigation).
+    # See issue #339 for convention details.
+    targets::tar_target(
+      qa_vignette_cross_refs,
+      command = {
+        check_vignette_cross_refs(here::here("docs"))
+        cli::cli_inform(c("v" = "qa_vignette_cross_refs: S8 passed (all vignettes have Related Vignettes section)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
