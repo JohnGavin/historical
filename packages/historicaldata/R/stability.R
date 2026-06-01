@@ -198,3 +198,72 @@ hd_sharpe_stability_ratio <- function(r, w, ann_factor = 252, lag_nw = NULL) {
     ann_factor  = as.double(ann_factor)
   )
 }
+
+
+# ── 3. Top-5% returns share ───────────────────────────────────────────────────
+
+#' Top-5% returns share of total return
+#'
+#' Quantifies how concentrated a strategy's value generation is. Returns the
+#' fraction of total compounded return contributed by the top 5% of periods
+#' (e.g. top 13 months over a 260-month sample). A value near 1.0 means the
+#' strategy's edge lives entirely in extreme periods (concentrated); a value
+#' near 0.05 (= 5%) means returns are evenly distributed (the most diversified
+#' possible outcome). Macro strategies with "benign seasonality" -- where the
+#' strategy withdraws to zero in cold regimes and concentrates exposure in
+#' high-conviction periods -- typically score above 0.30.
+#'
+#' Used jointly with [hd_sharpe_stability_ratio()] to distinguish benign from
+#' detrimental seasonality. Benign: high SSR + high top5pct share (consistent
+#' AND concentrated in favourable regimes). Detrimental: low SSR + high top5pct
+#' share (concentrated in episodic spikes).
+#'
+#' @param r numeric vector of period returns (sign and magnitude both matter).
+#' @param pct numeric in (0, 1). The top fraction to measure. Default 0.05
+#'   (top 5%). Override for sensitivity analysis.
+#' @return named list with components:
+#'   \describe{
+#'     \item{top_share}{sum of top-pct returns / sum of all returns. NA if
+#'       denominator is 0.}
+#'     \item{n_top}{integer count of top-pct periods.}
+#'     \item{n_total}{integer total periods.}
+#'     \item{pct}{the percentile used.}
+#'     \item{total_return}{sum of all returns (for sanity check).}
+#'   }
+#' @references
+#' Brine, E., & Sueppel, R. (2026). The Sharpe stability ratio of trading
+#' strategies. Macrosynergy Research.
+#' @family falsification
+#' @export
+hd_top5pct_share <- function(r, pct = 0.05) {
+  r       <- r[!is.na(r)]
+  n_total <- length(r)
+  if (n_total == 0L) {
+    return(list(
+      top_share    = NA_real_,
+      n_top        = 0L,
+      n_total      = 0L,
+      pct          = pct,
+      total_return = NA_real_
+    ))
+  }
+  if (pct <= 0 || pct >= 1) {
+    cli::cli_abort("`pct` must be in (0, 1); got {pct}.")
+  }
+  n_top       <- max(1L, as.integer(ceiling(n_total * pct)))
+  sorted_desc <- sort(r, decreasing = TRUE)
+  top_sum     <- sum(sorted_desc[seq_len(n_top)])
+  total_sum   <- sum(r)
+  share       <- if (abs(total_sum) > .Machine$double.eps) {
+    top_sum / total_sum
+  } else {
+    NA_real_
+  }
+  list(
+    top_share    = share,
+    n_top        = n_top,
+    n_total      = n_total,
+    pct          = pct,
+    total_return = total_sum
+  )
+}
