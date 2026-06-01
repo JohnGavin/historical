@@ -239,3 +239,157 @@ test_that("hd_sharpe_stability_ratio: returns NA list when T < w", {
   expect_true(is.na(res$ssr))
   expect_equal(res$n_windows, 0L)
 })
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# hd_top5pct_share
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Test 1: all-positive uniform series -- share equals pct exactly
+test_that("hd_top5pct_share: uniform positive series yields share = 0.05", {
+  r   <- rep(0.01, 100L)
+  res <- hd_top5pct_share(r)
+
+  expect_type(res, "list")
+  # ceiling(100 * 0.05) = 5 top periods; top_sum = 5*0.01 = 0.05;
+  # total_sum = 100*0.01 = 1.0; share = 0.05 / 1.0 = 0.05
+  expect_equal(res$n_top,     5L)
+  expect_equal(res$n_total,   100L)
+  expect_equal(res$top_share, 0.05, tolerance = 1e-12)
+})
+
+
+# Test 2: single outlier -- share captures full concentration
+test_that("hd_top5pct_share: single non-zero outlier yields share = 1.0", {
+  r   <- c(rep(0, 99L), 1.0)
+  res <- hd_top5pct_share(r)
+
+  # ceiling(100 * 0.05) = 5 top periods; sorted desc: 1.0, 0, 0, 0, 0
+  # top_sum = 1.0; total_sum = 1.0; share = 1.0
+  expect_equal(res$n_top,     5L)
+  expect_equal(res$top_share, 1.0, tolerance = 1e-12)
+})
+
+
+# Test 3: negative-tail series -- share and sign are preserved
+test_that("hd_top5pct_share: negative-dominated series returns negative share", {
+  r         <- c(rep(0.001, 95L), rep(-0.05, 5L))
+  res       <- hd_top5pct_share(r)
+  # top 5 sorted desc: 0.001, 0.001, 0.001, 0.001, 0.001
+  top_sum   <- 5 * 0.001
+  total_sum <- 95 * 0.001 + 5 * (-0.05)
+  expected  <- top_sum / total_sum
+
+  expect_equal(res$n_top,     5L)
+  expect_equal(res$top_share, expected, tolerance = 1e-9)
+  expect_lt(res$top_share, 0,
+    label = "share is negative when total return is negative")
+})
+
+
+# Test 4: empty and all-NA inputs
+test_that("hd_top5pct_share: empty vector returns NA sentinel", {
+  res <- hd_top5pct_share(numeric(0L))
+
+  expect_true(is.na(res$top_share))
+  expect_equal(res$n_top,    0L)
+  expect_equal(res$n_total,  0L)
+  expect_true(is.na(res$total_return))
+})
+
+test_that("hd_top5pct_share: all-NA vector returns NA sentinel", {
+  res <- hd_top5pct_share(c(NA_real_, NA_real_, NA_real_))
+
+  expect_true(is.na(res$top_share))
+  expect_equal(res$n_top,   0L)
+  expect_equal(res$n_total, 0L)
+})
+
+
+# Test 5: n_top rounding -- ceiling behaviour
+test_that("hd_top5pct_share: n_top uses ceiling(n_total * pct)", {
+  # n_total=22, pct=0.05: ceiling(22*0.05) = ceiling(1.1) = 2
+  res22 <- hd_top5pct_share(rep(0.01, 22L))
+  expect_equal(res22$n_top, 2L)
+
+  # n_total=10, pct=0.05: ceiling(10*0.05) = ceiling(0.5) = 1
+  res10 <- hd_top5pct_share(rep(0.01, 10L))
+  expect_equal(res10$n_top, 1L)
+})
+
+
+# Test 6: pct override
+test_that("hd_top5pct_share: pct=0.10 override yields share=0.10 for uniform series", {
+  r   <- rep(0.01, 100L)
+  res <- hd_top5pct_share(r, pct = 0.10)
+
+  # ceiling(100 * 0.10) = 10 top periods; share = 10*0.01 / (100*0.01) = 0.10
+  expect_equal(res$n_top,     10L)
+  expect_equal(res$pct,       0.10)
+  expect_equal(res$top_share, 0.10, tolerance = 1e-12)
+})
+
+
+# Test 7: pct validation -- out-of-range values trigger cli_abort
+test_that("hd_top5pct_share: pct=0 triggers error", {
+  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = 0),
+               class = "rlang_error")
+})
+
+test_that("hd_top5pct_share: pct=1 triggers error", {
+  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = 1),
+               class = "rlang_error")
+})
+
+test_that("hd_top5pct_share: pct=1.5 triggers error", {
+  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = 1.5),
+               class = "rlang_error")
+})
+
+test_that("hd_top5pct_share: pct=-0.1 triggers error", {
+  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = -0.1),
+               class = "rlang_error")
+})
+
+
+# Test 8: NA handling -- NAs stripped before computation
+test_that("hd_top5pct_share: NA values are dropped before computation", {
+  r   <- c(1, 2, NA, 3, 4)
+  res <- hd_top5pct_share(r)
+
+  # After NA removal: r_clean = c(1, 2, 3, 4); n_total=4
+  # n_top = ceiling(4 * 0.05) = ceiling(0.2) = 1
+  # sorted desc: 4, 3, 2, 1; top_sum = 4; total_sum = 10; share = 0.4
+  expect_equal(res$n_total,   4L)
+  expect_equal(res$n_top,     1L)
+  expect_equal(res$top_share, 0.4, tolerance = 1e-12)
+})
+
+
+# Test 9: article calibration smoke test
+test_that("hd_top5pct_share: benign seasonality series has share above 0.3 and SSR > 1", {
+  # Mimic a macro strategy with 12.5% of months showing positive shocks:
+  #   base: rnorm(240, mean=0, sd=0.01)
+  #   shocks: add 0.03 to 30 randomly chosen months
+  # This produces a "benign seasonality" series where a minority of periods
+  # contributes a disproportionate share of total return.
+  #
+  # Lower bound is intentionally wide (0.30) -- this is a sanity check, not a
+  # precise calibration.  The article states macro strategies with benign
+  # seasonality "typically score above 0.30"; we test that floor only.
+  set.seed(1L)
+  n_total <- 240L
+  r       <- rnorm(n_total, mean = 0, sd = 0.01)
+  shock_idx <- sample(n_total, 30L)
+  r[shock_idx] <- r[shock_idx] + 0.03
+
+  res_top <- hd_top5pct_share(r)
+  res_ssr <- hd_sharpe_stability_ratio(r, w = 36L, ann_factor = 12L)
+
+  expect_gte(res_top$top_share, 0.30,
+    label = "benign seasonality: top5pct share should be concentrated (>= 0.30)")
+  expect_lte(res_top$top_share, 0.99,
+    label = "benign seasonality: top5pct share should be below 0.99 (not purely episodic)")
+  expect_gt(res_ssr$ssr, 1,
+    label = "benign seasonality: SSR should be > 1 (significant and consistent)")
+})
