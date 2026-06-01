@@ -1,5 +1,73 @@
 # Changelog
 
+## 2026-06-01 (session 14 — 12 PRs merged + #400 SSR rollout kicked off)
+
+### Completed
+
+Single-day session (started 2026-05-31 18:49Z, ran across midnight into 2026-06-01). Closed multiple follow-up tracks from session #13 and opened the Sharpe Stability Ratio (SSR) rollout from a new article gap analysis.
+
+#### Worktree cleanup
+- Pruned 13 unlocked agent worktrees (51 → 38 total) — all confirmed safe via `git cherry origin/main <branch>` showing 0 unique commits. Held `agent-aa99f6` (had unique `cc31850` commit overlapping with merged PR #384 — verification pending).
+
+#### Session #13 follow-ups (5 PRs)
+- **#394** lychee long-tail cleanup — fixed `vdev` URL bug in `build_info()` (semver guard), removed dead `examples.html` references, replaced 2 ECB/Wikipedia URLs, added `.lycheeignore` for DOI/publisher walls, added `lychee` to `tproject.toml`, switched workflow from `lycheeverse/lychee-action@v2` to `nix develop --command lychee`. Closed #392.
+- **#395** idempotent `hd_run_upsert()` — fixes #375 deterministic-UUID collision in `*_register_runs`. New function in `packages/historicaldata/R/registry_writers.R`; both `.mom_prepeak_register_runs()` and `.cmr_register_runs()` switched to upsert. 12 new tests.
+- **#396** mom_prepeak L/S construction caps — closes #374. Capped per-position short-leg returns at +100% in `R/plan_mom_prepeak.R:295-308`. Documented short-leg cap convention. 2 new tests (squeeze + identity-in-normal-month).
+
+#### Leaderboard (3 PRs)
+- **#398** surface 8 missing strategies + QA coverage gate — closes #345. Wired `ltr`, `olmar`, `tom`, `cmr`, `rsc`, `avoid_worst`, `mom_prepeak`, `mom_postpeak`, `mom_combined` into `R/plan_leaderboard.R` with schema-normalising helpers per strategy. Added `check_leaderboard_coverage()` + `qa_leaderboard_coverage` S7 target. Wired `plan_qa_gates()` into `docs/_targets.R` (was never included). 7 new offline tests.
+- **#401** tar_make re-materialisation — 53 targets rebuilt, 126 skipped (warm-start rsync from main's `_targets/` cache worked). QA gate **passed** — all 14 strategies confirmed in rendered HTML. Fixed 2 latent bugs along the way: `adjusted` → `adjusted_close` in `R/plan_turn_of_month.R:47` (column rename #325 cascade) and `strategy_names` short_name mismatches (`"DRIF"`→`"Factor DRIF"`, `"MR"`→`"CMR"`).
+- **#402** remaining test failures — closes #397. Updated `test-query.R:94-98` to canonical `adjusted_close`; added alias normalisation in `test-registry.R:51-63` (registry asserts caller-visible schema, not raw parquet); accepted updated `_snaps/query.md` snapshot. Test count went FAIL 1→0 (FAIL 3→0 against pre-session main).
+
+#### Testing & docs (2 PRs)
+- **#399** snapshot-test policy + DRIF backfill — closes #340. Added `.claude/rules/snapshot-test-policy.md` with decision matrix; 46-file audit (confirmed issue body's "0 snapshot tests" was DRIF-specific — 7 files already had snapshots). Backfilled `test-drif-selection.R` (+4 `expect_snapshot`) and `test-drif.R` (+1 caption snapshot). New `_snaps/drif-selection.md`, `_snaps/drif.md`.
+- **#404** inter-vignette cross-references — closes #339. Added `## Related Vignettes` section (prose) or `#### Related Vignettes` tab to 12 vignettes. Added `check_vignette_cross_refs()` QA gate + 7 offline unit tests.
+
+#### Vignette deploy (1 PR)
+- **#406** re-render 9 of 12 vignettes from #404 — `factor-max`, `drif`, `stock-backtest`, `avoid-worst-days`, `european-overlay`, `falsification`, `negative-results`, `momentum-prepeak`, `quiz` all rendered with the new sections. Applied path-checked `tar_config_set()` cwd-trap fix to 3 more vignettes (`avoid-worst-days.qmd`, `european-overlay.qmd`, `macro-defense-rotation.qmd`) — same #379/#388/#390 pattern. 3 vignettes deferred (`leaderboard.qmd` schema mismatch, `jst-dashboard.qmd` raw `tar_load()` without RDS fallback, `macro-defense-rotation.qmd` requires live `bt_*` targets).
+
+#### SSR rollout (2 PRs + 4 PRs deferred)
+- **#400** filed — gap analysis vs existing `hd_hac_sharpe()`, `hd_deflated_sharpe()`, `hd_strat_keff_vertox()`, `hd_dd_duration()`, `hd_loss_clustering()` from [Brine & Sueppel (2026) Macrosynergy](https://macrosynergy.com/research/the-sharpe-stability-ratio-of-trading-strategies/). Identified 7-function gap; proposed 6-PR rollout. Empirical calibration anchors: S&P 500 SSR 5.3, macro FX 4.4, macro duration 2.0.
+- **#403 PR 1/6** `hd_rolling_sharpe()` + `hd_sharpe_stability_ratio()` — new `packages/historicaldata/R/stability.R`. Newey-West HAC SE with standard bandwidth rule `floor(4*(T/100)^(2/9))`. 31 tests across 10 scenarios (white-noise null, regime-switch, episodic vs consistent sims).
+- **#405 PR 2/6** `hd_top5pct_share()` seasonality companion — same file. 16 new tests including article calibration smoke check (bound loosened to 0.30 per article's "typically above 0.30" wording).
+- **PRs 3-6 deferred** — fixer agent dispatched for PR 3/6 (registry helper) hit Anthropic session limit before pushing. Full self-contained briefs for PRs 3-6 filed as comment on #400 (https://github.com/JohnGavin/historical/issues/400#issuecomment-4597073377) for fresh-session pickup post-reset (14:50 Dublin).
+
+#### Lychee follow-up (1 PR)
+- **#407** removed broken `.claude/memory/*` markdown link in `CHANGELOG.md:561` — orchestrator-local memory file not in repo. Scheduled run had failed; manual re-run (`workflow_dispatch`) post-merge **completed: success** — full end-to-end verification of #394 + #407.
+
+### Failed Approaches
+
+- **Parallel agent dispatch — same mistake 3 times.** Dispatched agents sequentially across 3 separate turns ("first then second then third") when the user explicitly asked for parallel work. The correct pattern is multiple `Agent` tool calls in ONE response. Cost: ~30+ minutes wall-clock lost across the session. Self-correction caught the third time but pattern not internalised early enough.
+- **WebFetch + Wayback Machine for the Macrosynergy article.** Article is Cloudflare-protected (returns "Just a moment..." HTML challenge to curl/WebFetch); Wayback has no snapshot. Resolved by user providing the downloaded HTML at `~/Downloads/` — extracted text via `sed`. Cloudflare bypass via browser-UA headers (per `feedback_cloudflare-webfetch-403.md`) did NOT work for this domain.
+- **#339 agent ran tests with cwd at main checkout.** Created `_snaps/query.new.md` artefact in `/Users/johngavin/docs_gh/historical/.claude/worktrees/...` — Tier-3 verify flagged as drift but was an isolation gap, not a real breach. Cleaned up by removing the file.
+- **#400 PR 3/6 fixer agent hit session limit.** Anthropic session quota exceeded before agent could push. No PR opened. Mitigation: shipped detailed briefs as #400 comment for post-reset re-dispatch.
+
+### Accuracy / Metrics
+
+- **12 PRs merged** (#394, #395, #396, #398, #399, #401, #402, #403, #404, #405, #406, #407)
+- **2 issues filed** (#397 — pre-existing test failures, resolved by #402; #400 — SSR gap analysis)
+- **+47 new tests** (12 from #395 + 7 from #398 + 5 from #399 + 7 from #404 + 31 from #403 + 16 from #405) plus 2 from #396, 7 from #404 QA, and 3 fixes in #402
+- **Test suite delta**: FAIL 3 → FAIL 0 (all pre-existing `adjusted_close` failures cleared)
+- **Worktree count**: 51 → 38 (after prune of 13 unlocked agents)
+- **Leaderboard strategy count**: 5 visible → 14 visible (all `strategy_names` rows covered)
+- **Lychee CI**: failing → green (verified end-to-end via manual `workflow_dispatch`)
+
+### Known Limitations
+
+- **#400 PRs 3-6 not yet implemented** — briefs in #400 comment, agent dispatch deferred until 14:50 Dublin (Anthropic session reset)
+- **3 vignettes still need re-render after #404** — `leaderboard.qmd` (schema mismatch: `cvar_95` missing from `leaderboard.rds`; will be naturally resolved by SSR PR 4/6), `jst-dashboard.qmd` (raw `tar_load()` with no RDS fallback), `macro-defense-rotation.qmd` (requires live `bt_*` targets)
+- **roborev backlog** — 103 failed verdicts / 55 addressed / 48 unaddressed (pre-existing, not scoped to this session)
+- **#400 idempotency caveat carried over from PR 3 brief** — `hd_metric_record()` upsert semantics need verifying; flagged for the eventual PR 3 implementer
+- **Mid-session shell hiccup** — a short sequence of Bash tool calls returned exit 1 with no output during the lychee fix dispatch; self-recovered within seconds. Worth flagging if it recurs.
+
+### Next Session
+
+- **Continue #400 rollout** — re-dispatch PR 3/6 (registry helper) after 14:50 Dublin reset; full self-contained briefs are in #400 comment 4597073377
+- **Optional follow-up**: small `targets-runner` dispatch to re-render the 3 deferred vignettes after PR 4/6 lands
+- **Open backlog from session #13**: #362 Lazy Man's Momentum (queued)
+- **Optional global rule update** — propose llm-side rule: session-end CHANGELOG entries must NOT use `[X](.claude/memory/...)` markdown link syntax; use inline backticks `\`feedback_X\` (Claude Code memory)` instead (the #407 fix pattern)
+
+
 ## 2026-05-31 (session 13 — #365 mom_prepeak umbrella closed end-to-end: 14 PRs + 6 follow-up issues)
 
 ### Completed
