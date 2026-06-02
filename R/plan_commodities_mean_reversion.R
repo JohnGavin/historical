@@ -149,17 +149,23 @@ plan_commodities_mean_reversion <- function() {
     }),
 
 
-    # ── Registry sentinel (#347 PR 2/4) ───────────────────────────────────
+    # ── Registry sentinel (#347 PR 2/4; stability metrics #400 PR 5/6) ──────
     # First strategy to write into the bt.* registry. One bt.strategy row
     # + three bt.run rows (one per lookback partition: 1m, 3m, 6m). The
     # registry path is overridable via HD_REGISTRY_PATH so CI / tests can
     # point it at a tempfile. Returns a tibble of the run_uuids for
     # inspection via tar_read(cmr_registry_run).
+    # Also records SSR + top5pct stability metrics via hd_record_stability_metrics().
 
     targets::tar_target(cmr_registry_run, {
       .cmr_register_runs(
         strategy_names = strategy_names,
-        cmr_summary    = cmr_summary
+        cmr_summary    = cmr_summary,
+        portfolio_list = list(
+          `1m` = cmr_portfolio_1m,
+          `3m` = cmr_portfolio_3m,
+          `6m` = cmr_portfolio_6m
+        )
       )
     })
 
@@ -214,10 +220,13 @@ plan_commodities_mean_reversion <- function() {
 }
 
 
-# ── Registry sentinel helper (#347 PR 2/4) ────────────────────────────────
+# ── Registry sentinel helper (#347 PR 2/4; stability metrics #400 PR 5/6) ──
 # Initialises (idempotent) + upserts CMR strategy + records one bt.run
-# row per lookback partition. Returns a tibble of (partition, run_uuid).
-.cmr_register_runs <- function(strategy_names, cmr_summary) {
+# row per lookback partition. Also records SSR + top5pct stability metrics
+# via hd_record_stability_metrics() when portfolio_list is supplied.
+# Returns a tibble of (partition, run_uuid).
+.cmr_register_runs <- function(strategy_names, cmr_summary,
+                               portfolio_list = list()) {
   if (!requireNamespace("DBI", quietly = TRUE) ||
       !requireNamespace("duckdb", quietly = TRUE)) {
     return(tibble::tibble(
@@ -268,6 +277,22 @@ plan_commodities_mean_reversion <- function() {
       metric_cols <- setdiff(names(row), "lookback")
       wide <- row[, metric_cols, drop = FALSE]
       historicaldata::hd_metric_record(con, uu, wide)
+    }
+
+    # Record SSR + top5pct stability metrics (#400 PR 5/6).
+    # Monthly series: w = 36 rolling windows, ann_factor = 12.
+    port <- portfolio_list[[p]]
+    if (!is.null(port) && is.data.frame(port) && "net_ret" %in% names(port)) {
+      rets <- port$net_ret
+      if (length(rets) > 0L) {
+        historicaldata::hd_record_stability_metrics(
+          con        = con,
+          run_uuid   = uu,
+          returns    = rets,
+          w          = 36L,
+          ann_factor = 12L
+        )
+      }
     }
   }
 

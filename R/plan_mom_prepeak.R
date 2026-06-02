@@ -153,15 +153,21 @@ plan_mom_prepeak <- function() {
     }),
 
 
-    # ── Registry sentinel (#365 PR 2/4) ─────────────────────────────────────
+    # ── Registry sentinel (#365 PR 2/4; stability metrics #400 PR 5/6) ──────
     # Mirrors .cmr_register_runs() from plan_commodities_mean_reversion.R.
     # Upserts 3 strategy rows + records one bt.run + bt.metric row each.
+    # Also records SSR + top5pct stability metrics via hd_record_stability_metrics().
     # Guard: returns empty tibble if DBI / duckdb are unavailable.
 
     targets::tar_target(mom_prepeak_register_runs, {
       .mom_prepeak_register_runs(
-        strategy_names    = strategy_names,
-        mom_prepeak_summary = mom_prepeak_summary
+        strategy_names      = strategy_names,
+        mom_prepeak_summary = mom_prepeak_summary,
+        returns_list        = list(
+          mom_prepeak  = mom_prepeak_returns$ret_ls,
+          mom_postpeak = mom_postpeak_returns$ret_ls,
+          mom_combined = mom_combined_returns$ret_ls
+        )
       )
     })
 
@@ -346,14 +352,22 @@ plan_mom_prepeak <- function() {
 #' Registry sentinel: upsert 3 sibling strategies + record runs + metrics
 #'
 #' Mirrors .cmr_register_runs() from plan_commodities_mean_reversion.R.
+#' Also records SSR + top-5pct stability metrics via
+#' [historicaldata::hd_record_stability_metrics()] for each sibling.
 #' Returns empty tibble if DBI / duckdb are unavailable.
 #'
 #' @param strategy_names Tibble from the strategy_names target.
 #' @param mom_prepeak_summary Tibble from the mom_prepeak_summary target.
+#' @param returns_list Named list of numeric vectors keyed by strategy
+#'   code_name (`mom_prepeak`, `mom_postpeak`, `mom_combined`). Each
+#'   vector should be the `ret_ls` column from the corresponding
+#'   `*_returns` target. May be `NULL` or missing entries — stability
+#'   metrics are skipped for that strategy.
 #'
 #' @return Tibble with columns: strategy_id, run_uuid.
 #' @noRd
-.mom_prepeak_register_runs <- function(strategy_names, mom_prepeak_summary) {
+.mom_prepeak_register_runs <- function(strategy_names, mom_prepeak_summary,
+                                       returns_list = list()) {
   if (!requireNamespace("DBI", quietly = TRUE) ||
       !requireNamespace("duckdb", quietly = TRUE)) {
     return(tibble::tibble(
@@ -406,6 +420,19 @@ plan_mom_prepeak <- function() {
       metric_cols <- setdiff(names(metrics_row), "strategy")
       wide <- metrics_row[, metric_cols, drop = FALSE]
       historicaldata::hd_metric_record(con, uu, wide)
+    }
+
+    # Record SSR + top5pct stability metrics (#400 PR 5/6).
+    # Monthly series: w = 36 rolling windows, ann_factor = 12.
+    rets <- returns_list[[cn]]
+    if (!is.null(rets) && length(rets) > 0L) {
+      historicaldata::hd_record_stability_metrics(
+        con        = con,
+        run_uuid   = uu,
+        returns    = rets,
+        w          = 36L,
+        ann_factor = 12L
+      )
     }
 
     strategy_ids[[i]] <- cn
