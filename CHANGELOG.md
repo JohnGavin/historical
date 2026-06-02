@@ -37,13 +37,26 @@ Single-day session completing the four #400 PRs deferred from session #14 (post 
 - Duplicate clone `~/docs_gh/historical` removed (all 7 local branches verified `0 0` against origin; both working trees clean; phase-a worktree removed first)
 - 6 stale claude PIDs from session-end checklist already not running — no-op kill
 - This session's checkout fast-forwarded from `76216d1` to `ba11051` (18 commits behind at session start)
+- **`.claire/` typo directory removed** — orphan from a path-typo (someone wrote `.claire/worktrees/agent-ae6faed/...` instead of `.claude/worktrees/...`). Contained one stale older copy of `strategy_mom_prepeak.R` (used deprecated `purrr::map_dfr`; canonical version uses `dplyr::bind_rows(purrr::map(...))`). 12 KB, no git tracking, no references in codebase
+- **Bulk worktree cleanup** — 11 worktrees + 11 branches removed after 3-step `branch-salvage-workflow` verification on all 11 (5 cherry-checks by orchestrator + 6 by background agent `ab6c9dd9`). All 11 returned DISCARD; removal executed by second background agent `a528165b`. Reclaimed ~1 GB. Cleanup detail:
+  - 6 stale-locked agent worktrees unlocked (lock-PIDs 67230/1318/98890 all dead): `abd130`, `ae3190`, `a1af5b`, `a8564e`, `a9196a`, `aeb77`
+  - 7 agent worktrees removed (the 6 above + `aa99f6` — session #14 hold cleared)
+  - 4 sibling `~/docs_gh/proj/finance/data/historical-feat-cc-*` worktrees removed (382 MB)
+  - 11 branches deleted including 4 named-feature branches (`docs/316-adjusted-close-schema`, `fix/313-trp-heap-walk`, `feat/269-pillar8-risk-metrics`, `fix/4371-drif-selection-helper`) — all verified squash-merged or strict-ancestor of main
+  - **Session #14 hold resolved**: `aa99f6`'s unique commit `cc31850` IS PR #384 (squash-merged 9 min after authoring; identical file changes — link-audit 403-accept, falsification.qmd path fix, jst-dashboard typo fix). The "verification pending" note from session #14 is cleared.
+  - 13 anonymous unlocked agent worktrees from 1–4d ago left untouched; Phase 7f auto-GC will sweep them naturally as their PIDs die and they age past 14d
+- **2 new research issues filed**:
+  - **#414** — backtest Active Dual Momentum GTAA (Quantpedia 6080 / Beluska 2026), 9-ETF dual-window RoC with absolute-momentum filter. Data-availability check shows common 2007+ start window; 7 subtasks including data sourcing, gauntlet, net-of-cost sensitivity, pervasiveness probe.
+  - **#415** — review `alphaarchitect.com/factor-strategies/` for gaps vs our 14-strategy inventory. 7-subtask audit (page is Cloudflare-blocked; Subtask 1 covers manual fetch). Inline taxonomy of current 14 strategies for the gap-analyser.
 
 ### Next Session
 
 - **Close #400** — run full pipeline, re-render `docs/leaderboard.qmd`, then close the umbrella
 - **Surface SSR for the 6 NA leaderboard rows** — wire direct return-vector dependencies for TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal
-- **Bulk-clean stale agent worktrees** — apply the cleanup snippet deferred from sessions #14 and #15
+- **#414 Active Dual Momentum GTAA** — data-sourcing subtask first (9 ETFs, common start ~2007); decide on extending `strategy_names` to 15 rows
+- **#415 AA factor-strategies gap analysis** — manual page fetch (Subtask 1), then taxonomy extraction + COVERED/PARTIAL/GAP classification against our 14
 - **Open backlog**: #362 Lazy Man's Momentum (queued since session #14)
+- **Phase 7f auto-GC** is now in place — no manual worktree maintenance needed for the 13 unlocked anonymous worktrees
 
 
 ## 2026-06-01 (session 14 — 12 PRs merged + #400 SSR rollout kicked off)
