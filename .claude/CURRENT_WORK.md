@@ -1,4 +1,4 @@
-# Current Work (Session 2026-06-02 #15 — #400 SSR rollout closed + 2 issues filed + housekeeping, ENDED)
+# Current Work (Session 2026-06-02 #15 — #400 SSR rollout closed + 4 issues + 1 cross-project bug + housekeeping, ENDED)
 
 **Last updated:** session end
 **Previous sessions:** #14 (12 PRs + SSR rollout kicked off), #13 (#365 mom_prepeak umbrella, 14 PRs), #12 (#347 DuckDB registry, 5 PRs)
@@ -16,10 +16,19 @@
 
 - **#411** re-render 2 of 3 deferred vignettes — `macro-defense-rotation.qmd` against warm-started `_targets/`; `jst-dashboard.qmd` migrated to `safe_tar_read()` + 4 RDS fallbacks in `inst/extdata/vignettes/`. Third (`leaderboard.qmd`) addressed by #409's schema change.
 
-### 2 research issues filed
+### 4 research issues + 1 cross-project bug filed
 
 - **#414** — Active Dual Momentum GTAA (Quantpedia 6080 / Beluska 2026). 9-ETF dual-window RoC with absolute-momentum filter. Reported Sharpe 0.91 / Calmar 0.89. 7 subtasks (data sourcing, gauntlet, net-of-cost sensitivity, pervasiveness probe).
 - **#415** — `alphaarchitect.com/factor-strategies/` gap audit vs our 14-strategy inventory. Cloudflare-blocked from WebFetch; Subtask 1 covers manual page capture. 7-subtask audit including child-issue generation for each GAP row.
+- **#416** — Modern Statistical Arbitrage (Quantitativo 2026). Factor 46 multi-period mean-reversion + 17-signal portfolio. Sharpe 0.53–1.46 single signal, 1.15–1.76 portfolio, worst max DD −4.3% on R3000. 190→17 selection multiple-testing problem — `K_eff_strat` deflation mandatory. 10 subtasks; paywalled 17-signal portfolio deferred.
+- **#417** — Concretum operational pitfalls of algo trading gap analysis. 10 pitfalls enumerated; 6 GAP rows clustered around trading-calendar awareness. 7 subtasks including `R/utils_trading_calendar.R` module + `qa_rebalance_dates_valid` target. Directly impacts #414 + #416.
+- **llmtelemetry#287** (cross-project bug) — `export_and_deploy_data.sh` rebase-conflict path strands data; recommend bailing before push when `N_CHANGED == 0 && N_NEW == 0`. Surfaced during this session's first /bye telemetry export attempt.
+
+### Roborev backlog (post-original-/bye sweep)
+
+- Actionable backlog (`compact --dry-run`) reduced to **0** — 4 doc-only F-verdicts consolidated/closed by `roborev compact`
+- 176 cosmetic close-comments added; summary counter unchanged at 51/99 (gated by `closures` table requiring real commit SHA refs — not CLI-reachable without forging)
+- Daemon restarted (stale-cwd workers from earlier worktree cleanup)
 
 ### Housekeeping
 
@@ -38,7 +47,7 @@
 | Metric | Value |
 |---|---|
 | PRs merged | 5 (#408, #409, #410, #411, #413) + 1 superseded (#412) |
-| Issues filed | 2 (#414, #415) |
+| Issues filed | 4 in historical (#414, #415, #416, #417) + 1 in llmtelemetry (#287) |
 | New tests added | ~32 (8 + 6 + 5 + 13) |
 | `bt.metric` extension | 8 new stability scalars per run, auto-recorded by both register_runs paths |
 | #400 umbrella | All 6 PRs merged; issue still OPEN (close pending pipeline run + leaderboard re-render) |

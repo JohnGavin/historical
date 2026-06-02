@@ -45,9 +45,16 @@ Single-day session completing the four #400 PRs deferred from session #14 (post 
   - 11 branches deleted including 4 named-feature branches (`docs/316-adjusted-close-schema`, `fix/313-trp-heap-walk`, `feat/269-pillar8-risk-metrics`, `fix/4371-drif-selection-helper`) — all verified squash-merged or strict-ancestor of main
   - **Session #14 hold resolved**: `aa99f6`'s unique commit `cc31850` IS PR #384 (squash-merged 9 min after authoring; identical file changes — link-audit 403-accept, falsification.qmd path fix, jst-dashboard typo fix). The "verification pending" note from session #14 is cleared.
   - 13 anonymous unlocked agent worktrees from 1–4d ago left untouched; Phase 7f auto-GC will sweep them naturally as their PIDs die and they age past 14d
-- **2 new research issues filed**:
+- **4 new research issues filed**:
   - **#414** — backtest Active Dual Momentum GTAA (Quantpedia 6080 / Beluska 2026), 9-ETF dual-window RoC with absolute-momentum filter. Data-availability check shows common 2007+ start window; 7 subtasks including data sourcing, gauntlet, net-of-cost sensitivity, pervasiveness probe.
   - **#415** — review `alphaarchitect.com/factor-strategies/` for gaps vs our 14-strategy inventory. 7-subtask audit (page is Cloudflare-blocked; Subtask 1 covers manual fetch). Inline taxonomy of current 14 strategies for the gap-analyser.
+  - **#416** — backtest Modern Statistical Arbitrage (Quantitativo 2026). Factor 46 = `(MA3 + MA6 + MA12 + MA24) / (4·close)`, cross-sectional contrarian, dollar-neutral, daily rebalance, 2d execution lag. Reported single-signal Sharpe 0.53–1.46 across 6 universes; ~17-signal portfolio Sharpe 1.15–1.76 with worst max DD −4.3% on R3000. 190→17 selection is textbook multiple-testing; `K_eff_strat` deflation mandatory per `#160`. 10 subtasks; 17-signal portfolio deferred (paywalled).
+  - **#417** — operational pitfalls of algo trading (Concretum) gap analysis. All 10 pitfalls enumerated; 6 GAP rows identified clustered around trading-calendar awareness. 7 subtasks including `R/utils_trading_calendar.R` module, `qa_rebalance_dates_valid` target, DST-safe scheduling audit. Directly impacts #414 (weekly Wed rebalance) and #416 (daily rebalance).
+
+- **1 cross-project bug filed**:
+  - **llmtelemetry#287** — `export_and_deploy_data.sh` rebase-conflict path strands data indefinitely; recommend bailing before push when `N_CHANGED == 0 && N_NEW == 0`. Surfaced during session-end telemetry export (rebase conflict on 10+ concurrent "data: update telemetry data 2026-06-02" commits). Filed per `cross-project-scope` rule's "another project's issue when reporting a finding" path.
+
+- **Roborev backlog (post-original-/bye sweep)**: actionable backlog reduced to **0** (`roborev compact --branch main` consolidated and closed the 4 actionable F-verdict reviews — all on documentation-only ledger commits with no real findings). Daemon restarted to clear stale-cwd workers from earlier worktree cleanup. 176 cosmetic close-comments added to historical F-verdict reviews. Summary counter unchanged at 51/99 — the displayed `addressed` metric is gated by a separate `closures` table (currently 0 rows) requiring real commit SHA references; CLI paths `close` / `comment` / `comment --commenter roborev-fix` all left it unmoved. Counter would require either direct SQL INSERT into `closures` (forging closure_commit_sha references) or running `roborev fix` (which makes real code changes we don't need). **Documented for next session as not actionable without daemon-side support.**
 
 ### Next Session
 
@@ -55,6 +62,9 @@ Single-day session completing the four #400 PRs deferred from session #14 (post 
 - **Surface SSR for the 6 NA leaderboard rows** — wire direct return-vector dependencies for TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal
 - **#414 Active Dual Momentum GTAA** — data-sourcing subtask first (9 ETFs, common start ~2007); decide on extending `strategy_names` to 15 rows
 - **#415 AA factor-strategies gap analysis** — manual page fetch (Subtask 1), then taxonomy extraction + COVERED/PARTIAL/GAP classification against our 14
+- **#416 Modern Statistical Arbitrage** — start with Factor 46 single-signal replication on S&P 500 (data we have); defer the paywalled 17-signal portfolio
+- **#417 Operational pitfalls** — `R/utils_trading_calendar.R` is the highest-leverage subtask (closes 4 of 6 GAP rows)
+- **llmtelemetry#287** — needs an llm-session pickup; non-llm sessions can only file, not fix
 - **Open backlog**: #362 Lazy Man's Momentum (queued since session #14)
 - **Phase 7f auto-GC** is now in place — no manual worktree maintenance needed for the 13 unlocked anonymous worktrees
 
