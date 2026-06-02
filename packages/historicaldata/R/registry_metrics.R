@@ -165,6 +165,89 @@ hd_leaderboard_from_registry <- function(con,
   out
 }
 
+# ── registry stability helper ─────────────────────────────────────────────
+
+#' Record SSR and top-pct-share stability metrics for a backtest run
+#'
+#' Convenience wrapper that calls [hd_sharpe_stability_ratio()] and
+#' [hd_top5pct_share()] on a returns vector, then writes the combined
+#' 8 metric values into `bt.metric` via [hd_metric_record()].
+#'
+#' The 8 metrics written are:
+#' \describe{
+#'   \item{`ssr`}{Sharpe Stability Ratio.}
+#'   \item{`ssr_mean_sharpe`}{Mean of rolling Sharpe series.}
+#'   \item{`ssr_se`}{Newey-West HAC standard error.}
+#'   \item{`ssr_n_windows`}{Number of complete rolling windows.}
+#'   \item{`ssr_lag_nw`}{Newey-West bandwidth used.}
+#'   \item{`top_share`}{Fraction of total return from the top-`pct` periods.}
+#'   \item{`top_n_top`}{Count of top-`pct` periods.}
+#'   \item{`top_n_total`}{Total non-NA period count.}
+#' }
+#'
+#' `NA` values in `returns` are silently removed before both computations
+#' (matching the behaviour of [hd_sharpe_stability_ratio()] and
+#' [hd_top5pct_share()]).  If all values are `NA` the function returns
+#' a list of eight `NA` values without writing anything to the database.
+#'
+#' Idempotency: [hd_metric_record()] performs a DELETE-then-INSERT for each
+#' `(run_uuid, metric_name)` pair, so calling this helper twice with the same
+#' arguments overwrites the earlier values and leaves exactly 8 rows.
+#'
+#' @param con DBI connection (writable).
+#' @param run_uuid Character. Must refer to an existing `bt.run` row.
+#' @param returns Numeric vector of period returns.
+#' @param w Integer window length for the rolling Sharpe computation.
+#'   Typical choices: 252 (daily) or 36 (monthly).
+#' @param ann_factor Annualisation factor matching the frequency of `returns`
+#'   (252 for daily, 12 for monthly, 4 for quarterly). Default 252.
+#' @param pct Numeric in (0, 1). The top fraction for [hd_top5pct_share()].
+#'   Default 0.05 (top 5%).
+#'
+#' @return Invisibly, a named list of the 8 metric values.
+#'
+#' @seealso [hd_sharpe_stability_ratio()], [hd_top5pct_share()],
+#'   [hd_metric_record()]
+#' @export
+hd_record_stability_metrics <- function(con, run_uuid, returns,
+                                        w, ann_factor = 252, pct = 0.05) {
+  if (!is.numeric(returns)) {
+    cli::cli_abort(c("x" = "{.arg returns} must be a numeric vector."))
+  }
+  returns_clean <- returns[!is.na(returns)]
+  if (length(returns_clean) == 0L) {
+    empty <- list(
+      ssr            = NA_real_,
+      ssr_mean_sharpe = NA_real_,
+      ssr_se         = NA_real_,
+      ssr_n_windows  = 0L,
+      ssr_lag_nw     = NA_integer_,
+      top_share      = NA_real_,
+      top_n_top      = 0L,
+      top_n_total    = 0L
+    )
+    return(invisible(empty))
+  }
+
+  ssr_out <- hd_sharpe_stability_ratio(returns, w = w, ann_factor = ann_factor)
+  top_out <- hd_top5pct_share(returns, pct = pct)
+
+  metrics <- list(
+    ssr            = ssr_out$ssr,
+    ssr_mean_sharpe = ssr_out$mean_sharpe,
+    ssr_se         = ssr_out$se,
+    ssr_n_windows  = ssr_out$n_windows,
+    ssr_lag_nw     = ssr_out$lag_nw,
+    top_share      = top_out$top_share,
+    top_n_top      = top_out$n_top,
+    top_n_total    = top_out$n_total
+  )
+
+  hd_metric_record(con, run_uuid, metrics)
+  invisible(metrics)
+}
+
+
 # ── internals ─────────────────────────────────────────────────────────────
 
 .normalise_metric_long <- function(tbl) {
