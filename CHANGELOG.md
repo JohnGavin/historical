@@ -1,5 +1,51 @@
 # Changelog
 
+## 2026-06-02 (session 15 — #400 SSR rollout closed: 4 PRs + 1 deploy)
+
+### Completed
+
+Single-day session completing the four #400 PRs deferred from session #14 (post the 14:50 Dublin Anthropic session reset) plus a deploy follow-up that re-rendered 2 of the 3 vignettes deferred from #406.
+
+#### #400 SSR rollout (4 PRs — full 6-PR umbrella now merged; #403 + #405 shipped in session #14)
+
+- **#410 PR 3/6** `hd_record_stability_metrics()` registry helper — new orchestrator in `packages/historicaldata/R/registry_metrics.R` computing SSR + top-pct-share for a returns vector and writing 8 scalar values (`ssr`, `ssr_mean_sharpe`, `ssr_se`, `ssr_n_windows`, `ssr_lag_nw`, `top_share`, `top_n_top`, `top_n_total`) into `bt.metric` via the existing `hd_metric_record()` interface (no DDL change — `bt.metric` already supports arbitrary `metric_name` strings). 8 new tests (idempotency, different `w`, NA interleaved, all-NA input, monthly cross-check). Full registry suite: 137 PASS / 0 FAIL.
+- **#409 PR 4/6** leaderboard SSR + top5pct columns — added `ssr` and `top5pct_share` to the `leaderboard` target in `R/plan_leaderboard.R` (w=36, ann_factor=12 for monthly; <38 obs → NA via `safe_ssr()`). Broadcast as full-sample stats via left-join; surfaced in the Full Period tab of `docs/leaderboard.qmd`. 9 strategies covered (Factor MAX, Factor DRIF, Stock MAX, Stock DRIF, XGB DRIF, Mom Pre-Peak, Mom Post-Peak, Mom 12-2, LTR); 6 strategies NA (TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal) pending direct return-vector dependencies. `check_leaderboard_coverage()` QA gate extended; 6 new tests in `tests/testthat/test-leaderboard-coverage.R`.
+- **#413 PR 5/6** auto-record SSR + top5pct from `*_register_runs` — threads strategy returns through `.mom_prepeak_register_runs()` (3 siblings) and `.cmr_register_runs()` (3 lookback partitions: 1m/3m/6m), calling `hd_record_stability_metrics()` per partition. Missing returns/portfolio → graceful no-op. 5 new tests (positive path, idempotency = DELETE-then-INSERT keeps 8 rows/run, empty input). **Supersedes closed #412** — original PR was stacked on #410's branch and auto-closed when GitHub deleted that branch on merge. Three PR-5 commits rebased onto main; PR 3 commits dropped (already in main as squash 84aeb34).
+- **#408 PR 6/6** mom_prepeak gauntlet SSR axis — added `mom_prepeak_ssr` and `mom_prepeak_top5pct` gauntlet targets in `R/plan_mom_prepeak_gauntlet.R`; extended `.mom_prepeak_gauntlet_register()` to write 4 columns (`ssr`, `ssr_mean_sr`, `ssr_n_windows`, `top5pct_share`) into `bt.metric`. New Sharpe Stability Ratio dashboard section in `docs/momentum-prepeak.qmd` with DT table + prose interpretation against published calibration anchors (S&P 500 SSR ~5.3, macro FX ~4.4). Methodology updated (eight→nine sections). 13 new tests (G1–G13) covering return structure, NA handling, integration workflow.
+
+#### Vignette deploy (1 PR)
+
+- **#411** re-render 2 of 3 vignettes deferred from #406 — `docs/macro-defense-rotation.qmd` rendered against a warm-started `_targets/` cache (rsynced from main; 45 chunks executed, all `bt_*` targets from cache; dark-mode audit: 0 violations); `docs/jst-dashboard.qmd` migrated from raw `tar_load()` to path-checked `tar_config_set()` + `safe_tar_read()` (same pattern as `falsification.qmd` / `momentum-prepeak.qmd`); 4 `jst_*` objects (`jst_equity_premium`, `jst_pervasiveness`, `jst_crises`, `jst_summary`) exported to `inst/extdata/vignettes/` for pkgdown RDS fallback. Third deferred vignette (`leaderboard.qmd`) handled by #409's schema change.
+
+### Accuracy / Metrics
+
+- **5 PRs merged** (#408, #409, #410, #411, #413) + 1 superseded (#412)
+- **~32 new tests** (8 from #410 + 6 from #409 + 5 from #413 + 13 from #408)
+- **`bt.metric` extended** — 8 new stability scalars per run, recorded automatically by both `.mom_prepeak_register_runs()` and `.cmr_register_runs()`
+- **#400 status** — all 6 implementation PRs now merged (#403, #405 from session #14; #408, #409, #410, #413 today); umbrella issue still **OPEN** (close pending end-to-end pipeline run + `leaderboard.qmd` re-render)
+- **Vignettes deferred from #406** — 2 of 3 rendered via #411; 3rd (`leaderboard.qmd`) addressed schema-side by #409 (HTML re-render deferred)
+
+### Known Limitations
+
+- **#400 itself still OPEN** despite all 6 PRs merged — close pending confirmation of full pipeline run and `leaderboard.qmd` re-render
+- **6 leaderboard strategies NA on SSR / top5pct** — TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal — need direct return-vector target dependencies before they can populate
+- **`leaderboard.qmd` HTML not yet re-rendered** — #409 ships the schema change only; `tar_make(leaderboard)` + render deferred to next deploy
+- **Stale agent worktrees** — count unchanged from session #14 (no bulk clean this session)
+
+### Housekeeping
+
+- Duplicate clone `~/docs_gh/historical` removed (all 7 local branches verified `0 0` against origin; both working trees clean; phase-a worktree removed first)
+- 6 stale claude PIDs from session-end checklist already not running — no-op kill
+- This session's checkout fast-forwarded from `76216d1` to `ba11051` (18 commits behind at session start)
+
+### Next Session
+
+- **Close #400** — run full pipeline, re-render `docs/leaderboard.qmd`, then close the umbrella
+- **Surface SSR for the 6 NA leaderboard rows** — wire direct return-vector dependencies for TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal
+- **Bulk-clean stale agent worktrees** — apply the cleanup snippet deferred from sessions #14 and #15
+- **Open backlog**: #362 Lazy Man's Momentum (queued since session #14)
+
+
 ## 2026-06-01 (session 14 — 12 PRs merged + #400 SSR rollout kicked off)
 
 ### Completed
