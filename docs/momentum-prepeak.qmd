@@ -1040,11 +1040,99 @@ DT::datatable(
 
 **CPCV PBO:** The Combinatorial Purged Cross-Validation Probability of Backtest Overfitting measures how often the IS-best configuration (n_quantiles value) underperforms the OOS median. PBO = **`r pbo_val`** (across `r pbo_paths` paths). PBO near 0 means the IS-best choice also tends to be OOS-best — little evidence of overfitting. PBO near 1 means IS selection is anti-predictive for OOS — strong evidence of overfitting. Since mom_prepeak is not a highly tuned strategy, this PBO is more of a sanity check than a critical test.
 
+# Sharpe Stability Ratio
+
+## Row
+
+### {.tabset}
+
+#### SSR Panel
+
+```{r}
+#| label: ssr-panel
+ssr_res    <- safe_tar_read("mom_prepeak_ssr")
+top5_res   <- safe_tar_read("mom_prepeak_top5pct")
+
+ssr_available  <- !is.null(ssr_res)
+top5_available <- !is.null(top5_res)
+
+# Dynamic values for prose (dynamic-prose-values rule)
+ssr_val       <- if (ssr_available && !is.null(ssr_res$ssr))
+  round(ssr_res$ssr, 3) else "N/A"
+ssr_mean_sr   <- if (ssr_available && !is.null(ssr_res$mean_sharpe))
+  round(ssr_res$mean_sharpe, 3) else "N/A"
+ssr_n_windows <- if (ssr_available && !is.null(ssr_res$n_windows))
+  ssr_res$n_windows else "N/A"
+top5_share    <- if (top5_available && !is.null(top5_res$top_share))
+  round(top5_res$top_share, 3) else "N/A"
+top5_n_top    <- if (top5_available) top5_res$n_top    else "N/A"
+top5_n_total  <- if (top5_available) top5_res$n_total  else "N/A"
+
+ssr_display <- tibble::tibble(
+  Metric = c(
+    "SSR",
+    "Mean rolling Sharpe",
+    "Rolling windows (36-month)",
+    "Top-5% share of total return",
+    "Top-5% period count"
+  ),
+  Value = c(
+    as.character(ssr_val),
+    as.character(ssr_mean_sr),
+    as.character(ssr_n_windows),
+    as.character(top5_share),
+    paste0(as.character(top5_n_top), " of ", as.character(top5_n_total))
+  ),
+  Interpretation = c(
+    "Sharpe Stability Ratio: mean rolling Sharpe / HAC SE. SSR > 1.96 → 95% confidence the strategy is persistently profitable across rolling windows.",
+    "Mean of 36-month rolling annualised Sharpe series (12× ann factor).",
+    "Number of complete 36-month rolling windows used to compute SSR.",
+    "Fraction of total compounded return contributed by the top 5% of months.",
+    "Count of top-5% months / total months."
+  )
+)
+
+DT::datatable(
+  ssr_display,
+  caption = htmltools::tags$caption(
+    style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+    paste0(
+      "Sharpe Stability Ratio (SSR) for mom_prepeak — 36-month rolling windows, ann_factor = 12. ",
+      "Calibration anchors: S\\u00B950 500 daily since 1995: SSR \\u224 5.3; macro FX cross-asset: SSR \\u224 4.4. ",
+      "SSR is computed via hd_sharpe_stability_ratio() in packages/historicaldata/R/stability.R ",
+      "using Newey-West HAC bandwidth (floor(4*(T/100)^(2/9))). ",
+      "Top-5% share is computed via hd_top5pct_share()."
+    )
+  ),
+  rownames = FALSE,
+  options  = list(pageLength = 6, scrollX = TRUE, dom = "t")
+)
+```
+
+#### Interpretation
+
+```{r}
+#| label: ssr-interpretation
+#| results: asis
+ssr_res    <- if (exists("ssr_res"))    ssr_res    else safe_tar_read("mom_prepeak_ssr")
+top5_res   <- if (exists("top5_res"))   top5_res   else safe_tar_read("mom_prepeak_top5pct")
+
+ssr_available  <- !is.null(ssr_res)
+top5_available <- !is.null(top5_res)
+
+ssr_val     <- if (ssr_available && !is.null(ssr_res$ssr))       round(ssr_res$ssr, 3)          else "N/A"
+top5_share  <- if (top5_available && !is.null(top5_res$top_share)) round(top5_res$top_share, 3) else "N/A"
+```
+
+**Sharpe Stability Ratio:** The SSR is the mean of a 36-month rolling annualised Sharpe series divided by its Newey-West HAC standard error. It is a t-statistic for the hypothesis that the strategy earns a consistently positive Sharpe across rolling windows, not just on average. SSR = **`r ssr_val`**. Calibration anchors from published research (Bajor Traver & Rodriguez Dominguez 2026; Brine & Sueppel 2026): S&P 500 daily returns since 1995 have a naive Sharpe of ~0.5 and SSR ~5.3; macro FX cross-asset strategies score SSR ~4.4. An SSR below 1.96 indicates that the strategy's Sharpe is not statistically stable across the rolling-window horizon — profits may be concentrated in a small number of windows rather than earned consistently.
+
+**Top-5% return share:** Top-5% share = **`r top5_share`**. This measures what fraction of total compounded return comes from the best 5% of months. A share near 1.0 indicates highly episodic returns (edge concentrated in a few exceptional periods); a share near 0.05 indicates uniformly distributed returns. Interpreted jointly with SSR: high SSR + high top-5% share indicates benign seasonality (the strategy consistently wins, but larger in favourable regimes — a desirable property). Low SSR + high top-5% share indicates detrimental episodic spikes (a few outlier months drive the full-sample Sharpe, masking instability).
+
 ## Methodology
 
 ### What this vignette computes
 
-This vignette reads pre-computed targets from the pipeline and builds eight sections: a peak-date distribution histogram (replicating paper Figure 1); a 84/16 decomposition table from `mom_prepeak_summary`; cumulative-return curves for all three strategies with bankruptcy annotation at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"`; a skewness comparison; Pillar-8 risk metrics (dd duration, consecutive losses, loss clustering) from the extended `mom_prepeak_summary`; a Walk-Forward Correlation grid over n_quantiles ∈ {5, 10, 20}; a random-day-as-peak null test; and a statistical hardening panel (HAC Sharpe, FF5+Momentum regression alpha, CPCV PBO).
+This vignette reads pre-computed targets from the pipeline and builds nine sections: a peak-date distribution histogram (replicating paper Figure 1); a 84/16 decomposition table from `mom_prepeak_summary`; cumulative-return curves for all three strategies with bankruptcy annotation at month `r if (!is.na(bankrupt_mo)) bankrupt_mo else "N/A"`; a skewness comparison; Pillar-8 risk metrics (dd duration, consecutive losses, loss clustering) from the extended `mom_prepeak_summary`; a Walk-Forward Correlation grid over n_quantiles ∈ {5, 10, 20}; a random-day-as-peak null test; a statistical hardening panel (HAC Sharpe, FF5+Momentum regression alpha, CPCV PBO); and a Sharpe Stability Ratio (SSR) panel quantifying temporal consistency of risk-adjusted returns.
 
 ### Data sources
 
@@ -1054,6 +1142,8 @@ This vignette reads pre-computed targets from the pipeline and builds eight sect
 - `mom_prepeak_random_peak_test`, `mom_prepeak_random_peak_metrics` — random-day-as-peak null from [`.mom_prepeak_random_peak_signal()`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R) in the gauntlet plan.
 - `mom_prepeak_hac`, `mom_prepeak_ff_reg` — HAC Sharpe and FF5+Momentum regression via [`hd_hac_sharpe()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L80) and [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L738) on monthly Fama-French factors from `hd_factors(frequency="monthly")`.
 - `mom_prepeak_pbo` — CPCV Probability of Backtest Overfitting via [`hd_pbo()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/cpcv.R#L267) over n_quantiles ∈ {5, 10, 20}.
+- `mom_prepeak_ssr` — Sharpe Stability Ratio via [`hd_sharpe_stability_ratio()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/stability.R#L132) with w=36 months and ann_factor=12. Computed in [`R/plan_mom_prepeak_gauntlet.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R).
+- `mom_prepeak_top5pct` — Top-5% return share via [`hd_top5pct_share()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/stability.R#L238). Computed in [`R/plan_mom_prepeak_gauntlet.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R).
 - `strategy_names` — single source of truth for display names, defined in [`R/plan_strategy_names.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_names.R).
 - Paper: Büsing, Mohrschladt & Siedhoff (2022), *Pre-peak and post-peak momentum*, [SSRN 4298538](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=4298538).
 
