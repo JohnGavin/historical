@@ -302,6 +302,96 @@ plan_leaderboard <- function() {
           )
       }
 
+      # ── SSR + top5pct columns (#400) ─────────────────────────────────────────
+      # Sharpe Stability Ratio (SSR) and top-5% share for each strategy.
+      # Window w = 36 months (3 years) for all monthly strategies; ann_factor = 12.
+      # Strategies without an accessible return vector receive NA for both columns.
+      # SSR and top5pct_share are full-sample statistics: broadcast to all period
+      # rows (the vignette shows them only in the Full-Period view).
+      {
+        # Build a named list: strategy label -> full-period return vector
+        # Each return vector must be numeric, already NA-stripped by the helpers.
+        ssr_map <- list()
+
+        safe_ssr <- function(r) {
+          r <- r[!is.na(r)]
+          if (length(r) < 38L) return(NA_real_)
+          tryCatch(
+            historicaldata::hd_sharpe_stability_ratio(r, w = 36L, ann_factor = 12L)$ssr,
+            error = function(e) NA_real_
+          )
+        }
+
+        safe_top5 <- function(r) {
+          r <- r[!is.na(r)]
+          if (length(r) == 0L) return(NA_real_)
+          tryCatch(
+            historicaldata::hd_top5pct_share(r)$top_share,
+            error = function(e) NA_real_
+          )
+        }
+
+        # Factor MAX and Factor DRIF: monthly portfolio_ret
+        if (!is.null(fm_portfolio) && "portfolio_ret" %in% names(fm_portfolio)) {
+          r <- fm_portfolio$portfolio_ret
+          ssr_map[["Factor MAX"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+        if (!is.null(drif_portfolio) && "portfolio_ret" %in% names(drif_portfolio)) {
+          r <- drif_portfolio$portfolio_ret
+          ssr_map[["Factor DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+
+        # Stock MAX, Stock DRIF, XGB DRIF: monthly port_ret
+        if (!is.null(stk_max_portfolio) && "port_ret" %in% names(stk_max_portfolio)) {
+          r <- stk_max_portfolio$port_ret
+          ssr_map[["Stock MAX"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+        if (!is.null(stk_drif_portfolio) && "port_ret" %in% names(stk_drif_portfolio)) {
+          r <- stk_drif_portfolio$port_ret
+          ssr_map[["Stock DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+        if (!is.null(xgb_drif_portfolio) && "port_ret" %in% names(xgb_drif_portfolio)) {
+          r <- xgb_drif_portfolio$port_ret
+          ssr_map[["XGB DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+
+        # Mom Pre-Peak, Post-Peak, Combined: monthly ret_ls
+        if (!is.null(mom_prepeak_returns) && "ret_ls" %in% names(mom_prepeak_returns)) {
+          r <- mom_prepeak_returns$ret_ls
+          ssr_map[["Mom Pre-Peak"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+        if (!is.null(mom_postpeak_returns) && "ret_ls" %in% names(mom_postpeak_returns)) {
+          r <- mom_postpeak_returns$ret_ls
+          ssr_map[["Mom Post-Peak"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+        if (!is.null(mom_combined_returns) && "ret_ls" %in% names(mom_combined_returns)) {
+          r <- mom_combined_returns$ret_ls
+          ssr_map[["Mom 12-2"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+
+        # LTR: monthly port_ret
+        if (!is.null(ltr_portfolio) && "port_ret" %in% names(ltr_portfolio)) {
+          r <- ltr_portfolio$port_ret
+          ssr_map[["LTR"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+        }
+
+        # Build lookup tibble for joining
+        if (length(ssr_map) > 0L) {
+          ssr_tbl <- dplyr::bind_rows(lapply(names(ssr_map), function(nm) {
+            tibble::tibble(
+              strategy     = nm,
+              ssr          = ssr_map[[nm]]$ssr,
+              top5pct_share = ssr_map[[nm]]$top5
+            )
+          }))
+          all_metrics <- all_metrics |>
+            dplyr::left_join(ssr_tbl, by = "strategy")
+        } else {
+          all_metrics <- all_metrics |>
+            dplyr::mutate(ssr = NA_real_, top5pct_share = NA_real_)
+        }
+      }
+
       # ── Pillar 8: risk-architecture columns (#269, #331) ─────────────────────
       # Join avg_dd_days, max_dd_days, loss_clustered, max_cons_losses from
       # fals_results_db. fals_results_db uses strategy_id (internal code); map
