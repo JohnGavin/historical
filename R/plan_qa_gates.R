@@ -195,6 +195,11 @@ check_anchor_in_range <- function(html_dir,
 #' running `tar_make()`.  The `qa_leaderboard_coverage` target calls this
 #' function directly.
 #'
+#' Also asserts that the `ssr` and `top5pct_share` columns are present in the
+#' leaderboard tibble and that at least one row has a non-NA value for each
+#' (i.e. the stability metrics were computed for at least one strategy).
+#' Added in #400 (PR 4/6).
+#'
 #' @param strategy_names Tibble with at least `short_name` and `code_name`
 #'   columns (the output of the `strategy_names` targets pipeline target).
 #' @param leaderboard Tibble with at least a `strategy` column (the output of
@@ -216,6 +221,34 @@ check_leaderboard_coverage <- function(strategy_names, leaderboard) {
         rep("i", length(missing))
       ),
       "i" = "Add the corresponding add_meta() calls in R/plan_leaderboard.R."
+    ))
+  }
+
+  # Assert SSR column present and populated (#400)
+  if (!"ssr" %in% names(leaderboard)) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing required column {.field ssr}.",
+      "i" = "Add the SSR computation block to R/plan_leaderboard.R (#400)."
+    ))
+  }
+  if (all(is.na(leaderboard$ssr))) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard column {.field ssr} is entirely NA — no stability metrics were computed.",
+      "i" = "Check that portfolio return targets are available and have >= 38 months (#400)."
+    ))
+  }
+
+  # Assert top5pct_share column present and populated (#400)
+  if (!"top5pct_share" %in% names(leaderboard)) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing required column {.field top5pct_share}.",
+      "i" = "Add the top5pct computation block to R/plan_leaderboard.R (#400)."
+    ))
+  }
+  if (all(is.na(leaderboard$top5pct_share))) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard column {.field top5pct_share} is entirely NA — no top-5% shares were computed.",
+      "i" = "Check that portfolio return targets are available (#400)."
     ))
   }
 
