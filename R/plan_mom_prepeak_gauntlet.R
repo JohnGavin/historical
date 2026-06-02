@@ -372,11 +372,43 @@ plan_mom_prepeak_gauntlet <- function() {
 
 
     # ══════════════════════════════════════════════════════════════════════════
-    # B5 — Registry sentinel extension
+    # B5 — Sharpe Stability Ratio (SSR) + Top-5% share
+    #
+    # Complements the HAC Sharpe (B3) with a temporal-stability dimension:
+    # does the strategy earn its Sharpe consistently across rolling windows,
+    # or is it concentrated in a few episodes?
+    #
+    # SSR calibration anchors (Bajor Traver & Rodriguez Dominguez 2026;
+    # Brine & Sueppel 2026):
+    #   S&P 500 daily (1995-): naive Sharpe ~0.5, SSR ~5.3
+    #   Macro FX cross-asset: SSR ~4.4
+    #   Pure random walk: SSR near 0
+    #
+    # top5pct_share: fraction of total return contributed by the top 5% of months.
+    # Used jointly with SSR to distinguish benign seasonality (high SSR + high
+    # top5pct) from detrimental episodic spikes (low SSR + high top5pct).
+    # ══════════════════════════════════════════════════════════════════════════
+
+    targets::tar_target(mom_prepeak_ssr, {
+      hd_sharpe_stability_ratio(
+        mom_prepeak_returns$ret_ls,
+        w          = 36L,
+        ann_factor = 12L
+      )
+    }),
+
+    targets::tar_target(mom_prepeak_top5pct, {
+      hd_top5pct_share(mom_prepeak_returns$ret_ls)
+    }),
+
+
+    # ══════════════════════════════════════════════════════════════════════════
+    # B6 — Registry sentinel extension
     #
     # Record gauntlet metrics (hac_sharpe, hac_pvalue, ff5_alpha, ff5_alpha_t,
-    # pbo, wfc_pearson, avg_dd_days, max_dd_days, max_cons_losses) into bt.metric
-    # under the existing mom_prepeak run_uuid from mom_prepeak_register_runs.
+    # pbo, wfc_pearson, avg_dd_days, max_dd_days, max_cons_losses, ssr,
+    # top5pct_share) into bt.metric under the existing mom_prepeak run_uuid
+    # from mom_prepeak_register_runs.
     #
     # NOTE: idempotency bug #375 is known — deterministic UUID re-running produces
     # duplicate rows.  This target writes correctly on the FIRST tar_make invocation.
@@ -390,7 +422,9 @@ plan_mom_prepeak_gauntlet <- function() {
         mom_prepeak_hac            = mom_prepeak_hac,
         mom_prepeak_ff_reg         = mom_prepeak_ff_reg,
         mom_prepeak_pbo            = mom_prepeak_pbo,
-        mom_prepeak_wfc_result     = mom_prepeak_wfc_result
+        mom_prepeak_wfc_result     = mom_prepeak_wfc_result,
+        mom_prepeak_ssr            = mom_prepeak_ssr,
+        mom_prepeak_top5pct        = mom_prepeak_top5pct
       )
     })
 
@@ -499,8 +533,8 @@ plan_mom_prepeak_gauntlet <- function() {
 
 #' Register gauntlet metrics into bt.metric for the mom_prepeak run
 #'
-#' Appends HAC, FF5, PBO, and WFC metrics to the bt.metric table for the
-#' mom_prepeak run_uuid established in mom_prepeak_register_runs.
+#' Appends HAC, FF5, PBO, WFC, SSR, and top5pct metrics to the bt.metric table
+#' for the mom_prepeak run_uuid established in mom_prepeak_register_runs.
 #' Returns an empty tibble if DBI / duckdb are unavailable.
 #'
 #' @noRd
@@ -509,7 +543,9 @@ plan_mom_prepeak_gauntlet <- function() {
                                             mom_prepeak_hac,
                                             mom_prepeak_ff_reg,
                                             mom_prepeak_pbo,
-                                            mom_prepeak_wfc_result) {
+                                            mom_prepeak_wfc_result,
+                                            mom_prepeak_ssr    = NULL,
+                                            mom_prepeak_top5pct = NULL) {
   if (!requireNamespace("DBI", quietly = TRUE) ||
       !requireNamespace("duckdb", quietly = TRUE)) {
     return(tibble::tibble(run_uuid = character(), metric_rows = integer()))
@@ -550,7 +586,15 @@ plan_mom_prepeak_gauntlet <- function() {
       mom_prepeak_wfc_result$classification else NA_character_,
     avg_dd_days    = mom_prepeak_metrics$avg_dd_days,
     max_dd_days    = mom_prepeak_metrics$max_dd_days,
-    max_cons_losses = mom_prepeak_metrics$max_cons_losses
+    max_cons_losses = mom_prepeak_metrics$max_cons_losses,
+    ssr            = if (!is.null(mom_prepeak_ssr) && !is.null(mom_prepeak_ssr$ssr))
+      mom_prepeak_ssr$ssr else NA_real_,
+    ssr_mean_sr    = if (!is.null(mom_prepeak_ssr) && !is.null(mom_prepeak_ssr$mean_sharpe))
+      mom_prepeak_ssr$mean_sharpe else NA_real_,
+    ssr_n_windows  = if (!is.null(mom_prepeak_ssr) && !is.null(mom_prepeak_ssr$n_windows))
+      as.integer(mom_prepeak_ssr$n_windows) else NA_integer_,
+    top5pct_share  = if (!is.null(mom_prepeak_top5pct) && !is.null(mom_prepeak_top5pct$top_share))
+      mom_prepeak_top5pct$top_share else NA_real_
   )
 
   historicaldata::hd_metric_record(con, uu, gauntlet_wide)
