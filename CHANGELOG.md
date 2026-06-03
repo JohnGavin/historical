@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-06-03 (session 16 — #400 umbrella closed)
+
+### Completed
+
+- **#400 closed as completed** — posted summary comment listing all 6 merged PRs (#403, #405, #410, #409, #413, #408) covering primitives → companion → registry → leaderboard → auto-record → gauntlet. SSR is now wired end-to-end. Closed via `gh issue close 400 --reason completed`.
+
+### Accuracy / Metrics
+
+- 1 umbrella issue closed; no code/test changes this session.
+
+### Known Limitations
+
+- None new.
+
 ## 2026-06-02 (session 15 — #400 SSR rollout closed: 4 PRs + 1 deploy)
 
 ### Completed

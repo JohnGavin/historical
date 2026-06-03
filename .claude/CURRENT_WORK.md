@@ -1,4 +1,20 @@
-# Current Work (Session 2026-06-02 #15 — #400 SSR rollout closed + 4 issues + 1 cross-project bug + housekeeping, ENDED)
+# Current Work (Session 2026-06-03 #16 — #400 umbrella closed, ENDED)
+
+**Last updated:** session end
+**Previous sessions:** #15 (5 PRs + 4 issues + cross-project bug), #14 (12 PRs + SSR rollout kicked off)
+
+## This session — single action
+
+- **#400 closed** as completed. Posted summary comment listing all 6 merged PRs (#403 primitives, #405 top5pct companion, #410 registry, #409 leaderboard, #413 auto-record, #408 mom_prepeak gauntlet). SSR is wired end-to-end. No code changes.
+
+## Next session
+
+- Triage flagged unmerged feat branches (8 surfaced at session start — all SURFACE_TOUCHED + STALE; need `branch-salvage-workflow` 3-step on each).
+- 6 braindump-linked issues open >14 days (per session-init STALE banner).
+
+---
+
+# Previous: Session 2026-06-02 #15 — #400 SSR rollout closed + 4 issues + 1 cross-project bug + housekeeping (ENDED)
 
 **Last updated:** session end
 **Previous sessions:** #14 (12 PRs + SSR rollout kicked off), #13 (#365 mom_prepeak umbrella, 14 PRs), #12 (#347 DuckDB registry, 5 PRs)
