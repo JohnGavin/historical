@@ -327,7 +327,6 @@ if (!is.null(mi)) {
 The asymmetry table on the **S&P 500 Analysis** tab includes Mkt-RF rows (Fama-French market factor, 1926+). The same pattern holds over nearly a century: the asymmetry ratio exceeds 1 at every N, confirming this is not a recent or data-period-specific phenomenon.
 
 Mkt-RF is not identical to the S&P 500 — it is the value-weighted CRSP market return minus the risk-free rate. The longer history (1926 vs 1993 for SPY) provides stronger evidence that return asymmetry is a persistent structural feature of equity markets.
-```
 
 # Practical Implementation
 

@@ -207,13 +207,18 @@ plan_commodities_mean_reversion <- function() {
 
   dd_stats   <- hd_dd_duration(r)
 
+  # Unit convention (#336): cagr, vol, max_dd are stored as DECIMAL fractions
+  # (e.g., -0.21 = -21% drawdown), matching the canonical convention used by
+  # plan_factormax.R, plan_drif.R, commodities_momentum.R, and the leaderboard
+  # normalizers in plan_leaderboard.R. Display-time formatting (× 100, "%")
+  # belongs to the consumer (DT::datatable, plot label), not the producer.
   tibble::tibble(
     lookback        = lookback,
     n_months        = n,
     sharpe          = round(sharpe, 3),
-    cagr            = round(cagr * 100, 1),
-    vol             = round(vol * 100, 1),
-    max_dd          = round(max_dd * 100, 1),
+    cagr            = round(cagr, 4),
+    vol             = round(vol, 4),
+    max_dd          = round(max_dd, 4),
     avg_dd_duration = dd_stats$avg_dd_duration,
     max_dd_duration = dd_stats$max_dd_duration
   )
