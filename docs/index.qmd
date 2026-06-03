@@ -66,8 +66,10 @@ execute:
 # succeeds even when HuggingFace is offline.
 
 local({
-  # Load the package from the project tree
-  suppressMessages(pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE))
+  # Path-checked pkgload (cwd-trap fix: here::here() returns docs/ under quarto render) — #387
+  pkg_path <- if (dir.exists("packages/historicaldata")) "packages/historicaldata" else
+    file.path(dirname(here::here()), "packages/historicaldata")
+  suppressMessages(pkgload::load_all(pkg_path, quiet = TRUE))
 
   n_tickers <- tryCatch({
     tickers_equity <- hd_tickers("equity_daily")
