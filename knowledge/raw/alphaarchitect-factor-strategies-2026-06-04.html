@@ -1,0 +1,305 @@
+<!--
+====================================================================
+RAW SOURCE CAPTURE — Alpha Architect "factor strategies" audit
+====================================================================
+
+PROVENANCE (append-only — do not edit):
+
+This file captures the HTML/RSS content used for issue #415's audit of
+Alpha Architect against our 14 strategies.
+
+Captured: 2026-06-04
+Captured by: Claude Code agent dispatch (worktree-agent-adaaa38b4004a8bcb)
+
+--------------------------------------------------------------------
+SOURCE 1: https://alphaarchitect.com/factor-strategies/
+--------------------------------------------------------------------
+HTTP via direct GET: 403 Forbidden (Cloudflare JS challenge)
+HTTP via Wayback Machine: no snapshot available for this URL
+Method used:  live RSS feed at https://alphaarchitect.com/feed/
+  - feed HTTP 200, 39968 bytes, fetched 2026-06-04
+  - feed contains the full article body under <content:encoded>
+  - 5 items in feed; the /factor-strategies/ post is item 4 (line 905
+    of the original feed; lines 906-1108 inline below)
+
+CRITICAL FINDING (and reframe of the dispatch's premise):
+The URL alphaarchitect.com/factor-strategies/ is NOT a taxonomy/index
+page. It is a single Larry Swedroe blog post (2026-05-22) titled
+"When Everyone Trades the Same Factor Playbook," summarising the
+Posselt & Kjær (March 2026) "Anomaly-Driven Demand" (ADD) paper.
+
+This was previously noted in issue #279 (closed):
+  "The /factor-strategies/ slug is NOT a product/factor catalogue —
+   it is a Swedroe blog post digesting Posselt & Kjær 'ADD'."
+
+The Posselt & Kjær paper was already digested in:
+  knowledge/wiki/anomaly-driven-demand.md
+  knowledge/raw/anomaly-driven-demand-kjaer-posselt-2025.md
+  knowledge/raw/swedroe-anomaly-driven-demand-2026-05-22.md
+
+--------------------------------------------------------------------
+SOURCE 2: https://alphaarchitect.com/focusedfactors/
+--------------------------------------------------------------------
+This is AA's actual long-only strategy lineup page.
+HTTP via direct GET: 403 Forbidden (Cloudflare)
+HTTP via Wayback Machine: 200 (snapshot 2025-08-04)
+Wayback URL: http://web.archive.org/web/20250804093822/https://alphaarchitect.com/focusedfactors/
+307,130 bytes of HTML.  The page is heavy on imagery; the strategy
+prose is the two short captions inlined below.
+
+--------------------------------------------------------------------
+SOURCE 3: https://alphaarchitect.com/research-category-list/
+--------------------------------------------------------------------
+This is AA's research archive landing page.
+HTTP via direct GET: 403 Forbidden
+HTTP via Wayback: 200 (snapshot 2026-01-29)
+Wayback URL: http://web.archive.org/web/20260129170459/https://alphaarchitect.com/research-category-list/
+405,167 bytes.  Headings extracted reveal AA's top-level research
+taxonomy: Value / Momentum / Trend / White Papers / More.
+
+--------------------------------------------------------------------
+SOURCE 4: https://alphaarchitect.com/alpha-architect-white-papers/
+--------------------------------------------------------------------
+HTTP via direct GET: 403 Forbidden
+HTTP via Wayback: 200 (snapshot 2025-08-04)
+Wayback URL: http://web.archive.org/web/20250804093822/https://alphaarchitect.com/alpha-architect-white-papers/
+367,207 bytes.  Article-list anchors verified.
+
+--------------------------------------------------------------------
+BLOCKED URLs (Cloudflare 403; no usable Wayback):
+--------------------------------------------------------------------
+  https://alphaarchitect.com/factor-max/            (cited by #18; live blocked, no Wayback)
+  https://alphaarchitect.com/about/                 (sampled to confirm site-wide block)
+  https://alphaarchitect.com/managedfutures/        (live 403; Wayback 2025-08-04 fetched OK below)
+  https://alphaarchitect.com/sitemap.xml            (live 403)
+  https://alphaarchitect.com/wp-json/wp/v2/...      (live 403; WP REST API blocked)
+  https://alphaarchitect.com/category/.../feed/     (live 403; category feeds blocked)
+  https://alphaarchitect.com/comments/feed/         (live 403)
+
+The only live un-blocked endpoint discovered is the main /feed/ RSS
+(which gives only the 5 most recent posts).
+
+--------------------------------------------------------------------
+SOURCE 5: https://alphaarchitect.com/managedfutures/
+--------------------------------------------------------------------
+HTTP via direct GET: 403
+HTTP via Wayback: 200 (snapshot 2025-08-04)
+303,785 bytes; prose content extracted below.
+
+====================================================================
+END HEADER
+====================================================================
+-->
+
+<!-- ================================================================ -->
+<!-- SOURCE 1 BODY: /factor-strategies/ — Swedroe ADD post (RSS-derived) -->
+<!-- ================================================================ -->
+
+<article>
+<title>When Everyone Trades the Same Factor Playbook</title>
+<link>https://alphaarchitect.com/factor-strategies/</link>
+<author>Larry Swedroe</author>
+<pubDate>Fri, 22 May 2026 15:52:00 +0000</pubDate>
+<categories>Larry Swedroe; Factor Investing; Research Insights; Other Insights</categories>
+
+<description>What happens to market prices when millions of investors simultaneously follow the same mechanical rules to rebalance the same portfolios? If you allocate to factor strategies, this paper has interesting findings as to where your returns are actually coming from.</description>
+
+<content>
+
+<p>For decades, academic researchers have catalogued hundreds of patterns in the stock market — statistical regularities linking firm characteristics to future returns. These persistent return patterns, unexplained by standard risk models, are known as <em>anomalies</em>. They now form the intellectual backbone of a multi-trillion-dollar industry called factor investing, implemented through mutual funds, hedge funds, and ETFs worldwide.</p>
+
+<p>The premise is straightforward: buy stocks with characteristics associated with high returns (the right, or "long leg") and short stocks with characteristics associated with low returns (the left, or "short leg").</p>
+
+<p>Anders Posselt and Mads Kjær, authors of the March 2026 study, "<a href="https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6342599">Anomaly-Driven Demand</a>," examined what happens to market prices when millions of investors simultaneously follow the same mechanical rules to rebalance the same portfolios.</p>
+
+<h3>Research Design</h3>
+
+<p>Anomaly strategies are constructed by sorting stocks on a trait, or characteristic — say, book-to-market for value investing. Because those characteristics change over time, portfolio constituents are not static. Stocks drift in and out of the long and short legs every month as their characteristics update.</p>
+
+<p>Each time a stock enters the long leg of a value strategy, value investors must buy it. When it exits, they must sell. This is mechanical, predictable rebalancing — analogous to what happens when a stock is added to or removed from an index like the S&amp;P 500.</p>
+
+<p>Now extend that logic across to what researchers have dubbed a "zoo of anomalies" — hundreds of different published anomalies simultaneously. A stock that enters the long leg of many anomalies at once is being targeted by a large, diverse population of factor investors all rebalancing in the same direction, at approximately the same time. The authors call this cumulative buying (or selling) pressure <strong>Anomaly-Driven Demand (ADD)</strong>.</p>
+
+<h3>Constructing the ADD Measure</h3>
+
+<p>For each of the 209 anomalies in the <a href="https://www.federalreserve.gov/econres/feds/open-source-cross-sectional-asset-pricing.htm">Chen and Zimmermann dataset</a>, the authors sorted stocks into portfolios (quintiles) based on the anomaly characteristic. Each month, they counted — for each individual stock — how many anomaly long legs it had newly entered minus how many short legs it had newly entered. The change in this net count from one month to the next is ADD.</p>
+
+<p>A high ADD value means a stock has recently become a constituent in many more long legs than short legs, signaling that a large wave of anomaly rebalancing will be directed <em>toward</em> buying that stock. A low ADD value signals the opposite — coordinated selling pressure.</p>
+
+<p>Crucially, ADD is constructed entirely from publicly observable firm characteristics. No access to investor position data, no proprietary holdings, no insider information. Just the mechanical logic of how anomaly portfolios are built.</p>
+
+<h3>Key Findings (verbatim claims from the post)</h3>
+
+<ul>
+<li><strong>High-ADD stocks significantly outperform low-ADD stocks.</strong> Annualised excess returns rose monotonically from 6.62% in the lowest group to 10.65% in the highest — a spread of 4.03pp (t = 4.03). Long-short Sharpe ≈ 0.61.</li>
+<li><strong>The effect survives standard risk factors.</strong> Alpha remains significant after FF5 + momentum + first 3 PCs of anomaly returns + a custom anomaly-exposure portfolio.</li>
+<li><strong>ADD predicts real positioning shifts.</strong> Short interest rose for low-ADD stocks and fell for high-ADD stocks; institutional breadth increased with ADD.</li>
+<li><strong>Returns concentrated in first ~6 trading days of the month.</strong> Driven entirely by open-to-close (intraday) returns — institutional order flow signature.</li>
+<li><strong>Price impact is permanent.</strong> No 12-month reversal; consistent with demand-based pricing (not a liquidity blip).</li>
+<li><strong>Anomalies with larger long-short ADD imbalance earn 8.04pp/yr more.</strong> A +1 SD imbalance predicts +24bps next month.</li>
+<li><strong>Valuation-related signals play an outsized role.</strong> "Other" category (seasonality, betting-against-beta) also contributes — aggregate-of-many-overlapping-strategies effect.</li>
+<li><strong>Effect is stronger for high-t-statistic anomalies.</strong> Low-t spread ≈ 0; high-t spread > 5pp. Long-leg inclusions have larger price impact than short-leg (institutional short-selling constraints).</li>
+<li><strong>U-shaped in size.</strong> Strongest in micro-cap and mega-cap; weakest in middle. Mega-cap premium ≈ 3pp/yr.</li>
+</ul>
+
+<h3>Interpreting the Results</h3>
+
+<p>The conventional debate about why anomalies generate returns has three camps: they reflect compensation for risk, they reflect investor mispricing, or they are statistical artifacts. This paper introduces a fourth channel that operates <em>on top of</em> whichever is correct.</p>
+
+<p>As factor investing has grown, its rebalancing activity has become large enough to generate meaningful demand pressure in the stocks that define anomalies' long legs — and selling pressure in those that define the short legs. This mechanically inflates observed returns, which attracts more capital into the same strategies, which drives larger rebalancing flows, which produces more price pressure, which inflates returns further. The anomaly, in other words, is partly feeding itself.</p>
+
+<p>This is structurally similar to the index inclusion effect — predictable price pressure from mechanical, inelastic demand. The difference is scale: the factor investing ecosystem now manages trillions of dollars synchronized across hundreds of strategies simultaneously.</p>
+
+<blockquote>Their findings led Kjær and Posselt to conclude: "trading on anomalies generates price pressure in the underlying stocks." They added: "As investors rebalance to maintain exposure, their trading affects the very returns they seek to earn."</blockquote>
+
+<h3>Key Investor Takeaways</h3>
+
+<ul>
+<li>Anomaly returns are partly mechanical — a portion comes from collective rebalancing, not underlying economic logic.</li>
+<li>Timing and coordination matter — effect concentrated at start of each month.</li>
+<li>Most popular anomalies carry the most embedded demand pressure.</li>
+<li>Price pressure does not reverse — structural, not transient.</li>
+<li>Factor investing is now large enough to move its own markets.</li>
+</ul>
+
+<p><em>Larry Swedroe is the author or co-author of 18 books on investing, including Enrich Your Future.</em></p>
+
+</content>
+
+</article>
+
+<!-- ================================================================ -->
+<!-- SOURCE 2 BODY: /focusedfactors/ — Long-Only lineup (Wayback)     -->
+<!-- ================================================================ -->
+
+<article>
+<title>Focused Factors — Long-Only ETF Lineup</title>
+<source>http://web.archive.org/web/20250804093822/https://alphaarchitect.com/focusedfactors/</source>
+
+<nav>
+Strategies submenu (extracted from menu HTML):
+- Long-Only:
+  - Quantitative Value
+  - Quantitative Mom
+- Alternatives:
+  - Global Value Momentum Trend
+  - Managed Futures
+  - Custom Solutions
+- 1042 QRP Solutions
+</nav>
+
+<section>
+<h2>Quantitative Value Strategy</h2>
+<p>The strategy seeks to buy the cheapest, highest quality value stocks.</p>
+<link>https://alphaarchitect.com/the-quantitative-value-investing-philosophy/</link>
+<note>Process diagram on page (image qv-process.png) summarises the
+five-step screen: starting universe → forensic/financial-distress
+filter → high-quality (FCF/ROIC) screen → cheapness (EV/EBIT) screen →
+~50-stock concentrated portfolio.  Image content not transcribed.</note>
+</section>
+
+<section>
+<h2>Quantitative Momentum Strategy</h2>
+<p>The strategy seeks to buy stocks with the highest quality momentum.</p>
+<link>https://alphaarchitect.com/quantitative-momentum-investing-philosophy/</link>
+<note>Process diagram on page (image qm-steps.png) summarises the
+five-step momentum screen: 12-2 momentum sort → momentum-quality
+(path-smoothness / "frog-in-the-pan") screen → ~50-stock concentrated
+portfolio.  Image content not transcribed.</note>
+</section>
+
+</article>
+
+<!-- ================================================================ -->
+<!-- SOURCE 3 BODY: /research-category-list/ — Top-level taxonomy     -->
+<!-- ================================================================ -->
+
+<article>
+<title>Research Categories</title>
+<source>http://web.archive.org/web/20260129170459/https://alphaarchitect.com/research-category-list/</source>
+<headings>
+- Value
+- Momentum
+- Trend
+- White Papers
+- More
+</headings>
+<note>The page shows article counts per category (image-rendered).
+"More" expands to additional research categories whose names are
+embedded in images and therefore not extractable from HTML alone.</note>
+
+<sample-articles>
+Articles linked on the same page (alphabetical-ish, AA-authored or AA-hosted):
+
+- Are Factors Better and More Diversifying Than Asset Classes?
+- Avoiding the Big Drawdown with Trend-Following Investment Strategies
+- Box Spreads: An Alternative to Treasury Bills?
+- Can AI Read the News Better Than You? How ChatGPT Could Transform Momentum Investing
+- Cut Through the Noise! These Two Factors Tend to Drive Portfolio Success
+- Do Mutual Fund Flows Really Say What We Think They Say?
+- Enhancing Momentum Strategies
+- Equity duration and predictability
+- How Many Stocks Should Be In Your Portfolio? A Practical Guide to Portfolio Construction
+- Intelligent Concentration: A Synopsis of Warren Buffett and Diversification
+- Is There A Bubble In Private Credit?
+- Is Value Investing Dead?
+- Long-Only Value Investing: Size Doesn't Matter!
+- Momentum factor investing: Evidence and evolution
+- Nine Lessons the Market Taught in 2024
+- Should Investors Combine or Separate Their Factor Exposures?
+- The Global Value Momentum Trend Philosophy
+- The Many Facets of Stock Momentum
+- The World's Longest Trend-Following Backtest
+- Trend-Following: A Deep Dive Into A Unique Risk Premium
+- Why you should trust the investment process (even though it's hard)
+</sample-articles>
+</article>
+
+<!-- ================================================================ -->
+<!-- SOURCE 4 BODY: /alpha-architect-white-papers/ — White-paper list -->
+<!-- ================================================================ -->
+
+<article>
+<title>Alpha Architect White Papers</title>
+<source>http://web.archive.org/web/20250804093822/https://alphaarchitect.com/alpha-architect-white-papers/</source>
+
+<extracted-titles>
+"Alternative" Facts about Formulaic Value Investing
+1042 Qualified Replacement Property: An Overview of ESOP Rollover Strategies
+A Short Research Library Outlining Why Traditional Stock Picking is Challenging
+Box Spreads: An Alternative to Treasury Bills?
+Commodity Futures Investing: Complex and Unique
+Do factor portfolios survive transaction costs?
+Do Portfolio Factors or Characteristics Drive Expected Returns?
+Does Emerging Markets Investing Make Sense?
+Even God would get fired as an Active Investor
+Factor Investing is More Art, and Less Science
+Factor Investing: Evidence Based Insights
+How Portfolio Construction Impacts the Reliability of Outcomes
+Is Passive Investing Better than Active Investing? A Critical Review.
+Long-Only Value Investing: Size Doesn't Matter!
+Momentum Investing, Like Value Investing, is Simple, but NOT Easy
+Reconciling Individual Stock Returns and Factor Portfolio Returns
+The Global Value Momentum Trend Philosophy
+Trend Following: The Epitome of No Pain, No Gain
+Value and Momentum Investing: Combine or Separate?
+Value Factor Diversification: Is Quality Better Than Momentum?
+Value Investing: An Examination of the 1,000 Largest Firms
+What's the Story Behind EBIT/TEV?
+Why you should trust the investment process (even though it's hard)
+</extracted-titles>
+</article>
+
+<!-- ================================================================ -->
+<!-- SOURCE 5 BODY: /managedfutures/ — Managed Futures Strategy       -->
+<!-- ================================================================ -->
+
+<article>
+<title>Managed Futures</title>
+<source>http://web.archive.org/web/20250804093822/https://alphaarchitect.com/managedfutures/</source>
+<h1>Managed Futures</h1>
+<p>Seek to provide a tax-efficient, tail-risk hedged, absolute return for family offices and HNW individuals.</p>
+<note>Remainder of page is image-heavy; no further extractable prose.</note>
+</article>
+
+<!-- End of raw capture file. -->
