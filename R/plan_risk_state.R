@@ -32,7 +32,10 @@ plan_risk_state <- function() {
         exposure_cautious = 0.50,
         exposure_hostile  = 0.10,
         slope_change_window = 5L,        # days for delta computation
-        oos_start = as.Date("2020-01-01")
+        oos_start = as.Date("2020-01-01"),
+        # Cost model (#425): SPY-level trades; 5 bps one-way
+        # Applied only on regime-switch days (exposure changes)
+        cost_per_trade = 0.0005
       )
     }),
 
@@ -179,14 +182,21 @@ plan_risk_state <- function() {
     targets::tar_target(rsc_portfolio, {
       library(dplyr)
 
+      # Cost model (#425): deduct cost only on days when exposure changes
+      # (regime switches). cost = cost_per_trade * |delta_exposure| * 2
+      # (round-trip: sell old SPY allocation + buy/sell new allocation).
       rsc_regime |>
         filter(!is.na(spy_ret), !is.na(exposure)) |>
         mutate(
-          rf_daily     = ifelse(is.na(rf_lag), 0, rf_lag),
-          ret_strategy = exposure * spy_ret + (1 - exposure) * rf_daily,
-          ret_buyhold  = spy_ret,
-          cum_strategy = cumprod(1 + ret_strategy),
-          cum_buyhold  = cumprod(1 + ret_buyhold)
+          rf_daily        = ifelse(is.na(rf_lag), 0, rf_lag),
+          # Switch indicator: exposure changed vs previous day
+          exposure_change = abs(exposure - dplyr::lag(exposure, default = exposure[1L])),
+          trade_cost      = rsc_params$cost_per_trade * exposure_change * 2.0,
+          gross_ret_strategy = exposure * spy_ret + (1 - exposure) * rf_daily,
+          ret_strategy    = gross_ret_strategy - trade_cost,
+          ret_buyhold     = spy_ret,
+          cum_strategy    = cumprod(1 + ret_strategy),
+          cum_buyhold     = cumprod(1 + ret_buyhold)
         )
     }),
 
