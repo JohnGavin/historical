@@ -1081,8 +1081,11 @@ plan_stock_backtest <- function() {
         "The difference is execution cost, not diversification: ",
         "stock-level decile sorts produce ~80% monthly turnover across ~130 positions ",
         "at 0.50%/trade = ~1.85%/month (~22%/yr). ",
-        "Factor-level trades 2\u20134 positions with ~40% turnover at 0.10%/trade = ",
-        "~0.16%/month (~2%/yr). ",
+        # dynamic-prose-values rule: read from drif_params (single source of truth, #425)
+        "Factor-level trades 2\u20134 positions with ~40% turnover at ",
+        round(drif_params$cost_per_trade * 100, 2), "%/trade = ",
+        "~", round(drif_params$cost_per_trade * 0.40 * 2 * 100, 2), "%/month (~",
+        round(drif_params$cost_per_trade * 0.40 * 2 * 12 * 100, 1), "%/yr). ",
         "Dashed line = test partition start (",
         format(stk_params$oos_start, "%Y"), ")."
       )

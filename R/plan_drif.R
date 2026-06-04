@@ -24,7 +24,10 @@ plan_drif <- function() {
         test_end = p$test_end,
         val_start = p$val_start,
         val_end = p$val_end,
-        oos_start = p$test_start
+        oos_start = p$test_start,
+        # Cost model (#425): factor-level trades; 0.10%/trade one-way
+        # (matches stk_all_caption claim; single source of truth here)
+        cost_per_trade = 0.001
       )
     }),
 
@@ -205,18 +208,46 @@ plan_drif <- function() {
 
       months <- sort(unique(signal$ym))
 
-      results <- lapply(months, function(m) {
+      # Cost model (#425): turnover = fraction of portfolio changed between
+      # consecutive months. For top_n=2 of 5 factors, full rotation = 100%
+      # (2 in + 2 out). Partial overlap reduces turnover proportionally.
+      # Round-trip cost = cost_per_trade * turnover * 2 (sell prev + buy new).
+      results <- lapply(seq_along(months), function(i) {
+        m <- months[i]
         month_signal <- signal |> filter(ym == m)
         if (nrow(month_signal) == 0) return(NULL)
 
         selected <- month_signal
+        top_n <- drif_params$top_n
 
-        port_ret <- mean(selected$actual_ret)
+        # Turnover: fraction of holdings that changed vs previous month
+        if (i == 1L) {
+          # First month: full cost (entering all positions from cash)
+          turnover <- 1.0
+        } else {
+          prev_m <- months[i - 1L]
+          prev_signal <- signal |> filter(ym == prev_m)
+          prev_factors <- prev_signal$factor_name
+          curr_factors <- selected$factor_name
+          n_overlap <- length(intersect(prev_factors, curr_factors))
+          # Fraction of portfolio changed = 1 - overlap / top_n
+          turnover <- 1.0 - n_overlap / top_n
+        }
+
+        # Round-trip cost (both legs: sell exiting + buy entering)
+        cost <- drif_params$cost_per_trade * turnover * 2.0
+
+        gross_ret <- mean(selected$actual_ret)
+        port_ret  <- gross_ret - cost
+
         b <- bench |> filter(ym == m)
         r <- rf |> filter(ym == m)
 
         tibble(
           ym = m,
+          gross_port_ret = gross_ret,
+          turnover = turnover,
+          cost = cost,
           portfolio_ret = port_ret,
           benchmark_ret = if (nrow(b) == 1) b$bench_ret else NA_real_,
           rf_ret = if (nrow(r) == 1) r$rf_monthly else NA_real_,
