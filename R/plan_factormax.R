@@ -21,7 +21,10 @@ plan_factormax <- function() {
         test_end = p$test_end,
         val_start = p$val_start,
         val_end = p$val_end,
-        oos_start = p$test_start       # backwards compat
+        oos_start = p$test_start,      # backwards compat
+        # Cost model (#425): factor-level trades; 0.10%/trade one-way
+        # (matches stk_all_caption claim; single source of truth in drif_params)
+        cost_per_trade = 0.001
       )
     }),
 
@@ -95,6 +98,9 @@ plan_factormax <- function() {
       min_history <- 12L
       trade_months <- months[(min_history + 1):length(months)]
 
+      # Track previous month's holdings to compute turnover (#425)
+      prev_selected <- character(0L)
+
       results <- lapply(trade_months, function(m) {
         # Signal: use MAX ranks from PREVIOUS month
         prev_idx <- which(months == m) - 1
@@ -117,13 +123,31 @@ plan_factormax <- function() {
 
         if (nrow(factor_rets) == 0) return(NULL)
 
-        port_ret <- mean(factor_rets$monthly_ret)
+        # Cost model (#425): turnover = fraction of portfolio changed
+        # vs previous holdings. Full rotation = 100% (top_n slots all changed).
+        n_overlap <- length(intersect(prev_selected, selected))
+        top_n <- fm_params$top_n
+        # First trade month: prev_selected is empty → full entry cost
+        turnover <- if (length(prev_selected) == 0L) 1.0 else
+          1.0 - n_overlap / top_n
+
+        cost <- fm_params$cost_per_trade * turnover * 2.0  # round-trip
+
+        # Update for next iteration (<<- to mutate enclosing scope)
+        prev_selected <<- selected
+
+        gross_ret <- mean(factor_rets$monthly_ret)
+        port_ret  <- gross_ret - cost
+
         bench_ret <- benchmark |> filter(ym == m) |> pull(monthly_ret)
-        rf_ret <- rf |> filter(ym == m) |> pull(monthly_ret)
+        rf_ret    <- rf |> filter(ym == m) |> pull(monthly_ret)
 
         tibble(
           date = factor_rets$last_date[1],
           ym = m,
+          gross_port_ret = gross_ret,
+          turnover = turnover,
+          cost = cost,
           portfolio_ret = port_ret,
           benchmark_ret = if (length(bench_ret) == 1) bench_ret else NA_real_,
           rf_ret = if (length(rf_ret) == 1) rf_ret else NA_real_,
