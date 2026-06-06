@@ -44,7 +44,8 @@ jobs:
           install.packages(
             c("jsonlite", "arrow", "dplyr", "cli", "here",
               "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload",
-              "DBI", "duckdb", "duckplyr", "ggplot2"),
+              "DBI", "duckdb", "duckplyr", "ggplot2",
+              "lubridate", "slider", "rlang"),
             repos = "https://cloud.r-project.org"
           )
 
