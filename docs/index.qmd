@@ -29,7 +29,7 @@ format:
           .info-card h4 { margin: 0 0 0.4em; }
           .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
           .stats-row { display: flex !important; flex-direction: row !important;
-                       flex-wrap: nowrap !important; gap: 2.5em !important;
+                       flex-wrap: nowrap !important; gap: 6em !important;
                        justify-content: center !important; align-items: center !important;
                        margin: 1em 0 !important; width: 100% !important; }
           .stat { text-align: center; flex-shrink: 0; display: inline-block; }
@@ -304,26 +304,36 @@ hd_search("vanguard")  # search metadata
 #| label: install-check
 #| echo: false
 #| comment: ""
-#| caption: "Live install check — re-runs on every page render"
-cat("# Live install check — re-runs on every page render\n")
-res <- tryCatch({
-  pkg_installed <- requireNamespace("historicaldata", quietly = TRUE)
-  list(
-    pkg_installed  = pkg_installed,
-    pkg_version    = if (pkg_installed)
-                       as.character(utils::packageVersion("historicaldata"))
-                     else "not installed",
-    n_exports      = if (pkg_installed)
-                       length(getNamespaceExports("historicaldata"))
-                     else NA_integer_,
-    r_version      = as.character(getRversion()),
-    duckdb_version = tryCatch(
-                       as.character(utils::packageVersion("duckdb")),
-                       error = function(e) "not installed"
-                     )
-  )
-}, error = function(e) list(error = conditionMessage(e)))
-str(res)
+#| warning: false
+#| message: false
+# Re-runs the four example commands above on every page render, so the
+# output stays in sync with the live HuggingFace data and the package
+# code on this commit.
+show_query <- function(label, expr) {
+  cat("# > ", label, "\n", sep = "")
+  result <- tryCatch(eval(expr, envir = parent.frame()),
+                     error = function(e) {
+                       cat("# ERROR: ", conditionMessage(e), "\n", sep = "")
+                       NULL
+                     })
+  if (!is.null(result)) {
+    # Materialise lazy duckplyr queries before head/print
+    if (inherits(result, c("duckplyr_df", "tbl_lazy"))) {
+      result <- dplyr::collect(result)
+    }
+    print(utils::head(result, 5L))
+  }
+  cat("\n")
+}
+
+show_query('hd_ohlcv("AAPL", from = "2024-01-01")',
+           quote(hd_ohlcv("AAPL", from = "2024-01-01")))
+show_query('hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")  # batch query',
+           quote(hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")))
+show_query('hd_macro(c("SP500", "VIXCLS"), from = "2024-01-01")',
+           quote(hd_macro(c("SP500", "VIXCLS"), from = "2024-01-01")))
+show_query('hd_search("vanguard")  # search metadata',
+           quote(hd_search("vanguard")))
 ```
 
 #### Python (DuckDB)

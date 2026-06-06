@@ -99,7 +99,7 @@ body { font-size: 1.2em; }
 .info-card h4 { margin: 0 0 0.4em; }
 .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
 .stats-row { display: flex !important; flex-direction: row !important;
-             flex-wrap: nowrap !important; gap: 2.5em !important;
+             flex-wrap: nowrap !important; gap: 6em !important;
              justify-content: center !important; align-items: center !important;
              margin: 1em 0 !important; width: 100% !important; }
 .stat { text-align: center; flex-shrink: 0; display: inline-block; }
@@ -593,15 +593,59 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
-<pre><code># Live install check — re-runs on every page render</code></pre>
+<pre><code># &gt; hd_ohlcv("AAPL", from = "2024-01-01")</code></pre>
 </div>
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
-<pre><code>List of 5
- $ pkg_installed : logi TRUE
- $ pkg_version   : chr "0.1.0"
- $ n_exports     : int 120
- $ r_version     : chr "4.5.3"
- $ duckdb_version: chr "1.5.1"</code></pre>
+<pre><code># A tibble: 5 × 11
+  date                 open  high   low close adjusted_close   volume ticker
+  &lt;dttm&gt;              &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;          &lt;dbl&gt;    &lt;dbl&gt; &lt;chr&gt; 
+1 2024-01-02 00:00:00  187.  188.  184.  186.           184. 82488700 AAPL  
+2 2024-01-03 00:00:00  184.  186.  183.  184.           182. 58414500 AAPL  
+3 2024-01-04 00:00:00  182.  183.  181.  182.           180. 71983600 AAPL  
+4 2024-01-05 00:00:00  182.  183.  180.  181.           179. 62379700 AAPL  
+5 2024-01-08 00:00:00  182.  186.  182.  186.           184. 59144500 AAPL  
+# ℹ 3 more variables: source &lt;chr&gt;, asset_class &lt;chr&gt;, updated_at &lt;dttm&gt;</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; hd_ohlcv(hd_group("FAANG"), from = "2024-01-01")  # batch query
+# A tibble: 5 × 11
+  date                 open  high   low close adjusted_close   volume ticker
+  &lt;dttm&gt;              &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt; &lt;dbl&gt;          &lt;dbl&gt;    &lt;dbl&gt; &lt;chr&gt; 
+1 2024-01-02 00:00:00  187.  188.  184.  186.           184. 82488700 AAPL  
+2 2024-01-03 00:00:00  184.  186.  183.  184.           182. 58414500 AAPL  
+3 2024-01-04 00:00:00  182.  183.  181.  182.           180. 71983600 AAPL  
+4 2024-01-05 00:00:00  182.  183.  180.  181.           179. 62379700 AAPL  
+5 2024-01-08 00:00:00  182.  186.  182.  186.           184. 59144500 AAPL  
+# ℹ 3 more variables: source &lt;chr&gt;, asset_class &lt;chr&gt;, updated_at &lt;dttm&gt;</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; hd_macro(c("SP500", "VIXCLS"), from = "2024-01-01")
+# A tibble: 5 × 4
+  date       value series_id source
+  &lt;date&gt;     &lt;dbl&gt; &lt;chr&gt;     &lt;chr&gt; 
+1 2024-01-01   NA  SP500     fred  
+2 2024-01-02 4743. SP500     fred  
+3 2024-01-03 4705. SP500     fred  
+4 2024-01-04 4689. SP500     fred  
+5 2024-01-05 4697. SP500     fred  </code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; hd_search("vanguard")  # search metadata
+# A tibble: 5 × 31
+  ticker dataset      long_name  exchange full_exchange currency instrument_type
+  &lt;chr&gt;  &lt;chr&gt;        &lt;chr&gt;      &lt;chr&gt;    &lt;chr&gt;         &lt;chr&gt;    &lt;chr&gt;          
+1 0VOO.L equity_daily Vanguard … LSE      LSE           USD      ETF            
+2 V3AB.L equity_daily Vanguard … LSE      LSE           GBP      ETF            
+3 V3AM.L equity_daily Vanguard … LSE      LSE           GBP      ETF            
+4 VAPX.L equity_daily Vanguard … LSE      LSE           GBP      ETF            
+5 VDEM.L equity_daily Vanguard … LSE      LSE           USD      ETF            
+# ℹ 24 more variables: sector &lt;chr&gt;, industry &lt;chr&gt;, country &lt;chr&gt;,
+#   market_cap &lt;dbl&gt;, volume_avg &lt;dbl&gt;, fifty_two_week_high &lt;dbl&gt;,
+#   fifty_two_week_low &lt;dbl&gt;, expense_ratio &lt;dbl&gt;, yield_pct &lt;dbl&gt;,
+#   category &lt;chr&gt;, fund_family &lt;chr&gt;, nav_price &lt;dbl&gt;, beta_3yr &lt;dbl&gt;,
+#   ytd_return &lt;dbl&gt;, three_yr_return &lt;dbl&gt;, start_date &lt;date&gt;,
+#   end_date &lt;date&gt;, total_obs &lt;dbl&gt;, missing_pct &lt;dbl&gt;, yield_type &lt;chr&gt;,
+#   short_name &lt;chr&gt;, quote_type &lt;chr&gt;, asset_class &lt;chr&gt;, source &lt;chr&gt;</code></pre>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -616,15 +660,15 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <p>No R needed — query the same data directly from Python using DuckDB’s native <code>hf://</code> protocol:</p>
-<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb4"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> duckdb</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>con <span class="op">=</span> duckdb.<span class="ex">connect</span>()</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> con.sql(<span class="st">"""</span></span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT date, close, volume</span></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="st">    FROM 'hf://datasets/JohnGavin/finance-data/equity_daily.parquet'</span></span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="st">    WHERE ticker = 'AAPL' AND date &gt;= '2024-01-01'</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a><span class="st">    ORDER BY date</span></span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>).df()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb7"><pre class="sourceCode python code-with-copy"><code class="sourceCode python"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="im">import</span> duckdb</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>con <span class="op">=</span> duckdb.<span class="ex">connect</span>()</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>df <span class="op">=</span> con.sql(<span class="st">"""</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT date, close, volume</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="st">    FROM 'hf://datasets/JohnGavin/finance-data/equity_daily.parquet'</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="st">    WHERE ticker = 'AAPL' AND date &gt;= '2024-01-01'</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="st">    ORDER BY date</span></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>).df()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -637,8 +681,8 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb5"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Enter reproducible Nix shell (all R + Python packages included)</span></span>
-<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop github:JohnGavin/historical</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Enter reproducible Nix shell (all R + Python packages included)</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop github:JohnGavin/historical</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <p>Then start R and load the package. All dependencies (dplyr, ggplot2, scales, DT, arrow, duckdb) are pre-installed in the Nix shell.</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -652,14 +696,14 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb6"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone, enter Nix shell, fetch data, run pipeline</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/JohnGavin/historical.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> historical</span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop</span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/fetch_equity.py     <span class="co"># 51 equity tickers</span></span>
-<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_crypto.R     <span class="co"># 14 crypto tokens</span></span>
-<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_macro.R      <span class="co"># 19 FRED series</span></span>
-<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_factors.R    <span class="co"># Fama-French factors</span></span>
-<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a><span class="ex">t</span> run src/pipeline.t               <span class="co"># T pipeline</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone, enter Nix shell, fetch data, run pipeline</span></span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/JohnGavin/historical.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> historical</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/fetch_equity.py     <span class="co"># 51 equity tickers</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_crypto.R     <span class="co"># 14 crypto tokens</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_macro.R      <span class="co"># 19 FRED series</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_factors.R    <span class="co"># Fama-French factors</span></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">t</span> run src/pipeline.t               <span class="co"># T pipeline</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -683,7 +727,7 @@ grid-auto-rows: minmax(0, 1fr);">
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/236f865ba2e329149387966c5d8d77d4720f265d"><code>236f865</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-06-06 17:04:11”</p>
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/7c47ac1bbd1236b15344340f04a25bff8d86b9f1"><code>7c47ac1</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-06-06 18:34:29”</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
