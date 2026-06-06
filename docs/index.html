@@ -99,8 +99,8 @@ body { font-size: 1.2em; }
 .info-card h4 { margin: 0 0 0.4em; }
 .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
 .stats-row { display: flex !important; flex-direction: row !important;
-             flex-wrap: nowrap !important; gap: 6em !important;
-             justify-content: center !important; align-items: center !important;
+             flex-wrap: nowrap !important;
+             justify-content: space-evenly !important; align-items: center !important;
              margin: 1em 0 !important; width: 100% !important; }
 .stat { text-align: center; flex-shrink: 0; display: inline-block; }
 .stat .num { font-size: 1.8em; font-weight: bold; display: block; }
@@ -678,7 +678,7 @@ grid-auto-rows: minmax(0, 1fr);">
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
 </div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-6-3"><div class="card-body html-fill-item html-fill-container" data-title="Nix">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb8"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Enter reproducible Nix shell (all R + Python packages included)</span></span>
@@ -691,19 +691,67 @@ grid-auto-rows: minmax(0, 1fr);">
         <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; nix flake metadata
+description:    historical_data — a T data analysis project
+last_modified:  2026-06-06 18:35 BST
+locked_rev:     
+inputs (7):  flake-utils, flake-utils_2, nixpkgs, nixpkgs_2, systems, systems_2, t-lang</code></pre>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
 </div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-6-4"><div class="card-body html-fill-item html-fill-container" data-title="T language">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb9"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone, enter Nix shell, fetch data, run pipeline</span></span>
-<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/JohnGavin/historical.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> historical</span>
-<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop</span>
-<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/fetch_equity.py     <span class="co"># 51 equity tickers</span></span>
-<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_crypto.R     <span class="co"># 14 crypto tokens</span></span>
-<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_macro.R      <span class="co"># 19 FRED series</span></span>
-<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_factors.R    <span class="co"># Fama-French factors</span></span>
-<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="ex">t</span> run src/pipeline.t               <span class="co"># T pipeline</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone, enter Nix shell, fetch data, run pipeline</span></span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/JohnGavin/historical.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> historical</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/fetch_equity.py     <span class="co"># 51 equity tickers</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_crypto.R     <span class="co"># 14 crypto tokens</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_macro.R      <span class="co"># 19 FRED series</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_factors.R    <span class="co"># Fama-French factors</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="ex">t</span> run src/pipeline.t               <span class="co"># T pipeline</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>Warning message:
+In normalizePath(path) :
+  path[1]="/Users/johngavin/docs_gh/proj/finance/data/historical-feat-cc-20260604-102429/docs/packages/historicaldata": No such file or directory</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; scripts/fetch_*.{R,py}  (not run at render time — too expensive)</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>13 R fetchers + 3 Python fetchers = 16 total</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; src/pipeline.t  (T-language pipeline)</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>139 lines</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code># &gt; targets::tar_manifest()  (R targets pipeline driving docs/)</code></pre>
+</div>
+<div class="cell-output cell-output-stdout html-fill-item html-fill-container">
+<pre><code>(could not parse)</code></pre>
+</div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -727,7 +775,7 @@ grid-auto-rows: minmax(0, 1fr);">
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/7c47ac1bbd1236b15344340f04a25bff8d86b9f1"><code>7c47ac1</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-06-06 18:34:29”</p>
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/16b692e1a0b6b63ab6c34a2d07e8a05699bb37ee"><code>16b692e</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-06-06 19:28:52”</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>

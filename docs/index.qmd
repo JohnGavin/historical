@@ -29,8 +29,8 @@ format:
           .info-card h4 { margin: 0 0 0.4em; }
           .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
           .stats-row { display: flex !important; flex-direction: row !important;
-                       flex-wrap: nowrap !important; gap: 6em !important;
-                       justify-content: center !important; align-items: center !important;
+                       flex-wrap: nowrap !important;
+                       justify-content: space-evenly !important; align-items: center !important;
                        margin: 1em 0 !important; width: 100% !important; }
           .stat { text-align: center; flex-shrink: 0; display: inline-block; }
           .stat .num { font-size: 1.8em; font-weight: bold; display: block; }
@@ -361,6 +361,42 @@ nix develop github:JohnGavin/historical
 
 Then start R and load the package. All dependencies (dplyr, ggplot2, scales, DT, arrow, duckdb) are pre-installed in the Nix shell.
 
+```{r}
+#| label: nix-verify
+#| echo: false
+#| comment: ""
+#| warning: false
+#| message: false
+# Show flake metadata for the active project — proves the nix-develop
+# target above resolves to a concrete commit + dependency tree.
+flake_dir <- if (file.exists(file.path(here::here(), "flake.nix"))) {
+               here::here()
+             } else {
+               dirname(here::here())
+             }
+md <- tryCatch(
+  system2("nix", c("flake", "metadata", flake_dir, "--json"),
+          stdout = TRUE, stderr = FALSE),
+  error = function(e) NULL
+)
+if (length(md) > 0L && requireNamespace("jsonlite", quietly = TRUE)) {
+  j <- jsonlite::fromJSON(paste(md, collapse = ""))
+  cat("# > nix flake metadata\n", sep = "")
+  cat("description:    ", j$description %||% "(none)", "\n", sep = "")
+  cat("last_modified:  ",
+      if (!is.null(j$lastModified))
+        format(as.POSIXct(j$lastModified, origin = "1970-01-01"), "%Y-%m-%d %H:%M %Z")
+      else "(unknown)", "\n", sep = "")
+  cat("locked_rev:     ", substr(j$locked$rev %||% "", 1L, 12L), "\n", sep = "")
+  inputs <- names(j$locks$nodes)
+  inputs <- setdiff(inputs, "root")
+  cat("inputs (", length(inputs), "):  ",
+      paste(inputs, collapse = ", "), "\n", sep = "")
+} else {
+  cat("# > nix flake metadata\n# (nix not on PATH at render time; trust the locked flake)\n", sep = "")
+}
+```
+
 #### T language
 
 ```bash
@@ -372,6 +408,56 @@ Rscript scripts/fetch_crypto.R     # 14 crypto tokens
 Rscript scripts/fetch_macro.R      # 19 FRED series
 Rscript scripts/fetch_factors.R    # Fama-French factors
 t run src/pipeline.t               # T pipeline
+```
+
+```{r}
+#| label: pipeline-overview
+#| echo: false
+#| comment: ""
+#| warning: false
+#| message: false
+# The full clone + fetch + pipeline run takes ~20 min; not feasible at
+# page-render time. Instead, show the static shape: how many fetch
+# scripts exist, how many pipeline targets, file sizes.
+root <- if (file.exists(file.path(here::here(), "scripts"))) {
+          here::here()
+        } else {
+          dirname(here::here())
+        }
+
+fetch_scripts <- list.files(file.path(root, "scripts"),
+                            pattern = "^fetch_.*\\.(R|py)$",
+                            full.names = FALSE)
+n_r  <- sum(grepl("\\.R$",  fetch_scripts))
+n_py <- sum(grepl("\\.py$", fetch_scripts))
+
+pipeline_file <- file.path(root, "src", "pipeline.t")
+pipeline_lines <- if (file.exists(pipeline_file)) {
+                    length(readLines(pipeline_file, warn = FALSE))
+                  } else {
+                    NA_integer_
+                  }
+
+n_targets <- tryCatch({
+  if (file.exists(file.path(root, "docs", "_targets.R"))) {
+    manifest <- targets::tar_manifest(
+      script = file.path(root, "docs", "_targets.R")
+    )
+    nrow(manifest)
+  } else NA_integer_
+}, error = function(e) NA_integer_)
+
+cat("# > scripts/fetch_*.{R,py}  (not run at render time — too expensive)\n")
+cat(n_r, " R fetchers + ", n_py, " Python fetchers = ", length(fetch_scripts),
+    " total\n", sep = "")
+cat("\n")
+cat("# > src/pipeline.t  (T-language pipeline)\n")
+cat(if (is.na(pipeline_lines)) "(not found)"
+    else paste0(pipeline_lines, " lines"), "\n", sep = "")
+cat("\n")
+cat("# > targets::tar_manifest()  (R targets pipeline driving docs/)\n")
+cat(if (is.na(n_targets)) "(could not parse)"
+    else paste0(n_targets, " targets"), "\n", sep = "")
 ```
 
 # Build Info
