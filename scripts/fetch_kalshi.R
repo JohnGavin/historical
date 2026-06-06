@@ -39,7 +39,19 @@ fetch_kalshi_markets <- function(series_ticker, api_base, limit = 200) {
     cli_inform(c("i" = "Page {page}: {url}"))
 
     resp <- tryCatch(
-      jsonlite::fromJSON(url, simplifyDataFrame = FALSE),
+      {
+        raw <- httr2::request(url) |>
+          httr2::req_user_agent(
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+          ) |>
+          httr2::req_headers(
+            Accept          = "application/json",
+            `Accept-Language` = "en-US,en;q=0.9"
+          ) |>
+          httr2::req_retry(max_tries = 3L, backoff = \(x) 2^x) |>
+          httr2::req_perform()
+        httr2::resp_body_json(raw, simplifyVector = FALSE)
+      },
       error = function(e) {
         cli_abort("API request failed: {e$message}")
       }
