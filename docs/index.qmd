@@ -32,9 +32,9 @@ format:
                        flex-wrap: nowrap !important; gap: 2.5em !important;
                        justify-content: center !important; align-items: center !important;
                        margin: 1em 0 !important; width: 100% !important; }
-          .stat { text-align: center; flex-shrink: 0; }
-          .stat .num { font-size: 1.8em; font-weight: bold; }
-          .stat .label { font-size: 0.8em; opacity: 0.6; }
+          .stat { text-align: center; flex-shrink: 0; display: inline-block; }
+          .stat .num { font-size: 1.8em; font-weight: bold; display: block; }
+          .stat .label { font-size: 0.8em; opacity: 0.6; display: block; }
           .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 4px;
                    font-size: 0.8em; margin-right: 0.5em; }
           .badge-blue { background: #1a3a5c; color: #6B8DAE; }
@@ -162,11 +162,11 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer"><span class="badge badge-gold">Hugging Face</span></a>
 
 <div class="stats-row">
-<a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><div class="stat"><div class="num">`r stat_tickers`</div><div class="label">tickers</div></div></a>
-<a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><div class="stat"><div class="num">`r stat_rows`</div><div class="label">rows</div></div></a>
-<a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><div class="stat"><div class="num">`r stat_datasets`</div><div class="label">datasets</div></div></a>
-<a href="jst-dashboard.html" class="stat-link"><div class="stat"><div class="num">`r stat_yr`</div><div class="label">history</div></div></a>
-<a href="https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md" target="_blank" rel="noopener noreferrer" class="stat-link"><div class="stat"><div class="num">`r stat_functions`</div><div class="label">functions</div></div></a>
+<a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_tickers`</span><span class="label">tickers</span></span></a>
+<a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_rows`</span><span class="label">rows</span></span></a>
+<a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_datasets`</span><span class="label">datasets</span></span></a>
+<a href="jst-dashboard.html" class="stat-link"><span class="stat"><span class="num">`r stat_yr`</span><span class="label">history</span></span></a>
+<a href="https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_functions`</span><span class="label">functions</span></span></a>
 </div>
 
 ## Row
