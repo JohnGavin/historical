@@ -524,6 +524,98 @@ plan_drif <- function() {
       }
 
       hd_pbo(is_scores = is_mat, oos_scores = oos_mat)
+    }),
+
+    # ── Registry sentinel (#442 Tier 1) ─────────────────────────────────────
+    # Upserts bt.strategy row for "drif", records one bt.run + bt.metric rows
+    # (one per period from drif_metrics). Returns tibble(strategy_id, run_uuid).
+    # Guard: returns empty tibble if DBI / duckdb are unavailable.
+    targets::tar_target(drif_register_runs, {
+      .drif_register_runs(
+        strategy_names = strategy_names,
+        drif_metrics   = drif_metrics,
+        drif_portfolio = drif_portfolio
+      )
     })
+
   )
+}
+
+
+# ── Internal helper ────────────────────────────────────────────────────────────
+# Prefixed .drif_* (private; not exported from the package).
+# Mirrors .mom_prepeak_register_runs() from plan_mom_prepeak.R.
+
+#' Register DRIF backtest run in the strategy registry
+#'
+#' @param strategy_names Tibble from the `strategy_names` target.
+#' @param drif_metrics Tibble from the `drif_metrics` target.
+#' @param drif_portfolio Tibble from the `drif_portfolio` target; used to
+#'   extract returns for SSR/top5pct stability metrics.
+#'
+#' @return Tibble with columns: strategy_id, run_uuid.
+#' @noRd
+.drif_register_runs <- function(strategy_names, drif_metrics,
+                                drif_portfolio) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      strategy_id = character(),
+      run_uuid    = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  strat_row <- strategy_names |>
+    dplyr::filter(.data$code_name == "drif") |>
+    dplyr::transmute(
+      strategy_id        = .data$code_name,
+      short_name         = .data$short_name,
+      long_name          = .data$long_name,
+      asset_class        = .data$asset_class,
+      frequency          = .data$frequency,
+      ann_factor         = as.integer(.data$ann_factor),
+      directionality     = as.character(.data$directionality),
+      liquidity_tier     = as.character(.data$liquidity_tier),
+      time_horizon_days  = as.integer(.data$time_horizon_days_avg),
+      trades_per_year    = as.numeric(.data$trades_per_year_avg),
+      turnover_pct       = as.numeric(.data$turnover_pct_per_period_avg),
+      tags               = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+
+  historicaldata::hd_strategy_upsert(con, strat_row)
+
+  uu <- historicaldata::hd_run_upsert(
+    con,
+    strategy_id      = "drif",
+    partition        = "phase1",
+    pipeline_version = "phase1"
+  )
+
+  # Record full-period metrics row
+  full_row <- drif_metrics[drif_metrics$period == "Full Period", , drop = FALSE]
+  if (nrow(full_row) == 1L) {
+    metric_cols <- setdiff(names(full_row), "period")
+    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+  }
+
+  # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
+  rets <- drif_portfolio$portfolio_ret
+  rets <- rets[!is.na(rets)]
+  if (length(rets) > 0L) {
+    historicaldata::hd_record_stability_metrics(
+      con        = con,
+      run_uuid   = uu,
+      returns    = rets,
+      w          = 36L,
+      ann_factor = 12L
+    )
+  }
+
+  tibble::tibble(strategy_id = "drif", run_uuid = uu)
 }
