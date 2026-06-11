@@ -1,0 +1,44 @@
+name: pkgctx API doc freshness
+
+# Fails the PR if docs/api-historicaldata.md is stale relative to
+# packages/historicaldata/R/. Companion to the Stop-hook that regenerates
+# the doc locally (JohnGavin/historical#438).
+#
+# Triggered only when the R source or the generated doc is touched, so
+# unrelated PRs pay zero cost.
+
+on:
+  pull_request:
+    paths:
+      - 'packages/historicaldata/R/**'
+      - 'docs/api-historicaldata.md'
+      - '.github/workflows/pkgctx-check.yml'
+  workflow_dispatch:
+
+jobs:
+  pkgctx-freshness:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          # Same substituter config used by r-tests.yml so the pkgctx
+          # flake derivation is also covered by the rstats-on-nix cache
+          # (avoids slow from-source R rebuilds on cache miss).
+          extra-conf: |
+            trusted-users = root runner
+            extra-substituters = https://rstats-on-nix.cachix.org
+            extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
+
+      - name: Regenerate docs/api-historicaldata.md
+        run: bash scripts/regen_api_context.sh
+
+      - name: Fail if doc is stale
+        run: |
+          git diff --exit-code docs/api-historicaldata.md || {
+            echo "::error file=docs/api-historicaldata.md::api-historicaldata.md is stale."
+            echo "Run  bash scripts/regen_api_context.sh  and commit the updated file."
+            exit 1
+          }

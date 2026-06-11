@@ -3,6 +3,14 @@
 # Triggered manually before any commit that changes packages/historicaldata/R/.
 # Future: hook this into a Quarto pre-render or pre-commit (see JohnGavin/llm issue).
 set -euo pipefail
+
+# Graceful degrade: if nix is not available, skip silently (CI or dev
+# environments without Nix should not fail hard on a doc-regen script).
+if ! command -v nix >/dev/null 2>&1; then
+  echo "regen_api_context.sh: nix not found on PATH — skipping pkgctx regen" >&2
+  exit 0
+fi
+
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OUTFILE="$ROOT/docs/api-historicaldata.md"
 SHA=$(git -C "$ROOT" rev-parse --short HEAD 2>/dev/null || echo "unknown")
