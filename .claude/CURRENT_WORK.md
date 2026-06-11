@@ -1,79 +1,98 @@
-# Current Work (Session 2026-06-02 #15 — #400 SSR rollout closed + 4 issues + 1 cross-project bug + housekeeping, ENDED)
+# Current Work (Session 2026-06-04 → 2026-06-11 #16 — #425 critical cost-bug fix + #442 Tier 1 registry + 7 PRs, ENDED)
 
-**Last updated:** session end
-**Previous sessions:** #14 (12 PRs + SSR rollout kicked off), #13 (#365 mom_prepeak umbrella, 14 PRs), #12 (#347 DuckDB registry, 5 PRs)
+**Last updated:** session end 2026-06-11
+**Previous sessions:** #15 (#400 SSR closed, 5 PRs), #14 (12 PRs), #13 (#365 mom_prepeak umbrella, 14 PRs)
 
-## This session — 5 PRs merged + 2 issues filed + ~1 GB reclaimed
+## This session — 7 PRs merged + 16 issues filed + critical cost-deduction bug discovered and fixed
 
-### #400 SSR rollout closed (4 PRs — full 6-PR umbrella now in main)
+### Headline
 
-- **#410 PR 3/6** `hd_record_stability_metrics()` — registry orchestrator writing 8 stability scalars per run into `bt.metric` (no DDL change). 8 new tests; 137 PASS / 0 FAIL registry suite.
-- **#409 PR 4/6** leaderboard SSR + top5pct columns — broadcast as full-sample stats via left-join; surfaced in Full Period tab. 9 strategies covered; 6 NA pending direct return-vector dependencies. 6 new tests.
-- **#413 PR 5/6** auto-record from `*_register_runs` — threads strategy returns through `.mom_prepeak_register_runs()` (3 siblings) and `.cmr_register_runs()` (3 lookback partitions). Supersedes closed #412. 5 new tests.
-- **#408 PR 6/6** mom_prepeak gauntlet SSR axis — new `mom_prepeak_ssr`, `mom_prepeak_top5pct` targets; dashboard section with DT table + calibration anchors (S&P 500 SSR ~5.3, macro FX ~4.4). 13 new tests.
+Multi-day session that discovered and fixed a **critical zero-cost-deduction bug** (#425) in `drif_portfolio` / `fm_portfolio` / `rsc_portfolio` — the deployed leaderboard's factor-level "net" Sharpe numbers were actually **gross**. PR cascade #437→#439→#440→#441 corrected the source, rebuilt the dashboards, and made the install-check chunk produce real output. Closed the registry/scorecard disconnect with **#442 Tier 1** (PR #444 — drif/fac_max/ltr/avoid_worst/rsc registered; `bt.strategy` now 8/14).
 
-### Vignette deploy
+### PRs merged (7)
 
-- **#411** re-render 2 of 3 deferred vignettes — `macro-defense-rotation.qmd` against warm-started `_targets/`; `jst-dashboard.qmd` migrated to `safe_tar_read()` + 4 RDS fallbacks in `inst/extdata/vignettes/`. Third (`leaderboard.qmd`) addressed by #409's schema change.
-
-### 4 research issues + 1 cross-project bug filed
-
-- **#414** — Active Dual Momentum GTAA (Quantpedia 6080 / Beluska 2026). 9-ETF dual-window RoC with absolute-momentum filter. Reported Sharpe 0.91 / Calmar 0.89. 7 subtasks (data sourcing, gauntlet, net-of-cost sensitivity, pervasiveness probe).
-- **#415** — `alphaarchitect.com/factor-strategies/` gap audit vs our 14-strategy inventory. Cloudflare-blocked from WebFetch; Subtask 1 covers manual page capture. 7-subtask audit including child-issue generation for each GAP row.
-- **#416** — Modern Statistical Arbitrage (Quantitativo 2026). Factor 46 multi-period mean-reversion + 17-signal portfolio. Sharpe 0.53–1.46 single signal, 1.15–1.76 portfolio, worst max DD −4.3% on R3000. 190→17 selection multiple-testing problem — `K_eff_strat` deflation mandatory. 10 subtasks; paywalled 17-signal portfolio deferred.
-- **#417** — Concretum operational pitfalls of algo trading gap analysis. 10 pitfalls enumerated; 6 GAP rows clustered around trading-calendar awareness. 7 subtasks including `R/utils_trading_calendar.R` module + `qa_rebalance_dates_valid` target. Directly impacts #414 + #416.
-- **llmtelemetry#287** (cross-project bug) — `export_and_deploy_data.sh` rebase-conflict path strands data; recommend bailing before push when `N_CHANGED == 0 && N_NEW == 0`. Surfaced during this session's first /bye telemetry export attempt.
-
-### Roborev backlog (post-original-/bye sweep)
-
-- Actionable backlog (`compact --dry-run`) reduced to **0** — 4 doc-only F-verdicts consolidated/closed by `roborev compact`
-- 176 cosmetic close-comments added; summary counter unchanged at 51/99 (gated by `closures` table requiring real commit SHA refs — not CLI-reachable without forging)
-- Daemon restarted (stale-cwd workers from earlier worktree cleanup)
-
-### Housekeeping
-
-- Duplicate clone `~/docs_gh/historical` removed (all 7 local branches verified `0 0` against origin; clean working trees).
-- `.claire/` typo dir removed — orphan with stale older copy of `strategy_mom_prepeak.R` (deprecated `purrr::map_dfr`); 12 KB.
-- **Worktree bulk cleanup**: 11 worktrees + 11 branches removed after 3-step `branch-salvage-workflow` on all 11 (5 orchestrator + 6 background-agent). Reclaimed ~1 GB.
-  - 6 stale-locked agent worktrees unlocked (lock-PIDs 67230/1318/98890 all dead)
-  - 7 agent worktrees removed (`abd130`, `ae3190`, `a1af5b`, `a8564e`, `a9196a`, `aeb77`, `aa99f6`)
-  - 4 sibling `historical-feat-cc-*` worktrees removed (382 MB)
-  - 4 named-feature branches deleted (all verified squash-merged): `docs/316-adjusted-close-schema`, `fix/313-trp-heap-walk`, `feat/269-pillar8-risk-metrics`, `fix/4371-drif-selection-helper`
-  - **Session #14 aa99f6 hold resolved** — `cc31850` IS PR #384 (squash-merged 9 min after authoring; identical changes)
-  - 13 anonymous unlocked agent worktrees left untouched (1–4 d old; Phase 7f auto-GC will sweep naturally)
-
-## Headline numbers
-
-| Metric | Value |
+| PR | Subject |
 |---|---|
-| PRs merged | 5 (#408, #409, #410, #411, #413) + 1 superseded (#412) |
-| Issues filed | 4 in historical (#414, #415, #416, #417) + 1 in llmtelemetry (#287) |
-| New tests added | ~32 (8 + 6 + 5 + 13) |
-| `bt.metric` extension | 8 new stability scalars per run, auto-recorded by both register_runs paths |
-| #400 umbrella | All 6 PRs merged; issue still OPEN (close pending pipeline run + leaderboard re-render) |
-| Worktrees | 25 → 14 (-11) |
-| Disk reclaimed | ~1 GB (.claude/worktrees 2.1 → 1.5 GB; siblings 382 MB gone) |
-| Branches deleted | 11 |
-| Background agents | 2 (`ab6c9dd9` cherry-checks, `a528165b` cleanup) — both completed cleanly |
+| #433 | Umbrella session 1 (Cakici A/B + #278 + #125 + #415 + #425 + render) |
+| #434 | docs/ HTML re-render against rebuilt #425 targets |
+| #437 | Data-poll workflow + index.qmd headline source fixes (yr_history + 30→120 functions + collapsible datasets + install-check) |
+| #439 | `<span>` not `<div>` in stats-row — fixes pandoc strip regression |
+| #440 | Wider stat-card spacing + R install-check actually runs example commands |
+| #441 | `space-evenly` stats-row + Nix `flake metadata` chunk + T pipeline-overview chunk |
+| #444 | #442 Tier 1: register_runs for drif, fac_max, ltr, avoid_worst, rsc |
 
-## Carry to next session
+### Issues filed (16)
 
-### Recommended priority
+- **Tracking / bugs**: #424 (DRIF signal quality — resolved), **#425 (P0 cost deduction — fixed)**, #442 (registry gap — Tier 1 done)
+- **Research (AA gap analysis)**: #426 Fundamental Value (HIGH), #427 Managed Futures (HIGH), #428 FIP momentum (MED), #429 Intl Momentum (MED), #430 ADD crowding (MED), #431 Long-history trend (LOW-MED), #432 Asset-class vs factor (LOW)
+- **Strategy research**: #443 BDBB queueing on SOL (Varma 2026, depends on #436)
+- **Infrastructure / UX**: #435 Collapsible articles table, #436 Kraken data integration, #438 Project Stop-hook for pkgctx
+- **Cross-project**: **JohnGavin/JohnGavin.github.io#10** (user-site font +2), **JohnGavin/llm#532** (global pkgctx rollout)
 
-1. **Close #400 umbrella** — run full pipeline `tar_make()`, re-render `docs/leaderboard.qmd`, verify SSR values populated for the 9 covered strategies, then close #400
-2. **Surface SSR for the 6 NA leaderboard rows** — wire direct return-vector dependencies for TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal
-3. **#414 Active Dual Momentum GTAA** — Subtask 1 (data sourcing): register 9-ETF daily series with common 2007+ start; decide on extending `strategy_names` to 15 rows
-4. **#415 AA factor-strategies gap audit** — Subtask 1 (manual page capture, Cloudflare-blocked); then taxonomy extraction + COVERED/PARTIAL/GAP classification
+### Issues closed (4)
 
-### Or pick from
+- #312 Cakici A/B — deferred until universe widens (paired with #278); empirically no-op on top-100
+- #424 DRIF signal quality — resolved on current universe (net SR -1.13 Full, -0.01 Validation; signal dies under realistic costs)
+- #425 Zero-cost-deduction bug — fixed in #437
+- #415 AlphaArchitect audit — 7 gap stubs filed (#426–#432) and labeled
 
-- **#362** Lazy Man's Momentum (queued since session #14)
-- **roborev backlog** — 98 failed / 50 addressed / 48 unaddressed (pre-existing; unchanged this session)
+### Key numerical impacts (now live on https://johngavin.github.io/historical/)
 
-## Known limitations / carry-forward
+| Surface | Before | After |
+|---|---|---|
+| `drif_metrics` Full Sharpe | 0.259 | **0.076** |
+| `fm_metrics` Full Sharpe | 0.015 | **-0.098** |
+| `rsc_metrics` SPY_overlay Testing Sharpe | 0.853 | 0.582 |
+| Stock MAX terminal $1 → | (gross) | **$0.21** |
+| Stock DRIF terminal $1 → | (gross) | **$0.10** |
+| Headline "history" | 5,553,492yr (bogus) | **100yr** |
+| Headline "functions" | 30 (hardcoded) | **120** (from NAMESPACE / api-historicaldata.md) |
+| `bt.strategy` rows | 3 | **8** |
 
-- **#400 itself still OPEN** despite all 6 PRs merged — close pending end-to-end pipeline run + leaderboard re-render
-- **6 leaderboard strategies NA on SSR/top5pct** — TOM, CMR, Avoid Worst, Risk State, OLMAR, PSO Optimal — need direct return-vector dependencies
-- **`leaderboard.qmd` HTML not yet re-rendered** — #409 ships the schema change only; `tar_make(leaderboard)` + render deferred
-- **13 anonymous worktrees** — left untouched this session; Phase 7f auto-GC handles them as PIDs die and they age past 14 d
-- **roborev backlog** — 48 unaddressed (pre-existing; not scoped to this session)
+### pkgctx integration (new this session)
+
+- `docs/api-historicaldata.md` — 1,155 lines, 120 functions with signatures + human-friendly descriptions (replaces NAMESPACE link from landing page)
+- `scripts/regen_api_context.sh` — manual entrypoint (`nix run github:b-rodrigues/pkgctx -- r packages/historicaldata --compact`)
+- `.claude/CLAUDE.md` — regen reminder added
+- **#438** (project-local Stop-hook + CI safety net) and **llm#532** (global rollout) filed as follow-ups
+
+### Cakici A/B prototype (#312 explorations)
+
+- `explorations/cakici_design_ab/` — three-variant comparison (Baseline / A filter-then-rank / B rank-then-renormalise) using cached `stk_drif_signal` × `stk_monthly_adv` with $5M ADV gate
+- **Result**: A and B bit-for-bit identical on top-100 universe (Spearman 1.000); Baseline 0.998 vs both. Design choice is empirically a no-op until universe widens
+- Deferred until #278 lands
+
+## Failed Approaches (documented for future-session avoidance)
+
+- **Pandoc strips `<div>` inside `<a>`** once `<details>` blocks appear later in the doc. Investigation chain: knit-level produces correct values (rules it OUT of R) → markdown intermediate fine → HTML missing div content → pandoc layer responsible. Workaround: Option A (spans + `display: block`); rejected Options B (`::: fenced div`) and C (include partial) without testing because A worked.
+- **First render-fix subagent died with socket error** after 10 min (5 tool calls). Took over inline rather than re-dispatching.
+- **Tier 1 register_runs agent's tar_make verification** failed on 3/5 strategies in fresh worktree (missing upstream targets cache). Fixed by orchestrator copying main's `docs/_targets/` (553 MB) into worktree → all 5 succeeded in 3.9s. Lesson: agents on fresh worktrees need a primed cache for any target with deep upstream deps.
+- **`if/else` on separate lines without `{}` braces** parses fine interactively but FATAL in non-interactive Rscript — caught the `nix-verify` + `pipeline-overview` chunks in #441's first render attempt.
+
+## Roborev status (advisory — NOT addressed this session)
+
+- Last 7d: **23 reviews, 5 PASS, 18 FAIL, 0 ADDRESSED** (22% pass rate)
+- 2 review-job crashes (claude-code agent)
+- Median review duration: 47s, p99: 2.2m
+- **For next session**: triage the 18 unaddressed failures. Many likely from this session's high-velocity PR cadence; may auto-resolve via cleanup-on-merge.
+
+## Next session
+
+- Continue on branch: `main` (session branch fully merged via squash; nothing pending)
+- **Open priorities** (in suggested order):
+  1. **#442 Tier 2** — wire register_runs for stk_max, stk_drif, xgb_drif (stock-level workhorses; follow same pattern as Tier 1 PR #444)
+  2. **Triage roborev backlog** — 18 unaddressed failures from this session's velocity
+  3. **#438** — project-local Stop-hook for `docs/api-historicaldata.md` auto-regen (small infra task)
+  4. **#436** — Kraken data integration (gates #443 BDBB-SOL)
+  5. **#442 Tier 3** — tom, cmr, pso_optimal (closes #442 entirely at 14/14)
+- **Awaiting user decision**:
+  - #278 OLMAR Phase 4 data source pick (Norgate ~$30/mo vs EODHD ~$20/mo vs CRSP academic vs defer)
+- **Cross-project (someone else's session)**:
+  - JohnGavin.github.io#10 (font size on user site — llm session has authority)
+  - llm#532 (global pkgctx rollout — llm session)
+
+## Session-end state
+
+- Working tree: clean (6 untracked render byproducts retained as before — deliberately not committed)
+- Branch: `feat/cc-20260604-102429` at 62b4139 (Tier 1 cherry-pick; superseded by main `e8cb7a9` via PR #444 squash)
+- Remote: main contains all session work (ahead of session branch by 1 commit content-identical via squash)
