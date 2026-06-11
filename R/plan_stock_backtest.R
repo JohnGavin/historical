@@ -1089,6 +1089,125 @@ plan_stock_backtest <- function() {
         "Dashed line = test partition start (",
         format(stk_params$oos_start, "%Y"), ")."
       )
+    }),
+
+    # ── Registry sentinel (#442 Tier 2) ──────────────────────────────────────
+    # Upserts bt.strategy row for "stk_max", records bt.run + bt.metric rows
+    # (full-period metrics) + bt.diagnostic (survivorship_biased flag).
+    # Returns tibble(strategy_id, run_uuid).
+    # Guard: returns empty tibble if DBI / duckdb are unavailable.
+    targets::tar_target(stk_max_register_runs, {
+      .stk_register_runs(
+        strategy_names = strategy_names,
+        code_name      = "stk_max",
+        metrics        = stk_max_metrics,
+        portfolio      = stk_max_portfolio
+      )
+    }),
+
+    # ── Registry sentinel (#442 Tier 2) ──────────────────────────────────────
+    # Upserts bt.strategy row for "stk_drif", records bt.run + bt.metric rows
+    # (full-period metrics) + bt.diagnostic (survivorship_biased flag).
+    # Returns tibble(strategy_id, run_uuid).
+    # Guard: returns empty tibble if DBI / duckdb are unavailable.
+    targets::tar_target(stk_drif_register_runs, {
+      .stk_register_runs(
+        strategy_names = strategy_names,
+        code_name      = "stk_drif",
+        metrics        = stk_drif_metrics,
+        portfolio      = stk_drif_portfolio
+      )
     })
+
   )
+}
+
+
+# ── Internal helper ────────────────────────────────────────────────────────────
+# Shared helper for stk_max and stk_drif registry registration.
+# Prefixed .stk_* (private; not exported from the package).
+# Mirrors .drif_register_runs() from plan_drif.R.
+
+#' Register stock backtest run in the strategy registry
+#'
+#' @param strategy_names Tibble from the `strategy_names` target.
+#' @param code_name Character. Strategy code_name ("stk_max" or "stk_drif").
+#' @param metrics Tibble from the corresponding `*_metrics` target.
+#' @param portfolio Tibble from the corresponding `*_portfolio` target; used
+#'   to extract returns for SSR/top5pct stability metrics.
+#'
+#' @return Tibble with columns: strategy_id, run_uuid.
+#' @noRd
+.stk_register_runs <- function(strategy_names, code_name, metrics, portfolio) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      strategy_id = character(),
+      run_uuid    = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  strat_row <- strategy_names |>
+    dplyr::filter(.data$code_name == .env$code_name) |>
+    dplyr::transmute(
+      strategy_id        = .data$code_name,
+      short_name         = .data$short_name,
+      long_name          = .data$long_name,
+      asset_class        = .data$asset_class,
+      frequency          = .data$frequency,
+      ann_factor         = as.integer(.data$ann_factor),
+      directionality     = as.character(.data$directionality),
+      liquidity_tier     = as.character(.data$liquidity_tier),
+      time_horizon_days  = as.integer(.data$time_horizon_days_avg),
+      trades_per_year    = as.numeric(.data$trades_per_year_avg),
+      turnover_pct       = as.numeric(.data$turnover_pct_per_period_avg),
+      tags               = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+
+  historicaldata::hd_strategy_upsert(con, strat_row)
+
+  uu <- historicaldata::hd_run_upsert(
+    con,
+    strategy_id      = code_name,
+    partition        = "phase1",
+    pipeline_version = "phase1"
+  )
+
+  # Record full-period metrics row (numeric cols only; survivorship_biased
+  # logical is silently skipped by .normalise_metric_long).
+  full_row <- metrics[metrics$period == "Full Period", , drop = FALSE]
+  if (nrow(full_row) == 1L) {
+    metric_cols <- setdiff(names(full_row), "period")
+    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+  }
+
+  # Record survivorship_biased as a diagnostic (#442).
+  if ("survivorship_biased" %in% names(metrics)) {
+    historicaldata::hd_diagnostic_record(con, uu, tibble::tibble(
+      diagnostic_name = "survivorship_biased",
+      value_num  = as.numeric(any(metrics$survivorship_biased)),
+      value_text = as.character(any(metrics$survivorship_biased))
+    ))
+  }
+
+  # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
+  rets <- portfolio$port_ret
+  rets <- rets[!is.na(rets)]
+  if (length(rets) > 0L) {
+    historicaldata::hd_record_stability_metrics(
+      con        = con,
+      run_uuid   = uu,
+      returns    = rets,
+      w          = 36L,
+      ann_factor = 12L
+    )
+  }
+
+  tibble::tibble(strategy_id = code_name, run_uuid = uu)
 }
