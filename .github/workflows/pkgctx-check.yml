@@ -32,12 +32,24 @@ jobs:
             extra-substituters = https://rstats-on-nix.cachix.org
             extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
 
+      - name: Snapshot committed doc
+        run: cp docs/api-historicaldata.md /tmp/api-committed.md
+
       - name: Regenerate docs/api-historicaldata.md
         run: bash scripts/regen_api_context.sh
 
       - name: Fail if doc is stale
+        # Order- and header-insensitive comparison. Two sources of false
+        # positives in a naive `git diff --exit-code`:
+        #   1. The header's Date:/SHA: lines change on every regen.
+        #   2. pkgctx block ordering is environment-dependent (linux CI vs
+        #      local macOS emit the same 120 functions in different order).
+        # So compare the sorted body (header stripped) instead: catches any
+        # added/removed/changed signature line while ignoring pure reordering.
         run: |
-          git diff --exit-code docs/api-historicaldata.md || {
+          tail -n +7 /tmp/api-committed.md            | sort > /tmp/api-a.txt
+          tail -n +7 docs/api-historicaldata.md       | sort > /tmp/api-b.txt
+          diff -u /tmp/api-a.txt /tmp/api-b.txt || {
             echo "::error file=docs/api-historicaldata.md::api-historicaldata.md is stale."
             echo "Run  bash scripts/regen_api_context.sh  and commit the updated file."
             exit 1

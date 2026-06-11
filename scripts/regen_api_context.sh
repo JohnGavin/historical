@@ -34,5 +34,18 @@ HEADER
 cat "$HEADERFILE" "$TMPFILE" > "$OUTFILE"
 rm -f "$TMPFILE" "$HEADERFILE"
 
+# Suppress header-only churn: if the only lines that changed vs the committed
+# version are the volatile Date:/SHA: header lines, restore the committed file.
+# Keeps the Stop hook silent and `git status` clean when the API is unchanged.
+# (git diff -I requires git >= 2.30; --no-ext-diff because -I is only
+# honoured by git's internal xdiff, not external diff drivers.)
+if git -C "$ROOT" ls-files --error-unmatch docs/api-historicaldata.md >/dev/null 2>&1; then
+  if git -C "$ROOT" diff --no-ext-diff --quiet -I'^     Date:' -I'^     SHA:' -- docs/api-historicaldata.md; then
+    git -C "$ROOT" checkout --quiet -- docs/api-historicaldata.md
+    echo "API unchanged (header-only churn suppressed): docs/api-historicaldata.md left at committed version"
+    exit 0
+  fi
+fi
+
 N=$(grep -c "^kind: function" "$OUTFILE")
 echo "Wrote $OUTFILE ($N functions)"
