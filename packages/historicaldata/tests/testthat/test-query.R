@@ -120,3 +120,123 @@ test_that("hd_ohlcv split-and-bind: single-dataset batch keeps fast path", {
 test_that("hd_ohlcv: empty ticker vector errors", {
   expect_snapshot(error = TRUE, hd_ohlcv(character(0)))
 })
+
+# ── Regression tests for #453 ──────────────────────────────────────────────────
+# Root cause: DuckDB throws an INTERNAL exception when comparing a TIMESTAMP_NS
+# column (HF equity_daily parquet) against either a STRING_LITERAL or a DATE
+# literal inside a stingy duckplyr frame.  The fix probes the 'date' column
+# type via head(0)|>collect() and injects:
+#   TIMESTAMP column → as.POSIXct(tz="UTC")  (TIMESTAMP candidate matches)
+#   DATE column      → as.Date()              (DATE candidate matches)
+# These tests use a local temp parquet so they run offline.
+
+test_that("date filter works against TIMESTAMP-typed parquet column (#453)", {
+  skip_if_not_installed("duckdb")
+
+  # Write a tiny parquet whose 'date' column is TIMESTAMP (not DATE) —
+  # replicating the HF equity_daily schema.
+  tmp_parquet <- tempfile(fileext = ".parquet")
+  on.exit(unlink(tmp_parquet), add = TRUE)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, paste0(
+    "COPY (SELECT ",
+    "  CAST(d AS TIMESTAMP) AS date, ",
+    "  'SPY' AS ticker, ",
+    "  100.0 + ROW_NUMBER() OVER () AS close ",
+    "FROM UNNEST(CAST(['1994-01-03','1994-02-01','1994-03-01','1994-04-01'] AS DATE[])) t(d)) ",
+    "TO '", tmp_parquet, "' (FORMAT PARQUET)"
+  ))
+
+  # Probe the date column class — should be POSIXct for TIMESTAMP parquet
+  schema0 <- duckplyr::read_parquet_duckdb(tmp_parquet) |> head(0) |> dplyr::collect()
+  expect_true(inherits(schema0[["date"]], "POSIXct"))
+
+  # Filter using as.POSIXct (the fixed pattern for TIMESTAMP columns)
+  from_ts <- as.POSIXct("1994-01-01", tz = "UTC")
+  to_ts   <- as.POSIXct("1994-03-01", tz = "UTC")
+
+  result <- duckplyr::read_parquet_duckdb(tmp_parquet) |>
+    dplyr::filter(date >= !!from_ts, date <= !!to_ts) |>
+    dplyr::collect()
+
+  # Should include 1994-01-03, 1994-02-01, 1994-03-01 (3 rows); not 1994-04-01
+  expect_equal(nrow(result), 3L)
+  expect_true(all(result$date <= as.POSIXct("1994-03-01", tz = "UTC")))
+  expect_true(all(result$date >= as.POSIXct("1994-01-01", tz = "UTC")))
+
+  # Snapshot: stable structure
+  expect_snapshot(names(result))
+})
+
+test_that("date filter works with character from/to for TIMESTAMP column (#453)", {
+  skip_if_not_installed("duckdb")
+
+  tmp_parquet <- tempfile(fileext = ".parquet")
+  on.exit(unlink(tmp_parquet), add = TRUE)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, paste0(
+    "COPY (SELECT ",
+    "  CAST(d AS TIMESTAMP) AS date, ",
+    "  'SPY' AS ticker, ",
+    "  1.0 AS close ",
+    "FROM UNNEST(CAST(['1994-01-03','1994-02-01','1994-03-15'] AS DATE[])) t(d)) ",
+    "TO '", tmp_parquet, "' (FORMAT PARQUET)"
+  ))
+
+  # Mimic what hd_ohlcv_single() does: probe type, then inject as.POSIXct
+  from <- "1994-02-01"
+  to   <- "1994-03-15"
+  schema0 <- duckplyr::read_parquet_duckdb(tmp_parquet) |> head(0) |> dplyr::collect()
+  date_coerce <- if (inherits(schema0[["date"]], "POSIXct")) {
+    function(x) as.POSIXct(x, tz = "UTC")
+  } else {
+    as.Date
+  }
+
+  result <- duckplyr::read_parquet_duckdb(tmp_parquet) |>
+    dplyr::filter(date >= !!date_coerce(from), date <= !!date_coerce(to)) |>
+    dplyr::collect()
+
+  expect_equal(nrow(result), 2L)  # 1994-02-01 and 1994-03-15, not 1994-01-03
+})
+
+test_that("date filter works against DATE-typed parquet column (#453)", {
+  skip_if_not_installed("duckdb")
+
+  tmp_parquet <- tempfile(fileext = ".parquet")
+  on.exit(unlink(tmp_parquet), add = TRUE)
+
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  DBI::dbExecute(con, paste0(
+    "COPY (SELECT ",
+    "  CAST(d AS DATE) AS date, ",
+    "  'SP500' AS series_id, ",
+    "  100.0 AS value ",
+    "FROM UNNEST(CAST(['1994-01-03','1994-02-01','1994-04-01'] AS DATE[])) t(d)) ",
+    "TO '", tmp_parquet, "' (FORMAT PARQUET)"
+  ))
+
+  # Probe: DATE parquet should give Date class, not POSIXct
+  schema0 <- duckplyr::read_parquet_duckdb(tmp_parquet) |> head(0) |> dplyr::collect()
+  expect_false(inherits(schema0[["date"]], "POSIXct"))
+  expect_true(inherits(schema0[["date"]], "Date"))
+
+  # Filter using as.Date (the fixed pattern for DATE columns)
+  result <- duckplyr::read_parquet_duckdb(tmp_parquet) |>
+    dplyr::filter(date >= !!as.Date("1994-01-01"), date <= !!as.Date("1994-03-01")) |>
+    dplyr::collect()
+
+  expect_equal(nrow(result), 2L)  # 1994-01-03 and 1994-02-01; not 1994-04-01
+})
+
+test_that("hd_ohlcv: API stability snapshot (#453)", {
+  expect_snapshot(args(hd_ohlcv))
+})

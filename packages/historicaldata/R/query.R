@@ -183,13 +183,37 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
   # Backward-compat alias: cached parquets written before #325 use 'adjusted'.
   # New parquets use 'adjusted_close'.  Alias here so callers always see
   # 'adjusted_close'. (#325)
-  col_names <- lf |> head(0) |> dplyr::collect() |> names()
+  schema0 <- lf |> head(0) |> dplyr::collect()
+  col_names <- names(schema0)
   if ("adjusted" %in% col_names && !("adjusted_close" %in% col_names)) {
     lf <- lf |> dplyr::rename(adjusted_close = adjusted)
   }
 
-  if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!as.character(from))
-  if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!as.character(to))
+  # Date-filter type matching for duckplyr (#453)
+  # The HF equity_daily parquet stores 'date' as TIMESTAMP_NS. DuckDB throws an
+  # INTERNAL exception when comparing TIMESTAMP_NS against a DATE literal
+  # (injected by !!as.Date()), and against a STRING_LITERAL (injected by
+  # !!as.character()). The correct injection is as.POSIXct(tz="UTC") which
+  # produces a TIMESTAMP literal — the only type DuckDB can compare directly
+  # with TIMESTAMP_NS in a stingy duckplyr frame.
+  #
+  # For datasets whose 'date' column is typed DATE (not TIMESTAMP), duckplyr
+  # falls back from DuckDB to dplyr when it sees a TIMESTAMP vs DATE predicate,
+  # and R's Ops.Date vs Ops.POSIXt coercion silently returns 0 rows. We
+  # therefore probe the column type once (already materialised above) and
+  # convert the bound values accordingly:
+  #   TIMESTAMP_NS → as.POSIXct(tz="UTC")  (matches via TIMESTAMP candidate)
+  #   DATE         → as.Date()              (matches via DATE candidate)
+  if (!is.null(from) || !is.null(to)) {
+    date_is_timestamp <- inherits(schema0[["date"]], "POSIXct")
+    date_coerce <- if (date_is_timestamp) {
+      function(x) as.POSIXct(x, tz = "UTC")
+    } else {
+      as.Date
+    }
+    if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))
+    if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))
+  }
 
   if (collect) dplyr::collect(lf) else lf
 }
@@ -286,8 +310,16 @@ hd_macro <- function(series_id, from = NULL, to = NULL,
     dplyr::filter(series_id %in% !!series_id) |>
     dplyr::arrange(series_id, date)
 
-  if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!as.character(from))
-  if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!as.character(to))
+  if (!is.null(from) || !is.null(to)) {
+    schema0 <- lf |> head(0) |> dplyr::collect()
+    date_coerce <- if (inherits(schema0[["date"]], "POSIXct")) {
+      function(x) as.POSIXct(x, tz = "UTC")
+    } else {
+      as.Date
+    }
+    if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))  # (#453)
+    if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))    # (#453)
+  }
 
   if (collect) dplyr::collect(lf) else lf
 }
@@ -340,8 +372,16 @@ hd_factors <- function(dataset = "FF3", frequency = "daily",
     dplyr::filter(dataset == !!dataset, frequency == !!frequency) |>
     dplyr::arrange(date)
 
-  if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!as.character(from))
-  if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!as.character(to))
+  if (!is.null(from) || !is.null(to)) {
+    schema0 <- lf |> head(0) |> dplyr::collect()
+    date_coerce <- if (inherits(schema0[["date"]], "POSIXct")) {
+      function(x) as.POSIXct(x, tz = "UTC")
+    } else {
+      as.Date
+    }
+    if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))  # (#453)
+    if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))    # (#453)
+  }
 
   if (collect) dplyr::collect(lf) else lf
 }

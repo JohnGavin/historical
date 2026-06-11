@@ -26,8 +26,17 @@ hd_macro_vintages <- function(series_id, from = NULL, to = NULL, release = "all"
   if (!missing(series_id) && !is.null(series_id)) {
     lf <- lf |> dplyr::filter(series_id %in% !!series_id)
   }
-  if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!as.character(from))
-  if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!as.character(to))
+
+  if (!is.null(from) || !is.null(to)) {
+    schema0 <- lf |> head(0) |> dplyr::collect()
+    date_coerce <- if (inherits(schema0[["date"]], "POSIXct")) {
+      function(x) as.POSIXct(x, tz = "UTC")
+    } else {
+      as.Date
+    }
+    if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))  # (#453)
+    if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))    # (#453)
+  }
 
   lf <- lf |> dplyr::arrange(series_id, date, pub_date)
 
