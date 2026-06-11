@@ -1,5 +1,72 @@
 # Changelog
 
+## 2026-06-04 → 2026-06-11 (session 16 — 7 PRs + 16 issues filed + cost-deduction bug fix + registry Tier 1)
+
+### Completed
+
+Multi-day session spanning #312 Cakici A/B investigation through #442 Tier 1 registry rollout. Headline: **discovered and fixed a critical zero-cost-deduction bug** in `drif_portfolio` / `fm_portfolio` / `rsc_portfolio` (#425); rebuilt the entire deployed dashboard against net-of-cost numbers; closed the registry/scorecard disconnect for the 5 falsification-tested strategies.
+
+#### Critical bug found + fixed (#425)
+
+- **#125 cost-assumption audit** surfaced that `drif_portfolio` and `fm_portfolio` compute `port_ret <- mean(actual_ret)` with **zero cost deduction** despite `stk_all_caption` claiming 0.10%/trade. Affects all factor-level DRIF + Factor MAX numbers + `pso_optimal` (which optimised on the inflated `fac_max` objective). Filed as **#425 P0**, fixed via PR #437 + #439 cascade.
+- Factor-level Sharpe deltas (Full Period): drif 0.259 → **0.076** (Δ -0.18); fac_max 0.015 → **-0.098** (Δ -0.11); DRIF_raw in `rsc_metrics` 3.26 → 2.47 (Δ -0.79). Stock-level untouched (uses `portfolio_longshort()` which already had 50bps costs).
+- Caption sync per `dynamic-prose-values` rule — `stk_all_caption` now reads `drif_params$cost_per_trade` via inline R. Snapshot test pins the gross-vs-net delta.
+
+#### Dashboard headline + render fixes (#437, #439, #440, #441)
+
+- **#437** — yr_history `5,553,492yr` (POSIXct/Date confusion, returning epoch seconds as days) → **100yr**; hardcoded "30 functions" → dynamic **120** from NAMESPACE; collapsible `<details>` dataset list with `#L<n>` anchored links into `R/registry.R`/`R/groups.R`.
+- **#439** — pandoc stripped `<div class="num">` from inside `<a class="stat-link">` once `<details>` blocks were added later in the doc. Fixed by swapping nested `<div>` → `<span>` (inline-in-inline preserved); CSS `display: block` on `.num`/`.label`.
+- **#440** — bumped stat-card spacing 2.5em → 6em; **replaced the session-info install-check chunk with one that actually runs `hd_ohlcv("AAPL")` / `hd_macro(c("SP500","VIXCLS"))` / `hd_search("vanguard")` and prints `head(5)` of each result** (caught by user as misleading).
+- **#441** — switched `.stats-row` to `justify-content: space-evenly`; added `nix flake metadata` chunk on Nix tab + fetch-script-count + `tar_manifest()` count on T tab (no full pipeline run).
+
+#### Cakici A/B + investigations
+
+- **#312** Cakici A/B prototype (`explorations/cakici_design_ab/`): three variants (Baseline, A filter-then-rank, B rank-then-renormalise) tested on cached `stk_drif_signal` × `stk_monthly_adv` + $5M ADV gate. **Empirical result: A and B are bit-for-bit identical on top-100 universe** (Spearman 1.000); Baseline vs both = 0.998. Issue deferred until #278 widens universe.
+- **#278 OLMAR Phase 4** scoping doc — 8-source data-source matrix; recommendation: **Norgate Platinum ~$30/mo** primary, EODHD+Wayback ~$20/mo fallback, CRSP via WRDS academic-only. Deferred per user (no $ commitment).
+- **#415 alphaarchitect.com audit** — Cloudflare 403 mitigated via RSS feed + Wayback. 24-row gap matrix: 5 COVERED, 6 PARTIAL, **6 GAP**, 2 EXCLUDED, 5 N/A. 7 follow-up issues filed (#426 Fundamental Value HIGH, #427 Managed Futures HIGH, #428 FIP momentum MED, #429 Intl Momentum MED, #430 ADD crowding MED, #431 long-history trend LOW-MED, #432 asset-class vs factor LOW). Labels applied.
+
+#### pkgctx integration (#532 llm, #438 historical)
+
+- `docs/api-historicaldata.md` generated via `nix run github:b-rodrigues/pkgctx` (1,155 lines, 120 functions with signatures + human-friendly descriptions). Replaces NAMESPACE link from landing-page "functions" stat.
+- `scripts/regen_api_context.sh` manual entrypoint; `.claude/CLAUDE.md` regen reminder added.
+- Filed **JohnGavin/llm#532** (global rollout via hook + opt-in marker) and **#438** (project-local Stop-hook + CI safety net).
+
+#### Workflow + #442 registry gap
+
+- **Weekly Data Poll fix** — kalshi 403 (httr2 with browser UA + retry) + commodities missing R deps (lubridate/slider/rlang added to workflow install list). Curl-verified UA fix returns 200.
+- **#442 surfaced** — `bt.strategy` had only 3/14 strategies registered (mom_* only); falsification scorecard's 5 had zero overlap. Database table: `inst/extdata/registry/registry.duckdb` schema `bt` (13 tables).
+- **#442 Tier 1 shipped via PR #444** — wired `register_runs` for drif, fac_max, ltr, avoid_worst, rsc following `.mom_prepeak_register_runs` pattern. `bt.strategy` now **8 rows**; 13–17 metrics per new strategy. 47 test assertions, 0 FAIL. Tier 2 (stk_*) + Tier 3 (tom/cmr/pso) deferred to #442.
+
+#### Research issue filed (#443)
+
+- **#443 BDBB queueing model on SOL** (Varma 2026, "Bitcoin doesn't bounce back. It slouches back."). M/G/∞ queue framework; 3 diagnostics (R, θ, signed-flow); claim: BTC recovery half-life 10–25 hours; R is 2× sharper than Amihud / 8× sharper than Kyle for tail-risk prediction. 9-step workflow plan; hard dep on #436 (Kraken data). Phase 2 conditions SOL on BTC + ETH.
+
+### Failed Approaches
+
+- **First render of `docs/index.html` post-#437** stripped inner `<div>` content from stats-row leaving empty `<a>` tags. Root cause: pandoc tolerated block-in-inline (`<div>` inside `<a>`) until `<details>` blocks were added later, which pushed it into strict inline-only mode. **Investigated 4 hypotheses** (knit-level OK → pandoc layer; dataset-config not it; flake.nix not it; `<details>` neighbour suspected). Workaround: Option A (`<span>` not `<div>` + `display: block` CSS). Working fix shipped in #439.
+- **Render-fix subagent died with API socket error** after 10 min (5 tool calls only). Took over directly with the same Option A; succeeded in one pass.
+- **Tier 1 register_runs agent's verification** was incomplete — 3 of 5 strategies errored in agent's fresh worktree because `_targets` cache was absent (missing `adjusted` column upstream). Orchestrator copied main's `docs/_targets/` (553 MB) to worktree and re-ran tar_make → all 5 completed in 3.9s. Helpers themselves correct.
+- **First `nix-verify` + `pipeline-overview` chunks** in #441 used `if ... else` on separate lines without `{}` braces — fine interactively, fatal in non-interactive `Rscript` parse. Fixed by wrapping all bodies in `{}`.
+
+### Accuracy / Metrics
+
+- **7 PRs merged**: #433 (umbrella session), #434 (HTML re-render), #437, #439, #440, #441, #444 (Tier 1 register_runs)
+- **16 issues filed**: #424, #425, #426–#432 (AA gaps), #435, #436, #438, #442, #443, **JohnGavin/JohnGavin.github.io#10**, **JohnGavin/llm#532**
+- **4 issues closed**: #312 deferred, #424 resolved, #425 fixed, #415 closed
+- **47 new tests** in `test-register-runs-tier1.R` (5 snapshots, 0 FAIL) + 28 hand-derived assertions in #425 cost-deduction test
+- **`bt.strategy`**: 3 → 8 rows (factor + overlay tiers covered)
+- **Deployed dashboards now show net-of-cost numbers** — Factor DRIF $1.08 (CAGR 0.5%), Factor MAX $1.07 (CAGR 0.4%), Stock MAX $0.21, Stock DRIF $0.10 (visible decline from gross-of-cost view)
+- **Landing-page headline corrected** — 1,636 tickers · 7.8M rows · 9 datasets · 100yr history · 120 functions (was 5,553,492yr · 30 functions hardcoded)
+
+### Known Limitations
+
+- **#442 Tier 2 (stk_max, stk_drif, xgb_drif) and Tier 3 (tom, cmr, pso_optimal) still unregistered** — Tier 1 PR comment lists this as the next step
+- **#436 Kraken data integration** gates #443 BDBB-SOL implementation — no work possible on #443 until data path resolved
+- **#278 OLMAR Phase 4** awaiting user decision on paid data source (~$20–30/mo). Scoping doc + stub target + checklist on main but no production work.
+- **Roborev 18/18 unaddressed failures** over last 7 days (22% pass rate, claude-code agent). Not blocking but should be triaged.
+- **JohnGavin/llm#532** global pkgctx rollout pending; meanwhile only `historical` has the API doc + relink.
+- **#435 collapsible vignette table** on `#articles` still uses flat layout
+
 ## 2026-06-02 (session 15 — #400 SSR rollout closed: 4 PRs + 1 deploy)
 
 ### Completed
