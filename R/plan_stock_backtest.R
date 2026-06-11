@@ -394,6 +394,9 @@ plan_stock_backtest <- function() {
         max_monthly_ret = 0.20,       # Winsorise at ±20% (Option 2)
         hrp_lookback_months = 36L,    # HRP covariance lookback for stock-level long-short
         adv_pct_cap = 0.10,           # ADV participation cap: 10% of ADV-weighted share × n
+        # $5M daily dollar volume — investability gate for decile construction (#312);
+        # see explorations/cakici_design_ab/ for A/B evidence (Spearman 0.998 at this threshold)
+        adv_threshold = 5e6,
         top_n_market_cap = 100L       # #150 Option C: restrict to top-N by current market cap
       )
     }),
@@ -937,7 +940,20 @@ plan_stock_backtest <- function() {
         filter(!is.na(predicted_ret)) |>
         inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
 
-      # Drop months with too few stocks for meaningful deciles (#43)
+      # Variant A (filter-then-rank, Cakici 2023 / #312):
+      # Drop sub-ADV names BEFORE cutting deciles — illiquid micro-caps with extreme
+      # predictions cannot end up in decile 1 or 10.
+      # ADV source: stk_monthly_adv (column adv_dollars = median_daily_volume × avg_close).
+      # Spearman correlation with baseline at $5M: 0.998 (see explorations/cakici_design_ab/).
+      signal <- signal |>
+        inner_join(
+          stk_monthly_adv |> select(ticker, ym, adv_dollars),
+          by = c("ticker", "ym")
+        ) |>
+        filter(adv_dollars >= stk_params$adv_threshold)
+
+      # Re-apply minimum-stocks guard AFTER the ADV filter (#312):
+      # the gate can drop names and push some months below the decile threshold.
       stocks_per_month <- signal |> count(ym, name = "n_stocks")
       valid_months <- stocks_per_month |> filter(n_stocks >= stk_params$n_deciles * 5) |> pull(ym)
       signal <- signal |> filter(ym %in% valid_months)
