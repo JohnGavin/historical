@@ -240,6 +240,22 @@ plan_portfolio_opt <- function() {
         hd_theme()
     }),
 
+    # ── Registry sentinel (#442 Tier 3) ──────────────────────────────────────
+    # Upserts bt.strategy row for "pso_optimal", records one bt.run + bt.metric
+    # rows (Full Period PSO-optimal columns from port_metrics).
+    # Returns tibble(strategy_id, run_uuid).
+    # Guard: returns empty tibble if DBI / duckdb are unavailable.
+    # Note: port_metrics columns opt_cagr/opt_vol/opt_maxdd are decimal fractions
+    # (canonical unit convention). Benchmark/HRP columns are excluded; only the
+    # PSO optimal series columns are stored.
+    targets::tar_target(pso_optimal_register_runs, {
+      .pso_optimal_register_runs(
+        strategy_names = strategy_names,
+        port_metrics   = port_metrics,
+        port_combined  = port_combined
+      )
+    }),
+
     # ── Monthly returns heatmap table ─────────────────────────────
     targets::tar_target(port_monthly_returns, {
       library(dplyr)
@@ -277,4 +293,94 @@ plan_portfolio_opt <- function() {
         as_tibble()
     })
   )
+}
+
+
+# ── Internal helper ────────────────────────────────────────────────────────────
+# Prefixed .pso_optimal_* (private; not exported from the package).
+# Mirrors .drif_register_runs() from plan_drif.R.
+
+#' Register PSO Optimal portfolio backtest run in the strategy registry
+#'
+#' @param strategy_names Tibble from the `strategy_names` target.
+#' @param port_metrics Tibble from the `port_metrics` target. Full-period
+#'   PSO-optimal columns (`opt_cagr`, `opt_vol`, `opt_sharpe`, `opt_maxdd`)
+#'   are used for the bt.metric insert. Values are decimal fractions.
+#' @param port_combined Tibble from the `port_combined` target; used to
+#'   extract `optimal_ret` (monthly) for SSR/top5pct stability metrics.
+#'
+#' @return Tibble with columns: strategy_id, run_uuid.
+#' @noRd
+.pso_optimal_register_runs <- function(strategy_names, port_metrics,
+                                       port_combined) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      strategy_id = character(),
+      run_uuid    = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  strat_row <- strategy_names |>
+    dplyr::filter(.data$code_name == "pso_optimal") |>
+    dplyr::transmute(
+      strategy_id        = .data$code_name,
+      short_name         = .data$short_name,
+      long_name          = .data$long_name,
+      asset_class        = .data$asset_class,
+      frequency          = .data$frequency,
+      ann_factor         = as.integer(.data$ann_factor),
+      directionality     = as.character(.data$directionality),
+      liquidity_tier     = as.character(.data$liquidity_tier),
+      time_horizon_days  = as.integer(.data$time_horizon_days_avg),
+      trades_per_year    = as.numeric(.data$trades_per_year_avg),
+      turnover_pct       = as.numeric(.data$turnover_pct_per_period_avg),
+      tags               = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+
+  historicaldata::hd_strategy_upsert(con, strat_row)
+
+  uu <- historicaldata::hd_run_upsert(
+    con,
+    strategy_id      = "pso_optimal",
+    partition        = "phase1",
+    pipeline_version = "phase1"
+  )
+
+  # Record Full Period PSO-optimal metrics (decimal fractions; canonical units).
+  # Only store PSO columns; HRP/equal-weight columns belong to separate strategies
+  # if they are ever registered.
+  full_row <- port_metrics[port_metrics$period == "Full Period", , drop = FALSE]
+  if (nrow(full_row) == 1L) {
+    pso_cols <- intersect(
+      c("months", "opt_cagr", "opt_vol", "opt_sharpe", "opt_maxdd"),
+      names(full_row)
+    )
+    if (length(pso_cols) > 0L) {
+      historicaldata::hd_metric_record(
+        con, uu, full_row[, pso_cols, drop = FALSE]
+      )
+    }
+  }
+
+  # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
+  rets <- port_combined$optimal_ret
+  rets <- rets[!is.na(rets)]
+  if (length(rets) > 0L) {
+    historicaldata::hd_record_stability_metrics(
+      con        = con,
+      run_uuid   = uu,
+      returns    = rets,
+      w          = 36L,
+      ann_factor = 12L
+    )
+  }
+
+  tibble::tibble(strategy_id = "pso_optimal", run_uuid = uu)
 }
