@@ -87,3 +87,19 @@
       Error in `hd_ohlcv()`:
       ! `ticker` must be a non-empty character vector.
 
+# date filter works against TIMESTAMP-typed parquet column (#453)
+
+    Code
+      names(result)
+    Output
+      [1] "date"   "ticker" "close" 
+
+# hd_ohlcv: API stability snapshot (#453)
+
+    Code
+      args(hd_ohlcv)
+    Output
+      function (ticker, from = NULL, to = NULL, dataset = NULL, local = FALSE, 
+          collect = TRUE) 
+      NULL
+
