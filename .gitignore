@@ -93,3 +93,6 @@ inst/extdata/vignettes/vig_setup.rds
 .DS_Store
 # roborev tool's local runtime backlog dump (regenerated from ~/.roborev/reviews.db)
 .roborev/
+# Kraken OHLCVT parquet: 27 MB local build artefact; canonical copy lives on
+# hf://datasets/JohnGavin/finance-data (uploaded via scripts/upload_kraken_hf.sh, #436)
+data/raw/kraken_ohlcvt.parquet
