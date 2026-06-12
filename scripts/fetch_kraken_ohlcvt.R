@@ -93,21 +93,27 @@ INTERVALS <- c(60L, 1440L)
 #' @return Tibble with normalised schema, or NULL on failure.
 parse_ohlcvt_from_zip <- function(zip_path, csv_prefix, interval_min,
                                    ticker, kraken_pair) {
-  # The CSV may be at the root of the ZIP (new layout) or under Kraken_OHLCVT/
-  # (old layout). Try both.
+  # The CSV's parent directory inside the ZIP varies by archive vintage:
+  # root ("{file}"), "Kraken_OHLCVT/{file}", "master_q4/{file}" (2026 full
+  # archive), etc. Match by basename anywhere in the tree instead of
+  # hardcoding layouts; ignore macOS resource-fork junk under __MACOSX/.
   csv_name <- paste0(csv_prefix, "_", interval_min, ".csv")
-  candidates <- c(csv_name, paste0("Kraken_OHLCVT/", csv_name))
 
   zip_contents <- tryCatch(unzip(zip_path, list = TRUE)$Name, error = function(e) character(0))
-  match_idx <- match(candidates, zip_contents)
-  match_idx <- match_idx[!is.na(match_idx)]
+  hits <- zip_contents[
+    basename(zip_contents) == csv_name &
+      !grepl("(^|/)__MACOSX/", paste0("/", zip_contents))
+  ]
 
-  if (length(match_idx) == 0L) {
+  if (length(hits) == 0L) {
     cli::cli_warn("  {ticker} {interval_min}min: {csv_name} not found in ZIP")
     return(NULL)
   }
+  if (length(hits) > 1L) {
+    cli::cli_warn("  {ticker} {interval_min}min: {length(hits)} copies of {csv_name} in ZIP; using {hits[1L]}")
+  }
 
-  matched_name <- zip_contents[match_idx[1L]]
+  matched_name <- hits[1L]
   tmp_dir <- tempdir()
 
   tryCatch({
@@ -360,7 +366,7 @@ for (p in PAIRS) {
 }
 
 if (length(all_results) == 0L) {
-  cli::cli_abort("x" = "No data fetched — cannot write parquet.")
+  cli::cli_abort(c("x" = "No data fetched — cannot write parquet."))
 }
 
 combined <- dplyr::bind_rows(all_results) |>
