@@ -1,5 +1,78 @@
 # Changelog
 
+## 2026-06-11 → 2026-06-12 (session 17 — 9 PRs merged + 6 issues closed + registry 14/14 + Kraken 19-pair dataset live on HF)
+
+### Completed
+
+Parallel-worktree session (user-directed: "use git worktrees to work in parallel with appropriate models, skills and agents"). 7 fixer/critic agents dispatched; 3 killed mid-flight by the monthly API spend limit, all 3 salvaged from their worktrees, verified, and shipped by the orchestrator.
+
+#### #442 registry — 3/14 → 14/14, closed
+
+- **Tier 2 (PR #447)**: stk_max / stk_drif / xgb_drif sentinels — shared `.stk_register_runs()` helper + self-contained xgb variant; `survivorship_biased` recorded in `bt.diagnostic` (#150). 42 test assertions. (Agent died pre-commit; salvaged.)
+- **Tier 3 (PR #448)**: tom + pso_optimal new; cmr verified already wired (`cmr_registry_run`). 33 assertions + tier-1 regression 47.
+- **Materialised**: 12 sentinels run against the main store (11 via `tar_make(shortcut = TRUE)` in 6.2s; tom chain built fresh). Verified `bt.strategy` = **14 rows**, each with ≥1 run and 13–45 metrics. Note: the canonical registry had only 3 rows pre-run — the Tier-1-era run had written to a non-canonical instance; sentinels are idempotent so re-running all was safe.
+
+#### #453 hd_ohlcv duckplyr binder bug (found by the tom build, PR #454)
+
+- `from`/`to` injected as `as.character()` can NEVER bind against the HF parquet's TIMESTAMP_NS date column (`r_base::>=(TIMESTAMP_NS, STRING_LITERAL)` has no candidate). This is why `tom_metrics` had never existed in the store.
+- Fix: type-probe pattern (schema `head(0)` probe → `as.POSIXct(tz="UTC")` for TIMESTAMP cols, `as.Date()` for DATE cols) applied to `hd_ohlcv_single`, `hd_macro`, `hd_factors`, `hd_macro_vintages`. 4 regression tests with TIMESTAMP/DATE parquet fixtures. Live verified: SPY 1994-01-01→1994-03-01 = 41 rows.
+
+#### #438 pkgctx automation (PR #446) + CI-gate determinism fix
+
+- Stop-hook `pkgctx_regen_on_stop.sh` (project-local settings.json), `pkgctx-check.yml` CI gate, nix graceful-degrade in the regen script.
+- First CI run failed on its own PR — **two false-positive sources**: header `Date:`/`SHA:` churn (gate could never pass) and environment-dependent pkgctx block ordering (28/120 functions reordered linux-vs-macOS). Fixed: regen script suppresses header-only churn via `git diff --no-ext-diff -I'^     Date:' -I'^     SHA:'` (`--no-ext-diff` required — the user's external diff driver bypasses `-I`); workflow compares sorted header-stripped bodies.
+
+#### #312 DRIF Cakici rank-before-filter — closed (PR #452)
+
+- Critic agent confirmed the defect live at `stk_drif_portfolio` + `xgb_drif_portfolio`; exploration evidence (Spearman 0.998 @ $5M ADV) de-risked the fix. User decisions: Variant A (filter-then-rank) for stk_drif now; xgb_drif separate (#449, needs own A/B); $20M sweep low-priority (#450).
+- Fix: `stk_params$adv_threshold = 5e6` (distinct from HRP `adv_pct_cap`), ADV gate via existing `stk_monthly_adv` before `assign_decile()`, min-stocks guard re-applied post-filter. 14 new assertions incl. illiquid-extreme-ticker decile-exclusion proof.
+
+#### #436 Kraken OHLCVT — closed (PRs #455, #456, #457); #443 unblocked
+
+- **Decisions** (user): Option C hybrid; majors-only → extended same-day to **19 pairs** (6 crypto + all 12 Kraken fiat-fiat spot FX + PAXG gold; FX relevant to #267/#142, retail-venue caveat documented).
+- **Download mechanics** (key research): full archive (7.3 GB) + quarterly updates are Drive-hosted; **automated download blocked** (virus-scan interstitial; `confirm=t` returns empty 200). Manual download + `KRAKEN_ZIP_PATH=` is the supported path; REST fallback caps at 720 candles.
+- **Layout bug fixed live**: real archive nests CSVs under `master_q4/` — a third layout; first real run returned 0 rows from all 12 files. Fix: basename match at any ZIP depth, `__MACOSX/` excluded. Plus malformed `cli_abort(x=)` masking the empty-result error.
+- **Result**: 957,650 rows / 19 pairs / 60+1440 min → 27.5 MB parquet, dv validation passed. Coverage: BTC 2013-10→2025-12; **FX only from 2020-03/06 (Kraken's fiat-fiat launch — file sizes had implied ~9yr; actual ~5.5yr)**.
+- **Phase B**: `hd_kraken_ohlcvt()` (typed time filters per #453, PIT guard, HD_CACHE_DIR local mode), `hd_datasets()$kraken_ohlcvt` entry, `scripts/upload_kraken_hf.sh` (hf CLI, auth from CLI cache, DRYRUN mode). **Uploaded to HF (commit 6131f378)**; live remote read-back: SOL hourly 2021-07 = 716 rows bounded; EURUSD daily = 2,121 rows. Local parquet gitignored.
+
+#### #389 multivariate simulation — Phase A merged (PR #393), Phase B shipped (PR #456)
+
+- PR #393 (stale since 05-31) merged; its `Closes #389` auto-closed the issue — reopened (phases B–E remain).
+- Phase B: `R/plan_returns.R` (cov_annual + rolling 60-month covariance, min-obs gating), `plan_cross_asset_corr.R` phantom `strategy_returns_wide` upstream repaired, `regime_correlations.R` finally sourced. 95 assertions (symmetry/PSD/dimnames/NA-gating). (Agent died pre-commit; salvaged.)
+
+#### Other
+
+- **#423 closed** — deployed fence fix verified live (0 raw fences, 4 captions restored); stale-branch commit was already superseded, no harvest needed.
+- **roborev triage**: the "18 FAIL" backlog = 22 infra-failed *jobs* (codex/claude spend-limit Apr–May, 2 cwd-deleted compacts, 1 difftastic error) with **no review rows — `roborev close` 404s by design** (same dead end as session 15's "closures table not CLI-reachable"). Only real open review (6613, PASS) closed.
+- **Issues filed**: #449 (xgb_drif A/B+fix), #450 ($20M ADV sweep, low-pri), #451 (QuantMind critical review — company vs LLMQuant-paper disambiguation RESOLVED: unrelated entities; paper PDF captured to knowledge/raw/), #453 (binder bug).
+- `.claire/` typo-dir moved to `archive/claire-typo-dir-20260611/` (user-directed).
+
+### Failed Approaches
+
+- **`roborev close` on failed jobs** — 404 "review not found for job"; failed jobs have no review row. Don't retry; it's structural (2nd session to hit this).
+- **`git diff -I` without `--no-ext-diff`** — silently ignored when an external diff driver (difftastic) is configured; the suppression branch never fired. Always pair `-I` with `--no-ext-diff` in scripts.
+- **Drive scripted download** (`confirm=t` etc.) — returns HTTP 200 with 0 bytes for >25 MB files. Manual download is the path; don't burn time on bypasses.
+- **`tar_make(shortcut = TRUE)` for never-built chains** — "cannot bootstrap target" for tom; shortcut only works when upstreams exist in store metadata. Split runs: shortcut for warm chains, full build for cold ones.
+- **First Kraken fetch run** — silent 0-row extraction from all files due to unknown `master_q4/` ZIP layout + a `cli_abort(x=)` bug that crashed the error reporter itself. Lesson: never hardcode archive layouts; match basenames.
+- **3 of 7 agent dispatches killed by monthly API spend limit** (0-token deaths mid-task). Salvage-from-worktree worked every time (status → copy files → verify tests → commit with Dispatch-Id attribution), but prefer inline implementation until the limit resets.
+
+### Accuracy / Metrics
+
+- Registry coverage: 3/14 → **14/14** strategies (all with runs + metrics rows).
+- New tests this session: 42 (tier2) + 33 (tier3) + 14 (adv-gate) + 4 (binder regression) + 42→81 (kraken fetch, 19-pair) + 16 (hd_kraken_ohlcvt) + 95 (plan_returns) — all FAIL 0.
+- HF dataset: ~46 MB → ~74 MB (kraken_ohlcvt.parquet 27.5 MB, 957,650 rows).
+- `docs/api-historicaldata.md`: 120 → 121 functions.
+- PRs merged: 9 (#446 #447 #448 #452 #393 #454 #455 #456 #457). Issues closed: 6 (#423 #312 #442 #436 #438 via #446, #453). Filed: 5 (#449 #450 #451 #453 + llm cross-refs).
+
+### Known Limitations
+
+- **Kraken data ends 2025-12-31** (Q4 master archive) — quarterly update ZIPs needed for 2026 H1; recipe in #436-closing PR (#457).
+- **FX pairs are retail crypto-venue volume**, not interbank — fine for hourly/daily research (#267), not microstructure.
+- **xgb_drif still has the rank-before-filter defect** (#449) — metrics on the deployed dashboard remain pre-fix until that lands.
+- **Leaderboard/vignettes not yet re-rendered** post-#452/#442 — next full `tar_make` + deploy will pick up the (expected hair-thin) stk_drif deltas + registry rows.
+- pkgctx CI gate is order-insensitive by design — a pure reordering regression would pass; content changes still caught.
+- roborev backlog counter will keep showing ~19 phantom "failed" jobs until the closures-table limitation is fixed upstream.
+
 ## 2026-06-04 → 2026-06-11 (session 16 — 7 PRs + 16 issues filed + cost-deduction bug fix + registry Tier 1)
 
 ### Completed
