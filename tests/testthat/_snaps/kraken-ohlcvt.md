@@ -19,5 +19,5 @@
     Code
       cat(paste(tickers, collapse = ", "))
     Output
-      BTC, ETH, SOL, XRP, ADA, LINK
+      BTC, ETH, SOL, XRP, ADA, LINK, EURUSD, GBPUSD, USDJPY, USDCHF, USDCAD, AUDUSD, AUDJPY, EURGBP, EURJPY, EURCHF, EURCAD, EURAUD, PAXG
 

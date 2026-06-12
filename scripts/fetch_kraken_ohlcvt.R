@@ -64,16 +64,36 @@ suppressPackageStartupMessages({
 # Configuration
 # ---------------------------------------------------------------------------
 
-# The 6 largest USD pairs on Kraken by 24 h USD volume (verified 2026-06-12).
-# Ranking source: Kraken public REST API /Ticker endpoint.
+# Three asset groups (user-approved scope, #436 2026-06-12):
+#   crypto — the 6 largest USD pairs by 24 h USD volume (Kraken /Ticker)
+#   fx     — all 12 true fiat-fiat spot pairs Kraken lists (thin retail
+#            venue volume vs interbank; fine for hourly/daily research,
+#            relevant to #267/#142 FX hedge work)
+#   gold   — PAXG/USD tokenised gold
 # Kraken internal name → (ticker, CSV pair prefix, wsname)
 PAIRS <- list(
+  # crypto majors
   list(kraken_pair = "XXBTZUSD", ticker = "BTC",  csv_prefix = "XBTUSD",  wsname = "XBT/USD"),
   list(kraken_pair = "XETHZUSD", ticker = "ETH",  csv_prefix = "ETHUSD",  wsname = "ETH/USD"),
   list(kraken_pair = "SOLUSD",   ticker = "SOL",  csv_prefix = "SOLUSD",  wsname = "SOL/USD"),
   list(kraken_pair = "XXRPZUSD", ticker = "XRP",  csv_prefix = "XRPUSD",  wsname = "XRP/USD"),
   list(kraken_pair = "ADAUSD",   ticker = "ADA",  csv_prefix = "ADAUSD",  wsname = "ADA/USD"),
-  list(kraken_pair = "LINKUSD",  ticker = "LINK", csv_prefix = "LINKUSD", wsname = "LINK/USD")
+  list(kraken_pair = "LINKUSD",  ticker = "LINK", csv_prefix = "LINKUSD", wsname = "LINK/USD"),
+  # spot FX (fiat-fiat)
+  list(kraken_pair = "ZEURZUSD", ticker = "EURUSD", csv_prefix = "EURUSD", wsname = "EUR/USD"),
+  list(kraken_pair = "ZGBPZUSD", ticker = "GBPUSD", csv_prefix = "GBPUSD", wsname = "GBP/USD"),
+  list(kraken_pair = "ZUSDZJPY", ticker = "USDJPY", csv_prefix = "USDJPY", wsname = "USD/JPY"),
+  list(kraken_pair = "USDCHF",   ticker = "USDCHF", csv_prefix = "USDCHF", wsname = "USD/CHF"),
+  list(kraken_pair = "ZUSDZCAD", ticker = "USDCAD", csv_prefix = "USDCAD", wsname = "USD/CAD"),
+  list(kraken_pair = "AUDUSD",   ticker = "AUDUSD", csv_prefix = "AUDUSD", wsname = "AUD/USD"),
+  list(kraken_pair = "AUDJPY",   ticker = "AUDJPY", csv_prefix = "AUDJPY", wsname = "AUD/JPY"),
+  list(kraken_pair = "EURGBP",   ticker = "EURGBP", csv_prefix = "EURGBP", wsname = "EUR/GBP"),
+  list(kraken_pair = "EURJPY",   ticker = "EURJPY", csv_prefix = "EURJPY", wsname = "EUR/JPY"),
+  list(kraken_pair = "EURCHF",   ticker = "EURCHF", csv_prefix = "EURCHF", wsname = "EUR/CHF"),
+  list(kraken_pair = "EURCAD",   ticker = "EURCAD", csv_prefix = "EURCAD", wsname = "EUR/CAD"),
+  list(kraken_pair = "EURAUD",   ticker = "EURAUD", csv_prefix = "EURAUD", wsname = "EUR/AUD"),
+  # tokenised gold
+  list(kraken_pair = "PAXGUSD",  ticker = "PAXG", csv_prefix = "PAXGUSD", wsname = "PAXG/USD")
 )
 
 # Intervals to extract (minutes)
