@@ -120,6 +120,26 @@ hd_datasets <- function() {
         # 'adjusted_close' (renamed from yfinance 'adj_close' at fetch time in
         # fetch_equity.py L163; #325).  See inst/COLUMN_NAMING.md.
       )
+    ),
+    kraken_ohlcvt = list(
+      url = hd_base_url("kraken_ohlcvt.parquet"),
+      schema = c("ticker", "pair", "interval_min", "time", "open", "high",
+                 "low", "close", "volume", "trades"),
+      frequency = "60min+1440min",
+      description = paste0(
+        "Kraken exchange OHLCVT bars (hourly + daily) for 19 pairs: ",
+        "6 crypto majors (BTC, ETH, SOL, XRP, ADA, LINK vs USD), ",
+        "12 spot FX pairs (EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, ",
+        "AUD/USD, AUD/JPY, EUR/GBP, EUR/JPY, EUR/CHF, EUR/CAD, EUR/AUD), ",
+        "and PAXG/USD tokenised gold. Source: Kraken quarterly OHLCVT ",
+        "archive via scripts/fetch_kraken_ohlcvt.R (#436). ",
+        "Crypto history from each pair's listing (BTC 2013-10); FX from ",
+        "Kraken's fiat-fiat launch (2020-03/2020-06). Caveats: bars exist ",
+        "only for periods with trades (hourly gaps are normal in thin ",
+        "pairs); FX volume is retail crypto-exchange flow, NOT interbank — ",
+        "fine for hourly/daily research, not microstructure. ",
+        "Use hd_kraken_ohlcvt() to query."
+      )
     )
   )
 }

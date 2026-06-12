@@ -54,6 +54,7 @@ Other falsification:
 \code{\link{hd_sharpe_stability_ratio}()},
 \code{\link{hd_tail_dependence}()},
 \code{\link{hd_tail_keff_frob}()},
+\code{\link{hd_top5pct_share}()},
 \code{\link{hd_wf_correlation}()}
 }
 \concept{falsification}

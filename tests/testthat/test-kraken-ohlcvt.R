@@ -245,9 +245,10 @@ test_that("dv_kraken_ohlcvt error message snapshot — missing column", {
 # Tests: PAIRS constant (pair list shape)
 # ---------------------------------------------------------------------------
 
-test_that("PAIRS constant has exactly 6 entries with required keys", {
+test_that("PAIRS constant has exactly 19 entries with required keys", {
+  # 6 crypto majors + 12 spot FX + PAXG gold (#436 scope extension 2026-06-12)
   source_fetch_fns()
-  expect_length(PAIRS, 6L)
+  expect_length(PAIRS, 19L)
   for (p in PAIRS) {
     expect_true(all(c("kraken_pair", "ticker", "csv_prefix", "wsname") %in% names(p)))
     expect_type(p$ticker, "character")
