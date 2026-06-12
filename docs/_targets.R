@@ -25,11 +25,12 @@ tar_option_set(
 pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
 # Source Tier 1 & 2 gap functions
-# TODO: create liquidity.R, tracking_error.R, regime_correlations.R, tail_keff.R
+# TODO: create liquidity.R, tracking_error.R, tail_keff.R
 # source(here::here("R/liquidity.R"))
 # source(here::here("R/tracking_error.R"))
-# source(here::here("R/regime_correlations.R"))
 # source(here::here("R/tail_keff.R"))
+# Phase B of #389: regime_correlations.R functions used by plan_cross_asset_corr.R
+source(here::here("R/regime_correlations.R"))
 source(here::here("R/vvix_analysis.R"))
 source(here::here("R/crypto_momentum_helpers.R"))
 
@@ -131,6 +132,9 @@ source(here::here("R/plan_turn_of_month.R"))
 source(here::here("R/plan_wf_correlation.R"))
 source(here::here("R/plan_artefact_registry.R"))
 source(here::here("R/plan_qa_gates.R"))
+# Phase B of #389: covariance infrastructure + fixed cross-asset correlation plan
+source(here::here("R/plan_returns.R"))
+source(here::here("R/plan_cross_asset_corr.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -181,6 +185,9 @@ c(plan_strategy_names(),
   plan_wf_correlation(),
   plan_artefact_registry(),
   plan_qa_gates(),
+  # Phase B of #389: covariance targets + fixed cross-asset correlation plan
+  plan_returns(),
+  plan_cross_asset_corr(),
 
   # Phase 1 of #149: date-type consistency across all registered datasets.
   # tar_target_raw + explicit deps so targets schedules dv_join_key_types

@@ -1,46 +1,49 @@
 # Cross-asset correlation targets with regime conditioning
 # Addresses gap from #105: no cross-asset correlations, correlations not regime-conditional
 # Implements contagion analysis from #102 findings
+#
+# Phase B (#389): upstream dependency fixed.
+#   Before: consumed non-existent `strategy_returns_wide` target.
+#   After:  consumes `asset_monthly_returns_wide` from plan_returns.R,
+#           which materialises SPY/TLT/GLD/DBC monthly returns.
+#
+# regime_correlations() and plot_regime_correlation_heatmap() are sourced
+# from regime_correlations.R (sourced in docs/_targets.R).
 
-library(targets)
-library(dplyr)
-
+plan_cross_asset_corr <- function() {
 list(
-  # === Multi-asset returns (strategies + benchmark assets) ===
+  # === Multi-asset returns (benchmark assets) ===
+  # Sourced from plan_returns.R: asset_monthly_returns_wide contains
+  # SPY, TLT, GLD, DBC monthly simple returns, inner-joined on date.
+  # Typed date discipline (#453): date column already as.Date() in plan_returns.R.
   tar_target(
     multi_asset_returns,
     {
-      # Combine strategy returns with benchmark assets (SPY, TLT, GLD, DBC)
-      # Placeholder - integrate with actual targets
-      strategy_returns_wide |>  # Assumes this exists from multi-strategy
-        dplyr::left_join(
-          consolidated_equity |>
-            dplyr::filter(ticker %in% c("SPY", "TLT", "GLD", "DBC")) |>
-            dplyr::select(date, ticker, close) |>
-            tidyr::pivot_wider(names_from = ticker, values_from = close) |>
-            dplyr::mutate(
-              dplyr::across(c(SPY, TLT, GLD, DBC), ~(.x / dplyr::lag(.x)) - 1)
-            ) |>
-            dplyr::filter(!is.na(SPY)),  # Remove first row with NA
-          by = "date"
-        )
+      # asset_monthly_returns_wide already has complete-case rows only (plan_returns.R).
+      # Filter to dates where VIX is also available (needed by regime_correlations()).
+      asset_monthly_returns_wide
     }
   ),
 
   # === VIX data for regime classification ===
+  # aw_vix_daily is produced by plan_avoid_worst.R (wired in docs/_targets.R).
+  # Aggregate to monthly (mean VIX per month) for regime classification.
   tar_target(
     vix_monthly,
     {
-      # Placeholder - integrate with actual VIX source
-      # Could come from aw_vix_daily or consolidated_macro
       aw_vix_daily |>
-        dplyr::mutate(year_month = format(date, "%Y-%m")) |>
+        dplyr::filter(!is.na(vix)) |>
+        dplyr::mutate(
+          date       = as.Date(date),
+          year_month = format(date, "%Y-%m")
+        ) |>
         dplyr::group_by(year_month) |>
         dplyr::summarise(
           date = max(date),  # End of month
-          vix = mean(vix, na.rm = TRUE),  # Monthly average VIX
+          vix  = mean(vix, na.rm = TRUE),
           .groups = "drop"
-        )
+        ) |>
+        dplyr::arrange(date)
     }
   ),
 
@@ -158,3 +161,4 @@ list(
     }
   )
 )
+}
