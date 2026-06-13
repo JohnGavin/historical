@@ -1,3 +1,25 @@
+# hd_ohlcv snapshot of AAPL structure
+
+    Code
+      str(result)
+    Output
+      tibble [4 x 11] (S3: tbl_df/tbl/data.frame)
+       $ date          : POSIXct[1:4], format: 
+    Condition
+      Warning in `as.POSIXlt.POSIXct()`:
+      Coercing nanoseconds to a lower resolution may result in a loss of data.
+    Output
+      "2026-04-07" "2026-04-08" ...
+       $ open          : num [1:4] 256 258 259 260
+       $ high          : num [1:4] 256 260 261 262
+       $ low           : num [1:4] 246 257 256 259
+       $ close         : num [1:4] 254 259 260 260
+       $ adjusted_close: num [1:4] 254 259 260 260
+       $ volume        : num [1:4] 62148000 41032800 28121600 31259500
+       $ ticker        : chr [1:4] "AAPL" "AAPL" "AAPL" "AAPL"
+       $ source        : chr [1:4] "yahoo" "yahoo" "yahoo" "yahoo"
+       $ asset_class   : chr [1:4] "equity" "equity" "equity" "equity"
+       $ updated_at    : POSIXct[1:4], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
 # hd_datasets snapshot
 
     Code
@@ -56,6 +78,15 @@
         ..$ schema     : chr [1:10] "ticker" "pair" "interval_min" "time" ...
         ..$ frequency  : chr "60min+1440min"
         ..$ description: chr "Kraken exchange OHLCVT bars (hourly + daily) for 19 pairs: 6 crypto majors (BTC, ETH, SOL, XRP, ADA, LINK vs US"| __truncated__
+
+# hd_ohlcv split-and-bind: collect=FALSE informs user
+
+    Code
+      result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-05",
+      collect = FALSE)
+    Message
+      Mixed-dataset batch detected: "crypto_daily" and "equity_daily".
+      i Returning materialised tibble; `collect = FALSE` cannot be honoured when binding across datasets.
 
 # hd_ohlcv: empty ticker vector errors
 

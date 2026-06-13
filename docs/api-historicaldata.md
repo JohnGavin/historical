@@ -293,6 +293,33 @@ arguments:
 returns: 'A [tibble]tibble with columns: Date or integer row index (if no date column supplied).'
 ---
 kind: function
+name: bdbb_fit
+exported: true
+signature: bdbb_fit(df, window_days = 30L, min_frac = 0.7)
+arguments:
+  df: Tibble with columns time (POSIXct UTC), open, high, low, close, volume, trades.
+  min_frac: Numeric in (0, 1].
+  window_days: Integer.
+returns: 'A tibble with one row per complete rolling window, columns: window_end, R, theta, half_life_hours, signed_flow_mean, amihud_mean, kyle_mean, n_obs, regime.'
+---
+kind: function
+name: bdbb_half_life
+exported: true
+signature: bdbb_half_life(theta)
+arguments:
+  theta: Numeric.
+returns: Numeric.
+---
+kind: function
+name: bdbb_tail_predict
+exported: true
+signature: bdbb_tail_predict(diagnostics_df, returns_df)
+arguments:
+  diagnostics_df: Tibble output of \link[=bdbb_fit]{bdbb_fit()}.
+  returns_df: Tibble with columns time (POSIXct UTC) and log_ret (numeric).
+returns: 'A tibble with one row per predictor and columns: predictor, p_extreme_high_tercile, p_extreme_low_tercile, spread_pp, n_high, n_low.'
+---
+kind: function
 name: hd_check_survivorship_bias
 exported: true
 signature: hd_check_survivorship_bias(dataset)
