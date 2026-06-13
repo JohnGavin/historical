@@ -165,7 +165,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_tickers`</span><span class="label">tickers</span></span></a>
 <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_rows`</span><span class="label">rows</span></span></a>
 <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_datasets`</span><span class="label">datasets</span></span></a>
-<a href="jst-dashboard.html" class="stat-link"><span class="stat"><span class="num">`r stat_yr`</span><span class="label">history</span></span></a>
+<a href="evidence.html" class="stat-link"><span class="stat"><span class="num">`r stat_yr`</span><span class="label">history</span></span></a>
 <a href="https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">`r stat_functions`</span><span class="label">functions</span></span></a>
 </div>
 
@@ -249,9 +249,9 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <h4>European Overlay</h4>
 <p>CISS vs VIX regime comparison: ECB's Composite Indicator of Systemic Stress as European-native vol proxy. 5 European ETFs, OOS performance, attribution.</p>
 </a>
-<a href="jst-dashboard.html" class="info-card">
-<h4><abbr title="Jordà-Schularick-Taylor Macrohistory Database">JST</abbr> Macrohistory: Long-Run Equity Returns</h4>
-<p>155 years of equity premium across 18 countries (1870-2020). Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.</p>
+<a href="evidence.html" class="info-card">
+<h4>Evidence &amp; Context</h4>
+<p>Negative results (strategies that failed falsification) and 155 years of equity premium across 18 countries. Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.</p>
 </a>
 <a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
 <h4>Source Code</h4>
@@ -274,7 +274,7 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [Avoid Worst Days](avoid-worst-days.html) — return asymmetry thought experiment
 - [Falsification Tests](falsification.html) — causal integrity, FF alpha, HAC-robust Sharpe
 - [European Overlay](european-overlay.html) — CISS vs VIX regime comparison
-- [JST Macrohistory](jst-dashboard.html) — 155 years equity premium, 18 countries, pervasiveness test
+- [Evidence & Context](evidence.html) — negative results + 155 years equity premium, 18 countries, pervasiveness test
 
 ## Row
 
