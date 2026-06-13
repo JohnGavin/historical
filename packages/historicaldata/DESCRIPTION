@@ -24,6 +24,7 @@ Imports:
     purrr,
     rlang,
     slider,
+    stats,
     tibble
 Suggests:
     alphavantager,

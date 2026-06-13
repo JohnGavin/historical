@@ -128,6 +128,7 @@ source(here::here("R/plan_mom_prepeak_gauntlet.R"))
 source(here::here("R/plan_crypto_momentum.R"))
 source(here::here("R/plan_solana_momentum.R"))
 source(here::here("R/plan_olmar.R"))
+source(here::here("R/plan_bdbb_sol.R"))
 source(here::here("R/plan_turn_of_month.R"))
 source(here::here("R/plan_wf_correlation.R"))
 source(here::here("R/plan_artefact_registry.R"))
@@ -181,6 +182,7 @@ c(plan_strategy_names(),
   plan_crypto_momentum(),
   plan_solana_momentum(),
   plan_olmar(),
+  plan_bdbb_sol(),
   plan_turn_of_month(),
   plan_wf_correlation(),
   plan_artefact_registry(),
