@@ -1,0 +1,75 @@
+---
+title: "BDBB Queueing Diagnostics — SOL/USD (Phase 1)"
+description: |
+  M/G/infinity queueing model (Varma 2026) applied to SOL/USD Kraken hourly data.
+  Replicates resilience half-life estimation and tail-risk predictivity test.
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+library(targets)
+library(dplyr)
+library(ggplot2)
+tar_config_set(store = here::here("docs/_targets"))
+```
+
+## Overview
+
+This vignette replicates Varma (2026)'s M/G/∞ queueing model on SOL/USD
+using Kraken hourly OHLCVT bars.  The model characterises the market's
+resilience — its tendency to absorb order-flow shocks and revert to
+equilibrium price — as a queueing process.  Three outputs are tracked:
+
+1. **R-metric**: variance per unit of signed order flow (volume × direction).
+   Higher R implies prices move more per unit of flow — thinner liquidity.
+2. **θ (theta)**: mean-reversion rate estimated from ACF decay of signed
+   log-returns.  Positive θ → mean reversion; negative → momentum.
+3. **Half-life**: `log(2) / θ` in hours — the time for half the price
+   impact of a shock to dissipate.
+
+```{r data-check}
+dv <- tar_read(bdbb_sol_dv)
+knitr::kable(dv, caption = "SOL/USD data coverage")
+```
+
+## Rolling Diagnostics (R, θ, Half-Life)
+
+```{r fit-summary}
+fit     <- tar_read(bdbb_sol_fit)
+metrics <- tar_read(bdbb_sol_metrics)
+knitr::kable(metrics, caption = tar_read(bdbb_sol_caption))
+```
+
+## Regime Distribution
+
+```{r regime-plot}
+fit |>
+  dplyr::filter(!is.na(regime)) |>
+  ggplot2::ggplot(ggplot2::aes(x = regime, fill = regime)) +
+  ggplot2::geom_bar() +
+  ggplot2::labs(
+    title   = "BDBB Regime Distribution — SOL/USD",
+    x       = "Regime",
+    y       = "Window count",
+    caption = paste0(
+      "Mean-reversion vs momentum vs ambiguous across 30-day rolling windows. ",
+      "Varma (2026) BTC benchmark: ~39% mean-reversion windows."
+    )
+  ) +
+  ggplot2::theme_minimal() +
+  ggplot2::theme(legend.position = "bottom")
+```
+
+## Tail-Risk Predictivity (R vs Amihud vs Kyle)
+
+```{r tail-predict}
+knitr::kable(
+  tar_read(bdbb_sol_tail_predict),
+  digits  = 2,
+  caption = paste0(
+    "Tail-risk predictivity by predictor. ",
+    "Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). ",
+    "Varma BTC benchmarks: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp."
+  )
+)
+```
