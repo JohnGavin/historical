@@ -3,25 +3,30 @@
     Code
       str(result)
     Output
-      tibble [3 x 11] (S3: tbl_df/tbl/data.frame)
-       $ date          : POSIXct[1:3], format: "2026-04-07" "2026-04-08" ...
-       $ open          : num [1:3] 256 258 259
-       $ high          : num [1:3] 256 260 261
-       $ low           : num [1:3] 246 257 256
-       $ close         : num [1:3] 254 259 260
-       $ adjusted_close: num [1:3] 254 259 260
-       $ volume        : num [1:3] 62148000 41032800 28121600
-       $ ticker        : chr [1:3] "AAPL" "AAPL" "AAPL"
-       $ source        : chr [1:3] "yahoo" "yahoo" "yahoo"
-       $ asset_class   : chr [1:3] "equity" "equity" "equity"
-       $ updated_at    : POSIXct[1:3], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
+      tibble [4 x 11] (S3: tbl_df/tbl/data.frame)
+       $ date          : POSIXct[1:4], format: 
+    Condition
+      Warning in `as.POSIXlt.POSIXct()`:
+      Coercing nanoseconds to a lower resolution may result in a loss of data.
+    Output
+      "2026-04-07" "2026-04-08" ...
+       $ open          : num [1:4] 256 258 259 260
+       $ high          : num [1:4] 256 260 261 262
+       $ low           : num [1:4] 246 257 256 259
+       $ close         : num [1:4] 254 259 260 260
+       $ adjusted_close: num [1:4] 254 259 260 260
+       $ volume        : num [1:4] 62148000 41032800 28121600 31259500
+       $ ticker        : chr [1:4] "AAPL" "AAPL" "AAPL" "AAPL"
+       $ source        : chr [1:4] "yahoo" "yahoo" "yahoo" "yahoo"
+       $ asset_class   : chr [1:4] "equity" "equity" "equity" "equity"
+       $ updated_at    : POSIXct[1:4], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
 
 # hd_datasets snapshot
 
     Code
       str(hd_datasets())
     Output
-      List of 9
+      List of 10
        $ equity_daily       :List of 6
         ..$ url                : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
         ..$ schema             : chr [1:11] "date" "open" "high" "low" ...
@@ -69,6 +74,11 @@
         ..$ schema     : chr [1:8] "date" "open" "high" "low" ...
         ..$ frequency  : chr "daily"
         ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
+       $ kraken_ohlcvt      :List of 4
+        ..$ url        : chr "hf://datasets/JohnGavin/finance-data/kraken_ohlcvt.parquet"
+        ..$ schema     : chr [1:10] "ticker" "pair" "interval_min" "time" ...
+        ..$ frequency  : chr "60min+1440min"
+        ..$ description: chr "Kraken exchange OHLCVT bars (hourly + daily) for 19 pairs: 6 crypto majors (BTC, ETH, SOL, XRP, ADA, LINK vs US"| __truncated__
 
 # hd_ohlcv split-and-bind: collect=FALSE informs user
 
