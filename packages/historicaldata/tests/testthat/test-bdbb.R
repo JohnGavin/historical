@@ -120,3 +120,27 @@ test_that("bdbb_tail_predict returns expected columns", {
   ) %in% names(result)))
   expect_equal(nrow(result), 3L)  # R, amihud_mean, kyle_mean
 })
+
+test_that("bdbb_fit output column schema is stable", {
+  set.seed(1L)
+  n   <- 800L
+  eps <- rnorm(n, sd = 0.01)
+  ar1 <- as.numeric(stats::filter(eps, filter = 0.3, method = "recursive", sides = 1))
+  df  <- tibble::tibble(
+    time   = seq(as.POSIXct("2022-01-01", tz = "UTC"),
+                 by = "1 hour", length.out = n),
+    open   = 100 + cumsum(ar1),
+    high   = open + abs(rnorm(n, sd = 0.5)),
+    low    = open - abs(rnorm(n, sd = 0.5)),
+    close  = open + ar1,
+    volume = abs(rnorm(n, mean = 1000, sd = 200)),
+    trades = as.integer(abs(rnorm(n, mean = 100, sd = 20)))
+  )
+  result <- bdbb_fit(df, window_days = 10L, min_frac = 0.5)
+  expect_snapshot(names(result))
+})
+
+test_that("bdbb_half_life and bdbb_tail_predict signatures are stable", {
+  expect_snapshot(args(bdbb_half_life))
+  expect_snapshot(args(bdbb_tail_predict))
+})
