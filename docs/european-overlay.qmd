@@ -16,10 +16,6 @@ format:
           if (!localStorage.getItem('quarto-color-scheme')) {
             document.documentElement.setAttribute('data-bs-theme', 'dark');
           }
-          document.addEventListener('shown.bs.tab', function(e) {
-            var tabBar = e.target.closest('.nav-tabs');
-            if (tabBar) tabBar.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          });
           </script>
 execute:
   echo: false
