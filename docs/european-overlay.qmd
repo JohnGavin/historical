@@ -313,7 +313,7 @@ if (!is.null(ecb_raw)) {
 
 - **[Avoid Worst Days](avoid-worst-days.html)** — applies similar regime-based analysis to US equity markets using VIX as the stress indicator
 - **[Macro Defense Rotation](macro-defense-rotation.html)** — rotates among US defensive ETFs (TLT, GLD, DBC, UUP) using the same momentum-based regime logic
-- **[JST Long-Run Evidence](jst-dashboard.html)** — 155-year cross-country equity premium evidence underpinning the cross-geography rationale for overlays
+- **[Evidence & Context](evidence.html)** — 155-year cross-country equity premium evidence underpinning the cross-geography rationale for overlays
 
 #### Build Info
 

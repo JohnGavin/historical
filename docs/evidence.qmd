@@ -1,0 +1,447 @@
+---
+title: "Evidence & Context"
+subtitle: "Strategy Verdicts and Long-Run Historical Evidence"
+format:
+  html:
+    embed-resources: false
+    theme:
+      dark: darkly
+      light: cosmo
+    toc: true
+    toc-depth: 2
+    code-fold: true
+    include-in-header:
+      - text: |
+          <style>
+          body { font-size: 1.3em; line-height: 1.6; }
+          caption, figcaption, .figure-caption { color: #fff !important; }
+          .cell-output-display { margin: 1.5em 0; }
+          figure { margin: 2em 0; }
+          figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+          table { margin: 1.5em auto; }
+          .negative-card {
+            background: #1a1a2e; border: 1px solid #d73027; border-radius: 8px;
+            padding: 16px; margin: 16px 0;
+          }
+          .negative-card h3 { color: #d73027; margin-top: 0; }
+          .lesson { background: #111; border-left: 4px solid #e6a817; padding: 12px 16px; margin: 12px 0; }
+          #ui-controls {
+            position: fixed; top: 10px; right: 10px; z-index: 9999;
+            display: flex; gap: 5px; background: var(--bs-body-bg);
+            padding: 5px; border-radius: 4px; border: 1px solid var(--bs-border-color);
+          }
+          #ui-controls button {
+            padding: 5px 10px; border: 1px solid var(--bs-border-color);
+            background: var(--bs-body-bg); color: var(--bs-body-color);
+            cursor: pointer; border-radius: 3px;
+          }
+          #ui-controls button:hover { opacity: 0.8; }
+          </style>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme'))
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          document.addEventListener('DOMContentLoaded', function() {
+            var toolbar = document.createElement('div');
+            toolbar.id = 'ui-controls';
+            toolbar.innerHTML = '<button id="font-down" title="Decrease font">A-</button>' +
+              '<button id="font-up" title="Increase font">A+</button>' +
+              '<button id="theme-toggle" title="Toggle dark/light">◐</button>';
+            document.body.appendChild(toolbar);
+            var baseSize = parseFloat(localStorage.getItem('font-size-px') || '20.8');
+            document.documentElement.style.fontSize = baseSize + 'px';
+            document.getElementById('font-up').addEventListener('click', function() {
+              baseSize = Math.min(baseSize + 1, 28);
+              document.documentElement.style.fontSize = baseSize + 'px';
+              localStorage.setItem('font-size-px', baseSize);
+            });
+            document.getElementById('font-down').addEventListener('click', function() {
+              baseSize = Math.max(baseSize - 1, 12);
+              document.documentElement.style.fontSize = baseSize + 'px';
+              localStorage.setItem('font-size-px', baseSize);
+            });
+            document.getElementById('theme-toggle').addEventListener('click', function() {
+              var current = document.documentElement.getAttribute('data-bs-theme');
+              var next = current === 'dark' ? 'light' : 'dark';
+              document.documentElement.setAttribute('data-bs-theme', next);
+              localStorage.setItem('quarto-color-scheme', next);
+            });
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r setup}
+#| label: setup
+#| include: false
+library(targets)
+library(dplyr)
+library(here)
+library(ggplot2)
+library(tidyr)
+library(DT)
+
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+
+jst_equity_premium <- safe_tar_read("jst_equity_premium")
+jst_pervasiveness  <- safe_tar_read("jst_pervasiveness")
+jst_crises         <- safe_tar_read("jst_crises")
+jst_summary        <- safe_tar_read("jst_summary")
+```
+
+::: {.panel-tabset}
+
+## Negative Results
+
+### Why Document Negative Results?
+
+Negative results are as valuable as positive ones. A strategy that fails the falsification framework teaches us:
+
+- Which signals are **disguised beta** (market exposure dressed up as alpha)
+- Which intuitions about markets are **wrong** (or at least not tradeable)
+- Where the **boundary** lies between genuine alpha and noise
+
+Publication bias in finance means failed strategies are rarely documented. This page corrects that.
+
+### Failed Strategies
+
+```{r neg-scorecard}
+#| label: neg-scorecard
+summary <- safe_tar_read("fals_summary")
+nms <- safe_tar_read("fals_vig_names")
+if (!is.null(summary) && !is.null(nms)) {
+  neg <- summary |>
+    filter(ff_alpha_tstat < 2.0) |>
+    mutate(
+      Strategy = nms$long_name[match(strategy, nms$code_name)],
+      `HAC t` = round(hac_tstat, 2),
+      `Alpha t` = round(ff_alpha_tstat, 2),
+      `R² (%)` = round(ff_r_squared * 100, 1),
+      `Alpha (%)` = round(ff_alpha_annual * 100, 0),
+      Diagnosis = case_when(
+        ff_r_squared > 0.50 ~ "Pure market beta",
+        ff_r_squared > 0.15 ~ "Significant factor exposure",
+        TRUE ~ "Noise — neither alpha nor beta"
+      )
+    ) |>
+    select(Strategy, `HAC t`, `Alpha t`, `R² (%)`, `Alpha (%)`, Diagnosis) |>
+    arrange(`Alpha t`)
+
+  hd_dt(neg, paste0(
+    nrow(neg), " of ", nrow(summary),
+    " strategies failed the falsification framework (Alpha t < 2.0). ",
+    "These strategies' returns are explained by known factor exposure or noise."
+  ))
+}
+```
+
+### Avoid Worst Days (VIX Protection) {#avoid-worst}
+
+::: {.negative-card}
+#### Verdict: Pure market beta (R² = 41%)
+
+**What it does:** Exit to cash when yesterday's <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> > 30 or yesterday's absolute return > 3%. Re-enter when VIX < 25 and 5-day cooloff expires. All signals use t-1 (previous day) values.
+
+**Why it fails:**
+
+- The strategy is essentially a crude vol-timing filter on SPY
+- When VIX is high, you're out of the market — but so is the VIX signal embedded in the market itself
+- The 41% R² means the strategy's returns are 41% explained by Mkt-RF (market factor alone)
+- Alpha = -1% per year: the strategy **destroys** value relative to just holding the market
+- The t+1 execution constraint is critical: the pre-fix version (using same-day VIX) showed 18.4% CAGR; honest t+1 execution drops it to 5.3%
+
+**Key lesson:** VIX is not a leading indicator — it's a concurrent indicator. By the time VIX > 30, the worst days have already happened.
+:::
+
+::: {.lesson}
+**What we learned:** Any strategy that triggers on elevated VIX is timing exits AFTER the crash, not before it. The worst days and best days cluster together (median 5 calendar days apart). You cannot avoid one without missing the other. See the [temporal clustering analysis](avoid-worst-days.html).
+:::
+
+### Risk State Classification (VIX Overlay) {#risk-state}
+
+::: {.negative-card}
+#### Verdict: Pure market beta (R² = 88%)
+
+**What it does:** Three-signal design: VVIX (vol-of-vol) as early warning, VIX term structure 5-day change, VIX term structure level. Market-specific percentile thresholds from training data only. Overlay on SPY: reduce exposure when signals are elevated.
+
+**Why it fails:**
+
+- 88% R² — this is almost entirely market beta
+- Alpha = -1% per year (negative): the overlay HURTS performance
+- Despite using VVIX (which IS an early warning — it rises before VIX spikes), the signal doesn't translate into tradeable alpha
+- The 5-day change in term structure adds noise, not signal
+- Percentile thresholds from training data don't generalise: crisis regimes are structurally different from calm regimes
+
+**Key lesson:** Adding more VIX-derived signals doesn't help. VVIX, term structure, and VIX level are all highly correlated. Three correlated signals ≈ one signal with more noise.
+:::
+
+::: {.lesson}
+**What we learned:** Implied volatility signals (VIX, VVIX, term structure) are priced in. The market already incorporates this information. A strategy based on these signals is, by construction, replicating what the market already does — hence the 88% R² with the market factor.
+:::
+
+### LTR Cross-Sectional Momentum (Borderline) {#ltr}
+
+::: {.negative-card}
+#### Verdict: Borderline (Alpha t = 1.99, R² = 7%)
+
+**What it does:** XGBoost LambdaMART ranks ~500 US stocks monthly using 21 momentum/volatility features. Long top decile, short bottom decile.
+
+**Why it's borderline:**
+
+- Alpha t = 1.99 — just below the 2.0 threshold
+- R² = 7% — low factor exposure, which is good
+- Alpha = 166% per year — suspiciously high
+- The demo uses ~51 stocks (not the full US universe) which inflates returns
+- Walk-forward from 2005 with annual retraining — but limited out-of-sample validation
+
+**Key lesson:** The signal may be genuine but the implementation is too small-scale to confirm. Needs: full US universe (3000+ stocks), transaction costs for monthly L/S rebalancing, and multi-market replication.
+:::
+
+::: {.lesson}
+**What we learned:** Cross-sectional momentum is well-documented academically. Our implementation is a proof-of-concept, not a production signal. The 166% annual alpha is an artifact of the small universe, not evidence of a genuine edge.
+:::
+
+### Pattern: What Predicts Failure?
+
+```{r neg-pattern}
+#| label: neg-pattern
+if (!is.null(summary) && !is.null(nms)) {
+  pattern <- summary |>
+    mutate(
+      Strategy = nms$long_name[match(strategy, nms$code_name)],
+      `Asset Class` = nms$asset_class[match(strategy, nms$code_name)],
+      `Frequency` = nms$frequency[match(strategy, nms$code_name)],
+      `R² (%)` = round(ff_r_squared * 100, 1),
+      `Alpha t` = round(ff_alpha_tstat, 2),
+      Verdict = ifelse(ff_alpha_tstat > 2.0, "Alpha", "No alpha")
+    ) |>
+    select(Strategy, `Asset Class`, Frequency, `R² (%)`, `Alpha t`, Verdict) |>
+    arrange(desc(`Alpha t`))
+
+  hd_dt(pattern, paste0(
+    "All 5 strategies sorted by Alpha t. ",
+    "The two overlay strategies (daily, VIX-based) both fail. ",
+    "The two factor strategies (monthly, momentum-based) both pass. ",
+    "Pattern: daily VIX-based overlays = beta; monthly factor rotation = alpha."
+  ))
+}
+```
+
+### Implications for Portfolio Construction
+
+1. **Do not include** Avoid Worst Days or Risk State in the multi-strategy portfolio (#52)
+2. **VIX-based overlays** add cost and complexity without alpha — use passive SPY instead
+3. **Factor rotation** (<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>, Factor MAX) is where the genuine alpha lives
+4. **Cross-sectional momentum** (LTR) needs scaling before inclusion — promising but unconfirmed at production scale
+
+### References
+
+- Full falsification methodology: [Strategy Falsification](falsification.html)
+- Avoid Worst Days analysis: [avoid-worst-days.html](avoid-worst-days.html)
+- Strategy leaderboard: [leaderboard.html](leaderboard.html)
+- Harvey, Liu & Zhu (2016). "...and the Cross-Section of Expected Returns"
+
+## Historical Evidence
+
+### Overview
+
+The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.net/database/){target="_blank" rel="noopener noreferrer"} provides 150+ years of macroeconomic and financial data across `r jst_summary$n_countries` advanced economies, spanning `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]`. This tab analyzes the equity premium (equity total return minus short-term government bill rate) to test the cross-geography pervasiveness criterion from the Swedroe evidence-based investing framework.
+
+**Key findings:**
+
+- Equity premium is positive in `r jst_summary$pervasive_count` of `r jst_summary$pervasive_total` countries over the full sample (mean > 0, t-stat > 2, majority of years positive)
+- USA equity premium from JST correlates `r jst_summary$correlation_with_ff` with the Fama-French market factor (1926-2020 overlap period)
+- Financial crises occurred in `r nrow(jst_crises)` countries, with total crisis-years ranging from `r min(jst_crises$n_crises)` to `r max(jst_crises$n_crises)` per country
+
+**Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241){target="_blank" rel="noopener noreferrer"}
+
+---
+
+### Cross-Geography Pervasiveness
+
+The table below shows full-sample equity premium statistics by country, sorted by mean premium. A factor is considered *pervasive* if it has a positive mean premium, t-statistic > 2, and is positive in more than 50% of years.
+
+```{r jst-pervasiveness}
+#| label: jst-pervasiveness
+#| tbl-cap: "Equity premium pervasiveness test: full-sample statistics by country. Countries are sorted by mean premium. The 'Pervasive' column indicates whether the premium meets all three criteria: positive mean, t-stat > 2, and positive in >50% of years. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/)."
+
+jst_pervasiveness |>
+  select(
+    Country = iso,
+    Period = from_year,
+    `To Year` = to_year,
+    `N Years` = n_years,
+    `Mean (%)` = mean_premium,
+    `SD (%)` = sd_premium,
+    `t-stat` = t_stat,
+    `% Positive` = pct_positive,
+    Pervasive = pervasive
+  ) |>
+  mutate(across(where(is.numeric), ~round(., 2))) |>
+  datatable(
+    options = list(
+      pageLength = 20,
+      dom = 't',
+      columnDefs = list(
+        list(className = 'dt-center', targets = 1:8)
+      )
+    ),
+    rownames = FALSE
+  ) |>
+  formatStyle(
+    'Mean (%)',
+    background = styleColorBar(range(jst_pervasiveness$mean_premium, na.rm = TRUE), '#69d4a0'),
+    backgroundSize = '100% 90%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  ) |>
+  formatStyle(
+    'Pervasive',
+    backgroundColor = styleEqual(c(TRUE, FALSE), c('#69d4a0', '#555555'))
+  )
+```
+
+---
+
+### Equity Premium Heatmap
+
+The heatmap below shows mean equity premium by decade and country. Darker green indicates higher premium; red indicates negative premium. Missing cells represent periods with insufficient data.
+
+```{r jst-heatmap}
+#| label: jst-heatmap
+#| fig-cap: !expr 'paste0("Equity premium heatmap: mean excess return (equity total return minus bill rate) by decade and country, ", jst_summary$year_range[1], "-", jst_summary$year_range[2], ". Green shades indicate positive premium, red indicates negative. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/). Generated by [R/plan_jst.R](https://github.com/JohnGavin/historical/blob/main/R/plan_jst.R).")'
+#| fig-width: 12
+#| fig-height: 8
+
+ggplot(jst_equity_premium, aes(x = decade, y = iso, fill = mean_premium)) +
+  geom_tile(color = "white", linewidth = 0.5) +
+  scale_fill_gradient2(
+    low = "#f08080",
+    mid = "#1a1a2e",
+    high = "#69d4a0",
+    midpoint = 0,
+    na.value = "grey50",
+    name = "Mean Premium (%)"
+  ) +
+  scale_x_continuous(breaks = seq(1870, 2020, 10)) +
+  labs(
+    title = "Equity Premium by Decade and Country",
+    subtitle = paste0(jst_summary$year_range[1], "-", jst_summary$year_range[2]),
+    x = "Decade",
+    y = "Country"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major = element_blank(),
+    panel.grid.minor = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, color = "grey60"),
+    legend.position = "right"
+  )
+```
+
+---
+
+### Financial Crisis Timeline
+
+Financial crises (identified by the JST `crisisJST` indicator) are shown below as segments spanning crisis years for each country.
+
+```{r jst-crises-timeline}
+#| label: jst-crises-timeline
+#| fig-cap: !expr 'paste0("Financial crisis timeline: crisis years by country, ", jst_summary$year_range[1], "-", jst_summary$year_range[2], ". Each segment represents a crisis year as identified by the JST crisisJST indicator. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/).")'
+#| fig-width: 12
+#| fig-height: 6
+
+crises_long <- jst_crises |>
+  separate_rows(crisis_years, sep = ", ") |>
+  mutate(year = as.integer(crisis_years)) |>
+  select(iso, year) |>
+  arrange(iso, year)
+
+ggplot(crises_long, aes(x = year, y = iso)) +
+  geom_point(color = "#f08080", size = 2) +
+  geom_segment(
+    aes(xend = year + 1, yend = iso),
+    color = "#f08080",
+    linewidth = 1,
+    alpha = 0.6
+  ) +
+  scale_x_continuous(breaks = seq(1870, 2020, 10)) +
+  labs(
+    title = "Financial Crisis Timeline",
+    subtitle = paste0(jst_summary$year_range[1], "-", jst_summary$year_range[2]),
+    x = "Year",
+    y = "Country"
+  ) +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    panel.grid.major.y = element_blank(),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, color = "grey60")
+  )
+```
+
+---
+
+### Crisis Frequency Table
+
+The table below shows the number of crisis years per country, sorted by total crisis-years.
+
+```{r jst-crises-table}
+#| label: jst-crises-table
+#| tbl-cap: "Financial crisis frequency by country: total crisis-years identified by the JST crisisJST indicator. Countries are sorted by total crisis count. Data source: [JST Macrohistory Database](https://www.macrohistory.net/database/)."
+
+jst_crises |>
+  select(
+    Country = iso,
+    `Total Crisis Years` = n_crises,
+    `Crisis Years` = crisis_years
+  ) |>
+  datatable(
+    options = list(
+      pageLength = 20,
+      dom = 't',
+      columnDefs = list(
+        list(className = 'dt-center', targets = 1)
+      )
+    ),
+    rownames = FALSE
+  ) |>
+  formatStyle(
+    'Total Crisis Years',
+    background = styleColorBar(range(jst_crises$n_crises), '#f08080'),
+    backgroundSize = '100% 90%',
+    backgroundRepeat = 'no-repeat',
+    backgroundPosition = 'center'
+  )
+```
+
+---
+
+### Data Notes
+
+- **Equity premium** = equity total return (`eq_tr`) - short-term government bill rate (`bill_rate`)
+- **Pervasiveness criteria**: mean premium > 0, t-stat > 2, and positive in >50% of years
+- **Crisis indicator**: `crisisJST` binary flag (1 = crisis year)
+- **Country coverage**: `r jst_summary$n_countries` countries: `r paste(sort(unique(jst_pervasiveness$iso)), collapse = ", ")`
+- **Data period**: `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]` (`r format(jst_summary$n_obs, big.mark = ",")` country-year observations)
+
+All target computations are defined in [`R/plan_jst.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_jst.R).
+
+:::
+
+```{r build-info}
+#| label: build-info
+#| results: asis
+build_info()
+```
