@@ -14,6 +14,7 @@ hd_simulate_paths(
   cpi_annual_rate = 0.03,
   block_size = 12L,
   .returns_wide = NULL,
+  .cpi_monthly = NULL,
   seed = 42L
 )
 }
@@ -42,6 +43,13 @@ If NULL, estimated as 12 x colMeans of \code{.returns_wide}.}
 \item{.returns_wide}{Data frame with columns \code{date} + one column
 per asset (monthly returns). Required for \code{method = "bootstrap"}
 and for estimating mu/Sigma when either is NULL.}
+
+\item{.cpi_monthly}{Optional numeric vector of historical monthly CPI
+changes (month-over-month, e.g. from FRED CPIAUCSL). When supplied and
+\code{length(.cpi_monthly) >= block_size}, annual CPI rates are drawn by
+block-bootstrapping 12 consecutive monthly values (same \code{block_size} and
+\code{seed} as the return draws). When NULL (default), \code{cpi_annual_rate} is
+used as a constant. Phase E of issue #389.}
 
 \item{seed}{Integer random seed (default 42L).}
 }

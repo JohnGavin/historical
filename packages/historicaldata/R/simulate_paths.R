@@ -20,6 +20,12 @@
 #' @param .returns_wide Data frame with columns `date` + one column
 #'   per asset (monthly returns). Required for `method = "bootstrap"`
 #'   and for estimating mu/Sigma when either is NULL.
+#' @param .cpi_monthly Optional numeric vector of historical monthly CPI
+#'   changes (month-over-month, e.g. from FRED CPIAUCSL). When supplied and
+#'   `length(.cpi_monthly) >= block_size`, annual CPI rates are drawn by
+#'   block-bootstrapping 12 consecutive monthly values (same `block_size` and
+#'   `seed` as the return draws). When NULL (default), `cpi_annual_rate` is
+#'   used as a constant. Phase E of issue #389.
 #' @param seed       Integer random seed (default 42L).
 #'
 #' @return A tibble with 7 columns:
@@ -43,6 +49,7 @@ hd_simulate_paths <- function(
   cpi_annual_rate = 0.03,
   block_size      = 12L,
   .returns_wide   = NULL,
+  .cpi_monthly    = NULL,   # NEW: vector of monthly CPI changes for bootstrap
   seed            = 42L
 ) {
   method <- match.arg(method)
@@ -71,6 +78,13 @@ hd_simulate_paths <- function(
     cli::cli_abort(c(
       "x" = "{.arg cpi_annual_rate} must be a scalar numeric.",
       "i" = "Got {.cls {class(cpi_annual_rate)}} of length {length(cpi_annual_rate)}."
+    ))
+  }
+
+  if (!is.null(.cpi_monthly) && (!is.numeric(.cpi_monthly) || length(.cpi_monthly) == 0L)) {
+    cli::cli_abort(c(
+      "x" = "{.arg .cpi_monthly} must be a numeric vector of monthly CPI changes, or NULL.",
+      "i" = "Got {.cls {class(.cpi_monthly)}} of length {length(.cpi_monthly)}."
     ))
   }
 
@@ -135,6 +149,22 @@ hd_simulate_paths <- function(
 
   set.seed(seed)
 
+  # --- CPI annual rates (length n_draws, one per path-year pair) ---
+  if (!is.null(.cpi_monthly) && length(.cpi_monthly) >= block_size) {
+    n_cpi_monthly    <- n_draws * 12L
+    n_cpi_blocks     <- ceiling(n_cpi_monthly / block_size)
+    max_start_cpi    <- length(.cpi_monthly) - block_size + 1L
+    cpi_starts       <- sample(seq_len(max_start_cpi), size = n_cpi_blocks, replace = TRUE)
+    cpi_idx          <- unlist(lapply(cpi_starts, function(s) seq.int(s, s + block_size - 1L)))
+    cpi_idx          <- cpi_idx[seq_len(n_cpi_monthly)]
+    cpi_monthly_samp <- .cpi_monthly[cpi_idx]
+    # Compound each 12-month block to one annual CPI rate
+    m12_cpi          <- matrix(cpi_monthly_samp, nrow = 12L, ncol = n_draws)
+    cpi_annual_draws <- apply(m12_cpi, 2L, function(x) prod(1 + x) - 1)
+  } else {
+    cpi_annual_draws <- rep(cpi_annual_rate, n_draws)
+  }
+
   # --- draw annual returns: (n_draws x n_assets) matrix ---
   if (method == "parametric") {
     draws <- MASS::mvrnorm(n = n_draws, mu = mu, Sigma = Sigma)
@@ -196,7 +226,16 @@ hd_simulate_paths <- function(
   long2 <- long2[order(long2$path_id, long2$asset, long2$year), ]
 
   # --- real returns and cumulative factors ---
-  long2$return_real <- (1 + long2$return_nominal) / (1 + cpi_annual_rate) - 1
+  # Broadcast per-(path_id, year) CPI draw to each asset row
+  long_cpi <- data.frame(
+    path_id    = rep(seq_len(n_paths), each = horizon_years),
+    year       = rep(seq_len(horizon_years), times = n_paths),
+    cpi_draw   = cpi_annual_draws,
+    stringsAsFactors = FALSE
+  )
+  long2 <- dplyr::left_join(long2, long_cpi, by = c("path_id", "year"))
+  long2$return_real <- (1 + long2$return_nominal) / (1 + long2$cpi_draw) - 1
+  long2$cpi_draw    <- NULL
 
   long2 <- dplyr::group_by(long2, .data$path_id, .data$asset)
   long2 <- dplyr::mutate(long2,

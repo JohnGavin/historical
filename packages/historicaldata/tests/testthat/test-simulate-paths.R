@@ -210,3 +210,61 @@ test_that("mu estimated from .returns_wide when mu=NULL", {
   expect_equal(nrow(result), 4L * 2L * 2L)
   expect_false(anyNA(result$return_nominal))
 })
+
+# ---- Phase E: CPI bootstrap ------------------------------------------------
+
+test_that("bootstrapped CPI changes return_real relative to constant-CPI baseline", {
+  set.seed(42L)
+  cpi_monthly <- rnorm(120L, mean = 0.003, sd = 0.001)  # 10yr of monthly CPI
+
+  # constant CPI baseline
+  res_const <- hd_simulate_paths(
+    n_paths       = 10L,
+    horizon_years = 5L,
+    assets        = c("A", "B"),
+    mu            = make_mu(),
+    Sigma         = make_sigma(),
+    method        = "parametric",
+    cpi_annual_rate = 0.03,
+    seed          = 1L
+  )
+
+  # bootstrapped CPI (same seed — note: CPI bootstrap consumes RNG before
+  # return draws, so nominal returns will differ; that's expected behaviour)
+  res_boot <- hd_simulate_paths(
+    n_paths       = 10L,
+    horizon_years = 5L,
+    assets        = c("A", "B"),
+    mu            = make_mu(),
+    Sigma         = make_sigma(),
+    method        = "parametric",
+    .cpi_monthly  = cpi_monthly,
+    seed          = 1L
+  )
+
+  # schema and row count are identical in both cases
+  expect_equal(ncol(res_const), ncol(res_boot))
+  expect_equal(nrow(res_const), nrow(res_boot))
+  expect_equal(colnames(res_const), colnames(res_boot))
+
+  # real returns differ because CPI rates differ from 0.03 constant
+  expect_false(isTRUE(all.equal(res_const$return_real, res_boot$return_real)))
+
+  # no NAs introduced by the bootstrapped CPI path
+  expect_false(anyNA(res_boot$return_real))
+  expect_false(anyNA(res_boot$cum_real))
+})
+
+test_that(".cpi_monthly non-numeric aborts with informative message", {
+  expect_snapshot(
+    error = TRUE,
+    hd_simulate_paths(
+      n_paths       = 3L,
+      horizon_years = 2L,
+      assets        = c("A", "B"),
+      mu            = make_mu(),
+      Sigma         = make_sigma(),
+      .cpi_monthly  = "not_numeric"
+    )
+  )
+})

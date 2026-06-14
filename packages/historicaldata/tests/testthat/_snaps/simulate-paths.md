@@ -36,6 +36,17 @@
     Output
       function (n_paths, horizon_years, assets, Sigma = NULL, mu = NULL, 
           method = c("parametric", "bootstrap"), cpi_annual_rate = 0.03, 
-          block_size = 12L, .returns_wide = NULL, seed = 42L) 
+          block_size = 12L, .returns_wide = NULL, .cpi_monthly = NULL, 
+          seed = 42L) 
       NULL
+
+# .cpi_monthly non-numeric aborts with informative message
+
+    Code
+      hd_simulate_paths(n_paths = 3L, horizon_years = 2L, assets = c("A", "B"), mu = make_mu(),
+      Sigma = make_sigma(), .cpi_monthly = "not_numeric")
+    Condition
+      Error in `hd_simulate_paths()`:
+      x `.cpi_monthly` must be a numeric vector of monthly CPI changes, or NULL.
+      i Got <character> of length 1.
 
