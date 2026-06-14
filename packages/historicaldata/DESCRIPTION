@@ -21,6 +21,7 @@ Imports:
     duckplyr,
     ggplot2,
     lubridate,
+    MASS,
     purrr,
     rlang,
     slider,
