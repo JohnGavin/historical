@@ -36,10 +36,12 @@ if (!existsFunction("check_leaderboard_coverage")) {
 
 .make_leaderboard <- function(strategies) {
   tibble::tibble(
-    strategy = strategies,
-    period   = "Full Period",
-    cagr     = 5.0,
-    sharpe   = 0.5
+    strategy      = strategies,
+    period        = "Full Period",
+    cagr          = 5.0,
+    sharpe        = 0.5,
+    ssr           = 1.2,
+    top5pct_share = 0.25
   )
 }
 
