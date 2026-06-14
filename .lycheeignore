@@ -1,3 +1,7 @@
+# Local file:// references are Quarto companion-dir artifacts (e.g. docs/evidence_files/).
+# These directories are not committed; file:// links are meaningless on CI.
+^file://
+
 # Publisher walls bot-block academic DOIs; legitimate for human readers.
 ^https://doi\.org/
 ^https://www\.journals\.uchicago\.edu/
