@@ -117,32 +117,21 @@ lb <- safe_tar_read("leaderboard")
 if (!is.null(lb)) {
   full <- lb |>
     filter(period == "Full Period") |>
-    arrange(max_dd)
+    arrange(desc(sharpe))
 
-  # Transpose: risk first, then return (net only — no gross)
-  metrics_long <- full |>
+  metrics_table <- full |>
     mutate(
-      `Max DD` = paste0(round(max_dd * 100, 1), "%"),
-      `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%")),
-      Vol = paste0(round(vol * 100, 1), "%"),
-      `Net CAGR` = ifelse(is.na(net_cagr), "—", paste0(round(net_cagr * 100, 1), "%")),
-      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
-      Credible = ifelse(is.na(credible) | !credible, "NO", "yes"),
-      # SSR and top5pct_share added in #400
-      SSR = ifelse(
-        is.na(ssr), "—",
-        as.character(round(ssr, 2))
-      ),
-      `Top5% Share` = ifelse(
-        is.na(top5pct_share), "—",
-        paste0(round(top5pct_share * 100, 1), "%")
-      )
+      Sharpe     = ifelse(is.na(sharpe),       "—", as.character(round(sharpe, 2))),
+      `Net CAGR` = ifelse(is.na(net_cagr),     "—", paste0(round(net_cagr * 100, 1), "%")),
+      `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
+      `CVaR 95%` = ifelse(is.na(cvar_95),      "—", paste0(round(cvar_95 * 100, 1), "%")),
+      Vol        = paste0(round(vol * 100, 1), "%"),
+      SSR        = ifelse(is.na(ssr),           "—", as.character(round(ssr, 2))),
+      `Top5% Share` = ifelse(is.na(top5pct_share), "—", paste0(round(top5pct_share * 100, 1), "%")),
+      Credible   = ifelse(is.na(credible) | !credible, "NO", "yes")
     ) |>
-    select(strategy, `Max DD`, `CVaR 95%`, Vol, `Net CAGR`, Sharpe, SSR, `Top5% Share`, Credible) |>
-    pivot_longer(-strategy, names_to = "Metric", values_to = "value") |>
-    pivot_wider(names_from = strategy, values_from = value)
+    select(Strategy = strategy, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, SSR, `Top5% Share`, Credible)
 
-  # Flag non-credible strategies
   n_flagged <- sum(!full$credible, na.rm = TRUE)
   flag_note <- if (n_flagged > 0) {
     flagged <- full$strategy[!full$credible]
@@ -158,11 +147,12 @@ if (!is.null(lb)) {
            " — draw on `stk_universe` (see issue #150).")
   } else ""
 
-  hd_dt(metrics_long, paste0(
-    "Risk-first rankings (sorted by max drawdown). ",
-    "Risk: DD, CVaR, Vol. Return: Net CAGR (after 0.20% round-trip/month). ",
-    "SSR = Sharpe Stability Ratio (HAC-corrected t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
-    "Top5% Share = fraction of total return from the best 5% of months.",
+  hd_dt(metrics_table, paste0(
+    "Strategies ranked by Sharpe (highest first). ",
+    "Net CAGR after 0.20% round-trip/month cost where available. ",
+    "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
+    "Top5% Share = fraction of total return from best 5% of months. ",
+    "Credible = plausible CAGR (<20%) and cum P&L (<50x).",
     flag_note, bias_note
   ))
 }
