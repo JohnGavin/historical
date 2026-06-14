@@ -1,5 +1,44 @@
 # Changelog
 
+## 2026-06-13 → 2026-06-14 (session 18 — #389 Phases D+E + CI lychee fix + 4 PRs merged)
+
+### Completed
+
+- **PR #462 (registry snapshot fix):** `_snaps/registry.md` + `_snaps/query.md` updated to include `kraken_ohlcvt` (List of 10); `test-registry.R` `expect_named` now covers all 10 dataset names. CI green.
+- **Lychee CI fix (commit `1bd41de`, pushed directly to main):** Added `^file://` to `.lycheeignore`. Quarto companion directories (`docs/evidence_files/`) produce `file://` links in rendered HTML that are not committed; lychee was failing on them in CI. One-line fix.
+- **PR #464 — #389 Phase D (`hd_path_quantiles` + `hd_plot_fan_chart`):**
+  - New `packages/historicaldata/R/path_quantiles.R` with two exports: `hd_path_quantiles()` (returns tibble of q10/q25/q50/q75/q90 per year per asset) and `hd_plot_fan_chart()` (ggplot2 ribbon fan chart, outer=q10-q90, inner=q25-q75, median line, faceted by asset).
+  - 13 tests in `test-path-quantiles.R` covering schema, row count, monotonicity (q10≤…≤q90), `cum_real` vs `cum_nominal` divergence, error snapshots, signature snapshots.
+  - Two pipeline targets: `path_quantiles` (nominal) and `path_quantiles_real` (real) in `R/plan_returns.R`.
+  - NAMESPACE + man pages regenerated; `docs/api-historicaldata.md` updated to 124 functions.
+- **PR #465 — #389 Phase E (bootstrapped CPI in `hd_simulate_paths`):**
+  - New `.cpi_monthly` parameter: numeric vector of monthly CPIAUCSL M/M changes. When supplied, each path-year draws a block of 12 consecutive months, compounds to an annual CPI factor, then deflates the path's nominal cumulative returns to real.
+  - New pipeline target `cpi_monthly_changes`: fetches CPIAUCSL from `hd_lazy("macro_daily")`, last-day-of-month reduction, M/M change, NA-stripped vector. Feeds into `simulate_paths` as `.cpi_monthly`.
+  - Phase E rebased onto Phase D via worktree stale-main resolution (conflicts in `plan_returns.R` and `api-historicaldata.md`).
+  - `hd_simulate_paths` signature adds `block_size = 12L` and `.cpi_monthly = NULL`; backward-compatible (old callers unaffected).
+  - 8 new tests in `test-simulate-paths.R` covering `.cpi_monthly` downstream effects, RNG ordering, schema stability.
+
+### Failed Approaches
+
+- **`devtools::document()` with bare Rscript path**: Running `Rscript /path/to/project/default.R` for rix regeneration (or `Rscript /path/to/worktree/...` for roxygen) inherits the caller's cwd — the generated file lands in the wrong directory. Fix: always use `setwd()` inside the Rscript invocation, or subshell `(cd /path && ...)`. Applied per `nix-agent-shell-protocol`.
+- **`git rebase --continue --no-edit`**: `--no-edit` is not a valid flag for `git rebase --continue`; causes parse error. Use `git rebase --continue` alone.
+- **Phase E worktree stale-main**: Agent worktree for Phase E was created from pre-Phase-D main (122 functions). After Phase D merged, rebase of Phase E branch onto `origin/main` caused conflicts in `plan_returns.R` (both branches added targets) and `docs/api-historicaldata.md`. Resolved by: (1) manual conflict resolution in `plan_returns.R` preserving all Phase C/D/E targets, (2) `git checkout --theirs docs/api-historicaldata.md` then re-ran `devtools::document()` + `regen_api_context.sh`, (3) `AGENT_PUSH_OK=1 git push --force-with-lease` to bypass the agent push guard after rebase.
+- **`pkgctx` "API unchanged" false report**: pkgctx reads NAMESPACE (not R source). New `@export` functions are invisible to pkgctx until `devtools::document()` updates NAMESPACE. Lesson: always document before `regen_api_context.sh`.
+
+### Accuracy / Metrics
+
+- Package exports: 124 (was 122 before Phase D)
+- Tests added: 21 new (13 in `test-path-quantiles.R` + 8 in `test-simulate-paths.R`)
+- CI check: r-tests ×2 green, pkgctx-freshness green, lychee green
+
+### Known Limitations
+
+- `hd_plot_fan_chart()` is implemented but has no vignette render — fan-chart visualisation (#389 Phase D vignette) still to do.
+- `cpi_monthly_changes` pipeline target requires `macro_daily` parquet to contain CPIAUCSL (`series_id == "CPIAUCSL"`); if not populated, target fails silently with an empty vector. No guard added yet.
+- Issue #463 (fat-tailed simulations via copula + EVT) filed but not started.
+- Issue #449 (xgb_drif A/B comparison) filed but not started.
+- 18 roborev findings unaddressed (pre-existing, not from this session's work).
+
 ## 2026-06-11 → 2026-06-12 (session 17 — 9 PRs merged + 6 issues closed + registry 14/14 + Kraken 19-pair dataset live on HF)
 
 ### Completed
