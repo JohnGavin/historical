@@ -36,10 +36,12 @@ if (!existsFunction("check_leaderboard_coverage")) {
 
 .make_leaderboard <- function(strategies) {
   tibble::tibble(
-    strategy = strategies,
-    period   = "Full Period",
-    cagr     = 5.0,
-    sharpe   = 0.5
+    strategy      = strategies,
+    period        = "Full Period",
+    cagr          = 5.0,
+    sharpe        = 0.5,
+    ssr           = 1.2,
+    top5pct_share = 0.25
   )
 }
 
@@ -100,10 +102,12 @@ test_that("check_leaderboard_coverage: handles duplicate strategy rows in leader
   # Leaderboard has one row per period; strategy name repeats across periods
   sn <- .make_strategy_names(c("Alpha", "Beta"))
   lb <- tibble::tibble(
-    strategy = rep(c("Alpha", "Beta"), each = 4L),
-    period   = rep(c("Training", "Testing", "Validation", "Full Period"), times = 2L),
-    cagr     = 5.0,
-    sharpe   = 0.5
+    strategy      = rep(c("Alpha", "Beta"), each = 4L),
+    period        = rep(c("Training", "Testing", "Validation", "Full Period"), times = 2L),
+    cagr          = 5.0,
+    sharpe        = 0.5,
+    ssr           = 1.2,
+    top5pct_share = 0.25
   )
 
   result <- check_leaderboard_coverage(sn, lb)

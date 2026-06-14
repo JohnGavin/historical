@@ -1,27 +1,9 @@
-# hd_ohlcv snapshot of AAPL structure
-
-    Code
-      str(result)
-    Output
-      tibble [3 x 11] (S3: tbl_df/tbl/data.frame)
-       $ date          : POSIXct[1:3], format: "2026-04-07" "2026-04-08" ...
-       $ open          : num [1:3] 256 258 259
-       $ high          : num [1:3] 256 260 261
-       $ low           : num [1:3] 246 257 256
-       $ close         : num [1:3] 254 259 260
-       $ adjusted_close: num [1:3] 254 259 260
-       $ volume        : num [1:3] 62148000 41032800 28121600
-       $ ticker        : chr [1:3] "AAPL" "AAPL" "AAPL"
-       $ source        : chr [1:3] "yahoo" "yahoo" "yahoo"
-       $ asset_class   : chr [1:3] "equity" "equity" "equity"
-       $ updated_at    : POSIXct[1:3], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
-
 # hd_datasets snapshot
 
     Code
       str(hd_datasets())
     Output
-      List of 9
+      List of 10
        $ equity_daily       :List of 6
         ..$ url                : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
         ..$ schema             : chr [1:11] "date" "open" "high" "low" ...
@@ -69,15 +51,11 @@
         ..$ schema     : chr [1:8] "date" "open" "high" "low" ...
         ..$ frequency  : chr "daily"
         ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
-
-# hd_ohlcv split-and-bind: collect=FALSE informs user
-
-    Code
-      result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-05",
-      collect = FALSE)
-    Message
-      Mixed-dataset batch detected: "crypto_daily" and "equity_daily".
-      i Returning materialised tibble; `collect = FALSE` cannot be honoured when binding across datasets.
+       $ kraken_ohlcvt      :List of 4
+        ..$ url        : chr "hf://datasets/JohnGavin/finance-data/kraken_ohlcvt.parquet"
+        ..$ schema     : chr [1:10] "ticker" "pair" "interval_min" "time" ...
+        ..$ frequency  : chr "60min+1440min"
+        ..$ description: chr "Kraken exchange OHLCVT bars (hourly + daily) for 19 pairs: 6 crypto majors (BTC, ETH, SOL, XRP, ADA, LINK vs US"| __truncated__
 
 # hd_ohlcv: empty ticker vector errors
 

@@ -3,7 +3,7 @@
     Code
       str(hd_datasets())
     Output
-      List of 9
+      List of 10
        $ equity_daily       :List of 6
         ..$ url                : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
         ..$ schema             : chr [1:11] "date" "open" "high" "low" ...
@@ -51,4 +51,9 @@
         ..$ schema     : chr [1:8] "date" "open" "high" "low" ...
         ..$ frequency  : chr "daily"
         ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
+       $ kraken_ohlcvt      :List of 4
+        ..$ url        : chr "hf://datasets/JohnGavin/finance-data/kraken_ohlcvt.parquet"
+        ..$ schema     : chr [1:10] "ticker" "pair" "interval_min" "time" ...
+        ..$ frequency  : chr "60min+1440min"
+        ..$ description: chr "Kraken exchange OHLCVT bars (hourly + daily) for 19 pairs: 6 crypto majors (BTC, ETH, SOL, XRP, ADA, LINK vs US"| __truncated__
 
