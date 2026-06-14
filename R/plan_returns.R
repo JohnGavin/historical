@@ -164,6 +164,33 @@ plan_returns <- function() {
       names(cov_list) <- as.character(dates)
 
       cov_list
+    }),
+
+    # ── Phase C: Joint return path simulator ─────────────────────────────────
+    #
+    # 500 paths × 30-year horizon using the full-sample covariance (cov_annual).
+    # mu is estimated from asset_monthly_returns_wide by hd_simulate_paths().
+    # Parametric (multivariate-normal) method — Phase D fan-charts consume this.
+    targets::tar_target(simulate_paths, {
+      hd_simulate_paths(
+        n_paths       = 500L,
+        horizon_years = 30L,
+        assets        = RETURNS_ASSETS,
+        Sigma         = cov_annual,
+        .returns_wide = asset_monthly_returns_wide,
+        method        = "parametric",
+        seed          = 42L
+      )
+    }),
+
+    # ── Phase D: Quantile fan (nominal) ──────────────────────────────────────
+    targets::tar_target(path_quantiles, {
+      hd_path_quantiles(simulate_paths, metric = "cum_nominal")
+    }),
+
+    # ── Phase D: Quantile fan (real) ─────────────────────────────────────────
+    targets::tar_target(path_quantiles_real, {
+      hd_path_quantiles(simulate_paths, metric = "cum_real")
     })
   )
 }
