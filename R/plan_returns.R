@@ -166,11 +166,34 @@ plan_returns <- function() {
       cov_list
     }),
 
-    # ── Phase C: Joint return path simulator ─────────────────────────────────
+    # ── Phase E: Historical monthly CPI changes (FRED CPIAUCSL) ──────────────
     #
-    # 500 paths × 30-year horizon using the full-sample covariance (cov_annual).
-    # mu is estimated from asset_monthly_returns_wide by hd_simulate_paths().
-    # Parametric (multivariate-normal) method — Phase D fan-charts consume this.
+    # Block-bootstrap pool for per-path-year CPI draws in hd_simulate_paths().
+    # Returns a numeric vector of month-over-month CPI changes, filtered to
+    # complete (non-NA) observations.
+    targets::tar_target(cpi_monthly_changes, {
+      library(dplyr)
+
+      cpi_raw <- hd_lazy("macro_daily") |>
+        dplyr::filter(.data$series_id == "CPIAUCSL") |>
+        dplyr::mutate(date = as.Date(date)) |>
+        dplyr::collect() |>
+        dplyr::arrange(date) |>
+        dplyr::mutate(ym = format(date, "%Y-%m")) |>
+        dplyr::group_by(ym) |>
+        dplyr::filter(date == max(date)) |>
+        dplyr::ungroup() |>
+        dplyr::select(date, value) |>
+        dplyr::arrange(date)
+
+      cpi_mom <- cpi_raw$value / dplyr::lag(cpi_raw$value) - 1
+      cpi_mom[!is.na(cpi_mom)]
+    }),
+
+    # ── Phase C: Multivariate return simulation (#389) ───────────────────────
+    #
+    # 500 paths × 30 years, parametric (mvrnorm), fed by Phase B covariance.
+    # Phase E: passes .cpi_monthly for block-bootstrapped CPI deflation.
     targets::tar_target(simulate_paths, {
       hd_simulate_paths(
         n_paths       = 500L,
@@ -178,6 +201,7 @@ plan_returns <- function() {
         assets        = RETURNS_ASSETS,
         Sigma         = cov_annual,
         .returns_wide = asset_monthly_returns_wide,
+        .cpi_monthly  = cpi_monthly_changes,
         method        = "parametric",
         seed          = 42L
       )
