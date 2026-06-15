@@ -392,6 +392,28 @@ plan_leaderboard <- function() {
         }
       }
 
+      # ── ADD (Anomaly-Driven Demand) crowding columns (#430) ──────────────────
+      # add_corr: Pearson correlation between strategy monthly return and
+      #   SPY's first-6-trading-day return in the same month.
+      #   High positive correlation = returns concentrated in month-start
+      #   rebalancing window → ADD crowding signature.
+      # add_flag: TRUE if add_corr > add_params$crowd_corr_threshold (0.40).
+      # add_beta: OLS slope; one-unit increase in SPY month-start return maps
+      #   to add_beta units change in strategy return.
+      # Only "Full Period" rows carry meaningful values; sub-period rows receive NA.
+      # Reference: Kjær & Posselt (2025); wiki: anomaly-driven-demand.md
+      if (!is.null(add_crowding) && nrow(add_crowding) > 0) {
+        add_join <- add_crowding |>
+          dplyr::select("strategy", "add_corr", "add_beta", "add_flag")
+        all_metrics <- all_metrics |>
+          dplyr::left_join(add_join, by = "strategy") |>
+          dplyr::mutate(
+            add_corr = ifelse(period == "Full Period", add_corr, NA_real_),
+            add_beta = ifelse(period == "Full Period", add_beta, NA_real_),
+            add_flag = ifelse(period == "Full Period", add_flag, NA)
+          )
+      }
+
       # ── Pillar 8: risk-architecture columns (#269, #331) ─────────────────────
       # Join avg_dd_days, max_dd_days, loss_clustered, max_cons_losses from
       # fals_results_db. fals_results_db uses strategy_id (internal code); map

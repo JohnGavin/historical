@@ -128,6 +128,7 @@ source(here::here("R/plan_commodities_mean_reversion.R"))
 source(here::here("R/plan_mom_prepeak.R"))
 source(here::here("R/plan_mom_prepeak_gauntlet.R"))
 source(here::here("R/plan_fip_screen.R"))
+source(here::here("R/plan_add_crowding.R"))
 source(here::here("R/plan_crypto_momentum.R"))
 source(here::here("R/plan_solana_momentum.R"))
 source(here::here("R/plan_olmar.R"))
@@ -184,6 +185,7 @@ c(plan_strategy_names(),
   plan_mom_prepeak(),
   plan_mom_prepeak_gauntlet(),
   plan_fip_screen(),
+  plan_add_crowding(),
   plan_crypto_momentum(),
   plan_solana_momentum(),
   plan_olmar(),
