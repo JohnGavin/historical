@@ -110,6 +110,7 @@ source(here::here("R/plan_vvix.R"))
 source(here::here("R/plan_european_overlay.R"))
 source(here::here("R/plan_rafi.R"))
 source(here::here("R/plan_ev_ebit.R"))
+source(here::here("R/plan_managed_futures.R"))
 source(here::here("R/plan_forecast_eval.R"))
 source(here::here("R/plan_kalshi.R"))
 source(here::here("R/plan_nyt_sentiment.R"))
@@ -158,6 +159,7 @@ c(plan_strategy_names(),
   plan_european_overlay(),
   plan_rafi(),
   plan_ev_ebit(),
+  plan_managed_futures(),
   plan_forecast_eval(),
   plan_strategy_correlation(),
   plan_leaderboard(), plan_qa_vignette(),
