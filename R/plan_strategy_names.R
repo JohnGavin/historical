@@ -4,8 +4,8 @@
 # All downstream plans (falsification vignette, leaderboard, etc.)
 # should filter this target rather than defining their own name tables.
 #
-# Current count: 14 strategies (rows 1-11 original; rows 12-14 mom_prepeak
-# siblings added in #365 PR 2/4).
+# Current count: 15 strategies (rows 1-11 original; rows 12-14 mom_prepeak
+# siblings added in #365 PR 2/4; row 15 ev_ebit added in #426).
 
 plan_strategy_names <- function() {
   list(
@@ -16,13 +16,16 @@ plan_strategy_names <- function() {
           "stk_max", "stk_drif", "xgb_drif", "pso_optimal",
           "cmr",
           # ── #365: pre-peak / post-peak 12-2 momentum decomposition ──
-          "mom_prepeak", "mom_postpeak", "mom_combined"
+          "mom_prepeak", "mom_postpeak", "mom_combined",
+          # ── #426: EV/EBIT fundamental value sleeve (HML proxy v0) ──
+          "ev_ebit"
         ),
         short_name = c(
           "Avoid Worst", "Factor DRIF", "Factor MAX", "Risk State", "LTR", "TOM",
           "Stock MAX", "Stock DRIF", "XGB DRIF", "PSO Optimal",
           "CMR",
-          "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2"
+          "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2",
+          "Value (HML)"
         ),
         long_name = c(
           "Avoid Worst Days (VIX Protection)",
@@ -38,62 +41,72 @@ plan_strategy_names <- function() {
           "Commodities Mean Reversion",
           "Pre-Peak 12-2 Momentum (Büsing 2022)",
           "Post-Peak 12-2 Momentum (Büsing 2022)",
-          "Standard 12-2 Momentum (Büsing baseline)"
+          "Standard 12-2 Momentum (Büsing baseline)",
+          "EV/EBIT Value Sleeve (HML+RMW Proxy, v0)"
         ),
         asset_class = c(
           "overlay", "factor", "factor", "overlay", "equity", "overlay",
           "equity", "equity", "equity", "combined",
           "commodities",
-          "equity", "equity", "equity"
+          "equity", "equity", "equity",
+          "factor"
         ),
         frequency = c(
           "daily", "monthly", "monthly", "daily", "monthly", "daily",
           "monthly", "monthly", "monthly", "monthly",
           "monthly",
-          "monthly", "monthly", "monthly"
+          "monthly", "monthly", "monthly",
+          "monthly"
         ),
         ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L, 12L,
-                       12L, 12L, 12L),
+                       12L, 12L, 12L, 12L),
         vignette_url = c(
           "avoid-worst-days.html", "drif.html", "factor-max.html",
           "leaderboard.html", "leaderboard.html", "turn-of-month.html",
           "stock-backtest.html", "stock-backtest.html",
           "stock-backtest.html", "leaderboard.html",
           "commodities-mean-reversion.html",
-          "momentum-prepeak.html", "momentum-prepeak.html", "momentum-prepeak.html"
+          "momentum-prepeak.html", "momentum-prepeak.html", "momentum-prepeak.html",
+          "leaderboard.html"
         ),
         # ── #346 strategy registry keywords (rough first-pass; refine after a full tar_make) ──
-        # Order matches code_name above (1 avoid_worst .. 11 cmr, 12-14 mom_prepeak siblings).
+        # Order matches code_name above (1 avoid_worst .. 11 cmr, 12-14 mom_prepeak siblings,
+        # 15 ev_ebit added in #426).
         time_horizon_days_avg = c(
           1L,  21L, 21L, 1L,  252L, 1L,
           21L, 21L, 21L, 90L,
           21L,
-          21L, 21L, 21L
+          21L, 21L, 21L,
+          252L
         ),
         trades_per_year_avg = c(
           12,  12,  12,  12,  12,  12,
           12,  12,  12,   4,
           12,
-          12, 12, 12
+          12, 12, 12,
+          12
         ),
         liquidity_tier = factor(
           c("high", "high", "high", "high", "med", "high",
             "med",  "med",  "med",  "high",
             "med",
-            "med", "med", "med"),
+            "med", "med", "med",
+            "high"),
           levels = c("high", "med", "low")
         ),
         turnover_pct_per_period_avg = c(
           50, 30, 30, 50, 20, 10,
           100, 100, 100, 10,
           100,
-          100, 100, 100
+          100, 100, 100,
+          20
         ),
         directionality = factor(
           c("overlay",    "long_only",  "long_only",  "overlay",    "long_short", "overlay",
             "long_short", "long_short", "long_short", "long_only",
             "long_short",
-            "long_short", "long_short", "long_short"),
+            "long_short", "long_short", "long_short",
+            "long_only"),
           levels = c("long_only", "long_short", "market_neutral", "overlay")
         ),
         # Tags as JSON-encoded character vectors so duckplyr can pick them
@@ -112,7 +125,8 @@ plan_strategy_names <- function() {
           '["mean_reversion","commodities"]',
           '["momentum","cross_sectional","decomposition","prepeak"]',
           '["momentum","cross_sectional","decomposition","postpeak"]',
-          '["momentum","cross_sectional","baseline"]'
+          '["momentum","cross_sectional","baseline"]',
+          '["value","fundamental","factor","monthly","quality"]'
         ),
         research_paper_doi = c(
           NA_character_,                  # 1 avoid_worst (folk wisdom; no single paper)
@@ -128,7 +142,8 @@ plan_strategy_names <- function() {
           NA_character_,                  # 11 cmr (internal — #134/#138)
           "10.2139/ssrn.4298538",         # 12 mom_prepeak (Büsing, Mohrschladt & Siedhoff 2022)
           "10.2139/ssrn.4298538",         # 13 mom_postpeak
-          "10.2139/ssrn.4298538"          # 14 mom_combined (baseline)
+          "10.2139/ssrn.4298538",         # 14 mom_combined (baseline)
+          "10.1111/j.1540-6261.1993.tb04741.x" # 15 ev_ebit (Fama & French 1993 three-factor model)
         )
       )
     })
