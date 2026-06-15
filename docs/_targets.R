@@ -119,6 +119,7 @@ source(here::here("R/plan_causal_graph.R"))
 source(here::here("R/plan_ecb.R"))
 source(here::here("R/plan_guardian.R"))
 source(here::here("R/plan_jst.R"))
+source(here::here("R/plan_jst_trend.R"))
 source(here::here("R/plan_momentum_decomposition.R"))
 source(here::here("R/plan_volatility_spikes.R"))
 source(here::here("R/plan_regime_momentum.R"))
@@ -176,6 +177,7 @@ c(plan_strategy_names(),
   plan_ecb(),
   plan_guardian(),
   plan_jst(),
+  plan_jst_trend(),
   plan_momentum_decomposition(),
   plan_volatility_spikes(),
   plan_regime_momentum(),
