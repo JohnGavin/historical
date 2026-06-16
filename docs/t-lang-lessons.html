@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>t-lang-lessons</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="t-lang-lessons_files/libs/clipboard/clipboard.min.js"></script>
+<script src="t-lang-lessons_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="t-lang-lessons_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="t-lang-lessons_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="t-lang-lessons_files/libs/quarto-html/popper.min.js"></script>
+<script src="t-lang-lessons_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="t-lang-lessons_files/libs/quarto-html/anchor.min.js"></script>
+<link href="t-lang-lessons_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="t-lang-lessons_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="t-lang-lessons_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="t-lang-lessons_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="t-lang-lessons_files/libs/bootstrap/bootstrap-d5fa03fb90ac27921a6d47853be462c0.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="fullcontent quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+
+<main class="content" id="quarto-document-content">
+
+
+
+
+<section id="t-language-r-package-lessons-learned" class="level1">
+<h1>T Language + R Package: Lessons Learned</h1>
+<p>Lessons from the <code>historicaldata</code> project (2026-04-12 to 2026-04-14). To be promoted to a global rule at <code>~/docs_gh/llm/.claude/rules/t-lang-r-package.md</code>.</p>
+<section id="dependency-management" class="level2">
+<h2 class="anchored" data-anchor-id="dependency-management">1. Dependency Management</h2>
+<section id="tproject.toml-is-the-single-source-of-truth-for-nix" class="level3">
+<h3 class="anchored" data-anchor-id="tproject.toml-is-the-single-source-of-truth-for-nix">tproject.toml is the single source of truth for nix</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 13%">
+<col style="width: 20%">
+<col style="width: 28%">
+<col style="width: 37%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>File</th>
+<th>Purpose</th>
+<th>Who reads it</th>
+<th>Auto-generated?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>tproject.toml</code></td>
+<td>Declares R + Python + tool deps for nix</td>
+<td><code>t update</code></td>
+<td>No — edit directly</td>
+</tr>
+<tr class="even">
+<td><code>flake.nix</code></td>
+<td>Nix derivation with R/Python environments</td>
+<td><code>nix develop</code></td>
+<td><strong>Yes</strong> — by <code>t update</code>. NEVER edit directly.</td>
+</tr>
+<tr class="odd">
+<td><code>DESCRIPTION</code></td>
+<td>R package deps for non-nix users</td>
+<td><code>pak::pak()</code>, <code>R CMD check</code></td>
+<td>No — edit directly</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Every new R dependency must be added to BOTH <code>tproject.toml</code> AND <code>DESCRIPTION</code>.</strong></p>
+</section>
+<section id="why-two-files" class="level3">
+<h3 class="anchored" data-anchor-id="why-two-files">Why two files?</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 43%">
+<col style="width: 23%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Audience</th>
+<th>Installs via</th>
+<th>Reads</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Nix/T user</td>
+<td><code>nix develop</code></td>
+<td><code>tproject.toml</code> → <code>flake.nix</code></td>
+</tr>
+<tr class="even">
+<td>R user (no nix)</td>
+<td><code>pak::pak("owner/repo", subdir = "packages/pkg")</code></td>
+<td><code>DESCRIPTION</code></td>
+</tr>
+</tbody>
+</table>
+<p>Forgetting one means: - Missing from <code>tproject.toml</code> → R CMD check fails in nix (package not found) - Missing from <code>DESCRIPTION</code> → non-nix users can’t install</p>
+</section>
+<section id="adding-a-dependency-checklist" class="level3">
+<h3 class="anchored" data-anchor-id="adding-a-dependency-checklist">Adding a dependency: checklist</h3>
+<ol type="1">
+<li>Add to <code>tproject.toml</code> <code>[r-dependencies] packages</code></li>
+<li>Add to <code>DESCRIPTION</code> Imports (API dep) or Suggests (optional/pipeline dep)</li>
+<li>Run <code>t update</code> (regenerates <code>flake.nix</code>)</li>
+<li><code>exit</code> + <code>nix develop</code> (picks up new flake)</li>
+<li>Verify: <code>Rscript -e 'library(newpkg)'</code></li>
+</ol>
+</section>
+<section id="common-mistakes" class="level3">
+<h3 class="anchored" data-anchor-id="common-mistakes">Common mistakes</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 34%">
+<col style="width: 46%">
+<col style="width: 19%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Mistake</th>
+<th>Consequence</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Edit <code>flake.nix</code> directly</td>
+<td>Overwritten by next <code>t update</code></td>
+<td>Edit <code>tproject.toml</code> instead</td>
+</tr>
+<tr class="even">
+<td><code>install.packages()</code> in nix</td>
+<td>Fails (read-only nix store)</td>
+<td>Add to <code>tproject.toml</code></td>
+</tr>
+<tr class="odd">
+<td>Add to <code>flake.nix</code> but not <code>tproject.toml</code></td>
+<td>Lost on <code>t update</code></td>
+<td>Always edit <code>tproject.toml</code></td>
+</tr>
+<tr class="even">
+<td>Add to <code>tproject.toml</code> but not <code>DESCRIPTION</code></td>
+<td>Non-nix users can’t install</td>
+<td>Add to both</td>
+</tr>
+<tr class="odd">
+<td>Forget <code>t update</code> after editing <code>tproject.toml</code></td>
+<td><code>flake.nix</code> stale, package missing</td>
+<td>Always <code>t update &amp;&amp; exit &amp;&amp; nix develop</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="nix-shell-architecture" class="level2">
+<h2 class="anchored" data-anchor-id="nix-shell-architecture">2. Nix Shell Architecture</h2>
+<section id="one-r-environment-shared-by-all-nodes" class="level3">
+<h3 class="anchored" data-anchor-id="one-r-environment-shared-by-all-nodes">One R environment, shared by all nodes</h3>
+<p>T creates a single <code>r-env</code> from <code>[r-dependencies]</code>. All <code>rn()</code> pipeline nodes share it. No per-node overrides.</p>
+<p>Same for Python: single <code>py-env</code> from <code>[py-dependencies]</code>.</p>
+</section>
+<section id="claudes-dev-shell-project-shell" class="level3">
+<h3 class="anchored" data-anchor-id="claudes-dev-shell-project-shell">Claude’s dev shell ≠ project shell</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 15%">
+<col style="width: 22%">
+<col style="width: 42%">
+<col style="width: 20%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Shell</th>
+<th>R binary</th>
+<th>Has project deps?</th>
+<th>Use for</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Claude dev shell</td>
+<td><code>/nix/store/...-R-4.5.2/bin/R</code></td>
+<td>Some (impure)</td>
+<td>Reading files, git, quarto render</td>
+</tr>
+<tr class="even">
+<td>Project shell (<code>nix develop</code>)</td>
+<td><code>/nix/store/...-R-4.5.3-wrapper/bin/R</code></td>
+<td>All</td>
+<td><code>tar_make()</code>, <code>devtools::check()</code>, compiled packages</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Compiled R packages (glmnet, duckdb) SEGFAULT across shell boundaries.</strong> The <code>.so</code> files are compiled for one R binary and crash when loaded by another.</p>
+</section>
+<section id="what-runs-where" class="level3">
+<h3 class="anchored" data-anchor-id="what-runs-where">What runs where</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Task</th>
+<th>Shell</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>tar_make()</code> with compiled packages</td>
+<td><code>nix develop</code></td>
+<td>ABI match</td>
+</tr>
+<tr class="even">
+<td><code>devtools::check()</code></td>
+<td><code>nix develop</code></td>
+<td>Needs all deps + correct R</td>
+</tr>
+<tr class="odd">
+<td><code>quarto render</code></td>
+<td>Claude dev shell</td>
+<td>Only reads pre-built RDS</td>
+</tr>
+<tr class="even">
+<td><code>git commit/push</code></td>
+<td>Either</td>
+<td>No R involved</td>
+</tr>
+<tr class="odd">
+<td><code>t update</code></td>
+<td><code>nix develop</code></td>
+<td>Needs <code>t</code> binary</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="automation-from-claudes-shell" class="level3">
+<h3 class="anchored" data-anchor-id="automation-from-claudes-shell">Automation from Claude’s shell</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Run R commands inside the project shell</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop /path/to/project <span class="at">--command</span> bash <span class="at">-c</span> <span class="st">'Rscript -e "..."'</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Dedicated script</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="fu">bash</span> scripts/check_in_nix.sh</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+</section>
+<section id="r-package-in-t-project" class="level2">
+<h2 class="anchored" data-anchor-id="r-package-in-t-project">3. R Package in T Project</h2>
+<section id="directory-structure" class="level3">
+<h3 class="anchored" data-anchor-id="directory-structure">Directory structure</h3>
+<pre><code>project/
+├── tproject.toml          # T project deps (single source of truth)
+├── flake.nix              # Auto-generated by t update
+├── src/pipeline.t         # T pipeline DAG
+├── R/                     # Pipeline plan files (NOT part of R package)
+│   ├── plan_vignette.R
+│   ├── plan_backtest.R
+│   └── plan_drif.R
+├── docs/                  # Vignettes + rendered HTML
+│   ├── _targets.R         # Unified targets pipeline
+│   └── *.qmd
+├── scripts/               # Fetch scripts, QA, automation
+└── packages/
+    └── historicaldata/    # The R PACKAGE
+        ├── DESCRIPTION    # R package deps (for pak/CRAN)
+        ├── R/             # Package source code
+        ├── man/           # Roxygen docs
+        ├── tests/         # testthat
+        └── inst/          # Bundled data</code></pre>
+</section>
+<section id="r-package-does-not-have-its-own-nix-shell" class="level3">
+<h3 class="anchored" data-anchor-id="r-package-does-not-have-its-own-nix-shell">R package does NOT have its own nix shell</h3>
+<p>The R package lives inside the T project’s nix environment. There is no <code>default.R</code>/<code>default.nix</code> inside <code>packages/historicaldata/</code>. Package deps come from <code>tproject.toml</code>.</p>
+</section>
+<section id="r-cmd-check-fixes" class="level3">
+<h3 class="anchored" data-anchor-id="r-cmd-check-fixes">R CMD check fixes</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 58%">
+<col style="width: 41%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Issue</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Network-dependent examples</td>
+<td><code>@examplesIf interactive()</code> (interim); local fallback data (proper fix, #25)</td>
+</tr>
+<tr class="even">
+<td>Network-dependent tests</td>
+<td><code>skip_if_offline()</code> + <code>curl</code> in Suggests</td>
+</tr>
+<tr class="odd">
+<td>T extension in R package</td>
+<td>Delete <code>R/_extensions/</code>; add <code>_extensions</code> to <code>.Rbuildignore</code></td>
+</tr>
+<tr class="even">
+<td>pkgdown files flagged</td>
+<td>Add <code>_pkgdown.yml</code>, <code>docs/</code>, <code>pkgdown/</code> to <code>.Rbuildignore</code></td>
+</tr>
+<tr class="odd">
+<td>“unable to verify current time”</td>
+<td>Nix sandbox — unavoidable, not a code issue</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="never-ship-degraded-implementations" class="level2">
+<h2 class="anchored" data-anchor-id="never-ship-degraded-implementations">4. Never Ship Degraded Implementations</h2>
+<p>If a strategy requires package X (e.g.&nbsp;glmnet for elastic net):</p>
+<ol type="1">
+<li><strong>STOP</strong> — do not write code until the package is available</li>
+<li>Add to <code>tproject.toml</code> + <code>DESCRIPTION</code></li>
+<li><code>t update &amp;&amp; exit &amp;&amp; nix develop</code></li>
+<li>Verify <code>library(X)</code> works</li>
+<li><strong>THEN</strong> write the code</li>
+</ol>
+<p><strong>Never</strong> write <code>if (!require(X)) { use_simpler_method() }</code>. A missing feature is honest; a degraded implementation is a lie. The DRIF vignette shipped with PCA-OLS “fallback” instead of elastic net — the OOS results looked 3x better than reality because PCA-OLS was overfitting.</p>
+</section>
+<section id="huggingface-data-hosting" class="level2">
+<h2 class="anchored" data-anchor-id="huggingface-data-hosting">5. HuggingFace Data Hosting</h2>
+<section id="upload-git-clone-lfs-push" class="level3">
+<h3 class="anchored" data-anchor-id="upload-git-clone-lfs-push">Upload: git clone + LFS push</h3>
+<p>REST API upload endpoints are broken. The only reliable method:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="va">HF_TOKEN</span><span class="op">=</span><span class="va">$(</span><span class="fu">cat</span> ~/.cache/huggingface/token<span class="va">)</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="va">TMPDIR</span><span class="op">=</span><span class="va">$(</span><span class="fu">mktemp</span> <span class="at">-d</span><span class="va">)</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone <span class="st">"https://user:</span><span class="va">$HF_TOKEN</span><span class="st">@huggingface.co/datasets/owner/repo"</span> <span class="st">"</span><span class="va">$TMPDIR</span><span class="st">/repo"</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">cp</span> data/dist/file.parquet <span class="st">"</span><span class="va">$TMPDIR</span><span class="st">/repo/"</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> <span class="at">-C</span> <span class="st">"</span><span class="va">$TMPDIR</span><span class="st">/repo"</span> add file.parquet</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> <span class="at">-C</span> <span class="st">"</span><span class="va">$TMPDIR</span><span class="st">/repo"</span> commit <span class="at">-m</span> <span class="st">"Update"</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> <span class="at">-C</span> <span class="st">"</span><span class="va">$TMPDIR</span><span class="st">/repo"</span> push</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu">rm</span> <span class="at">-rf</span> <span class="st">"</span><span class="va">$TMPDIR</span><span class="st">"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="read-duckdb-hf-protocol" class="level3">
+<h3 class="anchored" data-anchor-id="read-duckdb-hf-protocol">Read: DuckDB hf:// protocol</h3>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>duckplyr<span class="sc">::</span><span class="fu">read_parquet_duckdb</span>(<span class="st">"hf://datasets/owner/repo/file.parquet"</span>) <span class="sc">|&gt;</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(ticker <span class="sc">==</span> <span class="st">"AAPL"</span>) <span class="sc">|&gt;</span> <span class="fu">collect</span>()</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>34% faster than <code>resolve/main/</code> URLs. Predicate pushdown works.</p>
+</section>
+<section id="duckplyr-gotchas" class="level3">
+<h3 class="anchored" data-anchor-id="duckplyr-gotchas">duckplyr gotchas</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 39%">
+<col style="width: 39%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Pattern</th>
+<th>Problem</th>
+<th>Fix</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>group_by() \|&gt; summarise()</code></td>
+<td>“stingy duckplyr frame”</td>
+<td>Use <code>.by =</code> inside <code>summarise()</code></td>
+</tr>
+<tr class="even">
+<td><code>as.character(min(date))</code> inside summarise</td>
+<td>Type coercion fails</td>
+<td>Move to after <code>collect()</code></td>
+</tr>
+<tr class="odd">
+<td><code>tbl(con, sql("SELECT..."))</code></td>
+<td>Still raw SQL</td>
+<td>Use <code>duckplyr::read_parquet_duckdb()</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="dataset-metadata-sync" class="level3">
+<h3 class="anchored" data-anchor-id="dataset-metadata-sync">Dataset-metadata sync</h3>
+<p>OHLCV tickers and metadata can drift. <code>qa_metadata_sync</code> target detects this. Upload both <code>equity_daily.parquet</code> AND <code>metadata.parquet</code> together.</p>
+</section>
+<section id="yfinance-volume-bug" class="level3">
+<h3 class="anchored" data-anchor-id="yfinance-volume-bug">yfinance volume bug</h3>
+<p>Non-US markets report incorrect volume (ranaroussi/yfinance#300). <code>qa_volume_sanity</code> target flags outliers. Don’t use raw volume for cross-exchange comparisons.</p>
+</section>
+</section>
+<section id="vignette-standards" class="level2">
+<h2 class="anchored" data-anchor-id="vignette-standards">6. Vignette Standards</h2>
+<section id="build-info-footer-mandatory" class="level3">
+<h3 class="anchored" data-anchor-id="build-info-footer-mandatory">Build-info footer (mandatory)</h3>
+<p>Every vignette ends with <code>build_info()</code> from <code>docs/vignette_utils.R</code>: - Version links to GitHub release - Git SHA links to commit - R version links to CRAN NEWS</p>
+</section>
+<section id="dark-mode-default" class="level3">
+<h3 class="anchored" data-anchor-id="dark-mode-default">Dark mode default</h3>
+<p>All vignettes use <code>theme: {dark: darkly, light: cosmo}</code> with JS defaulting to dark.</p>
+</section>
+<section id="click-to-zoom-on-plots" class="level3">
+<h3 class="anchored" data-anchor-id="click-to-zoom-on-plots">Click-to-zoom on plots</h3>
+<p>JS handler: click img → fullscreen overlay. Click overlay → dismiss.</p>
+</section>
+<section id="qa-pipeline" class="level3">
+<h3 class="anchored" data-anchor-id="qa-pipeline">QA pipeline</h3>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 36%">
+<col style="width: 36%">
+<col style="width: 27%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Target</th>
+<th>Checks</th>
+<th>Runs</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>qa_summary</code></td>
+<td>Pipeline completion</td>
+<td>Every <code>tar_make()</code></td>
+</tr>
+<tr class="even">
+<td><code>qa_metadata_sync</code></td>
+<td>OHLCV vs metadata ticker consistency</td>
+<td>Every <code>tar_make()</code></td>
+</tr>
+<tr class="odd">
+<td><code>qa_volume_sanity</code></td>
+<td>yfinance volume outliers</td>
+<td>Every <code>tar_make()</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
