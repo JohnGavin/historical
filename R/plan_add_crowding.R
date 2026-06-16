@@ -114,14 +114,17 @@ plan_add_crowding <- function() {
       min_mo     <- add_params$min_months
       spy_ms     <- add_spy_month_start |> dplyr::select("ym", "spy_start_ret")
 
-      # Helper: safely extract ym + ret from a portfolio tibble
+      # Helper: safely extract ym + ret from a portfolio tibble.
+      # Uses df[[col]] not .data[[col]] — targets tidy_eval wraps the body in
+      # rlang::expr() which treats .data[[col]] as a quosure reference and
+      # looks col up in envir (not the function's local scope), causing
+      # "object 'date_col' not found" at tar_target() construction time.
       .to_ym_ret <- function(df, date_col, ret_col) {
         if (is.null(df) || !all(c(date_col, ret_col) %in% names(df))) return(NULL)
-        df |>
-          dplyr::transmute(
-            ym  = format(as.Date(.data[[date_col]]), "%Y-%m"),
-            ret = .data[[ret_col]]
-          )
+        tibble::tibble(
+          ym  = format(as.Date(df[[date_col]]), "%Y-%m"),
+          ret = df[[ret_col]]
+        )
       }
 
       strat_rets <- list(
