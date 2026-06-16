@@ -1,5 +1,38 @@
 # Changelog
 
+## 2026-06-14 → 2026-06-16 (session 19 — 4 PRs + tar_make + full vignette render)
+
+### Completed
+
+- **PR #468 — FIP momentum screen (#427):** `R/plan_fip_screen.R` (7 targets: `fip_params`, `fip_daily_returns`, `fip_scores`, `fip_portfolio`, `fip_returns`, `fip_comparison`, `fip_caption`). Financial Instability Proxy screen using debt growth + credit spread signals. Wired into `docs/_targets.R`. All 7 targets computed in `tar_make()`.
+- **PR #469 — ADD crowding diagnostic (#430):** `R/plan_add_crowding.R` (4 targets: `add_params`, `add_spy_daily`, `add_spy_month_start`, `add_crowding`). Anomaly-Driven Demand (ADD) Pearson correlation between each strategy's monthly return and SPY month-start return (6-day window, Kjær & Posselt 2025). First 3 targets computed; `add_crowding` blocked by pre-existing `asset_monthly_returns_wide` / `mf_portfolios` cascade.
+- **PR #470 — JST 200-year trend-following backtest (#431):** `R/plan_jst_trend.R` (7 targets: `jt_params`, `jt_data`, `jt_country_metrics`, `jt_pooled`, `jt_sensitivity`, `jt_pervasiveness`, `jt_caption`). MA-12y equity index cross-over strategy applied to 17 economies 1870–2020 (JST Macro History dataset). All 7 targets computed. Pervasiveness: 14/17 economies (82%) show Sharpe improvement under trend-following vs buy-and-hold. Issue #431 closed.
+- **PR #471 — fix `plan_add_crowding.R` date_col bug (targets tidy_eval):** `.to_ym_ret()` helper used `.data[[date_col]]` inside `dplyr::transmute()` inside a `tar_target()` body. `targets 1.12.0` with `tidy_eval=TRUE` wraps the body in `rlang::expr()` + `quo_squash()`; `.data[[col]]` is treated as a quosure reference and `col` is looked up in `tar_option_get("envir")` rather than the function's local scope → `object 'date_col' not found` at construction time, blocking all `tar_make()` / `tar_outdated()` calls. Fixed by replacing with `tibble::tibble(col = df[[col]])` (base-R subsetting). Verified: all 67 `plan_*()` calls succeed post-fix.
+- **`tar_make()` run:** 56 targets completed after fix. New: all `jt_*` (7), `fip_*` (7), `ev_*` (6), `add_params` + `add_spy_daily` + `add_spy_month_start` (3). Pre-existing failures retained (duckplyr stingy frame, forcats missing, crypto ticker join, `asset_monthly_returns_wide` object `.` bug).
+- **`quarto render docs/` + push:** All 18 vignettes re-rendered and pushed to `origin/main` (136 files, 35,924 insertions). 4 previously-unrendered QMD files now live: `MERMAID_LESSONS`, `api-historicaldata`, `etf-replication-notes`, `t-lang-lessons`. Dark-mode contrast 0 violations. GitHub Pages updated.
+
+### Failed Approaches
+
+- **`traceback()` after `source("docs/_targets.R")` error:** When `source()` fails with `object 'date_col' not found`, `traceback()` reports "No traceback available" — the error happens at top-level expression evaluation, not inside a function call, so R's traceback stack is empty. Workaround: used `withCallingHandlers()` instead, which preserves `sys.calls()` even for top-level errors.
+- **`tidy_eval=TRUE` with `.data[[col]]` inside inner functions:** `.data[[col]]` dplyr pronoun cannot be used inside helper functions defined within `tar_target()` command bodies when `tidy_eval=TRUE` (the default). `targets::tar_target()` wraps the command in `as.call(c(quote(rlang::expr), expr))` then evaluates it — `quo_squash()` sees `.data[[col]]` and tries to resolve `col` in `envir`, where it doesn't exist. Fix: use base-R `df[[col]]` not `.data[[col]]` inside inner functions in target bodies.
+- **`.env$col` approach:** Tried `.data[[.env$date_col]]` to scope the lookup to the function's local environment. `.env` itself is not found outside a data-mask context. Only `df[[col]]` (base-R) works reliably.
+- **Renaming the parameter:** Renaming `date_col` to `dc` produces `object 'dc' not found` — the issue is structural (`.data[[]]` inside inner function), not the variable name.
+
+### Accuracy / Metrics
+
+- New pipeline targets computed: 20 new targets successful (jt_* 7, fip_* 7, ev_* 6)
+- Vignettes deployed: 18 rendered (4 previously unrendered now live)
+- PRs merged: 4 (#468, #469, #470, #471)
+
+### Known Limitations
+
+- `add_crowding` target blocked by cascade from `asset_monthly_returns_wide` (`object '.' not found`). Pre-existing bug in `plan_liquidity.R` or similar — needs separate investigation.
+- `mf_portfolios` (managed futures) blocked by same cascade. `mf_data` fails to load `asset_monthly_returns_wide`.
+- No QMD vignette yet for JST trend-following (`jt_*` targets), FIP screen (`fip_*`), EV/EBIT (`ev_*`), or ADD crowding (`add_*`). Data computed; prose layer not yet written.
+- `leaderboard` target blocked by `add_crowding` failure — leaderboard page renders using stale/cached data.
+- 24 roborev findings unaddressed (20 addressed, 4 remaining — pre-existing).
+- `evidence.qmd` missing `## Related Vignettes` section (qa_vignette_cross_refs gate fails).
+
 ## 2026-06-13 → 2026-06-14 (session 18 — #389 Phases D+E + CI lychee fix + 4 PRs merged)
 
 ### Completed
