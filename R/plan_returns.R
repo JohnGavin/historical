@@ -73,15 +73,22 @@ plan_returns <- function() {
     # Inner-joins all assets on date so every row has a complete observation.
     # This is the canonical feed for plan_cross_asset_corr.R's multi_asset_returns.
     targets::tar_target(asset_monthly_returns_wide, {
-      library(dplyr)
+      wide <- asset_monthly_returns |>
+        tidyr::pivot_wider(names_from = ticker, values_from = ret)
 
-      asset_monthly_returns |>
-        tidyr::pivot_wider(names_from = ticker, values_from = ret) |>
-        # Drop any row where ANY asset is NA (ensures cov() gets complete cases)
-        dplyr::filter(if (ncol(dplyr::select(., -date)) > 0)
-          rowSums(is.na(dplyr::select(., -date))) == 0
-          else TRUE) |>
-        dplyr::arrange(date)
+      asset_cols <- setdiff(colnames(wide), "date")
+
+      # Drop any row where ANY asset is NA (ensures cov() gets complete cases).
+      # NOTE: native pipe |> does not bind `.`, so the previous dplyr::select(., -date)
+      # pattern caused "object '.' not found" at runtime (#471 sibling).
+      if (length(asset_cols) > 0) {
+        wide <- dplyr::filter(
+          wide,
+          !dplyr::if_any(dplyr::all_of(asset_cols), is.na)
+        )
+      }
+
+      dplyr::arrange(wide, date)
     }),
 
     # ── Full-sample annualised covariance matrix ──────────────────────────────
