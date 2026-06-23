@@ -238,6 +238,73 @@ test_that("plan_returns: function signature is stable (API drift guard)", {
   expect_snapshot(args(plan_returns))
 })
 
+# ============================================================================
+# Regression: asset_monthly_returns_wide NA-drop (native pipe `.` bug, #471 sibling)
+# ============================================================================
+#
+# Before the fix, dplyr::select(., -date) inside a native-pipe |> chain threw
+# "object '.' not found" because |> does not bind `.` (only magrittr %>% does).
+# These tests replicate the pivot_wider + NA-drop logic on toy data to confirm:
+#   (a) rows with NA in any asset column are dropped
+#   (b) rows with all non-NA asset values are kept
+#   (c) zero-asset-column edge case keeps all rows (no error)
+
+# Helper: replicate the fixed asset_monthly_returns_wide logic
+wide_na_drop <- function(long_tbl) {
+  wide <- tidyr::pivot_wider(long_tbl, names_from = ticker, values_from = ret)
+  asset_cols <- setdiff(colnames(wide), "date")
+  if (length(asset_cols) > 0) {
+    wide <- dplyr::filter(
+      wide,
+      !dplyr::if_any(dplyr::all_of(asset_cols), is.na)
+    )
+  }
+  dplyr::arrange(wide, date)
+}
+
+test_that("wide_na_drop: rows with NA in any asset column are dropped", {
+  long <- tibble::tibble(
+    date   = as.Date(c("2020-01-31", "2020-01-31",
+                       "2020-02-29", "2020-02-29",
+                       "2020-03-31", "2020-03-31")),
+    ticker = c("SPY", "TLT",   "SPY", "TLT",   "SPY", "TLT"),
+    ret    = c(0.01,   0.02,    NA,    0.03,    0.04,   0.05)
+  )
+  result <- wide_na_drop(long)
+  # 2020-02-29 has NA for SPY -> should be dropped; other two months kept
+  expect_equal(nrow(result), 2L,
+    info = "Row with NA in any asset must be dropped")
+  expect_false(any(as.character(result$date) == "2020-02-29"),
+    info = "The NA-containing month (2020-02-29) must not appear in output")
+})
+
+test_that("wide_na_drop: rows with all non-NA asset values are kept", {
+  long <- tibble::tibble(
+    date   = as.Date(c("2020-01-31", "2020-01-31",
+                       "2020-02-29", "2020-02-29")),
+    ticker = c("SPY", "TLT", "SPY", "TLT"),
+    ret    = c(0.01,   0.02,  0.03,  0.04)
+  )
+  result <- wide_na_drop(long)
+  expect_equal(nrow(result), 2L,
+    info = "All complete rows should be retained")
+  expect_equal(sort(as.character(result$date)),
+               c("2020-01-31", "2020-02-29"))
+})
+
+test_that("wide_na_drop: zero-asset edge case keeps all rows without error", {
+  # pivot_wider on a zero-row long tibble produces a date-only wide tibble
+  long_zero <- tibble::tibble(
+    date   = as.Date(character(0)),
+    ticker = character(0),
+    ret    = numeric(0)
+  )
+  # Should not error and return an empty tibble
+  expect_no_error(wide_na_drop(long_zero))
+  result <- wide_na_drop(long_zero)
+  expect_equal(nrow(result), 0L)
+})
+
 test_that("cov_annual: structure snapshot with canonical 4-asset universe", {
   assets <- c("SPY", "TLT", "GLD", "DBC")
   wide   <- make_wide_returns(n_months = 120L, assets = assets, seed = 7L)
