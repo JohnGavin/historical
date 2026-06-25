@@ -40,8 +40,8 @@ if (!existsFunction("check_leaderboard_coverage")) {
     period        = "Full Period",
     cagr          = 5.0,
     sharpe        = 0.5,
-    ssr           = 1.2,
-    top5pct_share = 0.25
+    ssr           = 0.8,
+    top5pct_share = 0.05
   )
 }
 
@@ -106,8 +106,8 @@ test_that("check_leaderboard_coverage: handles duplicate strategy rows in leader
     period        = rep(c("Training", "Testing", "Validation", "Full Period"), times = 2L),
     cagr          = 5.0,
     sharpe        = 0.5,
-    ssr           = 1.2,
-    top5pct_share = 0.25
+    ssr           = 0.8,
+    top5pct_share = 0.05
   )
 
   result <- check_leaderboard_coverage(sn, lb)
