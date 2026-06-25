@@ -1,14 +1,13 @@
-# Tests for plan_structural_breaks.R and hd_structural_breaks() (#477)
+# Tests for plan_structural_breaks.R (#477)
 #
-# Tests at two levels:
-#   1. Unit tests for hd_structural_breaks() on synthetic series with a
-#      known injected break.
-#   2. Tests for the plan helper logic (summary builder, divergence flag)
-#      using a synthetic multi-strategy input.
-#   3. Snapshot tests for error/CLI paths and assembled caption strings.
+# Tests for the plan helper logic (summary builder, divergence flag) using a
+# synthetic multi-strategy input.  Snapshot tests for assembled caption strings.
+#
+# Note: unit tests for hd_structural_breaks() itself live in:
+#   packages/historicaldata/tests/testthat/test-structural-breaks.R
+# They are NOT duplicated here (snapshot-test-policy.md).
 #
 # All tests are self-contained: no live targets pipeline is executed.
-# The package is loaded via pkgload::load_all() which reflects the worktree.
 
 testthat::local_edition(3)
 
@@ -21,152 +20,7 @@ source(here::here("packages/historicaldata/R/structural_breaks.R"))
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 1. hd_structural_breaks() — input validation (snapshot: error messages)
-# ─────────────────────────────────────────────────────────────────────────────
-
-test_that("hd_structural_breaks: non-numeric input aborts with structured cli message", {
-  expect_snapshot(
-    error = TRUE,
-    hd_structural_breaks("not_a_vector")
-  )
-})
-
-test_that("hd_structural_breaks: NA values abort with structured cli message", {
-  expect_snapshot(
-    error = TRUE,
-    hd_structural_breaks(c(0.01, NA_real_, 0.02))
-  )
-})
-
-test_that("hd_structural_breaks: alpha out of (0,1) aborts with structured cli message", {
-  set.seed(42)
-  r <- rnorm(500, 0.0004, 0.01)
-  expect_snapshot(
-    error = TRUE,
-    hd_structural_breaks(r, alpha = 1.5)
-  )
-})
-
-test_that("hd_structural_breaks: non-positive min_years aborts", {
-  set.seed(42)
-  r <- rnorm(500, 0.0004, 0.01)
-  expect_snapshot(
-    error = TRUE,
-    hd_structural_breaks(r, min_years = 0)
-  )
-})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 2. hd_structural_breaks() — no-break on stationary series
-# ─────────────────────────────────────────────────────────────────────────────
-
-test_that("hd_structural_breaks: stationary series produces n_breaks = 0", {
-  set.seed(123)
-  # 10 years of daily returns drawn from a stable distribution — no break.
-  r <- rnorm(10L * 252L, mean = 0.0004, sd = 0.01)
-
-  result <- hd_structural_breaks(r, alpha = 0.01, min_years = 5L,
-                                   periods_per_year = 252L)
-
-  expect_type(result, "list")
-  expect_equal(result$n_breaks, 0L)
-  expect_equal(length(result$break_indices), 0L)
-  expect_equal(result$post_break_start, 1L)
-  expect_equal(result$post_break_returns, r)
-})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 3. hd_structural_breaks() — known injected break is detected
-# ─────────────────────────────────────────────────────────────────────────────
-
-test_that("hd_structural_breaks: injected mean shift is detected at 1% level", {
-  set.seed(42)
-  n_daily <- 252L
-
-  # Pre-break: 7 years, modest positive mean.
-  pre  <- rnorm(7L * n_daily, mean =  0.0008, sd = 0.01)
-  # Post-break: 6 years, large negative mean (clear regime shift).
-  post <- rnorm(6L * n_daily, mean = -0.0008, sd = 0.01)
-  r    <- c(pre, post)
-
-  result <- hd_structural_breaks(r, alpha = 0.01, min_years = 3L,
-                                   periods_per_year = 252L)
-
-  # Must detect at least one break somewhere in the series.
-  expect_true(result$n_breaks >= 1L)
-
-  # The first break found must be within the series boundaries.
-  # Note: the algorithm scans forward and reports the EARLIEST significant
-  # split (within [min_periods, n - min_periods]).  With opposite-sign means
-  # the split will be detected somewhere in the early part of the data.
-  # We only assert that a break exists and post_break_start < n.
-  expect_true(result$post_break_start >= 1L)
-  expect_true(result$post_break_start <= length(r))
-})
-
-test_that("hd_structural_breaks: post_break_returns length matches assertion", {
-  set.seed(42)
-  n_daily <- 252L
-  pre  <- rnorm(7L * n_daily, mean =  0.0008, sd = 0.01)
-  post <- rnorm(6L * n_daily, mean = -0.0008, sd = 0.01)
-  r    <- c(pre, post)
-
-  result <- hd_structural_breaks(r, alpha = 0.01, min_years = 3L,
-                                   periods_per_year = 252L)
-
-  # post_break_returns must equal r[post_break_start:length(r)]
-  expected_post <- r[result$post_break_start:length(r)]
-  expect_equal(result$post_break_returns, expected_post)
-  expect_equal(length(result$post_break_returns),
-               length(r) - result$post_break_start + 1L)
-})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 4. hd_structural_breaks() — return structure completeness
-# ─────────────────────────────────────────────────────────────────────────────
-
-test_that("hd_structural_breaks: return list has all required components", {
-  set.seed(7)
-  r <- rnorm(5L * 252L, 0.0003, 0.01)
-  result <- hd_structural_breaks(r, alpha = 0.05, min_years = 2L,
-                                   periods_per_year = 252L)
-
-  expected_names <- c(
-    "n_breaks", "break_indices", "post_break_start",
-    "post_break_returns", "alpha", "min_periods",
-    "multiple_testing_note"
-  )
-  expect_setequal(names(result), expected_names)
-})
-
-test_that("hd_structural_breaks: multiple_testing_note is a non-empty string", {
-  set.seed(7)
-  r <- rnorm(5L * 252L, 0.0003, 0.01)
-  result <- hd_structural_breaks(r, alpha = 0.01, min_years = 2L,
-                                   periods_per_year = 252L)
-
-  expect_type(result$multiple_testing_note, "character")
-  expect_true(nchar(result$multiple_testing_note) > 0L)
-  # Snapshot to catch wording drift.
-  expect_snapshot(cat(result$multiple_testing_note))
-})
-
-test_that("hd_structural_breaks: min_periods echoed correctly", {
-  set.seed(7)
-  r <- rnorm(8L * 12L, 0.003, 0.04)  # monthly series
-  result <- hd_structural_breaks(r, alpha = 0.01, min_years = 3L,
-                                   periods_per_year = 12L)
-
-  expect_equal(result$min_periods, 3L * 12L)
-  expect_equal(result$alpha, 0.01)
-})
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# 5. Summary-builder helper — tested inline
+# Summary-builder helper — tested inline
 #
 # Replicates the logic from the `structural_breaks_summary` target body so we
 # can test it without running a full pipeline.
@@ -223,18 +77,21 @@ test_that("hd_structural_breaks: min_periods echoed correctly", {
   )
 }
 
-test_that("summary builder: no-break strategy has n_breaks = 0 and divergence NA", {
+test_that("summary builder: no-break strategy has n_breaks = 0 and equal Sharpes", {
   res <- .make_sb_results()
   s_a <- res$strat_a
 
   whole_sharpe <- .sharpe_ann(s_a$series$returns, s_a$series$ann)
-  post_r       <- s_a$result$post_break_returns
+  # main's hd_structural_breaks() does not return post_break_returns;
+  # derive from post_break_start index (same as the plan consumer does).
+  post_start <- s_a$result$post_break_start
+  post_r      <- s_a$series$returns[post_start:length(s_a$series$returns)]
   post_sharpe  <- .sharpe_ann(post_r, s_a$series$ann)
 
-  # No-break strategy: post_break = full series → divergence should be 0, not NA.
+  # No-break strategy: post_break = full series -> Sharpes identical.
   expect_equal(s_a$result$n_breaks, 0L)
   expect_equal(length(s_a$result$break_indices), 0L)
-  # When no break, post series = whole series → Sharpes identical.
+  # When no break, post series = whole series -> Sharpes identical.
   expect_equal(whole_sharpe, post_sharpe, tolerance = 1e-10)
 })
 
@@ -254,7 +111,7 @@ test_that("summary builder: errored strategy preserved with note", {
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 6. Caption snapshot — catches wording drift
+# Caption snapshot — catches wording drift
 # ─────────────────────────────────────────────────────────────────────────────
 
 # Replicate the caption-building logic (snapshot of assembled string).

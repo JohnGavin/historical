@@ -233,7 +233,10 @@ plan_structural_breaks <- function() {
 
           whole_sharpe      <- sharpe_ann(r, ann)
           post_start_idx    <- res$post_break_start
-          post_r            <- res$post_break_returns
+          # main's hd_structural_breaks() returns break_indices, n_breaks,
+          # segments, post_break_start, alpha, min_obs — no post_break_returns
+          # field.  Derive it from the index.
+          post_r            <- r[post_start_idx:length(r)]
           post_break_sharpe <- sharpe_ann(post_r, ann)
 
           # Break dates: convert break indices to calendar dates.
