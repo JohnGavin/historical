@@ -208,21 +208,20 @@ Audit of the comprehensive market behavior definition (from #105 comment) agains
 | Strategy decay (#73) | ✅ | `plan_strategy_decay.R` (Factor MAX decay >50%) |
 | Bootstrap CI (parameter stability) | ✅ | `plan_bootstrap_ci.R` |
 | Regime-split performance | ✅ | Causal graph HML-VIX by period (pre/post 2010) |
-| Formal structural break tests | ❌ | Regime detection exists but no Chow/CUSUM tests |
+| Formal structural break tests | ✅ | `hd_structural_breaks()` via `plan_structural_breaks.R`; displayed in the [Structural Breaks](https://johngavin.github.io/historical/leaderboard.html) page of the leaderboard (#484) |
 
 **Vignettes displaying:**
-- Leaderboard: By Partition tab, Alpha Decay tab, Bootstrap CI tab
+- Leaderboard: By Partition tab, Alpha Decay tab, Bootstrap CI tab, Structural Breaks page
 - Falsification: Causal graph implication split tests
 
 ### Gaps: ⚠️ **MINOR (20%)**
 
 | Missing | Priority | Reason |
 |---------|----------|--------|
-| Chow test (structural break) | Medium | Formal test for parameter change at known date |
-| CUSUM (rolling break detection) | Medium | Detect breaks at unknown dates |
+| CUSUM (rolling break detection) | Low | `hd_structural_breaks()` uses iterative forward-split t-test; CUSUM is an alternative method not yet implemented |
 | Rolling window Sharpe | Low | Already have partition-based + bootstrap |
 
-**Recommendation:** Add Chow test for strategies with suspected decay (e.g., Factor MAX at 2010 split). Low priority — partition-based analysis and causal graph splits already cover this ground.
+**Recommendation:** Structural break detection is now covered by `hd_structural_breaks()` (iterative forward-split t-test, 1% level, 5-year minimum segment). The Chow test for a *known* break date and CUSUM for rolling monitoring are lower-priority alternatives if the current iterative method proves insufficient.
 
 ---
 
