@@ -19,13 +19,24 @@
 #     normal; do not conflate underperformance with a structural break.
 #
 # Input targets (bridge series; all NA-filtered before passing):
-#   fals_drif_input       — monthly Factor DRIF portfolio returns
-#   fals_fac_max_input    — monthly Factor MAX portfolio returns
-#   fals_ltr_input        — monthly LTR (LambdaMART) portfolio returns
+#   fals_drif_input        — monthly Factor DRIF portfolio returns
+#   fals_fac_max_input     — monthly Factor MAX portfolio returns
+#   fals_ltr_input         — monthly LTR (LambdaMART) portfolio returns
 #   fals_avoid_worst_input — daily Avoid-Worst VIX returns
-#   fals_rsc_input        — daily Risk-State Overlay returns
-#   port_returns          — monthly multi-strategy return matrix
-#                           (cols: fac_max, fac_drif, stk_max, stk_drif)
+#   fals_rsc_input         — daily Risk-State Overlay returns
+#   port_returns           — monthly multi-strategy return matrix
+#                            (cols: fac_max, fac_drif, stk_max, stk_drif)
+#   xgb_drif_portfolio     — monthly XGB DRIF portfolio (col: port_ret)
+#   olmar_portfolio        — daily OLMAR-1 portfolio (col: net_ret)
+#   fals_tom_input         — daily TOM overlay (col: strategy_ret)
+#   fals_cmr_input         — monthly CMR 3m (col: strategy_ret)
+#   mom_prepeak_returns    — monthly Mom Pre-Peak L/S (col: ret_ls, date: exec_date)
+#   mom_postpeak_returns   — monthly Mom Post-Peak L/S (col: ret_ls, date: exec_date)
+#   mom_combined_returns   — monthly Mom 12-2 L/S (col: ret_ls, date: exec_date)
+#
+# Short-series guard: hd_structural_breaks() needs >= 2*min_years*ppy observations.
+# Strategies that fall below this threshold appear in structural_breaks_summary
+# with a `note` explaining why they were skipped — the target does NOT error.
 #
 # Total new targets: 5
 #   sb_params
@@ -77,14 +88,15 @@ plan_structural_breaks <- function() {
         library(dplyr)
 
         # Helper: extract non-NA returns and corresponding dates from a
-        # data.frame with columns {date, strategy_ret}.
-        extract_series <- function(df, ret_col = "strategy_ret") {
+        # data.frame with columns {date_col, ret_col}.
+        extract_series <- function(df, ret_col = "strategy_ret",
+                                   date_col = "date") {
           if (is.null(df) || nrow(df) == 0L) return(NULL)
           df <- df[!is.na(df[[ret_col]]), ]
           if (nrow(df) == 0L) return(NULL)
           list(
             returns = df[[ret_col]],
-            dates   = as.Date(df$date)
+            dates   = as.Date(df[[date_col]])
           )
         }
 
@@ -108,21 +120,47 @@ plan_structural_breaks <- function() {
           # ── Stock strategies (monthly, from portfolio returns) ─────────
           `Stock MAX`     = extract_port("stk_max"),
           `Stock DRIF`    = extract_port("stk_drif"),
+          # ── XGB DRIF (monthly, port_ret column) ───────────────────────
+          `XGB DRIF`      = extract_series(xgb_drif_portfolio,
+                                           ret_col = "port_ret"),
+          # ── OLMAR-1 (daily, net_ret column) ───────────────────────────
+          `OLMAR-1`       = extract_series(olmar_portfolio,
+                                           ret_col = "net_ret"),
           # ── Other strategies via fals bridge targets ───────────────────
           # LTR is monthly
           LTR             = extract_series(fals_ltr_input),
           # Avoid Worst and RSC are daily
           `Avoid Worst`   = extract_series(fals_avoid_worst_input),
-          `Risk State`    = extract_series(fals_rsc_input)
+          `Risk State`    = extract_series(fals_rsc_input),
+          # TOM is daily (fals_tom_input: date + strategy_ret)
+          TOM             = extract_series(fals_tom_input),
+          # CMR is monthly (fals_cmr_input = cmr_returns_3m: date + strategy_ret)
+          CMR             = extract_series(fals_cmr_input),
+          # Mom strategies are monthly (exec_date + ret_ls)
+          `Mom Pre-Peak`  = extract_series(mom_prepeak_returns,
+                                           ret_col  = "ret_ls",
+                                           date_col = "exec_date"),
+          `Mom Post-Peak` = extract_series(mom_postpeak_returns,
+                                           ret_col  = "ret_ls",
+                                           date_col = "exec_date"),
+          `Mom 12-2`      = extract_series(mom_combined_returns,
+                                           ret_col  = "ret_ls",
+                                           date_col = "exec_date")
         )
 
         # Tag each entry with its period frequency for downstream Sharpe calc.
         ppy_map <- list(
-          `Factor DRIF` = 12L, `Factor MAX` = 12L,
-          `Stock MAX`   = 12L, `Stock DRIF` = 12L,
-          LTR           = 12L,
-          `Avoid Worst` = 252L,
-          `Risk State`  = 252L
+          `Factor DRIF`  = 12L,  `Factor MAX`   = 12L,
+          `Stock MAX`    = 12L,  `Stock DRIF`   = 12L,
+          `XGB DRIF`     = 12L,
+          `OLMAR-1`      = 252L,
+          LTR            = 12L,
+          `Avoid Worst`  = 252L,
+          `Risk State`   = 252L,
+          TOM            = 252L,
+          CMR            = 12L,
+          `Mom Pre-Peak` = 12L,  `Mom Post-Peak` = 12L,
+          `Mom 12-2`     = 12L
         )
 
         lapply(names(raw), function(nm) {
