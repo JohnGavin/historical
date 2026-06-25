@@ -450,6 +450,187 @@ if (!is.null(kelly_t)) {
 }
 ```
 
+# Structural Breaks
+
+## Row {height=100%}
+
+### {.tabset}
+
+#### Interpretation
+
+A **structural break** at date *T* means the returns process appears to have changed before and after that date — the distribution of vol-normalised returns differs significantly on each side. This is **evidence worth investigating**, not an automatic allocation trigger.
+
+The `resulting-prohibition` rule applies directly here: a detected break does not justify revising strategy weights without identifying new *structural* evidence for why the change occurred. Past underperformance alone is not such evidence — Swedroe documents 12–39-year underperformance episodes for well-established risk premia (`underperformance-prior`). Conflating a drawdown with a structural change risks abandoning a strategy at exactly the wrong time.
+
+Rob Carver's empirical finding (2026) is the calibrating prior: across instrument/forecast pairs, only ~13% show breaks at the 1% level, and whole-history estimation often beats break-adjusted estimation out-of-sample. **Break-splitting is a guard against over-splitting, not an always-on re-estimator.**
+
+For the full framework context see the [market-behavior gap analysis](https://github.com/JohnGavin/historical/blob/main/knowledge/wiki/market-behavior-gap-analysis.md) (§ Structural Stability), which this section closes (gap now ✅).
+
+#### Summary Table
+
+```{r}
+#| label: sb-table
+sb_sum <- safe_tar_read("structural_breaks_summary")
+sb_cap <- safe_tar_read("structural_breaks_caption")
+snames  <- safe_tar_read("strategy_names")
+
+if (!is.null(sb_sum) && !is.null(snames)) {
+  # strategy_names join: structural_breaks_summary uses short_name labels
+  sb_disp <- sb_sum |>
+    left_join(
+      snames |> select(short_name, long_name),
+      by = c("strategy" = "short_name")
+    ) |>
+    mutate(Strategy = dplyr::coalesce(long_name, strategy)) |>
+    transmute(
+      Strategy,
+      `Break Date(s)`     = break_dates,
+      `N Breaks`          = ifelse(is.na(n_breaks), "—", as.character(n_breaks)),
+      `Whole Sharpe`      = ifelse(
+        is.na(whole_sharpe), "—",
+        format(round(whole_sharpe,      3L), nsmall = 3L)
+      ),
+      `Post-Break Sharpe` = ifelse(
+        is.na(post_break_sharpe), "—",
+        format(round(post_break_sharpe, 3L), nsmall = 3L)
+      ),
+      `Divergence %`      = ifelse(
+        is.na(sharpe_divergence_pct), "—",
+        paste0(sharpe_divergence_pct, "%")
+      ),
+      Material            = ifelse(
+        is.na(material_divergence), "—",
+        ifelse(material_divergence, "YES", "no")
+      ),
+      Note                = ifelse(is.na(note), "", note)
+    )
+
+  cap_text <- if (!is.null(sb_cap)) sb_cap else
+    "Structural break analysis — run tar_make() to populate."
+
+  DT::datatable(
+    sb_disp,
+    caption  = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption",
+      cap_text
+    ),
+    rownames = FALSE,
+    filter   = "top",
+    options  = list(
+      pageLength   = 20L,
+      scrollX      = TRUE,
+      dom          = "frtip",
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  ) |>
+    DT::formatStyle(
+      "Material",
+      target          = "row",
+      backgroundColor = DT::styleEqual("YES", "rgba(255, 99, 71, 0.18)")
+    )
+}
+```
+
+#### Sharpe Comparison
+
+```{r}
+#| label: sb-dotplot
+#| fig-height: 7
+#| fig-width: 9
+sb_sum <- safe_tar_read("structural_breaks_summary")
+snames  <- safe_tar_read("strategy_names")
+
+if (!is.null(sb_sum) && !is.null(snames)) {
+  plot_df <- sb_sum |>
+    filter(!is.na(whole_sharpe)) |>
+    left_join(
+      snames |> select(short_name, long_name),
+      by = c("strategy" = "short_name")
+    ) |>
+    mutate(
+      label     = dplyr::coalesce(long_name, strategy),
+      has_break = factor(
+        ifelse(!is.na(n_breaks) & n_breaks > 0L, "Break at 1%", "No break"),
+        levels = c("No break", "Break at 1%")
+      )
+    )
+
+  strat_order <- plot_df |>
+    arrange(whole_sharpe) |>
+    pull(label)
+
+  long_df <- plot_df |>
+    select(label, has_break,
+           `Whole History` = whole_sharpe,
+           `Post-Break`    = post_break_sharpe) |>
+    tidyr::pivot_longer(
+      c(`Whole History`, `Post-Break`),
+      names_to  = "Period",
+      values_to = "Sharpe"
+    ) |>
+    filter(!is.na(Sharpe)) |>
+    mutate(
+      label  = factor(label,  levels = strat_order),
+      Period = factor(Period, levels = c("Whole History", "Post-Break"))
+    )
+
+  ggplot(long_df, aes(x = Sharpe, y = label, colour = Period, shape = has_break)) +
+    geom_vline(xintercept = 0, linetype = "dotted",
+               colour = "grey50", linewidth = 0.4) +
+    geom_point(size = 3.5, alpha = 0.9) +
+    scale_colour_manual(
+      values = hd_palette(2),
+      name   = "Estimate period"
+    ) +
+    scale_shape_manual(
+      values = c("No break" = 16L, "Break at 1%" = 17L),
+      name   = "Break status"
+    ) +
+    labs(
+      x     = "Annualised Sharpe Ratio",
+      y     = NULL,
+      title = "Whole-history vs post-break Sharpe"
+    ) +
+    hd_theme()
+}
+```
+
+```{r}
+#| label: sb-dotplot-caption
+#| results: asis
+sb_cap <- safe_tar_read("structural_breaks_caption")
+fig_cap <- paste0(
+  "**Figure — Cleveland dot plot:** whole-history Sharpe (circle) vs ",
+  "post-break Sharpe (where a break was detected) for all leaderboard strategies. ",
+  "**Data:** return series pre-computed in the docs targets pipeline; see ",
+  "[plan_structural_breaks.R](https://github.com/JohnGavin/historical/blob/main/R/plan_structural_breaks.R). ",
+  "**Variables:** annualised Sharpe ratio; Whole History = full return series, ",
+  "Post-Break = segment after the first detected break (triangle shape). ",
+  "**Labels:** `long_name` from the `strategy_names` target ",
+  "([plan_strategy_names.R](https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_names.R)), ",
+  "ordered by whole-history Sharpe ascending. ",
+  "**Methodology:** iterative forward-split t-test at 1% level with 5-year minimum segment; see ",
+  "[hd_structural_breaks()](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/structural_breaks.R). ",
+  "**Caveats:** scanning all candidate split dates inflates false-break rate above the nominal 1% level; ",
+  "a detected break is evidence to investigate, not an allocation trigger (`resulting-prohibition`); ",
+  "whole-history estimation often beats break-adjusted OOS (Carver 2026). ",
+  "**Chart type:** Cleveland dot plot per visualization-standards (dotchart first choice). ",
+  if (!is.null(sb_cap)) paste0("Dynamic summary: ", sb_cap) else ""
+)
+cat(paste0("\n*", fig_cap, "*\n"))
+```
+
 # Details
 
 ## Row
