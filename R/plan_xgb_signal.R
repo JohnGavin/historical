@@ -103,6 +103,27 @@ plan_xgb_signal <- function() {
       signal <- xgb_drif_signal |>
         inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
 
+      # Variant A (filter-then-rank, Cakici 2023 / #449):
+      # Drop sub-ADV names BEFORE cutting deciles — illiquid micro-caps with
+      # extreme XGB predictions cannot end up in decile 1 or 10.
+      # ADV source: stk_monthly_adv (column adv_dollars = median_daily_volume × avg_close).
+      # stk_params$adv_threshold is the single source of truth (no hardcoding).
+      # XGB A/B evidence: see explorations/cakici_design_ab/results/xgb_SUMMARY.md
+      signal <- signal |>
+        inner_join(
+          stk_monthly_adv |> select(ticker, ym, adv_dollars),
+          by = c("ticker", "ym")
+        ) |>
+        filter(adv_dollars >= stk_params$adv_threshold)
+
+      # Re-apply minimum-stocks guard AFTER the ADV filter (#449):
+      # the gate can drop names and push some months below the decile threshold.
+      stocks_per_month <- signal |> count(ym, name = "n_stocks")
+      valid_months <- stocks_per_month |>
+        filter(n_stocks >= stk_params$n_deciles * 5L) |>
+        pull(ym)
+      signal <- signal |> filter(ym %in% valid_months)
+
       deciled <- assign_decile(signal, predicted_ret, stk_params$n_deciles)
       port <- portfolio_longshort(deciled, long_decile = 1L, short_decile = 10L,
                                    cost_per_trade = stk_params$cost_per_trade,
