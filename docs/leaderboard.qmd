@@ -548,6 +548,11 @@ if (!is.null(sb_sum) && !is.null(snames)) {
 #| label: sb-dotplot
 #| fig-height: 7
 #| fig-width: 9
+# Path-checked pkgload (cwd-trap fix: here::here() returns docs/ under quarto render)
+pkg_path <- if (dir.exists("packages/historicaldata")) "packages/historicaldata" else
+  file.path(dirname(here::here()), "packages/historicaldata")
+pkgload::load_all(pkg_path, quiet = TRUE)
+
 sb_sum <- safe_tar_read("structural_breaks_summary")
 snames  <- safe_tar_read("strategy_names")
 
