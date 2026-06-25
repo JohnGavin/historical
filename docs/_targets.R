@@ -136,6 +136,7 @@ source(here::here("R/plan_olmar.R"))
 source(here::here("R/plan_bdbb_sol.R"))
 source(here::here("R/plan_turn_of_month.R"))
 source(here::here("R/plan_wf_correlation.R"))
+source(here::here("R/plan_structural_breaks.R"))
 source(here::here("R/plan_artefact_registry.R"))
 source(here::here("R/plan_qa_gates.R"))
 # Phase B of #389: covariance infrastructure + fixed cross-asset correlation plan
@@ -195,6 +196,7 @@ c(plan_strategy_names(),
   plan_bdbb_sol(),
   plan_turn_of_month(),
   plan_wf_correlation(),
+  plan_structural_breaks(),
   plan_artefact_registry(),
   plan_qa_gates(),
   # Phase B of #389: covariance targets + fixed cross-asset correlation plan
