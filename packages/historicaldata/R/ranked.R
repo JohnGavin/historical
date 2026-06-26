@@ -30,13 +30,26 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
     lf <- lf |> dplyr::arrange(.data[[metric]])
   }
 
-  lf |> dplyr::slice_head(n = n) |> dplyr::collect()
+  lf |> dplyr::collect() |> dplyr::slice_head(n = n)
+}
+
+# Pick the best available adjusted-price column from an actual column list.
+# Priority: adjusted_close (canonical post-#397) > adjusted (legacy) > close.
+# Internal helper — not exported.
+.pick_price_col <- function(actual_cols) {
+  if ("adjusted_close" %in% actual_cols) "adjusted_close"
+  else if ("adjusted" %in% actual_cols) "adjusted"
+  else "close"
 }
 
 #' Most volatile tickers by recent realised volatility
 #'
 #' Computes 21-day rolling annualised volatility for all tickers in a dataset
 #' and returns the top N. Uses a single DuckDB window query over the full Parquet.
+#'
+#' The adjusted-price column is detected at runtime from the actual Parquet
+#' columns (priority: `adjusted_close` > `adjusted` > `close`), so the
+#' function tolerates parquets written both before and after the #397 rename.
 #'
 #' @param dataset Dataset name (default "equity_daily")
 #' @param n Number of tickers to return (default 5)
@@ -53,8 +66,13 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
   ds <- hd_datasets()[[dataset]]
   if (is.null(ds)) cli::cli_abort("Unknown dataset: {dataset}")
 
-  # Use adjusted if available (equity), else close
-  price_col <- if ("adjusted_close" %in% ds$schema) "adjusted_close" else "close"
+  # Detect price column from the actual parquet columns at runtime.
+  # The registry schema declares adjusted_close, but parquets written before
+  # issue #397 still use the old name `adjusted`. Checking ds$schema would
+  # always resolve to adjusted_close (absent from old parquets) → Binder Error.
+  src <- hd_read_parquet_sql(con, ds$url)
+  actual_cols <- names(DBI::dbGetQuery(con, sprintf("SELECT * FROM %s LIMIT 0", src)))
+  price_col <- .pick_price_col(actual_cols)
 
   sql <- sprintf("
     WITH returns AS (
@@ -82,7 +100,7 @@ hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) 
     WHERE vol_21d IS NOT NULL
     ORDER BY vol_21d DESC
     LIMIT %d",
-    price_col, price_col, price_col, hd_read_parquet_sql(con, ds$url), price_col,
+    price_col, price_col, price_col, src, price_col,
     as.integer(window_days) - 1L, as.integer(n)
   )
 
