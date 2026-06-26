@@ -1,4 +1,58 @@
 # Regression tests for #325: canonical adjusted_close column across datasets.
+# Regression tests for #489 Cluster A: vig_eq_faang / vig_eq_vol adjusted→adjusted_close.
+
+# ── Helpers used by vig_eq_faang and vig_eq_vol (inline in code-as-target strings) ──
+
+# Simulate what hd_ohlcv() returns for equity tickers after the #325/#397 rename:
+# a tibble with 'adjusted_close' (not bare 'adjusted').
+.ohlcv_frame <- function() {
+  tibble::tibble(
+    date           = as.Date(c("2024-01-02", "2024-01-03", "2024-01-04")),
+    close          = c(100.0, 110.0, 121.0),
+    adjusted_close = c(100.0, 110.0, 121.0),
+    ticker         = "AAPL"
+  )
+}
+
+test_that("return calc with adjusted_close gives expected values (#489 Cluster A regression)", {
+  # 3-row frame → ret = adjusted_close / lag(adjusted_close) - 1
+  df <- .ohlcv_frame() |>
+    dplyr::group_by(ticker) |>
+    dplyr::mutate(ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
+    dplyr::ungroup()
+
+  # Row 1: NA (no lag)
+  expect_true(is.na(df$ret[1L]))
+  # Rows 2 and 3: exact 10% return each
+  expect_equal(df$ret[2L], 0.1, tolerance = 1e-10)
+  expect_equal(df$ret[3L], 0.1, tolerance = 1e-10)
+})
+
+test_that("cum-return calc with adjusted_close gives expected values (#489 Cluster A regression)", {
+  # Mirrors vig_eq_faang: cum_ret = adjusted_close / first(adjusted_close) - 1
+  df <- .ohlcv_frame() |>
+    dplyr::group_by(ticker) |>
+    dplyr::mutate(cum_ret = adjusted_close / dplyr::first(adjusted_close) - 1) |>
+    dplyr::ungroup()
+
+  expect_equal(df$cum_ret[1L], 0.0,  tolerance = 1e-10)
+  expect_equal(df$cum_ret[2L], 0.1,  tolerance = 1e-10)
+  expect_equal(df$cum_ret[3L], 0.21, tolerance = 1e-10)
+})
+
+test_that("bare 'adjusted' column on an adjusted_close frame gives a clear dplyr error (#489 regression)", {
+  # After #325/#397, hd_ohlcv() returns 'adjusted_close', not 'adjusted'.
+  # Code that uses 'adjusted' on such a frame must fail loudly, not silently return NA.
+  df <- .ohlcv_frame()   # has 'adjusted_close', NOT 'adjusted'
+
+  expect_error(
+    dplyr::mutate(df, ret = adjusted / dplyr::lag(adjusted) - 1),
+    regexp = "adjusted",
+    info   = "dplyr must error when bare 'adjusted' column is absent"
+  )
+})
+
+
 
 test_that("equity_daily schema uses adjusted_close, not adjusted", {
   ds <- hd_datasets()
