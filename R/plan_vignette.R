@@ -90,7 +90,7 @@ ggplot(aapl, aes(date)) +
 # Batch query: all FAANG tickers in one DuckDB request
 faang <- hd_ohlcv(hd_group("FAANG"), from = "2024-01-01") |>
   group_by(ticker) |>
-  mutate(cum_ret = adjusted / first(adjusted) - 1) |>
+  mutate(cum_ret = adjusted_close / first(adjusted_close) - 1) |>
   ungroup()
 
 ggplot(faang, aes(date, cum_ret, colour = ticker)) +
@@ -112,7 +112,7 @@ vol <- hd_ohlcv(vol_tickers, from = "2023-06-01") |>
   group_by(ticker) |>
   arrange(date) |>
   mutate(
-    log_ret = log(adjusted / lag(adjusted)),
+    log_ret = log(adjusted_close / lag(adjusted_close)),
     cum_sq = cumsum(if_else(is.na(log_ret), 0, log_ret^2)),
     vol_21d = sqrt(pmax((cum_sq - lag(cum_sq, 21, default = NA_real_)) / 21, 0)) * sqrt(252)
   ) |>
