@@ -238,6 +238,67 @@ test_that("plan_returns: function signature is stable (API drift guard)", {
   expect_snapshot(args(plan_returns))
 })
 
+# ============================================================================
+# Tests: .complete_case_wide() — regression guard for #487
+#
+# Exercises the pure helper extracted from asset_monthly_returns_wide.
+# Source plan_returns.R once; the helper is available as .complete_case_wide().
+# ============================================================================
+
+test_that(".complete_case_wide: row with any NA asset column is dropped (#487)", {
+  # Source file in local env to get .complete_case_wide without side effects
+  env <- new.env()
+  source(here::here("R/plan_returns.R"), local = env)
+  ccw <- env$.complete_case_wide
+
+  wide <- tibble::tibble(
+    date = as.Date(c("2020-01-31", "2020-02-29", "2020-03-31")),
+    SPY  = c(0.01, NA_real_, 0.03),   # row 2 has NA
+    TLT  = c(0.02, 0.00,    0.01)
+  )
+
+  result <- ccw(wide)
+
+  expect_equal(nrow(result), 2L,
+               info = "Row with NA in asset column must be dropped")
+  expect_equal(result$date, as.Date(c("2020-01-31", "2020-03-31")),
+               info = "Remaining rows must be the complete-case rows")
+})
+
+test_that(".complete_case_wide: fully-populated frame is unchanged (#487)", {
+  env <- new.env()
+  source(here::here("R/plan_returns.R"), local = env)
+  ccw <- env$.complete_case_wide
+
+  wide <- tibble::tibble(
+    date = as.Date(c("2020-01-31", "2020-02-29")),
+    SPY  = c(0.01, 0.02),
+    TLT  = c(0.03, 0.04)
+  )
+
+  result <- ccw(wide)
+
+  expect_equal(nrow(result), 2L,
+               info = "No rows should be dropped from a fully-populated frame")
+  expect_equal(result, wide)
+})
+
+test_that(".complete_case_wide: date-only frame (no asset cols) is unchanged (#487)", {
+  # if_all(-date) over zero non-date columns returns TRUE → all rows kept.
+  # This guards the original 'else TRUE' edge case from the magrittr version.
+  env <- new.env()
+  source(here::here("R/plan_returns.R"), local = env)
+  ccw <- env$.complete_case_wide
+
+  wide <- tibble::tibble(date = as.Date(c("2020-01-31", "2020-02-29")))
+
+  result <- ccw(wide)
+
+  expect_equal(nrow(result), 2L,
+               info = "Date-only frame must pass all rows through (zero non-date cols)")
+  expect_equal(result, wide)
+})
+
 test_that("cov_annual: structure snapshot with canonical 4-asset universe", {
   assets <- c("SPY", "TLT", "GLD", "DBC")
   wide   <- make_wide_returns(n_months = 120L, assets = assets, seed = 7L)

@@ -40,6 +40,16 @@ RETURNS_ASSETS <- c("SPY", "TLT", "GLD", "DBC")
 # Monthly periods per year.
 PERIODS_PER_YEAR <- 12L
 
+# ── Pure helper: drop rows with any NA in non-date asset columns ─────────────
+#
+# Used by asset_monthly_returns_wide to ensure cov() gets complete cases.
+# Native |>-pipe-safe: no magrittr dot dependency.
+# Edge case: a date-only frame (zero non-date cols) passes all rows through
+# because if_all() over an empty column set returns TRUE for every row.
+.complete_case_wide <- function(df) {
+  dplyr::filter(df, dplyr::if_all(-date, ~ !is.na(.x)))
+}
+
 plan_returns <- function() {
   list(
 
@@ -78,9 +88,7 @@ plan_returns <- function() {
       asset_monthly_returns |>
         tidyr::pivot_wider(names_from = ticker, values_from = ret) |>
         # Drop any row where ANY asset is NA (ensures cov() gets complete cases)
-        dplyr::filter(if (ncol(dplyr::select(., -date)) > 0)
-          rowSums(is.na(dplyr::select(., -date))) == 0
-          else TRUE) |>
+        .complete_case_wide() |>
         dplyr::arrange(date)
     }),
 
