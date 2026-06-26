@@ -31,8 +31,13 @@ plan_crypto_momentum <- function() {
       library(dplyr)
       library(arrow)
 
-      # Read crypto data from local parquet file
+      # Read crypto data from local parquet file.
+      # NOTE: arrow parquet TIMESTAMP columns load as POSIXct; sample_start/sample_end
+      # are Date objects. A POSIXct-vs-Date comparison silently returns 0 rows
+      # (see data-validation-timeseries rule §9). Coerce to Date first so the
+      # filter is Date-vs-Date and produces the expected ~35k-row universe.
       crypto_data <- arrow::read_parquet(here::here("data/raw/crypto_all.parquet")) |>
+        dplyr::mutate(date = as.Date(date)) |>
         filter(
           date >= crypto_mom_params$sample_start,
           date <= crypto_mom_params$sample_end
