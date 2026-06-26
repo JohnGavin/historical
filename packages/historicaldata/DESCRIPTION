@@ -30,6 +30,7 @@ Imports:
 Suggests:
     alphavantager,
     arrow (>= 14.0),
+    blastula,
     curl,
     DT,
     glmnet,

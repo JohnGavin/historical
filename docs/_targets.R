@@ -142,6 +142,8 @@ source(here::here("R/plan_qa_gates.R"))
 # Phase B of #389: covariance infrastructure + fixed cross-asset correlation plan
 source(here::here("R/plan_returns.R"))
 source(here::here("R/plan_cross_asset_corr.R"))
+# #482 Slice 1: strategy digest (leaderboard deltas + blastula email-to-file)
+source(here::here("R/plan_strategy_digest.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -167,7 +169,7 @@ c(plan_strategy_names(),
   plan_managed_futures(),
   plan_forecast_eval(),
   plan_strategy_correlation(),
-  plan_leaderboard(), plan_qa_vignette(),
+  plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
   plan_ltr_momentum(),
