@@ -205,6 +205,18 @@ backtest_crypto_momentum <- function(signals, returns, cost_bps = 30,
     unique() |>
     sort()
 
+  # Guard: empty signals / rebalance_dates means an empty universe upstream
+  # (e.g. Date-vs-POSIXct filter mismatch in crypto_universe that returns 0 rows).
+  # Fail loudly here rather than producing a column-less tibble whose join later
+  # throws a cryptic "ticker not present in y" error.
+  if (nrow(signals) == 0L || length(rebalance_dates) == 0L) {
+    cli::cli_abort(c(
+      "x" = "backtest_crypto_momentum(): no signals / rebalance dates.",
+      "i" = "nrow(signals) = {nrow(signals)}, length(rebalance_dates) = {length(rebalance_dates)}.",
+      "i" = "An empty universe upstream (e.g. Date-vs-POSIXct filter mismatch) is the most common cause."
+    ))
+  }
+
   # For each rebalance date, rank by signal and assign positions
   positions <- lapply(rebalance_dates, function(reb_date) {
     signals |>
