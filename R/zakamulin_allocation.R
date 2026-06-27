@@ -333,20 +333,21 @@ summarize_regime_allocation <- function(backtest_results, annual_rf = 0.02) {
       .groups = "drop"
     ) |>
     mutate(
-      # Compute max drawdowns — use named-arg lambda + rlang::.env to avoid
-      # R parser warnings ("..1 may be used in an incorrect context") that
-      # purrr's `~{}` tilde-lambdas trigger when ..N refs sit inside dplyr's
-      # NSE-aware filter() — column-name vs iter-variable conflict requires
-      # .env$ to disambiguate. (#337)
+      # Compute max drawdowns — use DISTINCT lambda arg names (.scheme etc.)
+      # so there is no column-name vs. iterator-variable collision inside
+      # dplyr's data-mask filter(). The rlang::.env$ pronoun is NOT needed
+      # when the lambda args have names that don't shadow the column names.
+      # purrr::pmap_dbl() matches list keys to function arg names, so the
+      # list keys must also use the .prefixed names. (#337, #489 Cluster D)
       max_dd = purrr::pmap_dbl(
-        list(scheme = scheme, signal_type = signal_type, allocation_fn = allocation_fn),
-        function(scheme, signal_type, allocation_fn) {
+        list(.scheme = scheme, .signal_type = signal_type, .allocation_fn = allocation_fn),
+        function(.scheme, .signal_type, .allocation_fn) {
           rets <- backtest_results |>
-            filter(scheme == rlang::.env$scheme,
-                   signal_type == rlang::.env$signal_type,
-                   allocation_fn == rlang::.env$allocation_fn) |>
-            arrange(date) |>
-            pull(net_ret)
+            dplyr::filter(scheme == .scheme,
+                          signal_type == .signal_type,
+                          allocation_fn == .allocation_fn) |>
+            dplyr::arrange(date) |>
+            dplyr::pull(net_ret)
           if (length(rets) < 2) return(NA_real_)
           cumrets <- cumprod(1 + rets)
           cummax_vals <- cummax(cumrets)
@@ -355,14 +356,14 @@ summarize_regime_allocation <- function(backtest_results, annual_rf = 0.02) {
         }
       ),
       max_dd_allocated = purrr::pmap_dbl(
-        list(scheme = scheme, signal_type = signal_type, allocation_fn = allocation_fn),
-        function(scheme, signal_type, allocation_fn) {
+        list(.scheme = scheme, .signal_type = signal_type, .allocation_fn = allocation_fn),
+        function(.scheme, .signal_type, .allocation_fn) {
           rets <- backtest_results |>
-            filter(scheme == rlang::.env$scheme,
-                   signal_type == rlang::.env$signal_type,
-                   allocation_fn == rlang::.env$allocation_fn) |>
-            arrange(date) |>
-            pull(allocated_ret)
+            dplyr::filter(scheme == .scheme,
+                          signal_type == .signal_type,
+                          allocation_fn == .allocation_fn) |>
+            dplyr::arrange(date) |>
+            dplyr::pull(allocated_ret)
           if (length(rets) < 2) return(NA_real_)
           cumrets <- cumprod(1 + rets)
           cummax_vals <- cummax(cumrets)

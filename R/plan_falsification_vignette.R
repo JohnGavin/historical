@@ -541,6 +541,7 @@ plan_falsification_vignette <- function() {
     }),
 
     targets::tar_target(fals_vig_cmr_head_to_head_caption, {
+      gh_base <- "https://github.com/JohnGavin/historical/blob/main"
       mr_sharpes  <- fals_cmr_summary$hac_sharpe
       mom_sharpe  <- round(
         cmr_vs_mom_compare$sharpe[cmr_vs_mom_compare$type == "momentum"][1],
