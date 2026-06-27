@@ -112,19 +112,36 @@ test_that("volume nulling does not affect price columns (close, open, high, low)
 })
 
 # ── qa_volume_sanity recalibration logic ─────────────────────────────────────
-# Test the updated flagging logic (ratio > 50 only, no absolute threshold).
+# Tests the updated flagging logic: ratio > 250 (raised from 50 in #497).
 # Uses a synthetic summary table that mimics what qa_volume_sanity produces
 # after DuckDB summarisation + non-US nulling + filter(!is.na(avg_dollar_vol)).
+#
+# Calibration rationale:
+#   US median ADV ~$122M (many small-caps drag the median down).
+#   Legit US mega-caps: SPY 139x, TSLA 86x, QQQ 61x, NVDA 39x → all < 250x.
+#   Genuine unit-confusion errors: 1000x+ → well above 250x.
+#
+# The synthetic frame is designed so:
+#   - 19 background tickers produce median ≈ $122M when combined with mega-cap rows
+#   - SPY at $17B → ratio ≈ 139x → must NOT flag at threshold 250
+#   - BADTICKER at $122B → ratio ≈ 1000x → MUST flag at threshold 250
+#
+# These tests PIN the 250 threshold: they would FAIL at the old threshold of 50
+# (SPY at 139x would have been wrongly flagged).
 
-test_that("recalibrated flag: SPY-like US mega-cap (high absolute, low ratio) does NOT flag", {
-  # SPY: ~$17B/day; US median across 50 large caps ~$2B → ratio ~8.5x
-  # Should NOT be flagged by ratio > 50
+# Shared synthetic background tickers (19 US names, median of all 19 = $122M).
+# When combined with SPY ($17B) the 20-ticker median = (120+122)/2 = 121M.
+# When combined with SPY + BADTICKER ($122B) the 21-ticker median = 122M (11th value).
+.vol_smalls_adv <- c(40, 50, 60, 70, 80, 90, 100, 110, 115, 120, 122, 125, 130,
+                     140, 150, 160, 200, 250, 350) * 1e6  # 19 values
+
+test_that("recalibrated flag: SPY at ~139x US median does NOT flag at threshold 250", {
+  # 19 background US tickers + SPY → 20-ticker median ≈ $121M
+  # SPY ratio = 17000 / 121 ≈ 140x  →  below threshold 250, must NOT flag.
   ticker_stats <- tibble::tibble(
-    ticker        = c("SPY", "AAPL", "MSFT", "NVDA", "META",
-                      "WMT", "KO",   "PEP",  "DIS",  "T"),
-    avg_dollar_vol = c(17e9, 8e9, 6e9, 5e9, 4e9,
-                       2e9,  1e9, 1e9, 0.8e9, 0.5e9),
-    exchange      = rep("US", 10L)
+    ticker        = c(paste0("SML", seq_along(.vol_smalls_adv)), "SPY"),
+    avg_dollar_vol = c(.vol_smalls_adv, 17e9),
+    exchange      = "US"
   )
 
   exchange_stats <- dplyr::summarise(
@@ -137,20 +154,24 @@ test_that("recalibrated flag: SPY-like US mega-cap (high absolute, low ratio) do
   flagged <- ticker_stats |>
     dplyr::left_join(exchange_stats, by = "exchange") |>
     dplyr::mutate(ratio_to_median = avg_dollar_vol / pmax(median_vol, 1)) |>
-    dplyr::filter(ratio_to_median > 50)
+    dplyr::filter(ratio_to_median > 250)
 
+  spy_ratio <- 17e9 / exchange_stats$median_vol
+  expect_false("SPY" %in% flagged$ticker,
+    info = sprintf("SPY ratio = %.0fx; should be ~140x, below threshold 250", spy_ratio))
   expect_equal(nrow(flagged), 0L,
     info = paste("Expected 0 flagged; got:", paste(flagged$ticker, collapse = ", ")))
 })
 
-test_that("recalibrated flag: genuinely anomalous volume DOES flag (>50x median)", {
-  # Simulates a ticker with a data error: volume 200x the US median
+test_that("recalibrated flag: genuine unit-error at ~1000x median DOES flag at threshold 250", {
+  # 19 background tickers + SPY ($17B) + BADTICKER ($122B):
+  #   21-ticker median = 122M (11th value in sorted vector)
+  #   BADTICKER ratio = 122000 / 122 = 1000x  → above threshold 250, MUST flag
+  #   SPY ratio       = 17000  / 122 ≈ 139x   → below threshold 250, must NOT flag
   ticker_stats <- tibble::tibble(
-    ticker        = c("BADTICKER", "AAPL", "MSFT", "NVDA", "META",
-                      "WMT", "KO", "PEP", "DIS", "T"),
-    avg_dollar_vol = c(400e9, 8e9, 6e9, 5e9, 4e9,   # BADTICKER ~400B: data error
-                       2e9,  1e9, 1e9, 0.8e9, 0.5e9),
-    exchange      = rep("US", 10L)
+    ticker        = c(paste0("SML", seq_along(.vol_smalls_adv)), "SPY", "BADTICKER"),
+    avg_dollar_vol = c(.vol_smalls_adv, 17e9, 122e9),
+    exchange      = "US"
   )
 
   exchange_stats <- dplyr::summarise(
@@ -163,10 +184,16 @@ test_that("recalibrated flag: genuinely anomalous volume DOES flag (>50x median)
   flagged <- ticker_stats |>
     dplyr::left_join(exchange_stats, by = "exchange") |>
     dplyr::mutate(ratio_to_median = avg_dollar_vol / pmax(median_vol, 1)) |>
-    dplyr::filter(ratio_to_median > 50)
+    dplyr::filter(ratio_to_median > 250)
 
-  expect_equal(nrow(flagged), 1L)
+  bad_ratio <- 122e9 / exchange_stats$median_vol
+  spy_ratio <- 17e9  / exchange_stats$median_vol
+  expect_equal(nrow(flagged), 1L,
+    info = sprintf("Expected only BADTICKER (%.0fx); got: %s",
+                   bad_ratio, paste(flagged$ticker, collapse = ", ")))
   expect_equal(flagged$ticker, "BADTICKER")
+  expect_false("SPY" %in% flagged$ticker,
+    info = sprintf("SPY ratio = %.0fx; should be ~139x, below threshold 250", spy_ratio))
 })
 
 test_that("recalibrated flag: non-US tickers excluded BEFORE flagging (NA after nulling)", {

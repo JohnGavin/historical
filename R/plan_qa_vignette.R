@@ -177,11 +177,11 @@ plan_qa_vignette <- function() {
     # Fix: null non-US avg_dollar_vol AFTER the DuckDB summarisation so the heavy
     # per-row computation stays in DuckDB. Then filter to only reliable-volume
     # (non-NA) tickers before flagging.
-    # Calibration (#489): drop the >$5B/day absolute threshold — it false-flagged
-    # US mega-caps (SPY $17B, TSLA $10B, QQQ $7B) whose ratio-to-US-median is
-    # well under 50x. The ratio check alone (>50x within-exchange) is sufficient
-    # once all non-US corrupt volume is excluded. Expected flagged count ≈ 0 on
-    # current data.
+    # Calibration (#489, #497): drop the >$5B/day absolute threshold — it false-flagged
+    # US mega-caps (SPY $17B, TSLA $10B, QQQ $7B). Threshold raised to 250x: the US
+    # median ADV is ~$122M (dragged down by small-caps), so legit mega-caps reach
+    # ~140x (SPY 139x, TSLA 86x, QQQ 61x) — all below 250x. Genuine unit-confusion
+    # errors produce 1000x+, well above 250x. Expected flagged count ≈ 0 on current data.
     targets::tar_target(qa_volume_sanity, {
       library(dplyr)
 
@@ -225,17 +225,18 @@ plan_qa_vignette <- function() {
 
       # Step 3: flag outliers — only ratio check; absolute dollar threshold dropped
       # (#489: removed >$5B/day which false-flagged SPY/QQQ/TSLA).
-      # Ratio >50x within-exchange is sufficient: US mega-cap ETFs are 5-20x median,
-      # not 50x, so they pass cleanly.
+      # Ratio >250x within-exchange: US median ADV ~$122M (small-cap-dragged).
+      # Legit US mega-caps reach ~140x (SPY 139x, TSLA 86x, QQQ 61x) — all below 250x.
+      # Genuine unit-confusion errors produce 1000x+, well above 250x.
       stats <- ticker_stats |>
         left_join(exchange_stats, by = "exchange") |>
         mutate(ratio_to_median = avg_dollar_vol / pmax(median_vol, 1)) |>
-        filter(ratio_to_median > 50) |>
+        filter(ratio_to_median > 250) |>
         arrange(desc(ratio_to_median))
 
       if (nrow(stats) > 0) {
         cli::cli_warn(c(
-          "!" = "QA volume: {nrow(stats)} ticker(s) with suspicious dollar volume (>50x exchange median)",
+          "!" = "QA volume: {nrow(stats)} ticker(s) with suspicious dollar volume (>250x exchange median)",
           "i" = "Only reliable-volume tickers are evaluated (non-US volume is nulled per #21).",
           "i" = paste(head(stats$ticker, 10), collapse = ", ")
         ))
