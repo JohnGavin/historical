@@ -112,6 +112,30 @@ plan_leaderboard <- function() {
           rename(months = n_days)
       }
 
+      # mf_metrics has multiple internal strategies (Long-Only, Long-Short, EW benchmark)
+      # and columns: strategy, period, n_months, cagr, vol, sharpe, max_dd, calmar.
+      # Keep only the canonical MOP 2012 long-short strategy.
+      # Period labels ("Full"/"Training"/"OOS") match what other strategies use.
+      .norm_mf <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |>
+          filter(strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)") |>
+          select(-strategy, -calmar) |>
+          rename(months = n_months)
+      }
+
+      # ev_metrics has multiple internal strategies (Pure Value, Value+Quality, Benchmark)
+      # and columns: strategy, period, n_months, cagr, vol, sharpe, max_dd, calmar.
+      # Keep only the pure HML strategy that represents "Value (HML)".
+      # Period labels ("Full"/"Training"/"OOS") match what other strategies use.
+      .norm_value <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        m |>
+          filter(strategy == "Pure Value (100% HML, EV/EBIT proxy)") |>
+          select(-strategy, -calmar) |>
+          rename(months = n_months)
+      }
+
       all_metrics <- bind_rows(
         add_meta(fm_metrics, "Factor MAX", "Factor", "Max daily return",
                  "factor-max.html"),
@@ -149,7 +173,14 @@ plan_leaderboard <- function() {
                  "momentum-prepeak.html"),
         add_meta(.norm_mom_sibling(mom_combined_metrics), "Mom 12-2", "Equity",
                  "Standard 12-2 momentum (Büsing baseline)",
-                 "momentum-prepeak.html")
+                 "momentum-prepeak.html"),
+        # ── Added in #489 Cluster C: wire missing strategies (S7 coverage) ──
+        add_meta(.norm_value(ev_metrics), "Value (HML)", "Factor",
+                 "EV/EBIT value sleeve (HML+RMW proxy, v0)",
+                 "R/plan_ev_ebit.R"),
+        add_meta(.norm_mf(mf_metrics), "Managed Futures", "Multi-Asset",
+                 "Cross-asset TS-momentum (MOP 2012, ETF proxies, v0)",
+                 "R/plan_managed_futures.R")
       )
 
       # Add portfolio optimal
