@@ -7,6 +7,29 @@
 # Note: tar_objects() cannot be called during tar_make().
 # Instead, QA targets take vig outputs as dependencies.
 
+# Helper: strip <script> and <pre> blocks from HTML text before defect scanning.
+#
+# WHY: JavaScript identifiers like `renderError:`, `clearError:`, jQuery's
+# `throw new Error(...)`, and the literal "Syntax error" in minified libraries
+# are NOT deployment defects — they live in <script> blocks and are expected.
+# Similarly, vignettes like MERMAID_LESSONS.html contain code *listings*
+# (inside <pre>) that intentionally show error-handling syntax. Scanning the
+# entire raw HTML produces false-positive r_error / syntax_error hits (#489).
+# Stripping <script> and <pre> regions first means only genuine leaked R errors
+# / NULL output — which appear in rendered prose/output <div>/<p> blocks, NOT
+# inside script or code regions — are flagged by qa_html_quality.
+#
+# @param html_text Single character string containing the full HTML content.
+# @return Character string with all <script>...</script> and <pre>...</pre>
+#   blocks replaced by empty strings.  All other HTML is preserved.
+.strip_script_and_code <- function(html_text) {
+  # (?s) enables PCRE dotall mode so . matches \n (multi-line blocks).
+  # .*? is non-greedy so each tag pair is removed individually, not run-on.
+  stripped <- gsub("(?s)<script[^>]*>.*?</script>", "", html_text, perl = TRUE)
+  stripped <- gsub("(?s)<pre[^>]*>.*?</pre>", "", stripped, perl = TRUE)
+  stripped
+}
+
 plan_qa_vignette <- function() {
   list(
     # QA 1: Pipeline completion marker
@@ -278,8 +301,15 @@ plan_qa_vignette <- function() {
       results <- lapply(html_files, function(f) {
         content <- readLines(f, warn = FALSE)
         text <- paste(content, collapse = "\n")
+        # Strip <script> and <pre> blocks before scanning (#489): JS function
+        # names (renderError:, clearError:), jQuery throw new Error(), and
+        # code listings inside <pre> are not defects.  Genuine leaked R errors
+        # (e.g. 'Error in foo():') live in prose <p>/<div> output blocks and
+        # are still caught after stripping.
+        text_clean <- .strip_script_and_code(text)
+        lines_clean <- strsplit(text_clean, "\n", fixed = TRUE)[[1]]
         counts <- vapply(error_patterns, function(pat) {
-          sum(grepl(pat, content, ignore.case = FALSE))
+          sum(grepl(pat, lines_clean, ignore.case = FALSE))
         }, integer(1))
         tibble::tibble(
           file = basename(f),
