@@ -1,10 +1,98 @@
 # Tests for check_leaderboard_coverage() — QA gate S7 (#345, extended in #400)
+# Tests for .norm_mf / .norm_value normalizers — wiring fix for #489 Cluster C S7.
 #
 # The function is defined in R/plan_qa_gates.R.  Tests exercise it directly
 # without running tar_make().
 
 # Load the function under test directly.
 source(here::here("R/plan_qa_gates.R"))
+
+# ── Normalizer helpers (mirrors logic in plan_leaderboard.R for testability) ──
+# These duplicate the private .norm_mf / .norm_value functions that live inside
+# the leaderboard tar_target body.  Any schema change to those helpers MUST be
+# reflected here and vice-versa.
+
+.norm_mf_test <- function(m) {
+  if (is.null(m) || nrow(m) == 0) return(NULL)
+  m |>
+    dplyr::filter(strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)") |>
+    dplyr::select(-strategy, -calmar) |>
+    dplyr::rename(months = n_months)
+}
+
+.norm_value_test <- function(m) {
+  if (is.null(m) || nrow(m) == 0) return(NULL)
+  m |>
+    dplyr::filter(strategy == "Pure Value (100% HML, EV/EBIT proxy)") |>
+    dplyr::select(-strategy, -calmar) |>
+    dplyr::rename(months = n_months)
+}
+
+# ── Synthetic metrics fixtures (same schema as mf_metrics / ev_metrics) ──────
+
+synthetic_mf_metrics <- tibble::tibble(
+  strategy = rep(c(
+    "Long-Short TS-Mom (MOP 2012, vol-targeted)",
+    "Long-Only TS-Mom (12m signal, equal-weight)",
+    "Equal-Weight Benchmark (SPY+TLT+GLD+DBC)"
+  ), each = 3),
+  period   = rep(c("Full", "Training", "OOS"), times = 3),
+  n_months = 120L,
+  cagr     = 5.0,
+  vol      = 12.0,
+  sharpe   = 0.42,
+  max_dd   = -20.0,
+  calmar   = 0.25
+)
+
+synthetic_ev_metrics <- tibble::tibble(
+  strategy = rep(c(
+    "Pure Value (100% HML, EV/EBIT proxy)",
+    "Value+Quality (50% HML + 50% RMW, QVAL proxy)",
+    "Benchmark (Cap-Weighted Market)"
+  ), each = 3),
+  period   = rep(c("Full", "Training", "OOS"), times = 3),
+  n_months = 120L,
+  cagr     = 3.0,
+  vol      = 10.0,
+  sharpe   = 0.30,
+  max_dd   = -25.0,
+  calmar   = 0.12
+)
+
+# ── Tests: .norm_mf ───────────────────────────────────────────────────────────
+
+test_that(".norm_mf returns only canonical TS-Mom rows with base leaderboard columns", {
+  res <- .norm_mf_test(synthetic_mf_metrics)
+  expect_false(is.null(res))
+  expect_true(nrow(res) == 3L)  # Full / Training / OOS
+  expect_true(all(c("period", "months", "cagr", "vol", "sharpe", "max_dd") %in% names(res)))
+  expect_false("strategy" %in% names(res))
+  expect_false("calmar"   %in% names(res))
+  expect_false("n_months" %in% names(res))
+})
+
+test_that(".norm_mf returns NULL on empty input", {
+  expect_null(.norm_mf_test(tibble::tibble()))
+  expect_null(.norm_mf_test(NULL))
+})
+
+# ── Tests: .norm_value ────────────────────────────────────────────────────────
+
+test_that(".norm_value returns only Pure Value rows with base leaderboard columns", {
+  res <- .norm_value_test(synthetic_ev_metrics)
+  expect_false(is.null(res))
+  expect_true(nrow(res) == 3L)  # Full / Training / OOS
+  expect_true(all(c("period", "months", "cagr", "vol", "sharpe", "max_dd") %in% names(res)))
+  expect_false("strategy" %in% names(res))
+  expect_false("calmar"   %in% names(res))
+  expect_false("n_months" %in% names(res))
+})
+
+test_that(".norm_value returns NULL on empty input", {
+  expect_null(.norm_value_test(tibble::tibble()))
+  expect_null(.norm_value_test(NULL))
+})
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 

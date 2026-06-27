@@ -73,3 +73,9 @@ knitr::kable(
   )
 )
 ```
+
+## Related vignettes
+
+- **[Falsification](falsification.html)** — statistical testing framework applied to all systematic strategies; the same hypothesis-testing approach used to evaluate the BDBB diagnostics
+- **[Negative Results](negative-results.html)** — documents approaches that failed empirical scrutiny; the BDBB mean-reversion findings sit alongside these investigations
+- **[Strategy Leaderboard](leaderboard.html)** — performance comparison across all strategies; provides context for the SOL/USD queueing model relative to other systematic approaches
