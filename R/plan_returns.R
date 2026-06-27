@@ -112,7 +112,9 @@ plan_returns <- function() {
       ret_mat <- as.matrix(wide[, asset_cols])
 
       # Compute monthly covariance then annualise
-      Sigma_monthly <- stats::cov(ret_mat, use = "complete.obs")
+      # Routed through hd_cov_estimate() for configurable regularisation (#498).
+      # Default COV_METHOD = "sample" is bit-identical to stats::cov(use="complete.obs").
+      Sigma_monthly <- hd_cov_estimate(ret_mat, method = COV_METHOD, lw_target = COV_LW_TARGET)
 
       # Enforce symmetry numerically (floating-point drift)
       Sigma_annual  <- PERIODS_PER_YEAR * ((Sigma_monthly + t(Sigma_monthly)) / 2)
@@ -158,7 +160,8 @@ plan_returns <- function() {
 
           # Use complete-observation rows only
           window_cc  <- window[rowSums(is.na(window)) == 0L, , drop = FALSE]
-          Sigma_m    <- stats::cov(window_cc, use = "complete.obs")
+          # window_cc is already complete-cased; no NA warning fires (#498).
+          Sigma_m    <- hd_cov_estimate(window_cc, method = COV_METHOD, lw_target = COV_LW_TARGET)
           Sigma_ann  <- PERIODS_PER_YEAR * ((Sigma_m + t(Sigma_m)) / 2)
           rownames(Sigma_ann) <- asset_cols
           colnames(Sigma_ann) <- asset_cols

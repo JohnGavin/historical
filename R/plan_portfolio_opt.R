@@ -135,7 +135,8 @@ plan_portfolio_opt <- function() {
         return(setNames(rep(0.25, 4), strat_cols))
       }
 
-      cov_mat <- cov(ret_matrix)
+      # ret_matrix is already complete-cased on the line above; no NA warning fires (#498).
+      cov_mat <- hd_cov_estimate(ret_matrix, method = COV_METHOD, lw_target = COV_LW_TARGET)
       # HRP_Portfolio returns a data.frame with a 'weights' column,
       # rownames match colnames of cov_mat.
       hrp_result <- HierPortfolios::HRP_Portfolio(cov_mat)
