@@ -103,6 +103,13 @@ hd_check_survivorship_bias <- function(dataset) {
 #'   Passing `to > Sys.Date()` raises a classed error (`"hd_future_date"`).
 #'   Future-dated requests imply look-ahead knowledge and are forbidden to
 #'   prevent silent backtest contamination.
+#' @section Non-US volume nulling (issue #21):
+#'   When `collect = TRUE`, the `volume` column is set to `NA` for tickers
+#'   on non-US exchanges (`.L`, `.DE`, `.PA`, `.AS`, `.SW`, `.MC`, `.MI`,
+#'   `.ST`, `.CO`). yfinance reports unreliable volume for these exchanges.
+#'   The raw parquet is preserved unchanged (`raw-folder-readonly` rule).
+#'   When `collect = FALSE`, callers should apply
+#'   [hd_unreliable_volume_ticker()] to filter volume themselves.
 #' @family data-access
 #' @export
 #' @examplesIf interactive()
@@ -215,7 +222,23 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
     if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))
   }
 
-  if (collect) dplyr::collect(lf) else lf
+  if (collect) {
+    result <- dplyr::collect(lf)
+    # #21: yfinance volume is unreliable for non-US exchanges — null on read.
+    # The raw parquet is preserved (raw-folder-readonly rule). When collect = FALSE
+    # the lazy frame is returned as-is; callers should apply
+    # hd_unreliable_volume_ticker() themselves if they need volume filtering.
+    if ("volume" %in% names(result)) {
+      result[["volume"]] <- dplyr::if_else(
+        hd_unreliable_volume_ticker(result[["ticker"]]),
+        NA_real_,
+        as.numeric(result[["volume"]])
+      )
+    }
+    result
+  } else {
+    lf
+  }
 }
 
 #' Lazy duckplyr query over a dataset

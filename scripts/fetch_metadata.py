@@ -33,6 +33,8 @@ if _scripts_dir not in sys.path:
 from metadata_helpers import _yield_fields, first_present  # noqa: E402
 
 # US equity tickers
+# SYNC NOTE: when fetch_equity.py DEFAULT_TICKERS changes, update this list too.
+# Missing tickers caught by qa_metadata_sync (issue #489).
 US_EQUITY = [
     "AAPL", "MSFT", "GOOGL", "AMZN", "META", "NVDA", "TSLA",
     "AMD", "INTC", "AVGO", "QCOM",
@@ -41,11 +43,28 @@ US_EQUITY = [
     "JNJ", "UNH", "PFE", "ABBV", "MRK",
     "WMT", "COST", "HD", "MCD", "KO", "PEP",
     "CAT", "BA", "GE", "HON", "UPS",
-    "XOM", "CVX", "COP",
+    # Energy — APA added to match equity parquet (#489)
+    "XOM", "CVX", "COP", "APA",
     "DIS", "NFLX", "CMCSA", "T",
     "PLD", "AMT",
     "SPY", "QQQ", "IWM", "DIA",
     "VIXY",
+    # Healthcare — BDX added to match equity parquet (#489)
+    "BDX",
+    # Technology — CDW added to match equity parquet (#489)
+    "CDW",
+    # Industrials — ETN added to match equity parquet (#489)
+    "ETN",
+]
+
+# European equities present in equity_daily parquet but NOT in LSE ETF list.
+# These come from fetch_equity.py --stoxx600 runs. Add here to keep metadata
+# in sync with OHLCV (#489). Note: volume for these tickers is unreliable in
+# yfinance (non-US exchange suffixes) and is nulled on read by hd_ohlcv()
+# and hd_unreliable_volume_ticker().
+EUROPEAN_EQUITIES = [
+    "GN.CO",    # GN Group — Nasdaq Copenhagen (Denmark)
+    "SEB-A.ST", # SEB Bank — Nasdaq Stockholm (Sweden)
 ]
 
 CRYPTO = [
@@ -65,10 +84,13 @@ def load_lse_tickers() -> list[str]:
 
 
 def build_datasets() -> dict:
-    """Build DATASETS dict including LSE tickers."""
+    """Build DATASETS dict including LSE tickers and European equities."""
     lse = load_lse_tickers()
-    equity = US_EQUITY + lse
-    print(f"Equity tickers: {len(US_EQUITY)} US + {len(lse)} LSE = {len(equity)}")
+    equity = US_EQUITY + lse + EUROPEAN_EQUITIES
+    print(
+        f"Equity tickers: {len(US_EQUITY)} US + {len(lse)} LSE"
+        f" + {len(EUROPEAN_EQUITIES)} European = {len(equity)}"
+    )
     return {
         "equity_daily": equity,
         "crypto_daily": CRYPTO,

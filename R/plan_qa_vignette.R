@@ -104,7 +104,12 @@ plan_qa_vignette <- function() {
     }, cue = targets::tar_cue(mode = "always")),
 
     # QA 2: Dataset-metadata consistency (#19)
-    # Checks that every ticker in OHLCV parquets has a metadata row
+    # Checks that every ticker in OHLCV parquets has a metadata row.
+    # MISSING (OHLCV ticker without metadata) is a hard failure: downstream
+    # joins on metadata silently drop those tickers.
+    # ORPHANS (metadata row with no OHLCV) are informational only: they are
+    # stale metadata for tickers whose OHLCV fetch has not yet run or was
+    # de-listed. They do NOT increment the gate's issues count (#489).
     targets::tar_target(qa_metadata_sync, {
       library(dplyr)
 
@@ -115,6 +120,8 @@ plan_qa_vignette <- function() {
       datasets <- c("equity_daily", "crypto_daily")
       meta_ds <- hd_datasets()[["metadata"]]
       issues <- list()
+      n_missing_issues <- 0L  # only missing counts toward gate failure
+      n_orphan_issues  <- 0L  # informational only
 
       for (ds_name in datasets) {
         ds <- hd_datasets()[[ds_name]]
@@ -130,74 +137,110 @@ plan_qa_vignette <- function() {
         orphans <- setdiff(meta_tickers, ohlcv_tickers)
 
         if (length(missing) > 0) {
-          cli::cli_warn(c("!" = "{ds_name}: {length(missing)} tickers in OHLCV but not metadata",
-                          "i" = "Missing: {paste(head(missing, 10), collapse = ', ')}{if (length(missing) > 10) '...' else ''}"))
+          cli::cli_warn(c(
+            "!" = "{ds_name}: {length(missing)} tickers in OHLCV but not metadata",
+            "i" = "Missing: {paste(head(missing, 10), collapse = ', ')}{if (length(missing) > 10) '...' else ''}",
+            ">" = "Run: python scripts/fetch_metadata.py (after adding tickers to the script's lists)"
+          ))
           issues[[paste0(ds_name, "_missing")]] <- missing
+          n_missing_issues <- n_missing_issues + 1L
         }
         if (length(orphans) > 0) {
-          cli::cli_inform(c("i" = "{ds_name}: {length(orphans)} orphan metadata entries (no OHLCV data)"))
+          # Orphans are informational: stale metadata rows with no OHLCV.
+          # They do NOT break downstream joins and are NOT counted in issues.
+          cli::cli_inform(c(
+            "i" = "{ds_name}: {length(orphans)} orphan metadata entries (no OHLCV data)",
+            " " = "Orphans are stale metadata (pending-fetch or de-listed tickers) — not a gate failure."
+          ))
           issues[[paste0(ds_name, "_orphans")]] <- orphans
+          n_orphan_issues <- n_orphan_issues + 1L
         }
       }
 
-      if (length(issues) == 0) {
+      if (n_missing_issues == 0L && n_orphan_issues == 0L) {
         cli::cli_inform(c("v" = "QA metadata sync: all datasets consistent"))
+      } else if (n_missing_issues == 0L) {
+        cli::cli_inform(c("v" = "QA metadata sync: no missing metadata ({n_orphan_issues} orphan dataset(s) — informational only)"))
       }
 
       list(
-        checked = length(datasets),
-        issues = length(issues),
-        details = lapply(issues, length),
+        checked   = length(datasets),
+        issues    = n_missing_issues,   # gate-breaking: OHLCV tickers without metadata
+        n_orphans = n_orphan_issues,    # informational: metadata rows with no OHLCV
+        details   = lapply(issues, length),
         timestamp = Sys.time()
       )
     }, cue = targets::tar_cue(mode = "always")),
 
     # QA 3: Volume sanity check (#21)
-    # yfinance reports incorrect volume for non-US markets
-    # Flag tickers with suspiciously high dollar volume
+    # yfinance reports incorrect volume for non-US markets (London, XETRA, etc.).
+    # Fix: null non-US avg_dollar_vol AFTER the DuckDB summarisation so the heavy
+    # per-row computation stays in DuckDB. Then filter to only reliable-volume
+    # (non-NA) tickers before flagging.
+    # Calibration (#489): drop the >$5B/day absolute threshold — it false-flagged
+    # US mega-caps (SPY $17B, TSLA $10B, QQQ $7B) whose ratio-to-US-median is
+    # well under 50x. The ratio check alone (>50x within-exchange) is sufficient
+    # once all non-US corrupt volume is excluded. Expected flagged count ≈ 0 on
+    # current data.
     targets::tar_target(qa_volume_sanity, {
       library(dplyr)
 
       ds <- hd_datasets()[["equity_daily"]]
 
-      # Per-ticker dollar volume
+      # Step 1: per-ticker average dollar volume — computed in DuckDB (efficient).
+      # Volume for non-US tickers is corrupt in yfinance but we don't null here;
+      # we null AFTER collect so the regex helper runs in R.
       ticker_stats <- duckplyr::read_parquet_duckdb(ds$url) |>
         mutate(dollar_vol = close * volume) |>
         summarise(avg_dollar_vol = mean(dollar_vol, na.rm = TRUE), .by = ticker) |>
         collect() |>
-        mutate(exchange = case_when(
-          grepl("\\.DE$", ticker) ~ "DE",
-          grepl("\\.PA$", ticker) ~ "PA",
-          grepl("\\.AS$", ticker) ~ "AS",
-          grepl("\\.SW$", ticker) ~ "SW",
-          grepl("\\.MC$", ticker) ~ "MC",
-          grepl("\\.MI$", ticker) ~ "MI",
-          grepl("\\.ST$", ticker) ~ "ST",
-          grepl("\\.CO$", ticker) ~ "CO",
-          grepl("\\.L$",  ticker) ~ "L",
-          TRUE ~ "US"
-        ))
+        mutate(
+          # #21: null non-US avg_dollar_vol after collect (raw parquet preserved).
+          # hd_unreliable_volume_ticker() must be loaded via pkgload before this target runs.
+          avg_dollar_vol = dplyr::if_else(
+            hd_unreliable_volume_ticker(ticker),
+            NA_real_,
+            avg_dollar_vol
+          ),
+          exchange = case_when(
+            grepl("\\.DE$", ticker) ~ "DE",
+            grepl("\\.PA$", ticker) ~ "PA",
+            grepl("\\.AS$", ticker) ~ "AS",
+            grepl("\\.SW$", ticker) ~ "SW",
+            grepl("\\.MC$", ticker) ~ "MC",
+            grepl("\\.MI$", ticker) ~ "MI",
+            grepl("\\.ST$", ticker) ~ "ST",
+            grepl("\\.CO$", ticker) ~ "CO",
+            grepl("\\.L$",  ticker) ~ "L",
+            TRUE ~ "US"
+          )
+        ) |>
+        # Exclude tickers with no reliable volume (non-US, all NA after nulling)
+        filter(!is.na(avg_dollar_vol))
 
-      # Per-exchange median
+      # Step 2: per-exchange median (now only reliable-volume tickers remain)
       exchange_stats <- ticker_stats |>
         summarise(median_vol = median(avg_dollar_vol, na.rm = TRUE),
                   n_tickers = n(), .by = exchange)
 
-      # Flag outliers: >50x exchange median or >$5B/day
+      # Step 3: flag outliers — only ratio check; absolute dollar threshold dropped
+      # (#489: removed >$5B/day which false-flagged SPY/QQQ/TSLA).
+      # Ratio >50x within-exchange is sufficient: US mega-cap ETFs are 5-20x median,
+      # not 50x, so they pass cleanly.
       stats <- ticker_stats |>
         left_join(exchange_stats, by = "exchange") |>
         mutate(ratio_to_median = avg_dollar_vol / pmax(median_vol, 1)) |>
-        filter(ratio_to_median > 50 | avg_dollar_vol > 5e9) |>
+        filter(ratio_to_median > 50) |>
         arrange(desc(ratio_to_median))
 
       if (nrow(stats) > 0) {
         cli::cli_warn(c(
-          "!" = "QA volume: {nrow(stats)} tickers with suspicious dollar volume",
-          "i" = "Tickers >50x exchange median or >$5B/day (yfinance bug for non-US):",
+          "!" = "QA volume: {nrow(stats)} ticker(s) with suspicious dollar volume (>50x exchange median)",
+          "i" = "Only reliable-volume tickers are evaluated (non-US volume is nulled per #21).",
           "i" = paste(head(stats$ticker, 10), collapse = ", ")
         ))
       } else {
-        cli::cli_inform(c("v" = "QA volume: no outliers detected"))
+        cli::cli_inform(c("v" = "QA volume: no outliers detected (non-US volume excluded per #21)"))
       }
 
       list(

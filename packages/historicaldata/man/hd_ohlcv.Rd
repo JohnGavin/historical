@@ -52,6 +52,16 @@ Future-dated requests imply look-ahead knowledge and are forbidden to
 prevent silent backtest contamination.
 }
 
+\section{Non-US volume nulling (issue #21)}{
+
+When \code{collect = TRUE}, the \code{volume} column is set to \code{NA} for tickers
+on non-US exchanges (\code{.L}, \code{.DE}, \code{.PA}, \code{.AS}, \code{.SW}, \code{.MC}, \code{.MI},
+\code{.ST}, \code{.CO}). yfinance reports unreliable volume for these exchanges.
+The raw parquet is preserved unchanged (\code{raw-folder-readonly} rule).
+When \code{collect = FALSE}, callers should apply
+\code{\link[=hd_unreliable_volume_ticker]{hd_unreliable_volume_ticker()}} to filter volume themselves.
+}
+
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 hd_ohlcv("AAPL", from = "2024-01-01") |> collect()
