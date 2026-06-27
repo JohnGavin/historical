@@ -268,10 +268,11 @@ plan_portfolio_opt <- function() {
           return_pct = optimal_ret * 100
         ) |>
         select(year, month, return_pct) |>
+        tidyr::complete(year, month = 1:12) |>
         pivot_wider(
           names_from = month,
           values_from = return_pct,
-          names_sort = FALSE
+          names_sort = TRUE
         ) |>
         arrange(year) |>
         mutate(across(-year, ~if_else(is.na(.), NA_real_, .))) |>

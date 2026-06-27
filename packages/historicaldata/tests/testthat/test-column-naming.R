@@ -117,6 +117,62 @@ test_that("backward-compat alias is a no-op when adjusted_close already present"
   expect_equal(nrow(new_frame), 1L)
 })
 
+# ── Fix 1 (#489 Cluster D): mr_daily and mr_plot use adjusted_close ──────────
+# plan_mean_reversion.R previously referenced bare `adjusted` (→ "object not found").
+# Regression: the return-calc pattern used in both mr_daily and mr_plot targets
+# must work with adjusted_close, not adjusted.
+
+test_that("mr_daily return-calc pattern with adjusted_close (multi-ticker, #489 Cluster D)", {
+  # Simulate what hd_ohlcv() returns for two tickers: adjusted_close present
+  tickers <- c("AAPL", "MSFT")
+  make_ticker_frame <- function(tkr) {
+    tibble::tibble(
+      date           = as.Date(c("2024-01-02", "2024-01-03", "2024-01-04")),
+      adjusted_close = c(100.0, 105.0, 110.25),
+      volume         = c(1e6, 1.1e6, 1.2e6),
+      ticker         = tkr
+    )
+  }
+
+  result <- purrr::map_dfr(tickers, function(tkr) {
+    make_ticker_frame(tkr) |>
+      dplyr::arrange(date) |>
+      dplyr::mutate(
+        ret = adjusted_close / dplyr::lag(adjusted_close) - 1
+      ) |>
+      dplyr::filter(!is.na(ret)) |>
+      dplyr::select(date, ticker, ret, adjusted_close, volume)
+  })
+
+  # 2 tickers × 2 non-NA rows each = 4 rows
+  expect_equal(nrow(result), 4L)
+  # All returns should be approximately 5%
+  expect_true(all(abs(result$ret - 0.05) < 1e-8))
+  # adjusted_close column must be present (no bare 'adjusted')
+  expect_true("adjusted_close" %in% names(result))
+  expect_false("adjusted" %in% names(result))
+})
+
+test_that("mr_plot spy-benchmark return-calc uses adjusted_close (#489 Cluster D)", {
+  spy_frame <- tibble::tibble(
+    date           = as.Date(c("2024-01-02", "2024-01-03", "2024-01-04",
+                               "2024-01-05")),
+    adjusted_close = c(400.0, 404.0, 408.04, 412.12)
+  )
+
+  spy <- spy_frame |>
+    dplyr::arrange(date) |>
+    dplyr::mutate(ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
+    dplyr::filter(!is.na(ret)) |>
+    dplyr::mutate(cum_spy = cumprod(1 + ret)) |>
+    dplyr::select(date, cum_spy)
+
+  expect_equal(nrow(spy), 3L)
+  # Cumulative value after 3 ~1% returns should be ~(1.01)^3 ≈ 1.0303
+  expect_equal(spy$cum_spy[3L], (404 / 400) * (408.04 / 404) * (412.12 / 408.04),
+               tolerance = 1e-8)
+})
+
 test_that("hd_alphavantage output uses adjusted_close", {
   skip_if_not_installed("alphavantager")
   mock_result <- tibble::tibble(

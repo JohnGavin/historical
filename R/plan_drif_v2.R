@@ -204,7 +204,7 @@ plan_drif_v2 <- function() {
                               " k=", nfolds,
                               " f=", feature_set,
                               " l=", sub("lambda\\.", "", lambda_rule), ")"),
-          spec_label = forcats::fct_inorder(spec_label),
+          spec_label = factor(spec_label, levels = unique(spec_label)),
           highlight  = is_current
         )
 

@@ -1,5 +1,58 @@
 testthat::local_edition(3)
 
+# ── Fix 4 (#489 Cluster D): complete month grid before pivot_wider ────────────
+# When port_combined is missing a calendar month (e.g. month 3 = March) the
+# hardcoded rename(Mar = `3`, ...) used to fail with
+# "Column `3` doesn't exist".  The fix inserts tidyr::complete(year, month = 1:12)
+# before pivot_wider so all 12 month columns are always present.
+
+test_that("port_monthly_returns: missing month still yields all 12 renamed columns (#489 Cluster D)", {
+  # Synthetic data missing March (month 3) — mirrors the live failure
+  raw <- tibble::tibble(
+    year        = c(2020L, 2020L, 2020L, 2020L, 2020L,
+                    2020L, 2020L, 2020L, 2020L, 2020L, 2020L),   # 11 months
+    month       = c(1L, 2L,          4L, 5L, 6L,
+                    7L, 8L, 9L, 10L, 11L, 12L),                   # no 3
+    return_pct  = c(1.1, -0.5,       0.8, 1.2, -0.3,
+                    0.4,  0.7, -0.1,  0.9,  1.5, -0.2)
+  )
+
+  # Apply the fix: complete then pivot
+  wide <- raw |>
+    tidyr::complete(year, month = 1:12) |>
+    tidyr::pivot_wider(
+      names_from  = month,
+      values_from = return_pct,
+      names_sort  = TRUE
+    )
+
+  # All 12 month columns must exist (names are integers as characters)
+  month_cols <- as.character(1:12)
+  missing_cols <- setdiff(month_cols, names(wide))
+  expect_equal(
+    length(missing_cols), 0L,
+    info = paste("After complete(), these month columns are still absent:", paste(missing_cols, collapse = ", "))
+  )
+
+  # Month 3 column should be NA (completed but no data)
+  expect_true(is.na(wide[["3"]]),
+              info = "Completed month 3 must be NA when no data existed for it")
+
+  # The rename step that used to fail should now succeed
+  result <- wide |>
+    dplyr::rename(
+      Year = year,
+      Jan = `1`,  Feb = `2`,  Mar = `3`,  Apr = `4`,
+      May = `5`,  Jun = `6`,  Jul = `7`,  Aug = `8`,
+      Sep = `9`,  Oct = `10`, Nov = `11`, Dec = `12`
+    )
+
+  expect_true("Mar" %in% names(result),
+              info = "rename(Mar = `3`) must succeed after complete()")
+  expect_equal(ncol(result), 13L,  # year + 12 month columns
+               info = "Wide table should have exactly 13 columns (year + 12 months)")
+})
+
 # Regression test for fix in commit 159e3b9:
 # calc_port_metrics() was missing opt_vol column, causing NA in the PSO
 # Optimal leaderboard row. Test that the output tibble contains all four

@@ -54,11 +54,11 @@ plan_mean_reversion <- function() {
           hd_ohlcv(tkr, from = as.character(mr_params$start_date)) |>
             dplyr::arrange(date) |>
             dplyr::mutate(
-              ret = adjusted / dplyr::lag(adjusted) - 1,
+              ret = adjusted_close / dplyr::lag(adjusted_close) - 1,
               ticker = tkr
             ) |>
             dplyr::filter(!is.na(ret)) |>
-            dplyr::select(date, ticker, ret, adjusted, volume)
+            dplyr::select(date, ticker, ret, adjusted_close, volume)
         }, error = function(e) NULL)
       }) |>
         dplyr::mutate(date = as.Date(date, tz = "UTC"))
@@ -240,7 +240,7 @@ plan_mean_reversion <- function() {
       # SPY benchmark
       spy <- hd_ohlcv("SPY", from = as.character(mr_params$start_date)) |>
         arrange(date) |>
-        mutate(ret = adjusted / lag(adjusted) - 1) |>
+        mutate(ret = adjusted_close / lag(adjusted_close) - 1) |>
         filter(!is.na(ret)) |>
         mutate(cum_spy = cumprod(1 + ret)) |>
         select(date, cum_spy)
