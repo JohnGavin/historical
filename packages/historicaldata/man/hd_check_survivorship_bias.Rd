@@ -51,7 +51,8 @@ Other quality-audit:
 \code{\link{hd_amendments}()},
 \code{\link{hd_jumps}()},
 \code{\link{hd_metadata_amendments}()},
-\code{\link{hd_quality}()}
+\code{\link{hd_quality}()},
+\code{\link{hd_unreliable_volume_ticker}()}
 }
 \concept{data-access}
 \concept{quality-audit}

@@ -14,11 +14,18 @@ hd_most_volatile(dataset = "equity_daily", n = 5, window_days = 21)
 \item{window_days}{Rolling window in trading days (default 21)}
 }
 \value{
-Tibble with ticker, vol_21d, sorted by vol descending
+Tibble with columns ticker, vol_21d, as_of; sorted by vol descending
 }
 \description{
 Computes 21-day rolling annualised volatility for all tickers in a dataset
-and returns the top N. Uses a single DuckDB window query over the full Parquet.
+and returns the top N. The full Parquet is collected into R memory and
+rolling volatility is computed with \code{slider::slide_dbl()} — no raw SQL
+window functions are used.
+}
+\details{
+The adjusted-price column is detected at runtime from the actual Parquet
+columns (priority: \code{adjusted_close} > \code{adjusted} > \code{close}), so the
+function tolerates parquets written both before and after the #397 rename.
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}

@@ -20,6 +20,9 @@ Tibble with ticker + metadata columns, sorted by metric
 }
 \description{
 Queries the metadata Parquet for tickers ranked by the specified metric.
+The Parquet is filtered by dataset in DuckDB, then collected into R memory
+before the dynamic-column filter and sort (\code{.data[[metric]]} is not
+translatable by duckplyr in a lazy frame).
 }
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
