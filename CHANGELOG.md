@@ -1,5 +1,37 @@
 # Changelog
 
+## 2026-06-25 → 2026-06-27 (session 20 — structural breaks + digest + full pipeline-rot cleanup)
+
+### Completed
+
+- **Structural-break detection (#477):** `hd_structural_breaks()` (Carver 2026 iterative forward-split t-test on vol-normalised returns, `packages/historicaldata/R/structural_breaks.R`, PR #478, TDD). Leaderboard consumer `plan_structural_breaks()` (PR #480) extended to the full 14-strategy roster (PR #483). Result built against the store: 4/14 strategies break at 1% (Stock DRIF 2017-06, Risk State 1998-03, CMR 1997-04, Mom 12-2 2000-01); 3 material. Live on the leaderboard page (PR #485 + render); `market-behavior-gap-analysis.md:211` flipped ❌→✅.
+- **xgb_drif rank-before-filter fix (#449, PR #479):** ADV gate (filter-then-rank) + min-stocks guard in `xgb_drif_portfolio`. A/B rebuild against the store: correctness-only, Sharpe deltas ≤0.015 (mirrors elastic-net Spearman 0.998) — no leaderboard movement.
+- **strategy_digest slice 1 (#482, PR #486):** `hd_digest_delta`/`attention`/`html`/`snapshot_write` + `plan_strategy_digest()`. Baseline snapshot committed; verified 0 false-positive flag changes on the real 15-strategy leaderboard.
+- **Pipeline-rot cleanup (#489) — caching had masked ~23 broken targets across 4 clusters; all fixed + store-verified:**
+  - A1 (PR #491) `adjusted`→`adjusted_close` rename. A2 (PR #492) `ranked.R`: collect-before-slice + runtime price-col detection + window-SQL rewritten in R (`slider`).
+  - B (PR #493) crypto: parquet `date` POSIXct vs `Date` bound silently returned 0 rows → coerce `as.Date()` before filter + empty-universe guard.
+  - C (PR #495) QA content: leaderboard coverage (wired Value/Managed-Futures via `.norm_mf`/`.norm_value`), 2 Related-Vignettes sections, diagram anchors.
+  - D (PR #494) 5 assorted: forcats→base `factor()`, `mr_plot` adjusted_close, `gh_base` in-target, `port_monthly_returns` `complete(month=1:12)`, zak `rlang::.env$` pronoun → distinct lambda arg names.
+- **qa_summary data tier (PR #497, #499):** non-US volume nulled on read (`hd_unreliable_volume_ticker` + `hd_ohlcv`, raw preserved) + volume-check threshold recalibrated 50×→250× (SPY legit at 139×); metadata: 6 missing tickers surgically appended and **published to HuggingFace** (commit 7dff57d, raw record preserved); qa_html_quality false positives fixed by stripping `<script>`/`<pre>` before the defect scan.
+- **Full `tar_make()` now GREEN end-to-end:** 88 completed, 642 skipped, **0 errored** (was 23 errored at session start).
+- **Issues raised:** #477 (structural breaks), #481 (strategy_graph backbone), #482 (digest), #484 (vignette display), #487/#489 (pipeline rot), #490 (system-validation gaps, Harbourfront), #496 (new-strategy value gate), #498 (regularised covariance for wide data — Raviv 2026 WIREs).
+
+### Failed Approaches
+
+- **Single-rename hypothesis for Cluster A:** the equity-vignette failures looked like one `adjusted_close` rename but were three stacked layers (column rename → duckplyr `.data[[]]`/`slice_head` on a lazy frame → unsupported window SQL). Only iterative rebuild-against-store after each fix exposed the next layer. Lesson: worktree agents can't `tar_make`; the orchestrator must store-verify each "fix" before merge.
+- **Agent fixing `causal-dag.html` source:** a fixer hand-edited the rendered HTML for the diagram-anchor gate — but `causal-dag.html` is a `known_static_html` (no qmd/render), so direct edit was actually correct. Initial worry (re-render would overwrite) was unfounded.
+- **Full metadata rebuild via `fetch_metadata.py`:** rejected — a full yfinance re-fetch + republish of the production HF dataset risks silently dropping tickers on partial network failure. Used a surgical append (download → fetch only the 6 → verify original 1656 rows preserved → upload) instead.
+
+### Accuracy / Metrics
+
+- Full pipeline: 23 errored targets → **0**. Leaderboard now carries `add_*` crowding columns (was stale pre-#487). New tests across PRs (structural-breaks, digest, ranked, crypto-momentum, volume-reliability, qa-html-quality, leaderboard-coverage).
+
+### Known Limitations
+
+- **qa_summary depends on remote HF metadata:** the 6-ticker metadata fix required an external HuggingFace publish (Class C). `fetch_metadata.py` only does full rebuilds — a per-ticker append path would be safer (worth scripting).
+- **Pre-existing test failures** (unrelated to this session, flagged by fixers): `test-crypto-momentum:51`, `test-qa-summary-deps:196`, `test-stock-backtest:161`.
+- **Open follow-ups:** #498 regularised covariance (we use plain `stats::cov()` everywhere), #496 new-strategy value gate (Value/Managed-Futures admitted to satisfy a coverage gate without justification), #482 digest slice 2, #481 strategy_graph.
+
 ## 2026-06-14 → 2026-06-16 (session 19 — 4 PRs + tar_make + full vignette render)
 
 ### Completed
