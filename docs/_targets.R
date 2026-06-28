@@ -147,6 +147,8 @@ source(here::here("R/plan_qa_gates.R"))
 # Phase B of #389: covariance infrastructure + fixed cross-asset correlation plan
 source(here::here("R/plan_returns.R"))
 source(here::here("R/plan_cross_asset_corr.R"))
+# Phase 3a of #498: OOS min-variance / conditioning diagnostic
+source(here::here("R/plan_cov_diagnostic.R"))
 # #482 Slice 1: strategy digest (leaderboard deltas + blastula email-to-file)
 source(here::here("R/plan_strategy_digest.R"))
 
@@ -209,6 +211,8 @@ c(plan_strategy_names(),
   # Phase B of #389: covariance targets + fixed cross-asset correlation plan
   plan_returns(),
   plan_cross_asset_corr(),
+  # Phase 3a of #498: OOS min-variance / conditioning diagnostic compute core
+  plan_cov_diagnostic(),
 
   # Phase 1 of #149: date-type consistency across all registered datasets.
   # tar_target_raw + explicit deps so targets schedules dv_join_key_types
