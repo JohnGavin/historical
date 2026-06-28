@@ -15,8 +15,6 @@
 
 plan_cov_diagnostic_vignette <- function() {
 
-  gh_base <- "https://github.com/JohnGavin/historical/blob/main"
-
   list(
 
     # ── Display table ────────────────────────────────────────────────────
@@ -207,6 +205,9 @@ plan_cov_diagnostic_vignette <- function() {
     # ≥3 sentences. Numbers computed from cov_diag_summary.
     # The survivorship-bias caveat is fixed reference text (not data-derived).
     targets::tar_target(cov_diag_vig_caption, {
+      # Defined inside the target so it is in scope at build time (target
+      # commands evaluate in the pipeline env, not the plan-function frame).
+      gh_base <- "https://github.com/JohnGavin/historical/blob/main"
       s <- cov_diag_summary
 
       # Helper: extract one scalar value from summary
