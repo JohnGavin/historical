@@ -71,6 +71,11 @@ source(here::here("R/commodities_momentum.R"))
 # Source crypto momentum functions (issue #135)
 source(here::here("R/crypto_momentum.R"))
 
+# Source covariance-estimator configuration (#498).
+# Constants (COV_METHOD, COV_LW_TARGET) are evaluated at source() time;
+# must precede any plan file that calls hd_cov_estimate().
+source(here::here("R/cov_config.R"))
+
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
