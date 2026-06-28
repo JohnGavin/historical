@@ -4,10 +4,8 @@
       hd_min_var_weights(S_sing)
     Condition
       Error in `value[[3L]]()`:
-      ! Cannot compute minimum-variance weights: the covariance matrix is
-      singular or numerically ill-conditioned.
-      x solve() error: system is computationally singular: reciprocal condition number = 1.38296e-18
-      i In the wide regime (p ≥ n), the sample covariance matrix is rank-deficient. Use a regularised estimator via `hd_cov_estimate()` with `method = "ledoit_wolf"` or `method = "rmt_denoise"`.
+      ! Cannot compute minimum-variance weights: `Sigma` is singular or numerically ill-conditioned.
+      i In the wide regime (p >= n) the sample covariance is rank-deficient. Use a regularised estimator via `hd_cov_estimate()` with `method = "ledoit_wolf"` or `method = "rmt_denoise"`.
 
 # non-matrix input aborts with informative error
 

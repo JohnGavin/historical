@@ -118,14 +118,11 @@ hd_min_var_weights <- function(Sigma, normalize = TRUE) {
     error = function(e) {
       cli::cli_abort(
         c(
-          "Cannot compute minimum-variance weights: the covariance matrix is",
-          "singular or numerically ill-conditioned.",
-          "x" = "solve() error: {conditionMessage(e)}",
+          "Cannot compute minimum-variance weights: {.arg Sigma} is singular or numerically ill-conditioned.",
           "i" = paste0(
-            "In the wide regime (p ≥ n), the sample covariance matrix is ",
-            "rank-deficient. Use a regularised estimator via ",
-            "{.fun hd_cov_estimate} with {.code method = \"ledoit_wolf\"} or ",
-            "{.code method = \"rmt_denoise\"}."
+            "In the wide regime (p >= n) the sample covariance is rank-deficient. ",
+            "Use a regularised estimator via {.fun hd_cov_estimate} with ",
+            "{.code method = \"ledoit_wolf\"} or {.code method = \"rmt_denoise\"}."
           )
         )
       )
