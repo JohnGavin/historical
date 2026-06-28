@@ -116,4 +116,9 @@ Dressing of Financial Correlation Matrices. \emph{Physical Review Letters},
 Raviv, E. (2026). Covariance Estimation for Wide Data. \emph{WIREs
 Computational Statistics}, 18(2). \doi{10.1002/wics.70068}
 }
+\seealso{
+Other covariance: 
+\code{\link{hd_cov_oos_diagnostic}()},
+\code{\link{hd_min_var_weights}()}
+}
 \concept{covariance}
