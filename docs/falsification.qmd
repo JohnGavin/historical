@@ -397,6 +397,78 @@ Delta-Z = max(t_IS) - max(t_OOS) — the gap between the best in-sample and best
 In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" = FF alpha t-stat (after removing known factor exposure). The OOS test is not a temporal holdout but a *structural* holdout — does the signal survive factor decomposition?
 
 
+# Covariance Regularisation {#covreg}
+
+Does regularising the covariance estimator — via Ledoit-Wolf (LW) shrinkage or Random Matrix Theory (RMT) denoising — improve out-of-sample (OOS) global minimum-variance (GMV) portfolio performance relative to the plain sample estimator? This section presents a walk-forward diagnostic across two universes per Raviv (2026).
+
+## Row
+
+### {.tabset}
+
+#### OOS Diagnostic
+
+```{r}
+#| label: covreg-table
+covtab <- safe_tar_read("cov_diag_vig_table")
+covcap <- safe_tar_read("cov_diag_vig_caption")
+if (!is.null(covtab)) fals_dt(covtab, covcap)
+```
+
+#### Conditioning
+
+```{r}
+#| label: covreg-cond-plot
+#| fig-height: 6
+#| fig-width: 10
+#| fig-alt: "Cleveland dot plot of mean covariance condition number (κ) on a log10 x-axis for three estimators (Sample, Ledoit-Wolf, RMT-denoise) and two universes. Lower κ means better conditioning. Regularised estimators cluster leftward (lower κ) relative to the Sample estimator, demonstrating conditioning improvement in both universes."
+p <- safe_tar_read("cov_diag_vig_cond_plot")
+if (!is.null(p)) p
+```
+
+`r { cap <- safe_tar_read("cov_diag_vig_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+
+#### OOS Sharpe
+
+```{r}
+#| label: covreg-sharpe-plot
+#| fig-height: 6
+#| fig-width: 10
+#| fig-alt: "Cleveland dot plot of annualised out-of-sample minimum-variance Sharpe ratio by estimator and universe. The 4-asset universe (circles) shows a clean regularisation benefit: LW and RMT exceed the Sample Sharpe. The wide universe result (triangles, marked survivorship-biased) shows Sample outperforming, but this is confounded by the absence of delisted tickers."
+p <- safe_tar_read("cov_diag_vig_sharpe_plot")
+if (!is.null(p)) p
+```
+
+`r { cap <- safe_tar_read("cov_diag_vig_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+
+#### How to Read This
+
+**What is tested:**
+
+A 60-month rolling walk-forward backtest estimates global minimum-variance (GMV) portfolio weights from each covariance estimator using only the training window. The next-period (t+1) return is computed from the resulting weights — strictly no look-ahead (per the `alpha-decay-min-t+1` rule: t+0 execution is impossible). The three estimators compared are:
+
+- **Sample** — classical sample covariance: S = (1/(n−1)) X'X.
+- **Ledoit-Wolf (LW)** — linear shrinkage toward a constant-correlation target, with analytically optimal intensity δ* (no cross-validation). Guarantees positive-definiteness for any p and n. Implemented in [`hd_cov_estimate(method="ledoit_wolf")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/cov_estimate.R#L100){target="_blank" rel="noopener noreferrer"}.
+- **RMT-denoise** — Random Matrix Theory (RMT) Marchenko-Pastur clipping: eigenvalues below the noise threshold λ+ = (1+√(p/n))² are replaced by their common mean, removing noise components while preserving trace. Implemented in [`hd_cov_estimate(method="rmt_denoise")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/cov_estimate.R#L100){target="_blank" rel="noopener noreferrer"}.
+
+GMV weights are computed by [`hd_min_var_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/min_var_weights.R#L65){target="_blank" rel="noopener noreferrer"} from the estimated covariance via unconstrained matrix inversion; see its documentation for the `normalize = TRUE` default (weights sum to 1). The walk-forward engine is [`hd_cov_oos_diagnostic()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/cov_diagnostic.R#L87){target="_blank" rel="noopener noreferrer"}.
+
+**Condition number κ:** max eigenvalue / min eigenvalue. A well-conditioned matrix has κ = O(10–100); κ > 10,000 indicates near-singularity and numerical instability in inversion. The Conditioning tab uses a log₁₀ x-axis because condition numbers span multiple orders of magnitude across methods.
+
+**Honest interpretation:**
+
+The conditioning benefit of regularisation is unambiguous in both universes — Ledoit-Wolf and RMT-denoise produce substantially lower condition numbers than Sample regardless of the p/n ratio.
+
+The out-of-sample (OOS) Sharpe comparison is clean only on the **4-asset universe** (SPY/TLT/GLD/DBC, p/n ≈ 0.07): regularised estimators outperform Sample on Sharpe, confirming the expected benefit in a well-studied, non-survivorship-biased universe.
+
+The **wide universe** result (~30 large-cap US equities, p/n ≈ 0.50) shows Sample OOS Sharpe exceeding LW and RMT. This is **NOT** evidence against regularisation. The wide panel contains only currently-listed tickers — firms that survived to the present day — with no delisted firms included. Survivorship bias inflates all methods' OOS returns, but it especially advantages whichever estimator happens to concentrate more weight in the best-surviving stocks. This is a dataset artefact, not a property of the estimators.
+
+**Why the default COV_METHOD stays "sample":**
+
+The deployed strategy universes (4–6 assets) operate at p/n ≪ 0.1, where the sample covariance is already well-conditioned. The regularisation benefit is most important in wide regimes (p/n ≥ 0.1). COV_METHOD is the documented knob to flip when deploying a wide or point-in-time universe — set `COV_METHOD <- "ledoit_wolf"` in [`R/cov_config.R`](https://github.com/JohnGavin/historical/blob/main/R/cov_config.R){target="_blank" rel="noopener noreferrer"} and re-run `tar_make()`.
+
+**References:** Raviv (2026), *WIREs Computational Statistics*, [doi:10.1002/wics.70068](https://doi.org/10.1002/wics.70068). Full digest: [`knowledge/wiki/covariance-estimation-wide-data.md`](https://github.com/JohnGavin/historical/blob/main/knowledge/wiki/covariance-estimation-wide-data.md){target="_blank" rel="noopener noreferrer"}. Issue [#498](https://github.com/JohnGavin/historical/issues/498){target="_blank" rel="noopener noreferrer"}.
+
+
 # Walk-Forward Correlation {#wfc}
 
 ## Row

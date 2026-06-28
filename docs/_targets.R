@@ -149,6 +149,8 @@ source(here::here("R/plan_returns.R"))
 source(here::here("R/plan_cross_asset_corr.R"))
 # Phase 3a of #498: OOS min-variance / conditioning diagnostic
 source(here::here("R/plan_cov_diagnostic.R"))
+# Phase 3b of #498: covariance diagnostic vignette targets (falsification.qmd section)
+source(here::here("R/plan_cov_diagnostic_vignette.R"))
 # #482 Slice 1: strategy digest (leaderboard deltas + blastula email-to-file)
 source(here::here("R/plan_strategy_digest.R"))
 
@@ -213,6 +215,8 @@ c(plan_strategy_names(),
   plan_cross_asset_corr(),
   # Phase 3a of #498: OOS min-variance / conditioning diagnostic compute core
   plan_cov_diagnostic(),
+  # Phase 3b of #498: vignette targets for falsification.qmd covariance section
+  plan_cov_diagnostic_vignette(),
 
   # Phase 1 of #149: date-type consistency across all registered datasets.
   # tar_target_raw + explicit deps so targets schedules dv_join_key_types
