@@ -120,14 +120,32 @@ plan_cov_diagnostic <- function() {
     }),
 
     # ── Summary table (consumed by Phase 3b vignette) ──────────────────
-    # Row-bind 4-asset and wide results with a universe label.
-    # Phase 3b wires this target into falsification.qmd.
+    # Row-bind 4-asset and wide results with universe label and per-universe
+    # metadata (n_assets, n_periods, train_window) extracted from tibble
+    # attributes BEFORE dplyr operations strip them.
+    # Columns: universe, method, n_assets, n_periods, train_window,
+    #          n_oos, n_failed, oos_mean, oos_vol, oos_sharpe,
+    #          mean_cond, median_cond.
     targets::tar_target(cov_diag_summary, {
       library(dplyr)
 
+      # Capture attributes before any dplyr operations strip them
+      add_universe_meta <- function(diag_tbl, univ_label) {
+        tw  <- attr(diag_tbl, "train_window")
+        np  <- attr(diag_tbl, "n_periods")
+        na_ <- attr(diag_tbl, "n_assets")
+        dplyr::mutate(
+          diag_tbl,
+          universe     = univ_label,
+          n_assets     = na_,
+          n_periods    = np,
+          train_window = tw
+        )
+      }
+
       dplyr::bind_rows(
-        dplyr::mutate(cov_diag_4asset, universe = "4-asset"),
-        dplyr::mutate(cov_diag_wide,   universe = "wide")
+        add_universe_meta(cov_diag_4asset, "4-asset"),
+        add_universe_meta(cov_diag_wide,   "wide")
       ) |>
         dplyr::relocate("universe", .before = "method")
     })

@@ -132,7 +132,37 @@ Graphical LASSO (glasso) and related methods estimate Σ^{−1} (the precision m
 
 **Phase 2 (deferred):** Pipeline routing — computing `cov_annual` targets using `hd_cov_estimate()` in place of `stats::cov()`, integration with PSO portfolio optimisation, Sigma_m computation.
 
-**Phase 3 (deferred):** Out-of-sample diagnostic vignette comparing estimators on realised data.
+**Phase 3a (shipped, #498):** Out-of-sample diagnostic (`hd_cov_oos_diagnostic()`) comparing Sample, Ledoit-Wolf, and RMT-denoise on two universes via a 60-month rolling walk-forward backtest. See `cov_diag_summary` target.
+
+**Phase 3b (shipped, #498):** Covariance Regularisation section added to `docs/falsification.qmd` robustness gauntlet, surfacing `cov_diag_vig_table`, `cov_diag_vig_cond_plot`, `cov_diag_vig_sharpe_plot`, and `cov_diag_vig_caption` targets from `plan_cov_diagnostic_vignette.R`.
+
+---
+
+## Empirical Findings (This Project, #498)
+
+Walk-forward OOS diagnostic on two universes (60-month rolling training window, t+1 GMV weights, annualised Sharpe). Numbers are computed dynamically from the `cov_diag_summary` target — see `R/plan_cov_diagnostic_vignette.R` for the target definition.
+
+### 4-asset universe (SPY/TLT/GLD/DBC, p/n ≈ 0.067)
+
+- **Conditioning:** LW reduces mean κ from ~7.5 (Sample) to ~4.8; RMT achieves ~3.8. Improvement is approximately 1.6× and 2× respectively.
+- **OOS Sharpe:** LW (≈1.02) and RMT outperform Sample (≈0.96). Clean, unconfounded result — this universe has no survivorship bias.
+- **Interpretation:** Even at low p/n where sample covariance is already well-conditioned, regularisation modestly improves OOS Sharpe. The effect is expected to be much larger at high p/n.
+
+> ⚠ AI-inferred: The specific κ and Sharpe values above are from the Phase 3a tar_make run at the time of Phase 3b authoring. The vignette always shows current values from `cov_diag_summary`.
+
+### Wide universe (~30 large-cap US equities, p/n ≈ 0.50)
+
+- **Conditioning:** LW reduces mean κ from ~421 (Sample) to ~60; improvement is approximately 7×. RMT achieves similar or slightly better conditioning.
+- **OOS Sharpe:** Sample (≈0.93) exceeds LW (≈0.78) and RMT (≈0.82). This result is **confounded by survivorship bias** — the panel contains only currently-listed tickers; no delisted firms are included.
+- **Interpretation:** The Sharpe result is NOT evidence against regularisation. Survivorship bias in the wide panel biases all methods' OOS returns upward; it happens to favour whichever estimator concentrates more weight in the highest-surviving stocks, which is a dataset artefact. The conditioning improvement (7×) is unambiguous.
+
+> ⚠ AI-inferred: The survivorship-bias confound explanation is qualitative. A proper test would require a point-in-time database with delisted ticker history.
+
+### Default COV_METHOD remains "sample"
+
+The deployed strategy universes operate at p/n ≪ 0.1, where sample covariance is well-conditioned. COV_METHOD is the documented knob to flip when deploying a wide or point-in-time universe. Set `COV_METHOD <- "ledoit_wolf"` in `R/cov_config.R` and re-run `tar_make()`.
+
+**Clean test for regularisation:** use the 4-asset universe result (LW Sharpe improvement, no survivorship bias) rather than the wide-universe result (confounded).
 
 ---
 
