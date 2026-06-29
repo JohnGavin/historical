@@ -253,9 +253,8 @@ p
 # Batch query: 2 credit spread series in one request
 spreads <- hd_macro(c("BAMLH0A0HYM2", "BAMLC0A4CBBB"), from = "2020-01-01") |>
   filter(!is.na(value)) |>
-  mutate(series_id = case_match(series_id,
-    "BAMLH0A0HYM2" ~ "HY Spread",
-    "BAMLC0A4CBBB" ~ "BBB Spread",
+  mutate(series_id = case_when(series_id == "BAMLH0A0HYM2" ~ "HY Spread",
+    series_id == "BAMLC0A4CBBB" ~ "BBB Spread",
     .default = series_id))
 
 ggplot(spreads, aes(date, value, colour = series_id)) +

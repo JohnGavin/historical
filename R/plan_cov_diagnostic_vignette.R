@@ -26,17 +26,15 @@ plan_cov_diagnostic_vignette <- function() {
 
       cov_diag_summary |>
         dplyr::mutate(
-          Universe     = dplyr::case_match(
-            universe,
-            "4-asset" ~ "4-asset (SPY/TLT/GLD/DBC)",
-            "wide"    ~ "Wide (~30 large-cap equities)",
+          Universe     = dplyr::case_when(
+            universe == "4-asset" ~ "4-asset (SPY/TLT/GLD/DBC)",
+            universe == "wide"    ~ "Wide (~30 large-cap equities)",
             .default  = universe
           ),
-          Method       = dplyr::case_match(
-            method,
-            "sample"      ~ "Sample",
-            "ledoit_wolf" ~ "Ledoit-Wolf",
-            "rmt_denoise" ~ "RMT-denoise",
+          Method       = dplyr::case_when(
+            method == "sample"      ~ "Sample",
+            method == "ledoit_wolf" ~ "Ledoit-Wolf",
+            method == "rmt_denoise" ~ "RMT-denoise",
             .default      = method
           ),
           `OOS Sharpe` = round(oos_sharpe,  2),
@@ -65,21 +63,19 @@ plan_cov_diagnostic_vignette <- function() {
       s <- cov_diag_summary
 
       s$method_label <- factor(
-        dplyr::case_match(
-          s$method,
-          "sample"      ~ "Sample",
-          "ledoit_wolf" ~ "Ledoit-Wolf",
-          "rmt_denoise" ~ "RMT-denoise",
+        dplyr::case_when(
+          s$method == "sample"      ~ "Sample",
+          s$method == "ledoit_wolf" ~ "Ledoit-Wolf",
+          s$method == "rmt_denoise" ~ "RMT-denoise",
           .default      = s$method
         ),
         levels = c("Sample", "Ledoit-Wolf", "RMT-denoise")
       )
 
       s$universe_label <- factor(
-        dplyr::case_match(
-          s$universe,
-          "4-asset" ~ "4-asset (SPY/TLT/GLD/DBC)",
-          "wide"    ~ "Wide (~30 equities)",
+        dplyr::case_when(
+          s$universe == "4-asset" ~ "4-asset (SPY/TLT/GLD/DBC)",
+          s$universe == "wide"    ~ "Wide (~30 equities)",
           .default  = s$universe
         )
       )
@@ -137,21 +133,19 @@ plan_cov_diagnostic_vignette <- function() {
       s <- cov_diag_summary
 
       s$method_label <- factor(
-        dplyr::case_match(
-          s$method,
-          "sample"      ~ "Sample",
-          "ledoit_wolf" ~ "Ledoit-Wolf",
-          "rmt_denoise" ~ "RMT-denoise",
+        dplyr::case_when(
+          s$method == "sample"      ~ "Sample",
+          s$method == "ledoit_wolf" ~ "Ledoit-Wolf",
+          s$method == "rmt_denoise" ~ "RMT-denoise",
           .default      = s$method
         ),
         levels = c("Sample", "Ledoit-Wolf", "RMT-denoise")
       )
 
       s$universe_label <- factor(
-        dplyr::case_match(
-          s$universe,
-          "4-asset" ~ "4-asset (SPY/TLT/GLD/DBC)",
-          "wide"    ~ "Wide (~30 equities, survivorship-biased)",
+        dplyr::case_when(
+          s$universe == "4-asset" ~ "4-asset (SPY/TLT/GLD/DBC)",
+          s$universe == "wide"    ~ "Wide (~30 equities, survivorship-biased)",
           .default  = s$universe
         )
       )
