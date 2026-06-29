@@ -342,21 +342,10 @@ hd_returns_shrink <- function(mu,
   target <- mu_0 * ones
   names(target) <- names(mu)
 
-  diff   <- mu - target
-  quad   <- as.numeric(t(diff) %*% Si_mu - t(diff) %*% (Si_rhs[, 1L] - Si_mu))
-  # Re-derive cleanly: quad = diff' Σ⁻¹ diff
-  Si_diff <- tryCatch(
-    solve(sigma, diff),
-    error = function(e) {
-      cli::cli_abort(
-        c(
-          "Could not compute Mahalanobis form for {.code method = \"james_stein\"}.",
-          "x" = "Matrix solve failed; {.arg sigma} may be singular."
-        )
-      )
-    }
-  )
-  quad <- as.numeric(t(diff) %*% Si_diff)
+  diff    <- mu - target
+  # Σ⁻¹diff = Σ⁻¹(mu − mu_0·ones) = Si_mu − mu_0·Si_ones  (linearity; no extra solve)
+  Si_diff <- Si_mu - mu_0 * Si_ones
+  quad    <- as.numeric(t(diff) %*% Si_diff)
 
   # Clamp numerically to [0, 1] (should be automatic, but guard against
   # floating-point degenerate case where quad is tiny negative due to FP noise)
