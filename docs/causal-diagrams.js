@@ -49,7 +49,21 @@ var nodeTooltips = {
   "Decay": "Premium Decay — factor premiums weaken after discovery and crowding. Source: plan_strategy_decay.R",
   "Cost": "Rebalance Cost — trading costs from monthly rebalancing. Source: plan_alpha_decay.R",
   "Structural": "Structural headwinds: crowding, decay, transaction costs. Source: plan_strategy_decay.R",
-  "Market": "Market — equity market exposure underlying all strategies."
+  "Market": "Market — equity market exposure underlying all strategies.",
+
+  // ── Portfolio-construction subsystem nodes (dag-portcons-mount) ───────────
+  // Added in #514 Phase-0 master relationship diagram.
+  "COV_CFG": "cov_config.R — single source of truth for the active covariance estimator (COV_METHOD: sample|ledoit_wolf|rmt_denoise|threshold). Flip this knob to switch the whole portfolio-construction pipeline. Source: R/cov_config.R#L9",
+  "COV_EST": "hd_cov_estimate() — regularised covariance estimator dispatcher. Routes to: sample (stats::cov), Ledoit-Wolf (analytically optimal linear shrinkage, guaranteed PD), or RMT-denoise (Marchenko-Pastur eigenvalue clipping). Returns positive-definite Sigma. Source: packages/historicaldata/R/cov_estimate.R#L100",
+  "RET_SHRINK": "hd_returns_shrink() — shrinks historical mean returns toward the cross-sectional grand mean (Bayesian-style). Reduces estimation error in expected-return inputs before BL or MV optimisation. Source: packages/historicaldata/R/returns_shrink.R#L112",
+  "GMV_W": "hd_min_var_weights() — Global Minimum Variance weights via unconstrained inversion: w = Sigma^{-1}·1 / (1'·Sigma^{-1}·1). normalize=TRUE enforces sum-to-1. Used in the 60-month rolling OOS covariance diagnostic. Source: packages/historicaldata/R/min_var_weights.R#L65",
+  "BL_W": "hd_black_litterman() — Black-Litterman posterior weights. Takes Sigma (from hd_cov_estimate) and mu (from hd_returns_shrink or a prior), combines via BL formula to produce posterior expected returns and MV weights. Source: packages/historicaldata/R/black_litterman.R#L142",
+  "HRP_W": "hrp_weights() — Hierarchical Risk Parity via complete-linkage clustering on the correlation-distance matrix, then recursive bisection (Lopez de Prado 2016). Does not invert Sigma — numerically stable for large p. Source: packages/historicaldata/R/topological_risk_parity.R#L210",
+  "TRP_W": "trp_weights() — Topological Risk Parity: HRP extended with a Minimum Spanning Tree (MST) to derive cluster membership before recursive bisection, replacing the standard agglomerative linkage step. Source: packages/historicaldata/R/topological_risk_parity.R#L274",
+  "PSO_W": "PSO combo weights — Particle Swarm Optimisation over strategy-combination weights on the training window. Searches the allocation simplex for Sharpe-maximising weights; falls back to grid search when the pso package is unavailable. Source: R/plan_portfolio_opt.R#L12",
+  "OOS_DIAG": "hd_cov_oos_diagnostic() — 60-month rolling walk-forward OOS diagnostic. For each window, estimates GMV weights from each estimator on the training half, records the next-period OOS return and condition number. Results surface in falsification.qmd covreg section. Source: packages/historicaldata/R/cov_diagnostic.R#L87",
+  "FALS_DB": "falsification.qmd Covariance Regularisation tab (#covreg) — renders OOS conditioning dot plot (log10 x-axis), OOS min-variance Sharpe dot plot, and the walk-forward summary table. Canonical home for Phase-3 deployment decisions (when to flip COV_METHOD to ledoit_wolf). Source: docs/falsification.qmd#L400",
+  "LEADER_DB": "leaderboard.qmd — ranks all strategies by risk-adjusted return. Receives final portfolio weights from all weight engines (GMV, BL, HRP, TRP, PSO) and surfaces Sharpe, CAGR, MaxDD, and other metrics. Main consumer of portfolio-construction outputs. Source: docs/leaderboard.qmd#L1"
 };
 
 // Edge hover tooltips and click links.
@@ -514,6 +528,92 @@ var edgeMetadata = {
   "Structural->FMAX": {
     tooltip: "Structural headwinds (crowding, premium decay, transaction costs) reduce FacMAX returns. Source: plan_strategy_decay.R tar_target(decay_scores).",
     href: "https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R"
+  },
+
+  // ── dag-portcons-mount: portfolio-construction subsystem (#514) ───────────
+
+  // COV_CFG -> COV_EST (portcons)
+  "COV_CFG->COV_EST": {
+    tooltip: "COV_METHOD in cov_config.R controls which estimator hd_cov_estimate() dispatches to: 'sample' (default, unchanged deployed numbers), 'ledoit_wolf', 'rmt_denoise', or 'threshold'. Flip here to switch the whole pipeline. Source: R/cov_config.R#L9",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/R/cov_config.R#L9"
+  },
+
+  // COV_EST -> GMV_W (portcons)
+  "COV_EST->GMV_W": {
+    tooltip: "Sigma from hd_cov_estimate() is inverted by hd_min_var_weights() to compute GMV weights. A better-conditioned Sigma (LW or RMT) → more numerically stable inversion → lower realised OOS portfolio variance. Source: packages/historicaldata/R/min_var_weights.R#L65",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/min_var_weights.R#L65"
+  },
+
+  // COV_EST -> BL_W (portcons)
+  "COV_EST->BL_W": {
+    tooltip: "Sigma from hd_cov_estimate() is the uncertainty matrix in the BL formula: Sigma_posterior = [(tau*Sigma)^{-1} + P'*Omega^{-1}*P]^{-1}. Regularised Sigma → better-conditioned BL posterior. Source: packages/historicaldata/R/black_litterman.R#L142",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/black_litterman.R#L142"
+  },
+
+  // COV_EST -> HRP_W (portcons)
+  "COV_EST->HRP_W": {
+    tooltip: "hd_cov_estimate() output is converted to a correlation-distance matrix inside hrp_weights() via .cov_to_corr_dist(). HRP does not invert Sigma — only correlation distances drive clustering, so conditioning is less critical here. Source: packages/historicaldata/R/topological_risk_parity.R#L210",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/topological_risk_parity.R#L210"
+  },
+
+  // COV_EST -> TRP_W (portcons)
+  "COV_EST->TRP_W": {
+    tooltip: "trp_weights() takes cov_mat from hd_cov_estimate(), builds the MST from the correlation-distance matrix, uses MST cluster topology to define groups, then applies recursive bisection. Source: packages/historicaldata/R/topological_risk_parity.R#L274",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/topological_risk_parity.R#L274"
+  },
+
+  // COV_EST -> OOS_DIAG (portcons)
+  "COV_EST->OOS_DIAG": {
+    tooltip: "hd_cov_oos_diagnostic() calls hd_cov_estimate() once per training window for each COV_METHOD. The resulting condition numbers and OOS GMV Sharpe ratios are compared across methods in falsification.qmd. Source: packages/historicaldata/R/cov_diagnostic.R#L87",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/cov_diagnostic.R#L87"
+  },
+
+  // RET_SHRINK -> BL_W (portcons)
+  "RET_SHRINK->BL_W": {
+    tooltip: "hd_returns_shrink() produces mu_shrunk (shrunk expected returns) that replace naive historical means before the BL posterior. Shrinkage toward the cross-sectional mean reduces overfitting to asset-specific outliers. Source: packages/historicaldata/R/black_litterman.R#L142",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/black_litterman.R#L142"
+  },
+
+  // OOS_DIAG -> FALS_DB (portcons)
+  "OOS_DIAG->FALS_DB": {
+    tooltip: "hd_cov_oos_diagnostic() results surface in falsification.qmd as tar_targets cov_diag_vig_table, cov_diag_vig_cond_plot, and cov_diag_vig_sharpe_plot. These feed the Covariance Regularisation tabset (OOS Diagnostic, Conditioning, OOS Sharpe tabs). Source: R/plan_cov_diagnostic_vignette.R",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/falsification.qmd#L400"
+  },
+
+  // GMV_W -> FALS_DB (portcons)
+  "GMV_W->FALS_DB": {
+    tooltip: "The OOS diagnostic in falsification.qmd uses hd_min_var_weights() as the weight engine for comparing estimators: GMV is the objective whose OOS Sharpe and conditioning are evaluated. Source: packages/historicaldata/R/cov_diagnostic.R#L87",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/falsification.qmd#L400"
+  },
+
+  // GMV_W -> LEADER_DB (portcons)
+  "GMV_W->LEADER_DB": {
+    tooltip: "GMV weights feed into the leaderboard portfolio performance comparison (port_hrp_weights in plan_portfolio_opt.R uses GMV as one of the comparison strategies). Leaderboard surfaces Sharpe, CAGR, and MaxDD. Source: docs/leaderboard.qmd",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/leaderboard.qmd#L1"
+  },
+
+  // BL_W -> LEADER_DB (portcons)
+  "BL_W->LEADER_DB": {
+    tooltip: "Black-Litterman posterior weights from hd_black_litterman() feed into the leaderboard via the portfolio construction pipeline. Source: docs/leaderboard.qmd",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/leaderboard.qmd#L1"
+  },
+
+  // HRP_W -> LEADER_DB (portcons)
+  "HRP_W->LEADER_DB": {
+    tooltip: "HRP weights from hrp_weights() feed into the leaderboard via port_hrp_weights in plan_portfolio_opt.R (#L119). HRP is one of the comparison strategies in the portfolio-opt section of leaderboard.qmd. Source: R/plan_portfolio_opt.R#L119",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/leaderboard.qmd#L1"
+  },
+
+  // TRP_W -> LEADER_DB (portcons)
+  "TRP_W->LEADER_DB": {
+    tooltip: "TRP weights from trp_weights() (MST-extended HRP) are an alternative diversification method compared on the leaderboard against HRP, GMV, and BL. Source: docs/leaderboard.qmd",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/leaderboard.qmd#L1"
+  },
+
+  // PSO_W -> LEADER_DB (portcons)
+  "PSO_W->LEADER_DB": {
+    tooltip: "PSO optimal strategy-combination weights from plan_portfolio_opt.R feed into leaderboard via port_comparison_plot and port_metrics. PSO searches the allocation simplex for Sharpe-maximising weights on the training window. Source: R/plan_portfolio_opt.R#L12",
+    href: "https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/R/plan_portfolio_opt.R#L12"
   }
 };
 
@@ -835,7 +935,15 @@ var dagDefs = {
   "dag-full-mount": "graph LR\n  subgraph Factors[\"Fama-French Factors\"]\n    HML[\"HML Value\"]\n    SMB[\"SMB Size\"]\n    Mom[\"Mom Momentum\"]\n    RMW[\"RMW Profitability\"]\n    Mkt_RF[\"Mkt-RF Market\"]\n  end\n  subgraph Macro[\"Macro Signals\"]\n    VIX[\"VIX Level\"]\n    VTS[\"VIX Term Structure\"]\n    VVIX[\"VVIX\"]\n    Fed[\"Fed Rate\"]\n    Infl[\"Inflation\"]\n  end\n  subgraph Regime[\"Regime States\"]\n    VolR[\"Vol Regime\"]\n    RateR[\"Rate Regime\"]\n  end\n  subgraph Signals[\"Strategy Signals\"]\n    DRIF_S[\"DRIF Signal\"]\n    FMAX_S[\"FacMAX Signal\"]\n    LTR_S[\"LTR Signal\"]\n    RSC_S[\"RSC Signal\"]\n    VIX_S[\"VIX Overlay\"]\n  end\n  subgraph Returns[\"Strategy Returns\"]\n    DRIF_R[\"DRIF Return\"]\n    FMAX_R[\"FacMAX Return\"]\n    LTR_R[\"LTR Return\"]\n    MKT_R[\"Market Return\"]\n  end\n  subgraph Portfolio[\"Portfolio Outcomes\"]\n    PORT[\"Portfolio Return\"]\n    MDD[\"Max Drawdown\"]\n    SR[\"Sharpe Ratio\"]\n  end\n  subgraph Structural[\"Structural\"]\n    Crowd[\"Factor Crowding\"]\n    Decay[\"Premium Decay\"]\n    Cost[\"Rebalance Cost\"]\n  end\n  HML --> DRIF_S\n  SMB --> DRIF_S\n  Mom --> DRIF_S\n  RMW --> DRIF_S\n  HML --> FMAX_S\n  SMB --> FMAX_S\n  Mom --> FMAX_S\n  Mom --> LTR_S\n  SMB --> LTR_S\n  VIX --> VolR\n  VTS --> VolR\n  VVIX --> VolR\n  Fed --> RateR\n  Infl --> RateR\n  VolR --> RSC_S\n  VolR --> VIX_S\n  RateR --> LTR_S\n  DRIF_S --> DRIF_R\n  FMAX_S --> FMAX_R\n  LTR_S --> LTR_R\n  RSC_S --> MKT_R\n  VIX_S --> MKT_R\n  Mkt_RF --> MKT_R\n  Mkt_RF --> DRIF_R\n  Mkt_RF --> FMAX_R\n  Mkt_RF --> LTR_R\n  Crowd --> Decay\n  Decay --> FMAX_R\n  Decay --> DRIF_R\n  DRIF_R --> PORT\n  FMAX_R --> PORT\n  LTR_R --> PORT\n  Cost --> PORT\n  PORT --> SR\n  PORT --> MDD\n  VolR --> MDD\n  VIX -.->|\"r=-0.17 VIOLATED\"| HML\n  click HML \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click SMB \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click Mom \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click RMW \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click Mkt_RF \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click VIX \"https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R\" _blank\n  click VTS \"https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R\" _blank\n  click VVIX \"https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R\" _blank\n  click Fed \"https://github.com/JohnGavin/historical/blob/main/R/plan_regime.R\" _blank\n  click Infl \"https://github.com/JohnGavin/historical/blob/main/R/plan_regime.R\" _blank\n  click VolR \"https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R\" _blank\n  click RateR \"https://github.com/JohnGavin/historical/blob/main/R/plan_regime.R\" _blank\n  click DRIF_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R\" _blank\n  click FMAX_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R\" _blank\n  click LTR_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R\" _blank\n  click RSC_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_risk_state.R\" _blank\n  click VIX_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R\" _blank\n  click DRIF_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R\" _blank\n  click FMAX_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R\" _blank\n  click LTR_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R\" _blank\n  click MKT_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_backtest.R\" _blank\n  click PORT \"https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R\" _blank\n  click Crowd \"https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R\" _blank\n  click Decay \"https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R\" _blank\n  click Cost \"https://github.com/JohnGavin/historical/blob/main/R/plan_alpha_decay.R\" _blank\n  linkStyle default stroke:#CC0000,stroke-width:2px",
   "dag-drif-mount": "graph LR\n  HML[\"HML Value\"] --> DRIF_S[\"DRIF Signal\"]\n  SMB[\"SMB Size\"] --> DRIF_S\n  Mom[\"Mom Momentum\"] --> DRIF_S\n  RMW[\"RMW Profitability\"] --> DRIF_S\n  DRIF_S --> DRIF_R[\"DRIF Return\"]\n  Mkt_RF[\"Market Mkt-RF\"] --> DRIF_R\n  VIX[\"VIX Level\"] -.->|\"r=-0.17\"| HML\n  Decay[\"Premium Decay\"] --> DRIF_R\n  DRIF_R --> PORT[\"Portfolio Return\"]\n  click HML \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click SMB \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click Mom \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click RMW \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click DRIF_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R\" _blank\n  click DRIF_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R\" _blank\n  click Mkt_RF \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click VIX \"https://github.com/JohnGavin/historical/blob/main/R/plan_vix_macro_overlay.R\" _blank\n  click Decay \"https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R\" _blank\n  click PORT \"https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R\" _blank\n  linkStyle default stroke:#CC0000,stroke-width:2px\n  linkStyle 6 stroke:#ffff00,stroke-width:3px,stroke-dasharray:5",
   "dag-fmax-mount": "graph LR\n  HML[\"HML Value\"] --> FMAX_S[\"FacMAX Signal\"]\n  SMB[\"SMB Size\"] --> FMAX_S\n  Mom[\"Mom Momentum\"] --> FMAX_S\n  FMAX_S --> FMAX_R[\"FacMAX Return\"]\n  Mkt_RF[\"Market Mkt-RF\"] --> FMAX_R\n  Decay[\"Premium Decay\"] --> FMAX_R\n  FMAX_R --> PORT[\"Portfolio Return\"]\n  click HML \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click SMB \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click Mom \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click FMAX_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R\" _blank\n  click FMAX_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R\" _blank\n  click Mkt_RF \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click Decay \"https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_decay.R\" _blank\n  click PORT \"https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R\" _blank\n  linkStyle default stroke:#CC0000,stroke-width:2px",
-  "dag-ltr-mount": "graph LR\n  Mom[\"Mom Momentum\"] --> LTR_S[\"LTR Signal\"]\n  SMB[\"SMB Size\"] --> LTR_S\n  RateR[\"Rate Regime\"] --> LTR_S\n  LTR_S --> LTR_R[\"LTR Return\"]\n  Mkt_RF[\"Market Mkt-RF\"] --> LTR_R\n  LTR_R --> PORT[\"Portfolio Return\"]\n  click Mom \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click SMB \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click RateR \"https://github.com/JohnGavin/historical/blob/main/R/plan_regime.R\" _blank\n  click LTR_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R\" _blank\n  click LTR_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R\" _blank\n  click Mkt_RF \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click PORT \"https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R\" _blank\n  linkStyle default stroke:#CC0000,stroke-width:2px"
+  "dag-ltr-mount": "graph LR\n  Mom[\"Mom Momentum\"] --> LTR_S[\"LTR Signal\"]\n  SMB[\"SMB Size\"] --> LTR_S\n  RateR[\"Rate Regime\"] --> LTR_S\n  LTR_S --> LTR_R[\"LTR Return\"]\n  Mkt_RF[\"Market Mkt-RF\"] --> LTR_R\n  LTR_R --> PORT[\"Portfolio Return\"]\n  click Mom \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click SMB \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click RateR \"https://github.com/JohnGavin/historical/blob/main/R/plan_regime.R\" _blank\n  click LTR_S \"https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R\" _blank\n  click LTR_R \"https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R\" _blank\n  click Mkt_RF \"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R\" _blank\n  click PORT \"https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R\" _blank\n  linkStyle default stroke:#CC0000,stroke-width:2px",
+
+  // ── dag-portcons-mount — Portfolio Construction Subsystem ─────────────────
+  // Phase-0 master relationship diagram for #514 / seed of #481 strategy_graph.
+  // Scope: MVO portfolio-construction subsystem shipped in #498 #512 #513.
+  // Future PRs extend to: other strategies (DRIF, FMAX, LTR), factor layer,
+  // cross-dashboard navigation, and PSO parameter tuning surface.
+  // Commit SHA pinned to b346d802 (HEAD at time of #514 diagram PR).
+  "dag-portcons-mount": "graph TD\n  subgraph CovLayer[\"Covariance Estimator (issue 498)\"]\n    COV_CFG[\"cov_config.R COV_METHOD\"]\n    COV_EST[\"hd_cov_estimate() Sample / LW / RMT\"]\n    COV_CFG --> COV_EST\n  end\n  subgraph ExpRetLayer[\"Expected Returns (issue 512)\"]\n    RET_SHRINK[\"hd_returns_shrink()\"]\n  end\n  subgraph WeightEngines[\"Weight Engines\"]\n    GMV_W[\"hd_min_var_weights() GMV\"]\n    BL_W[\"hd_black_litterman() BL (issue 513)\"]\n    HRP_W[\"hrp_weights() HRP\"]\n    TRP_W[\"trp_weights() TRP\"]\n    PSO_W[\"PSO combo plan_portfolio_opt\"]\n  end\n  OOS_DIAG[\"hd_cov_oos_diagnostic() OOS Diagnostic\"]\n  subgraph Dashboards[\"Dashboards\"]\n    FALS_DB[\"falsification.qmd covreg tab\"]\n    LEADER_DB[\"leaderboard.qmd\"]\n  end\n  COV_EST --> GMV_W\n  COV_EST --> BL_W\n  COV_EST --> HRP_W\n  COV_EST --> TRP_W\n  COV_EST --> OOS_DIAG\n  RET_SHRINK --> BL_W\n  OOS_DIAG --> FALS_DB\n  GMV_W --> FALS_DB\n  GMV_W --> LEADER_DB\n  BL_W --> LEADER_DB\n  HRP_W --> LEADER_DB\n  TRP_W --> LEADER_DB\n  PSO_W --> LEADER_DB\n  click COV_CFG \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/R/cov_config.R#L9\" _blank\n  click COV_EST \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/cov_estimate.R#L100\" _blank\n  click RET_SHRINK \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/returns_shrink.R#L112\" _blank\n  click GMV_W \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/min_var_weights.R#L65\" _blank\n  click BL_W \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/black_litterman.R#L142\" _blank\n  click HRP_W \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/topological_risk_parity.R#L210\" _blank\n  click TRP_W \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/topological_risk_parity.R#L274\" _blank\n  click OOS_DIAG \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/packages/historicaldata/R/cov_diagnostic.R#L87\" _blank\n  click PSO_W \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/R/plan_portfolio_opt.R#L12\" _blank\n  click FALS_DB \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/falsification.qmd#L400\" _blank\n  click LEADER_DB \"https://github.com/JohnGavin/historical/blob/b346d802baa8f98c694905b944854bf9a43594cf/docs/leaderboard.qmd#L1\" _blank\n  linkStyle default stroke:#CC0000,stroke-width:2px"
 };
 
 // Render each diagram INDIVIDUALLY so one failure doesn't block others
