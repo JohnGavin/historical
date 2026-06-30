@@ -7,7 +7,7 @@
 > updates the relevant row here, and every feature proposes at least one
 > consolidation against this list.
 
-**Current count: 15 standalone dashboards.** Consolidation target: **11** (see
+**Current count: 14 standalone dashboards.** Consolidation target: **11** (see
 § Consolidation Proposal). The causal-DAG is an embedded surface inside
 `falsification.qmd`, not a standalone dashboard.
 
@@ -24,7 +24,7 @@
 | `stock-backtest.qmd` | Cross-sectional: MAX/DRIF on 660 stocks vs 5 factors | 2×2 strategy matrix; equity curves (4 strats, range slider); metrics table; key-findings matrix; per-signal detail (plots, pros/cons, factor exposure); XGBoost DRIF section | `stk_max_metrics`, `stk_drif_metrics`, `fm_metrics`, `drif_metrics`, `stk_all_comparison_plot` |
 | `avoid-worst-days.qmd` | Thought experiment: return asymmetry | Conceptual $100→$165 vs $75 chart; temporal-clustering analysis; discussion (not tradeable) | Inline SPY daily returns |
 | `european-overlay.qmd` | VIX-style signals on European equities vs ECB CISS | CISS-vs-VIX correlation table; CISS sub-market breakdown; CISS time series plotly; regime-allocation table; performance comparison | `ecb_raw`, `aw_vix_daily`, `hd_ecb()` |
-| `jst-dashboard.qmd` | Interactive 155-yr equity premium, 18 countries | Pervasiveness table; decade×country heatmap; crisis timeline; crisis-frequency table; summary callouts | `jst_equity_premium`, `jst_pervasiveness`, `jst_crises` |
+| ~~`jst-dashboard.qmd`~~ | ~~Interactive 155-yr equity premium, 18 countries~~ | ~~Pervasiveness table; decade×country heatmap; crisis timeline; crisis-frequency table; summary callouts~~ | ~~`jst_equity_premium`, `jst_pervasiveness`, `jst_crises`~~ **→ merged into `evidence.qmd#historical-evidence` (#514 merge 1/3)** |
 | `macro-defense-rotation.qmd` | Macro hedge rotation (TLT/GLD/DBC/UUP vs SPY) | Normalised price chart; performance-metrics table (by partition); regime overlay; win-rate table; allocation table | `bt_prices`, inline backtest |
 | `momentum-prepeak.qmd` | Büsing (2022) pre-peak vs post-peak 12-2 momentum | Equity-curve comparison (pre/post/combined); summary metrics; bankruptcy-events table; signal-decomposition explanation | `mom_prepeak_*`, `mom_postpeak_returns`, `mom_combined_returns`, `strategy_names` |
 | `bdbb-sol.qmd` | M/G/∞ queueing model (Varma 2026) on SOL/USD | Data-coverage table; rolling-diagnostics table; regime-distribution bar chart; tail-risk predictivity table | `bdbb_sol_dv`, `bdbb_sol_fit`, `bdbb_sol_metrics` |
@@ -35,14 +35,14 @@
 
 1. **Strategy performance** — `index` → `leaderboard` → `falsification`: ranking, equity curves, and verdicts that reference each other.
 2. **Per-strategy deep dives** — `factor-max`, `drif`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`: all show definition + cumulative-return plotly + metrics table + signal analysis. `stock-backtest` already subsumes `factor-max`/`drif` as a 2×2.
-3. **Long-run evidence** — `evidence` and `jst-dashboard` render the **same** JST pervasiveness table, heatmap, and crisis timeline.
+3. **Long-run evidence** — ~~`evidence` and `jst-dashboard` render the **same** JST pervasiveness table, heatmap, and crisis timeline.~~ Resolved: `jst-dashboard` merged into `evidence.qmd#historical-evidence` (#514 merge 1/3).
 4. **Robustness & falsification** — `leaderboard`, `falsification`, `negative-results`: overlapping robustness metrics; `negative-results` is a subset of the `falsification` scorecard.
 
 ## Consolidation Proposal (15 → 11)
 
 | # | Action | Rationale | Kept / lost |
 |---|---|---|---|
-| 1 | **Merge `jst-dashboard` → `evidence`** (tabset) | Identical JST outputs; no new information | All data kept; lose a standalone page |
+| 1 | ~~**Merge `jst-dashboard` → `evidence`** (tabset)~~ **DONE** (#514 consolidation 1/3) | Identical JST outputs; no new information | All data kept; redirect stub replaces standalone page; `evidence.qmd#historical-evidence` is the new anchor |
 | 2 | **Merge `factor-max` + `drif` → `stock-backtest`** (Factor-Level tabset) | `stock-backtest` already shows the 2×2 (Stock/Factor × MAX/DRIF) | All metrics/charts kept as tabs; lose two isolated pages; index links to `stock-backtest#factor-deep-dive` |
 | 3 | **Merge `negative-results` → `falsification`** (final "Failed Strategies" tab) | `negative-results` copies the falsification scorecard + failure cards | Falsification becomes passing→failing narrative; redirect old page |
 | 4 | **Keep** `index`, `leaderboard`, `falsification`, `evidence`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`, `european-overlay`, `bdbb-sol`, `avoid-worst-days`, `quiz` | Distinct objective/audience each | — |

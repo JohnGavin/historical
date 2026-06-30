@@ -249,7 +249,7 @@ if (!is.null(summary) && !is.null(nms)) {
 - Strategy leaderboard: [leaderboard.html](leaderboard.html)
 - Harvey, Liu & Zhu (2016). "...and the Cross-Section of Expected Returns"
 
-## Historical Evidence
+## Historical Evidence {#historical-evidence}
 
 ### Overview
 
@@ -450,5 +450,5 @@ build_info()
 
 - **[Falsification](falsification.html)** — applies formal hypothesis testing to each strategy's conditional independence claims; the long-run JST evidence is a key input to those priors
 - **[Strategy Leaderboard](leaderboard.html)** — ranks all strategies on risk-adjusted return; the equity premium evidence here contextualises what "good" looks like across 100+ years
-- **[JST Dashboard](jst-dashboard.html)** — interactive visualisation of the Jordà-Schularick-Taylor data set that underpins this vignette's long-run tables
+- **[Factor MAX](factor-max.html)** — applies cross-sectional factor rotation to the same academic factors whose long-run premia are documented in the JST data
 - **[Negative Results](negative-results.html)** — strategies that failed to survive empirical scrutiny; the historical evidence framework here explains why they were rejected
