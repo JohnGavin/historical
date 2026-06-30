@@ -119,6 +119,7 @@ Computational Statistics}, 18(2). \doi{10.1002/wics.70068}
 \seealso{
 Other covariance: 
 \code{\link{hd_cov_oos_diagnostic}()},
-\code{\link{hd_min_var_weights}()}
+\code{\link{hd_min_var_weights}()},
+\code{\link{hd_min_var_weights_penalised}()}
 }
 \concept{covariance}

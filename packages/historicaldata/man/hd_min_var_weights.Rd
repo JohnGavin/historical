@@ -73,6 +73,7 @@ frontier. \emph{Journal of Financial and Quantitative Analysis}, 7(4),
 \seealso{
 Other covariance: 
 \code{\link{hd_cov_estimate}()},
-\code{\link{hd_cov_oos_diagnostic}()}
+\code{\link{hd_cov_oos_diagnostic}()},
+\code{\link{hd_min_var_weights_penalised}()}
 }
 \concept{covariance}
