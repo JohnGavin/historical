@@ -643,6 +643,34 @@ cat('<div id="dag-ltr-mount"></div>')
 
 <abbr title="LambdaMART — XGBoost-based cross-sectional momentum strategy. Ranks stocks by predicted return using gradient-boosted trees.">LTR</abbr> uses XGBoost for cross-sectional stock ranking. Loads on <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr> + <abbr title="Small Minus Big — size factor">SMB</abbr>. <abbr title="Fed rate above/below median classifies as high/low rate regime">Rate regime</abbr> feeds into signal. Source: [plan_ltr_momentum.R](https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R).
 
+#### Strategy & Dashboard Relationship Map
+
+This diagram is the first version (Phase-0 prototype) of the master navigation
+layer described in [issue #481](https://github.com/JohnGavin/historical/issues/481)
+and built as part of [issue #514](https://github.com/JohnGavin/historical/issues/514).
+It shows the **MVO / portfolio-construction subsystem** shipped in issues #498
+(covariance estimator), #512 (returns shrinkage), and #513 (Black-Litterman),
+and the two dashboards that surface its outputs.
+
+Each node is clickable and links to the exact function definition in source,
+pinned to commit `b346d80`. Hover any edge for a tooltip explaining the
+data-flow. Future PRs extend this seed diagram to the full strategy graph
+(factor layer, DRIF / FMAX / LTR / RSC nodes, and cross-dashboard navigation).
+
+```{r}
+#| label: causal-portcons-mount
+#| results: asis
+#| echo: false
+cat('<div id="dag-portcons-mount" style="min-height:580px;"></div>')
+```
+
+Node colours follow the [diagram colour palette](https://github.com/JohnGavin/llm/blob/main/.claude/rules/mermaid-dashboard-pattern.md):
+<abbr title="Covariance config + estimator — data inputs to the weight engines">Covariance Estimator</abbr> (subgraph) |
+<abbr title="Expected-returns shrinkage applied before Black-Litterman">Expected Returns</abbr> (subgraph) |
+<abbr title="GMV, BL, HRP, TRP, PSO — portfolio weight engines">Weight Engines</abbr> (subgraph) |
+<abbr title="hd_cov_oos_diagnostic() — walk-forward OOS conditioning and Sharpe comparison">OOS Diagnostic</abbr> (single node) |
+<abbr title="falsification.qmd #covreg and leaderboard.qmd — the pages that render the outputs">Dashboards</abbr> (subgraph).
+
 #### Implication Tests
 
 ```{r}
