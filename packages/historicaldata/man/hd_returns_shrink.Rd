@@ -129,4 +129,8 @@ Jorion, P. (1991). Bayesian and CAPM estimators of the means:
 Implications for portfolio selection. \emph{Journal of Banking & Finance},
 15(3), 717–727. \doi{10.1016/0378-4266(91)90094-3}
 }
+\seealso{
+Other returns: 
+\code{\link{hd_black_litterman}()}
+}
 \concept{returns}
