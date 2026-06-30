@@ -102,6 +102,7 @@ dressing of financial correlation matrices. \emph{Physical Review Letters},
 \seealso{
 Other covariance: 
 \code{\link{hd_cov_estimate}()},
-\code{\link{hd_min_var_weights}()}
+\code{\link{hd_min_var_weights}()},
+\code{\link{hd_min_var_weights_penalised}()}
 }
 \concept{covariance}
