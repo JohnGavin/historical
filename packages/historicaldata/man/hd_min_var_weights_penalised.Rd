@@ -122,6 +122,7 @@ large-dimensional covariance matrices. \emph{Journal of Multivariate Analysis},
 Other covariance: 
 \code{\link{hd_cov_estimate}()},
 \code{\link{hd_cov_oos_diagnostic}()},
-\code{\link{hd_min_var_weights}()}
+\code{\link{hd_min_var_weights}()},
+\code{\link{hd_weight_stability_diagnostic}()}
 }
 \concept{covariance}
