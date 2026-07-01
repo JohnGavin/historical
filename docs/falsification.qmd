@@ -986,6 +986,88 @@ Issue [#269](https://github.com/JohnGavin/historical/issues/269).
 #### Related Vignettes
 
 - **[Strategy Leaderboard](leaderboard.html)** — displays the falsification scorecard verdicts alongside performance rankings; leaderboard surfaces what this page proves
-- **[Evidence & Context](evidence.html)** — catalogues strategies that failed the falsification gauntlet; companion document to this page's verdicts
+- **[Evidence & Context](evidence.html)** — per-strategy failure cards, lessons learned, and 155 years of equity premium across 18 countries; companion document to this page's verdicts
 - **[Momentum Pre-Peak](momentum-prepeak.html)** — the most recent gauntlet run; applies HAC, FF5, CPCV PBO, and Walk-Forward Correlation from this framework
+
+
+# Failed Strategies {#failed-strategies}
+
+Strategies that fail the falsification gauntlet (Alpha t < 2.0) reveal where market intuition breaks down. Their returns are explained by known factor exposure (beta) or statistical noise — not genuine alpha. Publication bias in finance means failed strategies are rarely documented; this section corrects that.
+
+## Row
+
+### {.tabset}
+
+#### Filtered Scorecard
+
+```{r}
+#| label: neg-scorecard-fals
+summary_tbl <- safe_tar_read("fals_summary")
+nms_tbl     <- safe_tar_read("fals_vig_names")
+if (!is.null(summary_tbl) && !is.null(nms_tbl)) {
+  neg <- summary_tbl |>
+    dplyr::filter(ff_alpha_tstat < 2.0) |>
+    dplyr::mutate(
+      Strategy   = nms_tbl$long_name[match(strategy, nms_tbl$code_name)],
+      `HAC t`    = round(hac_tstat, 2),
+      `Alpha t`  = round(ff_alpha_tstat, 2),
+      `R2 (%)`   = round(ff_r_squared * 100, 1),
+      `Alpha (%)` = round(ff_alpha_annual * 100, 0),
+      Diagnosis  = dplyr::case_when(
+        ff_r_squared > 0.50 ~ "Pure market beta",
+        ff_r_squared > 0.15 ~ "Significant factor exposure",
+        TRUE                ~ "Noise — neither alpha nor beta"
+      )
+    ) |>
+    dplyr::select(Strategy, `HAC t`, `Alpha t`, `R2 (%)`, `Alpha (%)`, Diagnosis) |>
+    dplyr::arrange(`Alpha t`)
+
+  hd_dt(neg, paste0(
+    nrow(neg), " of ", nrow(summary_tbl),
+    " strategies failed the falsification framework (Alpha t < 2.0). ",
+    "These strategies' returns are explained by known factor exposure or noise."
+  ))
+} else {
+  cat("*Falsification summary not yet built. Run `tar_make()`.*")
+}
+```
+
+#### Failure Patterns
+
+```{r}
+#| label: neg-pattern-fals
+summary_tbl <- safe_tar_read("fals_summary")
+nms_tbl     <- safe_tar_read("fals_vig_names")
+if (!is.null(summary_tbl) && !is.null(nms_tbl)) {
+  pattern <- summary_tbl |>
+    dplyr::mutate(
+      Strategy      = nms_tbl$long_name[match(strategy, nms_tbl$code_name)],
+      `Asset Class` = nms_tbl$asset_class[match(strategy, nms_tbl$code_name)],
+      Frequency     = nms_tbl$frequency[match(strategy, nms_tbl$code_name)],
+      `R2 (%)`      = round(ff_r_squared * 100, 1),
+      `Alpha t`     = round(ff_alpha_tstat, 2),
+      Verdict       = ifelse(ff_alpha_tstat > 2.0, "Alpha", "No alpha")
+    ) |>
+    dplyr::select(Strategy, `Asset Class`, Frequency, `R2 (%)`, `Alpha t`, Verdict) |>
+    dplyr::arrange(dplyr::desc(`Alpha t`))
+
+  hd_dt(pattern, paste0(
+    "All strategies sorted by Alpha t. ",
+    "The two overlay strategies (daily, VIX-based) both fail. ",
+    "The two factor strategies (monthly, momentum-based) both pass. ",
+    "Pattern: daily VIX-based overlays = beta; monthly factor rotation = alpha."
+  ))
+} else {
+  cat("*Falsification summary not yet built.*")
+}
+```
+
+#### Portfolio Implications
+
+1. **Do not include** Avoid Worst Days or Risk State Classification in the multi-strategy portfolio (see issue [#52](https://github.com/JohnGavin/historical/issues/52)).
+2. **VIX-based overlays** add cost and complexity without alpha — use passive SPY instead.
+3. **Factor rotation** ([DRIF](stock-backtest.html#factor-level-deep-dive), Factor MAX) is where the genuine alpha lives.
+4. **Cross-sectional momentum** (LTR) needs scaling before inclusion — promising but unconfirmed at production scale.
+
+For per-strategy failure cards and lessons learned, see [**Evidence & Context → Negative Results tab**](evidence.html#negative-results).
 
