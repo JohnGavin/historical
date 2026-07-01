@@ -469,6 +469,64 @@ The deployed strategy universes (4–6 assets) operate at p/n ≪ 0.1, where the
 **References:** Raviv (2026), *WIREs Computational Statistics*, [doi:10.1002/wics.70068](https://doi.org/10.1002/wics.70068). Full digest: [`knowledge/wiki/covariance-estimation-wide-data.md`](https://github.com/JohnGavin/historical/blob/main/knowledge/wiki/covariance-estimation-wide-data.md){target="_blank" rel="noopener noreferrer"}. Issue [#498](https://github.com/JohnGavin/historical/issues/498){target="_blank" rel="noopener noreferrer"}.
 
 
+# Weight-Stability Diagnostic (MVO breakdown) {#wstab}
+
+Does the choice of portfolio construction method affect weight stability and out-of-sample (OOS) performance? This section presents a walk-forward diagnostic on the 4-asset universe (SPY/TLT/GLD/DBC) comparing six methods: plug-in MVO, GMV, Shrunk-μ, Black-Litterman, Equal-Weight (1/N), and HRP. The central claim of the MVO-breakdown literature (Michaud 1989): plug-in mean-variance is an *error maximiser* — amplifying estimation noise in expected returns into high turnover, extreme weights, and poor OOS Sharpe. Regularised alternatives are more stable.
+
+## Row
+
+### {.tabset}
+
+#### OOS Diagnostic
+
+```{r}
+#| label: wstab-table
+wstab <- safe_tar_read("ws_diag_vig_table")
+wscap <- safe_tar_read("ws_diag_vig_caption")
+if (!is.null(wstab)) fals_dt(wstab, wscap)
+```
+
+#### OOS Sharpe
+
+```{r}
+#| label: wstab-plot
+#| fig-height: 6
+#| fig-width: 10
+#| fig-alt: "Cleveland dot plot of annualised OOS Sharpe ratio for six portfolio construction methods on the 4-asset universe (SPY/TLT/GLD/DBC). Raw MVO (plug-in tangency) has the lowest Sharpe and is coloured orange-red. GMV, HRP, Equal-Weight, Shrunk-mu, and Black-Litterman (no-views prior) cluster rightward, demonstrating that avoiding unconstrained expected-return estimation reduces OOS performance variance. A dashed vertical line marks Sharpe = 0."
+p <- safe_tar_read("ws_diag_vig_plot")
+if (!is.null(p)) p
+```
+
+`r { cap <- safe_tar_read("ws_diag_vig_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+
+#### How to Read This
+
+**What is tested:**
+
+A 60-month rolling walk-forward backtest estimates portfolio weights using each construction method from the training window (no look-ahead). The next-period (t+1) return is applied to the estimated weights — strictly no look-ahead per the `alpha-decay-min-t+1` rule. Six methods are compared:
+
+- **Raw MVO** — Plug-in tangency portfolio w ∝ Σ⁻¹μ using the *sample* covariance and *sample* mean. This is the article's error maximiser: small changes in μ produce large changes in w, especially when Σ is ill-conditioned. Fails (singular sample Σ) whenever the number of assets approaches the training window.
+- **GMV (Global Min-Var)** — `w ∝ Σ⁻¹1` via a regularised (Ledoit-Wolf) covariance. No expected-return input. Implemented in [`hd_min_var_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/min_var_weights.R#L65){target="_blank" rel="noopener noreferrer"}.
+- **Shrunk-μ (James-Stein)** — Tangency portfolio using Bayes-Stein (Jorion 1986) shrinkage on μ toward the grand mean, with a regularised Σ. Implemented in [`hd_returns_shrink(method = "james_stein")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/returns_shrink.R){target="_blank" rel="noopener noreferrer"}.
+- **Black-Litterman (no views)** — Tangency portfolio from the BL (1992) posterior μ̂ and Σ_BL using [`hd_black_litterman()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/black_litterman.R){target="_blank" rel="noopener noreferrer"}. Shown at the no-views equilibrium prior (P = NULL, w_mkt = 1/p, risk_aversion = 2.5). **Important:** with no investor views, the BL posterior collapses to Π = λΣw_mkt, so tangency weights are approximately equal-weight — this is the #513 invariant, not a bug (see caption).
+- **Equal-Weight (1/N)** — The robust benchmark. Zero turnover by construction.
+- **HRP (Hierarchical Risk Parity)** — Lopez de Prado (2016) hierarchical diversification using a regularised Σ. Implemented in [`hrp_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/hrp_weights.R){target="_blank" rel="noopener noreferrer"}.
+
+**Metrics explained:**
+
+- **Avg Turnover** — Mean L₁ weight change between consecutive OOS windows: mean(‖w_t − w_{t−1}‖₁). Higher = more rebalancing cost. Equal-Weight = 0 by construction.
+- **Max |w|** — Mean across windows of the largest absolute weight. Equal-Weight → 1/p = 0.25 for 4 assets. Raw MVO → values often > 1 (short positions).
+- **OOS Sharpe** — Annualised Sharpe ratio of OOS portfolio returns (mean/sd × √12) over non-failed windows.
+- **Eff N** — Mean effective number of holdings (1/Σw_j²; Herfindahl measure). Equal-Weight → p = 4; concentrated raw MVO → near 1.
+- **Failed** — Windows where weight construction failed (e.g. singular sample Σ for raw MVO). Counted but excluded from all performance metrics.
+
+**Honest interpretation:**
+
+The diagnostic is designed to confirm, not discover. The Michaud (1989) error-maximiser result is well-established theory: raw MVO's turnover and concentration metrics should exceed those of stable alternatives on any reasonably short training window. The 4-asset universe (p = 4, n = 60 months) gives p/n = 0.07 — the sample covariance is well-conditioned here, so raw_mvo rarely fails; the instability is in the *μ* estimation channel, not Σ. That is why Shrunk-μ and BL (expected-return regularisers) show a different benefit than GMV (a Σ-only regulariser).
+
+**References:** Michaud, R. O. (1989). "The Markowitz optimization enigma: Is 'optimized' optimal?" *Financial Analysts Journal*, 45(1), 31–42. Jorion, P. (1986). "Bayes-Stein Estimation for Portfolio Analysis." *JFQA*, 21(3), 279–292. Black, F. & Litterman, R. (1992). "Global Portfolio Optimization." *FAJ*, 48(5), 28–43. Lopez de Prado, M. (2016). "Building diversified portfolios that outperform out-of-sample." *JPM*, 42(4), 59–69. Implemented in [`hd_weight_stability_diagnostic()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/weight_stability.R#L130){target="_blank" rel="noopener noreferrer"}. Issue [#507](https://github.com/JohnGavin/historical/issues/507){target="_blank" rel="noopener noreferrer"}.
+
+
 # Walk-Forward Correlation {#wfc}
 
 ## Row
