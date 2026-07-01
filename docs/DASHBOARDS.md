@@ -7,7 +7,7 @@
 > updates the relevant row here, and every feature proposes at least one
 > consolidation against this list.
 
-**Current count: 14 standalone dashboards.** Consolidation target: **11** (see
+**Current count: 12 standalone dashboards.** Consolidation target: **11** (see
 § Consolidation Proposal). The causal-DAG is an embedded surface inside
 `falsification.qmd`, not a standalone dashboard.
 
@@ -19,8 +19,8 @@
 | `leaderboard.qmd` | Rank all strategies by risk-adjusted return; central output | Ranking table (Sharpe/CAGR/MaxDD/CVaR95/Vol/SSR/Top5%/Credible); partition table; equity-curve plotly (range slider); monthly-returns heatmap; bootstrap-CI table; deflated-Sharpe table; alpha-decay; regime-adjusted Sharpe; Kelly table; structural-breaks dot plot; correlation matrix | `tar_read(leaderboard)`, `boot_ci_summary`, `structural_breaks_summary`, `strategy_correlation` |
 | `falsification.qmd` | Test causal integrity / robustness gauntlet | Scorecard (Verdict/HAC t/Sharpe/Alpha/R²); null-rejection heatmap (6 envs × strats); FF5+Mom alpha scatter; HAC t comparison; multiplicity K_eff table; WFC 2×2; **covariance regularisation table + conditioning/OOS dot plots (#498)**; causal DAG (Mermaid/D3, tabbed); implication tests; risk-architecture table | `fals_vig_*`, `wfc_all_summary`, `cov_diag_vig_table`, `cg_dag`, `cg_test_implications` |
 | `evidence.qmd` | Negative results + 155-yr pervasiveness | Failed-strategies scorecard; pattern-analysis table; negative-result cards; JST pervasiveness table (18 countries); equity-premium heatmap; crisis timeline; crisis-frequency table | `fals_summary`, `jst_equity_premium`, `jst_pervasiveness`, `jst_crises` |
-| `factor-max.qmd` | MAX signal at factor level | Cumulative-return plotly (log); metrics table (IS/OOS/Full); factor-selection bar chart; MAX-signal heatmap; ETF comparison | `fm_cumret_plot`, `fm_metrics`, `fm_selection_freq`, `fm_heatmap` |
-| `drif.qmd` | DRIF elastic-net signal at factor level | Cumulative-return plotly; metrics table (seal warning on Validation); selection-frequency table; DRIF-vs-MAX comparison; parameters table | `drif_cumret_plot`, `drif_metrics`, `drif_params`, `drif_selection_freq`, `drif_vs_max_plot` |
+| ~~`factor-max.qmd`~~ | ~~MAX signal at factor level~~ | ~~Cumulative-return plotly (log); metrics table (IS/OOS/Full); factor-selection bar chart; MAX-signal heatmap; ETF comparison~~ | ~~`fm_cumret_plot`, `fm_metrics`, `fm_selection_freq`, `fm_heatmap`~~ **→ merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3)** |
+| ~~`drif.qmd`~~ | ~~DRIF elastic-net signal at factor level~~ | ~~Cumulative-return plotly; metrics table (seal warning on Validation); selection-frequency table; DRIF-vs-MAX comparison; parameters table~~ | ~~`drif_cumret_plot`, `drif_metrics`, `drif_params`, `drif_selection_freq`, `drif_vs_max_plot`~~ **→ merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3)** |
 | `stock-backtest.qmd` | Cross-sectional: MAX/DRIF on 660 stocks vs 5 factors | 2×2 strategy matrix; equity curves (4 strats, range slider); metrics table; key-findings matrix; per-signal detail (plots, pros/cons, factor exposure); XGBoost DRIF section | `stk_max_metrics`, `stk_drif_metrics`, `fm_metrics`, `drif_metrics`, `stk_all_comparison_plot` |
 | `avoid-worst-days.qmd` | Thought experiment: return asymmetry | Conceptual $100→$165 vs $75 chart; temporal-clustering analysis; discussion (not tradeable) | Inline SPY daily returns |
 | `european-overlay.qmd` | VIX-style signals on European equities vs ECB CISS | CISS-vs-VIX correlation table; CISS sub-market breakdown; CISS time series plotly; regime-allocation table; performance comparison | `ecb_raw`, `aw_vix_daily`, `hd_ecb()` |
@@ -34,7 +34,7 @@
 ## Overlap Clusters
 
 1. **Strategy performance** — `index` → `leaderboard` → `falsification`: ranking, equity curves, and verdicts that reference each other.
-2. **Per-strategy deep dives** — `factor-max`, `drif`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`: all show definition + cumulative-return plotly + metrics table + signal analysis. `stock-backtest` already subsumes `factor-max`/`drif` as a 2×2.
+2. ~~**Per-strategy deep dives** — `factor-max`, `drif`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`: all show definition + cumulative-return plotly + metrics table + signal analysis. `stock-backtest` already subsumes `factor-max`/`drif` as a 2×2.~~ Resolved: `factor-max` and `drif` merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3).
 3. **Long-run evidence** — ~~`evidence` and `jst-dashboard` render the **same** JST pervasiveness table, heatmap, and crisis timeline.~~ Resolved: `jst-dashboard` merged into `evidence.qmd#historical-evidence` (#514 merge 1/3).
 4. **Robustness & falsification** — `leaderboard`, `falsification`, `negative-results`: overlapping robustness metrics; `negative-results` is a subset of the `falsification` scorecard.
 
@@ -43,7 +43,7 @@
 | # | Action | Rationale | Kept / lost |
 |---|---|---|---|
 | 1 | ~~**Merge `jst-dashboard` → `evidence`** (tabset)~~ **DONE** (#514 consolidation 1/3) | Identical JST outputs; no new information | All data kept; redirect stub replaces standalone page; `evidence.qmd#historical-evidence` is the new anchor |
-| 2 | **Merge `factor-max` + `drif` → `stock-backtest`** (Factor-Level tabset) | `stock-backtest` already shows the 2×2 (Stock/Factor × MAX/DRIF) | All metrics/charts kept as tabs; lose two isolated pages; index links to `stock-backtest#factor-deep-dive` |
+| 2 | ~~**Merge `factor-max` + `drif` → `stock-backtest`** (Factor-Level tabset)~~ **DONE** (#514 consolidation 2/3) | `stock-backtest` already shows the 2×2 (Stock/Factor × MAX/DRIF) | All data kept as Factor-Level Deep Dive tabset; redirect stubs replace standalone pages; index links to `stock-backtest#factor-level-deep-dive` |
 | 3 | **Merge `negative-results` → `falsification`** (final "Failed Strategies" tab) | `negative-results` copies the falsification scorecard + failure cards | Falsification becomes passing→failing narrative; redirect old page |
 | 4 | **Keep** `index`, `leaderboard`, `falsification`, `evidence`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`, `european-overlay`, `bdbb-sol`, `avoid-worst-days`, `quiz` | Distinct objective/audience each | — |
 
@@ -61,7 +61,7 @@ data with a stub, render, attach for approval.
 | Multi-hypothesis comparison | `falsification.qmd` null-rejection heatmap (~L229–236) | `geom_tile` rejection-rate scale, facet by strategy |
 | Alpha vs factor-exposure diagnosis | `falsification.qmd` FF alpha scatter (~L194–200) | Standard alpha/R² placement |
 | Walk-forward estimator comparison | `falsification.qmd` covariance-regularisation block (~L410–468) | Comprehensive sample-vs-shrunk OOS template — **the model for #507's weight-stability diagnostic** |
-| Asset-rotation selection | `factor-max.qmd` selection-frequency (~L143–149) | `group_by + count` bar, facet by signal |
+| Asset-rotation selection | `stock-backtest.qmd` Factor-Level Deep Dive → Factor MAX tab, selection-frequency block | `group_by + count` bar, facet by signal |
 | Causal-assumption documentation | `falsification.qmd` causal DAG + implications (~L581–737) | DAG + conditional-independence table with source links |
 
 ## Maintenance
