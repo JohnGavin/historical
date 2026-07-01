@@ -7,8 +7,7 @@
 > updates the relevant row here, and every feature proposes at least one
 > consolidation against this list.
 
-**Current count: 12 standalone dashboards.** Consolidation target: **11** (see
-§ Consolidation Proposal). The causal-DAG is an embedded surface inside
+**Current count: 11 standalone dashboards.** Consolidation target reached. The causal-DAG is an embedded surface inside
 `falsification.qmd`, not a standalone dashboard.
 
 ## Inventory
@@ -17,7 +16,7 @@
 |---|---|---|---|
 | `index.qmd` | Portal + dataset catalogue | Headline stat block (tickers/rows/datasets/years/functions); 4 dataset cards; card grid → downstream dashboards | `hd_datasets()`, `hd_tickers()`, `hd_factors()` |
 | `leaderboard.qmd` | Rank all strategies by risk-adjusted return; central output | Ranking table (Sharpe/CAGR/MaxDD/CVaR95/Vol/SSR/Top5%/Credible); partition table; equity-curve plotly (range slider); monthly-returns heatmap; bootstrap-CI table; deflated-Sharpe table; alpha-decay; regime-adjusted Sharpe; Kelly table; structural-breaks dot plot; correlation matrix | `tar_read(leaderboard)`, `boot_ci_summary`, `structural_breaks_summary`, `strategy_correlation` |
-| `falsification.qmd` | Test causal integrity / robustness gauntlet | Scorecard (Verdict/HAC t/Sharpe/Alpha/R²); null-rejection heatmap (6 envs × strats); FF5+Mom alpha scatter; HAC t comparison; multiplicity K_eff table; WFC 2×2; **covariance regularisation table + conditioning/OOS dot plots (#498)**; causal DAG (Mermaid/D3, tabbed); implication tests; risk-architecture table | `fals_vig_*`, `wfc_all_summary`, `cov_diag_vig_table`, `cg_dag`, `cg_test_implications` |
+| `falsification.qmd` | Test causal integrity / robustness gauntlet + **Failed Strategies section (#514 merge 3/3)** | Scorecard (Verdict/HAC t/Sharpe/Alpha/R²); null-rejection heatmap (6 envs × strats); FF5+Mom alpha scatter; HAC t comparison; multiplicity K_eff table; WFC 2×2; **covariance regularisation table + conditioning/OOS dot plots (#498)**; causal DAG (Mermaid/D3, tabbed); implication tests; risk-architecture table; **failed-strategy filtered scorecard + pattern table + portfolio implications** | `fals_vig_*`, `wfc_all_summary`, `cov_diag_vig_table`, `cg_dag`, `cg_test_implications`, `fals_summary`, `fals_vig_names` |
 | `evidence.qmd` | Negative results + 155-yr pervasiveness | Failed-strategies scorecard; pattern-analysis table; negative-result cards; JST pervasiveness table (18 countries); equity-premium heatmap; crisis timeline; crisis-frequency table | `fals_summary`, `jst_equity_premium`, `jst_pervasiveness`, `jst_crises` |
 | ~~`factor-max.qmd`~~ | ~~MAX signal at factor level~~ | ~~Cumulative-return plotly (log); metrics table (IS/OOS/Full); factor-selection bar chart; MAX-signal heatmap; ETF comparison~~ | ~~`fm_cumret_plot`, `fm_metrics`, `fm_selection_freq`, `fm_heatmap`~~ **→ merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3)** |
 | ~~`drif.qmd`~~ | ~~DRIF elastic-net signal at factor level~~ | ~~Cumulative-return plotly; metrics table (seal warning on Validation); selection-frequency table; DRIF-vs-MAX comparison; parameters table~~ | ~~`drif_cumret_plot`, `drif_metrics`, `drif_params`, `drif_selection_freq`, `drif_vs_max_plot`~~ **→ merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3)** |
@@ -28,7 +27,7 @@
 | `macro-defense-rotation.qmd` | Macro hedge rotation (TLT/GLD/DBC/UUP vs SPY) | Normalised price chart; performance-metrics table (by partition); regime overlay; win-rate table; allocation table | `bt_prices`, inline backtest |
 | `momentum-prepeak.qmd` | Büsing (2022) pre-peak vs post-peak 12-2 momentum | Equity-curve comparison (pre/post/combined); summary metrics; bankruptcy-events table; signal-decomposition explanation | `mom_prepeak_*`, `mom_postpeak_returns`, `mom_combined_returns`, `strategy_names` |
 | `bdbb-sol.qmd` | M/G/∞ queueing model (Varma 2026) on SOL/USD | Data-coverage table; rolling-diagnostics table; regime-distribution bar chart; tail-risk predictivity table | `bdbb_sol_dv`, `bdbb_sol_fit`, `bdbb_sol_metrics` |
-| `negative-results.qmd` | Archive of failed strategies (detailed) | Failed-strategies scorecard; detailed failure cards; lessons-learned callouts; portfolio implications | `fals_summary` filtered Alpha t < 2.0 |
+| ~~`negative-results.qmd`~~ | ~~Archive of failed strategies (detailed)~~ | ~~Failed-strategies scorecard; detailed failure cards; lessons-learned callouts; portfolio implications~~ | ~~`fals_summary` filtered Alpha t < 2.0~~ **→ merged into `falsification.qmd#failed-strategies` (#514 merge 3/3)** |
 | `quiz.qmd` | Educational: real vs synthetic equity curves | Quiz interface (side-by-side plotly); difficulty badges; results card; explanation panels | `quiz_json`, quiz-logic.js |
 
 ## Overlap Clusters
@@ -36,7 +35,7 @@
 1. **Strategy performance** — `index` → `leaderboard` → `falsification`: ranking, equity curves, and verdicts that reference each other.
 2. ~~**Per-strategy deep dives** — `factor-max`, `drif`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`: all show definition + cumulative-return plotly + metrics table + signal analysis. `stock-backtest` already subsumes `factor-max`/`drif` as a 2×2.~~ Resolved: `factor-max` and `drif` merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3).
 3. **Long-run evidence** — ~~`evidence` and `jst-dashboard` render the **same** JST pervasiveness table, heatmap, and crisis timeline.~~ Resolved: `jst-dashboard` merged into `evidence.qmd#historical-evidence` (#514 merge 1/3).
-4. **Robustness & falsification** — `leaderboard`, `falsification`, `negative-results`: overlapping robustness metrics; `negative-results` is a subset of the `falsification` scorecard.
+4. ~~**Robustness & falsification** — `leaderboard`, `falsification`, `negative-results`: overlapping robustness metrics; `negative-results` is a subset of the `falsification` scorecard.~~ Resolved: `negative-results` merged into `falsification.qmd#failed-strategies` (#514 merge 3/3).
 
 ## Consolidation Proposal (15 → 11)
 
@@ -44,10 +43,10 @@
 |---|---|---|---|
 | 1 | ~~**Merge `jst-dashboard` → `evidence`** (tabset)~~ **DONE** (#514 consolidation 1/3) | Identical JST outputs; no new information | All data kept; redirect stub replaces standalone page; `evidence.qmd#historical-evidence` is the new anchor |
 | 2 | ~~**Merge `factor-max` + `drif` → `stock-backtest`** (Factor-Level tabset)~~ **DONE** (#514 consolidation 2/3) | `stock-backtest` already shows the 2×2 (Stock/Factor × MAX/DRIF) | All data kept as Factor-Level Deep Dive tabset; redirect stubs replace standalone pages; index links to `stock-backtest#factor-level-deep-dive` |
-| 3 | **Merge `negative-results` → `falsification`** (final "Failed Strategies" tab) | `negative-results` copies the falsification scorecard + failure cards | Falsification becomes passing→failing narrative; redirect old page |
+| 3 | ~~**Merge `negative-results` → `falsification`** (final "Failed Strategies" tab)~~ **DONE** (#514 consolidation 3/3) | `negative-results` copies the falsification scorecard + failure cards; detail cards already in `evidence.qmd` | Filtered scorecard + patterns + implications in `falsification.qmd#failed-strategies`; per-strategy failure cards remain in `evidence.qmd#negative-results`; redirect stub replaces standalone page |
 | 4 | **Keep** `index`, `leaderboard`, `falsification`, `evidence`, `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak`, `european-overlay`, `bdbb-sol`, `avoid-worst-days`, `quiz` | Distinct objective/audience each | — |
 
-**Resulting 11-dashboard architecture:** Portal (`index`) · Core (`leaderboard` → `falsification` → `evidence`) · Signals (`stock-backtest`) · Exploratory (`macro-defense-rotation`, `momentum-prepeak`, `european-overlay`, `bdbb-sol`, `avoid-worst-days`) · Interactive (`quiz`). Each merge is its own follow-up PR through the Phase 0 workflow.
+**Resulting 11-dashboard architecture (target reached, #514 consolidation complete):** Portal (`index`) · Core (`leaderboard` → `falsification` → `evidence`) · Signals (`stock-backtest`) · Exploratory (`macro-defense-rotation`, `momentum-prepeak`, `european-overlay`, `bdbb-sol`, `avoid-worst-days`) · Interactive (`quiz`).
 
 ## Template Recipe
 
