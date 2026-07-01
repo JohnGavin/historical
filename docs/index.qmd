@@ -225,13 +225,13 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 <h4>Macro Defense Rotation</h4>
 <p>Backtesting vignette: rotating among TLT/GLD/DBC/UUP to hedge macro risk. Expanding window methodology, in-sample vs out-of-sample holdout.</p>
 </a>
-<a href="factor-max.html" class="info-card">
+<a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
 <h4>Factor MAX Rotation</h4>
-<p>Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025).</p>
+<p>Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025). Part of Stock-Level Backtests.</p>
 </a>
-<a href="drif.html" class="info-card">
+<a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
 <h4><abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>: Daily Return Information</h4>
-<p>Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals.</p>
+<p>Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals. Part of Stock-Level Backtests.</p>
 </a>
 <a href="stock-backtest.html" class="info-card">
 <h4>Stock-Level Backtests</h4>
@@ -268,8 +268,8 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 - [Strategy Leaderboard](leaderboard.html) — rankings, equity curves, cost-adjusted metrics
 - [API Reference](https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R) — function source code
 - [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
-- [Factor MAX](factor-max.html) — factor rotation strategy
-- [DRIF](drif.html) — daily return information factor
+- [Factor MAX](stock-backtest.html#factor-level-deep-dive) — factor rotation strategy (Factor-Level Deep Dive tab)
+- [DRIF](stock-backtest.html#factor-level-deep-dive) — daily return information factor (Factor-Level Deep Dive tab)
 - [Stock-Level Backtests](stock-backtest.html) — 660 stocks, 4-strategy comparison
 - [Avoid Worst Days](avoid-worst-days.html) — return asymmetry thought experiment
 - [Falsification Tests](falsification.html) — causal integrity, FF alpha, HAC-robust Sharpe

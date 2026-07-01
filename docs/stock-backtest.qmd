@@ -54,8 +54,8 @@ Two signals applied at two levels, producing four strategies:
 
 | | Signal | Stock-Level (660 stocks, D1-D10) | Factor-Level (5 FF factors, top 2) |
 |--|--------|----------------------------------|-------------------------------------|
-| **MAX** | Highest single-day return in prior month | [Stock MAX](#stock-max) | [Factor MAX](factor-max.html) |
-| **<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>** | Elastic net on 42 daily return features | [Stock DRIF](#stock-drif) | [Factor DRIF](drif.html) |
+| **MAX** | Highest single-day return in prior month | [Stock MAX](#stock-max) | [Factor MAX](#factor-level-deep-dive) |
+| **<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>** | Elastic net on 42 daily return features | [Stock DRIF](#stock-drif) | [Factor DRIF](#factor-level-deep-dive) |
 
 **Stock-level:** Each month, rank all 660 stocks by signal. Long top decile (~38 stocks), short bottom decile. Monthly rebalance. Equal weight within each decile.
 
@@ -209,7 +209,7 @@ if (!is.null(metrics)) {
 ```
 
 ::: {.fig-caption}
-**Stock vs Factor MAX.** Stock-level exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Same MAX signal, different universes. Factor-level definition: [Factor MAX](factor-max.html).
+**Stock vs Factor MAX.** Stock-level exploits cross-sectional dispersion across 660 stocks. Factor-level rotates among 5 academic factors. Same MAX signal, different universes. Factor-level definition: [Factor MAX](#factor-level-deep-dive).
 :::
 
 #### Pros & Cons
@@ -292,8 +292,8 @@ if (!is.null(metrics)) {
 
 #### References
 
-1. [DRIF: factor-level implementation](drif.html) — same methodology on 5 FF factors
-2. [Factor MAX](factor-max.html) — simpler signal, comparison benchmark
+1. [DRIF: factor-level implementation](#factor-level-deep-dive) — same methodology on 5 FF factors
+2. [Factor MAX](#factor-level-deep-dive) — simpler signal, comparison benchmark
 3. [Alpha Architect: Daily Stock Returns](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"} — original research
 4. [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/){target="_blank" rel="noopener noreferrer"} — MAX signal research
 
@@ -428,6 +428,183 @@ if (!is.null(metrics_b)) {
 | **Cost advantage is real** | ETF costs ~0.20%/month vs 1.85%/month stock-level. The long-only gross returns survive after costs. |
 | **Validation** | A long-only CAGR (Validation): `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Validation"]*100,1),"%") else "N/A" }`. B long-only CAGR (Validation): `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Validation"]*100,1),"%") else "N/A" }`. Caveat: overlaps a bull market. |
 
+# Factor-Level Deep Dive {#factor-level-deep-dive}
+
+## Row
+
+::: {.callout-note}
+Factor-level strategies rotate among 5 Fama-French factors (HML, SMB, RMW, CMA, Mom) each month. Both signals select the top-2 factors with equal weights and rebalance monthly. See the [Comparison](#comparison) tab for the 2×2 stock vs factor overview. The former standalone Factor MAX and DRIF pages now redirect here (#514 consolidation 2/3).
+:::
+
+## Row
+
+### {.tabset}
+
+#### Factor MAX
+
+::: {.callout-tip}
+## Factor MAX Rotation
+
+Based on [Alpha Architect research](https://alphaarchitect.com/factor-max/){target="_blank" rel="noopener noreferrer"} (Dec 2025): the **maximum daily return within a month** predicts next-month factor returns. Each month, rank the 5 Fama-French factors by their MAX signal (highest single-day return). Go long the top-2 factors with equal weights. Rebalance monthly.
+:::
+
+```{r}
+#| fig-height: 6
+{ p <- safe_tar_read("fm_cumret_plot"); if (!is.null(p)) p else { cat("*Chart not available — run tar_make() to generate.*\n"); invisible(NULL) } }
+```
+
+::: {.fig-caption}
+**Factor MAX vs Market.** Y: growth of $1 (log scale). Blue = Factor MAX (top-2 factors by MAX signal, equal weight). Red = Market factor (Mkt-RF). Dashed line = OOS start (2020). Source: Fama-French via `hd_factors()`. Log scale shows compounding differences.
+:::
+
+```{r}
+metrics <- safe_tar_read("fm_metrics")
+if (!is.null(metrics)) {
+  display <- metrics |>
+    mutate(across(c(cagr, vol, max_dd, hit_rate, bench_cagr, bench_vol),
+                  ~ paste0(round(. * 100, 1), "%"))) |>
+    mutate(across(c(sharpe, bench_sharpe), ~ round(., 2)))
+  hd_dt(display, "Factor MAX strategy metrics: in-sample (1963-2019), out-of-sample (2020+), and full period.")
+}
+```
+
+```{r}
+sf <- safe_tar_read("fm_selection_freq")
+if (!is.null(sf)) {
+  sf <- sf |> mutate(pct = paste0(round(pct * 100, 1), "%"))
+  hd_dt(sf, "How often each factor is selected by the MAX signal. Momentum dominates.")
+}
+```
+
+```{r}
+#| fig-height: 8
+{ p <- safe_tar_read("fm_heatmap"); if (!is.null(p)) p else { cat("*Chart not available — run tar_make() to generate.*\n"); invisible(NULL) } }
+```
+
+::: {.fig-caption}
+**MAX signal rank heatmap.** Green = rank 1 (highest MAX, strongest buy signal). Dark = rank 5 (lowest). Rows: Fama-French factors (HML, SMB, RMW, CMA, Mom). Columns: calendar months. Faceted by year. Source: `hd_factors(dataset = "FF5")` + `hd_factors(dataset = "Mom")`.
+:::
+
+```{r}
+#| fig-height: 6
+{ p <- safe_tar_read("fm_etf_plot"); if (!is.null(p)) p else { cat("*Chart not available — run tar_make() to generate.*\n"); invisible(NULL) } }
+```
+
+::: {.fig-caption}
+**Factor ETFs vs academic factors.** VLUE (iShares Value) vs HML (Fama-French value factor), MTUM (iShares Momentum) vs Mom (Fama-French momentum). ETFs include market beta; academic factors are market-neutral. Source: `hd_ohlcv()` + `hd_factors()`.
+:::
+
+```{r}
+corr <- safe_tar_read("fm_etf_corr")
+if (!is.null(corr)) {
+  display <- corr |>
+    dplyr::mutate(ETF_CAGR = paste0(ETF_CAGR, "%"), Factor_CAGR = paste0(Factor_CAGR, "%"))
+  hd_dt(display, "Correlation between factor ETFs and academic factors (monthly returns, 2013-2026). Low correlations (VLUE/HML = 0.34, MTUM/Mom = -0.09) show ETFs capture different exposures than academic factors.")
+}
+```
+
+```{r}
+params <- safe_tar_read("fm_params")
+if (!is.null(params)) {
+  param_df <- tibble(
+    Parameter = c("Factors", "Top N", "Start Date", "IS End", "OOS Start", "Benchmark"),
+    Value = c(paste(params$factors, collapse = ", "),
+              as.character(params$top_n),
+              as.character(params$start_date),
+              as.character(params$is_end),
+              as.character(params$oos_start),
+              params$benchmark_factor)
+  )
+  hd_dt(param_df, "Factor MAX parameters. Change fm_params target and tar_make() to update all.")
+}
+```
+
+**References:** [Alpha Architect: Factor MAX](https://alphaarchitect.com/factor-max/){target="_blank" rel="noopener noreferrer"} — original research (Dec 2025). Data: [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"} via `hd_factors()`.
+
+#### DRIF (Factor)
+
+::: {.callout-tip}
+## DRIF: Daily Return Information Factor
+
+Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"}: an elastic net regression on the **full distribution of past 21 daily returns** — chronological order and rank order (42 features total) — predicts next-month factor returns. Each month, train an expanding-window elastic net (`glmnet::cv.glmnet`, 5-fold CV) and go long the top-2 predicted factors. The DRIF signal subsumes many anomalies including MAX, short-term reversal, and volatility effects.
+:::
+
+```{r}
+#| fig-height: 6
+{ p <- safe_tar_read("drif_cumret_plot"); if (!is.null(p)) p else { cat("*Chart not available — run tar_make() to generate.*\n"); invisible(NULL) } }
+```
+
+::: {.fig-caption}
+**DRIF vs Market.** Y: growth of $1 (log scale). Blue = DRIF (top-2 factors by elastic net prediction, equal weight). Red = Market factor (Mkt-RF). Dashed line = OOS start (2020). Source: Fama-French FF5 + Momentum via `hd_factors()`.
+:::
+
+::: {.callout-warning}
+**Current status (Validation period — sealed one-shot evaluation):** Sharpe `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, CAGR `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`, max DD `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`. The in-sample and Testing Sharpes reflect the development period; Validation is the unbiased live-performance estimate.
+:::
+
+```{r}
+metrics <- safe_tar_read("drif_metrics")
+if (!is.null(metrics)) {
+  display <- metrics |>
+    dplyr::mutate(across(c(cagr, vol, max_dd, hit_rate, bench_cagr, bench_vol),
+                  ~ paste0(round(. * 100, 1), "%"))) |>
+    dplyr::mutate(across(c(sharpe, bench_sharpe), ~ round(., 2)))
+  hd_dt_wide(display, "DRIF strategy metrics: in-sample (1968-2019), out-of-sample (2020+), and full period. Uses 60-month minimum expanding window.")
+}
+```
+
+```{r}
+sf <- safe_tar_read("drif_selection_freq")
+if (!is.null(sf)) {
+  sf <- sf |> dplyr::mutate(pct = paste0(round(pct * 100, 1), "%"))
+  hd_dt(sf, "How often each factor is selected by the DRIF signal. Momentum leads but less dominant than in Factor MAX.")
+}
+```
+
+```{r}
+#| fig-height: 6
+{ p <- safe_tar_read("drif_vs_max_plot"); if (!is.null(p)) p else { cat("*Chart not available — run tar_make() to generate.*\n"); invisible(NULL) } }
+```
+
+::: {.fig-caption}
+**DRIF vs Factor MAX.** Both strategies applied to the same FF5+Momentum factor universe. DRIF uses 42 features (21 chronological + 21 rank daily returns) via elastic net; Factor MAX uses only the single highest daily return. Full-period Sharpe — DRIF: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, Factor MAX: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`.
+:::
+
+```{r}
+params <- safe_tar_read("drif_params")
+if (!is.null(params)) {
+  param_df <- dplyr::tibble(
+    Parameter = c("Factors", "Lookback Days", "Top N", "Elastic Net Alpha",
+                  "Min Train Months", "Start Date", "IS End", "OOS Start"),
+    Value = c(paste(params$factors, collapse = ", "),
+              as.character(params$lookback_days),
+              as.character(params$top_n),
+              as.character(params$alpha),
+              as.character(params$min_train_months),
+              as.character(params$start_date),
+              as.character(params$is_end),
+              as.character(params$oos_start))
+  )
+  hd_dt(param_df, "DRIF parameters. Change drif_params target and tar_make() to update all.")
+}
+```
+
+The Alpha Architect paper finds chronological features are ~1.7x more predictive than rank features:
+
+| Dimension | Monthly Spread | Intuition |
+|-----------|---------------|-----------|
+| **Chronological** | ~1.5% | Recent price pressure, liquidity, order flow |
+| **Rank** | ~0.9% | Behavioral biases around extreme returns |
+| **Combined (DRIF)** | ~1.6% | Full daily return distribution |
+
+::: {.callout-warning}
+## Factor-Level vs Stock-Level Limitation
+
+This is a **factor-level** implementation — rotating among 5-6 academic factors. The original DRIF paper applies the signal cross-sectionally to individual stocks (3000+ in CRSP). Key differences: cross-section of 5 factors vs 3000+ stocks (much less statistical power); factor daily returns are more correlated than stock returns; no shorting (long top-2 only). A proper stock-level implementation is in the [Stock DRIF](#stock-drif) section above.
+:::
+
+**References:** [Alpha Architect: DRIF](https://alphaarchitect.com/daily-stock-returns/){target="_blank" rel="noopener noreferrer"} — original research (2026). Data: [Ken French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"} via `hd_factors()`.
+
 # Details
 
 ## Row
@@ -470,8 +647,8 @@ if (!is.null(params)) {
 
 #### Related Vignettes
 
-- **[Factor MAX](factor-max.html)** — factor-level MAX signal; this page applies that signal cross-sectionally to 660 individual equities
-- **[DRIF (Factor Rotation)](drif.html)** — factor-level DRIF; this page applies the same elastic-net selection to individual stocks
+- **[Factor MAX (Factor-Level Deep Dive)](#factor-level-deep-dive)** — factor-level MAX signal; this page applies that signal cross-sectionally to 660 individual equities
+- **[DRIF (Factor-Level Deep Dive)](#factor-level-deep-dive)** — factor-level DRIF; this page applies the same elastic-net selection to individual stocks
 - **[Strategy Leaderboard](leaderboard.html)** — overall strategy rankings across all strategies including stock-level implementations
 
 #### Build Info
