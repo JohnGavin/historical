@@ -10,7 +10,9 @@ date: "`r Sys.Date()`"
 library(targets)
 library(dplyr)
 library(ggplot2)
-tar_config_set(store = here::here("docs/_targets"))
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
 ```
 
 ## Overview
