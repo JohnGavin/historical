@@ -79,13 +79,10 @@ jobs:
             'https://johngavin.github.io/historical/' \
             'https://johngavin.github.io/historical/leaderboard.html' \
             'https://johngavin.github.io/historical/falsification.html' \
-            'https://johngavin.github.io/historical/factor-max.html' \
-            'https://johngavin.github.io/historical/drif.html' \
             'https://johngavin.github.io/historical/stock-backtest.html' \
             'https://johngavin.github.io/historical/avoid-worst-days.html' \
             'https://johngavin.github.io/historical/macro-defense-rotation.html' \
-            'https://johngavin.github.io/historical/jst-dashboard.html' \
-            'https://johngavin.github.io/historical/negative-results.html' \
+            'https://johngavin.github.io/historical/evidence.html' \
             'https://johngavin.github.io/historical/quiz.html' \
             'https://johngavin.github.io/historical/european-overlay.html'
 

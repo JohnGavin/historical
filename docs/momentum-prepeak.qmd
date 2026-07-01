@@ -1151,7 +1151,7 @@ This vignette was developed with assistance from Anthropic's Claude (model: Opus
 
 - **[Strategy Falsification](falsification.html)** — the full gauntlet framework (HAC, FF5, null environments, Walk-Forward Correlation) that the momentum pre-peak strategy runs through
 - **[Strategy Leaderboard](leaderboard.html)** — ranks momentum pre-peak alongside all other strategies on risk-adjusted return and falsification scorecard
-- **[Factor MAX](factor-max.html)** — factor-level momentum rotation strategy; shares the momentum family with pre-peak decomposition
+- **[Factor MAX](stock-backtest.html#factor-level-deep-dive)** — factor-level momentum rotation strategy; shares the momentum family with pre-peak decomposition
 
 ## Row
 
