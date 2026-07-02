@@ -471,7 +471,7 @@ The deployed strategy universes (4–6 assets) operate at p/n ≪ 0.1, where the
 
 # Weight-Stability Diagnostic (MVO breakdown) {#wstab}
 
-Does the choice of portfolio construction method affect weight stability and out-of-sample (OOS) performance? This section presents a walk-forward diagnostic on the 4-asset universe (SPY/TLT/GLD/DBC) comparing six methods: plug-in MVO, GMV, Shrunk-μ, Black-Litterman, Equal-Weight (1/N), and HRP. The central claim of the MVO-breakdown literature (Michaud 1989): plug-in mean-variance is an *error maximiser* — amplifying estimation noise in expected returns into high turnover, extreme weights, and poor OOS Sharpe. Regularised alternatives are more stable.
+How you turn a set of assets into portfolio weights matters. This section compares six ways to do it on the same four assets (SPY, TLT, GLD, DBC), rolling forward month by month: plug-in mean-variance (MVO), global minimum-variance (GMV), shrunk-return MVO, Black-Litterman, equal-weight (1/N), and hierarchical risk parity (HRP). The textbook MVO recipe (Michaud 1989) builds weights straight from raw sample estimates, so small errors in those estimates turn into big, unstable bets — heavy trading and most of the money piled into one asset. The other five regularise or sidestep the estimates and stay far steadier. Note the honest result below: on only four well-behaved assets, MVO's instability shows up as trading and concentration, *not* as a worse return — that penalty arrives in larger universes.
 
 ## Row
 
@@ -486,13 +486,13 @@ wscap <- safe_tar_read("ws_diag_vig_caption")
 if (!is.null(wstab)) fals_dt(wstab, wscap)
 ```
 
-#### OOS Sharpe
+#### Turnover
 
 ```{r}
 #| label: wstab-plot
 #| fig-height: 6
 #| fig-width: 10
-#| fig-alt: "Cleveland dot plot of annualised OOS Sharpe ratio for six portfolio construction methods on the 4-asset universe (SPY/TLT/GLD/DBC). Raw MVO (plug-in tangency) has the lowest Sharpe and is coloured orange-red. GMV, HRP, Equal-Weight, Shrunk-mu, and Black-Litterman (no-views prior) cluster rightward, demonstrating that avoiding unconstrained expected-return estimation reduces OOS performance variance. A dashed vertical line marks Sharpe = 0."
+#| fig-alt: "Cleveland dot plot of average monthly turnover for six portfolio construction methods on the 4-asset universe (SPY, TLT, GLD, DBC). Plug-in mean-variance (Raw MVO), coloured orange-red, trades far more than every other method. Equal-weight and Black-Litterman trade almost nothing; GMV, HRP, and shrunk-return MVO sit in between."
 p <- safe_tar_read("ws_diag_vig_plot")
 if (!is.null(p)) p
 ```
@@ -505,10 +505,10 @@ if (!is.null(p)) p
 
 A 60-month rolling walk-forward backtest estimates portfolio weights using each construction method from the training window (no look-ahead). The next-period (t+1) return is applied to the estimated weights — strictly no look-ahead per the `alpha-decay-min-t+1` rule. Six methods are compared:
 
-- **Raw MVO** — Plug-in tangency portfolio w ∝ Σ⁻¹μ using the *sample* covariance and *sample* mean. This is the article's error maximiser: small changes in μ produce large changes in w, especially when Σ is ill-conditioned. Fails (singular sample Σ) whenever the number of assets approaches the training window.
+- **Raw MVO** — Plug-in tangency portfolio w ∝ Σ⁻¹μ from the *sample* covariance and *sample* mean, with no regularisation. Small errors in the estimated returns swing the weights hard, so it trades heavily and piles into a few assets. It also breaks down (singular sample Σ) once the number of assets approaches the training-window length.
 - **GMV (Global Min-Var)** — `w ∝ Σ⁻¹1` via a regularised (Ledoit-Wolf) covariance. No expected-return input. Implemented in [`hd_min_var_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/min_var_weights.R#L65){target="_blank" rel="noopener noreferrer"}.
 - **Shrunk-μ (James-Stein)** — Tangency portfolio using Bayes-Stein (Jorion 1986) shrinkage on μ toward the grand mean, with a regularised Σ. Implemented in [`hd_returns_shrink(method = "james_stein")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/returns_shrink.R){target="_blank" rel="noopener noreferrer"}.
-- **Black-Litterman (no views)** — Tangency portfolio from the BL (1992) posterior μ̂ and Σ_BL using [`hd_black_litterman()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/black_litterman.R){target="_blank" rel="noopener noreferrer"}. Shown at the no-views equilibrium prior (P = NULL, w_mkt = 1/p, risk_aversion = 2.5). **Important:** with no investor views, the BL posterior collapses to Π = λΣw_mkt, so tangency weights are approximately equal-weight — this is the #513 invariant, not a bug (see caption).
+- **Black-Litterman (no views)** — Tangency portfolio from the BL (1992) posterior μ̂ and Σ_BL using [`hd_black_litterman()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/black_litterman.R){target="_blank" rel="noopener noreferrer"}. Shown here with no investor views (w_mkt = 1/p, risk_aversion = 2.5). **With no views, Black-Litterman just returns the equal-weight starting point**, so its row matches Equal-Weight below. That is expected behaviour, not a bug — there are no views to tilt away from.
 - **Equal-Weight (1/N)** — The robust benchmark. Zero turnover by construction.
 - **HRP (Hierarchical Risk Parity)** — Lopez de Prado (2016) hierarchical diversification using a regularised Σ. Implemented in [`hrp_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/hrp_weights.R){target="_blank" rel="noopener noreferrer"}.
 

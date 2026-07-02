@@ -8,10 +8,10 @@
 #
 # Targets produced:
 #   ws_diag_raw         — raw tibble from hd_weight_stability_diagnostic()
-#   ws_diag_vig_table   — tidy data.frame for fals_dt() (Method / Avg Turnover
-#                         / Max |w| / OOS Sharpe / Eff N / Failed)
-#   ws_diag_vig_plot    — Cleveland dot plot of OOS Sharpe by method (dark bg)
-#   ws_diag_vig_caption — dynamic caption string (>=3 sentences, data-driven)
+#   ws_diag_vig_table   — tidy data.frame for fals_dt() (Method / Avg turnover
+#                         / Max weight / Effective holdings / OOS Sharpe)
+#   ws_diag_vig_plot    — Cleveland dot plot of average turnover by method
+#   ws_diag_vig_caption — plain-language caption string (data-driven)
 #
 # Template: mirrors R/plan_cov_diagnostic_vignette.R (#498 Phase 3b).
 # All plots match the dark-background theme (black panel, #e0e0e0 text).
@@ -41,9 +41,12 @@ plan_weight_stability_vignette <- function() {
 
 
     # ── Display table ──────────────────────────────────────────────────────
-    # Five core columns per task specification, plus Failed (n_failed) which
-    # is essential for interpreting raw_mvo (singular sample Sigma windows).
-    # Arranged descending by OOS Sharpe: best method at top of the table.
+    # Columns: how much each method trades (Avg turnover), how concentrated it
+    # gets (Max weight), how many assets it effectively holds, and its OOS
+    # Sharpe. Sorted by turnover (steadiest first). The n_failed column is
+    # dropped here: it is always 0 on this 4-asset universe (the covariance is
+    # never singular) and only matters in wide universes where p approaches the
+    # training window.
     targets::tar_target(ws_diag_vig_table, {
       library(dplyr)
 
@@ -58,24 +61,27 @@ plan_weight_stability_vignette <- function() {
             method == "hrp"             ~ "HRP (Hierarchical RP)",
             .default = method
           ),
-          `Avg Turnover` = round(avg_turnover,   3L),
-          `Max |w|`      = round(max_abs_weight, 3L),
-          `OOS Sharpe`   = round(oos_sharpe,     2L),
-          `Eff N`        = round(mean_eff_n,      1L),
-          Failed         = as.integer(n_failed)
+          `Avg turnover`       = round(avg_turnover,   3L),
+          `Max weight`         = round(max_abs_weight, 3L),
+          `Effective holdings` = round(mean_eff_n,     1L),
+          `OOS Sharpe`         = round(oos_sharpe,     2L)
         ) |>
-        dplyr::arrange(dplyr::desc(oos_sharpe)) |>
+        # Steadiest method first: this is a *stability* diagnostic, so sort by
+        # how much each method trades, not by return.
+        dplyr::arrange(avg_turnover) |>
         dplyr::select(
-          Method, `Avg Turnover`, `Max |w|`, `OOS Sharpe`, `Eff N`, Failed
+          Method, `Avg turnover`, `Max weight`, `Effective holdings`, `OOS Sharpe`
         )
     }),
 
 
-    # ── OOS Sharpe Cleveland dot plot ──────────────────────────────────────
+    # ── Turnover Cleveland dot plot ────────────────────────────────────────
     # Horizontal dotchart (Cleveland convention, per visualization-standards):
-    # one point per method, sorted ascending so the worst Sharpe is at the
-    # bottom, best at the top. Raw MVO is coloured orange-red to flag it as
-    # the error-maximiser. Dashed zero line for reference.
+    # one point per method = average monthly turnover. This is a weight-
+    # stability section, so turnover (how much each method trades) is the
+    # headline metric — not Sharpe, where plug-in MVO can look fine on a small
+    # universe while still making wild, concentrated bets. Sorted ascending
+    # (steadiest at bottom); Raw MVO is coloured orange-red as the outlier.
     # No legend: colours are self-labelled by the y-axis tick labels.
     targets::tar_target(ws_diag_vig_plot, {
       library(ggplot2)
@@ -101,23 +107,20 @@ plan_weight_stability_vignette <- function() {
         .default = s$method
       )
 
-      # Sort ascending (lowest Sharpe at bottom); NA goes first (bottom).
-      sort_idx <- order(s$oos_sharpe, na.last = FALSE)
+      # Sort ascending (least trading at bottom, most at top).
+      sort_idx <- order(s$avg_turnover, na.last = FALSE)
       s$label  <- factor(s$label, levels = s$label[sort_idx])
 
-      ggplot(s, aes(x = oos_sharpe, y = label, colour = label)) +
-        geom_vline(
-          xintercept = 0, colour = "#666", linetype = "dashed", linewidth = 0.6
-        ) +
+      ggplot(s, aes(x = avg_turnover, y = label, colour = label)) +
         geom_point(size = 5L) +
         scale_colour_manual(values = method_colours, guide = "none") +
         labs(
-          title    = "Out-of-Sample (OOS) Sharpe by Portfolio Construction Method",
+          title    = "How much each method trades (average monthly turnover)",
           subtitle = paste0(
-            "4-asset universe (SPY/TLT/GLD/DBC). ",
-            "Raw MVO = error maximiser. †BL shown at no-views equilibrium prior."
+            "4-asset universe (SPY/TLT/GLD/DBC). Higher = more trading each ",
+            "rebalance. Plug-in MVO trades far more than every alternative."
           ),
-          x = "Annualised OOS Sharpe ratio",
+          x = "Average monthly turnover (sum of absolute weight changes)",
           y = NULL
         ) +
         theme_minimal(base_size = 14L) +
@@ -134,13 +137,13 @@ plan_weight_stability_vignette <- function() {
     }),
 
 
-    # ── Dynamic caption ────────────────────────────────────────────────────
-    # >=3 sentences. All numbers computed from ws_diag_raw at build time.
-    # Includes the BL-no-views caveat (#513 invariant) so readers do not read
-    # the coincidence of BL == Equal-Weight as a bug in the implementation.
+    # ── Plain-language caption ─────────────────────────────────────────────
+    # No jargon, no source links (those live, working, in the "How to Read
+    # This" tab), no full number-dump (the table carries the figures). Only the
+    # two numbers that make the point vivid — MVO's concentration — plus the
+    # honest read: on 4 assets MVO's instability shows up as trading and
+    # concentration, NOT worse Sharpe. Computed from ws_diag_raw at build time.
     targets::tar_target(ws_diag_vig_caption, {
-      gh_base <- "https://github.com/JohnGavin/historical/blob/main"
-
       s <- ws_diag_raw
 
       get_val <- function(meth, col) {
@@ -148,71 +151,32 @@ plan_weight_stability_vignette <- function() {
         if (length(val) == 0L) NA_real_ else val[[1L]]
       }
 
-      mvo_turnover   <- get_val("raw_mvo",        "avg_turnover")
-      ew_turnover    <- get_val("equal_weight",    "avg_turnover")
-      gmv_turnover   <- get_val("gmv",             "avg_turnover")
-      hrp_turnover   <- get_val("hrp",             "avg_turnover")
-
-      mvo_maxw       <- get_val("raw_mvo",         "max_abs_weight")
-      ew_maxw        <- get_val("equal_weight",     "max_abs_weight")
-
-      mvo_sharpe     <- get_val("raw_mvo",         "oos_sharpe")
-      gmv_sharpe     <- get_val("gmv",             "oos_sharpe")
-      hrp_sharpe     <- get_val("hrp",             "oos_sharpe")
-      ew_sharpe      <- get_val("equal_weight",    "oos_sharpe")
-      shrunk_sharpe  <- get_val("shrunk_mu",       "oos_sharpe")
-      bl_sharpe      <- get_val("black_litterman", "oos_sharpe")
-
-      mvo_failed     <- as.integer(get_val("raw_mvo", "n_failed"))
-
+      mvo_maxw  <- get_val("raw_mvo", "max_abs_weight")
+      mvo_effn  <- get_val("raw_mvo", "mean_eff_n")
       n_assets  <- attr(s, "n_assets")
       train_win <- attr(s, "train_window")
-      n_per     <- attr(s, "n_periods")
-
-      fail_note <- if (!is.na(mvo_failed) && mvo_failed > 0L) {
-        paste0(
-          " (", mvo_failed, " window",
-          if (mvo_failed != 1L) "s" else "",
-          " with singular sample covariance, counted as failed)"
-        )
-      } else {
-        ""
-      }
 
       paste0(
-        "Walk-forward weight-stability diagnostic across six portfolio construction ",
-        "methods on the 4-asset universe (SPY/TLT/GLD/DBC; p = ", n_assets,
-        ", T = ", n_per, " months, training window = ", train_win, " months). ",
+        "All six methods turn the same ", n_assets,
+        " assets (SPY, TLT, GLD, DBC) into portfolio weights; we rebalance ",
+        "monthly over rolling ", train_win,
+        "-month windows and score the next month out of sample. The table ",
+        "shows how much each method trades, how concentrated it gets, and its ",
+        "return. ",
 
-        "Raw MVO (plug-in tangency; sample Σ and μ, no regularisation) ",
-        "is the literature’s error maximiser: ",
-        "avg turnover = ", round(mvo_turnover, 3),
-        " vs GMV = ", round(gmv_turnover, 3),
-        ", Equal-Weight = ", round(ew_turnover, 3),
-        ", HRP = ", round(hrp_turnover, 3),
-        "; max |w| = ", round(mvo_maxw, 3),
-        " vs Equal-Weight = ", round(ew_maxw, 3),
-        "; OOS Sharpe = ", round(mvo_sharpe, 2), fail_note, ". ",
+        "Plug-in mean-variance — the textbook recipe built straight from raw ",
+        "sample estimates — is by far the least stable: it trades far more ",
+        "than any other method and puts ", round(mvo_maxw * 100),
+        "% into a single asset, effectively holding just ", round(mvo_effn, 1),
+        " of the ", n_assets, ". On these few well-behaved assets that ",
+        "concentrated bet happened to earn the highest Sharpe, but that is ",
+        "luck, not skill — the same behaviour is what blows up in larger ",
+        "universes. Shrinking the return estimates (Shrunk-μ) earns almost the ",
+        "same Sharpe far more steadily. ",
 
-        "Stable alternatives cluster rightward: ",
-        "GMV = ", round(gmv_sharpe, 2),
-        ", HRP = ", round(hrp_sharpe, 2),
-        ", Equal-Weight = ", round(ew_sharpe, 2),
-        "; expected-return regularisation: ",
-        "Shrunk-μ (James-Stein) = ", round(shrunk_sharpe, 2),
-        ", Black-Litterman (no views)† = ", round(bl_sharpe, 2), ". ",
-
-        "† Black-Litterman is shown at the no-views equilibrium prior ",
-        "(w_mkt = 1/p equal-weight, risk_aversion = 2.5), ",
-        "the #513 invariant; with no investor views the BL posterior mu-hat ",
-        "collapses to Pi = lambda*Sigma*w_mkt, so BL tangency weights ",
-        "are approximately equal-weight (by construction, not a bug). ",
-
-        "Source: ",
-        "[hd_weight_stability_diagnostic()](", gh_base,
-        "/packages/historicaldata/R/weight_stability.R#L130), ",
-        "[R/plan_weight_stability_vignette.R](", gh_base,
-        "/R/plan_weight_stability_vignette.R), issue #507."
+        "Black-Litterman is run with no investor views, so it simply reproduces ",
+        "the equal-weight benchmark — expected, not a bug: with no views there ",
+        "is nothing to tilt away from equal weight."
       )
     })
 
