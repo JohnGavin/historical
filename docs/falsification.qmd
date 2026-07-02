@@ -119,9 +119,25 @@ col_defs <- list(
   )
 )
 
+# #534: render markdown links [text](url) in caption strings as real HTML
+# anchors. DT captions and inline-R body output are treated as HTML, so raw
+# markdown would otherwise show literally. Returns x unchanged if NULL.
+md_links <- function(x) {
+  if (is.null(x)) return(x)
+  gsub(
+    "\\[([^]]+)\\]\\((https?://[^)]+)\\)",
+    paste0(
+      "<a href=\"\\2\" target=\"_blank\" rel=\"noopener noreferrer\" ",
+      "style=\"color:#6c9bd2;text-decoration:underline dotted;\">\\1</a>"
+    ),
+    x
+  )
+}
+
 # DT helper with linked column headers (open in new tab)
 fals_dt <- function(df, caption_text) {
   if (is.null(df)) return(invisible(NULL))
+  caption_text <- md_links(caption_text)  # #534: markdown links -> anchors
   # Build header with title attributes and optional links
   header_cells <- lapply(names(df), function(nm) {
     cd <- col_defs[[nm]]
@@ -197,7 +213,7 @@ if (!is.null(scorecard)) fals_dt(scorecard, caption)
 safe_tar_read("fals_vig_ff_alpha_plot")
 ```
 
-`r { cap <- safe_tar_read("fals_vig_ff_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+`r { cap <- safe_tar_read("fals_vig_ff_caption"); if (!is.null(cap)) paste0("*", md_links(cap), "*") else "" }`
 
 #### How to Read This
 
@@ -233,7 +249,7 @@ safe_tar_read("fals_vig_ff_alpha_plot")
 safe_tar_read("fals_vig_null_heatmap")
 ```
 
-`r { cap <- safe_tar_read("fals_vig_null_heatmap_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+`r { cap <- safe_tar_read("fals_vig_null_heatmap_caption"); if (!is.null(cap)) paste0("*", md_links(cap), "*") else "" }`
 
 #### Rejection Table
 
@@ -283,7 +299,7 @@ For each null environment, we generate M = 100 synthetic series, apply the strat
 safe_tar_read("fals_vig_hac_plot")
 ```
 
-`r { cap <- safe_tar_read("fals_vig_hac_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+`r { cap <- safe_tar_read("fals_vig_hac_caption"); if (!is.null(cap)) paste0("*", md_links(cap), "*") else "" }`
 
 #### HAC Details
 
@@ -425,7 +441,7 @@ p <- safe_tar_read("cov_diag_vig_cond_plot")
 if (!is.null(p)) p
 ```
 
-`r { cap <- safe_tar_read("cov_diag_vig_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+`r { cap <- safe_tar_read("cov_diag_vig_caption"); if (!is.null(cap)) paste0("*", md_links(cap), "*") else "" }`
 
 #### OOS Sharpe
 
@@ -438,7 +454,7 @@ p <- safe_tar_read("cov_diag_vig_sharpe_plot")
 if (!is.null(p)) p
 ```
 
-`r { cap <- safe_tar_read("cov_diag_vig_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+`r { cap <- safe_tar_read("cov_diag_vig_caption"); if (!is.null(cap)) paste0("*", md_links(cap), "*") else "" }`
 
 #### How to Read This
 
@@ -497,7 +513,7 @@ p <- safe_tar_read("ws_diag_vig_plot")
 if (!is.null(p)) p
 ```
 
-`r { cap <- safe_tar_read("ws_diag_vig_caption"); if (!is.null(cap)) paste0("*", cap, "*") else "" }`
+`r { cap <- safe_tar_read("ws_diag_vig_caption"); if (!is.null(cap)) paste0("*", md_links(cap), "*") else "" }`
 
 #### How to Read This
 
@@ -510,7 +526,7 @@ A 60-month rolling walk-forward backtest estimates portfolio weights using each 
 - **Shrunk-μ (James-Stein)** — Tangency portfolio using Bayes-Stein (Jorion 1986) shrinkage on μ toward the grand mean, with a regularised Σ. Implemented in [`hd_returns_shrink(method = "james_stein")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/returns_shrink.R){target="_blank" rel="noopener noreferrer"}.
 - **Black-Litterman (no views)** — Tangency portfolio from the BL (1992) posterior μ̂ and Σ_BL using [`hd_black_litterman()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/black_litterman.R){target="_blank" rel="noopener noreferrer"}. Shown here with no investor views (w_mkt = 1/p, risk_aversion = 2.5). **With no views, Black-Litterman just returns the equal-weight starting point**, so its row matches Equal-Weight below. That is expected behaviour, not a bug — there are no views to tilt away from.
 - **Equal-Weight (1/N)** — The robust benchmark. Zero turnover by construction.
-- **HRP (Hierarchical Risk Parity)** — Lopez de Prado (2016) hierarchical diversification using a regularised Σ. Implemented in [`hrp_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/hrp_weights.R){target="_blank" rel="noopener noreferrer"}.
+- **HRP (Hierarchical Risk Parity)** — Lopez de Prado (2016) hierarchical diversification using a regularised Σ. Implemented in [`hrp_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/topological_risk_parity.R){target="_blank" rel="noopener noreferrer"}.
 
 **Metrics explained:**
 
@@ -662,7 +678,7 @@ cat('<div id="dag-overview-mount"></div>')
 cat('<div id="dag-full-mount"></div>')
 ```
 
-Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: [plan_causal_graph.R](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).
+Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: <a href="https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R" target="_blank" rel="noopener noreferrer">plan_causal_graph.R</a>.
 
 `r paste0('<p style="color:#888;font-size:0.8em;">Full DAG tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>')`
 
@@ -812,9 +828,11 @@ if (!is.null(split) && !is.null(split$comparison)) {
     options = list(pageLength = 5, dom = "t"),
     caption = htmltools::tags$caption(
       style = "caption-side: top; text-align: left;",
-      paste0("HML-VIX correlation by period. Pre-2010 includes dot-com crash + GFC. ",
-             "Source: ", "[plan_causal_graph.R]",
-             "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R).")
+      htmltools::HTML(md_links(paste0(
+        "HML-VIX correlation by period. Pre-2010 includes dot-com crash + GFC. ",
+        "Source: [plan_causal_graph.R]",
+        "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R)."
+      )))
     )
   ) |> DT::formatRound("hml_vix_r", digits = 3)
 } else {
@@ -822,7 +840,7 @@ if (!is.null(split) && !is.null(split$comparison)) {
 }
 ```
 
-`r { cap <- safe_tar_read("cg_caption"); if (!is.null(cap)) cap else "" }`
+`r { cap <- safe_tar_read("cg_caption"); if (!is.null(cap)) md_links(cap) else "" }`
 
 # Risk Architecture {#risk-arch}
 
