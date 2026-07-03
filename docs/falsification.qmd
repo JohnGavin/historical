@@ -531,8 +531,8 @@ A 60-month rolling walk-forward backtest estimates portfolio weights using each 
 **Metrics explained:**
 
 - **Avg Turnover** — Mean L₁ weight change between consecutive OOS windows: mean(‖w_t − w_{t−1}‖₁). Higher = more rebalancing cost. Equal-Weight = 0 by construction.
-- **Max |w|** — Mean across windows of the largest absolute weight. Equal-Weight → 1/p = 0.25 for 4 assets. Raw MVO → values often > 1 (short positions).
-- **OOS Sharpe** — Annualised Sharpe ratio of OOS portfolio returns (mean/sd × √12) over non-failed windows.
+- **Max |w|** — Mean across windows of the largest absolute weight. Equal-Weight → 1/p = 0.25 for 4 assets. Raw MVO → values often exceed 1: a leveraged bet (more than 100% in one asset, funded by short/negative positions in the others), which the unconstrained optimiser permits and the regularised methods do not.
+- **OOS Sharpe** — Annualised Sharpe ratio of OOS portfolio returns (mean/sd × √12) over non-failed windows. On this 4-asset universe 0 of 182 windows failed for every method (the covariance is never singular with 4 well-behaved assets); failures only occur in wide universes where the asset count approaches the training-window length.
 - **Eff N** — Mean effective number of holdings (1/Σw_j²; Herfindahl measure). Equal-Weight → p = 4; concentrated raw MVO → near 1.
 - **Failed** — Windows where weight construction failed (e.g. singular sample Σ for raw MVO). Counted but excluded from all performance metrics.
 

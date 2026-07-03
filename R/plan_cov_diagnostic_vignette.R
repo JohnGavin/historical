@@ -202,6 +202,7 @@ plan_cov_diagnostic_vignette <- function() {
       # Defined inside the target so it is in scope at build time (target
       # commands evaluate in the pipeline env, not the plan-function frame).
       gh_base <- "https://github.com/JohnGavin/historical/blob/main"
+      a_ <- function(text, url) paste0('<a href="', url, '" target="_blank" rel="noopener noreferrer">', text, '</a>')
       s <- cov_diag_summary
 
       # Helper: extract one scalar value from summary
@@ -266,14 +267,10 @@ plan_cov_diagnostic_vignette <- function() {
         "only currently-listed tickers with no delisted firms, biasing all methods ",
         "toward apparent profitability and obscuring the regularisation benefit. ",
         "Source: ",
-        "[hd_cov_oos_diagnostic()](", gh_base,
-        "/packages/historicaldata/R/cov_diagnostic.R#L87), ",
-        "[hd_min_var_weights()](", gh_base,
-        "/packages/historicaldata/R/min_var_weights.R#L65), ",
-        "[hd_cov_estimate()](", gh_base,
-        "/packages/historicaldata/R/cov_estimate.R#L100), ",
-        "[R/plan_cov_diagnostic_vignette.R](", gh_base,
-        "/R/plan_cov_diagnostic_vignette.R), issue #498."
+        a_("hd_cov_oos_diagnostic()", paste0(gh_base, "/packages/historicaldata/R/cov_diagnostic.R#L87")), ", ",
+        a_("hd_min_var_weights()", paste0(gh_base, "/packages/historicaldata/R/min_var_weights.R#L65")), ", ",
+        a_("hd_cov_estimate()", paste0(gh_base, "/packages/historicaldata/R/cov_estimate.R#L100")), ", ",
+        a_("R/plan_cov_diagnostic_vignette.R", paste0(gh_base, "/R/plan_cov_diagnostic_vignette.R")), ", issue #498."
       )
     })
 

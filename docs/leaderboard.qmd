@@ -381,13 +381,13 @@ if (!is.null(dp) && !is.null(decay_metrics) && nrow(decay_metrics) > 0 && !neg_b
   cat("::: callout-warning\n",
       "**Alpha decay not meaningful — base Sharpe is non-positive for every strategy on the page.** ",
       "Decay measures the *fraction of base Sharpe that survives execution delay*; if base Sharpe ≤ 0 there is no alpha to decay. ",
-      "Investigate the strategies' base Sharpe before re-running this tab. See [#356](https://github.com/JohnGavin/historical/issues/356).\n",
+      "Investigate the strategies' base Sharpe before re-running this tab. See <a href=\"https://github.com/JohnGavin/historical/issues/356\" target=\"_blank\" rel=\"noopener noreferrer\">#356</a>.\n",
       ":::\n", sep = "")
 } else {
   cat("::: callout-note\n",
       "**Alpha decay analysis not yet computed.** ",
       "Run `tar_make(c(\"decay_metrics\", \"decay_plot\", \"decay_half_life\"))` ",
-      "to populate this tab. See [#356](https://github.com/JohnGavin/historical/issues/356).\n",
+      "to populate this tab. See <a href=\"https://github.com/JohnGavin/historical/issues/356\" target=\"_blank\" rel=\"noopener noreferrer\">#356</a>.\n",
       ":::\n", sep = "")
 }
 ```
