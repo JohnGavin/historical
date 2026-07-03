@@ -1,34 +1,24 @@
-# Current Work (Session 2026-06-13 → 2026-06-14 #18 — #389 Phases D+E + CI fix + 4 PRs, ENDED)
+# Current Work — session 21 end (2026-07-03, ENDED)
 
-**Last updated:** session end 2026-06-14
-**Previous sessions:** #17 (registry 14/14 + Kraken 19-pair dataset, 9 PRs), #16 (#425 cost-bug + Tier 1, 7 PRs)
+## State: all work merged + deployed
 
-## This session — 4 PRs merged + lychee CI fix
+Everything below is on `origin/main` (PRs #500–#538) and the dashboards are rendered + deployed (Pages serves committed `docs/*.html`). lychee link-audit is **green**.
 
-### Headline
+### Shipped this session
+- **#507 MVO remedy set — COMPLETE**: `hd_returns_shrink` (#512), `hd_black_litterman` (#513), `hd_min_var_weights_penalised` (#517), `hd_weight_stability_diagnostic` (#521) + surfaced on falsification `#wstab` (#523). wstab caption/plot corrected for accuracy + plain language (#533).
+- **#514 dashboard-first — COMPLETE**: rule + `docs/DASHBOARDS.md` (#515), master Mermaid map (#519), 3 consolidations (#516/#524/#526) → **15→11 dashboards**.
+- **#534 caption-link hygiene**: caption *targets* → HTML anchors site-wide (#536/#537); lychee 404 fixed. 0 raw links on falsification/leaderboard/evidence.
+- **#530 bdbb-sol render bug** fixed (#531).
+- "Class C" → "publish gate" rename in the global HITL rule.
 
-Fixed CI on PR #462 (kraken_ohlcvt registry snapshot), fixed lychee false-positive failures with `^file://` in `.lycheeignore`, then implemented #389 Phases D+E: quantile fan-chart infrastructure (`hd_path_quantiles` + `hd_plot_fan_chart`) and bootstrapped CPI deflation in `hd_simulate_paths`.
+### Open follow-ups (issues filed, not started)
+- **#518** — Phase 3b: no-short/box/L1-turnover/robust MVO via a QP solver (quadprog) + nix regen. Do as a dedicated PR, not a background fan-out.
+- **#520** tidyfinance gap analysis · **#522** Carver rolling-vs-expanding (extends the weight-stability diagnostic with an `estimation` axis) · **#525** Schmerling slope/strength (R²-strength signal, MONITOR) · **#528** Quantpedia AI-agent guardrails audit (dossier card, trade-log fidelity, break-even cost, dual-engine — several genuine gaps).
 
-### PRs merged (4)
+### Next-session starting point
+- Pick from #518 (finishes #507) or the research issues (#522 is the most direct extension of shipped work).
+- Note: weight-stability diagnostic only runs the 4-asset universe; a wide-universe demo (where MVO's Sharpe penalty appears) is the natural next enhancement.
 
-| PR | Subject |
-|---|---|
-| #462 | registry snapshot fix — kraken_ohlcvt List of 10 |
-| #464 | #389 Phase D — hd_path_quantiles + hd_plot_fan_chart (124 functions) |
-| #465 | #389 Phase E — bootstrapped CPI in hd_simulate_paths (.cpi_monthly param) |
-| lychee | fix(ci): `^file://` in .lycheeignore (direct to main, commit 1bd41de) |
-
-### Open issues to continue
-
-- **#389** — Phase D vignette (fan-chart rendered output) still needed
-- **#463** — fat-tailed simulations via copula + EVT (filed, not started)
-- **#449** — xgb_drif A/B comparison (filed, not started)
-- 18 roborev findings unaddressed (pre-existing)
-
-### Key lessons for next session
-
-1. `devtools::document()` in a worktree context: always `setwd()` inside the Rscript call — bare path inherits caller cwd.
-2. Stale-main worktrees: `git fetch origin main` + `git rebase origin/main` before push if another PR merged since worktree creation. Phase E needed this.
-3. pkgctx "API unchanged" = NAMESPACE not updated; run `devtools::document()` first.
-4. `AGENT_PUSH_OK=1 git push --force-with-lease` needed after rebase in agent worktrees (bypasses `agent_push_guard.sh`).
-5. `git rebase --continue` (no `--no-edit` — invalid flag).
+### Housekeeping
+- 2 unaddressed roborev verdict failures (cumulative counter; pre-existing — not from this session's merged work).
+- Main checkout has pre-existing untracked files (`.clone/`, `archive/`, `inst/extdata/results/*.parquet`, a `knowledge/raw/*.pdf`) — left as-is.

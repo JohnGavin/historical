@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-06-29 → 2026-07-03 (session 21 — MVO remedy set + dashboard-first workflow + caption-link hygiene)
+
+### Completed
+
+- **#507 MVO-breakdown remedy set — complete (4 phases + surfacing), all TDD:**
+  - Phase 1 `hd_returns_shrink()` — James-Stein/Bayes-Stein, grand-mean, CAPM-equilibrium targets (PR #512).
+  - Phase 2 `hd_black_litterman()` — equilibrium-anchored posterior; no-views→prior invariant (PR #513).
+  - Phase 3 `hd_min_var_weights_penalised()` — closed-form ridge + L2-turnover, dependency-free (PR #517).
+  - Phase 4 core `hd_weight_stability_diagnostic()` — turnover / max-weight / OOS-Sharpe across raw-MVO/GMV/shrunk-µ/BL/EW/HRP, strict t+1 look-ahead (PR #521); surfaced on `falsification.qmd` `#wstab` (PR #523).
+  - Math independently verified: Jorion φ, BL master formula, penalised-GMV KKT.
+- **#514 dashboard-first workflow — complete:** rule `.claude/rules/dashboard-output-first.md` + `docs/DASHBOARDS.md` inventory, Mermaid-first (clickable anchors + hover) (PR #515); master relationship Mermaid map (PR #519); three consolidations — jst-dashboard→evidence (#516), factor-max+drif→stock-backtest (#524), negative-results→falsification (#526). **Dashboards 15→11.**
+- **wstab review fix (PR #533):** plain-language caption; corrected a wrong narrative (raw-MVO has the *highest* Sharpe on 4 assets — real signal is turnover/concentration); plot Sharpe→turnover; dropped all-zero Failed column.
+- **Caption-link hygiene (#534, PR #536/#537):** `md_links()` in falsification + shared caption *targets* converted to HTML anchors site-wide; lychee 404 fixed (hrp_weights.R→topological_risk_parity.R). 0 raw markdown links across falsification/leaderboard/evidence.
+- **bdbb-sol render bug (#530, PR #531):** store-path guard (`docs/docs/_targets`→`docs/_targets`).
+- **Deploy:** rendered + published dashboards (no CI render; Pages serves committed HTML) — PRs #529, #532, #538. lychee link-audit **green**.
+- **Process:** "Class C" renamed to **"publish gate"** in `human-in-the-loop-decision-points`.
+- **Issues raised:** #518 (Phase 3b QP), #520 (tidyfinance), #522 (Carver rolling-vs-expanding), #525 (Schmerling slope/strength), #528 (Quantpedia AI-agent guardrails audit), #530 (bdbb-sol bug), #534 (caption raw-link bug).
+
+### Failed Approaches
+
+- **Shipping the wstab caption without checking the built numbers:** the #523 surfacing claimed MVO = "error maximiser → poor Sharpe", but raw-MVO posts the *highest* Sharpe on the 4-asset universe. Verify the narrative against the data, not the literature's default framing.
+- **`git checkout main` after a squash-merge shows stale files:** local main lags origin/main (squash merges don't fast-forward the local branch), so the working tree shows pre-merge content. Always `fetch` + `merge --ff-only` after `checkout main`.
+- **Raw caption links = whack-a-mole:** fixing `fals_dt` only caught DT-caption links; inline-R captions, a static body paragraph, a one-off `DT::datatable`, and shared caption *targets* each needed separate handling. Root fix: convert the caption *targets* to HTML anchors so every consumer renders correctly.
+- **Rendering in a worktree:** dashboard PRs can't render (no built `_targets` store in the agent worktree); the orchestrator renders in the main checkout post-merge and deploys the HTML as a separate PR.
+
+### Accuracy / Metrics
+
+- historicaldata: +4 exported functions (returns-shrink, Black-Litterman, penalised min-var, weight-stability diagnostic); API doc regen to 139+; new TDD suites (26 + 21 + 25 + 31 assertions). Dashboards 15→11. lychee: 1 error → 0 (of 455 links).
+
+### Known Limitations
+
+- #518 Phase 3b (no-short/box/L1-turnover/robust MVO) needs a QP solver + nix regen — deferred.
+- Weight-stability diagnostic runs only on the 4-asset universe (SPY/TLT/GLD/DBC); BL shows at its no-views prior (== equal-weight); the wide-universe regime where MVO's Sharpe penalty appears is not yet wired.
+- 2 unaddressed roborev verdict failures (cumulative counter; pre-existing).
+
 ## 2026-06-25 → 2026-06-27 (session 20 — structural breaks + digest + full pipeline-rot cleanup)
 
 ### Completed
