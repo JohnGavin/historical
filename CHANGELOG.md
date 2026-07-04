@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-07-04 (session 22 — GH Pages deploy retry + external gap-analysis triage)
+
+### Completed
+
+- **GH Pages deploy fix:** `deploy` job failed transiently on a green `build` (generic GitHub-side "Deployment failed, try again later"); confirmed no code/config cause, re-ran via `gh run rerun --failed` with user approval — all jobs green, site live.
+- **External gap-analysis triage (no code changes, research/methodology only):** reviewed 4 recent datageeek.com posts against the codebase and filed issues for genuine gaps, skipping techniques already covered:
+  - **#539** — Gaussian-vs-Student-t rolling log-likelihood tail-regime classifier (information- vs liquidity-driven moves); complements #463 (fat-tailed *simulation*) by classifying *observed* regimes instead.
+  - **#540** — execution-realism rigor score (latency-scaled slippage + PASS/FAIL/EXCELLENT verdict); complements #490/#125/#508 (flat cost *models*) with a scored realism *audit*.
+  - **#541** — multi-agent DDQN execution audit (silver futures, Keras/TensorFlow) — filed as **MONITOR, not adopt**: no RL/game-theory infra exists, Keras/TF conflicts with the R-preferred toolchain, and the underlying Nash/TWAP classification is likely closed-form-solvable without RL.
+  - The 4th post (Bitcoin twin-networks DML) was already covered by existing issue #144 — no new issue filed.
+
+### Failed Approaches
+
+- None this session — both the deploy retry and the triage were single-pass.
+
+### Accuracy / Metrics
+
+- 0 files changed; 3 new issues filed (#539, #540, #541); 0 duplicate issues (1 candidate gap already covered by #144, correctly skipped).
+
+### Known Limitations
+
+- Gap-analysis only covered the blog's 4 most-recent posts (back to 2026-05-05); older archive pages not yet reviewed.
+- #539/#540 are diagnostic-only proposals, not yet implemented — no code exists for either until a follow-up PR.
+
 ## 2026-06-29 → 2026-07-03 (session 21 — MVO remedy set + dashboard-first workflow + caption-link hygiene)
 
 ### Completed
