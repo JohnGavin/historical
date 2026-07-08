@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-07-07 (session 22 — Quantitativo Weekly research-triage issues)
+
+### Completed
+
+- **Research-triage issues raised from [Quantitativo Weekly](https://www.quantitativo.com/p/quantitativo-weekly)** (investigation-only; each wired to the gate battery — `priced-in-prohibition`, `backtest-robustness`/`K_eff_strat`, `cross-geography-pervasiveness`, `new-strategy-portfolio-fit` — and Phase 0 dashboard-first on graduation):
+  - **#549** — two skewness-based momentum/anomaly overlays: Gong-Lynch-Ogden (2026) skew-managed overlay + Dong et al. (2022) negative-coskewness reversal signal. Datasets mapped to in-repo sources (yfinance panel, Ken French, JST for recession dating); flagged intl firm-level equity panel as the gap for the UK/DE/FR/JP replication.
+  - **#550** — Price-to-52-Week-Anchor cross-asset overlay (Chen et al. 2026). Equities leg needs no new data; **bond leg is the data gap** (treasury-ETF proxies from avoid-worst/defense-first flagged as candidate source).
+  - **#551** — crypto Q-7 fundamentals model (Babayev & Aliyev 2026). Framed as primarily a **data-sourcing** effort — no crypto ingestion exists; "is crypto in platform scope" made an explicit strategic decision before any parser is built (reproducible-ingestion rule).
+- Deep-learning pairs-trading paper (Yilmaz & Sefer 2025) left un-triaged by choice — the only paper from the digest not filed.
+
+### Accuracy / Metrics
+
+- No code changes; three GitHub issues created. Working tree clean.
+
+### Known Limitations
+
+- Roborev consistency check flags `INCONSISTENT(backlog-vs-verdicts)` (backlog.open=544 vs verdicts.total=1) — pre-existing systemic state (reviews not completing to verdict), unrelated to this session.
+
 ## 2026-06-29 → 2026-07-03 (session 21 — MVO remedy set + dashboard-first workflow + caption-link hygiene)
 
 ### Completed
