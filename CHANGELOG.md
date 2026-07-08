@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-07-08 (session 23 — skewness/crypto triage: falsifiable specs + premise corrections)
+
+### Completed
+
+- **#551 (crypto Q-7)** — triaged **cheapest-first**. Corrected session-22's premise: crypto is **already in scope** (not greenfield) — `hd_kraken_ohlcvt()` is a live registered dataset (SOL + majors, hourly from 2021), read by `bdbb-sol.qmd`; `crypto_momentum`/`solana_momentum` plans exist; `fetch_drift_*()` already fetches funding rates (function, not yet a registered dataset). Posted a 3-tier falsification ladder: Tier 0 (reversal + vol legs on the Kraken panel we already hold, zero ingestion) → Tier 1 (funding, one gated fetch) → Tier 2 (on-chain quality, the only genuine gap). Decision: run Tier 0 before spending on funding/on-chain.
+- **#549 (skewness overlays)** — decisions: **B first** (negative-coskewness momentum overlay), **US-only first cut**. Corrected premise: `risk_metrics.R` has **no** skew/coskew helper (`hd_coskewness()` is a build, not an extend); it's shared machinery A reuses. Posted a falsifiable spec per thesis with a cheapest-gate-first battery (vol-managed-momentum benchmark first — the most likely cheap killer).
+- **#552** — created: B implementation issue (`hd_coskewness()` + US-only falsification battery on `mom_combined_returns`), gate-1-first, no new dashboard, worker-agent dispatch.
+- **llm#749** — created: action-first redesign of the overnight self-review email + fix for 2 genuinely-failing crons. Diagnosed launchd health: `roborev-metrics-etl` and `roborev-weekly-rollup-email` are **false alarms** (exit 0 / email sent; spurious exit codes); `launchd-health-weekly` (self-broken since Jun 28) and `self-review-stage1` (silent since Jun 24, feeds the email's headline count) are the real fixes; `roborev-bridge` likely intentionally retired.
+
+### Failed Approaches / Corrections
+
+- Session-22 CHANGELOG stated "#551 — no crypto ingestion exists" and "#549 — JST/risk_metrics skew helpers to extend." Both wrong: crypto price+funding fetchers exist; no skew helper exists. Future crypto/skew work must grep the repo before assuming greenfield.
+
+### Accuracy / Metrics
+
+- No code changes; 2 GitHub issues created (#552, llm#749), 2 triage specs posted (#549, #551). Working tree clean.
+
+### Known Limitations
+
+- Roborev consistency check flags `INCONSISTENT(backlog-vs-verdicts)` (open=555 vs verdicts.total=1) — pre-existing systemic state (reviews not completing to verdict), unrelated to this session.
+- Un-PR'd branch `feat/cc-20260707-174758` (session-22 CHANGELOG commit) still has no PR.
+- Yilmaz & Sefer (2025) deep-learning pairs-trading digest still un-triaged. #550 (PTA bond-leg) still open.
+
 ## 2026-07-07 (session 22 — Quantitativo Weekly research-triage issues)
 
 ### Completed

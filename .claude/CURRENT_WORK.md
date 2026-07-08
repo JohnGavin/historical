@@ -1,24 +1,19 @@
-# Current Work — session 21 end (2026-07-03, ENDED)
+# Current Work — session 23 end (2026-07-08, ENDED)
 
-## State: all work merged + deployed
+## State: triage-only session, no code changes
 
-Everything below is on `origin/main` (PRs #500–#538) and the dashboards are rendered + deployed (Pages serves committed `docs/*.html`). lychee link-audit is **green**.
+All output is on GitHub (issue comments + 2 new issues). Working tree clean apart from this session's CHANGELOG + CURRENT_WORK edits (pending commit decision).
 
-### Shipped this session
-- **#507 MVO remedy set — COMPLETE**: `hd_returns_shrink` (#512), `hd_black_litterman` (#513), `hd_min_var_weights_penalised` (#517), `hd_weight_stability_diagnostic` (#521) + surfaced on falsification `#wstab` (#523). wstab caption/plot corrected for accuracy + plain language (#533).
-- **#514 dashboard-first — COMPLETE**: rule + `docs/DASHBOARDS.md` (#515), master Mermaid map (#519), 3 consolidations (#516/#524/#526) → **15→11 dashboards**.
-- **#534 caption-link hygiene**: caption *targets* → HTML anchors site-wide (#536/#537); lychee 404 fixed. 0 raw links on falsification/leaderboard/evidence.
-- **#530 bdbb-sol render bug** fixed (#531).
-- "Class C" → "publish gate" rename in the global HITL rule.
-
-### Open follow-ups (issues filed, not started)
-- **#518** — Phase 3b: no-short/box/L1-turnover/robust MVO via a QP solver (quadprog) + nix regen. Do as a dedicated PR, not a background fan-out.
-- **#520** tidyfinance gap analysis · **#522** Carver rolling-vs-expanding (extends the weight-stability diagnostic with an `estimation` axis) · **#525** Schmerling slope/strength (R²-strength signal, MONITOR) · **#528** Quantpedia AI-agent guardrails audit (dossier card, trade-log fidelity, break-even cost, dual-engine — several genuine gaps).
+### Done this session
+- **#551 (crypto Q-7)** — cheapest-first falsification ladder posted; corrected the "no crypto ingestion" premise (Kraken dataset + funding fetcher already exist). Decision: run Tier 0 (reversal+vol on existing Kraken panel) before any funding/on-chain spend.
+- **#549 (skewness overlays)** — **B first, US-only** decided; falsifiable spec per thesis posted; corrected the "risk_metrics has skew helpers" premise (`hd_coskewness()` is a build).
+- **#552** — created: B (negative-coskewness) implementation issue, gate-1-first (vol-managed benchmark), no new dashboard.
+- **llm#749** — created: overnight-email action-first redesign + fix 2 real crons (`launchd-health-weekly`, `self-review-stage1`); 2 others are false alarms; `roborev-bridge` likely retired.
 
 ### Next-session starting point
-- Pick from #518 (finishes #507) or the research issues (#522 is the most direct extension of shipped work).
-- Note: weight-stability diagnostic only runs the 4-asset universe; a wide-universe demo (where MVO's Sharpe penalty appears) is the natural next enhancement.
+- **#552** is the ready-to-build item: dispatch a worker agent in a worktree to implement `hd_coskewness()` + B overlay on `mom_combined_returns`, US-only, run gate 1 (vol-managed benchmark) first → go/no-go.
+- Then #550 (PTA — decide bond leg vs equities-only), the Yilmaz & Sefer pairs-trading digest, and llm#749 (needs an `llm` session, not this repo).
 
 ### Housekeeping
-- 2 unaddressed roborev verdict failures (cumulative counter; pre-existing — not from this session's merged work).
-- Main checkout has pre-existing untracked files (`.clone/`, `archive/`, `inst/extdata/results/*.parquet`, a `knowledge/raw/*.pdf`) — left as-is.
+- Un-PR'd branch `feat/cc-20260707-174758` (session-22 CHANGELOG) still has no PR.
+- Roborev summary clean (6/6 verdicts addressed, 0 crash/quota); standing `INCONSISTENT(backlog-vs-verdicts)` infra noise persists.
