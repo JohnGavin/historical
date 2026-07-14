@@ -155,10 +155,10 @@ plan_leaderboard <- function() {
                  "leaderboard.html"),
         add_meta(.norm_tom(tom_metrics), "TOM", "Overlay",
                  "Turn-of-the-month calendar effect",
-                 "turn-of-month.html"),
+                 "https://github.com/JohnGavin/historical/blob/main/R/plan_turn_of_month.R#L20"),
         add_meta(.norm_cmr(cmr_summary), "CMR", "Commodities",
                  "Commodities mean reversion (best lookback)",
-                 "commodities-mean-reversion.html"),
+                 "https://github.com/JohnGavin/historical/blob/main/R/plan_commodities_mean_reversion.R#L19"),
         add_meta(.norm_rsc(rsc_metrics), "Risk State", "Overlay",
                  "VIX regime overlay on SPY",
                  "leaderboard.html"),
@@ -177,10 +177,10 @@ plan_leaderboard <- function() {
         # ── Added in #489 Cluster C: wire missing strategies (S7 coverage) ──
         add_meta(.norm_value(ev_metrics), "Value (HML)", "Factor",
                  "EV/EBIT value sleeve (HML+RMW proxy, v0)",
-                 "R/plan_ev_ebit.R"),
+                 "https://github.com/JohnGavin/historical/blob/main/R/plan_ev_ebit.R#L26"),
         add_meta(.norm_mf(mf_metrics), "Managed Futures", "Multi-Asset",
                  "Cross-asset TS-momentum (MOP 2012, ETF proxies, v0)",
-                 "R/plan_managed_futures.R")
+                 "https://github.com/JohnGavin/historical/blob/main/R/plan_managed_futures.R#L39")
       )
 
       # Add portfolio optimal
