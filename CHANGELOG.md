@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-07-15 (session 24 — dashboard-simplification (Fable) + 4 gap issues + leaderboard link-metadata fix)
+
+### Completed
+
+- **Dashboard simplification (Fable model)** — asked Fable to prioritise dashboard simplifications beyond the completed #514 merges (11-dashboard "target reached"). Fable read the actual `docs/*.qmd` and ranked: (1) stale-link/dead-surface sweep, (2) de-dup leaderboard hub (−9 duplicated outputs), (3) fold `bdbb-sol`→`evidence` (11→10), (4) centralise momentum-prepeak's private gauntlet into `falsification.qmd`, (5) extend the #481 relationship map into a navigation diagram. A follow-up Fable pass expanded items 2–5 into a full Phase-0 plan (per `dashboard-output-first`), recommended sequence **5→3→2→4**. Plan saved in session; **not yet filed as tracking issues.**
+- **Leaderboard link-metadata fix** — commit `3971943`. Corrected 4 `definition` values in `R/plan_leaderboard.R` (TOM, CMR, Value HML, Managed Futures) from non-existent `.html` pages / raw source paths to GitHub blob URLs with `#L<n>` anchors (`mermaid-click-anchors`). Parse-verified. Committed, **not pushed**.
+- **4 research-gap issues filed:**
+  - **#559** — momentum life cycle (turnover-conditioned early/late stage, Lee-Swaminathan MLC via Alpha Architect); a genuinely missing momentum *facet* distinct from Büsing pre/post-peak.
+  - **#560** — Quantitativo Weekly 4f8 (2026-07-12) 7-paper triage/gap map; recommends spawning reversal-tilt momentum (#1) + DOX commodities (#4) + peer/network (#3+#7), tick-size lens (#2) into trend gauntlet.
+  - **#561** — EIA Cushing crude storage as early US supply-shortage signal (freerangestats); inventory-fundamentals gap, with reproducible-ingestion + priced-in disciplines.
+  - **#562** — evaluation spike: OWID food_trade ETL as a commodity-supply source (framed honestly: trade-flows-not-supply, annual, ags-only, un-reconciled/one-sided-reporting → likely narrow/reject verdict).
+
+### Failed Approaches / Corrections
+
+- **Fable's "4 broken 404 links in the leaderboard hub" premise was wrong.** Verified: the `leaderboard` target's `definition` column is never rendered as a link — the dynamic ranking table (`leaderboard.qmd:122-133`) doesn't select it, and rendered `leaderboard.html` contains none of the strings. The field's only consumers are the digest **parquet snapshot** + a QA coverage check. Reframed the work from "live-404 fix" to "metadata correction." A genuinely user-visible fix would add the 4 strategies to the hand-written static table at `leaderboard.qmd:202-211` (they're absent there).
+- **alphaarchitect.com is Cloudflare-403 to both WebFetch and browser-UA curl** (consistent with existing `feedback_cloudflare-webfetch-403` memory). Could not ingest the AA article; reconstructed the MLC concept from the Lee-Swaminathan literature via WebSearch and flagged in #559 that the source must be read + digested to wiki before implementation.
+
+### Accuracy / Metrics
+
+- 1 commit (`3971943`, 4 lines changed), 4 GitHub issues created (#559–#562), no test/code-logic changes, `plan_leaderboard.R` parse-verified. Working tree clean.
+
+### Known Limitations
+
+- Leaderboard `definition` field is dead metadata (not rendered as links). User-visible follow-up: add TOM/CMR/Value/Managed-Futures rows to the static Definition table (`leaderboard.qmd:202-211`).
+- Fable Phase-0 items (5→3→2→4) not yet filed as tracking issues.
+- CI **Link audit (lychee)** failing (reported at session end) — not investigated; likely pre-existing bare-source-URL / broken-link findings.
+- roborev **backlog-vs-verdicts inconsistency** (559 open, 1 verdict) — pre-existing review-completion health issue, unrelated to this session; raw failure counters clean.
+
 ## 2026-07-08 (session 23 — skewness/crypto triage: falsifiable specs + premise corrections)
 
 ### Completed

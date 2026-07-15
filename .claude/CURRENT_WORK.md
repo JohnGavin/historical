@@ -1,19 +1,21 @@
-# Current Work — session 23 end (2026-07-08, ENDED)
+# Current Work — session 24 end (2026-07-15)
 
-## State: triage-only session, no code changes
+## State: 1 code commit (leaderboard link metadata) + 4 gap issues
 
-All output is on GitHub (issue comments + 2 new issues). Working tree clean apart from this session's CHANGELOG + CURRENT_WORK edits (pending commit decision).
+## What happened
 
-### Done this session
-- **#551 (crypto Q-7)** — cheapest-first falsification ladder posted; corrected the "no crypto ingestion" premise (Kraken dataset + funding fetcher already exist). Decision: run Tier 0 (reversal+vol on existing Kraken panel) before any funding/on-chain spend.
-- **#549 (skewness overlays)** — **B first, US-only** decided; falsifiable spec per thesis posted; corrected the "risk_metrics has skew helpers" premise (`hd_coskewness()` is a build).
-- **#552** — created: B (negative-coskewness) implementation issue, gate-1-first (vol-managed benchmark), no new dashboard.
-- **llm#749** — created: overnight-email action-first redesign + fix 2 real crons (`launchd-health-weekly`, `self-review-stage1`); 2 others are false alarms; `roborev-bridge` likely retired.
+- Fable-model analysis of dashboard simplifications beyond #514. Ranked opportunities; full Phase-0 plan for items 2–5, recommended sequence **5→3→2→4** (5=extend #481 relationship map, 3=fold bdbb-sol→evidence, 2=de-dup leaderboard hub, 4=centralise momentum-prepeak gauntlet). Plan is in the session transcript, NOT yet filed as issues.
+- Fixed 4 leaderboard `definition` URLs → GitHub source anchors (commit `3971943`, parse-verified). Reframed as a metadata fix, not a live-404 fix — the field isn't rendered as links anywhere (only stored in the parquet digest snapshot + a QA coverage check).
+- Filed 4 gap issues: #559 (momentum life cycle / AA), #560 (Quantitativo Weekly 4f8 triage), #561 (Cushing EIA storage), #562 (OWID food_trade eval spike).
 
-### Next-session starting point
-- **#552** is the ready-to-build item: dispatch a worker agent in a worktree to implement `hd_coskewness()` + B overlay on `mom_combined_returns`, US-only, run gate 1 (vol-managed benchmark) first → go/no-go.
-- Then #550 (PTA — decide bond leg vs equities-only), the Yilmaz & Sefer pairs-trading digest, and llm#749 (needs an `llm` session, not this repo).
+## Next session
 
-### Housekeeping
-- Un-PR'd branch `feat/cc-20260707-174758` (session-22 CHANGELOG) still has no PR.
-- Roborev summary clean (6/6 verdicts addressed, 0 crash/quota); standing `INCONSISTENT(backlog-vs-verdicts)` infra noise persists.
+- **Push** commit `3971943` + this CHANGELOG entry (branch ahead of origin) or open a PR.
+- **File Phase-0 tracking issues** for Fable items 5→3→2→4 (one umbrella or four) — offered to user, not yet done.
+- Optional user-visible follow-up: add TOM/CMR/Value/Managed-Futures rows to the static Definition table at `leaderboard.qmd:202-211` (they're absent; that's the table readers actually see).
+- Investigate failing **Link audit (lychee)** CI job.
+- Spawn strategy issues from #560 triage (reversal-tilt momentum #1 first).
+
+## Branch
+
+- `feat/cc-20260707-174758` — ahead of origin (leaderboard fix committed; CHANGELOG + CURRENT_WORK edits pending commit).
