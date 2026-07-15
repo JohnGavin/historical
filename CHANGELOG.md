@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-07-15 (session 25 — provenance correction: #559 misattributed the AA momentum-cycle URL; filed #565)
+
+### Completed
+
+- **Discovered #559 misattributes its source URL.** Session 24 filed #559 ("momentum life cycle") citing `alphaarchitect.com/momentum-cycle/`, but because that page is Cloudflare-403, the paper was reconstructed from WebSearch as the **Lee-Swaminathan Momentum Life Cycle (MLC)**. The user then supplied the actual article text: the URL resolves to **"The Intramonth Momentum Cycle"** (Basilico summary of **Nathan, Suominen & Tasa 2026**) — a *dash-for-cash / PreTOM* mechanism, entirely different from Lee-Swaminathan MLC. Exactly the failure mode #559's own provenance caveat warned about.
+- **Filed #565** — Intramonth Momentum Cycle, accurately sourced. Captures the real mechanism (momentum concentrated in ~6 trading days ending 4 days before month-end; short-side/loser-driven; $1→$18.78 vs $2.37 1980–2025; 7.2 bps/day loser asymmetry; T+1 settlement causal ID May 2024; crashes at month-start not PreTOM; 19-market pervasiveness), the gap vs our momentum sleeves, its distinction from #271 TOM (month-end/short-side vs month-start/inflows), portfolio-fit as a timing overlay reusing #271 machinery, and a falsification bar flagging the two live risks (net-of-cost survival under 6-day turnover; T+2→T+1 regime-aware window as a look-ahead trap).
+- **Corrected #559** — re-sourced to Lee & Swaminathan (2000) "Price Momentum and Trading Volume" (JoF) + 2021 revisit directly (AA URL removed); retitled (dropped "Alpha Architect"); added dated source-correction note, updated provenance caveat + first acceptance criterion (read L&S 2000, not "the AA article"); flagged the adjacent Implied Cost of Capital strand as a possible separate future issue; cross-linked #565.
+- **Posted correction comment on #559** documenting the misattribution and the split.
+
+### Failed Approaches / Corrections
+
+- Root cause reaffirmed: reconstructing a Cloudflare-blocked source from WebSearch produced a confidently-wrong paper attribution that survived into a filed issue. Mitigation applied: user-supplied article text is a verifiable source; both issues now carry accurate provenance and cross-links. Standing lesson: do not treat a WebSearch reconstruction of a blocked URL as the paper's identity.
+
+### Accuracy / Metrics
+
+- 1 issue created (#565), 1 issue edited (#559 title+body), 1 issue comment. No repo code/file changes. Working tree: only `.claude/CURRENT_WORK.md` (session state).
+
+### Known Limitations
+
+- roborev **INCONSISTENT(backlog-vs-verdicts)** (590 open, 1 verdict) persists — pre-existing review-completion health issue, unrelated to this session; raw failure counters clean.
+- #565 figures are transcribed from the user-supplied AA summary text, not the working-paper PDF — #565 AC-1 requires locating + reading the paper before any number is hardcoded.
+
 ## 2026-07-15 (session 24 — dashboard-simplification (Fable) + 4 gap issues + leaderboard link-metadata fix)
 
 ### Completed
