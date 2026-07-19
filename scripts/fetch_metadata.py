@@ -30,7 +30,12 @@ _scripts_dir = str(Path(__file__).parent)
 if _scripts_dir not in sys.path:
     sys.path.insert(0, _scripts_dir)
 
-from metadata_helpers import _yield_fields, first_present  # noqa: E402
+from metadata_helpers import (  # noqa: E402
+    _expected_trading_days,
+    _missing_pct,
+    _yield_fields,
+    first_present,
+)
 
 # US equity tickers
 # SYNC NOTE: when fetch_equity.py DEFAULT_TICKERS changes, update this list too.
@@ -149,7 +154,18 @@ def fetch_yahoo_info(yahoo_sym: str) -> dict:
 
 
 def compute_data_stats(ticker: str, dataset: str, data_dir: Path) -> dict:
-    """Compute start_date, end_date, total_obs, missing_pct from existing Parquet."""
+    """Compute start_date, end_date, total_obs, missing_pct from existing Parquet.
+
+    missing_pct means: "of the dates on which some ticker in this dataset has
+    an observation between this ticker's own start and end date, what
+    fraction is this ticker missing?" It is a data-derived proxy for the true
+    exchange trading calendar (see _expected_trading_days() in
+    metadata_helpers.py, historical#569), not a fixed 252/365 ratio.
+
+    LIMITATION: for a single-ticker dataset, missing_pct is 0 for every
+    ticker by construction (there is no other ticker's calendar to compare
+    against) — see _expected_trading_days() docstring.
+    """
     file_map = {
         "equity_daily": "yfinance_equity.parquet",
         "crypto_daily": "crypto_all.parquet",
@@ -158,6 +174,8 @@ def compute_data_stats(ticker: str, dataset: str, data_dir: Path) -> dict:
     if not fpath.exists():
         return {}
 
+    # Empty parquet (0 rows total) falls through to the len(sub) == 0 check
+    # below via an empty `sub`, same as a missing/unmatched ticker.
     df = pq.read_table(fpath, columns=["date", "ticker", "volume"]).to_pandas()
     sub = df[df["ticker"] == ticker]
     if len(sub) == 0:
@@ -166,21 +184,16 @@ def compute_data_stats(ticker: str, dataset: str, data_dir: Path) -> dict:
     start = sub["date"].min()
     end = sub["date"].max()
     total = len(sub)
+    days_span = (end - start).days  # may be 0 for a single-observation ticker
 
-    # Expected trading days (approximate: 252/year for equity, 365 for crypto)
-    days_span = (end - start).days
-    if dataset == "crypto_daily":
-        expected = days_span  # crypto trades every day
-    else:
-        expected = int(days_span * 252 / 365)  # approximate trading days
-
-    missing_pct = round(100 * (1 - total / max(expected, 1)), 1) if expected > 0 else 0.0
+    expected = _expected_trading_days(dataset, df["date"], start, end, days_span)
+    missing_pct = _missing_pct(total, expected)
 
     return {
         "start_date": start,
         "end_date": end,
         "total_obs": total,
-        "missing_pct": max(missing_pct, 0.0),
+        "missing_pct": missing_pct,
     }
 
 
