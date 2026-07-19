@@ -87,7 +87,11 @@ liquidity_summary <- function(df) {
 
 #' Calculate realized turnover for a strategy
 #'
-#' Compares actual position changes to assumed 80% monthly turnover
+#' Compares actual position changes to assumed 80% monthly turnover.
+#'
+#' NOT wired into any targets pipeline (#569). The `assumed_turnover = 0.80`
+#' constant below is itself under review in #567 — do not wire this function
+#' in until that issue resolves the constant, to avoid a collision.
 #'
 #' @param positions Tibble with columns: date, ticker, weight (target weights)
 #' @return Monthly turnover summary

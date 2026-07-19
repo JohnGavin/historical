@@ -26,6 +26,8 @@ tar_source("R/consolidate.R")
 tar_source("R/validate_macro.R")
 tar_source("R/validate_factors.R")
 tar_source("R/plan_qa_gates.R")
+tar_source("R/liquidity.R")
+tar_source("R/plan_liquidity.R")
 
 list(
   # === QA GATES (run first — abort on look-ahead bias or other violations) ===
@@ -54,6 +56,9 @@ list(
   tar_target(equity_clean, clean_equity(equity_api_valid, equity_static_valid)),
 
   tar_target(consolidated_equity, consolidate_parquet(equity_clean, "equity")),
+
+  # === LIQUIDITY (ADV / illiquidity filtering on consolidated_equity, #569) ===
+  plan_liquidity(),
 
   # === CRYPTO (14 tokens from Yahoo + BTC backfill for cross-ref) ===
   tar_target(crypto_api_file,    "tmp_crypto_api.parquet",    format = "file"),
