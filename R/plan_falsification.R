@@ -1164,11 +1164,19 @@ plan_falsification <- function() {
                       max_dd_duration_days = NA_integer_,
                       avg_dd_duration_obs  = NA_real_,
                       n_drawdowns = NA_integer_,
-                      recovery_days = NA_integer_))
+                      recovery_days = NA_integer_,
+                      peak_value = NA_real_))
         }
         cum  <- cumprod(1 + ret)
         peak <- cummax(cum)
         dd   <- (cum - peak) / peak
+
+        # True running high-water mark of the equity curve (start_value = 1).
+        # peak is non-decreasing, so its final element is the overall max —
+        # equivalent to max(cum). This replaces the prior approximation that
+        # set peak_value == final_value (wrong for any strategy in a
+        # drawdown at the end of the sample; #569).
+        peak_value <- peak[length(peak)]
 
         max_dd <- min(dd, na.rm = TRUE)
 
@@ -1199,7 +1207,8 @@ plan_falsification <- function() {
           max_dd_duration_obs  = max_dd_duration,
           avg_dd_duration_obs  = avg_dd_duration,
           n_drawdowns          = as.integer(n_drawdowns),
-          recovery_obs         = recovery_obs
+          recovery_obs         = recovery_obs,
+          peak_value           = peak_value
         )
       }
 
@@ -1214,6 +1223,7 @@ plan_falsification <- function() {
           return(list(
             start_date = NA, end_date = NA, duration_days = NA_integer_,
             exposure_time_pct = NA_real_, total_return_pct = NA_real_,
+            peak_value = NA_real_,
             cagr = NA_real_, vol = NA_real_, sharpe_naive = NA_real_,
             sortino = NA_real_, calmar = NA_real_,
             correlation_benchmark = NA_real_,
@@ -1335,6 +1345,7 @@ plan_falsification <- function() {
           duration_days         = duration_days,
           exposure_time_pct     = exposure_time_pct,
           total_return_pct      = total_return_pct,
+          peak_value            = dd_list$peak_value,
           cagr                  = cagr,
           vol                   = vol,
           sharpe_naive          = sharpe_naive,
@@ -1523,9 +1534,11 @@ plan_falsification <- function() {
       rows$final_value <- vapply(metrics_list, function(m) {
         1 + m$total_return_pct / 100
       }, double(1L))
-      rows$peak_value <- vapply(metrics_list, function(m) {
-        1 + m$total_return_pct / 100  # approximate
-      }, double(1L))
+      # True running high-water mark of the equity curve (start_value = 1),
+      # computed from the return series in compute_drawdowns(). Fixes #569:
+      # peak_value was previously set equal to final_value, which understates
+      # the true peak for any strategy in a drawdown at the end of the sample.
+      rows$peak_value <- vapply(metrics_list, function(m) m$peak_value, double(1L))
       rows$exposure_adj_return <- rows$cagr  # fully invested = cagr
       rows$n_drawdowns_per_year <- vapply(seq_along(metrics_list), function(i) {
         nd <- metrics_list[[i]]$n_drawdowns
