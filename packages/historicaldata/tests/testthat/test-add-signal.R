@@ -169,12 +169,12 @@ test_that("hd_compute_add: LOOK-AHEAD GUARD — perturbing only future quintiles
 # ── hd_compute_add: error handling ───────────────────────────────────────────
 
 test_that("hd_compute_add: errors on non-data-frame input", {
-  expect_error(hd_compute_add("not a tibble"), "data frame or tibble")
+  expect_snapshot(error = TRUE, hd_compute_add("not a tibble"))
 })
 
 test_that("hd_compute_add: errors on missing required columns", {
   bad <- tibble::tibble(stock = "A", date = Sys.Date())
-  expect_error(hd_compute_add(bad), "missing required columns")
+  expect_snapshot(error = TRUE, hd_compute_add(bad))
 })
 
 test_that("hd_compute_add: errors on empty input", {
@@ -182,7 +182,7 @@ test_that("hd_compute_add: errors on empty input", {
     stock = character(), date = as.Date(character()),
     anomaly_id = character(), quintile = integer()
   )
-  expect_error(hd_compute_add(empty), "must not be empty")
+  expect_snapshot(error = TRUE, hd_compute_add(empty))
 })
 
 test_that("hd_compute_add: errors on non-Date date column", {
@@ -190,7 +190,7 @@ test_that("hd_compute_add: errors on non-Date date column", {
     stock = "A", date = "2023-01-01",
     anomaly_id = "val", quintile = 3L
   )
-  expect_error(hd_compute_add(bad), "Date")
+  expect_snapshot(error = TRUE, hd_compute_add(bad))
 })
 
 test_that("hd_compute_add: errors on out-of-range quintile values", {
@@ -198,7 +198,7 @@ test_that("hd_compute_add: errors on out-of-range quintile values", {
     stock = "A", date = as.Date("2023-01-01"),
     anomaly_id = "val", quintile = 6L
   )
-  expect_error(hd_compute_add(bad), "1-5")
+  expect_snapshot(error = TRUE, hd_compute_add(bad))
 })
 
 test_that("hd_compute_add: allows NA quintile (stock not ranked)", {
@@ -261,12 +261,12 @@ test_that("hd_aggregate_add: errors on non-data-frame input", {
 
 test_that("hd_aggregate_add: errors on missing columns", {
   bad <- tibble::tibble(stock = "A", date = Sys.Date())
-  expect_error(hd_aggregate_add(bad), "missing required columns")
+  expect_snapshot(error = TRUE, hd_aggregate_add(bad))
 })
 
 test_that("hd_aggregate_add: errors on unsupported 'by' argument", {
   add_tbl <- hd_compute_add(make_quintile_tbl())
-  expect_error(hd_aggregate_add(add_tbl, by = "anomaly_date"), "stock_date")
+  expect_snapshot(error = TRUE, hd_aggregate_add(add_tbl, by = "anomaly_date"))
 })
 
 test_that("hd_aggregate_add: errors on empty input", {
@@ -274,7 +274,7 @@ test_that("hd_aggregate_add: errors on empty input", {
     stock = character(), date = as.Date(character()),
     anomaly_id = character(), quintile = integer(), add = integer()
   )
-  expect_error(hd_aggregate_add(empty), "must not be empty")
+  expect_snapshot(error = TRUE, hd_aggregate_add(empty))
 })
 
 # ── hd_register_add_dataset ───────────────────────────────────────────────────

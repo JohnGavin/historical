@@ -8,6 +8,9 @@ test_that("hd_cpcv_purge removes contaminated training observations", {
     label_horizon = 1L
   )
   expect_equal(result, 1L:14L)
+
+  # Tier A: function signature snapshot (catches param renames/additions).
+  expect_snapshot(args(hd_cpcv_purge))
 })
 
 test_that("hd_cpcv_purge with label_horizon = 0 removes nothing", {
@@ -41,10 +44,7 @@ test_that("hd_cpcv_purge returns empty if all training obs contaminated", {
 })
 
 test_that("hd_cpcv_purge rejects negative label_horizon", {
-  expect_error(
-    hd_cpcv_purge(1L:15L, 16L:20L, label_horizon = -1L),
-    "label_horizon"
-  )
+  expect_snapshot(error = TRUE, hd_cpcv_purge(1L:15L, 16L:20L, label_horizon = -1L))
 })
 
 test_that("hd_cpcv_purge handles empty inputs gracefully", {
@@ -85,10 +85,7 @@ test_that("hd_cpcv_embargo with embargo_n = 1 removes one observation", {
 })
 
 test_that("hd_cpcv_embargo rejects negative embargo_n", {
-  expect_error(
-    hd_cpcv_embargo(1L:15L, 16L:20L, embargo_n = -1L),
-    "embargo_n"
-  )
+  expect_snapshot(error = TRUE, hd_cpcv_embargo(1L:15L, 16L:20L, embargo_n = -1L))
 })
 
 test_that("hd_cpcv_embargo handles empty inputs gracefully", {
@@ -132,9 +129,9 @@ test_that("hd_cpcv_paths returns C(5,3) = 10 for n=5, k=3", {
 })
 
 test_that("hd_cpcv_paths rejects invalid inputs", {
-  expect_error(hd_cpcv_paths(1L, 1L), "n_groups")  # n_groups < 2
-  expect_error(hd_cpcv_paths(6L, 0L), "n_test_groups")  # n_test_groups < 1
-  expect_error(hd_cpcv_paths(6L, 6L), "n_test_groups")  # n_test_groups >= n_groups
+  expect_snapshot(error = TRUE, hd_cpcv_paths(1L, 1L))  # n_groups < 2
+  expect_snapshot(error = TRUE, hd_cpcv_paths(6L, 0L))  # n_test_groups < 1
+  expect_snapshot(error = TRUE, hd_cpcv_paths(6L, 6L))  # n_test_groups >= n_groups
 })
 
 # ── PBO ────────────────────────────────────────────────────────────────────────
@@ -150,6 +147,9 @@ test_that("hd_pbo returns near 1 when IS/OOS are perfectly anti-correlated", {
   expect_equal(res$pbo, 1.0)
   expect_equal(res$n_paths, n_paths)
   expect_equal(res$n_strategies, n_strat)
+
+  # Tier A: function signature snapshot (catches param renames/additions).
+  expect_snapshot(args(hd_pbo))
 })
 
 test_that("hd_pbo returns near 0 when IS/OOS are perfectly correlated", {
@@ -177,20 +177,20 @@ test_that("hd_pbo result is between 0 and 1 for random scores", {
 test_that("hd_pbo rejects dimension mismatch", {
   is_scores  <- matrix(rnorm(10L), 5L, 2L)
   oos_scores <- matrix(rnorm(15L), 5L, 3L)
-  expect_error(hd_pbo(is_scores, oos_scores), "same dimensions")
+  expect_snapshot(error = TRUE, hd_pbo(is_scores, oos_scores))
 })
 
 test_that("hd_pbo rejects fewer than 2 paths", {
-  expect_error(
-    hd_pbo(matrix(rnorm(4L), 1L, 4L), matrix(rnorm(4L), 1L, 4L)),
-    "2 paths"
+  expect_snapshot(
+    error = TRUE,
+    hd_pbo(matrix(rnorm(4L), 1L, 4L), matrix(rnorm(4L), 1L, 4L))
   )
 })
 
 test_that("hd_pbo rejects fewer than 2 strategies", {
-  expect_error(
-    hd_pbo(matrix(rnorm(5L), 5L, 1L), matrix(rnorm(5L), 5L, 1L)),
-    "2 strategies"
+  expect_snapshot(
+    error = TRUE,
+    hd_pbo(matrix(rnorm(5L), 5L, 1L), matrix(rnorm(5L), 5L, 1L))
   )
 })
 
