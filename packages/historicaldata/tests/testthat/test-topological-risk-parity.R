@@ -40,6 +40,9 @@ make_2asset_cov <- function() {
 test_that("hrp_weights: weights sum to 1 (5-asset)", {
   w <- hrp_weights(make_5asset_cov())
   expect_equal(sum(w), 1, tolerance = 1e-10)
+
+  # Tier A: function signature snapshot (catches param renames/additions).
+  expect_snapshot(args(hrp_weights))
 })
 
 test_that("hrp_weights: all weights strictly positive (5-asset)", {
@@ -133,35 +136,35 @@ test_that("trp_weights: works with 2 assets", {
 # ── Input validation ──────────────────────────────────────────────────────────
 
 test_that("hrp_weights: error on non-matrix input", {
-  expect_error(hrp_weights(list(a = 1)), class = "rlang_error")
+  expect_snapshot(error = TRUE, hrp_weights(list(a = 1)))
 })
 
 test_that("hrp_weights: error on non-square matrix", {
   m <- matrix(1:6, nrow = 2)
   rownames(m) <- c("A", "B")
-  expect_error(hrp_weights(m), class = "rlang_error")
+  expect_snapshot(error = TRUE, hrp_weights(m))
 })
 
 test_that("hrp_weights: error on unnamed matrix", {
   m <- matrix(c(1, 0.5, 0.5, 1), nrow = 2)
-  expect_error(hrp_weights(m), class = "rlang_error")
+  expect_snapshot(error = TRUE, hrp_weights(m))
 })
 
 test_that("hrp_weights: error on mismatched row/col names", {
   m <- matrix(c(1, 0.5, 0.5, 1), nrow = 2)
   rownames(m) <- c("A", "B")
   colnames(m) <- c("C", "D")
-  expect_error(hrp_weights(m), class = "rlang_error")
+  expect_snapshot(error = TRUE, hrp_weights(m))
 })
 
 test_that("hrp_weights: error on single-asset matrix", {
   m <- matrix(0.04, nrow = 1, ncol = 1)
   rownames(m) <- colnames(m) <- "A"
-  expect_error(hrp_weights(m), class = "rlang_error")
+  expect_snapshot(error = TRUE, hrp_weights(m))
 })
 
 test_that("trp_weights: error on non-matrix input", {
-  expect_error(trp_weights(data.frame(a = 1)), class = "rlang_error")
+  expect_snapshot(error = TRUE, trp_weights(data.frame(a = 1)))
 })
 
 # ── Consistency: TRP vs HRP ───────────────────────────────────────────────────
