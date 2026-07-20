@@ -200,6 +200,9 @@ test_that("hd_sharpe_stability_ratio: return is named list with correct field ty
   expect_type(res$w,           "integer")
   expect_type(res$lag_nw,      "integer")
   expect_type(res$ann_factor,  "double")
+
+  # Tier A: function signature snapshot (catches param renames/additions).
+  expect_snapshot(args(hd_sharpe_stability_ratio))
 })
 
 
@@ -208,23 +211,19 @@ test_that("hd_sharpe_stability_ratio: return is named list with correct field ty
 # ─────────────────────────────────────────────────────────────────────────────
 
 test_that("hd_rolling_sharpe: rejects non-numeric r", {
-  expect_error(hd_rolling_sharpe("not numeric", w = 10L),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_rolling_sharpe("not numeric", w = 10L))
 })
 
 test_that("hd_rolling_sharpe: rejects non-integer w", {
-  expect_error(hd_rolling_sharpe(rnorm(100), w = -1L),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_rolling_sharpe(rnorm(100), w = -1L))
 })
 
 test_that("hd_sharpe_stability_ratio: rejects negative ann_factor", {
-  expect_error(hd_sharpe_stability_ratio(rnorm(100), w = 20L, ann_factor = -1),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_sharpe_stability_ratio(rnorm(100), w = 20L, ann_factor = -1))
 })
 
 test_that("hd_sharpe_stability_ratio: rejects non-integer lag_nw", {
-  expect_error(hd_sharpe_stability_ratio(rnorm(100), w = 20L, lag_nw = 1.5),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_sharpe_stability_ratio(rnorm(100), w = 20L, lag_nw = 1.5))
 })
 
 test_that("hd_rolling_sharpe: returns empty vector when T < w", {
@@ -332,23 +331,19 @@ test_that("hd_top5pct_share: pct=0.10 override yields share=0.10 for uniform ser
 
 # Test 7: pct validation -- out-of-range values trigger cli_abort
 test_that("hd_top5pct_share: pct=0 triggers error", {
-  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = 0),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_top5pct_share(rep(0.01, 10L), pct = 0))
 })
 
 test_that("hd_top5pct_share: pct=1 triggers error", {
-  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = 1),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_top5pct_share(rep(0.01, 10L), pct = 1))
 })
 
 test_that("hd_top5pct_share: pct=1.5 triggers error", {
-  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = 1.5),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_top5pct_share(rep(0.01, 10L), pct = 1.5))
 })
 
 test_that("hd_top5pct_share: pct=-0.1 triggers error", {
-  expect_error(hd_top5pct_share(rep(0.01, 10L), pct = -0.1),
-               class = "rlang_error")
+  expect_snapshot(error = TRUE, hd_top5pct_share(rep(0.01, 10L), pct = -0.1))
 })
 
 

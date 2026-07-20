@@ -8,6 +8,9 @@ test_that("simplex_project: output sums to 1", {
   v <- c(3, 1, -1, 2)
   w <- olmar_simplex_project(v)
   expect_equal(sum(w), 1, tolerance = 1e-8)
+
+  # Tier A: function signature snapshot (catches param renames/additions).
+  expect_snapshot(args(olmar_simplex_project))
 })
 
 test_that("simplex_project: all elements >= 0", {
@@ -36,11 +39,11 @@ test_that("simplex_project: handles single-element vector", {
 })
 
 test_that("simplex_project: errors on non-numeric input", {
-  expect_error(olmar_simplex_project("a"), "non-empty numeric")
+  expect_snapshot(error = TRUE, olmar_simplex_project("a"))
 })
 
 test_that("simplex_project: errors on empty vector", {
-  expect_error(olmar_simplex_project(numeric(0L)), "non-empty numeric")
+  expect_snapshot(error = TRUE, olmar_simplex_project(numeric(0L)))
 })
 
 # ── olmar_update ─────────────────────────────────────────────────────────
@@ -76,14 +79,14 @@ test_that("olmar_update: equal x_pred leaves weights unchanged", {
 test_that("olmar_update: errors on length mismatch", {
   b <- c(0.5, 0.5)
   x <- c(1.0, 1.0, 1.0)
-  expect_error(olmar_update(b, x), "Length mismatch")
+  expect_snapshot(error = TRUE, olmar_update(b, x))
 })
 
 test_that("olmar_update: errors on non-positive epsilon", {
   b <- c(0.5, 0.5)
   x <- c(1.1, 0.9)
-  expect_error(olmar_update(b, x, epsilon = 0), "positive scalar")
-  expect_error(olmar_update(b, x, epsilon = -1), "positive scalar")
+  expect_snapshot(error = TRUE, olmar_update(b, x, epsilon = 0))
+  expect_snapshot(error = TRUE, olmar_update(b, x, epsilon = -1))
 })
 
 # ── olmar_backtest ────────────────────────────────────────────────────────
@@ -111,6 +114,9 @@ test_that("olmar_backtest: returns expected columns", {
   expect_s3_class(result, "tbl_df")
   expect_named(result, c("date", "gross_ret", "net_ret", "turnover"))
   expect_equal(nrow(result), nrow(prices))
+
+  # Tier A: schema snapshot (catches column renames/additions/removals).
+  expect_snapshot(names(result))
 })
 
 test_that("olmar_backtest: net_ret <= gross_ret where turnover > 0", {
@@ -168,10 +174,7 @@ test_that("olmar_backtest: small numeric sanity check (2 assets, 5 days)", {
 
 test_that("olmar_backtest: errors on insufficient rows", {
   prices <- matrix(rnorm(20), nrow = 4L, ncol = 5L)
-  expect_error(
-    olmar_backtest(prices, window = 25L),
-    "requires at least"
-  )
+  expect_snapshot(error = TRUE, olmar_backtest(prices, window = 25L))
 })
 
 test_that("olmar_backtest: handles data.frame with date column", {

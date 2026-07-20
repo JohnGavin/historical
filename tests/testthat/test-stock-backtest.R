@@ -1,3 +1,4 @@
+testthat::local_edition(3)
 # Tests for plan_stock_backtest.R helpers
 # Sourced directly since these are non-exported helper functions
 
@@ -52,8 +53,15 @@ test_that("apply_adv_cap: all-capped names leave residual as cash, not over-cap 
   w <- c(a = 0.01, b = 0.01, c = 0.98)
   adv <- c(a = 1, b = 1, c = 1)
   # 10% residual cash → warns (10% > 5% threshold)
-  result <- expect_warning(
-    apply_adv_cap(w, adv, adv_pct_cap = 0.30),
+  # NOTE: the assignment MUST happen inside the expect_warning() expression.
+  # Under testthat edition 3, expect_warning() invisibly returns the warning
+  # CONDITION object, not the wrapped expression's value (edition 2 returned
+  # the expression's value) -- `result <- expect_warning(apply_adv_cap(...))`
+  # silently captured the condition instead of the function's return list,
+  # making result$capped_w NULL. Found while adding local_edition(3) for the
+  # Tier A snapshot work in this file (#578).
+  expect_warning(
+    result <- apply_adv_cap(w, adv, adv_pct_cap = 0.30),
     regexp = "uninvested cash",
     label = "warns when residual cash exceeds 5%"
   )
@@ -86,8 +94,9 @@ test_that("apply_adv_cap: 4 names × 0.20 cap leaves 20% as uninvested cash (#r2
   w <- c(a = 0.01, b = 0.01, c = 0.01, d = 0.97)
   adv <- c(a = 1, b = 1, c = 1, d = 1)
   # 20% residual cash → warns (20% > 5% threshold)
-  result <- expect_warning(
-    apply_adv_cap(w, adv, adv_pct_cap = 0.20),
+  # See NOTE above: assignment must be inside expect_warning() under edition 3.
+  expect_warning(
+    result <- apply_adv_cap(w, adv, adv_pct_cap = 0.20),
     regexp = "uninvested cash",
     label = "warns when 20% residual cash"
   )
@@ -106,6 +115,19 @@ test_that("apply_adv_cap: empty input returns empty output", {
   result <- apply_adv_cap(numeric(0), numeric(0))
   expect_equal(length(result$capped_w), 0L)
   expect_equal(length(result$hit_cap), 0L)
+})
+
+test_that("apply_adv_cap: function signature is stable (catches API drift)", {
+  expect_snapshot(args(apply_adv_cap))
+})
+
+test_that("apply_adv_cap: uninvested-cash cli_warn wording is stable (#r2122)", {
+  # 3 names, all cap-constrained -> 10% residual cash -> warns. Assigning the
+  # result (rather than letting it auto-print) keeps this Tier A: only the
+  # cli_warn text is captured, not the numeric capped_w/hit_cap payload.
+  w <- c(a = 0.01, b = 0.01, c = 0.98)
+  adv <- c(a = 1, b = 1, c = 1)
+  expect_snapshot(result <- apply_adv_cap(w, adv, adv_pct_cap = 0.30))
 })
 
 test_that("apply_adv_cap: no cap binds when weights are small", {
