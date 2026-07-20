@@ -125,6 +125,10 @@ test_that("safe_tar_read: stops in strict mode when target is absent", {
       safe_tar_read("nonexistent_target_xyz_12345"),
       regexp = "VIGNETTE_STRICT"
     )
+    expect_snapshot(
+      error = TRUE,
+      safe_tar_read("nonexistent_target_xyz_12345")
+    )
   })
 })
 
@@ -135,6 +139,10 @@ test_that("safe_tar_read: VIGNETTE_STRICT=1 triggers strict error (issue #232 + 
     expect_error(
       safe_tar_read("nonexistent_target_xyz_12345"),
       regexp = "VIGNETTE_STRICT"
+    )
+    expect_snapshot(
+      error = TRUE,
+      safe_tar_read("nonexistent_target_xyz_12345")
     )
   })
 })
@@ -183,10 +191,9 @@ test_that(".parse_vignette_strict: VIGNETTE_STRICT=treu returns FALSE AND trigge
     rlang::reset_warning_verbosity("vignette_strict_typo_treu")
     withr::defer(rlang::reset_warning_verbosity("vignette_strict_typo_treu"))
 
-    expect_warning(
-      result <- .parse_vignette_strict(),
-      regexp = "Unrecognised"
-    )
+    # expect_snapshot captures the full cli_warn wording (not just a regexp
+    # match) so any drift in the typo-guard message is visible in review.
+    expect_snapshot(result <- .parse_vignette_strict())
     expect_false(result)
   })
 })
@@ -214,10 +221,12 @@ test_that(".parse_vignette_strict: all #210 required falsy aliases return FALSE"
 test_that(".parse_vignette_strict: 'n' is unrecognised alias — warns and returns FALSE (safe default)", {
   # "n" is not in the canonical falsy list; correct behaviour is warn + default FALSE
   withr::with_envvar(list(VIGNETTE_STRICT = "n"), {
-    expect_warning(
-      result <- .parse_vignette_strict(),
-      regexp = "Unrecognised"
-    )
+    rlang::reset_warning_verbosity("vignette_strict_typo_n")
+    withr::defer(rlang::reset_warning_verbosity("vignette_strict_typo_n"))
+
+    # expect_snapshot pins the exact wording (distinct from the "treu" case
+    # above since {.val {raw}} interpolates the offending value into the text).
+    expect_snapshot(result <- .parse_vignette_strict())
     expect_false(result)
   })
 })
@@ -243,5 +252,18 @@ test_that(".parse_vignette_strict: typo warning fires AT MOST ONCE across N call
     )
     expect_length(warnings_seen, 1L)
     expect_match(warnings_seen[[1]], "Unrecognised")
+    # Pin the exact wording of the single captured warning (Tier A: CLI message).
+    expect_snapshot(cat(warnings_seen[[1]]))
   })
+})
+
+# ---------------------------------------------------------------------------
+# Function signature stability (catches API drift) — Tier A snapshots
+# ---------------------------------------------------------------------------
+
+test_that("function signatures are stable (catches API drift)", {
+  expect_snapshot(args(.parse_vignette_strict))
+  expect_snapshot(args(safe_tar_read))
+  expect_snapshot(args(is_stale_marker))
+  expect_snapshot(args(show_code))
 })

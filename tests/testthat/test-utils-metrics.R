@@ -90,6 +90,10 @@ test_that("annualise_returns: non-numeric ret aborts with cli_abort", {
     annualise_returns(c("a", "b", "c")),
     class = "rlang_error"
   )
+  expect_snapshot(
+    error = TRUE,
+    annualise_returns(c("a", "b", "c"))
+  )
 })
 
 test_that("annualise_returns: invalid periods_per_year aborts", {
@@ -97,4 +101,12 @@ test_that("annualise_returns: invalid periods_per_year aborts", {
     annualise_returns(c(0.01, 0.02), periods_per_year = -1),
     class = "rlang_error"
   )
+  expect_snapshot(
+    error = TRUE,
+    annualise_returns(c(0.01, 0.02), periods_per_year = -1)
+  )
+})
+
+test_that("annualise_returns: function signature is stable (catches API drift)", {
+  expect_snapshot(args(annualise_returns))
 })

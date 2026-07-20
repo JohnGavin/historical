@@ -14,6 +14,8 @@ test_that("check_no_lead_ym detects lead(ym) pattern", {
   hits <- check_no_lead_ym(tmp)
   expect_equal(nrow(hits), 1L)
   expect_equal(hits$line, 2L)
+  # Schema snapshot: pins the returned tibble's column names (file/line/code).
+  expect_snapshot(names(hits))
 })
 
 test_that("check_no_lead_ym detects dplyr::lead(ym) pattern", {
@@ -153,6 +155,13 @@ test_that("check_no_forward_cumulative does not flag ordinary cumprod(1 + ret)",
 })
 
 # ── Live tripwire: current R/ tree must pass all 4 checks ────────────────────
+
+test_that("qa look-ahead-bias scanner function signatures are stable (catches API drift)", {
+  expect_snapshot(args(check_no_lead_ym))
+  expect_snapshot(args(check_no_unleaded_slider))
+  expect_snapshot(args(check_no_na_approx))
+  expect_snapshot(args(check_no_forward_cumulative))
+})
 
 test_that("qa_look_ahead_bias passes on current R/ tree", {
   files <- list.files(here::here("R"), pattern = "\\.R$",
