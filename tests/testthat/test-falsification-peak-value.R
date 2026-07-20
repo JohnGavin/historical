@@ -66,6 +66,24 @@ compute_drawdowns_extracted <- function(ret) {
 # ── F1: peak_value differs from final_value when the curve peaked and
 #    then declined before the end of the sample (the bug this fixes) ─────
 
+test_that("compute_drawdowns_extracted: function signature is stable (catches API drift)", {
+  expect_snapshot(args(compute_drawdowns_extracted))
+})
+
+test_that("compute_drawdowns_extracted: return-value schema is stable (non-empty path)", {
+  # Schema snapshot for the normal (non-empty ret) branch only. NOTE: the
+  # empty-ret early-return branch (length(ret) == 0L, see lines 21-29 above)
+  # uses DIFFERENT field names for two elements
+  # (max_dd_duration_days/recovery_days) than this branch
+  # (max_dd_duration_obs/recovery_obs). That asymmetry is a latent schema bug
+  # in compute_drawdowns_extracted() / the R/plan_falsification.R original it
+  # mirrors -- flagged in the PR description rather than pinned here as a
+  # snapshot, since committing it would bless the mismatch as expected.
+  ret <- c(0.05, 0.05, 0.05, 0.05, -0.03, -0.03, -0.03, -0.03, -0.02, -0.02)
+  dd <- compute_drawdowns_extracted(ret)
+  expect_snapshot(names(dd))
+})
+
 test_that("peak_value: exceeds final_value for a strategy in a drawdown at period end (regression #569)", {
   # Equity rises 20%, then gives back half of it, ending in a drawdown.
   ret <- c(0.05, 0.05, 0.05, 0.05, -0.03, -0.03, -0.03, -0.03, -0.02, -0.02)

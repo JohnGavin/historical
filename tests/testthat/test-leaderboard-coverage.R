@@ -1,3 +1,4 @@
+testthat::local_edition(3)
 # Tests for check_leaderboard_coverage() — QA gate S7 (#345, extended in #400)
 # Tests for .norm_mf / .norm_value normalizers — wiring fix for #489 Cluster C S7.
 #
@@ -159,6 +160,10 @@ test_that("check_leaderboard_coverage throws when a strategy is missing", {
     check_leaderboard_coverage(minimal_strategy_names, missing_strategy_leaderboard),
     regexp = "Factor DRIF"
   )
+  expect_snapshot(
+    error = TRUE,
+    check_leaderboard_coverage(minimal_strategy_names, missing_strategy_leaderboard)
+  )
 })
 
 # ── Tests: SSR column (#400) ─────────────────────────────────────────────────
@@ -168,12 +173,20 @@ test_that("check_leaderboard_coverage throws when ssr column absent", {
     check_leaderboard_coverage(minimal_strategy_names, no_ssr_leaderboard),
     regexp = "ssr"
   )
+  expect_snapshot(
+    error = TRUE,
+    check_leaderboard_coverage(minimal_strategy_names, no_ssr_leaderboard)
+  )
 })
 
 test_that("check_leaderboard_coverage throws when ssr column is entirely NA", {
   expect_error(
     check_leaderboard_coverage(minimal_strategy_names, all_na_ssr_leaderboard),
     regexp = "entirely NA"
+  )
+  expect_snapshot(
+    error = TRUE,
+    check_leaderboard_coverage(minimal_strategy_names, all_na_ssr_leaderboard)
   )
 })
 
