@@ -56,6 +56,23 @@ BASELINE_PKG_FAILURES=(
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
+# CRITICAL: cd into the repo this script belongs to.
+# `nix develop "$REPO_ROOT"` only selects which flake provides the shell — the
+# Rscript process it launches INHERITS THE CALLER'S CWD. Without this cd, running
+# e.g. /path/to/worktree-A/scripts/verify.sh from inside worktree-B silently
+# verifies worktree-B while reporting worktree-A's path in its header. That is a
+# false PASS: it tests a tree the caller never asked about.
+# Symptom to watch for: the suite's total test count differs between runs that
+# should be identical. See #575.
+cd "$REPO_ROOT"
+
+# Fail loudly if this is not actually a checkout of this repo.
+if [[ ! -f "$REPO_ROOT/_targets.R" ]]; then
+  echo "!!! $REPO_ROOT does not contain _targets.R — not a valid checkout !!!"
+  echo "!!! VERIFICATION DID NOT RUN. This is NOT a pass.                 !!!"
+  exit 2
+fi
+
 QUICK=0
 if [[ "${1:-}" == "--quick" ]]; then
   QUICK=1
@@ -76,6 +93,7 @@ R_OUT="$WORK_DIR/r_out.txt"
 
 if [[ "$QUICK" -eq 1 ]]; then
   R_SCRIPT='
+    cat("::VERIFY:CWD::", getwd(), "\n")
     parse_ok <- tryCatch({
       parse(file.path("_targets.R"))
       TRUE
@@ -88,6 +106,7 @@ if [[ "$QUICK" -eq 1 ]]; then
   '
 else
   R_SCRIPT='
+    cat("::VERIFY:CWD::", getwd(), "\n")
     pkg_path <- file.path("packages", "historicaldata")
 
     parse_ok <- tryCatch({
@@ -191,7 +210,17 @@ if [[ "$NIX_STATUS" -ne 0 ]] || ! grep -q "::VERIFY:PARSE_OK::" "$R_OUT"; then
   echo "!!! This is NOT a pass. Do not report this as verified-clean.             !!!"
   exit 2
 fi
-echo "PASS: _targets.R parses"
+
+# Guard against the #575 class of bug: confirm R actually ran in REPO_ROOT and
+# not in some inherited cwd. If these ever diverge the results describe a
+# different tree than the one this script claims to be verifying.
+R_CWD="$(grep '::VERIFY:CWD::' "$R_OUT" | head -1 | sed 's/.*::VERIFY:CWD:: *//' | sed 's/[[:space:]]*$//' | tr -d '\r')"
+if [[ "$(cd "$R_CWD" 2>/dev/null && pwd -P)" != "$(cd "$REPO_ROOT" && pwd -P)" ]]; then
+  echo "!!! CWD MISMATCH — R ran in '$R_CWD' but this script targets '$REPO_ROOT' !!!"
+  echo "!!! Results would describe the WRONG TREE. This is NOT a pass.           !!!"
+  exit 2
+fi
+echo "PASS: _targets.R parses (verified tree: $R_CWD)"
 
 if [[ "$QUICK" -eq 1 ]]; then
   echo ""
