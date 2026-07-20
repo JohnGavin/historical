@@ -5,3 +5,18 @@
 **API doc regen:** when `packages/historicaldata/R/*` exports change, run `scripts/regen_api_context.sh` before committing. The deployed link from `docs/index.qmd` → `docs/api-historicaldata.md` depends on it. The "functions" stat on the landing page is counted dynamically from `kind: function` lines in that file.
 
 **Automation (issue #438):** A project-local Stop hook (`.claude/hooks/pkgctx_regen_on_stop.sh`) runs automatically at session end. If `packages/historicaldata/R/` was touched during the session it invokes `scripts/regen_api_context.sh`; otherwise it exits silently. The hook is fail-open — a regen failure prints a warning but never blocks the session. A CI check (`.github/workflows/pkgctx-check.yml`) catches any stale doc on PRs that touch `packages/historicaldata/R/` or `docs/api-historicaldata.md`.
+
+## Verifying a change (issue #569)
+
+**Run `scripts/verify.sh` — it is the one command to run before claiming a change is verified.** `scripts/verify.sh --quick` does a fast parse-only check; plain `scripts/verify.sh` runs the full suite. Do not hand-roll a verification sequence — every fact below was learned the slow way by agents that got it wrong.
+
+| Fact | Detail |
+|------|--------|
+| Build system | This project uses **`flake.nix`**, not `default.nix`. Most global tooling assumes `default.nix` — it does not apply here. |
+| Getting R | There is **no R on the bare PATH** (`$IN_NIX_SHELL` is unset in a normal session). Always `nix develop <repo-root> --command Rscript -e '...'`. |
+| Shell entry cost | **Warm ~13s. Cold build 10+ minutes** (compiles dozens of R packages). Run verification in the background and wait for it — do not sit blocked on a cold build, and do not report "waiting on the build" as a result. |
+| Root test suite | `testthat::test_local()` **fails at repo root** (`Could not find a root 'DESCRIPTION' file`) — the package lives at `packages/historicaldata/`. Use `testthat::test_dir("tests/testthat")` for the root suite instead. |
+| Root suite baseline | **3 pre-existing failures** as of 2026-07-19: `test-crypto-momentum.R:51`, `test-qa-summary-deps.R:196`, `test-stock-backtest.R:161`. Not regressions — an agent unaware of this will misread them as its own breakage. `scripts/verify.sh` compares against this baseline by exact signature and only fails on a *different* set. |
+| Snapshot tests need `NOT_CRAN=true` | Plain `Rscript -e 'testthat::test_dir(...)'` leaves `NOT_CRAN` **unset**, so every `skip_on_cran()`-gated test — including this repo's mandated snapshot tests (`snapshot-test-policy` rule: error messages, captions, function signatures, target schemas) — is silently skipped and never executed. Confirmed empirically 2026-07-19 on the unmodified root suite: `NOT_CRAN` unset → `failed=3 skipped=41 passed=746`; `NOT_CRAN=true` → `failed=3 skipped=0 passed=800` (same 3 baseline failures either way). `scripts/verify.sh` sets `NOT_CRAN=true` before running either suite and prints the SKIP count in its summary. |
+| Pipeline check | `parse("_targets.R")` MUST succeed before every commit (global rule). `scripts/verify.sh` runs this first, always. |
+| CI coverage gap | `r-tests`/`pkgctx` CI only fire on `packages/historicaldata/**`. Changes to root `R/`, `scripts/`, and `tests/` get **no CI at all** — local `scripts/verify.sh` is the only gate for those paths. |
