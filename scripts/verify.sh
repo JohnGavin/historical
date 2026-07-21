@@ -73,6 +73,32 @@ if [[ ! -f "$REPO_ROOT/_targets.R" ]]; then
   exit 2
 fi
 
+# testthat edition 3 for the ROOT suite (#578/#579).
+#
+# The repo root is not a package, so testthat's find_edition() finds no
+# DESCRIPTION and falls back to edition 2:
+#     from_environment <- Sys.getenv("TESTTHAT_EDITION")
+#     if (nzchar(from_environment)) return(as.integer(from_environment))
+#     desc <- find_description(path, package)
+#     if (is.null(desc)) return(2L)
+#
+# TESTTHAT_EDITION is the only lever that works without a DESCRIPTION, and it
+# must be set BEFORE test_dir() — edition_get() caches into `the$edition`, so
+# a tests/setup.R cannot do it (setup runs too late). Measured, all variants:
+#     setup.R local_edition(3, .env = teardown_env())  -> edition 2  (no-op)
+#     setup.R local_edition(3, .env = globalenv())     -> edition 2  (no-op)
+#     setup.R options(testthat.edition = 3)            -> edition 2  (no-op)
+#     setup.R Sys.setenv(TESTTHAT_EDITION = 3)         -> edition 2  (too late)
+#     TESTTHAT_EDITION=3 exported before test_dir()    -> edition 3  (works)
+#
+# Note the global snapshot-tests-mandatory rule prescribes the first form,
+# which does nothing — see JohnGavin/llm#799.
+#
+# This does NOT make the per-file `testthat::local_edition(3)` declarations
+# redundant: they are the only thing that holds when someone runs test_dir()
+# directly without this script. Keep declaring it in new root test files.
+export TESTTHAT_EDITION=3
+
 QUICK=0
 if [[ "${1:-}" == "--quick" ]]; then
   QUICK=1
@@ -107,6 +133,7 @@ if [[ "$QUICK" -eq 1 ]]; then
 else
   R_SCRIPT='
     cat("::VERIFY:CWD::", getwd(), "\n")
+    cat("::VERIFY:EDITION::", testthat::edition_get(), "\n")
     pkg_path <- file.path("packages", "historicaldata")
 
     parse_ok <- tryCatch({
@@ -221,6 +248,19 @@ if [[ "$(cd "$R_CWD" 2>/dev/null && pwd -P)" != "$(cd "$REPO_ROOT" && pwd -P)" ]
   exit 2
 fi
 echo "PASS: _targets.R parses (verified tree: $R_CWD)"
+
+# Edition guard. If this ever reads 2, every skip_on_cran()-gated snapshot test
+# silently changes behaviour while the suite still reports green — the #574
+# failure mode. Loud is the only acceptable outcome.
+if [[ "$QUICK" -eq 0 ]]; then
+  R_EDITION="$(grep '::VERIFY:EDITION::' "$R_OUT" | head -1 | sed 's/.*::VERIFY:EDITION:: *//' | sed 's/[[:space:]]*$//')"
+  if [[ "$R_EDITION" != "3" ]]; then
+    echo "!!! testthat edition is '$R_EDITION', expected 3 !!!"
+    echo "!!! Snapshot tests do not behave as intended. This is NOT a pass. !!!"
+    exit 2
+  fi
+  echo "PASS: testthat edition 3 active"
+fi
 
 if [[ "$QUICK" -eq 1 ]]; then
   echo ""
