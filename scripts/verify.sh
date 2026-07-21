@@ -54,6 +54,17 @@ BASELINE_PKG_FAILURES=(
   "test-mom-prepeak-portfolio.R::.mom_prepeak_compute_returns caps short returns at +100%"
 )
 
+# ---------------------------------------------------------------------------
+# Normal SKIP count for the package suite, confirmed 2026-07-21 (issue #580).
+# The 7 tests guarded by `skip_if_no_remote_data()` in test-query.R,
+# test-ranked.R, and test-registry.R now skip (rather than error) when the
+# hf:// probe fails, on top of whatever `skip_on_cran()`/`skip_on_ci()` were
+# already skipping. Do NOT bump this number to silence a rising skip count —
+# a jump above it means the remote data source (or something upstream of it)
+# is unavailable and coverage is being lost; investigate, don't hide it.
+# ---------------------------------------------------------------------------
+BASELINE_PKG_SKIP_COUNT=5
+
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 # CRITICAL: cd into the repo this script belongs to.
@@ -176,6 +187,24 @@ else
       paste(msgs[!is.na(msgs)], collapse = " ||| ")
     }
 
+    # Pull the skip() reason out of a test result row (#580). A skipped test
+    # (df$skipped > 0) carries an "expectation_skip" condition among its
+    # recorded results (confirmed empirically against this testthat version —
+    # NOT "skip", which is a different, unrelated condition class); surfacing
+    # its message is what makes a rising SKIP count diagnosable instead of
+    # just visible as a bare number.
+    extract_skip_msg <- function(result_list) {
+      msgs <- vapply(result_list, function(cond) {
+        if (inherits(cond, "expectation_skip")) {
+          tryCatch(conditionMessage(cond), error = function(e) "<no message>")
+        } else {
+          NA_character_
+        }
+      }, character(1))
+      msgs <- msgs[!is.na(msgs)]
+      if (length(msgs) == 0) "<no skip reason recorded>" else paste(msgs, collapse = " ||| ")
+    }
+
     report_suite <- function(res) {
       df <- as.data.frame(res)
       fail_idx <- which((df$failed > 0) | (df$error > 0))
@@ -187,8 +216,12 @@ else
           snap_sig <- c(snap_sig, paste0(df$file[i], "::", df$test[i]))
         }
       }
+      skip_idx <- which(df$skipped > 0)
+      skip_detail <- vapply(skip_idx, function(i) {
+        sprintf("%s::%s -- %s", df$file[i], df$test[i], extract_skip_msg(df$result[[i]]))
+      }, character(1))
       list(total = nrow(df), failed = length(sig), skipped = sum(df$skipped),
-           sig = sig, snap_sig = sort(snap_sig))
+           sig = sig, snap_sig = sort(snap_sig), skip_detail = sort(skip_detail))
     }
 
     # Root suite: tests/testthat/ exercises repo-root R/ scripts that are
@@ -203,6 +236,9 @@ else
     cat("::VERIFY:ROOT_SNAPSHOT_FAILS_START::\n")
     if (length(root$snap_sig) > 0) cat(paste(root$snap_sig, collapse = "\n"), "\n", sep = "")
     cat("::VERIFY:ROOT_SNAPSHOT_FAILS_END::\n")
+    cat("::VERIFY:ROOT_SKIP_DETAILS_START::\n")
+    if (length(root$skip_detail) > 0) cat(paste(root$skip_detail, collapse = "\n"), "\n", sep = "")
+    cat("::VERIFY:ROOT_SKIP_DETAILS_END::\n")
     cat(sprintf("::VERIFY:ROOT_SUMMARY:: total=%d failed=%d skipped=%d\n", root$total, root$failed, root$skipped))
 
     # Package suite: packages/historicaldata — load_all() first so the
@@ -218,6 +254,9 @@ else
     cat("::VERIFY:PKG_SNAPSHOT_FAILS_START::\n")
     if (length(pkg$snap_sig) > 0) cat(paste(pkg$snap_sig, collapse = "\n"), "\n", sep = "")
     cat("::VERIFY:PKG_SNAPSHOT_FAILS_END::\n")
+    cat("::VERIFY:PKG_SKIP_DETAILS_START::\n")
+    if (length(pkg$skip_detail) > 0) cat(paste(pkg$skip_detail, collapse = "\n"), "\n", sep = "")
+    cat("::VERIFY:PKG_SKIP_DETAILS_END::\n")
     cat(sprintf("::VERIFY:PKG_SUMMARY:: total=%d failed=%d skipped=%d\n", pkg$total, pkg$failed, pkg$skipped))
 
     cat("::VERIFY:DONE::\n")
@@ -346,6 +385,19 @@ BASELINE_PKG_STR="$(printf '%s\n' "${BASELINE_PKG_FAILURES[@]+"${BASELINE_PKG_FA
 if ! compare_failure_set "package suite (packages/historicaldata/, ${#BASELINE_PKG_FAILURES[@]} known baseline failure(s), issue #569)" \
      "$BASELINE_PKG_STR" "$CURRENT_PKG_SIGNATURES" "$CURRENT_PKG_SNAPSHOT" "$PKG_SUMMARY_LINE"; then
   OVERALL_STATUS=1
+fi
+
+# Skip-reason surfacing (#580): a package-suite SKIP count above its normal
+# baseline (5) must be impossible to miss silently. Print which tests
+# skipped and why — a rise from 5 to 12 with no explanation is exactly the
+# failure mode (#574) this exists to prevent.
+PKG_SKIPPED_N="$(printf '%s\n' "$PKG_SUMMARY_LINE" | grep -oE 'skipped=[0-9]+' | grep -oE '[0-9]+' || echo '')"
+if [[ -n "$PKG_SKIPPED_N" ]] && [[ "$PKG_SKIPPED_N" -gt "$BASELINE_PKG_SKIP_COUNT" ]]; then
+  echo ""
+  echo "!!! package suite SKIP count ($PKG_SKIPPED_N) exceeds normal baseline ($BASELINE_PKG_SKIP_COUNT) !!!"
+  echo "!!! This is lost coverage, not a pass. Skipped tests and their reasons:                        !!!"
+  PKG_SKIP_DETAILS="$(awk '/::VERIFY:PKG_SKIP_DETAILS_START::/{flag=1; next} /::VERIFY:PKG_SKIP_DETAILS_END::/{flag=0} flag' "$R_OUT")"
+  echo "$PKG_SKIP_DETAILS" | sed '/^[[:space:]]*$/d' | sed 's/^/    [SKIP] /'
 fi
 
 echo ""
