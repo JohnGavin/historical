@@ -3,23 +3,18 @@
     Code
       str(result)
     Output
-      tibble [4 x 11] (S3: tbl_df/tbl/data.frame)
-       $ date          : POSIXct[1:4], format: 
-    Condition
-      Warning in `as.POSIXlt.POSIXct()`:
-      Coercing nanoseconds to a lower resolution may result in a loss of data.
-    Output
-      "2026-04-07" "2026-04-08" ...
-       $ open          : num [1:4] 256 258 259 260
-       $ high          : num [1:4] 256 260 261 262
-       $ low           : num [1:4] 246 257 256 259
-       $ close         : num [1:4] 254 259 260 260
-       $ adjusted_close: num [1:4] 254 259 260 260
-       $ volume        : num [1:4] 62148000 41032800 28121600 31259500
-       $ ticker        : chr [1:4] "AAPL" "AAPL" "AAPL" "AAPL"
-       $ source        : chr [1:4] "yahoo" "yahoo" "yahoo" "yahoo"
-       $ asset_class   : chr [1:4] "equity" "equity" "equity" "equity"
-       $ updated_at    : POSIXct[1:4], format: "2026-04-12 18:55:57" "2026-04-12 18:55:57" ...
+      tibble [5 x 11] (S3: tbl_df/tbl/data.frame)
+       $ date          : POSIXct[1:5], format: "2024-01-15" "2024-01-16" ...
+       $ open          : num [1:5] 185 186 187 188 178
+       $ high          : num [1:5] 186 188 187 188 179
+       $ low           : num [1:5] 185 186 186 177 173
+       $ close         : num [1:5] 186 188 187 177 174
+       $ adjusted_close: num [1:5] 184 186 185 175 172
+       $ volume        : num [1:5] 9716473 43644065 46127478 49897172 57473442
+       $ ticker        : chr [1:5] "AAPL" "AAPL" "AAPL" "AAPL" ...
+       $ source        : chr [1:5] "synthetic" "synthetic" "synthetic" "synthetic" ...
+       $ asset_class   : chr [1:5] "equity" "equity" "equity" "equity" ...
+       $ updated_at    : POSIXct[1:5], format: "2024-03-15" "2024-03-15" ...
 
 # hd_datasets snapshot
 
@@ -83,7 +78,7 @@
 # hd_ohlcv split-and-bind: collect=FALSE informs user
 
     Code
-      result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-05",
+      result <- hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-02", to = "2024-01-05",
       collect = FALSE)
     Message
       Mixed-dataset batch detected: "crypto_daily" and "equity_daily".
