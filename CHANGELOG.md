@@ -1,5 +1,94 @@
 # Changelog
 
+## 2026-07-19 → 2026-07-22 (session 22 — verification integrity + cross-project provisional-constants audit)
+
+### Completed
+
+- **Provisional-constants audit across 20 owned repos (llm#792):** 4-tier
+  severity taxonomy (P0–P3) + 4-verb fix vocabulary (F1–F4); ~65 genuine
+  findings from 1,943 raw hits. Per-project issues filed where findings existed
+  (stratford-events#6, llmtelemetry#331, irishbuoys#98, footbet#97,
+  randomwalk#215, statues_named_john#84, micromort#123, acd#77, historical#569,
+  llm#793); premortem tracked locally (0059). 5 repos clean. Prevention layer
+  (exposures table + column-level QA gate) open at llm#800.
+- **historical #569 P1 fixes (merged):** expected trading days derived from the
+  observed exchange calendar, not a 252/365 ratio (#570); `peak_value` computes
+  the true running high-water mark instead of final value (#571); `plan_liquidity`
+  wired into the root pipeline — exposed a `volume_stats` target that referenced
+  `liquidity_flag` on the wrong upstream and had never run (#572).
+- **Verification tooling:** `scripts/verify.sh` single entry point (#573);
+  edition-3 + NOT_CRAN + tree/edition assertions, distinct exit 2 for
+  "did-not-run". Snapshot programme #578 Phase 0–1: 11 files brought to the
+  mandated ratio, ~66 Tier A snapshots (#581/#582); two orphan snapshots
+  committed (#579).
+- **Remote-data test guard (#584/#580 Phase 1):** `skip_if_no_remote_data()` now
+  probes the `hf://` source for a valid read and skips (never fails) on
+  `TProtocolException`, with a memoised probe and a loud skip-count baseline;
+  stops transient remote breakage corrupting the package baseline.
+- **Issues raised:** #566/#567/#568 (hysteresis + turnover-driven costs),
+  #574 (snapshot tests never executed), #575→#577 (verify.sh cwd bug),
+  #580 (non-hermetic suite), #583 (fixed-fee/capacity-floor costs, folds into
+  #567), #585 (radical-uncertainty: reference narratives, hidden Sharpe CIs, 1/N
+  benchmark), #586 (path-dependent risk / first-passage / prop-constrained view),
+  #587 (mechanism/kill-observable registry fields + falsified-demotion),
+  #588 (Calmar incoherent for negative returns, regime-aware stop test);
+  llm#794 (private-repo detail locality), llm#799 (rule prescribes a no-op
+  setup.R), llm#800 (compute-then-discard structural pattern).
+
+### Failed Approaches
+
+- **`tests/setup.R` for testthat edition 3 is a NO-OP outside a package.**
+  `local_edition(3, .env=teardown_env())`, `.env=globalenv()`,
+  `options(testthat.edition=3)`, and `Sys.setenv(TESTTHAT_EDITION=3)` inside
+  setup.R all leave the active edition at 2 — `find_edition()` returns 2 with no
+  DESCRIPTION, and `edition_get()` caches before setup runs. Only
+  `TESTTHAT_EDITION=3` exported *before* `test_dir()` works. The global
+  `snapshot-tests-mandatory` rule prescribes the broken form (llm#799). The
+  "root suite byte-identical before/after" evidence read as *safe* actually
+  meant *no effect*.
+- **verify.sh computed REPO_ROOT but never `cd`'d there.** `nix develop` selects
+  the flake; the Rscript it launches inherits the caller's cwd — so running the
+  script from another worktree verified the wrong tree (total=269 vs the real
+  282) while printing the right path. A deliberately corrupted snapshot did not
+  fail the run. Fixed #577; three "re-verified" claims on #570/#571/#572
+  retracted as a consequence. Guard added: R emits `::VERIFY:CWD::`, shell
+  asserts it matches REPO_ROOT.
+- **Filed a public master issue (llm#792) before checking repo visibility** —
+  leaked private-repo names/paths (premortem, crypto_*), redacted within minutes.
+  Root fix: private-repo detail must stay in-repo; visibility check must precede
+  publish, not follow it (llm#794). Post-hoc redaction is incomplete — GitHub
+  keeps edit history and notification emails.
+- **The registry's turnover was hand-typed, not computed** (#567): realised
+  turnover is calculated in ≥4 places and discarded; the registry carried
+  round-number guesses under a "rough first-pass; refine later" comment. Fourth
+  instance of compute-then-discard (turnover / snapshots / Sharpe CIs / Calmar).
+- **Snapshot bulk-generation would satisfy the audit and make things worse:**
+  an auto-accepted snapshot blesses current behaviour as correct unreviewed.
+  Ordered by checkability (Tier A error-messages/signatures first) instead.
+
+### Accuracy / Metrics
+
+- Root suite: 41→0 skipped once `NOT_CRAN=true` is set (746→800 passing);
+  identical 3-failure baseline under editions 2 and 3.
+- historical `main` verified clean post-merge: root 289 / 3 baseline / 0 skipped,
+  package 571 / 1 baseline / 5 skipped, edition 3 asserted, exit 0.
+- Snapshot compliance: 11 of 60 non-compliant files brought to ratio; ~66 Tier A
+  snapshots added; 49 files / ~122 snapshots remaining (#578, deferred).
+
+### Known Limitations
+
+- **Package suite is non-hermetic** — 7 tests read live `hf://` parquet; #584
+  stops them corrupting the baseline but does not restore hermetic coverage
+  (#580 Phase 2: committed fixture + opt-in live target).
+- **compute-then-discard is systemic** — realised turnover (#567), snapshot tests
+  (#574), Sharpe CIs (#585), Calmar `select(-calmar)` (#586/#588). Structural
+  detection/enforcement open at llm#800; the existing `qa_summary` check that
+  should catch it has been red long enough to be normalised as "baseline".
+- **Calmar is mathematically incoherent for negative returns** (#588) — must be
+  fixed before #586's "display Calmar" recommendation is actioned.
+- **49 snapshot files remain below ratio** (#578); deferred to last by request.
+- **roborev backlog ~772 open and not clearing** (systemic, pre-existing).
+
 ## 2026-06-29 → 2026-07-03 (session 21 — MVO remedy set + dashboard-first workflow + caption-link hygiene)
 
 ### Completed
