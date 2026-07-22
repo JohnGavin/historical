@@ -1,7 +1,16 @@
-test_that("hd_ohlcv returns tibble for AAPL", {
-  skip_if_no_remote_data()
+# NOTE (#580 Phase 2): the tests below run hermetically against the bundled
+# inst/extdata/sample/*.parquet fixtures (via local_sample_data(), see
+# helper-sample.R) rather than the live hf:// endpoint. Date ranges and
+# ticker choices match data-raw/make_sample_data.R's known contents: equity
+# fixture covers 2024-01-02..2024-02-14 (32 weekdays, 55 tickers incl. AAPL
+# and MSFT); crypto fixture covers 2024-01-01..2024-02-09 (40 days, BTC/ETH).
+# The original live-endpoint assertions are preserved, unchanged, in
+# test-remote-live.R (opt-in via HD_TEST_LIVE=1).
 
-  result <- hd_ohlcv("AAPL", from = "2026-04-01", to = "2026-04-10")
+test_that("hd_ohlcv returns tibble for AAPL", {
+  local_sample_data()
+
+  result <- hd_ohlcv("AAPL", from = "2024-01-02", to = "2024-01-08")
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) > 0)
   expect_true(all(c("date", "close", "ticker") %in% names(result)))
@@ -11,18 +20,18 @@ test_that("hd_ohlcv returns tibble for AAPL", {
 test_that("hd_ohlcv auto-detects crypto dataset", {
   expect_equal(historicaldata:::detect_dataset("BONK"), "crypto_daily")
 
-  skip_if_no_remote_data()
+  local_sample_data()
 
-  result <- hd_ohlcv("BTC", from = "2026-04-01", to = "2026-04-10")
+  result <- hd_ohlcv("BTC", from = "2024-01-01", to = "2024-01-10")
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) > 0)
   expect_true(all(result$ticker == "BTC"))
 })
 
 test_that("hd_macro returns data for SP500", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
-  result <- hd_macro("SP500", from = "2026-04-01")
+  result <- hd_macro("SP500", from = "2024-01-01")
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) > 0)
   expect_true(all(result$series_id == "SP500"))
@@ -30,9 +39,9 @@ test_that("hd_macro returns data for SP500", {
 })
 
 test_that("hd_factors returns FF3 daily data", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
-  result <- hd_factors("FF3", "daily", from = "2026-01-01")
+  result <- hd_factors("FF3", "daily", from = "2024-01-01")
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) > 0)
   expect_true(all(result$dataset == "FF3"))
@@ -40,7 +49,7 @@ test_that("hd_factors returns FF3 daily data", {
 })
 
 test_that("hd_tickers returns character vector", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
   tickers <- hd_tickers("equity_daily")
   expect_type(tickers, "character")
@@ -49,7 +58,7 @@ test_that("hd_tickers returns character vector", {
 })
 
 test_that("hd_macro_series returns series IDs", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
   series <- hd_macro_series()
   expect_type(series, "character")
@@ -58,9 +67,9 @@ test_that("hd_macro_series returns series IDs", {
 })
 
 test_that("hd_ohlcv snapshot of AAPL structure", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
-  result <- hd_ohlcv("AAPL", from = "2026-04-07", to = "2026-04-10")
+  result <- hd_ohlcv("AAPL", from = "2024-01-15", to = "2024-01-19")
   expect_snapshot(str(result))
 })
 
@@ -83,9 +92,9 @@ test_that("hd_connect_local handles quoted parquet paths", {
 })
 
 test_that("hd_ohlcv split-and-bind: mixed equity + crypto batch", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
-  result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01", to = "2026-04-10")
+  result <- hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-02", to = "2024-01-08")
   expect_s3_class(result, "tbl_df")
   expect_true(nrow(result) > 0L)
   expect_true("AAPL" %in% result$ticker)
@@ -99,20 +108,25 @@ test_that("hd_ohlcv split-and-bind: mixed equity + crypto batch", {
 })
 
 test_that("hd_ohlcv split-and-bind: collect=FALSE informs user", {
-  skip_if_no_remote_data()
+  local_sample_data()
+  # Force the once-per-session survivorship-bias option to "already warned"
+  # so this snapshot deterministically captures only the mixed-dataset
+  # cli_inform message, regardless of what earlier tests in the full suite
+  # ran first (#580 Phase 2).
+  withr::local_options(list(hd_survivorship_warned_equity_daily = TRUE))
 
   expect_snapshot(
-    result <- hd_ohlcv(c("AAPL", "BTC"), from = "2026-04-01",
-                       to = "2026-04-05", collect = FALSE)
+    result <- hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-02",
+                       to = "2024-01-05", collect = FALSE)
   )
   expect_s3_class(result, "tbl_df")  # materialised despite collect=FALSE
 })
 
 test_that("hd_ohlcv split-and-bind: single-dataset batch keeps fast path", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
   # Two equity tickers — no inform message, no split, normal collect respected
-  result <- hd_ohlcv(c("AAPL", "MSFT"), from = "2026-04-01", to = "2026-04-05")
+  result <- hd_ohlcv(c("AAPL", "MSFT"), from = "2024-01-02", to = "2024-01-05")
   expect_s3_class(result, "tbl_df")
   expect_setequal(unique(result$ticker), c("AAPL", "MSFT"))
 })

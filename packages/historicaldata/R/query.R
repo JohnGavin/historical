@@ -170,7 +170,7 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
     }
   }
 
-  source_path <- if (local) {
+  source_path <- if (local && !nzchar(Sys.getenv("HD_USE_SAMPLE_DATA"))) {
     p <- file.path(hd_cache_path(), paste0(dataset, ".parquet"))
     if (!file.exists(p)) {
       cli::cli_abort(c(
@@ -180,7 +180,7 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
     }
     p
   } else {
-    ds$url
+    hd_dataset_source(dataset, local)
   }
 
   lf <- duckplyr::read_parquet_duckdb(source_path) |>
@@ -276,11 +276,7 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
     ))
   }
 
-  path <- if (local) {
-    file.path(hd_cache_path(), paste0(dataset, ".parquet"))
-  } else {
-    ds$url
-  }
+  path <- hd_dataset_source(dataset, local)
 
   lf <- duckplyr::read_parquet_duckdb(path)
 
@@ -317,16 +313,15 @@ hd_macro <- function(series_id, from = NULL, to = NULL,
                      local = FALSE, collect = TRUE) {
   .hd_check_pit(to)
   series_id <- as.character(series_id)
-  ds <- hd_datasets()[["macro_daily"]]
 
-  source_path <- if (local) {
+  source_path <- if (local && !nzchar(Sys.getenv("HD_USE_SAMPLE_DATA"))) {
     p <- file.path(hd_cache_path(), "macro_daily.parquet")
     if (!file.exists(p)) {
       cli::cli_abort("Local cache not found. Run {.fn hd_download} first.")
     }
     p
   } else {
-    ds$url
+    hd_dataset_source("macro_daily", local)
   }
 
   lf <- duckplyr::read_parquet_duckdb(source_path) |>
@@ -355,12 +350,7 @@ hd_macro <- function(series_id, from = NULL, to = NULL,
 #' @family discovery
 #' @export
 hd_macro_series <- function(local = FALSE) {
-  ds <- hd_datasets()[["macro_daily"]]
-  source_path <- if (local) {
-    file.path(hd_cache_path(), "macro_daily.parquet")
-  } else {
-    ds$url
-  }
+  source_path <- hd_dataset_source("macro_daily", local)
 
   duckplyr::read_parquet_duckdb(source_path) |>
     dplyr::distinct(series_id) |>
@@ -383,13 +373,7 @@ hd_macro_series <- function(local = FALSE) {
 hd_factors <- function(dataset = "FF3", frequency = "daily",
                        from = NULL, to = NULL, local = FALSE,
                        collect = TRUE) {
-  ds <- hd_datasets()[["factors"]]
-
-  source_path <- if (local) {
-    file.path(hd_cache_path(), "factors.parquet")
-  } else {
-    ds$url
-  }
+  source_path <- hd_dataset_source("factors", local)
 
   lf <- duckplyr::read_parquet_duckdb(source_path) |>
     dplyr::filter(dataset == !!dataset, frequency == !!frequency) |>

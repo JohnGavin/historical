@@ -167,7 +167,7 @@ hd_tickers <- function(dataset = "equity_daily") {
     ))
   }
 
-  duckplyr::read_parquet_duckdb(ds$url) |>
+  duckplyr::read_parquet_duckdb(hd_dataset_source(dataset)) |>
     dplyr::distinct(ticker) |>
     dplyr::arrange(ticker) |>
     dplyr::collect() |>
@@ -338,4 +338,39 @@ hd_macro_forward <- function() {
 hd_base_url <- function(filename) {
   repo <- Sys.getenv("HD_HF_REPO", unset = "JohnGavin/finance-data")
   sprintf("hf://datasets/%s/%s", repo, filename)
+}
+
+#' Resolve the read location for a dataset (test-only sample-data seam)
+#'
+#' Centralises the `local` vs remote `ds$url` branch that every accessor in
+#' `R/query.R`, `R/registry.R`, and `R/ranked.R` used to repeat inline, and
+#' adds a TEST-ONLY override: when the environment variable
+#' `HD_USE_SAMPLE_DATA` is set (non-empty), returns the path to the bundled
+#' sample Parquet fixture instead ([hd_sample_path()]) so the package test
+#' suite can run hermetically against committed fixtures rather than the
+#' live `hf://` endpoint (issue #580 Phase 2).
+#'
+#' `HD_USE_SAMPLE_DATA` is a test-only seam — production behaviour with the
+#' env var unset is byte-for-byte identical to before this function existed:
+#' `local` cache path when `local = TRUE`, `ds$url` otherwise. There is
+#' deliberately no automatic online/offline fallback here (that would change
+#' production behaviour); see [hd_is_online()] if such a fallback is ever
+#' wanted, and add it explicitly.
+#'
+#' @param dataset Dataset name from [hd_datasets()] (e.g. `"equity_daily"`).
+#' @param local If `TRUE`, resolve to the local cache path
+#'   (`file.path(hd_cache_path(), paste0(dataset, ".parquet"))`) instead of
+#'   the registry's remote `ds$url`. Ignored when `HD_USE_SAMPLE_DATA` is set.
+#' @return Character scalar: a file path or `hf://` URL.
+#' @keywords internal
+#' @noRd
+hd_dataset_source <- function(dataset, local = FALSE) {
+  if (nzchar(Sys.getenv("HD_USE_SAMPLE_DATA"))) {
+    return(hd_sample_path(dataset))
+  }
+  if (local) {
+    file.path(hd_cache_path(), paste0(dataset, ".parquet"))
+  } else {
+    hd_datasets()[[dataset]]$url
+  }
 }

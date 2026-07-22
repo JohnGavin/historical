@@ -23,8 +23,7 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
     cli::cli_abort("Invalid metric: {metric}. Valid: {paste(valid_metrics, collapse = ', ')}")
   }
 
-  ds <- hd_datasets()[["metadata"]]
-  df <- duckplyr::read_parquet_duckdb(ds$url) |>
+  df <- duckplyr::read_parquet_duckdb(hd_dataset_source("metadata")) |>
     dplyr::filter(dataset == !!dataset) |>
     dplyr::collect()
   df <- df |> dplyr::filter(!is.na(.data[[metric]]))
@@ -96,7 +95,7 @@ hd_top_by <- function(dataset, metric, n = 10, desc = TRUE) {
 hd_most_volatile <- function(dataset = "equity_daily", n = 5, window_days = 21) {
   ds <- hd_datasets()[[dataset]]
   if (is.null(ds)) cli::cli_abort("Unknown dataset: {dataset}")
-  raw <- duckplyr::read_parquet_duckdb(ds$url) |> dplyr::collect()
+  raw <- duckplyr::read_parquet_duckdb(hd_dataset_source(dataset)) |> dplyr::collect()
   price_col <- .pick_price_col(names(raw))
   .rolling_vol_rank(raw, price_col, window_days, n)
 }

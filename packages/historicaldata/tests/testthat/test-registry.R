@@ -31,24 +31,22 @@ test_that("hd_datasets snapshot", {
   expect_snapshot(str(hd_datasets()))
 })
 
-test_that("registry schema matches actual parquet columns for all datasets", {
-  skip_if_no_remote_data()
+test_that("registry schema matches actual parquet columns for sample-backed datasets", {
+  # Hermetic version (#580 Phase 2): checks only the registry entries that
+  # have a bundled sample fixture (see hd_sample_path()). The full-coverage
+  # version against every registry entry (including non-parquet datasets
+  # like jst_macrohistory and alphavantage_daily) is preserved, unchanged,
+  # in test-remote-live.R (opt-in via HD_TEST_LIVE=1).
+  local_sample_data()
 
   ds_list <- hd_datasets()
-  for (nm in names(ds_list)) {
+  sample_backed <- c("equity_daily", "crypto_daily", "macro_daily", "factors", "metadata")
+  for (nm in intersect(names(ds_list), sample_backed)) {
     ds <- ds_list[[nm]]
-    # Read one row to get column names without downloading full parquet
-    actual_cols <- tryCatch(
-      duckplyr::read_parquet_duckdb(ds$url) |>
-        utils::head(1) |>
-        dplyr::collect() |>
-        names(),
-      error = function(e) {
-        testthat::skip(paste("Cannot reach", nm, "parquet:", conditionMessage(e)))
-        character(0)
-      }
-    )
-    if (!length(actual_cols)) next
+    actual_cols <- duckplyr::read_parquet_duckdb(historicaldata:::hd_dataset_source(nm)) |>
+      utils::head(1) |>
+      dplyr::collect() |>
+      names()
     # Apply the same backward-compat alias that hd_lazy()/hd_ohlcv_single()
     # applies at read time (#325 / #397): parquets written before the rename
     # still contain 'adjusted'; the schema declares the post-alias canonical

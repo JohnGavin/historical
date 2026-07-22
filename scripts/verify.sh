@@ -55,15 +55,26 @@ BASELINE_PKG_FAILURES=(
 )
 
 # ---------------------------------------------------------------------------
-# Normal SKIP count for the package suite, confirmed 2026-07-21 (issue #580).
-# The 7 tests guarded by `skip_if_no_remote_data()` in test-query.R,
-# test-ranked.R, and test-registry.R now skip (rather than error) when the
-# hf:// probe fails, on top of whatever `skip_on_cran()`/`skip_on_ci()` were
-# already skipping. Do NOT bump this number to silence a rising skip count —
-# a jump above it means the remote data source (or something upstream of it)
-# is unavailable and coverage is being lost; investigate, don't hide it.
+# Normal SKIP count for the package suite, confirmed 2026-07-22 (issue #580
+# Phase 2). Composition (verify with the [SKIP] detail lines this script
+# prints once the count exceeds this baseline):
+#   - 4: {alphavantager} not installed (test-alphavantage.R x3,
+#        test-column-naming.R x1) — pre-existing, unrelated to #580.
+#   - 11: test-remote-live.R — the opt-in live-endpoint coverage file added
+#        by #580 Phase 2. These intentionally skip by default (gated on
+#        `HD_TEST_LIVE` being set) because Phase 2 made the 13 tests that
+#        used to call `skip_if_no_remote_data()` in test-query.R,
+#        test-ranked.R, and test-registry.R hermetic against bundled sample
+#        fixtures (inst/extdata/sample/*.parquet) instead — they now run
+#        unconditionally and contribute 0 to this count. test-remote-live.R
+#        preserves the original live-endpoint assertions for opt-in use
+#        (`HD_TEST_LIVE=1`) so "does the real remote schema still match?"
+#        stays checkable on demand.
+# Do NOT bump this number to silence a rising skip count from any OTHER
+# source — a jump above it means something besides the known 4+11 above is
+# skipping; investigate, don't hide it.
 # ---------------------------------------------------------------------------
-BASELINE_PKG_SKIP_COUNT=5
+BASELINE_PKG_SKIP_COUNT=15
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 

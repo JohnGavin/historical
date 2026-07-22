@@ -221,10 +221,17 @@ test_that("hd_top_by respects desc=FALSE (ascending order)", {
   expect_equal(result$ticker, c("X", "Z"))
 })
 
-# ── integration tests (remote data, CI-skipped) ───────────────────────────────
+# ── hermetic tests against the bundled sample-data fixtures (#580 Phase 2) ────
+#
+# Run against inst/extdata/sample/metadata_sample.parquet /
+# equity_sample.parquet via local_sample_data() (helper-sample.R). The
+# fixture has 55 equity tickers with market_cap/volume_avg populated for all
+# of them (data-raw/make_sample_data.R), so these assertions stay meaningful.
+# The original live-endpoint versions are preserved, unchanged, in
+# test-remote-live.R (opt-in via HD_TEST_LIVE=1).
 
-test_that("hd_top_by returns tibble from live metadata parquet", {
-  skip_if_no_remote_data()
+test_that("hd_top_by returns tibble from sample metadata parquet", {
+  local_sample_data()
 
   result <- hd_top_by("equity_daily", "market_cap", n = 5)
 
@@ -237,7 +244,7 @@ test_that("hd_top_by returns tibble from live metadata parquet", {
 })
 
 test_that("hd_most_volatile returns tibble with expected schema", {
-  skip_if_no_remote_data()
+  local_sample_data()
 
   result <- hd_most_volatile("equity_daily", n = 3)
 
