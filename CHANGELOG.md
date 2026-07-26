@@ -1,5 +1,41 @@
 # Changelog
 
+## 2026-07-25 (session 23 — research triage: edge-preserving filtering + prop-firm baseline)
+
+### Completed
+
+- **SSRN 7072279 (Weibel 2026) triaged, issue filed (#591):** paper shows
+  applying edge-preserving filters (Savitzky-Golay, Perona-Malik anisotropic
+  diffusion) to a macro regime signal — before classification, predictor set
+  and portfolio rule held fixed — roughly triples Sharpe (0.304→0.820) in a
+  9-SPDR-sector rotation. Confirmed via full-text read + repo grep this is
+  genuinely new: zero filtering (Savitzky-Golay/Perona-Malik/Kalman/HP/LOESS)
+  anywhere in `R/`, and all four existing regime classifiers
+  (`plan_vix_macro_overlay.R` #59, `plan_regime_momentum.R` #123,
+  `plan_european_overlay.R` #58, `plan_risk_state.R` #51) threshold raw or
+  simply-lagged series with no smoothing step. #591 scopes the cheap test
+  first (Savitzky-Golay on existing signals) ahead of any new sector-rotation
+  strategy, and flags the paper's own single-market caveat against
+  `cross-geography-pervasiveness`.
+- **Prop-firm stop-out baseline (algoadvantage #054, delphicalpha, Varma
+  stop-loss) — no new issue needed.** Both prop-firm articles are already
+  fully scoped by existing open issues: #586 (Delphic Alpha prop-firm math —
+  its proposed deliverable is exactly a per-strategy finite-horizon survival
+  curve, i.e. "would we stop out at a typical prop shop's drawdown floor")
+  and #588 (Varma stop-loss / CDAP fix, cross-referencing #586 on
+  exogenous-vs-endogenous drawdown floors). The AlgoAdvantage/Kieran Duff
+  episode restates the same core statistics as the Delphic Alpha piece, so it
+  adds nothing beyond #586.
+
+### Failed Approaches
+
+- None — pure research/triage session, no code changes.
+
+### Known Limitations
+
+- 1 unaddressed roborev verdict failure remains (cumulative counter;
+  pre-existing, unrelated to this session — same status noted last session).
+
 ## 2026-07-19 → 2026-07-22 (session 22 — verification integrity + cross-project provisional-constants audit)
 
 ### Completed

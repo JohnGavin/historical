@@ -1,24 +1,35 @@
-# Current Work — session 21 end (2026-07-03, ENDED)
+# Current Work — session 23 end (2026-07-25, ENDED)
 
-## State: all work merged + deployed
+## State: research/triage only, no code changes
 
-Everything below is on `origin/main` (PRs #500–#538) and the dashboards are rendered + deployed (Pages serves committed `docs/*.html`). lychee link-audit is **green**.
+Pure investigation session — no PRs, no code edits. One GitHub issue filed.
 
 ### Shipped this session
-- **#507 MVO remedy set — COMPLETE**: `hd_returns_shrink` (#512), `hd_black_litterman` (#513), `hd_min_var_weights_penalised` (#517), `hd_weight_stability_diagnostic` (#521) + surfaced on falsification `#wstab` (#523). wstab caption/plot corrected for accuracy + plain language (#533).
-- **#514 dashboard-first — COMPLETE**: rule + `docs/DASHBOARDS.md` (#515), master Mermaid map (#519), 3 consolidations (#516/#524/#526) → **15→11 dashboards**.
-- **#534 caption-link hygiene**: caption *targets* → HTML anchors site-wide (#536/#537); lychee 404 fixed. 0 raw links on falsification/leaderboard/evidence.
-- **#530 bdbb-sol render bug** fixed (#531).
-- "Class C" → "publish gate" rename in the global HITL rule.
-
-### Open follow-ups (issues filed, not started)
-- **#518** — Phase 3b: no-short/box/L1-turnover/robust MVO via a QP solver (quadprog) + nix regen. Do as a dedicated PR, not a background fan-out.
-- **#520** tidyfinance gap analysis · **#522** Carver rolling-vs-expanding (extends the weight-stability diagnostic with an `estimation` axis) · **#525** Schmerling slope/strength (R²-strength signal, MONITOR) · **#528** Quantpedia AI-agent guardrails audit (dossier card, trade-log fidelity, break-even cost, dual-engine — several genuine gaps).
+- **#591 filed** — SSRN 7072279 (Weibel 2026): edge-preserving filtering
+  (Savitzky-Golay/Perona-Malik) of macro regime signals. Confirmed genuinely
+  new (zero filtering anywhere in `R/`); scopes a cheap ablation test on our
+  four existing regime classifiers (#59/#123/#58/#51) ahead of any new
+  sector-rotation strategy.
+- **Prop-firm stop-out baseline request resolved without a new issue** —
+  algoadvantage #054, delphicalpha, and Varma stop-loss articles are all
+  already fully scoped by existing open issues #586 (prop-firm math /
+  finite-horizon survival curve — the actual "would we stop out" deliverable)
+  and #588 (Varma stop-loss / CDAP fix).
 
 ### Next-session starting point
-- Pick from #518 (finishes #507) or the research issues (#522 is the most direct extension of shipped work).
-- Note: weight-stability diagnostic only runs the 4-asset universe; a wide-universe demo (where MVO's Sharpe penalty appears) is the natural next enhancement.
+- **#591** — cheapest first move: apply `signal::sgolayfilt` to the existing
+  VIX/CISS/VVIX series in `plan_vix_macro_overlay.R`/`plan_regime_momentum.R`/
+  `plan_european_overlay.R`/`plan_risk_state.R`; measure regime-switch
+  frequency + OOS Sharpe change. No new dashboard (lands on `falsification.qmd`
+  if it moves forward).
+- **#586** — when prioritized, deliverable #3 (finite-horizon survival curve,
+  "P(−10% DD within 12m)" leaderboard column) directly answers the
+  prop-firm-stop-out question.
+- Carry-forward from session 21 (still open, untouched since): #518 (MVO
+  Phase 3b QP solver), #520/#522/#525/#528 research issues.
 
 ### Housekeeping
-- 2 unaddressed roborev verdict failures (cumulative counter; pre-existing — not from this session's merged work).
-- Main checkout has pre-existing untracked files (`.clone/`, `archive/`, `inst/extdata/results/*.parquet`, a `knowledge/raw/*.pdf`) — left as-is.
+- 1 unaddressed roborev verdict failure (cumulative counter; pre-existing,
+  unrelated to this session — same status noted in session 21).
+- Main checkout has pre-existing untracked files (`.clone/`, `archive/`,
+  `inst/extdata/results/*.parquet`, a `knowledge/raw/*.pdf`) — left as-is.
