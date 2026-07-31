@@ -1,0 +1,83 @@
+Using saved setting for 'extra-substituters = https://rstats-on-nix.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=' from ~/.local/share/nix/trusted-settings.json.
+==================================================
+T Project: historical_data
+==================================================
+
+Available commands:
+  t repl              - Start T REPL
+  t run <file>        - Run a T file
+  t test              - Run tests
+
+To add dependencies:
+  * Add them to tproject.toml
+  * Run 't update' to sync flake.nix
+
+Quarto is enabled via [additional-tools]. Render {t} chunks with filters: [tlang].
+
+=== 1. Load and align ===
+Warning message:
+"equity_daily" is survivorship-biased: 0 delisting events recorded across full
+history.
+ℹ Universe contains only currently-listed tickers.
+ℹ Known failed firms (Enron, Lehman, Bear Stearns, WorldCom, WaMu) are absent.
+✖ Per-stock Sharpe / CAGR / drawdown metrics OVER-ESTIMATE achievable
+  performance.
+→ True fix requires a point-in-time universe with delisting records
+  (CRSP/WRDS/Sharadar). See GitHub issue #150. 
+SPY date class: POSIXct/POSIXt 
+VIX date class: Date 
+Warning message:
+There was 1 warning in `mutate()`.
+ℹ In argument: `date = as.Date(date)`.
+Caused by warning in `as.Date.POSIXct()`:
+! Coercing nanoseconds to a lower resolution may result in a loss of data. 
+SPY rows: 8356  range: 1993-01-29 - 2026-04-10 
+VIX rows: 9470  NA values: 302 
+SPY price column used: adjusted_close 
+joined rows: 8356 
+complete rows after NA filter: 8351  range: 1993-02-01 - 2026-04-10 
+contemporaneous cor(spx_ret, vix_chg): -0.7916 
+
+=== 2. Cross-correlation lead-lag ===
+cor( spx_ret[t] , vix_chg[t+k] ). k>0 means SPX moves FIRST.
+  k = -5 : +0.0116
+  k = -4 : +0.0221
+  k = -3 : -0.0050
+  k = -2 : -0.0023
+  k = -1 : +0.0861
+  k = +0 : -0.7916   <- contemporaneous
+  k = +1 : +0.1063
+  k = +2 : +0.0409
+  k = +3 : +0.0210
+  k = +4 : +0.0449
+  k = +5 : +0.0095
+
+=== 3. Predictive asymmetry (the actual thesis) ===
+Does SPX predict tomorrow's VIX more than VIX predicts tomorrow's SPX?
+Each direction controls for the target's own lag.
+
+SPX_t -> VIX_{t+1}  (controlling VIX_t)
+  beta = -0.2890  t = -0.11  p = 0.911  FPR@equipoise = n/a (p >= 1/e)  model R2 = 0.01830
+VIX_t -> SPX_{t+1}  (controlling SPX_t)
+  beta = +0.0004  t = +3.15  p = 0.00162  FPR@equipoise = 0.027  model R2 = 0.00794
+
+=== 4. Levy area: does SPX lead VIX within the window? ===
+hd_levy_area sign convention: positive = FIRST series leads.
+  window  5: mean = +0.3767  frac>0 = 0.582  t = +16.64  n = 8347
+  window 10: mean = +1.0035  frac>0 = 0.623  t = +28.67  n = 8342
+  window 21: mean = +2.5551  frac>0 = 0.671  t = +39.07  n = 8331
+  window 63: mean = +9.9172  frac>0 = 0.778  t = +59.39  n = 8289
+
+=== 5. RSI(2) conditional asymmetry (the article's own signal) ===
+SPX RSI(2) <= 20  : n = 2324 (27.8% of days)
+   next-day SPX ret : mean +0.1086%  win rate 55.6%
+   next-day VIX chg : mean -0.1675    down-rate 57.6%
+
+VIX RSI(2) <= 20  : n = 2978 (35.7% of days)
+   next-day SPX ret : mean +0.0408%  win rate 54.4%
+   next-day VIX chg : mean +0.0761    down-rate 50.5%
+
+unconditional     : n = 8348
+   next-day SPX ret : mean +0.0465%  win rate 54.0%
+   next-day VIX chg : mean +0.0010    down-rate 53.0%
