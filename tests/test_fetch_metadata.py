@@ -11,7 +11,7 @@ trading days; the fix derives the expected calendar from the dataset itself.
 """
 
 import sys
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 # Allow running from repo root or from tests/
@@ -160,6 +160,57 @@ class TestExpectedTradingDays:
             "crypto_daily", [], date(2024, 1, 2), date(2024, 1, 2), days_span=0
         )
         assert result == 0
+
+    def test_holiday_containing_period_below_naive_252_365_estimate(self):
+        """A real span crossing known market holidays yields a calendar-derived
+        expected count strictly below the naive ``days_span * 252 / 365``
+        ratio that ``scripts/fetch_metadata.py`` used before this fix
+        (historical#569/#570; re-confirmed for historical#576, which filed
+        the same defect separately and was already resolved by #569/#570 by
+        the time it was opened).
+
+        Window: 2024-11-15 to 2025-01-15 (62 calendar days), crossing three
+        NYSE holidays — Thanksgiving (2024-11-28), Christmas (2024-12-25),
+        and New Year's Day (2025-01-01). See
+        https://www.nyse.com/markets/hours-calendars.
+
+        A short, holiday-dense window is used deliberately: over a *full*
+        calendar year the 252/365 ratio is calibrated to roughly match the
+        real NYSE holiday count (empirically verified: 2024 in full gives
+        expected == naive == 252, no divergence). Only a holiday-clustered
+        sub-period exposes the naive ratio's local error — this is exactly
+        the failure mode #569/#570/#576 describe: a fixed yearly-average
+        ratio misprices any window that isn't itself a full year.
+        """
+        holidays = {
+            date(2024, 11, 28),  # Thanksgiving
+            date(2024, 12, 25),  # Christmas
+            date(2025, 1, 1),  # New Year's Day
+        }
+        start = date(2024, 11, 15)
+        end = date(2025, 1, 15)
+        days_span = (end - start).days
+
+        all_dates = []
+        d = start
+        while d <= end:
+            if d.weekday() < 5 and d not in holidays:
+                all_dates.append(d)
+            d += timedelta(days=1)
+
+        expected = _expected_trading_days("equity_daily", all_dates, start, end, days_span)
+        naive_252_365 = int(days_span * 252 / 365)
+
+        # Sanity-pin the fixture's own arithmetic so a future edit to the
+        # holiday list or window can't silently change what's being compared.
+        assert expected == 41
+        assert naive_252_365 == 42
+
+        assert expected < naive_252_365, (
+            "calendar-derived expected days must fall below the old naive "
+            "252/365 estimate for a holiday-containing period that is not "
+            "itself a full year"
+        )
 
 
 class TestMissingPct:
