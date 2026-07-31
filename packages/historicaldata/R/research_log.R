@@ -107,6 +107,10 @@ hd_rlog_schema <- function(table) {
   }
   lineage <- .rlog_lineage_cols()
   specific <- switch(table,
+    # Commitment columns (#598): a hypothesis row is "sealed" when its
+    # substantive fields have been canonically serialised and hashed, so the
+    # claim cannot be silently edited after the outcome is known.  See
+    # hd_rlog_seal().  NA in all three means an unsealed row.
     hypotheses = tibble::tibble(
       economic_claim = character(),
       dependent_var  = character(),
@@ -114,6 +118,9 @@ hd_rlog_schema <- function(table) {
       sample_spec    = character(),
       null_hypothesis = character(),
       status         = character(),
+      commit_hash    = character(),
+      sealed_at      = as.POSIXct(character()),
+      seal_method    = character(),
       extra_json     = character()
     ),
     implementations = tibble::tibble(

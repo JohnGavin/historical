@@ -21,6 +21,9 @@ Other research-log:
 \code{\link{hd_rlog_path}()},
 \code{\link{hd_rlog_query}()},
 \code{\link{hd_rlog_schema}()},
+\code{\link{hd_rlog_seal}()},
+\code{\link{hd_rlog_seal_export}()},
+\code{\link{hd_rlog_seal_verify}()},
 \code{\link{hd_rlog_uuid}()}
 }
 \concept{research-log}

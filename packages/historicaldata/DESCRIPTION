@@ -16,6 +16,7 @@ RoxygenNote: 7.3.3
 Imports:
     cli,
     DBI,
+    digest,
     dplyr,
     duckdb (>= 0.9),
     duckplyr,
