@@ -166,3 +166,15 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
   2. Risk parity 58-year tail/drawdown audit (Beyond Passive) — empirical context for #114 HRP work
 - **Individual article fetches:** WebFetch permission denied; blurbs sourced from Quantocracy HTML only
 - See [[quantocracy-may-2026]]
+
+## 2026-08-01
+
+### SPX ↔ VIX lead-lag tested, not just reviewed (#611)
+- **Source:** [aligrithm "Chicken and Egg"](https://aligrithm.com/chicken-and-egg-use-the-spx-to-time-the-vix-not-vice-versa/) — not previously reviewed; the site was triaged at pillar level in #592 but this article appears in none of the four existing aligrithm issues
+- **First article we could TEST rather than annotate** — `hd_levy_area()` (#605) landed hours earlier and measures exactly the ordering claimed
+- **Positive result:** the RSI(2) filter claim replicates. SPX RSI(2) ≤ 20 → next-day SPX +0.109% / 55.6% win; VIX RSI(2) ≤ 20 → +0.041% / 54.4%, *below* the unconditional +0.047%
+- **Negative result:** the causal claim does not, and mildly reverses. SPX_t → VIX_{t+1} t = −0.11 (no power); VIX_t → SPX_{t+1} t = +3.15, FPR ≈ 2.7% (modest power)
+- **Reconciling finding:** the two RSI conditions are nearly disjoint (overlap 1.8% of days, `cor = −0.664`). They select opposite market states, not the same state through different sensors — SPX-oversold is a panic bottom, VIX-oversold is post-panic calm
+- **Live consequence:** `plan_avoid_worst.R` triggers on absolute VIX levels — the mechanism under dispute. Not refuted, but tested for the first time (#611 N1)
+- **Rejected:** short-VX strategy — no futures data, source backtest in-sample with self-admitted arbitrary lookback
+- Analysis: `explorations/vix_spx_leadlag/` (reproducible). See [[spx-vix-lead-lag]]

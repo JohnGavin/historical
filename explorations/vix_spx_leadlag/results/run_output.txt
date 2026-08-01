@@ -81,3 +81,32 @@ VIX RSI(2) <= 20  : n = 2978 (35.7% of days)
 unconditional     : n = 8348
    next-day SPX ret : mean +0.0465%  win rate 54.0%
    next-day VIX chg : mean +0.0010    down-rate 53.0%
+
+=== 6. Marginal contribution: which signal does the work? ===
+            bucket    n pct_days next_spx_pct spx_win next_vix vix_down
+           neither 3200     38.3       0.0077    52.5   0.0509     51.8
+ VIX oversold only 2824     33.8       0.0395    54.4   0.0832     50.5
+ SPX oversold only 2170     26.0       0.1117    55.8  -0.1757     58.1
+     both oversold  154      1.8       0.0648    53.9  -0.0528     50.6
+
+The two conditions are nearly mutually exclusive, not redundant:
+  cor(spx_rsi2, vix_rsi2)          = -0.664
+  P(VIX oversold | SPX oversold)   = 0.066
+  P(SPX oversold | VIX oversold)   = 0.052
+  overlap: 154 of 8348 days (1.8%)
+
+--- largest next-day moves, SPX oversold while VIX calm ---
+       date    px  vix spx_rsi2 vix_rsi2 next_spx_pct next_vix
+ 2008-10-10  64.2 70.0        0      100        14.52   -14.96
+ 2008-10-27  60.9 80.1        0      100        11.69   -13.10
+ 2025-04-08 490.9 52.3        0      100        10.50   -18.71
+ 2020-03-12 226.7 75.5        0      100         8.55   -17.64
+ 2020-03-06 271.8 41.9        0      100        -7.81    12.52
+
+--- largest next-day moves, VIX oversold while SPX not ---
+       date    px  vix spx_rsi2 vix_rsi2 next_spx_pct next_vix
+ 2008-10-14  72.4 55.1     89.5      0.9        -9.84    14.12
+ 2008-11-28  65.4 55.8    100.0     13.3        -8.86    12.67
+ 2020-04-03 228.1 46.8     60.9      0.0         6.72    -1.56
+ 2008-10-21  69.5 53.1     65.5      0.8        -5.45    16.54
+ 1998-10-14  62.3 39.0     73.2     11.2         5.38    -5.62
