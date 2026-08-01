@@ -2,26 +2,128 @@ name: Weekly Data Poll
 
 on:
   schedule:
-    - cron: '0 6 * * 6'  # Every Saturday at 06:00 UTC
-  workflow_dispatch:        # Manual trigger via GitHub UI
+    # Primary weekly poll.
+    - cron: '0 6 * * 6'   # Sat 06:00 UTC
+    # Decaying retry ladder at roughly +1h, +8h, +16h, +32h from the primary.
+    # GitHub Actions cannot self-schedule a delayed re-run, and sleeping inside
+    # a job is not an option (6h job cap, and it bills runner minutes for
+    # doing nothing). So the retries are ordinary cron entries, made cheap by
+    # the `plan` job below: on a retry fire it polls ONLY the sources whose
+    # most recent completed run failed. If the primary succeeded, every retry
+    # resolves to an empty matrix and the poll job is skipped entirely.
+    - cron: '0 7 * * 6'   # +1h   Sat 07:00
+    - cron: '0 14 * * 6'  # +8h   Sat 14:00
+    - cron: '0 22 * * 6'  # +16h  Sat 22:00
+    - cron: '0 14 * * 0'  # +32h  Sun 14:00
+  workflow_dispatch:
+    inputs:
+      source:
+        description: 'Single source to poll (leave blank for all)'
+        required: false
+        default: ''
+        type: choice
+        options:
+          - ''
+          - kalshi
+          - ecb
+          - guardian
+          - commodities
+          - cboe_vol
 
 permissions:
   contents: write  # Required for git push to main branch
+  actions: read    # Required by the `plan` job to read prior run conclusions
 
 jobs:
+  # Decides which sources this run should poll. All the retry logic lives
+  # here so the poll job itself is unchanged and unaware.
+  #
+  #   primary cron / dispatch with no input -> every source
+  #   dispatch with a source input          -> that source only
+  #   retry cron                            -> only sources whose most recent
+  #                                            completed run FAILED
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      sources: ${{ steps.select.outputs.sources }}
+    steps:
+      - id: select
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          # ecb/guardian/cboe_vol need no auth; commodities needs FRED_API_KEY.
+          ALL_SOURCES: 'kalshi ecb guardian commodities cboe_vol'
+          PRIMARY_CRON: '0 6 * * 6'
+          EVENT_NAME: ${{ github.event_name }}
+          EVENT_CRON: ${{ github.event.schedule }}
+          INPUT_SOURCE: ${{ github.event.inputs.source }}
+        run: |
+          set -euo pipefail
+
+          json_array() {
+            printf '%s' "$1" | tr ' ' '\n' | grep -v '^$' \
+              | jq -R . | jq -sc .
+          }
+
+          # 1. Manual dispatch naming a single source.
+          if [ "$EVENT_NAME" = "workflow_dispatch" ] && [ -n "${INPUT_SOURCE:-}" ]; then
+            echo "Manual dispatch for single source: $INPUT_SOURCE"
+            echo "sources=$(json_array "$INPUT_SOURCE")" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 2. Primary cron, or dispatch with no source -> everything.
+          if [ "$EVENT_NAME" != "schedule" ] || [ "$EVENT_CRON" = "$PRIMARY_CRON" ]; then
+            echo "Full poll of all sources."
+            echo "sources=$(json_array "$ALL_SOURCES")" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # 3. Retry cron -> only sources that have not succeeded this cycle.
+          #
+          # Look back 40h, which spans the primary fire and every retry slot
+          # without reaching the previous week's run.
+          since=$(date -u -d '40 hours ago' +%Y-%m-%dT%H:%M:%SZ)
+          echo "Retry fire ($EVENT_CRON). Checking runs since $since."
+
+          run_ids=$(gh run list --repo "$REPO" --workflow=data-poll.yml \
+                      --limit 40 --json databaseId,createdAt,status \
+                      --jq '.[] | select(.status == "completed")
+                                | select(.createdAt > "'"$since"'")
+                                | .databaseId')
+
+          needed=''
+          for src in $ALL_SOURCES; do
+            ok=no
+            for id in $run_ids; do
+              concl=$(gh run view "$id" --repo "$REPO" --json jobs \
+                        --jq '[.jobs[] | select(.name == "poll ('"$src"')") | .conclusion] | first // ""')
+              if [ "$concl" = "success" ]; then
+                ok=yes
+                break
+              fi
+            done
+            if [ "$ok" = "yes" ]; then
+              echo "  $src: already succeeded this cycle, skipping"
+            else
+              echo "  $src: no successful run this cycle, will retry"
+              needed="$needed $src"
+            fi
+          done
+
+          echo "sources=$(json_array "$needed")" >> "$GITHUB_OUTPUT"
+
   poll:
+    needs: plan
+    # An empty matrix is a hard error in Actions, and it is also the common
+    # case on a retry fire after a clean primary run. Skip instead.
+    if: needs.plan.outputs.sources != '[]'
     runs-on: ubuntu-latest
     # Allow individual sources to fail without blocking others
     strategy:
       fail-fast: false
       matrix:
-        source:
-          - kalshi
-          - ecb             # ECB SDMX REST API (no auth)
-          - guardian        # Guardian Content API (test key, no auth)
-          - commodities     # FRED commodity indexes (requires FRED_API_KEY secret)
-          - cboe_vol        # CBOE implied vol CDN (46 series, no auth)
-          # - nyt_tedalcorn # parse_nyt_tedalcorn.R (no auth, low priority)
+        source: ${{ fromJSON(needs.plan.outputs.sources) }}
 
     steps:
       - uses: actions/checkout@v4
