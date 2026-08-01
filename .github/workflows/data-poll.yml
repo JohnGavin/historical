@@ -180,7 +180,20 @@ jobs:
 
           message("Installing ", length(need), " packages: ",
                   paste(sort(need), collapse = ", "))
-          install.packages(need, repos = "https://cloud.r-project.org")
+          # r-lib/actions/setup-r exports RSPM — the Posit Package Manager
+          # binary repo matching this runner's Ubuntu release. Hardcoding
+          # cloud.r-project.org discards it, and cloud serves SOURCE tarballs
+          # only for Linux, so every package (duckdb, arrow, duckplyr, ggplot2)
+          # compiles from scratch. Measured on run 30691340071: the install
+          # step took ~51 minutes. Binaries take ~2.
+          repos <- Sys.getenv("RSPM", unset = "")
+          if (!nzchar(repos)) {
+            repos <- "https://cloud.r-project.org"
+            message("RSPM unset — falling back to CRAN source packages.")
+          }
+          message("Installing from: ", repos)
+
+          install.packages(need, repos = repos)
 
           # Fail loudly here rather than 20 lines later inside load_all().
           missing <- need[!need %in% rownames(installed.packages())]
