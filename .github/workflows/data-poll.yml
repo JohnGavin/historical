@@ -29,6 +29,13 @@ on:
           - guardian
           - commodities
           - cboe_vol
+          - macro
+          - intl_vol
+      dry_run_publish:
+        description: 'Print the HF upload command instead of running it'
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: write  # Required for git push to main branch
@@ -52,7 +59,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           REPO: ${{ github.repository }}
           # ecb/guardian/cboe_vol need no auth; commodities needs FRED_API_KEY.
-          ALL_SOURCES: 'kalshi ecb guardian commodities cboe_vol'
+          # macro + cboe_vol + intl_vol are the three components of
+          # macro_daily.parquet (#619). They were never polled, which is why
+          # that dataset sat frozen at its 2026-04 seed.
+          ALL_SOURCES: 'kalshi ecb guardian commodities cboe_vol macro intl_vol'
           PRIMARY_CRON: '0 6 * * 6'
           EVENT_NAME: ${{ github.event_name }}
           EVENT_CRON: ${{ github.event.schedule }}
@@ -217,3 +227,67 @@ jobs:
             git pull --rebase origin ${{ github.ref_name }}
             git push
           fi
+
+  # Rebuilds macro_daily.parquet from the three components the poll now
+  # refreshes, and publishes it to HuggingFace — the missing "last mile" that
+  # left that dataset frozen at its 2026-05-06 seed (#619).
+  #
+  # PUBLISHING IS GATED ON THE SECRET. With no HF_TOKEN configured this job
+  # builds the parquet, uploads nothing, and says so. Adding that secret is the
+  # deliberate act of authorising publication — not merging this workflow.
+  publish-macro-daily:
+    needs: poll
+    if: needs.poll.result == 'success'
+    runs-on: ubuntu-latest
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      # The poll jobs commit their parquets during this same run, so the
+      # checkout above predates them.
+      - name: Pull the parquets the poll just committed
+        run: git pull --ff-only origin ${{ github.ref_name }}
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          r-version: '4.4'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libuv1-dev
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          repos <- Sys.getenv("RSPM", unset = "")
+          if (!nzchar(repos)) repos <- "https://cloud.r-project.org"
+          message("Installing from: ", repos)
+          install.packages(c("arrow", "dplyr", "cli", "here", "tibble", "purrr"),
+                           repos = repos)
+
+      - name: Build macro_daily.parquet
+        run: Rscript scripts/build_macro_daily.R
+
+      - name: Install HuggingFace CLI
+        if: env.HF_TOKEN != ''
+        run: pip install --quiet --upgrade huggingface_hub
+
+      - name: Publish to HuggingFace
+        if: env.HF_TOKEN != ''
+        env:
+          DRYRUN: ${{ github.event.inputs.dry_run_publish == 'true' && '1' || '' }}
+        run: |
+          bash scripts/upload_hf.sh \
+            data/raw/macro_daily.parquet \
+            macro_daily.parquet \
+            "data: macro_daily refresh ($(date -u +%Y-%m-%d)) — #619"
+
+      - name: Report when publishing is not configured
+        if: env.HF_TOKEN == ''
+        run: |
+          echo "::notice::macro_daily.parquet built but NOT published — HF_TOKEN is not configured."
+          echo "Add HF_TOKEN to repository secrets to enable publishing (see #619)."
