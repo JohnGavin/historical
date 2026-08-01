@@ -41,6 +41,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 | Quantocracy May 2026 Roundup | [quantocracy-may-2026.md](wiki/quantocracy-may-2026.md) | Reference |
 | Macrosynergy Macro Data Research | [macrosynergy-research.md](wiki/macrosynergy-research.md) | Draft |
 | Research ROI Framework | [research-roi.md](wiki/research-roi.md) | Draft |
+| SPX ↔ VIX Lead-Lag & RSI(2) Filter Asymmetry | [spx-vix-lead-lag.md](wiki/spx-vix-lead-lag.md) | Active — filter claim confirmed, causal claim contradicted |
 
 ### Workflow & Infrastructure
 

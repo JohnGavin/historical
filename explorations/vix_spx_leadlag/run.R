@@ -159,3 +159,60 @@ cat(sprintf("   next-day SPX ret : mean %+.4f%%  win rate %.1f%%\n",
             100 * mean(d3$spx_next), 100 * mean(d3$spx_next > 0)))
 cat(sprintf("   next-day VIX chg : mean %+.4f    down-rate %.1f%%\n",
             mean(d3$vix_next), 100 * mean(d3$vix_next < 0)))
+
+cat("\n=== 6. Marginal contribution: which signal does the work? ===\n")
+# Sections 5's two conditions are not two sensors on one state - they are
+# nearly disjoint. Bucketing shows what each contributes on its own.
+d3 <- d3 |>
+  mutate(bucket = case_when(
+    spx_rsi2 <= 20 & vix_rsi2 <= 20 ~ "both oversold",
+    spx_rsi2 <= 20                  ~ "SPX oversold only",
+    vix_rsi2 <= 20                  ~ "VIX oversold only",
+    TRUE                            ~ "neither"
+  ))
+
+print(as.data.frame(
+  d3 |>
+    dplyr::group_by(bucket) |>
+    dplyr::summarise(
+      n            = dplyr::n(),
+      pct_days     = round(100 * dplyr::n() / nrow(d3), 1),
+      next_spx_pct = round(100 * mean(spx_next), 4),
+      spx_win      = round(100 * mean(spx_next > 0), 1),
+      next_vix     = round(mean(vix_next), 4),
+      vix_down     = round(100 * mean(vix_next < 0), 1),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(dplyr::desc(n))
+), row.names = FALSE)
+
+cat("\nThe two conditions are nearly mutually exclusive, not redundant:\n")
+cat(sprintf("  cor(spx_rsi2, vix_rsi2)          = %+.3f\n",
+            cor(d3$spx_rsi2, d3$vix_rsi2)))
+cat(sprintf("  P(VIX oversold | SPX oversold)   = %.3f\n",
+            mean(d3$vix_rsi2[d3$spx_rsi2 <= 20] <= 20)))
+cat(sprintf("  P(SPX oversold | VIX oversold)   = %.3f\n",
+            mean(d3$spx_rsi2[d3$vix_rsi2 <= 20] <= 20)))
+cat(sprintf("  overlap: %d of %d days (%.1f%%)\n",
+            sum(d3$spx_rsi2 <= 20 & d3$vix_rsi2 <= 20), nrow(d3),
+            100 * mean(d3$spx_rsi2 <= 20 & d3$vix_rsi2 <= 20)))
+
+cat("\n--- largest next-day moves, SPX oversold while VIX calm ---\n")
+print(as.data.frame(
+  d3 |> dplyr::filter(bucket == "SPX oversold only") |>
+    dplyr::arrange(dplyr::desc(abs(spx_next))) |> head(5) |>
+    dplyr::transmute(date, px = round(px, 1), vix = round(vix, 1),
+                     spx_rsi2 = round(spx_rsi2, 1), vix_rsi2 = round(vix_rsi2, 1),
+                     next_spx_pct = round(100 * spx_next, 2),
+                     next_vix = round(vix_next, 2))
+), row.names = FALSE)
+
+cat("\n--- largest next-day moves, VIX oversold while SPX not ---\n")
+print(as.data.frame(
+  d3 |> dplyr::filter(bucket == "VIX oversold only") |>
+    dplyr::arrange(dplyr::desc(abs(spx_next))) |> head(5) |>
+    dplyr::transmute(date, px = round(px, 1), vix = round(vix, 1),
+                     spx_rsi2 = round(spx_rsi2, 1), vix_rsi2 = round(vix_rsi2, 1),
+                     next_spx_pct = round(100 * spx_next, 2),
+                     next_vix = round(vix_next, 2))
+), row.names = FALSE)
