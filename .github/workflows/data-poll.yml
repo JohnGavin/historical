@@ -41,13 +41,50 @@ jobs:
       - name: Install R dependencies
         shell: Rscript {0}
         run: |
-          install.packages(
-            c("jsonlite", "arrow", "dplyr", "cli", "here",
-              "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload",
-              "DBI", "duckdb", "duckplyr", "ggplot2",
-              "lubridate", "slider", "rlang"),
-            repos = "https://cloud.r-project.org"
+          # The fetch scripts call pkgload::load_all() on packages/historicaldata,
+          # which hard-fails if any DESCRIPTION Import is absent. Keeping a
+          # hand-written list in sync with DESCRIPTION does not work: adding
+          # `digest` there (historical#598) broke this job on the next scheduled
+          # run, because only one of the two lists was updated.
+          #
+          # So derive the package's Imports from DESCRIPTION and union them with
+          # the extras that only the fetch scripts need. The literal list is
+          # retained as a floor, so a DESCRIPTION parse failure degrades to the
+          # previous behaviour rather than installing nothing.
+          script_deps <- c(
+            "jsonlite", "arrow", "dplyr", "cli", "here",
+            "httr2", "tibble", "tidyr", "purrr", "quantmod", "pkgload",
+            "DBI", "duckdb", "duckplyr", "ggplot2",
+            "lubridate", "slider", "rlang", "digest"
           )
+
+          pkg_imports <- tryCatch({
+            dcf <- read.dcf("packages/historicaldata/DESCRIPTION", fields = "Imports")
+            raw <- dcf[1L, 1L]
+            if (is.na(raw)) character(0) else {
+              x <- strsplit(raw, ",")[[1]]
+              trimws(sub("\\(.*\\)", "", x))
+            }
+          }, error = function(e) {
+            message("DESCRIPTION parse failed, falling back to literal list: ",
+                    conditionMessage(e))
+            character(0)
+          })
+
+          # base/recommended packages ship with R; installing them is wasteful
+          # and `base`/`stats` are not on CRAN at all.
+          base_pkgs <- rownames(installed.packages(priority = "base"))
+          need <- setdiff(unique(c(script_deps, pkg_imports)), c(base_pkgs, ""))
+
+          message("Installing ", length(need), " packages: ",
+                  paste(sort(need), collapse = ", "))
+          install.packages(need, repos = "https://cloud.r-project.org")
+
+          # Fail loudly here rather than 20 lines later inside load_all().
+          missing <- need[!need %in% rownames(installed.packages())]
+          if (length(missing) > 0L) {
+            stop("Failed to install: ", paste(missing, collapse = ", "))
+          }
 
       - name: Run fetch script
         env:
