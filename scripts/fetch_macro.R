@@ -53,6 +53,39 @@ series_list <- c(
   "BAMLH0A2HYB"          # ICE BofA BB High Yield Spread
 )
 
+#' Make an arbitrary string safe to hand to cli.
+#'
+#' Overnight run 30721849545 (#619) died here, not in the download. FRED
+#' returned bytes that `read.csv()` flagged as "embedded nulls"; the resulting
+#' condition message was not valid UTF-8, so `nchar()` returned NA inside
+#' `cli`'s `ansi_strwrap()`:
+#'
+#'   Error in if (any(sl > 0L | rl > 0L)) : missing value where TRUE/FALSE needed
+#'   Calls: tryCatch ... clii__xtext -> ansi_strwrap -> lapply -> FUN
+#'
+#' The batch handler crashed while *reporting* the failure, so the per-series
+#' fallback below it never ran and a transient upstream problem became a hard
+#' job failure. Every error message that reaches cli must go through this.
+#'
+#' Same defect class as the yfinance NUL-byte incident behind the
+#' `qa-targets-pipeline` rule's iconv requirement — applied to a message
+#' rather than to stored data.
+safe_msg <- function(x, max_chars = 300L) {
+  # Check before paste(): paste() renders NA as the literal string "NA".
+  if (length(x) == 0L || all(is.na(x))) return("(missing error message)")
+  x <- paste(as.character(x), collapse = " ")
+  # sub = "" drops bytes that are not representable, yielding valid UTF-8.
+  x <- iconv(x, from = "", to = "UTF-8", sub = "")
+  if (length(x) != 1L || is.na(x) || is.na(nchar(x))) {
+    return("(unprintable error message)")
+  }
+  x <- gsub("[[:cntrl:]]+", " ", x)
+  x <- trimws(x)
+  if (!nzchar(x)) return("(empty error message)")
+  if (nchar(x) > max_chars) x <- paste0(substr(x, 1L, max_chars), " [truncated]")
+  x
+}
+
 fetch_fred_csv <- function(series_id) {
   url <- paste0("https://fred.stlouisfed.org/graph/fredgraph.csv?id=", series_id)
   tryCatch({
@@ -69,7 +102,7 @@ fetch_fred_csv <- function(series_id) {
     cli::cli_inform(c("v" = "{series_id}: {nrow(df)} obs, {sum(!is.na(df$value))} non-NA"))
     df
   }, error = function(e) {
-    cli::cli_warn("Failed to fetch {series_id}: {conditionMessage(e)}")
+    cli::cli_warn("Failed to fetch {series_id}: {safe_msg(conditionMessage(e))}")
     NULL
   })
 }
@@ -93,10 +126,27 @@ batch_result <- tryCatch({
     ) |>
     filter(!is.na(date)) |>
     as_tibble()
+  # A garbage response can still parse into *something*. Reject anything that
+  # does not look like the wide FRED CSV we asked for, so it falls through to
+  # the per-series path instead of being written as if it were good.
+  matched <- intersect(unique(long$series_id), series_list)
+  if (nrow(long) == 0L || length(matched) < 1L) {
+    stop("batch response parsed but matched ", length(matched),
+         " of ", length(series_list), " requested series")
+  }
+  if (length(matched) < length(series_list)) {
+    cli::cli_warn(c(
+      "!" = "Batch returned {length(matched)} of {length(series_list)} series.",
+      "i" = "Missing: {.val {setdiff(series_list, matched)}}"
+    ))
+  }
+
   cli::cli_inform(c("v" = "Batch OK: {nrow(long)} obs, {n_distinct(long$series_id)} series"))
   long
 }, error = function(e) {
-  cli::cli_warn("Batch failed ({conditionMessage(e)}), falling back to per-series...")
+  # safe_msg is load-bearing: the raw message may be invalid UTF-8 and would
+  # crash cli here, taking the fallback below down with it (#619).
+  cli::cli_warn("Batch failed ({safe_msg(conditionMessage(e))}), falling back to per-series...")
   NULL
 })
 
@@ -114,6 +164,40 @@ if (is.null(batch_result)) {
 
 dir.create("data/raw", recursive = TRUE, showWarnings = FALSE)
 out_path <- "data/raw/fred_macro.parquet"
+
+# Do not let a partial failure quietly replace a good file. The batch path and
+# the per-series path can both return fewer series than asked for, and the
+# write below is an overwrite, not a merge (#619).
+n_series <- dplyr::n_distinct(combined$series_id)
+
+if (nrow(combined) == 0L) {
+  cli::cli_abort(c(
+    "x" = "No observations fetched from FRED — refusing to write an empty file.",
+    "i" = "Both the batch and per-series paths failed. Existing {.path {out_path}} left untouched."
+  ))
+}
+
+if (file.exists(out_path)) {
+  prev <- tryCatch(arrow::read_parquet(out_path), error = function(e) NULL)
+  if (!is.null(prev)) {
+    prev_series <- dplyr::n_distinct(prev$series_id)
+    if (n_series < prev_series) {
+      cli::cli_abort(c(
+        "x" = "Fetched {n_series} series but the existing file has {prev_series}.",
+        "i" = "Refusing to overwrite — this would silently drop {prev_series - n_series} series.",
+        "i" = "Re-run once FRED is healthy, or delete {.path {out_path}} to force."
+      ))
+    }
+  }
+}
+
+if (n_series < length(series_list)) {
+  cli::cli_warn(c(
+    "!" = "Writing {n_series} of {length(series_list)} requested series.",
+    "i" = "Missing: {.val {setdiff(series_list, unique(combined$series_id))}}"
+  ))
+}
+
 arrow::write_parquet(combined, out_path, compression = "zstd")
 
 cli::cli_h2("Summary")
