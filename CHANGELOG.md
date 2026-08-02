@@ -1,5 +1,103 @@
 # Changelog
 
+## 2026-07-30 → 2026-08-02 (session 23 — interval calibration, path signatures, and a dead data pipeline)
+
+### Completed
+
+- **Interval-coverage QA gate (#597, PR #604):** `hd_interval_score()`
+  (Gneiting-Raftery), `hd_interval_coverage()`, `hd_fpr_equipoise()`
+  (Sellke-Berger), `hd_block_boot_sharpe_ci()`. New `qa_interval_coverage`
+  walk-forwards the leaderboard's published bootstrap CIs. **Finding: predictive
+  coverage 10.5-54.4% against a stated 90%.** Mostly a category error - a
+  bootstrap CI is an interval on the *estimator*, while the leaderboard invites
+  reading it as a forecast interval. `stk_drif` at 31.6% on the *estimator*
+  reading is a genuine non-stationarity signal. Gate warns, never aborts:
+  effective n is 4.75 per strategy against 57 nominal origins.
+- **Sealed hypotheses (#598, PR #604):** `hypotheses` schema gains
+  `commit_hash`/`sealed_at`/`seal_method`; `hd_rlog_seal()`/`_verify()`/
+  `_export()`. Attestation is HuggingFace commit timestamps, with RFC-3161 TSA
+  documented as the upgrade path and OpenTimestamps rejected. Motivated by
+  making the `K_eff_strat` denominator auditable.
+- **Levy area (#605, PR #606):** `hd_path_signature2()`, `hd_levy_area()`,
+  `hd_roll_levy_area()`. Closes the one real gap the path-signature review
+  exposed - every rolling statistic we had was permutation-invariant. **No
+  dependency needed:** the shuffle identities collapse the level-2 tensor of a
+  2-D path to a single new number, pinned by tests. Checked all 24,483 CRAN
+  packages - no rough-path package exists in R.
+- **SPX-VIX lead-lag tested, not just reviewed (#611, PRs #612/#614):** the
+  source's RSI(2) filter claim **replicates**; its causal claim **reverses**
+  (SPX_t -> VIX_{t+1} t = -0.11; VIX_t -> SPX_{t+1} t = +3.15). Reconciled by
+  the finding that the two RSI conditions are nearly disjoint - 1.8% overlap,
+  `cor = -0.664` - so they select opposite market states rather than measuring
+  one state twice.
+- **CI: three defects found and fixed.** `digest` added to DESCRIPTION but not
+  the workflow's hand-written twin, breaking the poll (#613 - now derived from
+  DESCRIPTION); hardcoded `repos=` discarding RSPM binaries, **51m37s -> ~4m30s**
+  (#620); decaying retry ladder at +1h/+8h/+16h/+32h with per-source selection
+  (#618).
+- **#619 root-caused:** `macro_daily`/`equity_daily` are not a broken pipeline
+  but an **absent** one - seeded once on 2026-05-06 by duplicating an upstream
+  HF repo that had itself gone quiet, with no producer, no schedule, and fetch
+  scripts writing different filenames than the served artefacts. Gated producer
+  built (PR #621) + `fetch_macro.R` hardened (PR #622).
+- **Lessons propagated cross-project (llm#863):** `systematic-debugging` gains
+  baseline-before-regression; `verification-before-completion` gains
+  one-change-per-verification-run; `credential-management` gains the
+  `${VAR:+yes}${VAR:-no}` secret-echo trap; `ci-workflows-github-actions` gains
+  the RSPM finding.
+
+### Failed Approaches
+
+- **Blamed my own merges for a link-audit failure** on timestamp correlation.
+  It was a Kaggle bot-block returning **404** (not 403) to non-browser clients;
+  the merges only *triggered* the scheduled check. Fixed via `.lycheeignore`
+  (#596/PR #610).
+- **Called PR #613 suspect** when a verification run sat 38 min on the install
+  step it rewrote. The old run took **~51 min** - the step had always been that
+  slow, because it always *passed* and so was never timed. Exonerated on the PR.
+- **Framed #619 as "the refresh broke"** before checking a refresh had ever
+  existed. It had not.
+- **Dispatched two agents onto #575/#576** without checking the cited lines
+  still said what the issues claimed. Both had been fixed weeks earlier by
+  #570/#571. Cost ~340k tokens to discover nothing needed doing.
+- **`git diff > patch` then `git apply`** - the local git uses an external
+  differ, so the output is not a valid patch. Redo the edits or use
+  `--no-ext-diff`.
+- **`echo "${VAR:+yes}${VAR:-no}"`** as an is-it-set check printed the FRED key.
+
+### Accuracy / Metrics
+
+- Package suite 607 -> 650 tests (+43 path-signature, +73 across the session).
+  Baselines unchanged: root 3 known failures, package 1.
+- Package skip count 5 -> 15 (all `HD_TEST_LIVE`-gated, from #580 Phase 2
+  landing mid-session, not a regression). Documented baseline now stale - #607.
+- data-poll install step 51m37s -> ~4m30s per matrix job (~4h runner time saved
+  per weekly poll).
+- Macro coverage baseline measured for #617: median 96.4% of weekdays, mean NA
+  rate 0.92%, 19 of 71 series carry any NA.
+
+### Known Limitations
+
+- **`macro_daily`/`equity_daily` still stale** (#619). Producer merged and
+  gated; `HF_TOKEN` turns out to already exist, so the next successful poll
+  WILL publish. `equity_daily` (1,622 tickers, 7.1M rows) untouched.
+- **`HF_TOKEN` never validated** - created 2026-05-06, never used by a
+  workflow. `upload_hf.sh` gates on presence, not validity; a revoked token
+  fails at the last step. A pre-flight `hf auth whoami` would fix this.
+- **8 of 9 mandated `dv_*` targets absent** (#617); `plan_data_validation()`
+  is written but not wired into `docs/_targets.R`.
+- **`hd_ohlcv()` returns POSIXct, `hd_macro()` returns Date** (#615) - silent
+  zero-row joins. `dv_join_key_types` covers pipeline targets only, not
+  accessor return types (#616). Land #616 before #615.
+- **`fetch_intl_vol.R` cannot run in the project dev shell** - `quantmod` is in
+  the CI install list but not `flake.nix`, so the macro_daily combine was proven
+  with a stub for that component.
+- **FRED batch endpoint is intermittently corrupt** - observed both in CI and
+  locally. The fallback now survives it; the upstream flakiness remains.
+- **Retry ladder's selection branch** proved itself on the 2026-08-01 overnight
+  run, but `publish-macro-daily` has never reached the upload step.
+
+
 ## 2026-07-19 → 2026-07-22 (session 22 — verification integrity + cross-project provisional-constants audit)
 
 ### Completed
