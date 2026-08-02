@@ -71,5 +71,8 @@ x <- historicaldata::hd_macro("VIXCLS"); max(as.Date(x$date))   # want ~2026-08-
   final commit (`9a07a2c`, review 10630) returned "No issues found";
   `roborev_consistency_check.sh` reports `roborev:consistent`.
 - The FRED API key was echoed into a session transcript by a buggy
-  `${VAR:+yes}${VAR:-no}` check. Free-tier, rate-limit only — **rotate it**.
-  The trap is now a forbidden pattern in `credential-management` (llm#863).
+  `${VAR:+yes}${VAR:-no}` check. **CLOSED 2026-08-02 — user decided not to
+  rotate; do not re-raise.** Accepted risk: FRED keys are free to register,
+  carry rate limits only, and grant no billing, write, or private-data access.
+  The shell trap that caused it is now a forbidden pattern in the global
+  `credential-management` rule (llm#863), which is the part that generalises.
