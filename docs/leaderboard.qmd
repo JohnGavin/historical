@@ -126,11 +126,17 @@ if (!is.null(lb)) {
       `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
       `CVaR 95%` = ifelse(is.na(cvar_95),      "—", paste0(round(cvar_95 * 100, 1), "%")),
       Vol        = paste0(round(vol * 100, 1), "%"),
+      Gross      = dplyr::case_when(
+        !("gross_convention" %in% names(full)) | is.na(gross_convention) ~ "—",
+        is_cap ~ paste0(format(gross_convention, nsmall = 1), "x*"),
+        TRUE   ~ paste0(format(gross_convention, nsmall = 1), "x")
+      ),
       SSR        = ifelse(is.na(ssr),           "—", as.character(round(ssr, 2))),
       `Top5% Share` = ifelse(is.na(top5pct_share), "—", paste0(round(top5pct_share * 100, 1), "%")),
       Credible   = ifelse(is.na(credible) | !credible, "NO", "yes")
     ) |>
-    select(Strategy = strategy, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, SSR, `Top5% Share`, Credible)
+    select(Strategy = strategy, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
+           SSR, `Top5% Share`, Credible)
 
   n_flagged <- sum(!full$credible, na.rm = TRUE)
   flag_note <- if (n_flagged > 0) {
@@ -147,13 +153,53 @@ if (!is.null(lb)) {
            " — draw on `stk_universe` (see issue #150).")
   } else ""
 
+  # ── Gross-exposure disclosure note (#626) — dynamically computed, never hardcoded ──
+  gh_url <- tryCatch({
+    remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+    sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+  }, error = function(e) NULL)
+  git_sha <- tryCatch(
+    system("git rev-parse HEAD 2>/dev/null", intern = TRUE),
+    error = function(e) "main"
+  )
+  git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
+  gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
+    "https://github.com/JohnGavin/historical"
+  hd_exposure_link <- sprintf(
+    "[`hd_exposure_metrics()`](%s/blob/%s/packages/historicaldata/R/exposure.R#L67)",
+    gh_base, git_sha
+  )
+  gross_registry_link <- sprintf(
+    "[`strategy_gross_convention`](%s/blob/%s/R/plan_exposure.R#L27)",
+    gh_base, git_sha
+  )
+
+  n_2x <- if ("gross_convention" %in% names(full)) {
+    sum(full$gross_convention >= 2, na.rm = TRUE)
+  } else 0L
+  n_capped <- if ("is_cap" %in% names(full)) sum(full$is_cap, na.rm = TRUE) else 0L
+  n_na_gross <- if ("gross_convention" %in% names(full)) sum(is.na(full$gross_convention)) else nrow(full)
+
+  gross_note <- paste0(
+    " Gross exposure (`sum(abs(w))`, computed by ", hd_exposure_link,
+    " and recorded per strategy in ", gross_registry_link,
+    ") is not uniform across this table: ", n_2x,
+    " strategies are built dollar-neutral long-short at 2.0x gross while others run long-only at 1.0x, ",
+    "so Vol, Net CAGR, and Max DD are not directly comparable across rows even when Sharpe is similar ",
+    "(Sharpe is leverage-invariant under proportional scaling; the other three columns are not). ",
+    "A trailing `*` on the Gross column (", n_capped,
+    " strategies) marks a construction **ceiling** the strategy can reach but does not realise every period ",
+    "(e.g. Managed Futures targets volatility and only hits its 3.0x cap in low-vol regimes) — treat those as upper bounds, not realised averages. ",
+    if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross: either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
+  )
+
   hd_dt(metrics_table, paste0(
     "Strategies ranked by Sharpe (highest first). ",
     "Net CAGR after 0.20% round-trip/month cost where available. ",
     "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
     "Top5% Share = fraction of total return from best 5% of months. ",
     "Credible = plausible CAGR (<20%) and cum P&L (<50x).",
-    flag_note, bias_note
+    flag_note, bias_note, gross_note
   ))
 }
 ```

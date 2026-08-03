@@ -479,6 +479,17 @@ plan_leaderboard <- function() {
           )
       }
 
+      # ── Gross-exposure convention (#626, measurement only) ────────────────
+      # Join gross_convention, is_cap, source_ref from R/plan_exposure.R.
+      # strategy_gross_convention is keyed by the same display labels as
+      # all_metrics$strategy. Unlike the Full-Period-only joins above, this
+      # is a construction-time property of the strategy, not a period
+      # statistic, so it broadcasts to every period row unchanged.
+      if (!is.null(strategy_gross_convention) && nrow(strategy_gross_convention) > 0) {
+        all_metrics <- all_metrics |>
+          left_join(strategy_gross_convention, by = "strategy")
+      }
+
       all_metrics
     }),
 
