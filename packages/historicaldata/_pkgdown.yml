@@ -113,9 +113,10 @@ reference:
       - hd_kelly_bayesian
       - hd_kelly_bounded
       - hd_kelly_rolling
-      - hd_keff
-      - hd_tail_keff
+      - hd_keff_frob
+      - hd_tail_keff_frob
       - hd_tail_dependence
+      - hd_strat_keff_vertox
 
   - title: Trade Analysis
     desc: Trade-level metrics and event analysis
@@ -144,6 +145,13 @@ reference:
       - hd_results_append
       - hd_results_query
       - hd_results_schema
+
+  - title: Portfolio Construction
+    desc: Risk-parity weight construction and OOS weight-stability diagnostics
+    contents:
+      - hrp_weights
+      - trp_weights
+      - hd_weight_stability_diagnostic
 
   - title: Infrastructure
     desc: DuckDB connections, caching, and downloads

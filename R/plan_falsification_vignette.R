@@ -377,6 +377,91 @@ plan_falsification_vignette <- function() {
     }),
 
 
+    # ── Crisis-vs-calm tail independence (#624) ──────────────────────────
+    # fals_tail_independence is computed on every pipeline run but was never
+    # surfaced. Formats it as a Metric/Value table for the existing
+    # "Multiplicity Correction" tabset, following the fals_vig_multiplicity
+    # pattern above.
+    targets::tar_target(fals_vig_tail_table, {
+      tk <- fals_tail_independence$tail_keff
+      ratio <- if (!is.na(tk$K_eff_frob_calm) && tk$K_eff_frob_calm != 0) {
+        tk$K_eff_frob_crisis / tk$K_eff_frob_calm
+      } else {
+        NA_real_
+      }
+
+      td <- fals_tail_independence$tail_dependence
+      mean_lambda_l <- mean(td$lambda_L, na.rm = TRUE)
+
+      dd <- fals_tail_independence$drawdown_overlap
+      mean_dd_overlap <- mean(dd[upper.tri(dd)], na.rm = TRUE)
+
+      tibble::tibble(
+        Metric = c(
+          "K_eff_frob (calm regime)",
+          "K_eff_frob (crisis regime)",
+          "Collapse ratio (crisis / calm)",
+          "N calm-regime months",
+          "N crisis-regime months",
+          "Mean lower tail dependence (lambda_L)",
+          "Mean pairwise drawdown overlap"
+        ),
+        Value = as.character(c(
+          round(tk$K_eff_frob_calm, 2),
+          round(tk$K_eff_frob_crisis, 2),
+          round(ratio, 2),
+          tk$n_calm_days,
+          tk$n_crisis_days,
+          round(mean_lambda_l, 3),
+          round(mean_dd_overlap, 3)
+        ))
+      )
+    }),
+
+    targets::tar_target(fals_vig_tail_caption, {
+      tk <- fals_tail_independence$tail_keff
+      ratio <- if (!is.na(tk$K_eff_frob_calm) && tk$K_eff_frob_calm != 0) {
+        tk$K_eff_frob_crisis / tk$K_eff_frob_calm
+      } else {
+        NA_real_
+      }
+      collapse_pct <- round((1 - ratio) * 100, 0)
+
+      verdict <- if (is.na(ratio)) {
+        paste0(
+          "too few crisis-regime months (", tk$n_crisis_days,
+          ") to draw a conclusion"
+        )
+      } else if (ratio < 0.85) {
+        paste0(
+          "diversification is failing exactly when it matters most: K_eff_frob falls by ",
+          collapse_pct, "% from the calm to the crisis regime"
+        )
+      } else {
+        "diversification holds up in the crisis regime -- no material collapse detected"
+      }
+
+      gh <- "https://github.com/JohnGavin/historical/blob/main"
+      a_ <- function(text, url) paste0('<a href="', url, '" target="_blank" rel="noopener noreferrer">', text, '</a>')
+
+      paste0(
+        "Regime-conditional independence test. ",
+        "The 6-strategy return matrix is split into a crisis regime (any strategy below its own 5% monthly-return quantile) ",
+        "and the complementary calm regime, and K_eff_frob is recomputed within each. ",
+        "K_eff_frob (calm) = ", round(tk$K_eff_frob_calm, 2),
+        " vs K_eff_frob (crisis) = ", round(tk$K_eff_frob_crisis, 2),
+        " across ", tk$n_calm_days, " calm and ", tk$n_crisis_days, " crisis months: ",
+        verdict, ". ",
+        "Mean lower tail dependence (lambda_L) across the 15 strategy pairs is ",
+        round(mean(fals_tail_independence$tail_dependence$lambda_L, na.rm = TRUE), 3),
+        " -- under independence this converges to the 0.05 quantile used to define the tail. ",
+        "Source: ", a_("hd_tail_keff_frob()", paste0(gh, "/packages/historicaldata/R/falsification.R#L558")), ", ",
+        a_("hd_tail_dependence()", paste0(gh, "/packages/historicaldata/R/falsification.R#L638")), ", ",
+        a_("hd_drawdown_overlap()", paste0(gh, "/packages/historicaldata/R/falsification.R#L687")), "."
+      )
+    }),
+
+
     # ── HAC dot chart (Cleveland style) ─────────────────────────────
     targets::tar_target(fals_vig_hac_plot, {
       library(ggplot2)
