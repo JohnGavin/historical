@@ -97,6 +97,8 @@ source(here::here("R/plan_alpha_decay.R"))
 source(here::here("R/plan_kelly_variants.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_strategy_correlation.R"))
+# #626: gross/net exposure convention registry (measurement only)
+source(here::here("R/plan_exposure.R"))
 source(here::here("R/plan_avoid_worst.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
@@ -182,6 +184,7 @@ c(plan_strategy_names(),
   plan_managed_futures(),
   plan_forecast_eval(),
   plan_strategy_correlation(),
+  plan_exposure(),
   plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
