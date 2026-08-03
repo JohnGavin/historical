@@ -83,7 +83,7 @@ knitr::kable(
     "Amihud = 4.7 pp, Kyle = 1.1 pp. Kyle's lambda is estimated as the OLS ",
     "price-impact slope of log-returns on signed order flow within each ",
     "rolling window (cov/var; see ",
-    "[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R)",
+    "[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46)",
     "), not a per-bar ratio. Prior to [#624](https://github.com/JohnGavin/historical/issues/624), ",
     "the `kyle_mean` column was numerically identical to `amihud_mean`, so any ",
     "earlier apparent agreement with the Varma Kyle benchmark was spurious and ",
