@@ -144,3 +144,109 @@ test_that("bdbb_half_life and bdbb_tail_predict signatures are stable", {
   expect_snapshot(args(bdbb_half_life))
   expect_snapshot(args(bdbb_tail_predict))
 })
+
+# --- Kyle's lambda regression fix (#624) ------------------------------------
+#
+# Prior to #624, kyle_lambda was `abs(log_ret) / pmax(volume, 1e-8)` — the
+# exact same expression as amihud, so kyle_mean and amihud_mean were always
+# numerically identical. Kyle's lambda is a price-impact *coefficient* (the
+# regression slope of returns on signed order flow), not a per-bar ratio.
+# These tests guard the fixed behaviour.
+
+test_that("kyle_mean is no longer identical to amihud_mean when flow direction varies", {
+  set.seed(624L)
+  n <- 200L
+  times <- seq(as.POSIXct("2023-01-01", tz = "UTC"), by = "hour", length.out = n)
+  # Alternate signed flow direction and vary magnitude so amihud (a ratio of
+  # |log_ret| to volume) and the Kyle regression slope diverge.
+  sign_flow <- rep(c(1, -1), length.out = n)
+  vol       <- abs(rnorm(n, mean = 1000, sd = 300)) + 50
+  eps       <- rnorm(n, sd = 0.01)
+  close     <- 100 * exp(cumsum(eps))
+  open      <- close - sign_flow * 1e-3  # exact sign(close - open) == sign_flow
+  df <- tibble::tibble(
+    time = times, open = open, high = pmax(open, close) * 1.001,
+    low  = pmin(open, close) * 0.999, close = close, volume = vol,
+    trades = 50L
+  )
+  result <- bdbb_fit(df, window_days = 5L, min_frac = 0.5)
+  computed <- dplyr::filter(result, !is.na(kyle_mean), !is.na(amihud_mean))
+  expect_true(nrow(computed) > 0)
+  # The two series must differ somewhere -- this is the regression guard for
+  # the exact duplication bug fixed in #624.
+  expect_false(isTRUE(all.equal(computed$kyle_mean, computed$amihud_mean)))
+})
+
+test_that("kyle_mean recovers a known regression slope on synthetic data", {
+  set.seed(625L)
+  n     <- 100L
+  beta  <- 1.5e-6  # true price-impact coefficient
+  times <- seq(as.POSIXct("2023-01-01", tz = "UTC"), by = "hour", length.out = n)
+
+  # Freely choose desired signed_flow values, then back out volume/open/close
+  # so the realised signed_flow and log_ret match the design exactly (up to
+  # tiny numerical noise), letting us recover beta via OLS.
+  desired_flow <- rnorm(n, mean = 0, sd = 800)
+  sign_flow    <- sign(desired_flow)
+  sign_flow[sign_flow == 0] <- 1
+  vol          <- pmax(abs(desired_flow), 1)  # volume_t = |desired_flow_t|
+  desired_flow <- sign_flow * vol             # exact signed_flow after rounding
+
+  noise  <- rnorm(n, sd = 1e-8)  # negligible relative to beta * desired_flow
+  logret <- beta * desired_flow + noise
+  logret[1] <- 0  # first bar's log_ret is NA regardless (no lag); placeholder
+  close  <- 100 * exp(cumsum(logret))
+  open   <- close - sign_flow * 1e-6  # exact sign(close - open) == sign_flow
+
+  df <- tibble::tibble(
+    time = times, open = open, high = pmax(open, close) * 1.0001,
+    low  = pmin(open, close) * 0.9999, close = close, volume = vol,
+    trades = 50L
+  )
+  result <- bdbb_fit(df, window_days = 4L, min_frac = 0.9)
+  kyle_vals <- result$kyle_mean[!is.na(result$kyle_mean)]
+  expect_true(length(kyle_vals) > 0)
+  # Recovered slope should be close to the true beta used to generate the data.
+  expect_equal(kyle_vals, rep(beta, length(kyle_vals)), tolerance = 0.05)
+})
+
+test_that("kyle_mean is NA when window flow is zero-variance (flat)", {
+  set.seed(626L)
+  n <- 100L
+  times <- seq(as.POSIXct("2023-01-01", tz = "UTC"), by = "hour", length.out = n)
+  # Constant sign and constant volume -> signed_flow is identical every bar.
+  close <- 100 * exp(cumsum(rnorm(n, sd = 0.01)))
+  df <- tibble::tibble(
+    time = times, open = close - 1e-3, high = close * 1.001,
+    low  = close * 0.999, close = close, volume = 1000, trades = 50L
+  )
+  result <- bdbb_fit(df, window_days = 4L, min_frac = 0.9)
+  expect_true(nrow(result) > 0)
+  expect_true(all(is.na(result$kyle_mean)))
+  # R and amihud are unaffected by flat flow (they don't divide by var(flow)).
+  expect_true(any(!is.na(result$amihud_mean)))
+})
+
+test_that("kyle_mean is NA when too few paired observations, even though R/amihud compute", {
+  set.seed(627L)
+  n <- 200L
+  times <- seq(as.POSIXct("2023-01-01", tz = "UTC"), by = "hour", length.out = n)
+  eps   <- rnorm(n, sd = 0.01)
+  close <- 100 * exp(cumsum(eps))
+  vol   <- abs(rnorm(n, mean = 1000, sd = 200)) + 50
+  # NA out 25% of volume (scattered) -- log_ret coverage is unaffected (only
+  # the first bar is NA by construction), but paired (log_ret, signed_flow)
+  # coverage drops below the stricter 0.9 kyle gate while staying above the
+  # 0.5 min_frac gate used for the row as a whole.
+  na_idx      <- sample(seq_len(n), size = floor(0.25 * n))
+  vol[na_idx] <- NA_real_
+  df <- tibble::tibble(
+    time = times, open = close - 1e-3, high = close * 1.001,
+    low  = close * 0.999, close = close, volume = vol, trades = 50L
+  )
+  result <- bdbb_fit(df, window_days = 4L, min_frac = 0.5)
+  expect_true(nrow(result) > 0)
+  expect_true(all(is.na(result$kyle_mean)))
+  expect_true(any(!is.na(result$R)))
+  expect_true(any(!is.na(result$amihud_mean)))
+})

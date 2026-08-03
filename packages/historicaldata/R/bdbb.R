@@ -38,7 +38,7 @@
 #' No future data enters the window.
 #'
 #' @family bdbb
-#' @importFrom stats acf lm coef
+#' @importFrom stats acf lm coef cov var
 #' @export
 #' @examplesIf interactive()
 #' sol <- hd_kraken_ohlcvt("SOL", interval_min = 60L)
@@ -64,9 +64,13 @@ bdbb_fit <- function(df, window_days = 30L, min_frac = 0.7) {
     df,
     log_ret     = log(close / dplyr::lag(close)),
     signed_flow = sign(close - open) * volume,
-    amihud      = abs(log_ret) / pmax(volume, 1e-8),
-    kyle_lambda = abs(log_ret) / pmax(volume, 1e-8)
+    amihud      = abs(log_ret) / pmax(volume, 1e-8)
   )
+  # NOTE (#624): kyle_lambda is NOT a per-bar ratio. Kyle's lambda is a
+  # price-impact *coefficient* — the slope of price change on signed order
+  # flow — and is estimated per rolling window below (kyle_mean). A ratio
+  # form here would collapse onto amihud, because abs(signed_flow) == volume
+  # by construction.
 
   # Rolling window: one output row per window end (complete windows only)
   slider::slide_dfr(
@@ -124,6 +128,30 @@ bdbb_fit <- function(df, window_days = 30L, min_frac = 0.7) {
 
       half_life_hours <- if (!is.na(theta) && theta > 0) log(2) / theta else NA_real_
 
+      # Kyle's lambda: OLS slope of log_ret on signed_flow within the window
+      # (the standard price-impact estimator; see Kyle 1985). Estimated as
+      # cov(log_ret, signed_flow) / var(signed_flow) — the closed-form
+      # simple-regression slope. A regression needs paired, non-degenerate
+      # observations, so the coverage gate here is stricter (min_frac = 0.9,
+      # matching the extreme-quantile gate in roll_quantile_safe()) than the
+      # mean-based gate (min_n) used for R/amihud/theta above.
+      pair_ok    <- !is.na(w$log_ret) & !is.na(w$signed_flow)
+      n_pair     <- sum(pair_ok)
+      kyle_min_n <- ceiling(0.9 * n_bars)
+      if (n_pair < kyle_min_n) {
+        kyle_mean <- NA_real_
+      } else {
+        lr     <- w$log_ret[pair_ok]
+        sfp    <- w$signed_flow[pair_ok]
+        var_sf <- stats::var(sfp)
+        # A flat (zero-variance) flow window makes the slope undefined.
+        kyle_mean <- if (!is.finite(var_sf) || var_sf < 1e-12) {
+          NA_real_
+        } else {
+          stats::cov(lr, sfp) / var_sf
+        }
+      }
+
       tibble::tibble(
         window_end       = max(w$time, na.rm = TRUE),
         R                = R_metric,
@@ -131,7 +159,7 @@ bdbb_fit <- function(df, window_days = 30L, min_frac = 0.7) {
         half_life_hours  = half_life_hours,
         signed_flow_mean = mean(sf, na.rm = TRUE),
         amihud_mean      = mean(w$amihud, na.rm = TRUE),
-        kyle_mean        = mean(w$kyle_lambda, na.rm = TRUE),
+        kyle_mean        = kyle_mean,
         n_obs            = n,
         regime           = regime
       )
