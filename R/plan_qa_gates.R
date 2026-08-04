@@ -289,6 +289,85 @@ check_vignette_cross_refs <- function(vignettes_dir = here::here("docs")) {
 }
 
 
+#' Assert leaderboard cagr/vol/max_dd are within a plausible FRACTIONAL range (S9)
+#'
+#' Guards against the #637 defect class: a strategy's `.norm_*` helper in
+#' R/plan_leaderboard.R forgetting to convert its source metrics target's
+#' native PERCENT convention (x * 100) to the leaderboard's canonical
+#' FRACTION convention. A strategy stored as percent shows up here as ~100x
+#' its true value (e.g. cagr = 7.70 instead of 0.077), which these bounds
+#' catch even though `sharpe` (scale-free) would look fine either way.
+#'
+#' Bounds are deliberately generous — they are a scale-error gate, not a
+#' performance-plausibility gate:
+#'   - `vol`: [0, 2] (0%-200% annualised volatility)
+#'   - `max_dd`: [-1, 0] (a drawdown cannot exceed -100% of peak equity, and
+#'     drawdown is never positive; mom_prepeak's bankruptcy floor is exactly
+#'     -1.0, see packages/historicaldata/R/utils_mom_prepeak_metrics.R:73)
+#'   - `cagr`: [-1, 3] (-100% to +300% annualised — wide enough for small-n
+#'     sub-period rows and volatile overlay strategies, tight enough to catch
+#'     a stray x100)
+#'
+#' @param leaderboard Tibble with at least `strategy`, `period`, `cagr`,
+#'   `vol`, `max_dd` columns (the output of the `leaderboard` targets
+#'   pipeline target).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_metric_ranges <- function(leaderboard) {
+  required_cols <- c("strategy", "period", "cagr", "vol", "max_dd")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_leaderboard_metric_ranges() (S9) requires strategy, period, cagr, vol, max_dd."
+    ))
+  }
+
+  bounds <- list(
+    cagr   = c(-1, 3),
+    vol    = c(0, 2),
+    max_dd = c(-1, 0)
+  )
+
+  offenders <- purrr::map_dfr(names(bounds), function(col) {
+    vals <- leaderboard[[col]]
+    lo <- bounds[[col]][1]
+    hi <- bounds[[col]][2]
+    bad <- !is.na(vals) & (vals < lo | vals > hi)
+    if (!any(bad)) return(NULL)
+    tibble::tibble(
+      strategy = leaderboard$strategy[bad],
+      period   = leaderboard$period[bad],
+      metric   = col,
+      value    = vals[bad],
+      lo       = lo,
+      hi       = hi
+    )
+  })
+
+  if (nrow(offenders) > 0L) {
+    msgs <- purrr::pmap_chr(
+      offenders[, c("strategy", "period", "metric", "value", "lo", "hi")],
+      function(strategy, period, metric, value, lo, hi) {
+        sprintf("  %s / %s -- %s = %s (expected [%s, %s])",
+                strategy, period, metric,
+                format(value, digits = 4), lo, hi)
+      }
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard metric(s) out of plausible fractional range in ",
+        "{nrow(offenders)} place(s) (likely a percent-vs-fraction unit bug, #637):"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = "Check the source metrics target's convention and convert in its .norm_* helper in R/plan_leaderboard.R."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -435,6 +514,21 @@ plan_qa_gates <- function() {
       command = {
         check_vignette_cross_refs(here::here("docs"))
         cli::cli_inform(c("v" = "qa_vignette_cross_refs: S8 passed (all vignettes have Related Vignettes section)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: leaderboard cagr/vol/max_dd are within a plausible fractional
+    # range (S9) — guards against the #637 percent-vs-fraction unit defect
+    # class where a strategy's source metrics target stores cagr/vol/max_dd
+    # as PERCENT (x * 100) but its .norm_* helper in R/plan_leaderboard.R
+    # forgets to convert to the leaderboard's canonical FRACTION convention.
+    targets::tar_target(
+      qa_leaderboard_metric_ranges,
+      command = {
+        check_leaderboard_metric_ranges(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_metric_ranges: S9 passed (all cagr/vol/max_dd within fractional range)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

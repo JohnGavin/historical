@@ -11,6 +11,27 @@
 #
 # Transposed format: metrics as rows, strategies as columns
 # (fewer strategies than metrics, at least for now)
+#
+# ── Unit convention (#637) ─────────────────────────────────────────────────
+# `cagr`, `vol`, and `max_dd` are stored as DECIMAL FRACTIONS throughout this
+# target (e.g. -0.21 == -21% drawdown), matching the convention documented in
+# R/plan_commodities_mean_reversion.R:210-214 and used natively by
+# R/plan_factormax.R, R/plan_drif.R, R/plan_stock_backtest.R, and
+# R/plan_portfolio_opt.R. Several source metrics targets (ltr_metrics,
+# olmar_metrics, tom_metrics, rsc_metrics, aw_metrics, mom_prepeak_metrics /
+# mom_postpeak_metrics / mom_combined_metrics, mf_metrics, ev_metrics) store
+# these columns as PERCENT (x * 100) natively -- their `.norm_*` helpers below
+# divide by 100 at the point where the source convention is known, so every
+# row entering `all_metrics` is already a fraction. `sharpe` is scale-free and
+# is never converted. Any NEW strategy wired into this target MUST follow the
+# same rule: check the source metrics target's own convention (grep for
+# `* 100` in its calc/metrics function) and convert to fraction in its own
+# `.norm_*` helper -- never infer the unit from the output magnitude
+# (magnitude heuristics misclassify genuine >150% vol or <1% vol strategies).
+# Display-time formatting (x 100, "%") belongs to the consumer
+# (docs/leaderboard.qmd, DT::datatable(), plot labels), not this target.
+# See also: R/plan_qa_gates.R `qa_leaderboard_metric_ranges` -- the range gate
+# that asserts every row here is within a plausible fractional range.
 
 plan_leaderboard <- function() {
   list(
@@ -29,36 +50,54 @@ plan_leaderboard <- function() {
       # Each helper returns a tibble with at minimum: period, months, cagr, vol,
       # sharpe, max_dd. Extra columns are preserved so the final bind_rows()
       # fills NA for columns absent in some strategies.
+      # Canonical unit for cagr/vol/max_dd is FRACTION -- see the module-level
+      # comment above. Each helper below converts from its source's native
+      # unit (fraction or percent) at this boundary.
 
-      # ltr_metrics has hac_sharpe instead of sharpe; no months column
+      # ltr_metrics has hac_sharpe instead of sharpe; no months column.
+      # Source: R/plan_ltr_momentum.R:167-169 (compute_ltr_metrics) stores
+      # cagr/vol/max_dd as PERCENT (round(x * 100, 1)) -- convert to fraction.
       .norm_ltr <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
-        m |> rename(sharpe = hac_sharpe)
+        m |>
+          rename(sharpe = hac_sharpe) |>
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
-      # olmar_metrics has `days` instead of `months`; daily ann_factor
+      # olmar_metrics has `days` instead of `months`; daily ann_factor.
+      # Source: R/plan_olmar.R:138-141 (calc) stores cagr/vol/max_dd as
+      # PERCENT (round(x * 100, 2)) -- convert to fraction.
       .norm_olmar <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
-        m |> rename(months = days)
+        m |>
+          rename(months = days) |>
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
-      # tom_metrics uses cagr_tom, vol_tom, sharpe_tom, max_dd_tom
-      # Drop benchmark columns; keep TOM strategy row only
+      # tom_metrics uses cagr_tom, vol_tom, sharpe_tom, max_dd_tom.
+      # Drop benchmark columns; keep TOM strategy row only.
+      # Source: R/plan_turn_of_month.R:162-165 stores cagr_tom/vol_tom/max_dd_tom
+      # as PERCENT (round(x * 100, 2); confirmed by the target's own comment at
+      # line 317: "tom_metrics stores cagr/vol/max_dd in percentage units (x 100)")
+      # -- convert to fraction.
       .norm_tom <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |> transmute(
           period = period,
           months = n_days,
-          cagr   = cagr_tom,
-          vol    = vol_tom,
+          cagr   = cagr_tom / 100,
+          vol    = vol_tom / 100,
           sharpe = sharpe_tom,
-          max_dd = max_dd_tom
+          max_dd = max_dd_tom / 100
         )
       }
 
       # cmr_summary has lookback (1m/3m/6m) instead of period; no period column.
       # Pick the best-Sharpe lookback for the leaderboard row.
       # We create one synthetic "Full Period" row = the best lookback.
+      # Source: R/plan_commodities_mean_reversion.R:210-221 already stores
+      # cagr/vol/max_dd as FRACTION (documented convention, #336) -- no
+      # conversion needed here.
       .norm_cmr <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         best <- m |> filter(!is.na(sharpe)) |> arrange(desc(sharpe)) |> slice(1)
@@ -77,17 +116,23 @@ plan_leaderboard <- function() {
       # rsc_metrics contains multiple internal strategy variants (SPY_overlay,
       # DRIF_overlay, etc.). Pick only the SPY_overlay rows which represent the
       # strategy's own performance.
+      # Source: R/plan_risk_state.R:270-273 stores cagr/vol/max_dd as PERCENT
+      # (round(x * 100, 2)) -- convert to fraction.
       .norm_rsc <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(strategy == "SPY_overlay") |>
           select(-strategy) |>
-          rename(sharpe = hac_sharpe)
+          rename(sharpe = hac_sharpe) |>
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
       # mom_prepeak_metrics / siblings have no period column (one row per
       # strategy); column n_months not months; no period. Synthesise
       # "Full Period" as the single row.
+      # Source: packages/historicaldata/R/utils_mom_prepeak_metrics.R:111-113
+      # (.mom_prepeak_compute_metrics) stores cagr/vol/max_dd as PERCENT
+      # (round(x * 100, 1)) -- convert to fraction.
       .norm_mom_sibling <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
@@ -95,45 +140,55 @@ plan_leaderboard <- function() {
           transmute(
             period = "Full Period",
             months = n_months,
-            cagr   = cagr,
-            vol    = vol,
+            cagr   = cagr / 100,
+            vol    = vol / 100,
             sharpe = sharpe,
-            max_dd = max_dd
+            max_dd = max_dd / 100
           )
       }
 
       # aw_metrics has scenario × period; keep the "Remove 10 Worst" rows
       # (the protection scenario) and drop the extra scenario column.
+      # Source: R/plan_avoid_worst.R:440-444 (metrics_for) stores
+      # cagr/vol/max_dd as PERCENT (round(x * 100, 1)) -- convert to fraction.
       .norm_aw <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(scenario == "Remove 10 Worst") |>
           select(-scenario) |>
-          rename(months = n_days)
+          rename(months = n_days) |>
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
       # mf_metrics has multiple internal strategies (Long-Only, Long-Short, EW benchmark)
       # and columns: strategy, period, n_months, cagr, vol, sharpe, max_dd, calmar.
       # Keep only the canonical MOP 2012 long-short strategy.
       # Period labels ("Full"/"Training"/"OOS") match what other strategies use.
+      # Source: R/plan_managed_futures.R:187-192 (calc_metrics) stores
+      # cagr/vol/max_dd as PERCENT (round(x * 100, 2)) -- convert to fraction.
       .norm_mf <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)") |>
           select(-strategy, -calmar) |>
-          rename(months = n_months)
+          rename(months = n_months) |>
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
       # ev_metrics has multiple internal strategies (Pure Value, Value+Quality, Benchmark)
       # and columns: strategy, period, n_months, cagr, vol, sharpe, max_dd, calmar.
       # Keep only the pure HML strategy that represents "Value (HML)".
       # Period labels ("Full"/"Training"/"OOS") match what other strategies use.
+      # Source: R/plan_ev_ebit.R:109-114 (calc_metrics) stores cagr/vol/max_dd
+      # as PERCENT (x * 100, no explicit round until the tibble build) --
+      # convert to fraction.
       .norm_value <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(strategy == "Pure Value (100% HML, EV/EBIT proxy)") |>
           select(-strategy, -calmar) |>
-          rename(months = n_months)
+          rename(months = n_months) |>
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
       all_metrics <- bind_rows(
