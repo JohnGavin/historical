@@ -368,7 +368,7 @@ Where:
 - Alpha t < 2.0, R² (%) > 20: **Disguised beta** — just buy the factors directly
 - Alpha t < 2.0, R² (%) < 10: Strategy is noise
 
-**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}, daily frequency. Implemented in [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R){target="_blank" rel="noopener noreferrer"}.
+**Data source:** [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html){target="_blank" rel="noopener noreferrer"}, daily frequency. Implemented in [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L738){target="_blank" rel="noopener noreferrer"}.
 
 
 # Multiplicity Correction {#multiplicity}
@@ -384,6 +384,15 @@ Where:
 mult_tbl <- safe_tar_read("fals_vig_multiplicity")
 cap <- safe_tar_read("fals_vig_multiplicity_caption")
 if (!is.null(mult_tbl)) fals_dt(mult_tbl, cap)
+```
+
+#### Crisis vs Calm
+
+```{r}
+#| label: tail-independence-table
+tail_tbl <- safe_tar_read("fals_vig_tail_table")
+cap <- safe_tar_read("fals_vig_tail_caption")
+if (!is.null(tail_tbl)) fals_dt(tail_tbl, cap)
 ```
 
 #### Methodology
@@ -411,6 +420,15 @@ Delta-Z = max(t_IS) - max(t_OOS) — the gap between the best in-sample and best
 - Delta-Z > 2: Severe overfitting, in-sample performance is misleading
 
 In this framework, "in-sample" = HAC t-stat (strategy returns), "out-of-sample" = FF alpha t-stat (after removing known factor exposure). The OOS test is not a temporal holdout but a *structural* holdout — does the signal survive factor decomposition?
+
+**Crisis vs Calm (tail-weighted regime-conditional independence):**
+
+K_eff measures diversification on the *full* sample, averaged across calm and turbulent periods alike. A portfolio can look diversified on average while its strategies quietly converge to the same bet exactly when a crash hits — the moment diversification is actually needed. [`hd_tail_keff_frob()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L558){target="_blank" rel="noopener noreferrer"} tests for this directly: it splits the 6-strategy monthly return matrix into a **crisis regime** (any month where at least one strategy falls below its own 5% lower-tail quantile) and the complementary **calm regime**, then recomputes K_eff_frob separately within each.
+
+- **K_eff_frob (crisis) ≈ K_eff_frob (calm)**: diversification is regime-stable — the independence you see in normal markets is still there when it matters.
+- **K_eff_frob (crisis) < K_eff_frob (calm)**: diversification is collapsing precisely during drawdowns — strategies that look independent on average are converging to a single correlated bet in a crisis.
+
+The tab also reports the mean lower tail dependence coefficient (lambda_L) across all 15 strategy pairs, via [`hd_tail_dependence()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L638){target="_blank" rel="noopener noreferrer"} — the conditional probability that one strategy is in its own worst 5% of months given that another strategy is in its worst 5% — and the mean pairwise drawdown overlap fraction via [`hd_drawdown_overlap()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L687){target="_blank" rel="noopener noreferrer"}, the fraction of days two strategies are simultaneously underwater. Both are complementary evidence for the same question: do the 6 strategies actually lose money together?
 
 
 # Covariance Regularisation {#covreg}
@@ -523,18 +541,17 @@ A 60-month rolling walk-forward backtest estimates portfolio weights using each 
 
 - **Raw MVO** — Plug-in tangency portfolio w ∝ Σ⁻¹μ from the *sample* covariance and *sample* mean, with no regularisation. Small errors in the estimated returns swing the weights hard, so it trades heavily and piles into a few assets. It also breaks down (singular sample Σ) once the number of assets approaches the training-window length.
 - **GMV (Global Min-Var)** — `w ∝ Σ⁻¹1` via a regularised (Ledoit-Wolf) covariance. No expected-return input. Implemented in [`hd_min_var_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/min_var_weights.R#L65){target="_blank" rel="noopener noreferrer"}.
-- **Shrunk-μ (James-Stein)** — Tangency portfolio using Bayes-Stein (Jorion 1986) shrinkage on μ toward the grand mean, with a regularised Σ. Implemented in [`hd_returns_shrink(method = "james_stein")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/returns_shrink.R){target="_blank" rel="noopener noreferrer"}.
-- **Black-Litterman (no views)** — Tangency portfolio from the BL (1992) posterior μ̂ and Σ_BL using [`hd_black_litterman()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/black_litterman.R){target="_blank" rel="noopener noreferrer"}. Shown here with no investor views (w_mkt = 1/p, risk_aversion = 2.5). **With no views, Black-Litterman just returns the equal-weight starting point**, so its row matches Equal-Weight below. That is expected behaviour, not a bug — there are no views to tilt away from.
+- **Shrunk-μ (James-Stein)** — Tangency portfolio using Bayes-Stein (Jorion 1986) shrinkage on μ toward the grand mean, with a regularised Σ. Implemented in [`hd_returns_shrink(method = "james_stein")`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/returns_shrink.R#L112){target="_blank" rel="noopener noreferrer"}.
+- **Black-Litterman (no views)** — Tangency portfolio from the BL (1992) posterior μ̂ and Σ_BL using [`hd_black_litterman()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/black_litterman.R#L142){target="_blank" rel="noopener noreferrer"}. Shown here with no investor views (w_mkt = 1/p, risk_aversion = 2.5). **With no views, Black-Litterman just returns the equal-weight starting point**, so its row matches Equal-Weight below. That is expected behaviour, not a bug — there are no views to tilt away from.
 - **Equal-Weight (1/N)** — The robust benchmark. Zero turnover by construction.
-- **HRP (Hierarchical Risk Parity)** — Lopez de Prado (2016) hierarchical diversification using a regularised Σ. Implemented in [`hrp_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/topological_risk_parity.R){target="_blank" rel="noopener noreferrer"}.
+- **HRP (Hierarchical Risk Parity)** — Lopez de Prado (2016) hierarchical diversification using a regularised Σ. Implemented in [`hrp_weights()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/topological_risk_parity.R#L210){target="_blank" rel="noopener noreferrer"}.
 
 **Metrics explained:**
 
-- **Avg Turnover** — Mean L₁ weight change between consecutive OOS windows: mean(‖w_t − w_{t−1}‖₁). Higher = more rebalancing cost. Equal-Weight = 0 by construction.
-- **Max |w|** — Mean across windows of the largest absolute weight. Equal-Weight → 1/p = 0.25 for 4 assets. Raw MVO → values often exceed 1: a leveraged bet (more than 100% in one asset, funded by short/negative positions in the others), which the unconstrained optimiser permits and the regularised methods do not.
-- **OOS Sharpe** — Annualised Sharpe ratio of OOS portfolio returns (mean/sd × √12) over non-failed windows. On this 4-asset universe 0 of 182 windows failed for every method (the covariance is never singular with 4 well-behaved assets); failures only occur in wide universes where the asset count approaches the training-window length.
-- **Eff N** — Mean effective number of holdings (1/Σw_j²; Herfindahl measure). Equal-Weight → p = 4; concentrated raw MVO → near 1.
-- **Failed** — Windows where weight construction failed (e.g. singular sample Σ for raw MVO). Counted but excluded from all performance metrics.
+- **Avg turnover** — Mean L₁ weight change between consecutive OOS windows: mean(‖w_t − w_{t−1}‖₁). Higher = more rebalancing cost. Equal-Weight = 0 by construction.
+- **Max weight** — Mean across windows of the largest absolute weight. Equal-Weight → 1/p = 0.25 for 4 assets. Raw MVO → values often exceed 1: a leveraged bet (more than 100% in one asset, funded by short/negative positions in the others), which the unconstrained optimiser permits and the regularised methods do not.
+- **OOS Sharpe** — Annualised Sharpe ratio of OOS portfolio returns (mean/sd × √12) over non-failed windows. On this 4-asset universe 0 of 182 windows failed for every method (the covariance is never singular with 4 well-behaved assets); failures only occur in wide universes where the asset count approaches the training-window length. Windows where weight construction fails (e.g. singular sample Σ for raw MVO) are counted but excluded from all performance metrics and from this table.
+- **Effective holdings** — Mean effective number of holdings (1/Σw_j²; Herfindahl measure). Equal-Weight → p = 4; concentrated raw MVO → near 1.
 
 **Honest interpretation:**
 
@@ -607,7 +624,7 @@ if (!is.null(wfc_tbl) && nrow(wfc_tbl) > 0) {
 
 **Strategies not included:** OLMAR, TOM, and other non-parametric strategies have no tunable grid. XGB DRIF operates at the stock level (not a factor-rotation grid); factor-level XGB is tracked as a follow-up to [#318](https://github.com/JohnGavin/historical/issues/318){target="_blank" rel="noopener noreferrer"}.
 
-**Reference:** Tinsley, M. (2026). "Walk Forward Correlation." Trade Like A Machine Ltd. [SSRN 6324079](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6324079){target="_blank" rel="noopener noreferrer"}. Implemented in [`hd_wf_correlation()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/wf_correlation.R){target="_blank" rel="noopener noreferrer"}.
+**Reference:** Tinsley, M. (2026). "Walk Forward Correlation." Trade Like A Machine Ltd. [SSRN 6324079](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6324079){target="_blank" rel="noopener noreferrer"}. Implemented in [`hd_wf_correlation()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/wf_correlation.R#L84){target="_blank" rel="noopener noreferrer"}.
 
 
 # Assumptions {#assumptions}
@@ -810,7 +827,7 @@ The value factor (HML) and volatility index (VIX) are NOT independent. This mean
 |-------------|---------------|--------|
 | **[DRIF strategy](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R)** | DRIF loads on HML. During VIX spikes, DRIF underperforms MORE than the Vol_regime node alone predicts. | Consider reducing DRIF weight in crisis regimes |
 | **[Multi-strategy portfolio](https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R) ([#52](https://github.com/JohnGavin/historical/issues/52))** | Diversification between VIX overlay and value-heavy strategies is LESS than K_eff suggests — they correlate in crises, exactly when diversification matters most | Recompute weights with crisis-conditional correlations |
-| **[Tail independence](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R) ([#55](https://github.com/JohnGavin/historical/issues/55))** | K_eff_crisis < K_eff_calm is expected — this finding explains why | Run [`hd_tail_keff()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R) to quantify |
+| **[Tail independence](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L558) ([#55](https://github.com/JohnGavin/historical/issues/55))** | K_eff_crisis < K_eff_calm is expected — this finding explains why | See the [Crisis vs Calm tab](#multiplicity), computed via [`hd_tail_keff_frob()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L558) |
 | **[DAG revision](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R)** | Need either: VIX → HML edge (direct), or latent "Crisis_mode" → {VIX, HML} | Added VIX → HML edge (dashed yellow in diagram) |
 
 **Economic explanation:** In crises, investors sell risky assets indiscriminately. Value stocks (high book-to-market) are often distressed firms — they get sold first. Simultaneously, VIX spikes as options demand surges. The correlation is not VIX *causing* value to fall, but both responding to the same flight-to-safety mechanism.
@@ -994,9 +1011,9 @@ positives. The runs test has power against any non-random pattern; ACF
 specifically targets persistence.
 
 **Source code:**
-[`hd_dd_duration()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R)
+[`hd_dd_duration()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R#L38)
 and
-[`hd_loss_clustering()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R)
+[`hd_loss_clustering()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R#L140)
 in `packages/historicaldata/R/risk_metrics.R`. Tests in
 [`test-risk-metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/tests/testthat/test-risk-metrics.R).
 Issue [#269](https://github.com/JohnGavin/historical/issues/269).
