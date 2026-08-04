@@ -640,19 +640,27 @@ Two liquidity mechanisms exist in this codebase and neither one currently remove
 ```{r}
 #| label: liquidity-summary-table
 #| results: asis
-liq_tbl <- safe_tar_read("liquidity_summary_tbl")
+liq_tbl <- safe_tar_read("equity_daily_liquidity_summary_tbl")
 if (!is.null(liq_tbl)) {
   cap <- paste0(
-    "**Per-ticker average daily volume (ADV) summary, universe-wide.** ",
-    "One row per ticker: observation count, median daily share volume, median close, ",
-    "median 20-day dollar ADV, and the percent of that ticker's history flagged illiquid. ",
-    "Sourced from [`liquidity_summary()`](https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L74){target=\"_blank\" rel=\"noopener noreferrer\"}."
+    "**Per-ticker average daily volume (ADV) summary, dashboard universe.** ",
+    "One row per ticker in the top ",
+    "[`stk_params$top_n_market_cap`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L400){target=\"_blank\" rel=\"noopener noreferrer\"} ",
+    "by market cap ([`stk_universe`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target=\"_blank\" rel=\"noopener noreferrer\"} — ",
+    "the same equity source the stock backtests on this dashboard trade): observation count, ",
+    "median daily share volume, median close, median 20-day dollar ADV, and the percent of ",
+    "that ticker's history flagged illiquid. Non-US tickers with known-unreliable yfinance volume ",
+    "([`hd_unreliable_volume_ticker()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/volume_reliability.R#L35){target=\"_blank\" rel=\"noopener noreferrer\"}) ",
+    "have their volume nulled before this summary is computed. ",
+    "Sourced from [`liquidity_summary()`](https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L74){target=\"_blank\" rel=\"noopener noreferrer\"} ",
+    "via [`plan_liquidity_dashboard()`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target=\"_blank\" rel=\"noopener noreferrer\"} ",
+    "([#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"})."
   )
   fals_dt(liq_tbl, cap)
 } else {
   cat(paste0(
-    "*Not available: `plan_liquidity()` is not wired into this dashboard pipeline ",
-    "yet — see the “How to Read This” tab and ",
+    "*Not available: `equity_daily_liquidity_summary_tbl` has not been built by this run of ",
+    "`tar_make()` yet — see the “How to Read This” tab and ",
     "[#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"}.*"
   ))
 }
@@ -663,19 +671,22 @@ if (!is.null(liq_tbl)) {
 ```{r}
 #| label: liquidity-volume-stats
 #| results: asis
-vol_stats <- safe_tar_read("volume_stats")
+vol_stats <- safe_tar_read("equity_daily_volume_stats")
 if (!is.null(vol_stats)) {
   cap <- paste0(
-    "**Universe-level liquid/illiquid split.** One row: total tickers, total observations, ",
-    "the universe median 20-day dollar ADV, and the percent of observations flagged ",
+    "**Dashboard-universe liquid/illiquid split.** One row: total tickers, total observations, ",
+    "the dashboard-universe median 20-day dollar ADV, and the percent of observations flagged ",
     "liquid vs. illiquid against the $", scales::comma(vol_stats$min_adv_threshold), " threshold. ",
-    "Sourced from `volume_stats` (R/plan_liquidity.R)."
+    "Computed over the same top-market-cap equity universe ",
+    "([`stk_universe`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target=\"_blank\" rel=\"noopener noreferrer\"}) ",
+    "the stock backtests on this dashboard trade. Sourced from `equity_daily_volume_stats` ",
+    "([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target=\"_blank\" rel=\"noopener noreferrer\"})."
   )
   fals_dt(vol_stats, cap)
 } else {
   cat(paste0(
-    "*Not available: `plan_liquidity()` is not wired into this dashboard pipeline ",
-    "yet — see the “How to Read This” tab and ",
+    "*Not available: `equity_daily_volume_stats` has not been built by this run of ",
+    "`tar_make()` yet — see the “How to Read This” tab and ",
     "[#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"}.*"
   ))
 }
@@ -735,9 +746,9 @@ if (!is.null(adv_impact) && !is.null(sp)) {
 - `min_adv_threshold` = $1M (`R/plan_liquidity.R`, and the default in [`filter_liquidity()`](https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L35){target="_blank" rel="noopener noreferrer"}) — a **universe-wide liquidity flag**. It answers "is this name tradeable at all" and governs the Universe Summary / Volume Stats tabs above.
 - `stk_params$adv_threshold` = $5M ([`R/plan_stock_backtest.R:399`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L399){target="_blank" rel="noopener noreferrer"}) — a stricter **investability gate** used only inside decile construction for the Factor MAX / DRIF stock backtests ([#312](https://github.com/JohnGavin/historical/issues/312){target="_blank" rel="noopener noreferrer"}). It is higher because a long-short decile book concentrates capital in far fewer names than the full universe.
 
-Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode = "warn"`** — it flags illiquid rows but removes nothing. `stk_universe` ([`R/plan_stock_backtest.R:421`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target="_blank" rel="noopener noreferrer"}) does not depend on `equity_liquidity_filtered` at all. **Illiquid stocks are not excluded from any backtest portfolio shown on this dashboard today.** Do not read the Universe Summary / Volume Stats tabs as implying otherwise; they are a diagnostic, not a filter.
+Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode = "warn"`** — it flags illiquid rows but removes nothing, for both the ingestion-side (`equity_liquidity_filtered`) and dashboard-side (`equity_daily_liquidity_filtered`) targets. `stk_universe` ([`R/plan_stock_backtest.R:421`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target="_blank" rel="noopener noreferrer"}) does not depend on either filtered target — the dependency runs the other way (`equity_daily_liquidity_filtered` is derived *from* `stk_universe`, not vice versa). **Illiquid stocks are not excluded from any backtest portfolio shown on this dashboard today.** Do not read the Universe Summary / Volume Stats tabs as implying otherwise; they are a diagnostic, not a filter.
 
-**Universe Summary / Volume Stats availability:** `plan_liquidity()` ([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target="_blank" rel="noopener noreferrer"}) is wired into the *ingestion* pipeline (root `_targets.R`) but not into *this* dashboard pipeline (`docs/_targets.R`) — that pipeline has no `consolidated_equity` target to build on. If those two tabs above show "Not available," this is why; see [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"} for the investigation and the follow-up needed to wire them in.
+**Universe Summary / Volume Stats now wired in (#625, resolved 2026-08-04):** the two tabs above are computed by [`plan_liquidity_dashboard()`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target="_blank" rel="noopener noreferrer"} in `R/plan_liquidity.R`, which re-expresses the same `calculate_adv()` → `filter_liquidity()` → `liquidity_summary()` pipeline against `stk_universe` instead of `consolidated_equity` (which only exists in the root ingestion pipeline). This means the two tabs describe the **top-market-cap dashboard universe**, not the full ingested equity universe — see the per-table captions above for the exact scope. The original `plan_liquidity()` targets (`liquidity_summary_tbl`, `volume_stats`) are unchanged and still run only in the ingestion pipeline (root `_targets.R`); this dashboard has never depended on them. **Provenance risk:** nothing asserts the two equity sources (`consolidated_equity` vs. `stk_universe`) agree, so the ingestion-side and dashboard-side liquidity summaries can diverge — this is flagged as a follow-up in [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}, not resolved here. **Also unverified:** this PR could not run `tar_make()` (concurrent-store conflict with other work on this repo), so neither of these two tabs has been confirmed to actually render — the "Not available" fallback text above will show if the target has not yet been built by a subsequent pipeline run.
 
 **ADV-Cap Impact (MAX HRP) is a live target** ([`stk_max_adv_cap_impact`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L656){target="_blank" rel="noopener noreferrer"}) already built by the deployed pipeline — it compares the [HRP-weighted](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L609){target="_blank" rel="noopener noreferrer"} Stock MAX portfolio with and without the 10% ADV participation cap, and this tab is the first place it is displayed.
 

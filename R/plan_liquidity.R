@@ -77,3 +77,102 @@ plan_liquidity <- function() {
     )
   )
 }
+
+# ── equity_daily-sourced variant (#625 Option A, decided 2026-08-04) ───────
+#
+# plan_liquidity() above cannot run inside docs/_targets.R: consolidated_equity
+# only exists in the ROOT ingestion pipeline (_targets.R:58). This second plan
+# function re-expresses the same three-step liquidity computation
+# (calculate_adv -> filter_liquidity -> liquidity_summary) against
+# `stk_universe` (R/plan_stock_backtest.R:421) instead — the equity source the
+# dashboard's own backtests actually trade — so it can be wired into
+# docs/_targets.R. It is a SEPARATE function, not an extension of
+# plan_liquidity(), because plan_liquidity()'s targets are combined into the
+# root pipeline (_targets.R:61) where `stk_universe` does not exist; keeping
+# them apart lets both sets of targets build in their respective pipelines
+# without either referencing an undefined symbol.
+#
+# Column-shape note: stk_universe already carries date, ticker, close, volume
+# (plus adjusted) -- exactly the schema calculate_adv() expects. No adaptation
+# of calculate_adv()/filter_liquidity()/liquidity_summary() themselves was
+# needed or made.
+#
+# Volume-corruption guard note: stk_universe's own comment says its universe
+# is "S&P 500 + STOXX 600 majors, excluding LSE ETFs" (R/plan_stock_backtest.R:4)
+# -- i.e. it DOES contain non-US (European) tickers. stk_universe excludes
+# `.L` (LSE) tickers via a hardcoded regex (R/plan_stock_backtest.R:432), but
+# that is a narrower, DIFFERENT filter than the yfinance non-US
+# volume-corruption guard (hd_unreliable_volume_ticker(), packages/
+# historicaldata/R/volume_reliability.R) -- .DE/.PA/.AS/.SW/.MC/.MI/.ST/.CO
+# tickers pass through stk_universe with their raw (unreliable) volume
+# intact. hd_ohlcv_single() (packages/historicaldata/R/query.R:227-237)
+# applies hd_unreliable_volume_ticker() automatically when data is fetched
+# through hd_ohlcv()/hd_lazy(), but stk_universe bypasses those wrappers --
+# it queries hd_datasets()[["equity_daily"]]$url directly via
+# duckplyr::read_parquet_duckdb(). The guard is therefore applied explicitly
+# below, before calculate_adv() ever sees the volume column.
+#
+# ── Provenance divergence risk (flagged here per #625; not resolved here) ──
+# The ingestion-side liquidity_summary_tbl/volume_stats above are computed
+# from consolidated_equity (ALL ingested equity tickers). The dashboard-side
+# equity_daily_liquidity_summary_tbl/equity_daily_volume_stats below are
+# computed from stk_universe, which is restricted to the top
+# stk_params$top_n_market_cap (100) tickers by current market cap
+# (R/plan_stock_backtest.R:405-418) with >= stk_params$min_history_days of
+# history. Nothing asserts these two equity sources agree, and now that the
+# dashboard computes liquidity from a DIFFERENT (narrower, cap-weighted)
+# ticker set than ingestion's full universe, the two liquidity views can
+# diverge silently -- e.g. the dashboard's median ADV will structurally run
+# higher because it excludes the long tail of small/illiquid names ingestion
+# still reports on. This is flagged as a follow-up, not built here: no
+# reconciliation check is added by this change.
+plan_liquidity_dashboard <- function() {
+  list(
+    targets::tar_target(
+      equity_daily_with_adv,
+      {
+        stk_universe |>
+          dplyr::mutate(
+            volume = dplyr::if_else(
+              hd_unreliable_volume_ticker(ticker),
+              NA_real_,
+              as.numeric(volume)
+            )
+          ) |>
+          calculate_adv(window_days = 20)
+      }
+    ),
+
+    targets::tar_target(
+      equity_daily_liquidity_filtered,
+      {
+        equity_daily_with_adv |>
+          filter_liquidity(min_adv_usd = 1e6, filter_mode = "warn")
+      }
+    ),
+
+    targets::tar_target(
+      equity_daily_liquidity_summary_tbl,
+      {
+        equity_daily_liquidity_filtered |>
+          liquidity_summary()
+      }
+    ),
+
+    # === Volume statistics for the dashboard ===
+    targets::tar_target(
+      equity_daily_volume_stats,
+      {
+        equity_daily_liquidity_filtered |>
+          dplyr::summarise(
+            total_tickers = dplyr::n_distinct(ticker),
+            total_observations = dplyr::n(),
+            median_adv_all = median(adv_usd, na.rm = TRUE),
+            pct_liquid = 100 * mean(liquidity_flag == "liquid", na.rm = TRUE),
+            pct_illiquid = 100 * mean(liquidity_flag == "illiquid", na.rm = TRUE),
+            min_adv_threshold = 1e6
+          )
+      }
+    )
+  )
+}
