@@ -40,6 +40,7 @@ hd_dd_duration(r)
 \seealso{
 Other risk_metrics: 
 \code{\link{hd_exposure_metrics}()},
-\code{\link{hd_loss_clustering}()}
+\code{\link{hd_loss_clustering}()},
+\code{\link{hd_risk_contribution}()}
 }
 \concept{risk_metrics}
