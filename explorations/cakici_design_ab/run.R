@@ -69,6 +69,7 @@ stk_monthly     <- targets::tar_read_raw("stk_monthly", store = STORE)
 stk_monthly_adv <- targets::tar_read_raw("stk_monthly_adv", store = STORE)
 stk_rf          <- targets::tar_read_raw("stk_rf", store = STORE)
 bt_partitions   <- targets::tar_read_raw("bt_partitions", store = STORE)
+stk_params      <- targets::tar_read_raw("stk_params", store = STORE)
 
 message(
   "[cakici_ab] Signal rows: ", nrow(stk_drif_signal),
@@ -76,8 +77,14 @@ message(
   "  RF rows: ", nrow(stk_rf)
 )
 
-# Verify ADV column name (robustness guard)
-stopifnot("adv_dollars" %in% names(stk_monthly_adv))
+# Verify ADV column name (robustness guard), and pin ADV_THRESHOLD to the
+# canonical stk_params$adv_threshold (R/plan_stock_backtest.R:399) so the two
+# literals cannot silently drift apart (#625; mirrors the same guard in the
+# sibling xgb_ab.R script).
+stopifnot(
+  "adv_dollars" %in% names(stk_monthly_adv),
+  identical(stk_params$adv_threshold, ADV_THRESHOLD)
+)
 
 # ── Partition windows from bt_partitions$equity ───────────────────────────────
 p <- bt_partitions$equity

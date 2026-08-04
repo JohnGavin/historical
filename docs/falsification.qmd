@@ -627,6 +627,121 @@ if (!is.null(wfc_tbl) && nrow(wfc_tbl) > 0) {
 **Reference:** Tinsley, M. (2026). "Walk Forward Correlation." Trade Like A Machine Ltd. [SSRN 6324079](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=6324079){target="_blank" rel="noopener noreferrer"}. Implemented in [`hd_wf_correlation()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/wf_correlation.R#L84){target="_blank" rel="noopener noreferrer"}.
 
 
+# Liquidity {#liquidity}
+
+Two liquidity mechanisms exist in this codebase and neither one currently removes an illiquid stock from a backtest portfolio — this section surfaces both, plus the one liquidity diagnostic ([`stk_max_adv_cap_impact`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L656){target="_blank" rel="noopener noreferrer"}) that the `backtest-robustness` rule requires to be reported and that had never been displayed on any dashboard before this tab ([#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}).
+
+## Row
+
+### {.tabset}
+
+#### Universe Summary
+
+```{r}
+#| label: liquidity-summary-table
+#| results: asis
+liq_tbl <- safe_tar_read("liquidity_summary_tbl")
+if (!is.null(liq_tbl)) {
+  cap <- paste0(
+    "**Per-ticker average daily volume (ADV) summary, universe-wide.** ",
+    "One row per ticker: observation count, median daily share volume, median close, ",
+    "median 20-day dollar ADV, and the percent of that ticker's history flagged illiquid. ",
+    "Sourced from [`liquidity_summary()`](https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L74){target=\"_blank\" rel=\"noopener noreferrer\"}."
+  )
+  fals_dt(liq_tbl, cap)
+} else {
+  cat(paste0(
+    "*Not available: `plan_liquidity()` is not wired into this dashboard pipeline ",
+    "yet — see the “How to Read This” tab and ",
+    "[#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"}.*"
+  ))
+}
+```
+
+#### Volume Stats
+
+```{r}
+#| label: liquidity-volume-stats
+#| results: asis
+vol_stats <- safe_tar_read("volume_stats")
+if (!is.null(vol_stats)) {
+  cap <- paste0(
+    "**Universe-level liquid/illiquid split.** One row: total tickers, total observations, ",
+    "the universe median 20-day dollar ADV, and the percent of observations flagged ",
+    "liquid vs. illiquid against the $", scales::comma(vol_stats$min_adv_threshold), " threshold. ",
+    "Sourced from `volume_stats` (R/plan_liquidity.R)."
+  )
+  fals_dt(vol_stats, cap)
+} else {
+  cat(paste0(
+    "*Not available: `plan_liquidity()` is not wired into this dashboard pipeline ",
+    "yet — see the “How to Read This” tab and ",
+    "[#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"}.*"
+  ))
+}
+```
+
+#### ADV-Cap Impact (MAX HRP)
+
+```{r}
+#| label: liquidity-adv-cap-table
+#| results: asis
+adv_impact <- safe_tar_read("stk_max_adv_cap_impact")
+sp <- safe_tar_read("stk_params")
+if (!is.null(adv_impact) && !is.null(sp)) {
+  ov <- adv_impact$overall
+  get_val <- function(m) ov$value[ov$metric == m]
+  cap <- paste0(
+    "**ADV-cap on/off impact on the Stock MAX HRP long-short portfolio.** ",
+    "Reports how often the ", round(sp$adv_pct_cap * 100), "% average-daily-volume ",
+    "participation cap ([`stk_params$adv_pct_cap`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L396){target=\"_blank\" rel=\"noopener noreferrer\"}) ",
+    "binds when sizing positions, across ", round(get_val("months_in_backtest")), " backtest months. ",
+    "The cap bound in ", get_val("pct_months_any_cap_long"), "% of months on the long leg and ",
+    get_val("pct_months_any_cap_short"), "% of months on the short leg (averaging ",
+    round(get_val("avg_caps_per_month_long"), 2), " and ",
+    round(get_val("avg_caps_per_month_short"), 2), " capped positions per month respectively), and ",
+    "monthly turnover rises from ",
+    scales::percent(get_val("avg_turnover_hrp"), accuracy = 0.1), " without the cap to ",
+    scales::percent(get_val("avg_turnover_hrp_adv"), accuracy = 0.1),
+    " with it, since capped weight must be redistributed across the remaining names. ",
+    "This on/off comparison is required by the [`backtest-robustness`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/backtest-robustness.md){target=\"_blank\" rel=\"noopener noreferrer\"} rule (K_eff-guided search stopping section) for any ADV-cap variant."
+  )
+  fals_dt(ov, cap)
+} else {
+  cat("*ADV-cap impact not yet computed — run `tar_make()` to build `stk_max_adv_cap_impact`.*")
+}
+```
+
+```{r}
+#| label: liquidity-adv-cap-by-year
+#| results: asis
+if (!is.null(adv_impact) && !is.null(sp)) {
+  by_year <- adv_impact$by_year
+  cap2 <- paste0(
+    "**ADV-cap impact by year.** One row per calendar year in the Stock MAX HRP backtest: ",
+    "months observed, the percent of months the long and short legs hit the ", round(sp$adv_pct_cap * 100), "% ADV cap, ",
+    "and that year's average monthly turnover and average total transaction cost. ",
+    "Use this to check whether ADV-cap binding concentrates in specific years ",
+    "(e.g. low-liquidity regimes) rather than spreading evenly across the sample."
+  )
+  fals_dt(by_year, cap2)
+}
+```
+
+#### How to Read This
+
+**Two unreconciled thresholds — do not conflate them:**
+
+- `min_adv_threshold` = $1M (`R/plan_liquidity.R`, and the default in [`filter_liquidity()`](https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L35){target="_blank" rel="noopener noreferrer"}) — a **universe-wide liquidity flag**. It answers "is this name tradeable at all" and governs the Universe Summary / Volume Stats tabs above.
+- `stk_params$adv_threshold` = $5M ([`R/plan_stock_backtest.R:399`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L399){target="_blank" rel="noopener noreferrer"}) — a stricter **investability gate** used only inside decile construction for the Factor MAX / DRIF stock backtests ([#312](https://github.com/JohnGavin/historical/issues/312){target="_blank" rel="noopener noreferrer"}). It is higher because a long-short decile book concentrates capital in far fewer names than the full universe.
+
+Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode = "warn"`** — it flags illiquid rows but removes nothing. `stk_universe` ([`R/plan_stock_backtest.R:421`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target="_blank" rel="noopener noreferrer"}) does not depend on `equity_liquidity_filtered` at all. **Illiquid stocks are not excluded from any backtest portfolio shown on this dashboard today.** Do not read the Universe Summary / Volume Stats tabs as implying otherwise; they are a diagnostic, not a filter.
+
+**Universe Summary / Volume Stats availability:** `plan_liquidity()` ([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target="_blank" rel="noopener noreferrer"}) is wired into the *ingestion* pipeline (root `_targets.R`) but not into *this* dashboard pipeline (`docs/_targets.R`) — that pipeline has no `consolidated_equity` target to build on. If those two tabs above show "Not available," this is why; see [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"} for the investigation and the follow-up needed to wire them in.
+
+**ADV-Cap Impact (MAX HRP) is a live target** ([`stk_max_adv_cap_impact`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L656){target="_blank" rel="noopener noreferrer"}) already built by the deployed pipeline — it compares the [HRP-weighted](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L609){target="_blank" rel="noopener noreferrer"} Stock MAX portfolio with and without the 10% ADV participation cap, and this tab is the first place it is displayed.
+
+
 # Assumptions {#assumptions}
 
 ## Row
