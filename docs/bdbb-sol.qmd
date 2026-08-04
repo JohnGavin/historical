@@ -65,13 +65,29 @@ fit |>
 ## Tail-Risk Predictivity (R vs Amihud vs Kyle)
 
 ```{r tail-predict}
+tp <- tar_read(bdbb_sol_tail_predict)
+pull_spread <- function(pred) {
+  round(dplyr::filter(tp, predictor == pred)$spread_pp, 2)
+}
+
 knitr::kable(
-  tar_read(bdbb_sol_tail_predict),
+  tp,
   digits  = 2,
   caption = paste0(
     "Tail-risk predictivity by predictor. ",
     "Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). ",
-    "Varma BTC benchmarks: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp."
+    "SOL/USD spreads computed here: R = ", pull_spread("R"), " pp, ",
+    "Amihud = ", pull_spread("amihud_mean"), " pp, ",
+    "Kyle = ", pull_spread("kyle_mean"), " pp. ",
+    "Varma (2026) BTC benchmarks, shown for reference only: R = 8.6 pp, ",
+    "Amihud = 4.7 pp, Kyle = 1.1 pp. Kyle's lambda is estimated as the OLS ",
+    "price-impact slope of log-returns on signed order flow within each ",
+    "rolling window (cov/var; see ",
+    "[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46)",
+    "), not a per-bar ratio. Prior to [#624](https://github.com/JohnGavin/historical/issues/624), ",
+    "the `kyle_mean` column was numerically identical to `amihud_mean`, so any ",
+    "earlier apparent agreement with the Varma Kyle benchmark was spurious and ",
+    "the corrected figures above should not be assumed to reproduce it."
   )
 )
 ```
