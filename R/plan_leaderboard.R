@@ -490,6 +490,17 @@ plan_leaderboard <- function() {
           left_join(strategy_gross_convention, by = "strategy")
       }
 
+      # ── Transaction-cost convention (#624, measurement only) ──────────────
+      # Join cost_per_trade_bps, cost_convention, borrow_rate_annual,
+      # cost_source_ref from R/plan_cost_convention.R. Same join key and same
+      # broadcast-to-every-period-row semantics as strategy_gross_convention
+      # above -- this is a construction-time property of the strategy, not a
+      # period statistic.
+      if (!is.null(strategy_cost_convention) && nrow(strategy_cost_convention) > 0) {
+        all_metrics <- all_metrics |>
+          left_join(strategy_cost_convention, by = "strategy")
+      }
+
       all_metrics
     }),
 

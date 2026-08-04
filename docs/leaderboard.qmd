@@ -131,12 +131,23 @@ if (!is.null(lb)) {
         is_cap ~ paste0(format(gross_convention, nsmall = 1), "x*"),
         TRUE   ~ paste0(format(gross_convention, nsmall = 1), "x")
       ),
+      `Cost (bps)` = dplyr::case_when(
+        !("cost_per_trade_bps" %in% names(full)) | is.na(cost_per_trade_bps) ~ "—",
+        cost_per_trade_bps == 0 ~ "0*",
+        TRUE ~ as.character(round(cost_per_trade_bps))
+      ),
       SSR        = ifelse(is.na(ssr),           "—", as.character(round(ssr, 2))),
       `Top5% Share` = ifelse(is.na(top5pct_share), "—", paste0(round(top5pct_share * 100, 1), "%")),
-      Credible   = ifelse(is.na(credible) | !credible, "NO", "yes")
+      Credible   = ifelse(is.na(credible) | !credible, "NO", "yes"),
+      Redundant  = if ("redundant" %in% names(full)) {
+        ifelse(is.na(redundant), "—", ifelse(redundant, "YES", "no"))
+      } else "—",
+      `Incremental Sharpe` = if ("incremental_sharpe" %in% names(full)) {
+        ifelse(is.na(incremental_sharpe), "—", as.character(round(incremental_sharpe, 3)))
+      } else "—"
     ) |>
     select(Strategy = strategy, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
-           SSR, `Top5% Share`, Credible)
+           `Cost (bps)`, SSR, `Top5% Share`, Credible, Redundant, `Incremental Sharpe`)
 
   n_flagged <- sum(!full$credible, na.rm = TRUE)
   flag_note <- if (n_flagged > 0) {
@@ -193,13 +204,64 @@ if (!is.null(lb)) {
     if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross: either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
   )
 
+  # ── Transaction-cost disclosure note (#624) — dynamically computed, never hardcoded ──
+  cost_registry_link <- sprintf(
+    "[`strategy_cost_convention`](%s/blob/%s/R/plan_cost_convention.R#L44)",
+    gh_base, git_sha
+  )
+  n_zero_cost <- if ("cost_per_trade_bps" %in% names(full)) {
+    sum(full$cost_per_trade_bps == 0, na.rm = TRUE)
+  } else 0L
+  zero_cost_strategies <- if (n_zero_cost > 0) {
+    full$strategy[!is.na(full$cost_per_trade_bps) & full$cost_per_trade_bps == 0]
+  } else character(0)
+  n_na_cost <- if ("cost_per_trade_bps" %in% names(full)) sum(is.na(full$cost_per_trade_bps)) else nrow(full)
+  cost_bps_range <- if ("cost_per_trade_bps" %in% names(full) &&
+                          any(!is.na(full$cost_per_trade_bps))) {
+    rng <- range(full$cost_per_trade_bps, na.rm = TRUE)
+    paste0(rng[1], "–", rng[2], " bps")
+  } else "not available"
+
+  cost_note <- paste0(
+    " Per-strategy transaction-cost assumptions (recorded in ", cost_registry_link,
+    ") are **not uniform** across this table, in both magnitude (", cost_bps_range,
+    ") and unit: most rows charge ",
+    "a per-trade bps figure on realised turnover, but Value (HML) and Managed Futures charge a flat ",
+    "per-calendar-month bps figure regardless of turnover, and TOM/Risk State charge only on discrete ",
+    "switch days — see `cost_convention` in the registry for each row's exact timing. ",
+    if (n_zero_cost > 0) {
+      paste0("A trailing `*` on the Cost (bps) column (", paste(zero_cost_strategies, collapse = ", "),
+             ") marks a **verified zero** — no transaction-cost deduction exists in that strategy's code, ",
+             "not a plausible default; it is not net-of-cost comparable to the cost-charging rows above and below it. ")
+    } else "",
+    if (n_na_cost > 0) paste0(n_na_cost, " strategy row(s) show — for Cost (bps): a meta-portfolio blend inherits its constituents' already-net returns with no separate cost applied at the blend level. ") else "",
+    "This Cost (bps) column is the strategy's own internal assumption baked into its returns before they reach this table; ",
+    "for the ", sum(!is.na(full$net_cagr)),
+    " strategies with a Net CAGR value above, it is additional to — not the same as — the flat cost applied there."
+  )
+
+  # ── Diversification-value disclosure note (Pillar 7, #268; surfaced #624) ──
+  corr_registry_link <- sprintf(
+    "[`plan_strategy_correlation.R`](%s/blob/%s/R/plan_strategy_correlation.R#L31)",
+    gh_base, git_sha
+  )
+  n_redundant <- if ("redundant" %in% names(full)) sum(full$redundant, na.rm = TRUE) else 0L
+  diversification_note <- paste0(
+    " Redundant = TRUE when a strategy's Full-Period monthly-return correlation with another, ",
+    "higher-Sharpe strategy exceeds the threshold fixed in ", corr_registry_link,
+    " (", n_redundant, " of ", nrow(full),
+    " strategies currently flagged); Incremental Sharpe = the change in equal-weight-portfolio Sharpe from ",
+    "including this strategy vs excluding it — positive means it adds diversification value, negative means ",
+    "the portfolio is better off without it. Both feed the new-strategy value gate (#496)."
+  )
+
   hd_dt(metrics_table, paste0(
     "Strategies ranked by Sharpe (highest first). ",
     "Net CAGR after 0.20% round-trip/month cost where available. ",
     "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
     "Top5% Share = fraction of total return from best 5% of months. ",
     "Credible = plausible CAGR (<20%) and cum P&L (<50x).",
-    flag_note, bias_note, gross_note
+    flag_note, bias_note, gross_note, cost_note, diversification_note
   ))
 }
 ```

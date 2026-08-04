@@ -99,6 +99,8 @@ source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_strategy_correlation.R"))
 # #626: gross/net exposure convention registry (measurement only)
 source(here::here("R/plan_exposure.R"))
+# #624: per-strategy transaction-cost convention registry (measurement only)
+source(here::here("R/plan_cost_convention.R"))
 source(here::here("R/plan_avoid_worst.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
@@ -185,6 +187,7 @@ c(plan_strategy_names(),
   plan_forecast_eval(),
   plan_strategy_correlation(),
   plan_exposure(),
+  plan_cost_convention(),
   plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
