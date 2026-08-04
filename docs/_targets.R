@@ -27,17 +27,16 @@ pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 # Source Tier 1 & 2 gap functions
 # TODO: create tracking_error.R (tail_keff.R tracked under #624)
 #
-# liquidity.R already exists (R/liquidity.R, #105/#569) but is NOT wired into
-# THIS pipeline (#625 investigated this). plan_liquidity()'s targets read a
-# `consolidated_equity` symbol that only exists in the ROOT ingestion
-# pipeline's _targets.R — this dashboard pipeline has no target of that name
-# and instead loads equity prices directly from
-# hd_datasets()[["equity_daily"]] (see stk_universe, R/plan_stock_backtest.R:421).
-# Registering plan_liquidity() here as-is would create a target that fails at
-# build time; re-pointing it at the hd_datasets() pattern is a data-source
-# decision (which columns/filters/universe) left for a follow-up, not made
-# unilaterally here. See PR discharging #625 for the investigation.
-# source(here::here("R/liquidity.R"))
+# liquidity.R (R/liquidity.R, #105/#569) provides calculate_adv() /
+# filter_liquidity() / liquidity_summary(). plan_liquidity() (the
+# consolidated_equity-based targets) still cannot run here — consolidated_equity
+# only exists in the ROOT ingestion pipeline's _targets.R. Resolved by #625
+# (decided 2026-08-04): plan_liquidity_dashboard() (also in R/plan_liquidity.R)
+# re-expresses the same three-step computation against stk_universe
+# (R/plan_stock_backtest.R:421), which IS available in this pipeline. See
+# R/plan_liquidity.R for the full rationale and the flagged provenance-
+# divergence risk between the two equity sources.
+source(here::here("R/liquidity.R"))
 # source(here::here("R/tracking_error.R"))
 # source(here::here("R/tail_keff.R"))
 # Phase B of #389: regime_correlations.R functions used by plan_cross_asset_corr.R
@@ -97,6 +96,12 @@ source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_drif.R"))
 source(here::here("R/plan_drif_v2.R"))
 source(here::here("R/plan_stock_backtest.R"))
+# #625: dashboard-side liquidity targets (plan_liquidity_dashboard()), sourced
+# after plan_stock_backtest.R because its targets reference stk_universe.
+# Source-file order does not affect DAG resolution (targets are matched by
+# name at build time, not by source() order) but is kept adjacent for
+# readability.
+source(here::here("R/plan_liquidity.R"))
 source(here::here("R/plan_xgb_signal.R"))
 source(here::here("R/plan_portfolio_opt.R"))
 source(here::here("R/plan_etf_replication.R"))
@@ -175,7 +180,7 @@ source(here::here("R/plan_strategy_digest.R"))
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
   plan_partitions(), plan_vignette(), plan_backtest(), plan_factormax(), plan_drif(), plan_drif_v2(),
-  plan_stock_backtest(), plan_xgb_signal(), plan_portfolio_opt(),
+  plan_stock_backtest(), plan_liquidity_dashboard(), plan_xgb_signal(), plan_portfolio_opt(),
   plan_etf_replication(), plan_kelly(), plan_bootstrap_ci(),
   plan_interval_coverage(),
   plan_regime(), plan_alpha_decay(),
