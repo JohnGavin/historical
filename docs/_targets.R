@@ -25,7 +25,18 @@ tar_option_set(
 pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
 # Source Tier 1 & 2 gap functions
-# TODO: create liquidity.R, tracking_error.R, tail_keff.R
+# TODO: create tracking_error.R (tail_keff.R tracked under #624)
+#
+# liquidity.R already exists (R/liquidity.R, #105/#569) but is NOT wired into
+# THIS pipeline (#625 investigated this). plan_liquidity()'s targets read a
+# `consolidated_equity` symbol that only exists in the ROOT ingestion
+# pipeline's _targets.R — this dashboard pipeline has no target of that name
+# and instead loads equity prices directly from
+# hd_datasets()[["equity_daily"]] (see stk_universe, R/plan_stock_backtest.R:421).
+# Registering plan_liquidity() here as-is would create a target that fails at
+# build time; re-pointing it at the hd_datasets() pattern is a data-source
+# decision (which columns/filters/universe) left for a follow-up, not made
+# unilaterally here. See PR discharging #625 for the investigation.
 # source(here::here("R/liquidity.R"))
 # source(here::here("R/tracking_error.R"))
 # source(here::here("R/tail_keff.R"))
