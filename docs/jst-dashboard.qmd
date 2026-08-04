@@ -21,3 +21,9 @@ Redirecting automatically…
 
 <meta http-equiv="refresh" content="0; url=evidence.html#historical-evidence">
 <script>window.location.href = "evidence.html#historical-evidence";</script>
+
+## Related vignettes
+
+- **[Evidence & Context (Historical Evidence)](evidence.html#historical-evidence)** — the JST Macrohistory long-run equity premium analysis (155 years, 18 countries) now lives here
+- **[Strategy Falsification](falsification.html)** — applies formal hypothesis testing to each strategy's claims, using this long-run evidence as a prior
+- **[Strategy Leaderboard](leaderboard.html)** — ranks all strategies on risk-adjusted return; contextualise against 155 years of equity premium

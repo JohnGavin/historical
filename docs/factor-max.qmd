@@ -21,3 +21,9 @@ Redirecting automatically…
 
 <meta http-equiv="refresh" content="0; url=stock-backtest.html#factor-level-deep-dive">
 <script>window.location.href = "stock-backtest.html#factor-level-deep-dive";</script>
+
+## Related vignettes
+
+- **[Stock-Level Backtests (Factor-Level Deep Dive)](stock-backtest.html#factor-level-deep-dive)** — the Factor MAX signal now lives here, alongside DRIF, in the Factor-Level Deep Dive tab
+- **[Strategy Leaderboard](leaderboard.html)** — overall strategy rankings, including this factor rotation approach
+- **[Strategy Falsification](falsification.html)** — hypothesis-testing framework applied to Factor MAX and every other systematic strategy

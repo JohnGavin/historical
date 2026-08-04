@@ -24,3 +24,9 @@ Redirecting automatically…
 
 <meta http-equiv="refresh" content="0; url=falsification.html#failed-strategies">
 <script>window.location.href = "falsification.html#failed-strategies";</script>
+
+## Related vignettes
+
+- **[Strategy Falsification (Failed Strategies)](falsification.html#failed-strategies)** — the failed-strategies scorecard now lives here
+- **[Evidence & Context (Negative Results)](evidence.html#negative-results)** — per-strategy failure cards and lessons learned
+- **[Strategy Leaderboard](leaderboard.html)** — performance rankings across all strategies, for contrast against what failed
