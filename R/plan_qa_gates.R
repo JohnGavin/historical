@@ -453,7 +453,7 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 
 
 #' Assert port_returns has no calendar-month gaps and flag thin-coverage
-#' months
+#' months (S13)
 #'
 #' Guards against the #641 defect class: `port_returns` used to chain four
 #' `inner_join()`s across its constituent strategies (`stk_max`, `stk_drif`,
@@ -497,7 +497,7 @@ check_portfolio_join_coverage <- function(port_returns) {
   if (length(missing_cols) > 0L) {
     cli::cli_abort(c(
       "x" = "port_returns is missing {length(missing_cols)} required column(s): {missing_cols}.",
-      "i" = "check_portfolio_join_coverage() requires date, stk_max, stk_drif, fac_max, fac_drif."
+      "i" = "check_portfolio_join_coverage() (S13) requires date, stk_max, stk_drif, fac_max, fac_drif."
     ))
   }
 
@@ -737,7 +737,7 @@ plan_qa_gates <- function() {
     ),
 
     # QA gate: port_returns has no calendar-month gaps, thin-coverage months
-    # are flagged (#641) — guards against the #641 defect class where a
+    # are flagged (S13) — guards against the #641 defect class where a
     # 4-way inner_join chain in R/plan_portfolio_opt.R silently deleted any
     # month missing from ONE constituent strategy for ALL FOUR (128 of an
     # expected ~190+ rows, including every March). port_returns is now built
@@ -748,7 +748,7 @@ plan_qa_gates <- function() {
       qa_portfolio_join_coverage,
       command = {
         check_portfolio_join_coverage(port_returns)
-        cli::cli_inform(c("v" = "qa_portfolio_join_coverage: passed (no calendar-month gaps in port_returns)"))
+        cli::cli_inform(c("v" = "qa_portfolio_join_coverage: S13 passed (no calendar-month gaps in port_returns)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

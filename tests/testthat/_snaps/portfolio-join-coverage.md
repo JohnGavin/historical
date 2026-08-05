@@ -25,5 +25,5 @@
     Condition
       Error in `check_portfolio_join_coverage()`:
       x port_returns is missing 1 required column(s): stk_drif.
-      i check_portfolio_join_coverage() requires date, stk_max, stk_drif, fac_max, fac_drif.
+      i check_portfolio_join_coverage() (S13) requires date, stk_max, stk_drif, fac_max, fac_drif.
 

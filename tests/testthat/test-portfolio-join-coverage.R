@@ -1,5 +1,5 @@
 testthat::local_edition(3)
-# Tests for check_portfolio_join_coverage() — QA gate (#641)
+# Tests for check_portfolio_join_coverage() — QA gate S13 (#641)
 #
 # The function is defined in R/plan_qa_gates.R and depends on nothing else
 # in this repo, so it is exercised directly without running tar_make().
