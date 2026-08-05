@@ -27,6 +27,22 @@
 # in the allowed set, and no `.norm_*` helper in R/plan_leaderboard.R may
 # rename OOS to Testing. Only "Full" -> "Full Period" is a safe rename
 # (pure spelling difference for the same concept — see #643).
+#
+# "Validation" stays in the allowed set (#648 decision) even though the
+# `leaderboard` target's own automatic path may no longer emit a row with
+# this label (R/plan_leaderboard.R strips it at `all_metrics` assembly,
+# guarded by the S14 gate in R/plan_qa_gates.R). PERIOD_LABELS_ALLOWED names
+# the VOCABULARY, not WHERE a label may be computed — those are separate
+# concerns. "Validation" remains legitimate vocabulary because:
+#   1. Several source metrics targets (fm_metrics, drif_metrics,
+#      stk_max_metrics, stk_drif_metrics, xgb_drif_metrics, ltr_metrics,
+#      port_metrics) still compute it in their own right for their own
+#      consumers (e.g. docs/stock-backtest.qmd prose) — out of #648's scope.
+#   2. scripts/evaluate_validation.R, the sanctioned manual one-shot
+#      evaluation route required by backtest-partitions.md, produces rows
+#      labelled "Validation" by design.
+# Removing it from this constant would make both of the above fail S10
+# (check_leaderboard_period_vocab) / any future vocab check applied to them.
 PERIOD_LABELS_ALLOWED <- c(
   "Training", "Testing", "Validation", "Full Period", "OOS"
 )
