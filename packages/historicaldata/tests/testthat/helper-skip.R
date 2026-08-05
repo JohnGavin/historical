@@ -74,8 +74,8 @@
 #'
 #' The probe skip message always names the underlying error so a rising
 #' SKIP count is diagnosable, not just visible (see scripts/verify.sh, which
-#' surfaces skip reasons when the package suite's count exceeds its normal
-#' baseline of 5).
+#' surfaces skip reasons -- and now fails the run, #654 -- when the package
+#' suite's count exceeds its normal baseline of 15: BASELINE_PKG_SKIP_COUNT).
 skip_if_no_remote_data <- function() {
   testthat::skip_on_cran()
   testthat::skip_on_ci()
