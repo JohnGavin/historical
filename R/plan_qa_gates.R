@@ -623,6 +623,68 @@ check_leaderboard_no_validation_rows <- function(leaderboard) {
 }
 
 
+#' Scan published documents for reads of the sealed Validation partition (S15)
+#'
+#' Guards against the #660 defect class: `docs/stock-backtest.qmd` read
+#' `period == "Validation"` directly from upstream source-metrics targets
+#' (`stk_drif_metrics`, `stk_max_metrics`, `fm_metrics`, `drif_metrics`,
+#' `etf_a_metrics`, `etf_b_metrics`) in inline R expressions and in
+#' unfiltered metrics tables -- publishing sealed one-shot evaluation
+#' figures in prose and table cells, and in one case (the Stock DRIF Cons
+#' cell) drawing a strategy conclusion from them. This entirely bypassed
+#' the `leaderboard` target and its S14 gate (`check_leaderboard_no_validation_rows()`),
+#' because these reads went straight to the source metrics targets, which
+#' still legitimately compute a Validation row for other consumers (that
+#' computation is out of scope here and is not touched by this gate).
+#'
+#' `.claude/rules/backtest-partitions.md` requires Validation to stay sealed
+#' everywhere it could leak -- not only in automatic computation --
+#' S14's scope was the assembled `leaderboard` target only. This gate
+#' extends the seal to every published document by scanning for the
+#' literal `period == "Validation"` (or `period=="Validation"`) comparison,
+#' the idiom every #660 offending site shared.
+#'
+#' Known limitation (documented, not silently accepted): this is a lexical
+#' scan, like S1-S4 (`check_no_lead_ym()` et al.). A comparison built from a
+#' variable (e.g. `m$period == per` where `per` is later passed the string
+#' `"Validation"` at a call site) will NOT be caught by this pattern -- the
+#' #660 fix removed the one site in this codebase that did this (the
+#' `get_val()` helper in `docs/stock-backtest.qmd`'s headline callout) in
+#' favour of the literal idiom used everywhere else in the file, so no such
+#' site currently exists to miss.
+#'
+#' Exclusions (both required for the scan to be usable at all):
+#'   - `R/plan_qa_gates.R` itself -- this function's own roxygen block and
+#'     `check_leaderboard_no_validation_rows()` (S14) both name the literal
+#'     pattern `period == "Validation"` in comments/code; same
+#'     self-exclusion convention as `qa_look_ahead_bias` (S1-S4).
+#'   - `scripts/evaluate_validation.R` -- the sanctioned one-shot manual
+#'     evaluation route (#648). It does not currently use a `period ==`
+#'     comparison (it *assigns* `period = "Validation"` when building its
+#'     result rows), so today this exclusion is defensive rather than
+#'     load-bearing -- but the script's whole purpose is to read the
+#'     Validation partition, so it must never be flagged if its
+#'     implementation changes to filter its own output by period.
+#'
+#' Opt-out: append `# validation-read-safe` to a line reading Validation
+#' for a purpose that is not a published display of the metric (rare;
+#' document why in the comment).
+#'
+#' @param files Character vector of absolute file paths to scan (.qmd, .R).
+#' @return A tibble with columns file, line, code. Zero rows = no hits.
+#' @noRd
+check_no_published_validation_reads <- function(files) {
+  results <- purrr::map(files, function(f) {
+    lines <- readLines(f, warn = FALSE)
+    m <- grep("period\\s*==\\s*[\"']Validation[\"']", lines)
+    m <- m[!grepl("# validation-read-safe", lines[m], fixed = TRUE)]
+    if (length(m) == 0L) return(NULL)
+    tibble::tibble(file = f, line = m, code = lines[m])
+  })
+  dplyr::bind_rows(results)
+}
+
+
 #' Assert a monthly portfolio target has complete calendar-month coverage (S12)
 #'
 #' Guards against the #641 defect class: a systematic construction bug (a
@@ -1039,6 +1101,52 @@ plan_qa_gates <- function() {
         check_leaderboard_no_validation_rows(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_no_validation: S14 passed (no automatically-computed Validation row in leaderboard)"))
         TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: no published document reads the sealed Validation partition
+    # (S15) — guards against the #660 defect class where docs/stock-backtest.qmd
+    # read `period == "Validation"` directly from source-metrics targets in
+    # prose and unfiltered metrics tables, bypassing the leaderboard target
+    # (and its S14 gate) entirely. Extends S14's leaderboard-only scope to
+    # every published .qmd/.R, per the sealed-Validation requirement in
+    # backtest-partitions.md. See check_no_published_validation_reads()
+    # roxygen for the two required exclusions (this file; scripts/evaluate_validation.R).
+    targets::tar_target(
+      qa_no_published_validation_reads,
+      command = {
+        scan_dirs <- c(here::here("docs"), here::here("R"), here::here("scripts"))
+        scan_dirs <- scan_dirs[dir.exists(scan_dirs)]
+        files <- unlist(lapply(scan_dirs, function(d) {
+          list.files(d, pattern = "\\.(qmd|R)$", full.names = TRUE, recursive = TRUE)
+        }))
+        files <- files[basename(files) != "plan_qa_gates.R"]
+        files <- files[basename(files) != "evaluate_validation.R"]
+
+        hits <- check_no_published_validation_reads(files)
+        if (nrow(hits) > 0L) {
+          msgs <- purrr::pmap_chr(
+            hits[, c("file", "line", "code")],
+            function(file, line, code) {
+              sprintf("  %s:%d -- %s", basename(file), line, trimws(code))
+            }
+          )
+          cli::cli_abort(c(
+            "x" = paste0(
+              "Published document(s) read the sealed Validation partition in ",
+              nrow(hits), " place(s), #660:"
+            ),
+            setNames(msgs, rep("i", length(msgs))),
+            "i" = paste0(
+              "Validation is sealed for display AND reasoning ",
+              "(.claude/rules/backtest-partitions.md) -- remove the read, or use ",
+              "scripts/evaluate_validation.R for the sanctioned one-shot evaluation."
+            )
+          ))
+        }
+        cli::cli_inform(c("v" = "qa_no_published_validation_reads: S15 passed (no published document reads Validation)"))
+        nrow(hits)
       },
       cue = targets::tar_cue(mode = "always")
     )

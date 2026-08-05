@@ -101,10 +101,13 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
     make_row(stk_drif, "Stock DRIF"),
     make_row(fac_max, "Factor MAX"),
     make_row(fac_drif, "Factor DRIF")
-  )
+  ) |>
+    filter(Period != "Validation")
 
   hd_dt(all_metrics, paste0(
-    "All strategies by partition (Training / Testing / Validation / Full). ",
+    "All strategies by partition (Training / Testing / Full). ",
+    "Validation is sealed — not reported until a one-shot production evaluation ",
+    "(see `scripts/evaluate_validation.R`). ",
     "Factor-level links: Factor MAX, Factor DRIF. ",
     "Stock MAX and Stock DRIF draw on `stk_universe` (survivorship-biased — see issue #150)."
   ))
@@ -118,20 +121,20 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 | Finding | Evidence |
 |---------|----------|
 | Stock MAX full-period CAGR: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }` | Vol: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$vol[m$period=="Full Period"] else numeric(0); if(length(v)==1L) paste0(round(v*100,0),"%") else "N/A" }` — full-period Sharpe: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
-| Factor DRIF full-period Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` | Full-period covers the entire sample including Training. Validation Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
+| Factor DRIF full-period Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Full Period"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` | Full-period covers the entire sample including Training. Validation Sharpe is sealed — not reported until a one-shot production evaluation (see `scripts/evaluate_validation.R`). |
 | Stock DRIF full-period CAGR is only `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }` | Elastic net regularisation is very aggressive at stock level |
 
 **Out-of-Sample / Validation**
 
 ::: {.callout-warning}
-**Current Validation Sharpe (sealed partition):** `r { get_val <- function(tgt, col, per) { m <- safe_tar_read(tgt); v <- if (!is.null(m)) m[[col]][m$period == per] else numeric(0); if (length(v) == 1L) round(v, 2) else "N/A" }; paste0("Stock DRIF: ", get_val("stk_drif_metrics","sharpe","Validation"), " | Stock MAX: ", get_val("stk_max_metrics","sharpe","Validation"), " | Factor MAX: ", get_val("fm_metrics","sharpe","Validation"), " | Factor DRIF: ", get_val("drif_metrics","sharpe","Validation")) }`. Validation Sharpe values are shown above for each strategy. The Testing partition OOS results (below) reflect the calibration window used during strategy development, not the sealed evaluation.
+**Validation (sealed partition):** Validation Sharpe for these strategies is not reported on this page — it is sealed until a one-shot production evaluation (see `scripts/evaluate_validation.R`). The Testing partition OOS results (below) reflect the calibration window used during strategy development, not the sealed evaluation.
 :::
 
 | Finding | Evidence |
 |---------|----------|
-| Stock DRIF Testing-period Sharpe during elastic net development: `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Testing"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` | Validation Sharpe is `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` — `r { mt <- safe_tar_read("stk_drif_metrics"); vt <- if(!is.null(mt)) mt$sharpe[mt$period=="Testing"] else numeric(0); vv <- if(!is.null(mt)) mt$sharpe[mt$period=="Validation"] else numeric(0); if(length(vt)==1L && length(vv)==1L && is.finite(vt) && is.finite(vv)) { if(vv >= vt) "Validation Sharpe met or exceeded Testing." else "Validation Sharpe was lower than Testing." } else "Validation vs Testing comparison unavailable." }` |
-| Factor MAX Testing-period Sharpe: `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }` | Single-signal approach at factor level; Validation Sharpe: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
-| Stock MAX OOS CAGR looks extreme (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Testing"]*100,0),"%") else "N/A" }`) | Driven by COVID recovery + meme stocks — Validation CAGR: `r { m <- safe_tar_read("stk_max_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }` |
+| Stock DRIF Testing-period Sharpe during elastic net development: `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Testing"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` | Testing period reflects the calibration window used during development. Validation is sealed — not reported (see `scripts/evaluate_validation.R`). |
+| Factor MAX Testing-period Sharpe: `r { m <- safe_tar_read("fm_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }` | Single-signal approach at factor level; Validation is sealed — not reported (see `scripts/evaluate_validation.R`). |
+| Stock MAX OOS CAGR looks extreme (`r { m <- safe_tar_read("stk_max_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Testing"]*100,0),"%") else "N/A" }`) | Driven by COVID recovery + meme stocks. Validation CAGR is sealed — not reported (see `scripts/evaluate_validation.R`). |
 
 **Risk**
 
@@ -145,7 +148,7 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 
 | Finding | Evidence |
 |---------|----------|
-| Full daily return distribution (42 features) carries more signal than single-day MAX on paper; whether this advantage persists in the Validation period requires checking the current metrics table | Factor-level Validation Sharpe: `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` vs Factor MAX Validation Sharpe: `r { m <- safe_tar_read("fm_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` |
+| Full daily return distribution (42 features) carries more signal than single-day MAX on paper | Whether this advantage persists cannot be assessed here — Validation is sealed and not reported (see `scripts/evaluate_validation.R`) |
 | Factor-level vs stock-level volatility comparison — see current metrics table | Classic diversification vs concentration tradeoff |
 
 # Stock MAX
@@ -194,10 +197,11 @@ if (!is.null(stk_max) && !is.null(stk_drif) && !is.null(fac_max) && !is.null(fac
 metrics <- safe_tar_read("stk_max_metrics")
 if (!is.null(metrics)) {
   display <- metrics |>
+    filter(period != "Validation") |>
     mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2),
            avg_long = round(avg_long), avg_short = round(avg_short))
-  hd_dt_wide(display, "Stock MAX metrics by partition.")
+  hd_dt_wide(display, "Stock MAX metrics by partition (Validation sealed — see scripts/evaluate_validation.R).")
 }
 ```
 
@@ -271,10 +275,11 @@ if (!is.null(metrics)) {
 metrics <- safe_tar_read("stk_drif_metrics")
 if (!is.null(metrics)) {
   display <- metrics |>
+    filter(period != "Validation") |>
     mutate(across(c(cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2),
            avg_long = round(avg_long), avg_short = round(avg_short))
-  hd_dt_wide(display, "Stock DRIF metrics by partition.")
+  hd_dt_wide(display, "Stock DRIF metrics by partition (Validation sealed — see scripts/evaluate_validation.R).")
 }
 ```
 
@@ -283,7 +288,7 @@ if (!is.null(metrics)) {
 | | Detail |
 |--|--------|
 | **Pros (long-only)** | Uses full daily return information (42 features <!-- structural: 21 chronological + 21 rank daily returns — part of strategy definition, not a computed metric -->). Elastic net prevents overfitting. During strategy development (Testing period), showed Testing Sharpe of `r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Testing"],2) else "N/A" }`. |
-| **Cons** | Weak in-sample long-short (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Training"]*100,1),"%") else "N/A" }` CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. Validation Sharpe `r { m <- safe_tar_read("stk_drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }` — generalisation to sealed Validation has not held. |
+| **Cons** | Weak in-sample long-short (`r { m <- safe_tar_read("stk_drif_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Training"]*100,1),"%") else "N/A" }` CAGR). Compute-intensive (10 min for 660 stocks × 600 months). High turnover. Generalisation beyond the Testing partition has not been assessed — Validation is sealed and is not read here (see `scripts/evaluate_validation.R`). |
 | **Works well** | When the cross-section is large (more stocks = better elastic net training). Long-only implementation avoids cost drag of short leg. |
 | **Works badly** | Small universes (<100 stocks). Long-short after costs (D1-D10 spread insufficient to overcome 1.85%/month cost). |
 | **Factor exposure** | Lower factor loading than MAX (elastic net regularises out common factors). More likely to represent genuine alpha. |
@@ -400,9 +405,10 @@ Stock-level long-short strategies lose ~20%/yr after realistic costs (1.85%/mont
 metrics_a <- safe_tar_read("etf_a_metrics")
 if (!is.null(metrics_a)) {
   display <- metrics_a |>
+    filter(period != "Validation") |>
     mutate(across(c(cagr, long_cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2))
-  hd_dt_wide(display, "Approach A: DRIF applied directly to 9 factor ETF daily returns. Long-short (L/S) and long-only metrics. Cost: 0.10%/trade, 0.5%/yr borrow.")
+  hd_dt_wide(display, "Approach A: DRIF applied directly to 9 factor ETF daily returns. Long-short (L/S) and long-only metrics. Cost: 0.10%/trade, 0.5%/yr borrow. Validation sealed — see scripts/evaluate_validation.R.")
 }
 ```
 
@@ -412,9 +418,10 @@ if (!is.null(metrics_a)) {
 metrics_b <- safe_tar_read("etf_b_metrics")
 if (!is.null(metrics_b)) {
   display <- metrics_b |>
+    filter(period != "Validation") |>
     mutate(across(c(cagr, long_cagr, vol, max_dd), ~ paste0(round(. * 100, 1), "%")),
            sharpe = round(sharpe, 2))
-  hd_dt_wide(display, "Approach B: Academic factor DRIF signal mapped to ETFs via ETF_FACTOR_MAP. Mapping: HML→VLUE/VTV/IWD, Mom→MTUM, RMW→QUAL, etc.")
+  hd_dt_wide(display, "Approach B: Academic factor DRIF signal mapped to ETFs via ETF_FACTOR_MAP. Mapping: HML→VLUE/VTV/IWD, Mom→MTUM, RMW→QUAL, etc. Validation sealed — see scripts/evaluate_validation.R.")
 }
 ```
 
@@ -426,7 +433,7 @@ if (!is.null(metrics_b)) {
 | **Short leg is unprofitable** | A long-short: `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`. B long-short: `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$cagr[m$period=="Full Period"]*100,1),"%") else "N/A" }`. ETFs all have market beta — shorting one is mostly shorting the market. |
 | **Approach A vs B** | A full-period Sharpe: `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`. B full-period Sharpe: `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) round(m$sharpe[m$period=="Full Period"],2) else "N/A" }`. A max DD: `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$max_dd[m$period=="Full Period"]*100,1),"%") else "N/A" }`. The VLUE/HML mapping (cor=0.34) in B adds noise. |
 | **Cost advantage is real** | ETF costs ~0.20%/month vs 1.85%/month stock-level. The long-only gross returns survive after costs. |
-| **Validation** | A long-only CAGR (Validation): `r { m <- safe_tar_read("etf_a_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Validation"]*100,1),"%") else "N/A" }`. B long-only CAGR (Validation): `r { m <- safe_tar_read("etf_b_metrics"); if(!is.null(m)) paste0(round(m$long_cagr[m$period=="Validation"]*100,1),"%") else "N/A" }`. Caveat: overlaps a bull market. |
+| **Validation** | Sealed — not reported until a one-shot production evaluation (see `scripts/evaluate_validation.R`). |
 
 # Factor-Level Deep Dive {#factor-level-deep-dive}
 
@@ -461,10 +468,11 @@ Based on [Alpha Architect research](https://alphaarchitect.com/factor-max/){targ
 metrics <- safe_tar_read("fm_metrics")
 if (!is.null(metrics)) {
   display <- metrics |>
+    filter(period != "Validation") |>
     mutate(across(c(cagr, vol, max_dd, hit_rate, bench_cagr, bench_vol),
                   ~ paste0(round(. * 100, 1), "%"))) |>
     mutate(across(c(sharpe, bench_sharpe), ~ round(., 2)))
-  hd_dt(display, "Factor MAX strategy metrics: in-sample (1963-2019), out-of-sample (2020+), and full period.")
+  hd_dt(display, "Factor MAX strategy metrics: in-sample (1963-2019), out-of-sample (2020+), and full period. Validation sealed — see scripts/evaluate_validation.R.")
 }
 ```
 
@@ -539,17 +547,18 @@ Based on [Alpha Architect research](https://alphaarchitect.com/daily-stock-retur
 :::
 
 ::: {.callout-warning}
-**Current status (Validation period — sealed one-shot evaluation):** Sharpe `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$sharpe[m$period=="Validation"] else numeric(0); if(length(v)==1L) round(v,2) else "N/A" }`, CAGR `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$cagr[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`, max DD `r { m <- safe_tar_read("drif_metrics"); v <- if(!is.null(m)) m$max_dd[m$period=="Validation"] else numeric(0); if(length(v)==1L) paste0(round(v*100,1),"%") else "N/A" }`. The in-sample and Testing Sharpes reflect the development period; Validation is the unbiased live-performance estimate.
+**Validation (sealed partition):** Not reported here — DRIF Validation metrics are sealed until a one-shot production evaluation (see `scripts/evaluate_validation.R`). The in-sample and Testing Sharpes above reflect the development period only.
 :::
 
 ```{r}
 metrics <- safe_tar_read("drif_metrics")
 if (!is.null(metrics)) {
   display <- metrics |>
+    dplyr::filter(period != "Validation") |>
     dplyr::mutate(across(c(cagr, vol, max_dd, hit_rate, bench_cagr, bench_vol),
                   ~ paste0(round(. * 100, 1), "%"))) |>
     dplyr::mutate(across(c(sharpe, bench_sharpe), ~ round(., 2)))
-  hd_dt_wide(display, "DRIF strategy metrics: in-sample (1968-2019), out-of-sample (2020+), and full period. Uses 60-month minimum expanding window.")
+  hd_dt_wide(display, "DRIF strategy metrics: in-sample (1968-2019), out-of-sample (2020+), and full period. Uses 60-month minimum expanding window. Validation sealed — see scripts/evaluate_validation.R.")
 }
 ```
 
