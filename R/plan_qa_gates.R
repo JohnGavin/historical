@@ -452,7 +452,7 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 }
 
 
-#' Assert a monthly portfolio target has complete calendar-month coverage (S11)
+#' Assert a monthly portfolio target has complete calendar-month coverage (S12)
 #'
 #' Guards against the #641 defect class: a systematic construction bug (a
 #' lookback/rebalance window confined to a single calendar month) can
@@ -479,7 +479,7 @@ check_month_coverage <- function(portfolio, target_name, min_span_coverage = 0.6
   if (!"ym" %in% names(portfolio)) {
     cli::cli_abort(c(
       "x" = "{target_name} is missing the required {.field ym} column.",
-      "i" = "check_month_coverage() (S11) requires a ym (\"YYYY-MM\") column."
+      "i" = "check_month_coverage() (S12) requires a ym (\"YYYY-MM\") column."
     ))
   }
 
@@ -703,7 +703,7 @@ plan_qa_gates <- function() {
       cue = targets::tar_cue(mode = "always")
     ),
 
-    # QA gate: stk_drif_portfolio has complete calendar-month coverage (S11) —
+    # QA gate: stk_drif_portfolio has complete calendar-month coverage (S12) —
     # guards against the #641 defect class where a lookback/rebalance window
     # confined to a single calendar month silently drops an entire month
     # (March, fed by a structurally-short February) from every year.
@@ -711,7 +711,7 @@ plan_qa_gates <- function() {
       qa_stk_drif_month_coverage,
       command = {
         check_month_coverage(stk_drif_portfolio, "stk_drif_portfolio")
-        cli::cli_inform(c("v" = "qa_stk_drif_month_coverage: S11 passed (all 12 calendar months present in stk_drif_portfolio)"))
+        cli::cli_inform(c("v" = "qa_stk_drif_month_coverage: S12 passed (all 12 calendar months present in stk_drif_portfolio)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

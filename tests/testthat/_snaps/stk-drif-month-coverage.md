@@ -15,7 +15,7 @@
     Condition
       Error in `check_month_coverage()`:
       x test_portfolio is missing the required ym column.
-      i check_month_coverage() (S11) requires a ym ("YYYY-MM") column.
+      i check_month_coverage() (S12) requires a ym ("YYYY-MM") column.
 
 # check_month_coverage signature is stable (catches API drift)
 

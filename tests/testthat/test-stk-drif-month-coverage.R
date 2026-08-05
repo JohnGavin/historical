@@ -1,5 +1,5 @@
 testthat::local_edition(3)
-# Tests for check_month_coverage() — QA gate S11 (#641)
+# Tests for check_month_coverage() — QA gate S12 (#641)
 #
 # The function is defined in R/plan_qa_gates.R. Guards against the #641
 # defect class: a lookback/rebalance window confined to a single calendar
