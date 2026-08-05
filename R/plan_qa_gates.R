@@ -615,6 +615,110 @@ check_month_coverage <- function(portfolio, target_name, min_span_coverage = 0.6
 }
 
 
+#' Assert port_returns has no calendar-month gaps and flag thin-coverage
+#' months (S13)
+#'
+#' Guards against the #641 defect class: `port_returns` used to chain four
+#' `inner_join()`s across its constituent strategies (`stk_max`, `stk_drif`,
+#' `fac_max`, `fac_drif`), so any month missing from ONE constituent
+#' silently deleted that month for ALL FOUR -- 128 of an expected ~190+
+#' rows, including every March (`stk_drif_portfolio` had no March rows at
+#' all). R/plan_portfolio_opt.R now builds `port_returns` from an explicit
+#' calendar-complete monthly spine (bounded to the overlap of the two
+#' stock-level series' own date ranges) and LEFT-joins all four
+#' constituents onto it -- a missing constituent surfaces as an explicit NA
+#' in that column, not a deleted row.
+#'
+#' Two assertions:
+#'   1. `cli_abort()` if the `date` column has ANY calendar-month gap
+#'      between its min and max -- structurally this should be impossible
+#'      given the spine-based join described above (see the comment on the
+#'      `port_returns` target), so a gap here means either the spine
+#'      construction was changed back to using literal ym values, or
+#'      `stk_max_portfolio`/`stk_drif_portfolio` (R/plan_stock_backtest.R)
+#'      no longer overlap at all. Names every missing month.
+#'   2. `cli_warn()` (deliberately NOT abort) for any row where fewer than 2
+#'      of the 4 constituents report a value -- `port_combined`'s
+#'      `.port_weighted_return()` renormalisation guard (R/plan_portfolio_opt.R)
+#'      turns such rows into NA rather than a single-strategy bet dressed up
+#'      as a diversified portfolio. In the data as of #641 this is the
+#'      expected, benign live-edge lag between stock-level and factor-level
+#'      data feeds (currently the most recent 1-2 months) -- NOT a defect --
+#'      so it warns rather than aborting, and names the affected month(s)
+#'      plus which constituent(s) are missing so a genuine regression is
+#'      still visible.
+#'
+#' @param port_returns Tibble from the `port_returns` target; must have
+#'   `date` and the four strategy columns `stk_max`, `stk_drif`, `fac_max`,
+#'   `fac_drif`.
+#' @return `TRUE` invisibly (assertion 1 always holds on return; assertion 2
+#'   may have warned).
+#' @noRd
+check_portfolio_join_coverage <- function(port_returns) {
+  required_cols <- c("date", "stk_max", "stk_drif", "fac_max", "fac_drif")
+  missing_cols <- setdiff(required_cols, names(port_returns))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "port_returns is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_portfolio_join_coverage() (S13) requires date, stk_max, stk_drif, fac_max, fac_drif."
+    ))
+  }
+
+  # ── Assertion 1: no calendar-month gap in the date sequence ─────────────
+  d <- sort(unique(port_returns$date))
+  expected_ym <- format(seq(min(d), max(d), by = "month"), "%Y-%m")
+  # port_returns dates are anchored to the 15th (paste0(ym, "-15")); compare
+  # on year-month, not exact Date, so day-of-month never produces a false gap.
+  observed_ym <- format(d, "%Y-%m")
+  missing_months <- setdiff(expected_ym, observed_ym)
+
+  if (length(missing_months) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "port_returns has ", length(missing_months),
+        " calendar-month gap(s) in its date sequence:"
+      ),
+      setNames(sprintf("  %s", missing_months), rep("i", length(missing_months))),
+      "i" = paste0(
+        "port_returns builds a calendar-complete spine specifically so ",
+        "this cannot happen (#641) -- check for a changed spine/join in ",
+        "R/plan_portfolio_opt.R or a new gap in stk_max_portfolio / ",
+        "stk_drif_portfolio (R/plan_stock_backtest.R)."
+      )
+    ))
+  }
+
+  # ── Assertion 2: flag (warn, don't abort) thin-coverage months ──────────
+  strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+  avail <- rowSums(!is.na(as.matrix(port_returns[, strat_cols])))
+  thin <- port_returns[avail < 2L, , drop = FALSE]
+
+  if (nrow(thin) > 0L) {
+    thin_msgs <- vapply(seq_len(nrow(thin)), function(i) {
+      row <- thin[i, ]
+      missing_strats <- strat_cols[is.na(row[strat_cols])]
+      sprintf("  %s -- missing: %s", format(row$date, "%Y-%m"),
+              paste(missing_strats, collapse = ", "))
+    }, character(1L))
+    cli::cli_warn(c(
+      "!" = paste0(
+        length(thin_msgs), " month(s) have fewer than 2 of 4 constituent ",
+        "strategies reporting a value (renormalised to NA in port_combined ",
+        "rather than a single-strategy bet, #641):"
+      ),
+      setNames(thin_msgs, rep("i", length(thin_msgs))),
+      "i" = paste0(
+        "Usually the benign live-edge lag between stock-level and ",
+        "factor-level data feeds -- verify if this list grows or covers ",
+        "a month that isn't at the trailing edge."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -820,6 +924,24 @@ plan_qa_gates <- function() {
       command = {
         check_month_coverage(stk_drif_portfolio, "stk_drif_portfolio")
         cli::cli_inform(c("v" = "qa_stk_drif_month_coverage: S12 passed (all 12 calendar months present in stk_drif_portfolio)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: port_returns has no calendar-month gaps, thin-coverage months
+    # are flagged (S13) — guards against the #641 defect class where a
+    # 4-way inner_join chain in R/plan_portfolio_opt.R silently deleted any
+    # month missing from ONE constituent strategy for ALL FOUR (128 of an
+    # expected ~190+ rows, including every March). port_returns is now built
+    # from a calendar-complete spine with everything left-joined onto it, so
+    # a missing constituent surfaces as an explicit NA rather than a deleted
+    # row; this gate asserts that guarantee holds.
+    targets::tar_target(
+      qa_portfolio_join_coverage,
+      command = {
+        check_portfolio_join_coverage(port_returns)
+        cli::cli_inform(c("v" = "qa_portfolio_join_coverage: S13 passed (no calendar-month gaps in port_returns)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
