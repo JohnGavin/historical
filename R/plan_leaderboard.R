@@ -32,6 +32,17 @@
 # (docs/leaderboard.qmd, DT::datatable(), plot labels), not this target.
 # See also: R/plan_qa_gates.R `qa_leaderboard_metric_ranges` -- the range gate
 # that asserts every row here is within a plausible fractional range.
+#
+# ── Period vocabulary (#643) ────────────────────────────────────────────────
+# The `period` column MUST only contain values from `PERIOD_LABELS_ALLOWED`
+# (R/plan_partitions.R). Two source targets (mf_metrics, ev_metrics) used
+# "Full" for the full-sample row where every other strategy uses "Full
+# Period" -- their `.norm_mf()` / `.norm_value()` helpers below rename it at
+# this boundary, same pattern as the unit conversion above. Their "OOS" label
+# is intentionally NOT renamed to "Testing" -- see the `.norm_mf()` comment
+# and R/plan_partitions.R for why the two windows differ. See also:
+# R/plan_qa_gates.R `qa_leaderboard_period_vocab` -- the vocabulary gate that
+# asserts every row here uses an allowed label.
 
 plan_leaderboard <- function() {
   list(
@@ -163,32 +174,51 @@ plan_leaderboard <- function() {
       # mf_metrics has multiple internal strategies (Long-Only, Long-Short, EW benchmark)
       # and columns: strategy, period, n_months, cagr, vol, sharpe, max_dd, calmar.
       # Keep only the canonical MOP 2012 long-short strategy.
-      # Period labels ("Full"/"Training"/"OOS") match what other strategies use.
       # Source: R/plan_managed_futures.R:187-192 (calc_metrics) stores
       # cagr/vol/max_dd as PERCENT (round(x * 100, 2)) -- convert to fraction.
+      # Period-label normalisation (#643): mf_metrics' own vocabulary is
+      # "Full"/"Training"/"OOS" -- everywhere else in the leaderboard uses
+      # "Full Period" for the same full-sample concept, so "Full" is renamed
+      # here at the boundary (same rule as the unit conversion above -- fix
+      # at the point where the source convention is known). "OOS" is NOT
+      # renamed to "Testing": mf_metrics' OOS window is `dates >= oos_start`
+      # (2010-01-01, unbounded), a different span from the canonical Testing
+      # partition (2020-01-01..2022-12-31, R/plan_partitions.R) -- see the
+      # PERIOD_LABELS_ALLOWED comment in R/plan_partitions.R for the full
+      # rationale. Renaming it would misrepresent the wider sample as the
+      # shared cross-strategy test partition.
       .norm_mf <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)") |>
           select(-strategy, -calmar) |>
           rename(months = n_months) |>
-          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
+          mutate(
+            period = ifelse(period == "Full", "Full Period", period),
+            cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100
+          )
       }
 
       # ev_metrics has multiple internal strategies (Pure Value, Value+Quality, Benchmark)
       # and columns: strategy, period, n_months, cagr, vol, sharpe, max_dd, calmar.
       # Keep only the pure HML strategy that represents "Value (HML)".
-      # Period labels ("Full"/"Training"/"OOS") match what other strategies use.
       # Source: R/plan_ev_ebit.R:109-114 (calc_metrics) stores cagr/vol/max_dd
       # as PERCENT (x * 100, no explicit round until the tibble build) --
       # convert to fraction.
+      # Period-label normalisation (#643): see the matching comment in
+      # .norm_mf() above -- "Full" -> "Full Period" is a safe rename, "OOS"
+      # is intentionally left as-is (ev_metrics' OOS window is `dates >=
+      # 2010-01-01`, unbounded, not the canonical bounded Testing partition).
       .norm_value <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(strategy == "Pure Value (100% HML, EV/EBIT proxy)") |>
           select(-strategy, -calmar) |>
           rename(months = n_months) |>
-          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
+          mutate(
+            period = ifelse(period == "Full", "Full Period", period),
+            cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100
+          )
       }
 
       all_metrics <- bind_rows(

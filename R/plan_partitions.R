@@ -7,6 +7,30 @@
 # Testing:    calibration, hyperparameter tuning, strategy comparison
 # Validation: final one-shot evaluation (sealed envelope)
 
+# ── Canonical period vocabulary (#643) ──────────────────────────────────────
+# Single source of truth for every value the `period` column is allowed to
+# hold, across every strategy metrics target AND the `leaderboard` target
+# that aggregates them. Sourced before plan_leaderboard.R / plan_qa_gates.R /
+# plan_ev_ebit.R / plan_managed_futures.R in docs/_targets.R, so this object
+# is available wherever those files reference it.
+#
+# "OOS" is INTENTIONALLY separate from "Testing" — they are not synonyms:
+#   - "Testing" is the canonical, bounded window in `bt_partitions` above
+#     (currently 2020-01-01..2022-12-31 for every asset class).
+#   - "OOS" labels a strategy-local out-of-sample split defined by its own
+#     `oos_start` parameter with NO end bound (e.g. R/plan_ev_ebit.R and
+#     R/plan_managed_futures.R both use `dates >= 2010-01-01`, which spans
+#     the canonical Training tail (2010-2019), all of Testing (2020-2022),
+#     and all of Validation (2023+) in one undifferentiated block).
+# Renaming "OOS" to "Testing" would misrepresent that wider, strategy-defined
+# sample as the shared cross-strategy test partition — so both labels stay
+# in the allowed set, and no `.norm_*` helper in R/plan_leaderboard.R may
+# rename OOS to Testing. Only "Full" -> "Full Period" is a safe rename
+# (pure spelling difference for the same concept — see #643).
+PERIOD_LABELS_ALLOWED <- c(
+  "Training", "Testing", "Validation", "Full Period", "OOS"
+)
+
 plan_partitions <- function() {
   list(
     targets::tar_target(bt_partitions, {
