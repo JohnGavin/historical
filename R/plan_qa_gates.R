@@ -637,8 +637,8 @@ check_leaderboard_no_validation_rows <- function(leaderboard) {
 #' still legitimately compute a Validation row for other consumers (that
 #' computation is out of scope here and is not touched by this gate).
 #'
-#' `.claude/rules/backtest-partitions.md` requires Validation to be sealed
-#' from *display and reasoning*, not only from automatic computation --
+#' `.claude/rules/backtest-partitions.md` requires Validation to stay sealed
+#' everywhere it could leak -- not only in automatic computation --
 #' S14's scope was the assembled `leaderboard` target only. This gate
 #' extends the seal to every published document by scanning for the
 #' literal `period == "Validation"` (or `period=="Validation"`) comparison,
@@ -1110,8 +1110,8 @@ plan_qa_gates <- function() {
     # read `period == "Validation"` directly from source-metrics targets in
     # prose and unfiltered metrics tables, bypassing the leaderboard target
     # (and its S14 gate) entirely. Extends S14's leaderboard-only scope to
-    # every published .qmd/.R, per the display-and-reasoning clause this
-    # issue adds to backtest-partitions.md. See check_no_published_validation_reads()
+    # every published .qmd/.R, per the sealed-Validation requirement in
+    # backtest-partitions.md. See check_no_published_validation_reads()
     # roxygen for the two required exclusions (this file; scripts/evaluate_validation.R).
     targets::tar_target(
       qa_no_published_validation_reads,

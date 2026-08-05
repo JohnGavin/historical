@@ -50,19 +50,6 @@ plan_partitions <- function() {
 - Once you look at validation results and change the strategy, the validation partition becomes another test set — the seal is broken
 - Document in the vignette which partition each metric comes from
 
-**The seal covers display and reasoning, not only computation.** A source
-metrics target may legitimately compute a `"Validation"` row for other
-consumers (e.g. `scripts/evaluate_validation.R`) — that is not itself a
-violation. The violation is reading that row into a **published document**
-(a rendered `.qmd`, a table, a prose sentence) or drawing a **conclusion**
-from it (a Pros/Cons verdict, a "generalisation has/hasn't held" claim). Both
-are breaches of the seal even when no code change followed, because the
-partition's value depends on the values never having been looked at
-(#660). Every published document is scanned for a literal
-`period == "Validation"` read by the `qa_no_published_validation_reads`
-gate (S15, `R/plan_qa_gates.R`) — the sanctioned exception is
-`scripts/evaluate_validation.R`, the one-shot manual evaluation route.
-
 ## Metrics Labelling
 
 Every metrics table MUST label the partition:
