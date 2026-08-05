@@ -38,17 +38,20 @@ Convenience wrapper that calls \code{\link[=hd_sharpe_stability_ratio]{hd_sharpe
 8 metric values into \code{bt.metric} via \code{\link[=hd_metric_record]{hd_metric_record()}}.
 }
 \details{
-The 8 metrics written are:
+The 8 metrics written are (unit in parens; see \code{\link[=hd_metric_units]{hd_metric_units()}}):
 \describe{
-\item{\code{ssr}}{Sharpe Stability Ratio.}
-\item{\code{ssr_mean_sharpe}}{Mean of rolling Sharpe series.}
-\item{\code{ssr_se}}{Newey-West HAC standard error.}
-\item{\code{ssr_n_windows}}{Number of complete rolling windows.}
-\item{\code{ssr_lag_nw}}{Newey-West bandwidth used.}
-\item{\code{top_share}}{Fraction of total return from the top-\code{pct} periods.}
-\item{\code{top_n_top}}{Count of top-\code{pct} periods.}
-\item{\code{top_n_total}}{Total non-NA period count.}
+\item{\code{ssr}}{Sharpe Stability Ratio. (\code{ratio})}
+\item{\code{ssr_mean_sharpe}}{Mean of rolling Sharpe series. (\code{ratio})}
+\item{\code{ssr_se}}{Newey-West HAC standard error. (\code{ratio})}
+\item{\code{ssr_n_windows}}{Number of complete rolling windows. (\code{count})}
+\item{\code{ssr_lag_nw}}{Newey-West bandwidth used. (\code{count})}
+\item{\code{top_share}}{Fraction of total return from the top-\code{pct} periods. (\code{fraction})}
+\item{\code{top_n_top}}{Count of top-\code{pct} periods. (\code{count})}
+\item{\code{top_n_total}}{Total non-NA period count. (\code{count})}
 }
+These units are fixed by this helper's own contract — always the same
+regardless of caller — so they are hardcoded here rather than accepted
+as an argument.
 
 \code{NA} values in \code{returns} are silently removed before both computations
 (matching the behaviour of \code{\link[=hd_sharpe_stability_ratio]{hd_sharpe_stability_ratio()}} and

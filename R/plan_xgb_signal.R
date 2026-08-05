@@ -312,10 +312,20 @@ plan_xgb_signal <- function() {
 
   # Record full-period metrics row (numeric cols only; survivorship_biased
   # logical is silently skipped by .normalise_metric_long).
+  # Units (#640): xgb_drif_metrics comes from calc_backtest_metrics(), which
+  # stores cagr/vol/max_dd as decimal fractions, sharpe as a scale-free
+  # ratio, and months/avg_long/avg_short as counts.
   full_row <- xgb_drif_metrics[xgb_drif_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    xgb_units <- c(
+      months = "count", cagr = "fraction", vol = "fraction",
+      sharpe = "ratio", max_dd = "fraction",
+      avg_long = "count", avg_short = "count"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = xgb_units
+    )
   }
 
   # Record survivorship_biased as a diagnostic (#442).

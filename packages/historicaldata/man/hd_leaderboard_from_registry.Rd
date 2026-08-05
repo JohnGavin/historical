@@ -20,10 +20,24 @@ the most recent run per (strategy_id, partition). If \code{FALSE}, every
 recorded run is returned.}
 }
 \value{
-A tibble.
+A tibble with canonical \code{value}/\code{unit} columns plus
+\code{value_stored}/\code{unit_stored} carrying the as-recorded values.
 }
 \description{
 Joins \code{bt.strategy} + \code{bt.run} + \code{bt.metric} and pivots the named
 metric (default \code{"sharpe"}) into a column. Returns one row per
 (strategy_id, partition, run_uuid).
+}
+\details{
+\code{value}/\code{unit} are always in the \strong{canonical} unit for their kind —
+\code{"percent"} is converted to \code{"fraction"} (dividing by 100); \code{"ratio"},
+\code{"count"}, \code{"days"}, \code{"years"}, and already-\code{"fraction"} values pass
+through unscaled. Callers never need to know the storage convention.
+The original as-stored value/unit are preserved in \code{value_stored} /
+\code{unit_stored} for auditability. A \code{NA} or unrecognised stored unit
+aborts (see \code{\link[=hd_metric_units]{hd_metric_units()}}) rather than being silently treated
+as any particular unit — this is deliberate: an un-unitised row is
+exactly the #637/#640 hazard this function exists to prevent, and a
+registry populated before this fix landed must be regenerated (all
+pre-fix rows have \verb{metric_unit IS NULL}).
 }

@@ -419,7 +419,19 @@ plan_mom_prepeak <- function() {
     if (nrow(metrics_row) == 1L) {
       metric_cols <- setdiff(names(metrics_row), "strategy")
       wide <- metrics_row[, metric_cols, drop = FALSE]
-      historicaldata::hd_metric_record(con, uu, wide)
+      # Units (#640): see .mom_prepeak_compute_metrics() in
+      # packages/historicaldata/R/utils_mom_prepeak_metrics.R — cagr/vol/
+      # max_dd are decimal fractions, sharpe is a scale-free ratio,
+      # n_months/max_cons_losses/bankrupt_month are counts, avg_dd_days/
+      # max_dd_days are day-durations. blown_up/loss_clustered are logical
+      # and are auto-skipped by .normalise_metric_long (no unit needed).
+      mom_prepeak_units <- c(
+        n_months = "count", sharpe = "ratio", cagr = "fraction",
+        vol = "fraction", max_dd = "fraction",
+        bankrupt_month = "count", avg_dd_days = "days",
+        max_dd_days = "days", max_cons_losses = "count"
+      )
+      historicaldata::hd_metric_record(con, uu, wide, units = mom_prepeak_units)
     }
 
     # Record SSR + top5pct stability metrics (#400 PR 5/6).

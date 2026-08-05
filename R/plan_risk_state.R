@@ -710,13 +710,22 @@ plan_risk_state <- function() {
   )
 
   # Record SPY_overlay / Full Period metrics row (the primary RSC result)
+  # Units (#640): rsc_metrics stores cagr/vol/max_dd as PERCENT
+  # (round(x*100, ...) in calc_metrics() above); hac_tstat/hac_sharpe are
+  # scale-free ratios.
   full_row <- rsc_metrics[
     rsc_metrics$strategy == "SPY_overlay" & rsc_metrics$period == "Full Period",
     , drop = FALSE
   ]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), c("strategy", "period"))
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    rsc_units <- c(
+      cagr = "percent", vol = "percent", max_dd = "percent",
+      hac_tstat = "ratio", hac_sharpe = "ratio"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = rsc_units
+    )
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.

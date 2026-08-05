@@ -1313,10 +1313,21 @@ plan_stock_backtest <- function() {
 
   # Record full-period metrics row (numeric cols only; survivorship_biased
   # logical is silently skipped by .normalise_metric_long).
+  # Units (#640): calc_backtest_metrics() stores cagr/vol/max_dd as decimal
+  # fractions (ann_ret/ann_vol/max_dd are computed as raw fractions, never
+  # multiplied by 100 — see calc_backtest_metrics() above), sharpe is a
+  # scale-free ratio, and months/avg_long/avg_short are counts.
   full_row <- metrics[metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    stk_units <- c(
+      months = "count", cagr = "fraction", vol = "fraction",
+      sharpe = "ratio", max_dd = "fraction",
+      avg_long = "count", avg_short = "count"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = stk_units
+    )
   }
 
   # Record survivorship_biased as a diagnostic (#442).

@@ -122,7 +122,7 @@ test_that("hd_run_upsert deletes old bt.metric rows when run already exists", {
   )
 
   # Insert a metric row for the first run.
-  hd_metric_record(s$con, uuid, tibble::tibble(sharpe = 0.5))
+  hd_metric_record(s$con, uuid, tibble::tibble(sharpe = 0.5), units = c(sharpe = "ratio"))
 
   n_before <- DBI::dbGetQuery(
     s$con,
