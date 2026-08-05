@@ -597,7 +597,23 @@ plan_mom_prepeak_gauntlet <- function() {
       mom_prepeak_top5pct$top_share else NA_real_
   )
 
-  historicaldata::hd_metric_record(con, uu, gauntlet_wide)
+  # Units (#640): hac_sharpe/hac_tstat/ff5_alpha_t/wfc_pearson/ssr are
+  # scale-free ratios (Sharpe, t-stats, correlation coefficient, Sharpe
+  # Stability Ratio); ff5_alpha is a decimal-fraction annualised excess
+  # return (same scale as cagr); ff5_r2 and pbo are proportions in [0, 1]
+  # (fraction); avg_dd_days/max_dd_days are day-durations; max_cons_losses/
+  # ssr_n_windows are counts; top5pct_share is a fraction. wfc_class is
+  # character and is auto-skipped by .normalise_metric_long (no unit needed).
+  gauntlet_units <- c(
+    hac_sharpe = "ratio", hac_tstat = "ratio",
+    ff5_alpha = "fraction", ff5_alpha_t = "ratio", ff5_r2 = "fraction",
+    pbo = "fraction", wfc_pearson = "ratio",
+    avg_dd_days = "days", max_dd_days = "days",
+    max_cons_losses = "count",
+    ssr = "ratio", ssr_mean_sr = "ratio", ssr_n_windows = "count",
+    top5pct_share = "fraction"
+  )
+  historicaldata::hd_metric_record(con, uu, gauntlet_wide, units = gauntlet_units)
 
   tibble::tibble(run_uuid = uu, metric_rows = 1L)
 }

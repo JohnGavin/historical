@@ -384,11 +384,23 @@ plan_turn_of_month <- function() {
     pipeline_version = "phase1"
   )
 
-  # Record Full Period metrics row (cagr/vol/max_dd are in % units per plan convention)
+  # Record Full Period metrics row (#640: cagr_*/vol_*/max_dd_*/pct_in_tom
+  # are PERCENT — round(x*100, ...) in calc() above; sharpe_* are scale-free
+  # ratios; n_days/n_tom_days are counts; years is a year-duration).
   full_row <- tom_metrics[tom_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    tom_units <- c(
+      n_days = "count", years = "years",
+      cagr_tom = "percent", vol_tom = "percent", sharpe_tom = "ratio",
+      max_dd_tom = "percent",
+      cagr_bh = "percent", vol_bh = "percent", sharpe_bh = "ratio",
+      max_dd_bh = "percent",
+      n_tom_days = "count", pct_in_tom = "percent"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = tom_units
+    )
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.

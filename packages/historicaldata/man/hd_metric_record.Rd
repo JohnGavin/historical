@@ -4,7 +4,7 @@
 \alias{hd_metric_record}
 \title{Record long-form metrics for a backtest run}
 \usage{
-hd_metric_record(con, run_uuid, metrics)
+hd_metric_record(con, run_uuid, metrics, units = NULL)
 }
 \arguments{
 \item{con}{DBI connection (writable).}
@@ -12,6 +12,12 @@ hd_metric_record(con, run_uuid, metrics)
 \item{run_uuid}{Character. Must refer to an existing \code{bt.run} row.}
 
 \item{metrics}{A tibble (long or wide as above).}
+
+\item{units}{Optional named character vector mapping metric name to
+one of \code{\link[=hd_metric_units]{hd_metric_units()}}. Required for wide-form \code{metrics} (no
+\code{metric_name}/\code{metric_value} columns); optional fallback for
+long-form \code{metrics} whose \code{metric_unit} column is absent or has
+\code{NA} entries.}
 }
 \value{
 Invisibly, the number of rows written.
@@ -28,6 +34,14 @@ either:
 one metric row using its column name. Non-numeric and \code{NA} columns
 are skipped.
 }
+
+Every metric written MUST resolve to a known unit (see
+\code{\link[=hd_metric_units]{hd_metric_units()}}) — a missing or unrecognised unit aborts via
+\code{cli::cli_abort()}. Long-form tibbles supply units via a \code{metric_unit}
+column; wide-form tibbles have no per-column slot for a unit, so they
+must supply the \code{units} argument instead (a named character vector,
+\verb{metric name -> unit}). Long-form rows with \code{NA} in \code{metric_unit} may
+also be filled in from \code{units}, keyed by \code{metric_name}.
 
 Idempotent per (run_uuid, metric_name): re-recording overwrites.
 }

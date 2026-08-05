@@ -277,11 +277,21 @@ plan_commodities_mean_reversion <- function() {
     uuids[i] <- uu
 
     # PR 3/4 — record long-form metrics for this partition.
+    # Units (#640): cagr/vol/max_dd are decimal fractions per the "Unit
+    # convention (#336)" comment above, sharpe is a scale-free ratio,
+    # n_months is a count. avg_dd_duration/max_dd_duration are drawdown
+    # lengths measured in the return series' own periodicity (months, for
+    # CMR's monthly returns) — classified as "count" (periods), not "days".
     row <- cmr_summary[cmr_summary$lookback == p, , drop = FALSE]
     if (nrow(row) == 1L) {
       metric_cols <- setdiff(names(row), "lookback")
       wide <- row[, metric_cols, drop = FALSE]
-      historicaldata::hd_metric_record(con, uu, wide)
+      cmr_units <- c(
+        n_months = "count", sharpe = "ratio", cagr = "fraction",
+        vol = "fraction", max_dd = "fraction",
+        avg_dd_duration = "count", max_dd_duration = "count"
+      )
+      historicaldata::hd_metric_record(con, uu, wide, units = cmr_units)
     }
 
     # Record SSR + top5pct stability metrics (#400 PR 5/6).

@@ -358,15 +358,22 @@ plan_portfolio_opt <- function() {
   # Record Full Period PSO-optimal metrics (decimal fractions; canonical units).
   # Only store PSO columns; HRP/equal-weight columns belong to separate strategies
   # if they are ever registered.
+  # Units (#640): opt_cagr/opt_vol/opt_maxdd are decimal fractions (per the
+  # comment above), opt_sharpe is a scale-free ratio, months is a count.
   full_row <- port_metrics[port_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     pso_cols <- intersect(
       c("months", "opt_cagr", "opt_vol", "opt_sharpe", "opt_maxdd"),
       names(full_row)
     )
+    pso_units <- c(
+      months = "count", opt_cagr = "fraction", opt_vol = "fraction",
+      opt_sharpe = "ratio", opt_maxdd = "fraction"
+    )
     if (length(pso_cols) > 0L) {
       historicaldata::hd_metric_record(
-        con, uu, full_row[, pso_cols, drop = FALSE]
+        con, uu, full_row[, pso_cols, drop = FALSE],
+        units = pso_units[pso_cols]
       )
     }
   }

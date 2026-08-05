@@ -1137,13 +1137,22 @@ plan_avoid_worst <- function() {
   )
 
   # Record full-period / all-days metrics row
+  # Units (#640): aw_metrics stores cagr/vol/max_dd as PERCENT (x*100 in
+  # metrics_for() above — the source #637 flagged as percent-native), sharpe
+  # is a scale-free ratio, n_days is a count, and years is a year-duration.
   full_row <- aw_metrics[
     aw_metrics$period == "Full Period" & aw_metrics$scenario == "All Days",
     , drop = FALSE
   ]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), c("period", "scenario"))
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    aw_units <- c(
+      years = "years", n_days = "count", cagr = "percent",
+      vol = "percent", max_dd = "percent", sharpe = "ratio"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = aw_units
+    )
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.

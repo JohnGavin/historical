@@ -483,10 +483,20 @@ plan_factormax <- function() {
   )
 
   # Record full-period metrics row
+  # Units (#640): fm_metrics stores cagr/vol/max_dd/hit_rate/bench_* as
+  # decimal fractions (see .fm_metrics calc_metrics()), sharpe/bench_sharpe
+  # are scale-free ratios, and months is a period count.
   full_row <- fm_metrics[fm_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    fm_units <- c(
+      months = "count", cagr = "fraction", vol = "fraction",
+      sharpe = "ratio", max_dd = "fraction", hit_rate = "fraction",
+      bench_cagr = "fraction", bench_vol = "fraction", bench_sharpe = "ratio"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = fm_units
+    )
   }
 
   # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.

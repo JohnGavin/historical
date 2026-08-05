@@ -451,10 +451,20 @@ plan_ltr_momentum <- function() {
   )
 
   # Record full-period metrics row
+  # Units (#640): ltr_metrics stores cagr/vol/max_dd as PERCENT (round(x*100,1)
+  # above — the source #637 flagged as percent-native), hac_sharpe/hac_tstat
+  # are scale-free ratios, and months/avg_long/avg_short are counts.
   full_row <- ltr_metrics[ltr_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
-    historicaldata::hd_metric_record(con, uu, full_row[, metric_cols, drop = FALSE])
+    ltr_units <- c(
+      months = "count", cagr = "percent", vol = "percent", max_dd = "percent",
+      hac_sharpe = "ratio", hac_tstat = "ratio",
+      avg_long = "count", avg_short = "count"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = ltr_units
+    )
   }
 
   # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
