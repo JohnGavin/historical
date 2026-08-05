@@ -281,6 +281,30 @@ plan_leaderboard <- function() {
         all_metrics <- bind_rows(all_metrics, port_row)
       }
 
+      # ── Seal the Validation partition (#648) ──────────────────────────────
+      # Several source metrics targets (fm_metrics, drif_metrics,
+      # stk_max_metrics, stk_drif_metrics, xgb_drif_metrics, ltr_metrics,
+      # port_metrics) compute a "Validation" period row internally, in their
+      # OWN plan file, for their own reasons (e.g. R/plan_factormax.R:202
+      # `calc_metrics(val_data, "Validation")`). Those rows flow into
+      # `all_metrics` above completely unfiltered via `add_meta()`/`bind_rows()`
+      # and `port_row` -- this is a wider instance of the same
+      # `backtest-partitions.md` seal-breach #648 is about, and those source
+      # targets are intentionally NOT modified here (out of #648's scope --
+      # flagged as a follow-up; several also surface Validation values
+      # directly in vignette prose, e.g. docs/stock-backtest.qmd, which is a
+      # separate display-side leak this issue does not touch).
+      #
+      # This target (`leaderboard`) must not RE-EXPOSE those rows regardless
+      # of which upstream source produced them: drop every row labelled
+      # "Validation" the moment the base rows are assembled, before any of
+      # the cost/join/augmentation logic below runs. Without this, removing
+      # the (now redundant) `Validation` slice from `slice_portfolio()` below
+      # would only stop the COST columns (net_cagr, cum_pnl, cvar_95) from
+      # being computed for Validation -- the base cagr/vol/sharpe/max_dd rows
+      # would still leak through from fm_metrics et al.
+      all_metrics <- all_metrics |> filter(period != "Validation")
+
       # ── Cost metrics (net_cagr, cum_pnl, cvar_95) ─────────────────
       # Compute per strategy per period from raw portfolio returns.
       # cost: 0.20% round-trip per month (full turnover assumed).
@@ -305,11 +329,19 @@ plan_leaderboard <- function() {
       }
 
       # Each portfolio target and its return column (as string) and period slicing params
+      #
+      # NOTE (#648): this function previously also sliced a `Validation`
+      # window (`port_df$date >= params$val_start`) and computed cost metrics
+      # for it on every `tar_make()` -- an automatic-computation violation of
+      # `backtest-partitions.md` ("Validation metrics are NOT computed
+      # automatically"). That slice is removed: the automatic path now only
+      # ever produces Training / Testing / Full Period cost rows. A one-shot
+      # Validation evaluation, when authorised, belongs in
+      # scripts/evaluate_validation.R (never invoked by tar_make()), not here.
       slice_portfolio <- function(port_df, ret_col_name, params) {
         ret <- list(
           Training     = port_df[port_df$date <= params$is_end, ][[ret_col_name]],
           Testing      = port_df[port_df$date >= params$test_start & port_df$date <= params$test_end, ][[ret_col_name]],
-          Validation   = port_df[port_df$date >= params$val_start, ][[ret_col_name]],
           `Full Period` = port_df[[ret_col_name]]
         )
         bind_rows(lapply(names(ret), function(p) {

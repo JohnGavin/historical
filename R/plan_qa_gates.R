@@ -488,18 +488,25 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 #' @section Scope note (#648):
 #' This function is scoped to window BOUNDS on `mf_metrics`/`ev_metrics`
 #' only. #648 identified a systematic, wider version of the same seal-breach
-#' pattern: `slice_portfolio()` in R/plan_leaderboard.R computes an explicit
-#' `Validation` slice on every `tar_make()` for 7 strategies -- not a bounds
-#' violation (those rows are correctly labelled `"Validation"`), but an
-#' automatic-computation violation (`backtest-partitions.md`: "Validation
-#' metrics are NOT computed automatically by tar_make()"). That is a
+#' pattern: `slice_portfolio()` in R/plan_leaderboard.R computed an explicit
+#' `Validation` slice on every `tar_make()` for several strategies -- not a
+#' bounds violation (those rows were correctly labelled `"Validation"`), but
+#' an automatic-computation violation (`backtest-partitions.md`: "Validation
+#' metrics are NOT computed automatically by tar_make()"). That was a
 #' different check -- "no row may be automatically labelled Validation at
-#' all" -- and is out of scope here; #648 handles it separately. If it is
-#' later folded into this same S11 gate, `metrics` already carries `period`,
-#' so a `"no period == 'Validation' row present"` assertion could be added
-#' as a second, independent check inside this function (or as a sibling
-#' function called from the same `qa_metric_window_bounds` target) without
-#' needing to change this function's signature.
+#' all" -- from this function's "no window may silently extend past
+#' test_end".
+#'
+#' #648 was fixed as a SIBLING gate, `check_leaderboard_no_validation_rows()`
+#' (S14), rather than folded into this function, because the two operate on
+#' different shapes: this function takes a single source metrics target
+#' (`mf_metrics`/`ev_metrics`) with a `window_end` column and asserts a
+#' bound; S14 takes the assembled, multi-strategy `leaderboard` target
+#' (same shape as S9/S10) and asserts a label is entirely absent. Forcing
+#' both checks through one function signature would have required either a
+#' new optional `window_end`-less mode or a second call convention -- a
+#' same-shape sibling next to S9/S10 was the smaller change. See S14's own
+#' roxygen block below for the fix.
 #' @noRd
 check_metric_window_bounds <- function(metrics, test_end, source_label) {
   required_cols <- c("strategy", "period", "window_end")
@@ -536,6 +543,78 @@ check_metric_window_bounds <- function(metrics, test_end, source_label) {
       "i" = paste0(
         "Bound the window at test_end in the source metrics target, or ",
         "relabel the period \"Validation\" if the window is intentionally sealed."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Assert the leaderboard target never emits an automatically-computed
+#' "Validation" row (S14)
+#'
+#' Guards against the #648 defect class: `backtest-partitions.md` requires
+#' Validation metrics to never be computed automatically by `tar_make()` --
+#' only via an explicit manual target or script, exactly once, as a sealed
+#' one-shot evaluation. Two independent sources fed Validation rows into the
+#' `leaderboard` target before #648:
+#'   1. `slice_portfolio()` in R/plan_leaderboard.R computed a `Validation`
+#'      cost-metric slice on every `tar_make()` for six strategies.
+#'   2. Several source metrics targets (fm_metrics, drif_metrics,
+#'      stk_max_metrics, stk_drif_metrics, xgb_drif_metrics, ltr_metrics,
+#'      port_metrics) independently compute a `Validation` row in their own
+#'      plan file, which flowed into `all_metrics` completely unfiltered.
+#' Both are addressed at #648 by dropping every `period == "Validation"` row
+#' the moment `all_metrics` is assembled in R/plan_leaderboard.R -- this gate
+#' is the belt-and-braces check that the `leaderboard` target itself never
+#' re-exposes one, regardless of which upstream source (existing or future)
+#' reintroduces it.
+#'
+#' This is a distinct check from S11 (`check_metric_window_bounds()`): S11
+#' asserts a per-strategy source metrics target's own bespoke window never
+#' extends past `test_end` UNLESS it is correctly labelled "Validation" (a
+#' bounds check on a single source target with a `window_end` column). This
+#' gate asserts the opposite direction on the assembled, multi-strategy
+#' `leaderboard` target: no row may be labelled "Validation" at all, because
+#' that target's whole path is automatic. See S11's `@section Scope note
+#' (#648)` for why these are two gates rather than one.
+#'
+#' Note: the source metrics targets listed above (fm_metrics et al.) still
+#' compute Validation rows for their OWN purposes -- that is out of #648's
+#' scope (those targets are not modified here) and several also surface
+#' Validation values directly in vignette prose (e.g. docs/stock-backtest.qmd),
+#' which is a separate, wider display-side leak not covered by this gate.
+#' This gate only guarantees the `leaderboard` target's own output.
+#'
+#' @param leaderboard Tibble with at least `strategy`, `period` columns (the
+#'   output of the `leaderboard` targets pipeline target).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_no_validation_rows <- function(leaderboard) {
+  required_cols <- c("strategy", "period")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_leaderboard_no_validation_rows() (S14) requires strategy, period."
+    ))
+  }
+
+  offenders <- unique(leaderboard$strategy[leaderboard$period == "Validation"])
+
+  if (length(offenders) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(offenders),
+        " strategy/strategies with an automatically-computed {.val Validation} row, #648:"
+      ),
+      setNames(sprintf("  %s", offenders), rep("i", length(offenders))),
+      "i" = paste0(
+        "Validation metrics must NOT be computed automatically by tar_make() ",
+        "(.claude/rules/backtest-partitions.md). Drop the Validation row at ",
+        "the point it enters R/plan_leaderboard.R's `all_metrics`, or use ",
+        "scripts/evaluate_validation.R for a one-shot manual evaluation."
       )
     ))
   }
@@ -942,6 +1021,23 @@ plan_qa_gates <- function() {
       command = {
         check_portfolio_join_coverage(port_returns)
         cli::cli_inform(c("v" = "qa_portfolio_join_coverage: S13 passed (no calendar-month gaps in port_returns)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: leaderboard never emits an automatically-computed Validation
+    # row (S14) — guards against the #648 defect class where
+    # `slice_portfolio()` in R/plan_leaderboard.R and several source metrics
+    # targets (fm_metrics, drif_metrics, stk_max_metrics, stk_drif_metrics,
+    # xgb_drif_metrics, ltr_metrics, port_metrics) fed a "Validation" period
+    # row into the leaderboard on every tar_make() — an automatic-computation
+    # violation of the sealed-partition rule (backtest-partitions.md).
+    targets::tar_target(
+      qa_leaderboard_no_validation,
+      command = {
+        check_leaderboard_no_validation_rows(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_no_validation: S14 passed (no automatically-computed Validation row in leaderboard)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

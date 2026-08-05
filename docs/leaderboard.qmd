@@ -312,7 +312,12 @@ if (!is.null(lb)) {
 
 ```{r}
 if (!is.null(lb)) {
-  # NEVER show Validation data — sealed envelope (backtest-partitions rule)
+  # NEVER show Validation data — sealed envelope (backtest-partitions rule).
+  # As of #648, the `leaderboard` target itself no longer emits Validation
+  # rows (R/plan_leaderboard.R strips them at assembly), so the
+  # `filter(period != "Validation")` below is now belt-and-braces rather
+  # than the sole control -- kept so this display never regresses even if
+  # a future upstream change reintroduces a Validation row.
   params <- safe_tar_read("stk_params")
 
   # Create years lookup
