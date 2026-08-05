@@ -452,6 +452,98 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 }
 
 
+#' Assert no automatically-computed metric window extends past `test_end`
+#' unless its partition is explicitly "Validation" (S11)
+#'
+#' Guards against the #645 defect class: a strategy's source metrics target
+#' (e.g. `mf_metrics` in R/plan_managed_futures.R, `ev_metrics` in
+#' R/plan_ev_ebit.R) computes a bespoke period window that is unbounded above
+#' and therefore silently includes the sealed Validation partition
+#' (R/plan_partitions.R `bt_partitions`, `backtest-partitions` rule) on every
+#' `tar_make()`.
+#'
+#' Two period labels are exempt from the `test_end` bound, both by design of
+#' `backtest-partitions.md`:
+#'   - `"Validation"` -- the sealed partition itself; its whole purpose is to
+#'     extend past `test_end`.
+#'   - `"Full"` / `"Full Period"` -- the rule's own canonical reference
+#'     implementation lists `calc_metrics(all_data, "Full Period")` alongside
+#'     Training/Testing/Validation as an accepted, full-sample summary that is
+#'     *expected* to span the whole series (including Validation) by
+#'     definition -- it is not a bespoke evaluation/test window like `"OOS"`.
+#'     Every other strategy on the leaderboard already reports a Full Period
+#'     row this way; only a genuinely bespoke window (not itself the sealed
+#'     partition or the full-sample summary) is what #645 is about.
+#'
+#' @param metrics A tibble with at least `strategy`, `period`, `window_end`
+#'   columns (the output of a strategy metrics target, e.g. `mf_metrics` or
+#'   `ev_metrics`).
+#' @param test_end A single Date -- the canonical test-partition upper bound
+#'   for this metrics target's asset class (from `bt_partitions`,
+#'   R/plan_partitions.R).
+#' @param source_label A short string identifying the metrics target being
+#'   checked (used in error messages), e.g. `"mf_metrics"`.
+#' @return `TRUE` invisibly on success.
+#'
+#' @section Scope note (#648):
+#' This function is scoped to window BOUNDS on `mf_metrics`/`ev_metrics`
+#' only. #648 identified a systematic, wider version of the same seal-breach
+#' pattern: `slice_portfolio()` in R/plan_leaderboard.R computes an explicit
+#' `Validation` slice on every `tar_make()` for 7 strategies -- not a bounds
+#' violation (those rows are correctly labelled `"Validation"`), but an
+#' automatic-computation violation (`backtest-partitions.md`: "Validation
+#' metrics are NOT computed automatically by tar_make()"). That is a
+#' different check -- "no row may be automatically labelled Validation at
+#' all" -- and is out of scope here; #648 handles it separately. If it is
+#' later folded into this same S11 gate, `metrics` already carries `period`,
+#' so a `"no period == 'Validation' row present"` assertion could be added
+#' as a second, independent check inside this function (or as a sibling
+#' function called from the same `qa_metric_window_bounds` target) without
+#' needing to change this function's signature.
+#' @noRd
+check_metric_window_bounds <- function(metrics, test_end, source_label) {
+  required_cols <- c("strategy", "period", "window_end")
+  missing_cols <- setdiff(required_cols, names(metrics))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{source_label} is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_metric_window_bounds() (S11) requires strategy, period, window_end."
+    ))
+  }
+
+  exempt_periods <- c("Validation", "Full", "Full Period")
+
+  is_offender <- !is.na(metrics$window_end) &
+    !(metrics$period %in% exempt_periods) &
+    metrics$window_end > test_end
+  offenders <- metrics[is_offender, c("strategy", "period", "window_end"), drop = FALSE]
+
+  if (nrow(offenders) > 0L) {
+    msgs <- purrr::pmap_chr(
+      offenders,
+      function(strategy, period, window_end) {
+        sprintf("  %s / %s -- window_end %s exceeds test_end %s",
+                strategy, period, window_end, test_end)
+      }
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        source_label, " has ", nrow(offenders),
+        " row(s) whose computed window extends past the sealed Validation ",
+        "partition boundary (test_end = ", test_end, "), #645:"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "Bound the window at test_end in the source metrics target, or ",
+        "relabel the period \"Validation\" if the window is intentionally sealed."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Assert a monthly portfolio target has complete calendar-month coverage (S12)
 #'
 #' Guards against the #641 defect class: a systematic construction bug (a
@@ -698,6 +790,22 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_period_vocab(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_period_vocab: S10 passed (canonical period vocabulary, all strategies have a Full Period row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: no automatically-computed metric window extends past
+    # `test_end` unless its partition is explicitly "Validation" (S11) --
+    # guards against the #645 defect class where a strategy's bespoke OOS
+    # window (mf_metrics, ev_metrics) is unbounded above and silently
+    # includes the sealed Validation partition on every tar_make().
+    targets::tar_target(
+      qa_metric_window_bounds,
+      command = {
+        check_metric_window_bounds(mf_metrics, bt_partitions$macro$test_end, "mf_metrics")
+        check_metric_window_bounds(ev_metrics, bt_partitions$factor$test_end, "ev_metrics")
+        cli::cli_inform(c("v" = "qa_metric_window_bounds: S11 passed (no non-Validation window extends past test_end)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

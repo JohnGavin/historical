@@ -174,13 +174,23 @@ plan_managed_futures <- function() {
 
 
     # ── Metrics: performance table (Full / Training / OOS) ─────────────────────
+    # #645: OOS is bounded at bt_partitions$macro$test_end (R/plan_partitions.R)
+    # so it no longer silently swallows the sealed Validation partition on
+    # every tar_make(). Managed futures uses SPY+TLT+GLD+DBC -- the macro
+    # asset class -- so bt_partitions$macro is the matching partition set.
+    # Training keeps its original pre-2010 definition (narrower than
+    # canonical Training, a comparability wart but not a seal breach --
+    # see #645) and is unaffected by this bound.
     targets::tar_target(mf_metrics, {
       library(dplyr)
 
-      oos <- mf_params$oos_start
+      oos      <- mf_params$oos_start
+      test_end <- bt_partitions$macro$test_end
 
-      calc_metrics <- function(ret_vec, strategy_name, period_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      calc_metrics <- function(ret_vec, date_vec, strategy_name, period_name) {
+        keep     <- !is.na(ret_vec)
+        ret_vec  <- ret_vec[keep]
+        date_vec <- date_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
         years   <- length(ret_vec) / 12
         cum_ret <- prod(1 + ret_vec)
@@ -192,14 +202,16 @@ plan_managed_futures <- function() {
         max_dd  <- min(dd) * 100
         calmar  <- ifelse(abs(max_dd) > 0, cagr / abs(max_dd), NA_real_)
         tibble::tibble(
-          strategy = strategy_name,
-          period   = period_name,
-          n_months = length(ret_vec),
-          cagr     = round(cagr, 2),
-          vol      = round(vol, 2),
-          sharpe   = round(sharpe, 3),
-          max_dd   = round(max_dd, 2),
-          calmar   = round(calmar, 3)
+          strategy     = strategy_name,
+          period       = period_name,
+          n_months     = length(ret_vec),
+          cagr         = round(cagr, 2),
+          vol          = round(vol, 2),
+          sharpe       = round(sharpe, 3),
+          max_dd       = round(max_dd, 2),
+          calmar       = round(calmar, 3),
+          window_start = min(date_vec),
+          window_end   = max(date_vec)
         )
       }
 
@@ -213,15 +225,17 @@ plan_managed_futures <- function() {
         ls = "Long-Short TS-Mom (MOP 2012, vol-targeted)",
         ew = "Equal-Weight Benchmark (SPY+TLT+GLD+DBC)"
       )
-      dates  <- mf_portfolios$date
-      is_oos <- dates >= oos
+      dates <- mf_portfolios$date
+
+      is_pre_oos <- dates < oos
+      is_oos     <- dates >= oos & dates <= test_end
 
       rows <- list()
       for (nm in names(strategies)) {
         rows <- c(rows,
-          list(calc_metrics(strategies[[nm]],          labels[nm], "Full")),
-          list(calc_metrics(strategies[[nm]][!is_oos], labels[nm], "Training")),
-          list(calc_metrics(strategies[[nm]][is_oos],  labels[nm], "OOS"))
+          list(calc_metrics(strategies[[nm]],            dates,             labels[nm], "Full")),
+          list(calc_metrics(strategies[[nm]][is_pre_oos], dates[is_pre_oos], labels[nm], "Training")),
+          list(calc_metrics(strategies[[nm]][is_oos],     dates[is_oos],     labels[nm], "OOS"))
         )
       }
       dplyr::bind_rows(Filter(Negate(is.null), rows))
