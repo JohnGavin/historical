@@ -96,13 +96,23 @@ plan_ev_ebit <- function() {
 
 
     # ── Metrics: performance table across periods ───────────────────────────────
+    # #645: OOS is bounded at bt_partitions$factor$test_end (R/plan_partitions.R)
+    # so it no longer silently swallows the sealed Validation partition on
+    # every tar_make(). ev_ebit's strategies are FF5 factor (HML/RMW) proxies,
+    # so bt_partitions$factor is the matching partition set. Training keeps
+    # its original pre-2010 definition (narrower than canonical Training, a
+    # comparability wart but not a seal breach -- see #645) and is unaffected
+    # by this bound.
     targets::tar_target(ev_metrics, {
       library(dplyr)
 
-      oos <- ev_params$oos_start
+      oos      <- ev_params$oos_start
+      test_end <- bt_partitions$factor$test_end
 
-      calc_metrics <- function(ret_vec, strategy_name, period_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      calc_metrics <- function(ret_vec, date_vec, strategy_name, period_name) {
+        keep     <- !is.na(ret_vec)
+        ret_vec  <- ret_vec[keep]
+        date_vec <- date_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
         years    <- length(ret_vec) / 12
         cum_ret  <- prod(1 + ret_vec)
@@ -114,14 +124,16 @@ plan_ev_ebit <- function() {
         max_dd   <- min(drawdown) * 100
         calmar   <- ifelse(abs(max_dd) > 0, cagr / abs(max_dd), NA_real_)
         tibble::tibble(
-          strategy = strategy_name,
-          period   = period_name,
-          n_months = length(ret_vec),
-          cagr     = round(cagr, 2),
-          vol      = round(vol, 2),
-          sharpe   = round(sharpe, 3),
-          max_dd   = round(max_dd, 2),
-          calmar   = round(calmar, 3)
+          strategy     = strategy_name,
+          period       = period_name,
+          n_months     = length(ret_vec),
+          cagr         = round(cagr, 2),
+          vol          = round(vol, 2),
+          sharpe       = round(sharpe, 3),
+          max_dd       = round(max_dd, 2),
+          calmar       = round(calmar, 3),
+          window_start = min(date_vec),
+          window_end   = max(date_vec)
         )
       }
 
@@ -135,15 +147,17 @@ plan_ev_ebit <- function() {
         value_qual = "Value+Quality (50% HML + 50% RMW, QVAL proxy)",
         market     = "Benchmark (Cap-Weighted Market)"
       )
-      dates  <- ev_portfolios$date
-      is_oos <- dates >= oos
+      dates <- ev_portfolios$date
+
+      is_pre_oos <- dates < oos
+      is_oos     <- dates >= oos & dates <= test_end
 
       rows <- list()
       for (nm in names(strategies)) {
         rows <- c(rows,
-          list(calc_metrics(strategies[[nm]],          labels[nm], "Full")),
-          list(calc_metrics(strategies[[nm]][!is_oos], labels[nm], "Training")),
-          list(calc_metrics(strategies[[nm]][is_oos],  labels[nm], "OOS"))
+          list(calc_metrics(strategies[[nm]],            dates,             labels[nm], "Full")),
+          list(calc_metrics(strategies[[nm]][is_pre_oos], dates[is_pre_oos], labels[nm], "Training")),
+          list(calc_metrics(strategies[[nm]][is_oos],     dates[is_oos],     labels[nm], "OOS"))
         )
       }
       dplyr::bind_rows(Filter(Negate(is.null), rows))
