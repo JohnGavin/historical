@@ -368,6 +368,90 @@ check_leaderboard_metric_ranges <- function(leaderboard) {
 }
 
 
+#' Assert leaderboard period labels are canonical (S10)
+#'
+#' Guards against the #643 defect class: a strategy's source metrics target
+#' uses a non-canonical `period` label (e.g. "Full" instead of "Full Period")
+#' that silently drops the strategy from every `filter(period == "Full
+#' Period")` consumer -- the docs/leaderboard.qmd headline ranking table
+#' (filters on "Full Period" at two places) and the correlation/redundancy
+#' join in R/plan_leaderboard.R (`ifelse(period == "Full Period", ...)`).
+#'
+#' Two assertions:
+#'   1. Every distinct `strategy` has at least one row with
+#'      `period == "Full Period"` -- the canonical full-sample label every
+#'      leaderboard consumer filters on.
+#'   2. Every value in `period` is a member of `PERIOD_LABELS_ALLOWED`
+#'      (R/plan_partitions.R) -- the single source of truth for the allowed
+#'      vocabulary. "OOS" is deliberately its own label, distinct from
+#'      "Testing" -- see the `PERIOD_LABELS_ALLOWED` comment in
+#'      R/plan_partitions.R for why the two windows are not interchangeable.
+#'
+#' @param leaderboard Tibble with at least `strategy` and `period` columns
+#'   (the output of the `leaderboard` targets pipeline target).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_period_vocab <- function(leaderboard) {
+  required_cols <- c("strategy", "period")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_leaderboard_period_vocab() (S10) requires strategy, period."
+    ))
+  }
+
+  # ── Assertion 1: every strategy has a canonical "Full Period" row ────────
+  full_period_strategies <- unique(
+    leaderboard$strategy[leaderboard$period == "Full Period"]
+  )
+  all_strategies <- unique(leaderboard$strategy)
+  missing_full <- setdiff(all_strategies, full_period_strategies)
+
+  if (length(missing_full) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(missing_full),
+        " strategy/strategies missing a canonical {.val Full Period} row:"
+      ),
+      setNames(sprintf("  %s", missing_full), rep("i", length(missing_full))),
+      "i" = paste0(
+        "Every consumer of the leaderboard (docs/leaderboard.qmd headline ",
+        "table, correlation/redundancy join in R/plan_leaderboard.R) filters ",
+        "on period == \"Full Period\" -- a strategy using a different label ",
+        "(e.g. \"Full\") for its full-sample row is silently dropped (#643)."
+      ),
+      "i" = "Normalise the label in the strategy's .norm_* helper in R/plan_leaderboard.R."
+    ))
+  }
+
+  # ── Assertion 2: no period value outside the canonical vocabulary ────────
+  observed_periods <- unique(leaderboard$period)
+  bad_periods <- setdiff(observed_periods, PERIOD_LABELS_ALLOWED)
+
+  if (length(bad_periods) > 0L) {
+    offender_msgs <- vapply(bad_periods, function(p) {
+      strats <- unique(leaderboard$strategy[leaderboard$period == p])
+      sprintf("  %s -- used by: %s", p, paste(strats, collapse = ", "))
+    }, character(1L))
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard {.field period} column has ", length(bad_periods),
+        " value(s) outside the canonical vocabulary:"
+      ),
+      setNames(offender_msgs, rep("i", length(offender_msgs))),
+      "i" = paste0(
+        "Allowed values (R/plan_partitions.R PERIOD_LABELS_ALLOWED): ",
+        paste(PERIOD_LABELS_ALLOWED, collapse = ", "), "."
+      ),
+      "i" = "Normalise the label in the strategy's .norm_* helper in R/plan_leaderboard.R (#643)."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -529,6 +613,20 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_metric_ranges(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_metric_ranges: S9 passed (all cagr/vol/max_dd within fractional range)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: leaderboard period labels are canonical (S10) — guards against
+    # the #643 defect class where a strategy's source metrics target uses a
+    # non-canonical period label (e.g. "Full" instead of "Full Period") that
+    # silently drops the strategy from every period == "Full Period" filter.
+    targets::tar_target(
+      qa_leaderboard_period_vocab,
+      command = {
+        check_leaderboard_period_vocab(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_period_vocab: S10 passed (canonical period vocabulary, all strategies have a Full Period row)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

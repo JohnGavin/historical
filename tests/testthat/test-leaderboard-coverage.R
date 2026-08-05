@@ -18,7 +18,8 @@ source(here::here("R/plan_qa_gates.R"))
   m |>
     dplyr::filter(strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)") |>
     dplyr::select(-strategy, -calmar) |>
-    dplyr::rename(months = n_months)
+    dplyr::rename(months = n_months) |>
+    dplyr::mutate(period = ifelse(period == "Full", "Full Period", period))
 }
 
 .norm_value_test <- function(m) {
@@ -26,7 +27,8 @@ source(here::here("R/plan_qa_gates.R"))
   m |>
     dplyr::filter(strategy == "Pure Value (100% HML, EV/EBIT proxy)") |>
     dplyr::select(-strategy, -calmar) |>
-    dplyr::rename(months = n_months)
+    dplyr::rename(months = n_months) |>
+    dplyr::mutate(period = ifelse(period == "Full", "Full Period", period))
 }
 
 # ── Synthetic metrics fixtures (same schema as mf_metrics / ev_metrics) ──────
@@ -66,7 +68,7 @@ synthetic_ev_metrics <- tibble::tibble(
 test_that(".norm_mf returns only canonical TS-Mom rows with base leaderboard columns", {
   res <- .norm_mf_test(synthetic_mf_metrics)
   expect_false(is.null(res))
-  expect_true(nrow(res) == 3L)  # Full / Training / OOS
+  expect_true(nrow(res) == 3L)  # Full Period / Training / OOS
   expect_true(all(c("period", "months", "cagr", "vol", "sharpe", "max_dd") %in% names(res)))
   expect_false("strategy" %in% names(res))
   expect_false("calmar"   %in% names(res))
@@ -78,12 +80,27 @@ test_that(".norm_mf returns NULL on empty input", {
   expect_null(.norm_mf_test(NULL))
 })
 
+test_that(".norm_mf renames 'Full' to the canonical 'Full Period' label (#643)", {
+  res <- .norm_mf_test(synthetic_mf_metrics)
+  expect_true("Full Period" %in% res$period)
+  expect_false("Full" %in% res$period)
+})
+
+test_that(".norm_mf does NOT rename 'OOS' to 'Testing' (#643 -- different window)", {
+  # mf_metrics' OOS window (dates >= oos_start, unbounded) is not the same
+  # span as the canonical Testing partition (bounded, R/plan_partitions.R)
+  # -- see the .norm_mf() comment in R/plan_leaderboard.R for the evidence.
+  res <- .norm_mf_test(synthetic_mf_metrics)
+  expect_true("OOS" %in% res$period)
+  expect_false("Testing" %in% res$period)
+})
+
 # ── Tests: .norm_value ────────────────────────────────────────────────────────
 
 test_that(".norm_value returns only Pure Value rows with base leaderboard columns", {
   res <- .norm_value_test(synthetic_ev_metrics)
   expect_false(is.null(res))
-  expect_true(nrow(res) == 3L)  # Full / Training / OOS
+  expect_true(nrow(res) == 3L)  # Full Period / Training / OOS
   expect_true(all(c("period", "months", "cagr", "vol", "sharpe", "max_dd") %in% names(res)))
   expect_false("strategy" %in% names(res))
   expect_false("calmar"   %in% names(res))
@@ -93,6 +110,21 @@ test_that(".norm_value returns only Pure Value rows with base leaderboard column
 test_that(".norm_value returns NULL on empty input", {
   expect_null(.norm_value_test(tibble::tibble()))
   expect_null(.norm_value_test(NULL))
+})
+
+test_that(".norm_value renames 'Full' to the canonical 'Full Period' label (#643)", {
+  res <- .norm_value_test(synthetic_ev_metrics)
+  expect_true("Full Period" %in% res$period)
+  expect_false("Full" %in% res$period)
+})
+
+test_that(".norm_value does NOT rename 'OOS' to 'Testing' (#643 -- different window)", {
+  # ev_metrics' OOS window (dates >= oos_start, unbounded) is not the same
+  # span as the canonical Testing partition (bounded, R/plan_partitions.R)
+  # -- see the .norm_value() comment in R/plan_leaderboard.R for the evidence.
+  res <- .norm_value_test(synthetic_ev_metrics)
+  expect_true("OOS" %in% res$period)
+  expect_false("Testing" %in% res$period)
 })
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

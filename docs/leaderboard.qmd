@@ -98,15 +98,36 @@ if (!is.null(lb)) {
         !credible        ~ 2L,
         TRUE              ~ 1L
       ),
+      # NA redundant means this strategy is outside the 5-strategy correlation
+      # universe computed by R/plan_strategy_correlation.R (Stock MAX, Stock
+      # DRIF, Factor MAX, Factor DRIF, LTR only) -- that is "unassessed", not
+      # "assessed and found not redundant". Previously both NA and a computed
+      # FALSE fell through to the same ambiguous "—" (#643, same conflation
+      # class as Credible, #637 follow-up).
       Redundant  = if ("redundant" %in% names(full)) {
-        ifelse(is.na(redundant), "—", ifelse(redundant, "YES", "no"))
-      } else "—",
+        dplyr::case_when(
+          is.na(redundant) ~ "not computed",
+          redundant         ~ "YES",
+          TRUE              ~ "no"
+        )
+      } else "not computed",
+      # Explicit sort rank for Redundant: same rationale as .credible_rank —
+      # DT's default string comparator sorts "YES" / "no" / "not computed"
+      # alphabetically, which does not put assessed-good first, then
+      # assessed-bad, then never-assessed (#643).
+      .redundant_rank = if ("redundant" %in% names(full)) {
+        dplyr::case_when(
+          is.na(redundant) ~ 3L,
+          redundant         ~ 2L,
+          TRUE              ~ 1L
+        )
+      } else 3L,
       `Incremental Sharpe` = if ("incremental_sharpe" %in% names(full)) {
         ifelse(is.na(incremental_sharpe), "—", as.character(round(incremental_sharpe, 3)))
       } else "—"
     ) |>
     select(Strategy = strategy, Credible, .credible_rank, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
-           `Cost (bps)`, SSR, `Top5% Share`, Redundant, `Incremental Sharpe`)
+           `Cost (bps)`, SSR, `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
 
   # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
   # is NA, and indexing a character vector with a logical vector containing
@@ -210,13 +231,18 @@ if (!is.null(lb)) {
     gh_base, git_sha
   )
   n_redundant <- if ("redundant" %in% names(full)) sum(full$redundant, na.rm = TRUE) else 0L
+  n_redundant_na <- if ("redundant" %in% names(full)) sum(is.na(full$redundant)) else nrow(full)
   diversification_note <- paste0(
-    " Redundant = TRUE when a strategy's Full-Period monthly-return correlation with another, ",
+    " Redundant = \"YES\" when a strategy's Full-Period monthly-return correlation with another, ",
     "higher-Sharpe strategy exceeds the threshold fixed in ", corr_registry_link,
     " (", n_redundant, " of ", nrow(full),
-    " strategies currently flagged); Incremental Sharpe = the change in equal-weight-portfolio Sharpe from ",
-    "including this strategy vs excluding it — positive means it adds diversification value, negative means ",
-    "the portfolio is better off without it. Both feed the new-strategy value gate (#496)."
+    " strategies currently flagged); \"not computed\" (", n_redundant_na,
+    " strategies) marks a strategy outside the 5-strategy correlation universe ",
+    "(Stock MAX, Stock DRIF, Factor MAX, Factor DRIF, LTR) that R/plan_strategy_correlation.R ",
+    "currently covers — that is unassessed, not assessed-and-passed. Incremental Sharpe = the ",
+    "change in equal-weight-portfolio Sharpe from including this strategy vs excluding it — ",
+    "positive means it adds diversification value, negative means the portfolio is better off ",
+    "without it. Both feed the new-strategy value gate (#496)."
   )
 
   full_caption <- paste0(
@@ -230,15 +256,18 @@ if (!is.null(lb)) {
     flag_note, bias_note, gross_note, cost_note, diversification_note
   )
 
-  # Bespoke DT call (not hd_dt()): the Credible column needs an explicit sort
-  # rank (.credible_rank, added above) instead of DT's default alphabetical
-  # string comparator -- ascending on the display string gives NO / not
-  # computed / yes, which puts assessed-and-failed before never-assessed
-  # before assessed-and-passed, not the intended priority order. orderData
-  # points the Credible column's sort at the hidden rank column instead
-  # (#637 follow-up).
-  credible_col <- which(names(metrics_table) == "Credible") - 1L
-  rank_col     <- which(names(metrics_table) == ".credible_rank") - 1L
+  # Bespoke DT call (not hd_dt()): the Credible and Redundant columns each
+  # need an explicit sort rank (.credible_rank / .redundant_rank, added
+  # above) instead of DT's default alphabetical string comparator --
+  # ascending on the display string gives NO / not computed / yes (Credible)
+  # or YES / no / not computed (Redundant), neither of which puts
+  # assessed-good first, then assessed-bad, then never-assessed. orderData
+  # points each column's sort at its hidden rank column instead (#637
+  # follow-up; Redundant added #643).
+  credible_col  <- which(names(metrics_table) == "Credible") - 1L
+  cred_rank_col <- which(names(metrics_table) == ".credible_rank") - 1L
+  redundant_col <- which(names(metrics_table) == "Redundant") - 1L
+  red_rank_col  <- which(names(metrics_table) == ".redundant_rank") - 1L
   numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
@@ -259,8 +288,9 @@ if (!is.null(lb)) {
       search = list(regex = TRUE, caseInsensitive = TRUE),
       columnDefs = list(
         list(className = 'dt-right', targets = numeric_cols - 1),
-        list(visible = FALSE, targets = rank_col),
-        list(orderData = rank_col, targets = credible_col)
+        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col)),
+        list(orderData = cred_rank_col, targets = credible_col),
+        list(orderData = red_rank_col, targets = redundant_col)
       ),
       initComplete = DT::JS(
         "function(settings, json) {",
@@ -730,15 +760,49 @@ if (!is.null(sb_sum) && !is.null(snames)) {
         is.na(sharpe_divergence_pct), "—",
         paste0(sharpe_divergence_pct, "%")
       ),
-      Material            = ifelse(
-        is.na(material_divergence), "—",
-        ifelse(material_divergence, "YES", "no")
+      # `material_divergence` is NA for two structurally different reasons
+      # that were previously conflated into the same "—" (#643, same
+      # conflation class as Credible, #637 follow-up):
+      #   1. The break test itself errored or was skipped for this strategy
+      #      (n_breaks is NA_integer_, see the `entry$error` branch in
+      #      R/plan_structural_breaks.R) -- genuinely "not computed".
+      #   2. The break test ran and found NO break at all (n_breaks == 0) --
+      #      there is nothing to diverge from, so "no material divergence"
+      #      is a real, assessed answer, not an unknown one. A break WAS
+      #      found (n_breaks > 0) but the divergence percentage could not be
+      #      reliably computed (near-zero whole_sharpe denominator or too
+      #      few post-break observations) is its own indeterminate case and
+      #      stays "not computed" -- a break with an unmeasurable divergence
+      #      is not the same as "no material divergence".
+      Material            = dplyr::case_when(
+        is.na(n_breaks)                            ~ "not computed",
+        n_breaks == 0L                             ~ "no",
+        n_breaks > 0L & is.na(material_divergence) ~ "not computed",
+        material_divergence                        ~ "YES",
+        TRUE                                       ~ "no"
+      ),
+      # Explicit sort rank for Material -- same rationale as .credible_rank /
+      # .redundant_rank: DT's default string comparator sorts "YES" / "no" /
+      # "not computed" alphabetically, not assessed-good, assessed-bad,
+      # never-assessed (#643).
+      .material_rank      = dplyr::case_when(
+        is.na(n_breaks)                            ~ 3L,
+        n_breaks == 0L                             ~ 1L,
+        n_breaks > 0L & is.na(material_divergence) ~ 3L,
+        material_divergence                        ~ 2L,
+        TRUE                                       ~ 1L
       ),
       Note                = ifelse(is.na(note), "", note)
     )
 
   cap_text <- if (!is.null(sb_cap)) sb_cap else
     "Structural break analysis — run tar_make() to populate."
+
+  # Explicit sort rank for Material -- same rationale as .credible_rank /
+  # .redundant_rank above: DT's default string comparator sorts the display
+  # string alphabetically, not assessed-good, assessed-bad, never-assessed.
+  material_col      <- which(names(sb_disp) == "Material") - 1L
+  material_rank_col <- which(names(sb_disp) == ".material_rank") - 1L
 
   DT::datatable(
     sb_disp,
@@ -753,6 +817,10 @@ if (!is.null(sb_sum) && !is.null(snames)) {
       pageLength   = 20L,
       scrollX      = TRUE,
       dom          = "frtip",
+      columnDefs   = list(
+        list(visible = FALSE, targets = material_rank_col),
+        list(orderData = material_rank_col, targets = material_col)
+      ),
       initComplete = DT::JS(
         "function(settings, json) {",
         "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",

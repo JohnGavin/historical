@@ -330,7 +330,8 @@ plan_structural_breaks <- function() {
       structural_breaks_caption,
       {
         df <- structural_breaks_summary
-        n_strats   <- nrow(df)
+        n_strats      <- nrow(df)
+        n_not_computed <- sum(is.na(df$n_breaks))
         n_with_breaks <- sum(df$n_breaks > 0L, na.rm = TRUE)
         n_material    <- sum(df$material_divergence, na.rm = TRUE)
         alpha_pct  <- sb_params$alpha * 100
@@ -344,6 +345,12 @@ plan_structural_breaks <- function() {
           "Breaks are detected using an iterative forward-split t-test on ",
           "vol-normalised returns with a minimum segment of ",
           sb_params$min_years, " years. ",
+          "Material column: \"YES\" is a break with post-break Sharpe diverging ",
+          "beyond the threshold above; \"no\" is a strategy that WAS tested and ",
+          "either showed no break or a break too small to call material; ",
+          "\"not computed\" (", n_not_computed, " of ", n_strats,
+          " strategies) marks a strategy the break test could not run for at ",
+          "all (see its Note column) — that is unassessed, not a passed check. ",
           "Per the resulting-prohibition rule, a detected break is evidence ",
           "requiring investigation — not a signal to revise strategy allocation. ",
           "Per Carver's own finding, 'no break' often wins OOS: ",
