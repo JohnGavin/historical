@@ -23,6 +23,51 @@ plan_portfolio_opt <- function() {
     }),
 
     # ── Combine all strategy returns into one matrix ──────────────
+    #
+    # #641: this used to be a 4-way inner_join chain, so any `ym` missing
+    # from ANY ONE of the four constituents silently deleted that month for
+    # ALL FOUR -- 128 of an expected ~190+ rows, including every March
+    # (`stk_drif_portfolio` had no March rows at all; the upstream root
+    # cause is tracked and fixed separately in R/plan_stock_backtest.R,
+    # not here).
+    #
+    # The spine is now an explicit CALENDAR-COMPLETE monthly sequence
+    # bounded by the OVERLAP of the two stock-level series' own date ranges
+    # (`max(min(s1$ym), min(s2$ym))` .. `min(max(s1$ym), max(s2$ym))`), not
+    # a plain union of whatever rows happen to exist. This matters because:
+    #   - Using `seq()` to build the spine (rather than the literal ym
+    #     values present in s1/s2) is what actually fixes #641 -- a month
+    #     entirely absent from a constituent (e.g. every March in
+    #     stk_drif_portfolio) still gets a spine row, with that constituent
+    #     left NA rather than the row never existing.
+    #   - Bounding to the stock-level OVERLAP (not the union) keeps the
+    #     span close to the historical inner_join's implicit intersection.
+    #     fac_max / fac_drif (data from 1964-/1968- onward) run six decades
+    #     longer than stk_max / stk_drif (2005-/2010- onward); a plain
+    #     `full_join` across all four would silently expand `port_returns`,
+    #     and every "Full Period" metric/plot downstream, to include
+    #     decades where no stock-level strategy exists -- a different,
+    #     much bigger analysis than the 4-strategy stock+factor combination
+    #     this target is for. It would also introduce a large block of NA
+    #     into `stk_drif` (or `stk_max`, whichever starts later) for every
+    #     pre-overlap month, which downstream consumers that read
+    #     `port_returns` directly and do a *plain* `ret_matrix %*% w` (not
+    #     the NA-aware `.port_weighted_return()` below) -- e.g.
+    #     R/plan_regime.R's `regime_vol`/`regime_portfolio` -- are not
+    #     written to expect.
+    # Factor-level series are LEFT-joined onto that stock-bounded spine:
+    # they cover the whole overlap window so this introduces no new NAs in
+    # practice, but a genuine internal gap in either of them, or the normal
+    # live-edge lag between stock-level and factor-level data feeds (the
+    # most recent 1-2 months at the time of writing), now surfaces as an
+    # honest NA in that column instead of silently deleting the row.
+    #
+    # A missing constituent is therefore an explicit NA in its own column,
+    # never a deleted row. See `.port_weighted_return()` below for how
+    # `port_combined` turns a row with one or more NA constituents into a
+    # single portfolio return, and `check_portfolio_join_coverage()`
+    # (R/plan_qa_gates.R) for the pipeline assertion guarding against a
+    # calendar-month gap reappearing.
     targets::tar_target(port_returns, {
       library(dplyr)
 
@@ -32,10 +77,26 @@ plan_portfolio_opt <- function() {
       s3 <- fm_portfolio |> select(ym, fac_max = portfolio_ret)
       s4 <- drif_portfolio |> select(ym, fac_drif = portfolio_ret)
 
-      combined <- s1 |>
-        inner_join(s2, by = "ym") |>
-        inner_join(s3, by = "ym") |>
-        inner_join(s4, by = "ym")
+      # Calendar-complete monthly spine bounded to the stock-level overlap
+      # window (see comment above) -- NOT the literal set of ym values
+      # present in s1/s2, which is exactly what would silently re-drop a
+      # month like March if stk_drif_portfolio ever loses it again.
+      spine_start <- max(min(s1$ym), min(s2$ym))
+      spine_end   <- min(max(s1$ym), max(s2$ym))
+      spine <- tibble::tibble(
+        ym = format(
+          seq(as.Date(paste0(spine_start, "-01")),
+              as.Date(paste0(spine_end, "-01")),
+              by = "month"),
+          "%Y-%m"
+        )
+      )
+
+      combined <- spine |>
+        left_join(s1, by = "ym") |>
+        left_join(s2, by = "ym") |>
+        left_join(s3, by = "ym") |>
+        left_join(s4, by = "ym")
 
       # Add risk-free
       combined |>
@@ -146,17 +207,34 @@ plan_portfolio_opt <- function() {
     }),
 
     # ── Portfolio returns with optimal weights ────────────────────
+    #
+    # #641: port_returns can now carry an explicit NA for a constituent
+    # that is missing that month (see the port_returns target above). A
+    # plain `ret_matrix %*% w` would turn any such NA into an NA for the
+    # WHOLE portfolio return that month -- and because cumprod() propagates
+    # NA forward to every subsequent element, one missing constituent would
+    # silently NA out the rest of optimal_cum/hrp_cum/equalwt_cum too.
+    # `.port_weighted_return()` instead renormalises the target weight
+    # vector over the strategies actually present that month (a missing
+    # strategy contributes zero and present strategies are rescaled to sum
+    # to 1) with a floor of 2 strategies required -- see its roxygen doc
+    # below for the full rationale and the guard against a 1-strategy month
+    # masquerading as a diversified portfolio. `port_metrics`'s
+    # `calc_port_metrics()` below drops any remaining NA before computing
+    # cagr/vol/sharpe/max_dd so a handful of live-edge NA months cannot
+    # poison the whole-sample metrics.
     targets::tar_target(port_combined, {
       library(dplyr)
 
       strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
       w_pso <- port_optimal_weights
       w_hrp <- port_hrp_weights
+      w_eq  <- stats::setNames(rep(1 / length(strat_cols), length(strat_cols)), strat_cols)
 
       ret_matrix <- as.matrix(port_returns[, strat_cols])
-      pso_ret <- as.numeric(ret_matrix %*% w_pso)
-      hrp_ret <- as.numeric(ret_matrix %*% w_hrp)
-      eq_ret  <- rowMeans(ret_matrix)
+      pso_ret <- .port_weighted_return(ret_matrix, w_pso)
+      hrp_ret <- .port_weighted_return(ret_matrix, w_hrp)
+      eq_ret  <- .port_weighted_return(ret_matrix, w_eq)
 
       port_returns |>
         mutate(
@@ -173,31 +251,55 @@ plan_portfolio_opt <- function() {
     targets::tar_target(port_metrics, {
       library(dplyr)
 
+      # #641: optimal_ret/hrp_ret/equalwt_ret can now contain NA for months
+      # where fewer than 2 of the 4 constituent strategies reported a value
+      # (see .port_weighted_return() used by the port_combined target
+      # above). cumprod() propagates NA forward to every SUBSEQUENT
+      # element, so computing cagr/vol/sharpe/max_dd on the raw column
+      # would silently NA-poison the whole metric from the first gap
+      # onward. Each helper below drops NA returns for its own column
+      # before computing, and annualises using that column's own non-NA
+      # month count (not the shared `n`) -- `months` stays nrow(df), the
+      # calendar span of the period, for readability.
+      cagr_of <- function(r) {
+        r <- r[!is.na(r)]
+        if (length(r) < 1) return(NA_real_)
+        prod(1 + r)^(12 / length(r)) - 1
+      }
+      vol_of <- function(r) {
+        r <- r[!is.na(r)]
+        if (length(r) < 2) return(NA_real_)
+        sd(r) * sqrt(12)
+      }
+      sharpe_of <- function(r, rf_ann) {
+        r <- r[!is.na(r)]
+        if (length(r) < 2) return(NA_real_)
+        ann <- prod(1 + r)^(12 / length(r)) - 1
+        v <- sd(r) * sqrt(12)
+        if (v < 1e-8) NA_real_ else (ann - rf_ann) / v
+      }
+      maxdd_of <- function(r) {
+        r <- r[!is.na(r)]
+        if (length(r) < 1) return(NA_real_)
+        cum <- cumprod(1 + r)
+        min(cum / cummax(cum) - 1)
+      }
       calc_port_metrics <- function(df, label) {
         n <- nrow(df)
         if (n < 12) return(NULL)
         rf_ann <- mean(df$rf_ret, na.rm = TRUE) * 12
-        sharpe <- function(r) {
-          ann <- prod(1 + r)^(12/n) - 1
-          vol <- sd(r) * sqrt(12)
-          if (vol < 1e-8) NA_real_ else (ann - rf_ann) / vol
-        }
-        maxdd <- function(r) {
-          cum <- cumprod(1 + r)
-          min(cum / cummax(cum) - 1)
-        }
         tibble(
           period = label, months = n,
-          opt_cagr   = prod(1 + df$optimal_ret)^(12/n) - 1,
-          opt_vol    = sd(df$optimal_ret) * sqrt(12),
-          opt_sharpe = sharpe(df$optimal_ret),
-          opt_maxdd  = maxdd(df$optimal_ret),
-          hrp_cagr   = prod(1 + df$hrp_ret)^(12/n) - 1,
-          hrp_sharpe = sharpe(df$hrp_ret),
-          hrp_maxdd  = maxdd(df$hrp_ret),
-          eq_cagr    = prod(1 + df$equalwt_ret)^(12/n) - 1,
-          eq_sharpe  = sharpe(df$equalwt_ret),
-          eq_maxdd   = maxdd(df$equalwt_ret)
+          opt_cagr   = cagr_of(df$optimal_ret),
+          opt_vol    = vol_of(df$optimal_ret),
+          opt_sharpe = sharpe_of(df$optimal_ret, rf_ann),
+          opt_maxdd  = maxdd_of(df$optimal_ret),
+          hrp_cagr   = cagr_of(df$hrp_ret),
+          hrp_sharpe = sharpe_of(df$hrp_ret, rf_ann),
+          hrp_maxdd  = maxdd_of(df$hrp_ret),
+          eq_cagr    = cagr_of(df$equalwt_ret),
+          eq_sharpe  = sharpe_of(df$equalwt_ret, rf_ann),
+          eq_maxdd   = maxdd_of(df$equalwt_ret)
         )
       }
 
@@ -295,6 +397,65 @@ plan_portfolio_opt <- function() {
         as_tibble()
     })
   )
+}
+
+
+# ── Internal helper: NA-aware weighted portfolio return (#641) ────────────────
+
+#' Combine strategy returns into a single weighted portfolio return, one row
+#' at a time, treating any NA constituent as absent rather than propagating
+#' the NA to the whole row
+#'
+#' `port_returns` (#641) left-joins its four constituent strategies onto a
+#' calendar-complete month spine bounded to the stock-level overlap window,
+#' so a constituent missing that month is an explicit `NA` in its own
+#' column rather than a deleted row. Plain matrix
+#' multiplication (`ret_matrix %*% w`) would turn any such `NA` into `NA` for
+#' the whole row regardless of that constituent's weight, and because
+#' `cumprod()` propagates `NA` forward to every subsequent element, a single
+#' missing constituent early in the series would silently `NA` out the rest
+#' of the cumulative growth series too.
+#'
+#' Instead, for each row, the target weight vector `w` is renormalised over
+#' the strategies actually present that month: a missing strategy
+#' contributes zero and the present strategies' weights are rescaled to sum
+#' to 1 (i.e. their *relative* weights are preserved, just no longer diluted
+#' by a strategy that reported nothing). This is a deliberate modelling
+#' choice, not an artefact of the join -- treating a missing value as a zero
+#' return instead would understate the drawdown/CAGR contribution the
+#' missing strategy is actually making that month (unknown, not zero).
+#'
+#' Guard: a month where FEWER THAN 2 of the (currently 4) strategies report
+#' a value is NOT renormalised into a portfolio observation -- that would
+#' silently turn into a 100%-single-strategy bet dressed up as "PSO
+#' Optimal"/"HRP"/"Equal Weight". Such rows return `NA`. In the data as of
+#' #641 this affects only the most recent 1-2 months, where the
+#' factor-level return series (`fac_max`/`fac_drif`) lag the stock-level
+#' series (`stk_max`/`stk_drif`) at the live edge -- an expected, benign
+#' data-feed lag, not a defect. `calc_port_metrics()` (used by the
+#' `port_metrics` target) drops any remaining NA per-column before computing
+#' cagr/vol/sharpe/max_dd, so this cannot poison whole-sample metrics; the
+#' `port_comparison_plot` growth chart will show a break at that row, which
+#' honestly reflects "we don't know this month's return" rather than
+#' inventing one.
+#'
+#' @param ret_matrix Numeric matrix, one column per strategy (colnames
+#'   matching the names of `w`), one row per period. May contain `NA`.
+#' @param w Named numeric weight vector, same names/order as
+#'   `colnames(ret_matrix)`, non-negative, summing to 1 over the full set.
+#' @return Numeric vector, one weighted return per row of `ret_matrix`
+#'   (`NA` where fewer than 2 columns are non-NA that row, or where the
+#'   available strategies' weights sum to (numerically) zero).
+#' @noRd
+.port_weighted_return <- function(ret_matrix, w) {
+  apply(ret_matrix, 1L, function(row) {
+    avail <- !is.na(row)
+    if (sum(avail) < 2L) return(NA_real_)
+    w_avail <- w[avail]
+    w_sum <- sum(w_avail)
+    if (w_sum < 1e-8) return(NA_real_)
+    sum(row[avail] * w_avail) / w_sum
+  })
 }
 
 

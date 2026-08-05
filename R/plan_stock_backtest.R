@@ -45,6 +45,80 @@ assign_decile <- function(df, signal_col, n_groups = 10L) {
     dplyr::ungroup()
 }
 
+#' Build DRIF lookback features for a single target month (#641)
+#'
+#' Constructs the chronological ("c1".."c{lb}") and rank-sorted ("r1".."r{lb}")
+#' daily-return feature columns for every ticker with sufficient trailing
+#' history, joined to next-month realised return as target_ret.
+#'
+#' CRITICAL (#641): the lookback window is the trailing `lb` TRADING DAYS per
+#' ticker strictly before the first trading date of `target_ym` -- it deliberately
+#' SPANS calendar-month boundaries. The prior implementation confined the
+#' window to the single PRECEDING calendar month (`daily |> filter(ym ==
+#' prev_m)`). Because February supplies only 19-21 trading days a year
+#' (median 19-20, max 20-21 -- see #641 diagnosis), that confinement left the
+#' `c{lb}`/`r{lb}` columns NA for nearly every ticker whenever `target_ym` was
+#' March, and `predict.glmnet()` propagates any NA feature to an NA
+#' prediction for the whole row downstream in stk_drif_signal -- wiping out
+#' 14 of 17 March months entirely (and, by the identical mechanism, 23
+#' further single-year months fed by an unusually short predecessor month).
+#'
+#' @param daily Tibble with `ticker`, `date`, `daily_ret`, `ym` (== stk_daily_ret
+#'   with a `ym = format(date, "%Y-%m")` column added), sorted by ticker then
+#'   date ascending.
+#' @param target_ym Character scalar, "YYYY-MM" -- the month being predicted.
+#' @param monthly Tibble with `ticker`, `ym`, `monthly_ret` (== stk_monthly),
+#'   used to attach `target_ret` for `target_ym`.
+#' @param lb Integer trailing-window length in trading days.
+#' @param min_days Integer minimum trailing trading days required per ticker
+#'   (else that ticker is dropped for this month; was previously a per-month
+#'   10-day minimum -- see #43).
+#' @return Tibble with `ticker`, chrono cols `c1..c{lb}`, rank cols
+#'   `r1..r{lb}`, `target_ret`, `ym`. Zero rows (never NULL) when no ticker
+#'   has `min_days` trailing trading days before `target_ym`.
+#' @noRd
+stk_drif_month_features <- function(daily, target_ym, monthly, lb = 21L, min_days = 10L) {
+  cutoff_dates <- daily$date[daily$ym == target_ym]
+  if (length(cutoff_dates) == 0L) return(tibble::tibble())
+  cutoff_date <- min(cutoff_dates)
+
+  prior <- daily |>
+    dplyr::filter(date < cutoff_date) |>
+    dplyr::group_by(ticker) |>
+    dplyr::slice_max(order_by = date, n = lb, with_ties = FALSE) |>
+    dplyr::filter(dplyr::n() >= min_days) |>
+    dplyr::arrange(date, .by_group = TRUE) |>
+    dplyr::mutate(day_rank = dplyr::row_number()) |>
+    dplyr::ungroup()
+
+  if (nrow(prior) == 0L) return(tibble::tibble())
+
+  chrono <- prior |>
+    tidyr::pivot_wider(
+      id_cols = ticker, names_from = day_rank,
+      names_prefix = "c", values_from = daily_ret
+    )
+
+  ranked <- prior |>
+    dplyr::group_by(ticker) |>
+    dplyr::arrange(daily_ret, .by_group = TRUE) |>
+    dplyr::mutate(rank_idx = dplyr::row_number()) |>
+    dplyr::ungroup() |>
+    tidyr::pivot_wider(
+      id_cols = ticker, names_from = rank_idx,
+      names_prefix = "r", values_from = daily_ret
+    )
+
+  target <- monthly |>
+    dplyr::filter(ym == target_ym) |>
+    dplyr::select(ticker, target_ret = monthly_ret)
+
+  chrono |>
+    dplyr::inner_join(ranked, by = "ticker") |>
+    dplyr::inner_join(target, by = "ticker") |>
+    dplyr::mutate(ym = target_ym)
+}
+
 #' Compute long-short portfolio returns with realistic costs
 #' @param df Data frame with ym, ticker, decile, and monthly_ret columns
 #' @param long_decile Which decile to go long (default 1 = top)
@@ -812,65 +886,42 @@ plan_stock_backtest <- function() {
       library(dplyr)
 
       lb <- stk_params$lookback_days
-      daily <- stk_daily_ret |> mutate(ym = format(date, "%Y-%m"))
+      daily <- stk_daily_ret |>
+        mutate(ym = format(date, "%Y-%m")) |>
+        arrange(ticker, date)
 
-      # For each stock-month, get the prior month's daily returns
-      # Strategy: pivot wide by day-of-month rank, then compute features
       all_months <- sort(unique(daily$ym))
 
-      # Pre-compute: for each stock, the last `lb` trading days before each month
-      # Using a rolling join approach for efficiency
-      features_list <- lapply(seq_along(all_months)[-1], function(i) {
-        m <- all_months[i]
-        prev_m <- all_months[i - 1]
-
-        # Get prior month's trading days for all stocks
-        prior <- daily |>
-          filter(ym == prev_m) |>
-          group_by(ticker) |>
-          filter(n() >= 10) |>  # 10 days minimum (was 15 — see #43)
-          mutate(day_rank = row_number()) |>
-          ungroup()
-
-        if (nrow(prior) == 0) return(NULL)
-
-        # Chronological features: pad/trim to exactly lb days
-        chrono <- prior |>
-          filter(day_rank <= lb) |>
-          tidyr::pivot_wider(
-            id_cols = ticker,
-            names_from = day_rank,
-            names_prefix = "c",
-            values_from = daily_ret
-          )
-
-        # Rank features: sort within each stock, then pivot
-        ranked <- prior |>
-          group_by(ticker) |>
-          arrange(daily_ret) |>
-          mutate(rank_idx = row_number()) |>
-          ungroup() |>
-          filter(rank_idx <= lb) |>
-          tidyr::pivot_wider(
-            id_cols = ticker,
-            names_from = rank_idx,
-            names_prefix = "r",
-            values_from = daily_ret
-          )
-
-        # Get next month's return as target
-        target <- stk_monthly |> filter(ym == m) |> select(ticker, target_ret = monthly_ret)
-
-        # Combine
-        result <- chrono |>
-          inner_join(ranked, by = "ticker") |>
-          inner_join(target, by = "ticker") |>
-          mutate(ym = m)
-
-        result
+      # Trailing `lb`-trading-day lookback per ticker, spanning calendar-month
+      # boundaries where needed (#641 -- see stk_drif_month_features() roxygen
+      # for why the window must NOT be confined to a single calendar month).
+      features_list <- lapply(all_months[-1], function(m) {
+        stk_drif_month_features(daily, m, stk_monthly, lb = lb, min_days = 10L)
       })
+      names(features_list) <- all_months[-1]
 
-      bind_rows(Filter(Negate(is.null), features_list))
+      result <- bind_rows(features_list)
+
+      # Fail loudly (#641): a target month with zero feature rows silently
+      # vanishes from every downstream target with no signal anywhere. This
+      # should now only happen very early in the sample, before any ticker
+      # has accumulated `lb` trailing trading days.
+      produced_months <- sort(unique(result$ym))
+      zero_row_months <- setdiff(all_months[-1], produced_months)
+      if (length(zero_row_months) > 0L) {
+        cli::cli_warn(c(
+          "!" = paste0(
+            "stk_drif_features: ", length(zero_row_months),
+            " target month(s) produced ZERO feature rows (no ticker had ",
+            "the minimum trailing trading-day history) and will be entirely ",
+            "absent from every downstream DRIF target:"
+          ),
+          setNames(sprintf("  %s", zero_row_months), rep("i", length(zero_row_months))),
+          "i" = "See #641 -- expected only for the earliest month(s) of the sample."
+        ))
+      }
+
+      result
     }),
 
     # ── DRIF signal: pooled elastic net, expanding window ─────────
@@ -890,6 +941,8 @@ plan_stock_backtest <- function() {
       trade_months <- months[(min_train + 1):length(months)]
       cli::cli_inform(c("i" = "DRIF stock-level: {length(trade_months)} months to process"))
 
+      skip_reasons <- character(0)
+
       predictions <- lapply(seq_along(trade_months), function(j) {
         m <- trade_months[j]
         if (j %% 24 == 0) cli::cli_inform(c("i" = "  Month {j}/{length(trade_months)}: {m}"))
@@ -899,7 +952,10 @@ plan_stock_backtest <- function() {
         train <- features |> filter(ym %in% train_months)
         test <- features |> filter(ym == m)
 
-        if (nrow(test) == 0) return(NULL)
+        if (nrow(test) == 0) {
+          skip_reasons[[m]] <<- "no feature rows for this month (see stk_drif_features warnings)"
+          return(NULL)
+        }
 
         X_train <- as.matrix(train[, feat_cols])
         y_train <- train$target_ret
@@ -910,7 +966,12 @@ plan_stock_backtest <- function() {
         X_train <- X_train[complete, , drop = FALSE]
         y_train <- y_train[complete]
 
-        if (length(y_train) < 200) return(NULL)  # need decent sample
+        if (length(y_train) < 200) {
+          skip_reasons[[m]] <<- paste0(
+            "only ", length(y_train), " complete training rows (< 200 minimum)"
+          )
+          return(NULL)
+        }
 
         fit <- tryCatch({
           glmnet::cv.glmnet(X_train, y_train, alpha = 0.5,
@@ -920,7 +981,10 @@ plan_stock_backtest <- function() {
           NULL
         })
 
-        if (is.null(fit)) return(NULL)
+        if (is.null(fit)) {
+          skip_reasons[[m]] <<- "cv.glmnet failed (see warning above)"
+          return(NULL)
+        }
         pred <- as.numeric(predict(fit, X_test, s = "lambda.min"))
 
         tibble(
@@ -929,6 +993,20 @@ plan_stock_backtest <- function() {
         )
       })
 
+      # Fail loudly (#641): every trade month that produced NO predictions at
+      # all -- for whatever reason -- used to vanish from stk_drif_signal
+      # with zero signal anywhere in the pipeline.
+      if (length(skip_reasons) > 0L) {
+        msgs <- sprintf("  %s -- %s", names(skip_reasons), skip_reasons)
+        cli::cli_warn(c(
+          "!" = paste0(
+            "DRIF stock-level: ", length(skip_reasons),
+            " of ", length(trade_months), " trade month(s) produced NO predictions:"
+          ),
+          setNames(msgs, rep("i", length(msgs)))
+        ))
+      }
+
       bind_rows(Filter(Negate(is.null), predictions))
     }),
 
@@ -936,9 +1014,28 @@ plan_stock_backtest <- function() {
     targets::tar_target(stk_drif_portfolio, {
       library(dplyr)
 
-      signal <- stk_drif_signal |>
-        filter(!is.na(predicted_ret)) |>
+      signal_joined <- stk_drif_signal |>
         inner_join(stk_monthly |> select(ticker, ym, monthly_ret), by = c("ticker", "ym"))
+
+      months_before_na_filter <- sort(unique(signal_joined$ym))
+      signal <- signal_joined |> filter(!is.na(predicted_ret))
+      months_after_na_filter <- sort(unique(signal$ym))
+
+      # Fail loudly (#641): a month whose predicted_ret is NA for EVERY
+      # ticker used to disappear here with no signal anywhere -- this is
+      # exactly how March vanished from stk_drif_portfolio in every year.
+      dropped_na_months <- setdiff(months_before_na_filter, months_after_na_filter)
+      if (length(dropped_na_months) > 0L) {
+        cli::cli_warn(c(
+          "!" = paste0(
+            "stk_drif_portfolio: ", length(dropped_na_months),
+            " month(s) had predicted_ret == NA for every ticker and were ",
+            "dropped entirely:"
+          ),
+          setNames(sprintf("  %s", dropped_na_months), rep("i", length(dropped_na_months))),
+          "i" = "See #641 -- check stk_drif_signal warnings for cv.glmnet failures or insufficient training rows for these months."
+        ))
+      }
 
       # Variant A (filter-then-rank, Cakici 2023 / #312):
       # Drop sub-ADV names BEFORE cutting deciles — illiquid micro-caps with extreme
@@ -954,8 +1051,27 @@ plan_stock_backtest <- function() {
 
       # Re-apply minimum-stocks guard AFTER the ADV filter (#312):
       # the gate can drop names and push some months below the decile threshold.
+      min_stocks <- stk_params$n_deciles * 5
       stocks_per_month <- signal |> count(ym, name = "n_stocks")
-      valid_months <- stocks_per_month |> filter(n_stocks >= stk_params$n_deciles * 5) |> pull(ym)
+      valid_months <- stocks_per_month |> filter(n_stocks >= min_stocks) |> pull(ym)
+
+      # Fail loudly (#641): months dropped by the min-stocks guard used to
+      # vanish silently too -- report which months and how many stocks short.
+      dropped_liquidity <- stocks_per_month |> filter(n_stocks < min_stocks)
+      if (nrow(dropped_liquidity) > 0L) {
+        msgs <- sprintf(
+          "  %s -- %d stock(s) after ADV gate (need >= %d)",
+          dropped_liquidity$ym, dropped_liquidity$n_stocks, min_stocks
+        )
+        cli::cli_warn(c(
+          "!" = paste0(
+            "stk_drif_portfolio: ", nrow(dropped_liquidity),
+            " month(s) dropped by the min-stocks guard after the ADV filter:"
+          ),
+          setNames(msgs, rep("i", length(msgs)))
+        ))
+      }
+
       signal <- signal |> filter(ym %in% valid_months)
 
       deciled <- assign_decile(signal, predicted_ret, stk_params$n_deciles)
