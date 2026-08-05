@@ -1,5 +1,107 @@
 # Changelog
 
+## 2026-08-03 → 2026-08-05 (session 23 — liquidity/leverage/concentration instrumentation + a unit-scale cascade)
+
+### Completed
+
+- **Position document on liquidity, leverage and concentration (#624):** full
+  audit of how each is handled, with per-gap options/pros/cons. Split into
+  #625 (liquidity wiring) and #626 (leverage policy).
+- **Leverage measurement, from nothing to a published column (#626, #628):**
+  `hd_exposure_metrics()` (gross / net / long / short / cash_borrow) plus a
+  `strategy_gross_convention` registry with a verified `file:line` per row.
+  Before this, no target anywhere computed `sum(abs(w))`.
+- **Leverage policy shape decided (#626):** layered — a vol-normalised
+  allocator beneath a **gross** cap. Net rejected (unreachable for a
+  dollar-neutral book: scaling by any *k* leaves net 0); cash-borrowing
+  rejected (never binds — our neutral books borrow securities, not cash).
+  Level deferred to #635 pending measurement.
+- **`hd_risk_contribution()` (#633):** Euler decomposition (MCR / CR /
+  pct), `sum(CR) == sigma_p` as the correctness anchor, ERC property asserted
+  directly. Serves both the concentration gap and #626's allocator.
+- **Unit-scale cascade fixed (#637, #639):** `cagr`/`vol`/`max_dd` mixed
+  fractions (7 strategies) and percentages (10) in one column. `.norm_*`
+  helpers renamed but never rescaled. The rendered dashboard was showing
+  **1720% volatility** for LTR. Normalised to fractions at each source
+  boundary + a new S9 range gate.
+- **Period vocabulary (#643, #644):** `Value (HML)` and `Managed Futures`
+  emitted `Full`/`OOS`; `filter(period == "Full Period")` silently dropped
+  both from the headline ranking (15 rows, not 17). Normalised + `PERIOD_LABELS_ALLOWED`
+  single source of truth + S10 gate.
+- **Tri-state labelling (#642):** `Credible`, `Redundant`, `Material` all
+  displayed `NO` (or `—`) for strategies never assessed — conflating
+  "assessed and failed" with "not assessed". Now `not computed`, with a
+  hidden rank column so header-click sorting is meaningful.
+- **Kyle's lambda (#627):** was byte-identical to Amihud
+  (`abs(log_ret)/volume` twice); `bdbb-sol.qmd` presented them as a
+  comparison against distinct Varma benchmarks. Now an OLS price-impact
+  slope, `cov(log_ret, signed_flow)/var(signed_flow)`.
+- **Crisis-vs-calm tail independence surfaced (#630);** ADV-cap robustness
+  axis surfaced (#634), discharging a standing `backtest-robustness.md:121`
+  mandate; liquidity re-expressed against `equity_daily` (#636), which also
+  fixed a **non-US volume corruption-guard bypass** in `stk_universe`.
+- **llm#903 acceptance test:** DuckDB reads parquet footer KV metadata over
+  `hf://` as a **single 256 KB range request** (0.19% of a 134.9 MB file)
+  vs 61 ranges / 20.7 MB for a column scan. Slice 1 unblocked.
+- Worktree cleanup: 7 stale agent worktrees removed, 785 MB, ledger updated.
+
+### Failed Approaches
+
+- **Magnitude heuristics to detect unit scale.** `abs(vol) > 1.5` was fine to
+  *diagnose* #637 but is wrong as a *fix* — it misclassifies a genuine
+  200%-vol strategy and fails whenever a new strategy is added. The fix must
+  be driven by known provenance at the source boundary.
+- **Scanning rendered HTML for "any 3+ digit percentage" as evidence.** Caught
+  the Kelly table, where `Full Kelly` is legitimately unbounded and negative.
+  I cited `-1674.6%` as proof of the scale bug; it was not. Correct evidence
+  was `1720.0%` → `17.2%`. Any rendered-output gate must key on **columns**,
+  not magnitude.
+- **Trusting `audits/*.md` as current state.** `cost-assumptions-2026-06-04.md`
+  listed `drif`/`fac_max` at 0.00% cost (CRITICAL); #425 had fixed them two
+  months earlier. Repeated to the user several times before a subagent,
+  instructed not to trust the brief, checked the code.
+- **`count(*)` as a "full read" control for DuckDB range requests.** Answered
+  from the parquet footer — no row-group reads. Used `avg(volume)` instead.
+- **`SET enable_http_logging=true`** — removed in DuckDB 1.5.1. Use
+  `CALL enable_logging('HTTP')` + `duckdb_logs`.
+- **Assuming `OOS` could be remapped to `Testing`.** It spans
+  `>= 2010-01-01` unbounded, including sealed Validation. Renaming would have
+  converted a visible inconsistency into an invisible misstatement (#645).
+
+### Accuracy / Metrics
+
+- Root suite 289 → **313** tests; package suite 660 → **678**. Baselines
+  unchanged throughout (root 3 known failures / 0 skips; package 1 / 15).
+- Leaderboard: 15 → **17** strategies; 4 new columns (Gross, Cost (bps),
+  Redundant, Incremental Sharpe).
+- New QA gates: S9 (metric ranges), S10 (period vocabulary).
+- Measured **vol per unit gross: median 8.92%** (n=15), range 2.07–18.67% —
+  refuting my own 3–4% estimate. At a 19% vol target, implied gross ≈ 2.13×,
+  i.e. almost exactly the 2.0× already run.
+- 11 PRs merged, 12 issues raised.
+
+### Known Limitations
+
+- **#645 — the validation seal is already broken** for `Managed Futures` and
+  `Value (HML)`: their `OOS` window is unbounded above and spans the sealed
+  Validation partition, computed automatically every run. Now *more* visible,
+  since both strategies joined the headline ranking.
+- **#641 — every March is missing** from the PSO portfolio. `stk_drif_portfolio`
+  has no March rows; `port_returns` chains four `inner_join`s so one gap
+  deletes the month for all. 128 rows where ~156 expected. Contaminates
+  PSO Optimal's 6.82% vol, which was the candidate book anchor for #635.
+- **#646 — 2 `null` Period cells** on the live partition table: `factor()`
+  levels omit `OOS`, silently coercing it to `NA`.
+- **#640 — registry unit hazard:** `bt.metric` records `metric_unit` but
+  nothing validates it on write or converts on read. #639 fixed the dashboard
+  path only, so leaderboard and registry now disagree.
+- **#629** — `OLMAR-1` absent from `strategy_names`, forcing a display-label join.
+- **#631** — 19 bare source URLs remain; the `qa_no_bare_source_urls` gate the
+  `mermaid-click-anchors` rule prescribes was never built.
+- Recurring pattern worth a rule: **silent coercion of an unexpected value to
+  a null-ish state** — units (#637), vocabularies (#643), factor levels (#646).
+- Only `leaderboard.qmd` was re-rendered; other dashboards remain stale.
+
 ## 2026-07-19 → 2026-07-22 (session 22 — verification integrity + cross-project provisional-constants audit)
 
 ### Completed
