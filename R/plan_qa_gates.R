@@ -452,6 +452,77 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 }
 
 
+#' Assert a monthly portfolio target has complete calendar-month coverage (S11)
+#'
+#' Guards against the #641 defect class: a systematic construction bug (a
+#' lookback/rebalance window confined to a single calendar month) can
+#' silently drop an entire calendar month -- month 3/March in the #641
+#' case -- from EVERY year of a monthly strategy target, with no error and
+#' no warning anywhere else in the pipeline. `stk_max_portfolio` (255 rows,
+#' all 12 months) was the healthy sibling that exposed `stk_drif_portfolio`
+#' (129 rows, month 3 entirely absent) as broken.
+#'
+#' Two assertions:
+#'   1. Every calendar month 1-12 is represented by at least one row.
+#'   2. The number of distinct `ym` values covers a minimum fraction of the
+#'      target's own [min(ym), max(ym)] calendar-month span (default 60%) --
+#'      catches broader coverage collapse even when no single calendar
+#'      month is entirely absent.
+#'
+#' @param portfolio Tibble with a `ym` column ("YYYY-MM").
+#' @param target_name Character scalar, the target's name, used in messages.
+#' @param min_span_coverage Numeric in (0, 1]. Minimum fraction of the
+#'   target's own calendar-month span that must be present.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_month_coverage <- function(portfolio, target_name, min_span_coverage = 0.6) {
+  if (!"ym" %in% names(portfolio)) {
+    cli::cli_abort(c(
+      "x" = "{target_name} is missing the required {.field ym} column.",
+      "i" = "check_month_coverage() (S11) requires a ym (\"YYYY-MM\") column."
+    ))
+  }
+
+  yms <- sort(unique(portfolio$ym))
+  if (length(yms) == 0L) {
+    cli::cli_abort(c("x" = "{target_name} has zero rows -- cannot assess month coverage."))
+  }
+
+  observed_month_nums <- sort(unique(as.integer(substr(yms, 6, 7))))
+  missing_month_nums <- setdiff(1:12, observed_month_nums)
+
+  if (length(missing_month_nums) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        target_name, ": calendar month(s) ", paste(missing_month_nums, collapse = ", "),
+        " {.strong entirely absent} across the whole sample (", length(yms),
+        " month(s), ", min(yms), " to ", max(yms), ")."
+      ),
+      "i" = "A whole calendar month missing every year is a systematic construction bug, not sampling noise (#641).",
+      "i" = "Check for a lookback/rebalance window confined to a single calendar month, or a silent NA/join drop upstream."
+    ))
+  }
+
+  full_span <- seq.Date(as.Date(paste0(min(yms), "-01")), as.Date(paste0(max(yms), "-01")), by = "month")
+  full_span_ym <- format(full_span, "%Y-%m")
+  span_coverage <- length(yms) / length(full_span_ym)
+
+  if (span_coverage < min_span_coverage) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        target_name, ": only ", length(yms), "/", length(full_span_ym), " (",
+        sprintf("%.0f%%", span_coverage * 100), ") of its own [", min(yms), ", ",
+        max(yms), "] calendar-month span is present -- below the ",
+        sprintf("%.0f%%", min_span_coverage * 100), " minimum."
+      ),
+      "i" = "This may indicate systematic month loss upstream (#641) even though no single calendar month is entirely absent."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -627,6 +698,20 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_period_vocab(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_period_vocab: S10 passed (canonical period vocabulary, all strategies have a Full Period row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: stk_drif_portfolio has complete calendar-month coverage (S11) —
+    # guards against the #641 defect class where a lookback/rebalance window
+    # confined to a single calendar month silently drops an entire month
+    # (March, fed by a structurally-short February) from every year.
+    targets::tar_target(
+      qa_stk_drif_month_coverage,
+      command = {
+        check_month_coverage(stk_drif_portfolio, "stk_drif_portfolio")
+        cli::cli_inform(c("v" = "qa_stk_drif_month_coverage: S11 passed (all 12 calendar months present in stk_drif_portfolio)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
