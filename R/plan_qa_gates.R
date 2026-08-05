@@ -452,6 +452,169 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 }
 
 
+#' Assert no automatically-computed metric window extends past `test_end`
+#' unless its partition is explicitly "Validation" (S11)
+#'
+#' Guards against the #645 defect class: a strategy's source metrics target
+#' (e.g. `mf_metrics` in R/plan_managed_futures.R, `ev_metrics` in
+#' R/plan_ev_ebit.R) computes a bespoke period window that is unbounded above
+#' and therefore silently includes the sealed Validation partition
+#' (R/plan_partitions.R `bt_partitions`, `backtest-partitions` rule) on every
+#' `tar_make()`.
+#'
+#' Two period labels are exempt from the `test_end` bound, both by design of
+#' `backtest-partitions.md`:
+#'   - `"Validation"` -- the sealed partition itself; its whole purpose is to
+#'     extend past `test_end`.
+#'   - `"Full"` / `"Full Period"` -- the rule's own canonical reference
+#'     implementation lists `calc_metrics(all_data, "Full Period")` alongside
+#'     Training/Testing/Validation as an accepted, full-sample summary that is
+#'     *expected* to span the whole series (including Validation) by
+#'     definition -- it is not a bespoke evaluation/test window like `"OOS"`.
+#'     Every other strategy on the leaderboard already reports a Full Period
+#'     row this way; only a genuinely bespoke window (not itself the sealed
+#'     partition or the full-sample summary) is what #645 is about.
+#'
+#' @param metrics A tibble with at least `strategy`, `period`, `window_end`
+#'   columns (the output of a strategy metrics target, e.g. `mf_metrics` or
+#'   `ev_metrics`).
+#' @param test_end A single Date -- the canonical test-partition upper bound
+#'   for this metrics target's asset class (from `bt_partitions`,
+#'   R/plan_partitions.R).
+#' @param source_label A short string identifying the metrics target being
+#'   checked (used in error messages), e.g. `"mf_metrics"`.
+#' @return `TRUE` invisibly on success.
+#'
+#' @section Scope note (#648):
+#' This function is scoped to window BOUNDS on `mf_metrics`/`ev_metrics`
+#' only. #648 identified a systematic, wider version of the same seal-breach
+#' pattern: `slice_portfolio()` in R/plan_leaderboard.R computes an explicit
+#' `Validation` slice on every `tar_make()` for 7 strategies -- not a bounds
+#' violation (those rows are correctly labelled `"Validation"`), but an
+#' automatic-computation violation (`backtest-partitions.md`: "Validation
+#' metrics are NOT computed automatically by tar_make()"). That is a
+#' different check -- "no row may be automatically labelled Validation at
+#' all" -- and is out of scope here; #648 handles it separately. If it is
+#' later folded into this same S11 gate, `metrics` already carries `period`,
+#' so a `"no period == 'Validation' row present"` assertion could be added
+#' as a second, independent check inside this function (or as a sibling
+#' function called from the same `qa_metric_window_bounds` target) without
+#' needing to change this function's signature.
+#' @noRd
+check_metric_window_bounds <- function(metrics, test_end, source_label) {
+  required_cols <- c("strategy", "period", "window_end")
+  missing_cols <- setdiff(required_cols, names(metrics))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{source_label} is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_metric_window_bounds() (S11) requires strategy, period, window_end."
+    ))
+  }
+
+  exempt_periods <- c("Validation", "Full", "Full Period")
+
+  is_offender <- !is.na(metrics$window_end) &
+    !(metrics$period %in% exempt_periods) &
+    metrics$window_end > test_end
+  offenders <- metrics[is_offender, c("strategy", "period", "window_end"), drop = FALSE]
+
+  if (nrow(offenders) > 0L) {
+    msgs <- purrr::pmap_chr(
+      offenders,
+      function(strategy, period, window_end) {
+        sprintf("  %s / %s -- window_end %s exceeds test_end %s",
+                strategy, period, window_end, test_end)
+      }
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        source_label, " has ", nrow(offenders),
+        " row(s) whose computed window extends past the sealed Validation ",
+        "partition boundary (test_end = ", test_end, "), #645:"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "Bound the window at test_end in the source metrics target, or ",
+        "relabel the period \"Validation\" if the window is intentionally sealed."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Assert a monthly portfolio target has complete calendar-month coverage (S12)
+#'
+#' Guards against the #641 defect class: a systematic construction bug (a
+#' lookback/rebalance window confined to a single calendar month) can
+#' silently drop an entire calendar month -- month 3/March in the #641
+#' case -- from EVERY year of a monthly strategy target, with no error and
+#' no warning anywhere else in the pipeline. `stk_max_portfolio` (255 rows,
+#' all 12 months) was the healthy sibling that exposed `stk_drif_portfolio`
+#' (129 rows, month 3 entirely absent) as broken.
+#'
+#' Two assertions:
+#'   1. Every calendar month 1-12 is represented by at least one row.
+#'   2. The number of distinct `ym` values covers a minimum fraction of the
+#'      target's own [min(ym), max(ym)] calendar-month span (default 60%) --
+#'      catches broader coverage collapse even when no single calendar
+#'      month is entirely absent.
+#'
+#' @param portfolio Tibble with a `ym` column ("YYYY-MM").
+#' @param target_name Character scalar, the target's name, used in messages.
+#' @param min_span_coverage Numeric in (0, 1]. Minimum fraction of the
+#'   target's own calendar-month span that must be present.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_month_coverage <- function(portfolio, target_name, min_span_coverage = 0.6) {
+  if (!"ym" %in% names(portfolio)) {
+    cli::cli_abort(c(
+      "x" = "{target_name} is missing the required {.field ym} column.",
+      "i" = "check_month_coverage() (S12) requires a ym (\"YYYY-MM\") column."
+    ))
+  }
+
+  yms <- sort(unique(portfolio$ym))
+  if (length(yms) == 0L) {
+    cli::cli_abort(c("x" = "{target_name} has zero rows -- cannot assess month coverage."))
+  }
+
+  observed_month_nums <- sort(unique(as.integer(substr(yms, 6, 7))))
+  missing_month_nums <- setdiff(1:12, observed_month_nums)
+
+  if (length(missing_month_nums) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        target_name, ": calendar month(s) ", paste(missing_month_nums, collapse = ", "),
+        " {.strong entirely absent} across the whole sample (", length(yms),
+        " month(s), ", min(yms), " to ", max(yms), ")."
+      ),
+      "i" = "A whole calendar month missing every year is a systematic construction bug, not sampling noise (#641).",
+      "i" = "Check for a lookback/rebalance window confined to a single calendar month, or a silent NA/join drop upstream."
+    ))
+  }
+
+  full_span <- seq.Date(as.Date(paste0(min(yms), "-01")), as.Date(paste0(max(yms), "-01")), by = "month")
+  full_span_ym <- format(full_span, "%Y-%m")
+  span_coverage <- length(yms) / length(full_span_ym)
+
+  if (span_coverage < min_span_coverage) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        target_name, ": only ", length(yms), "/", length(full_span_ym), " (",
+        sprintf("%.0f%%", span_coverage * 100), ") of its own [", min(yms), ", ",
+        max(yms), "] calendar-month span is present -- below the ",
+        sprintf("%.0f%%", min_span_coverage * 100), " minimum."
+      ),
+      "i" = "This may indicate systematic month loss upstream (#641) even though no single calendar month is entirely absent."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Assert port_returns has no calendar-month gaps and flag thin-coverage
 #' months (S13)
 #'
@@ -731,6 +894,36 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_period_vocab(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_period_vocab: S10 passed (canonical period vocabulary, all strategies have a Full Period row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: no automatically-computed metric window extends past
+    # `test_end` unless its partition is explicitly "Validation" (S11) --
+    # guards against the #645 defect class where a strategy's bespoke OOS
+    # window (mf_metrics, ev_metrics) is unbounded above and silently
+    # includes the sealed Validation partition on every tar_make().
+    targets::tar_target(
+      qa_metric_window_bounds,
+      command = {
+        check_metric_window_bounds(mf_metrics, bt_partitions$macro$test_end, "mf_metrics")
+        check_metric_window_bounds(ev_metrics, bt_partitions$factor$test_end, "ev_metrics")
+        cli::cli_inform(c("v" = "qa_metric_window_bounds: S11 passed (no non-Validation window extends past test_end)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: stk_drif_portfolio has complete calendar-month coverage (S12) —
+    # guards against the #641 defect class where a lookback/rebalance window
+    # confined to a single calendar month silently drops an entire month
+    # (March, fed by a structurally-short February) from every year.
+    targets::tar_target(
+      qa_stk_drif_month_coverage,
+      command = {
+        check_month_coverage(stk_drif_portfolio, "stk_drif_portfolio")
+        cli::cli_inform(c("v" = "qa_stk_drif_month_coverage: S12 passed (all 12 calendar months present in stk_drif_portfolio)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
