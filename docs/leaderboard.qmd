@@ -39,67 +39,6 @@ disc_path <- if (file.exists("../R/disclosures.R")) "../R/disclosures.R" else
 source(disc_path)
 ```
 
-# Falsification
-
-## Row
-
-### {.tabset}
-
-#### Scorecard
-
-The falsification framework tests 5 strategies against multiple statistical hurdles: <abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr>-corrected t-statistics, 6 null environment rejection rates, and <abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr> + Momentum alpha regression. Strategies that pass all tests show genuine alpha; those that fail are explained by known factor exposure (beta). Note: this covers 5 strategies from the falsification pipeline — partially overlapping with the leaderboard strategies above.
-
-```{r}
-#| label: fals-scorecard
-fals_sc <- safe_tar_read("fals_vig_scorecard")
-fals_sc_cap <- safe_tar_read("fals_vig_scorecard_caption")
-if (!is.null(fals_sc)) {
-  cap_text <- if (!is.null(fals_sc_cap)) fals_sc_cap else "Strategy falsification scorecard"
-  hd_dt(fals_sc, cap_text)
-}
-```
-
-#### Null Rejection
-
-Rejection rates across 6 null environments (M = 100 simulations each). A low rate means the strategy's performance is easily replicated under the null — no genuine signal. A high rate means the null cannot explain the observed returns.
-
-```{r}
-#| label: fals-heatmap
-#| fig-height: 5
-#| fig-width: 10
-safe_tar_read("fals_vig_null_heatmap")
-```
-
-```{r}
-#| label: fals-heatmap-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_null_heatmap_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
-
-#### Alpha vs Factor Exposure
-
-Scatter plot of annualised alpha (%) against R² (%) from the Fama-French 5-Factor + Momentum regression. Genuine alpha strategies cluster in the top-left (low factor exposure, positive alpha). Beta strategies cluster on the right (high R²).
-
-```{r}
-#| label: fals-alpha-plot
-#| fig-height: 5
-#| fig-width: 10
-safe_tar_read("fals_vig_ff_alpha_plot")
-```
-
-```{r}
-#| label: fals-alpha-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_ff_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
-
-#### See Also
-
-For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr>, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
-
-
 # Rankings
 
 ::: {.callout-warning collapse="false" title="Survivorship bias"}
@@ -138,7 +77,27 @@ if (!is.null(lb)) {
       ),
       SSR        = ifelse(is.na(ssr),           "—", as.character(round(ssr, 2))),
       `Top5% Share` = ifelse(is.na(top5pct_share), "—", paste0(round(top5pct_share * 100, 1), "%")),
-      Credible   = ifelse(is.na(credible) | !credible, "NO", "yes"),
+      # NA credible means cost metrics were never computed for this strategy
+      # (cost_rows in R/plan_leaderboard.R only covers 5 core strategies +
+      # PSO Optimal) -- that is "unknown", not "explicitly failed". Conflating
+      # the two previously fed literal NA strategy names into the WARNING
+      # note below (#637 follow-up).
+      Credible   = dplyr::case_when(
+        is.na(credible) ~ "not computed",
+        !credible        ~ "NO",
+        TRUE              ~ "yes"
+      ),
+      # Explicit sort rank for Credible: the display string ("NO" / "not
+      # computed" / "yes") sorts alphabetically wrong under DT's default
+      # string comparator (ascending gives NO, not computed, yes -- neither
+      # ascending nor descending puts assessed-and-passed first, then
+      # assessed-and-failed, then never-assessed). This hidden column
+      # supplies the intended rank instead (#637 follow-up).
+      .credible_rank = dplyr::case_when(
+        is.na(credible) ~ 3L,
+        !credible        ~ 2L,
+        TRUE              ~ 1L
+      ),
       Redundant  = if ("redundant" %in% names(full)) {
         ifelse(is.na(redundant), "—", ifelse(redundant, "YES", "no"))
       } else "—",
@@ -146,13 +105,18 @@ if (!is.null(lb)) {
         ifelse(is.na(incremental_sharpe), "—", as.character(round(incremental_sharpe, 3)))
       } else "—"
     ) |>
-    select(Strategy = strategy, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
-           `Cost (bps)`, SSR, `Top5% Share`, Credible, Redundant, `Incremental Sharpe`)
+    select(Strategy = strategy, Credible, .credible_rank, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
+           `Cost (bps)`, SSR, `Top5% Share`, Redundant, `Incremental Sharpe`)
 
-  n_flagged <- sum(!full$credible, na.rm = TRUE)
+  # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
+  # is NA, and indexing a character vector with a logical vector containing
+  # NA inserts a literal NA element into the result -- that is the root
+  # cause of the "WARNING: NA, NA, NA, ..." defect (#637 follow-up). Only
+  # strategies with an explicit, computed FALSE are flagged.
+  n_flagged <- sum(!is.na(full$credible) & !full$credible)
   flag_note <- if (n_flagged > 0) {
-    flagged <- full$strategy[!full$credible]
-    paste0(" WARNING: ", paste(flagged, collapse=", "),
+    flagged <- full$strategy[!is.na(full$credible) & !full$credible]
+    paste0(" WARNING: ", paste(flagged, collapse = ", "),
            " flagged as non-credible (>20% CAGR or >50x cum P&L — likely unrealistic).")
   } else ""
 
@@ -255,14 +219,62 @@ if (!is.null(lb)) {
     "the portfolio is better off without it. Both feed the new-strategy value gate (#496)."
   )
 
-  hd_dt(metrics_table, paste0(
+  full_caption <- paste0(
     "Strategies ranked by Sharpe (highest first). ",
     "Net CAGR after 0.20% round-trip/month cost where available. ",
     "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
     "Top5% Share = fraction of total return from best 5% of months. ",
-    "Credible = plausible CAGR (<20%) and cum P&L (<50x).",
+    "Credible = plausible CAGR (<20%) and cum P&L (<50x): \"NO\" marks a strategy that was ",
+    "assessed and failed that check, \"not computed\" marks a strategy for which cost-adjusted ",
+    "metrics were never assessed at all (not the same as failing the check).",
     flag_note, bias_note, gross_note, cost_note, diversification_note
-  ))
+  )
+
+  # Bespoke DT call (not hd_dt()): the Credible column needs an explicit sort
+  # rank (.credible_rank, added above) instead of DT's default alphabetical
+  # string comparator -- ascending on the display string gives NO / not
+  # computed / yes, which puts assessed-and-failed before never-assessed
+  # before assessed-and-passed, not the intended priority order. orderData
+  # points the Credible column's sort at the hidden rank column instead
+  # (#637 follow-up).
+  credible_col <- which(names(metrics_table) == "Credible") - 1L
+  rank_col     <- which(names(metrics_table) == ".credible_rank") - 1L
+  numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
+                                  grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
+  DT::datatable(
+    metrics_table,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption",
+      full_caption
+    ),
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1),
+        list(visible = FALSE, targets = rank_col),
+        list(orderData = rank_col, targets = credible_col)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
 }
 ```
 
@@ -287,19 +299,71 @@ if (!is.null(lb)) {
     }
   )
 
+  # Explicit period display order (NOT alphabetical, per rule): Testing,
+  # Full Period, Training. Implemented via factor levels so dplyr::arrange()
+  # sorts by this order rather than alphabetically ("Full Period" < "Testing"
+  # < "Training").
+  period_order <- c("Testing", "Full Period", "Training")
+
   by_part <- lb |>
     filter(period != "Validation") |>
     left_join(years_map, by = "period") |>
+    mutate(period = factor(period, levels = period_order)) |>
+    # Sort on the NUMERIC sharpe column before it is formatted to character
+    # below -- sorting the formatted string ("9.5" vs "10.2") would sort
+    # lexicographically and put "9.5" above "10.2".
+    arrange(period, desc(sharpe)) |>
     mutate(
       CAGR = paste0(round(cagr * 100, 1), "%"),
       Vol = paste0(round(vol * 100, 1), "%"),
       Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
       `Max DD` = paste0(round(max_dd * 100, 1), "%"),
-      `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%"))
+      `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%")),
+      Period = as.character(period)
     ) |>
-    select(Strategy = strategy, Period = period, Years, CAGR, Vol, Sharpe, `Max DD`, `CVaR 95%`)
+    select(Strategy = strategy, Period, Sharpe, Years, CAGR, Vol, `Max DD`, `CVaR 95%`)
 
-  hd_dt(by_part, "All strategies × Training and Testing partitions. Years column shows date ranges. Validation partition is sealed — not shown until production deployment.")
+  # Bespoke DT call (not hd_dt()): rows above are already sorted by Period
+  # (Testing / Full Period / Training) then Sharpe descending. hd_dt()'s
+  # fixed options list has no `order` entry, so DT would apply its default
+  # initial sort (column 0 ascending = Strategy) and silently undo the sort
+  # above -- `order = list()` (empty array) disables DT's initial sort and
+  # preserves the incoming row order.
+  numeric_cols <- which(sapply(by_part, function(x) is.numeric(x) ||
+                                  grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
+  DT::datatable(
+    by_part,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption",
+      "All strategies × Training and Testing partitions, ordered Testing / Full Period / Training then by Sharpe (descending). Years column shows date ranges. Validation partition is sealed — not shown until production deployment."
+    ),
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      order = list(),
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
 }
 ```
 
@@ -329,6 +393,66 @@ if (!is.null(w)) {
   hd_dt(w_df, "PSO optimal weights (trained on Training partition Sharpe). Strategies with 0% weight omitted.")
 }
 ```
+
+# Falsification
+
+## Row
+
+### {.tabset}
+
+#### Scorecard
+
+The falsification framework tests 5 strategies against multiple statistical hurdles: <abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr>-corrected t-statistics, 6 null environment rejection rates, and <abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr> + Momentum alpha regression. Strategies that pass all tests show genuine alpha; those that fail are explained by known factor exposure (beta). Note: this covers 5 strategies from the falsification pipeline — partially overlapping with the leaderboard strategies above.
+
+```{r}
+#| label: fals-scorecard
+fals_sc <- safe_tar_read("fals_vig_scorecard")
+fals_sc_cap <- safe_tar_read("fals_vig_scorecard_caption")
+if (!is.null(fals_sc)) {
+  cap_text <- if (!is.null(fals_sc_cap)) fals_sc_cap else "Strategy falsification scorecard"
+  hd_dt(fals_sc, cap_text)
+}
+```
+
+#### Null Rejection
+
+Rejection rates across 6 null environments (M = 100 simulations each). A low rate means the strategy's performance is easily replicated under the null — no genuine signal. A high rate means the null cannot explain the observed returns.
+
+```{r}
+#| label: fals-heatmap
+#| fig-height: 5
+#| fig-width: 10
+safe_tar_read("fals_vig_null_heatmap")
+```
+
+```{r}
+#| label: fals-heatmap-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_null_heatmap_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### Alpha vs Factor Exposure
+
+Scatter plot of annualised alpha (%) against R² (%) from the Fama-French 5-Factor + Momentum regression. Genuine alpha strategies cluster in the top-left (low factor exposure, positive alpha). Beta strategies cluster on the right (high R²).
+
+```{r}
+#| label: fals-alpha-plot
+#| fig-height: 5
+#| fig-width: 10
+safe_tar_read("fals_vig_ff_alpha_plot")
+```
+
+```{r}
+#| label: fals-alpha-caption
+#| results: asis
+cap <- safe_tar_read("fals_vig_ff_caption")
+if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
+```
+
+#### See Also
+
+For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr>, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
 
 # Performance
 
