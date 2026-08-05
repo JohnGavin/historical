@@ -17,8 +17,10 @@
 # treated as a change worth a human's attention. A NEW failure that testthat
 # reports as snapshot-related is called out as [NEW-SNAPSHOT] rather than
 # [NEW] — it means a snapshot is missing or stale, not that behaviour
-# regressed. SKIP counts are always printed alongside PASS/FAIL; a jump in
-# SKIP without a code change is itself a signal worth investigating.
+# regressed. SKIP counts are always printed alongside PASS/FAIL; for the
+# package suite, a rise above BASELINE_PKG_SKIP_COUNT now FAILS the run
+# (#654) rather than merely printing a warning. The root suite has no
+# maintained skip baseline (normally 0) and is printed only.
 #
 # Usage:
 #   scripts/verify.sh            # full verification (can take a few minutes)
@@ -398,10 +400,14 @@ if ! compare_failure_set "package suite (packages/historicaldata/, ${#BASELINE_P
   OVERALL_STATUS=1
 fi
 
-# Skip-reason surfacing (#580): a package-suite SKIP count above its normal
-# baseline (5) must be impossible to miss silently. Print which tests
-# skipped and why — a rise from 5 to 12 with no explanation is exactly the
-# failure mode (#574) this exists to prevent.
+# Skip-reason surfacing (#580) + skip-count assertion (#654): a package-suite
+# SKIP count above its normal baseline (15 -- see BASELINE_PKG_SKIP_COUNT
+# above) must be impossible to miss silently AND must fail the script, not
+# merely print a warning that scrolls past. #654 found this block only ever
+# echoed a warning -- it never set OVERALL_STATUS, so the count could have
+# kept rising forever while verify.sh reported PASS. Any rise above the
+# baseline now fails the run (exit 1), matching how the failure-signature
+# comparisons above already behave.
 PKG_SKIPPED_N="$(printf '%s\n' "$PKG_SUMMARY_LINE" | grep -oE 'skipped=[0-9]+' | grep -oE '[0-9]+' || echo '')"
 if [[ -n "$PKG_SKIPPED_N" ]] && [[ "$PKG_SKIPPED_N" -gt "$BASELINE_PKG_SKIP_COUNT" ]]; then
   echo ""
@@ -409,6 +415,7 @@ if [[ -n "$PKG_SKIPPED_N" ]] && [[ "$PKG_SKIPPED_N" -gt "$BASELINE_PKG_SKIP_COUN
   echo "!!! This is lost coverage, not a pass. Skipped tests and their reasons:                        !!!"
   PKG_SKIP_DETAILS="$(awk '/::VERIFY:PKG_SKIP_DETAILS_START::/{flag=1; next} /::VERIFY:PKG_SKIP_DETAILS_END::/{flag=0} flag' "$R_OUT")"
   echo "$PKG_SKIP_DETAILS" | sed '/^[[:space:]]*$/d' | sed 's/^/    [SKIP] /'
+  OVERALL_STATUS=1
 fi
 
 echo ""
