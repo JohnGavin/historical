@@ -83,9 +83,20 @@ if (!is.null(lb)) {
       # the two previously fed literal NA strategy names into the WARNING
       # note below (#637 follow-up).
       Credible   = dplyr::case_when(
-        is.na(credible) ~ "—",
+        is.na(credible) ~ "not computed",
         !credible        ~ "NO",
         TRUE              ~ "yes"
+      ),
+      # Explicit sort rank for Credible: the display string ("NO" / "not
+      # computed" / "yes") sorts alphabetically wrong under DT's default
+      # string comparator (ascending gives NO, not computed, yes -- neither
+      # ascending nor descending puts assessed-and-passed first, then
+      # assessed-and-failed, then never-assessed). This hidden column
+      # supplies the intended rank instead (#637 follow-up).
+      .credible_rank = dplyr::case_when(
+        is.na(credible) ~ 3L,
+        !credible        ~ 2L,
+        TRUE              ~ 1L
       ),
       Redundant  = if ("redundant" %in% names(full)) {
         ifelse(is.na(redundant), "—", ifelse(redundant, "YES", "no"))
@@ -94,7 +105,7 @@ if (!is.null(lb)) {
         ifelse(is.na(incremental_sharpe), "—", as.character(round(incremental_sharpe, 3)))
       } else "—"
     ) |>
-    select(Strategy = strategy, Credible, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
+    select(Strategy = strategy, Credible, .credible_rank, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
            `Cost (bps)`, SSR, `Top5% Share`, Redundant, `Incremental Sharpe`)
 
   # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
@@ -208,14 +219,62 @@ if (!is.null(lb)) {
     "the portfolio is better off without it. Both feed the new-strategy value gate (#496)."
   )
 
-  hd_dt(metrics_table, paste0(
+  full_caption <- paste0(
     "Strategies ranked by Sharpe (highest first). ",
     "Net CAGR after 0.20% round-trip/month cost where available. ",
     "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
     "Top5% Share = fraction of total return from best 5% of months. ",
-    "Credible = plausible CAGR (<20%) and cum P&L (<50x); — where cost-adjusted metrics are not computed for this strategy.",
+    "Credible = plausible CAGR (<20%) and cum P&L (<50x): \"NO\" marks a strategy that was ",
+    "assessed and failed that check, \"not computed\" marks a strategy for which cost-adjusted ",
+    "metrics were never assessed at all (not the same as failing the check).",
     flag_note, bias_note, gross_note, cost_note, diversification_note
-  ))
+  )
+
+  # Bespoke DT call (not hd_dt()): the Credible column needs an explicit sort
+  # rank (.credible_rank, added above) instead of DT's default alphabetical
+  # string comparator -- ascending on the display string gives NO / not
+  # computed / yes, which puts assessed-and-failed before never-assessed
+  # before assessed-and-passed, not the intended priority order. orderData
+  # points the Credible column's sort at the hidden rank column instead
+  # (#637 follow-up).
+  credible_col <- which(names(metrics_table) == "Credible") - 1L
+  rank_col     <- which(names(metrics_table) == ".credible_rank") - 1L
+  numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
+                                  grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
+  DT::datatable(
+    metrics_table,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption",
+      full_caption
+    ),
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1),
+        list(visible = FALSE, targets = rank_col),
+        list(orderData = rank_col, targets = credible_col)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
 }
 ```
 
