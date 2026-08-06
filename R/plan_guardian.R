@@ -70,7 +70,7 @@ plan_guardian <- function() {
           ) |>
           dplyr::group_by(year_month) |>
           dplyr::summarise(
-            spy_return = (dplyr::last(adjusted) / dplyr::first(adjusted) - 1) * 100,
+            spy_return = (dplyr::last(adjusted_close) / dplyr::first(adjusted_close) - 1) * 100,
             .groups = "drop"
           )
       }, error = function(e) {

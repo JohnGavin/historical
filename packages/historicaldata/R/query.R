@@ -30,6 +30,43 @@
   }
   invisible(NULL)
 }
+# ── Schema contract guard (#669) ──────────────────────────────────────────
+
+#' Assert the canonical adjusted-price column survived the read-time alias
+#'
+#' Fires a classed error ("hd_schema_drift") when a dataset that promises
+#' an adjusted_close column in its [hd_datasets()] schema does not actually
+#' have one after the adjusted -> adjusted_close backward-compat rename in
+#' [hd_ohlcv_single()] / [hd_lazy()]. Without this guard, an upstream schema
+#' change that the rename does not anticipate is silently absorbed here and
+#' only surfaces later as a "column doesn't exist" error at an arbitrary
+#' downstream consumer -- exactly what happened for ~10 weeks in issue #669,
+#' where adjusted_close diverged from adjusted across call sites with no
+#' error raised at the access boundary.
+#'
+#' @param col_names Character vector of column names already read from the
+#'   source, after the read-time alias has run.
+#' @param dataset Dataset name (from [hd_datasets()]), used in the error.
+#' @return Invisibly NULL when the contract holds or the dataset does not
+#'   promise an adjusted_close column.
+#' @noRd
+.hd_assert_price_schema <- function(col_names, dataset) {
+  ds <- hd_datasets()[[dataset]]
+  promises_adjusted_close <- !is.null(ds) && "adjusted_close" %in% ds[["schema"]]
+  if (!promises_adjusted_close) return(invisible(NULL))
+  if ("adjusted_close" %in% col_names) return(invisible(NULL))
+  cli::cli_abort(
+    c(
+      "x" = "{.val {dataset}} promises an {.val adjusted_close} column but it is missing after the read-time alias.",
+      "i" = "Columns present: {.val {col_names}}.",
+      "i" = "The underlying parquet's adjusted-price column has apparently been renamed to something the {.fn hd_ohlcv}/{.fn hd_lazy} alias does not recognise.",
+      ">" = "Update the {.val adjusted} -> {.val adjusted_close} alias in {.fn hd_ohlcv_single} / {.fn hd_lazy} to match the new upstream column name."
+    ),
+    class = "hd_schema_drift",
+    call = rlang::caller_env()
+  )
+}
+
 
 # ── Survivorship-bias guard ───────────────────────────────────────────────────
 
@@ -194,7 +231,10 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
   col_names <- names(schema0)
   if ("adjusted" %in% col_names && !("adjusted_close" %in% col_names)) {
     lf <- lf |> dplyr::rename(adjusted_close = adjusted)
+    col_names[col_names == "adjusted"] <- "adjusted_close"
   }
+
+  .hd_assert_price_schema(col_names, dataset)
 
   # Date-filter type matching for duckplyr (#453)
   # The HF equity_daily parquet stores 'date' as TIMESTAMP_NS. DuckDB throws an
@@ -288,7 +328,10 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
   col_names <- lf |> head(0) |> dplyr::collect() |> names()
   if ("adjusted" %in% col_names && !("adjusted_close" %in% col_names)) {
     lf <- lf |> dplyr::rename(adjusted_close = adjusted)
+    col_names[col_names == "adjusted"] <- "adjusted_close"
   }
+
+  .hd_assert_price_schema(col_names, dataset)
 
   lf
 }

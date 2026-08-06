@@ -54,7 +54,7 @@ plan_olmar <- function() {
         tryCatch({
           hd_ohlcv(tkr, from = as.character(olmar_params$start_date)) |>
             dplyr::arrange(date) |>
-            dplyr::select(date, adjusted) |>
+            dplyr::select(date, adjusted_close) |>
             dplyr::mutate(date = as.Date(date, tz = "UTC"),
                           ticker = tkr)
         }, error = function(e) {
@@ -74,7 +74,7 @@ plan_olmar <- function() {
 
       # Pivot to wide: rows = date, cols = ticker
       wide <- dplyr::bind_rows(raw) |>
-        tidyr::pivot_wider(names_from = ticker, values_from = adjusted) |>
+        tidyr::pivot_wider(names_from = ticker, values_from = adjusted_close) |>
         dplyr::arrange(date)
 
       # Drop tickers that have too little history

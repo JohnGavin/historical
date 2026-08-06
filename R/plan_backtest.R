@@ -38,7 +38,7 @@ plan_backtest <- function() {
         dplyr::group_by(ticker, ym) |>
         dplyr::filter(date == max(date)) |>
         dplyr::ungroup() |>
-        dplyr::select(ticker, date, close, adjusted) |>
+        dplyr::select(ticker, date, close, adjusted_close) |>
         dplyr::arrange(ticker, date) |>
         dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
@@ -48,7 +48,7 @@ plan_backtest <- function() {
       bt_prices |>
         dplyr::group_by(ticker) |>
         dplyr::arrange(date) |>
-        dplyr::mutate(ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        dplyr::mutate(ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
         dplyr::filter(!is.na(ret)) |>
         dplyr::ungroup() |>
         dplyr::mutate(date = as.Date(date, tz = "UTC"))

@@ -37,7 +37,7 @@ plan_vix_macro_overlay <- function() {
           hd_ohlcv(tkr) |>
             mutate(date = as.Date(date)) |>
             arrange(date) |>
-            mutate(ret = adjusted / lag(adjusted) - 1, ticker = tkr) |>
+            mutate(ret = adjusted_close / lag(adjusted_close) - 1, ticker = tkr) |>
             filter(!is.na(ret)) |>
             select(date, ticker, ret) |>
             left_join(vix, by = "date")

@@ -41,7 +41,7 @@ plan_quiz <- function() {
         tryCatch({
           d <- hd_ohlcv(tkr) |>
             dplyr::arrange(date) |>
-            dplyr::mutate(ret = adjusted / dplyr::lag(adjusted) - 1) |>
+            dplyr::mutate(ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
             dplyr::filter(!is.na(ret))
           d |> dplyr::select(date, ret)
         }, error = function(e) NULL)

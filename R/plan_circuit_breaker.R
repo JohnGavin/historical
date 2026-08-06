@@ -247,7 +247,7 @@ plan_circuit_breaker <- function() {
         hd_ohlcv("SPY") |>
           mutate(date = as.Date(date)) |>
           arrange(date) |>
-          mutate(spy_ret = adjusted / lag(adjusted) - 1) |>
+          mutate(spy_ret = adjusted_close / lag(adjusted_close) - 1) |>
           filter(!is.na(spy_ret)) |>
           select(date, spy_ret),
         error = function(e) {
