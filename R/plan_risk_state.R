@@ -47,7 +47,7 @@ plan_risk_state <- function() {
       # SPY daily returns
       spy <- hd_ohlcv("SPY") |>
         arrange(date) |>
-        mutate(spy_ret = adjusted / lag(adjusted) - 1) |>
+        mutate(spy_ret = adjusted_close / lag(adjusted_close) - 1) |>
         filter(!is.na(spy_ret)) |>
         select(date, spy_ret)
 

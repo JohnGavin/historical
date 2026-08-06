@@ -27,7 +27,7 @@ plan_avoid_worst <- function() {
         d <- hd_ohlcv(tkr) |>
           arrange(date) |>
           mutate(
-            ret = adjusted / lag(adjusted) - 1,
+            ret = adjusted_close / lag(adjusted_close) - 1,
             ticker = tkr
           ) |>
           filter(!is.na(ret)) |>

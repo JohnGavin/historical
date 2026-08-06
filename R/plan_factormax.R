@@ -318,7 +318,7 @@ plan_factormax <- function() {
         ungroup() |>
         group_by(ticker) |>
         arrange(date) |>
-        mutate(ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        mutate(ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
         filter(!is.na(ret)) |>
         ungroup() |>
         select(ticker, date, ym, ret)

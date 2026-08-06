@@ -60,7 +60,7 @@ plan_integration <- function() {
         hd_ohlcv("SPY") |>
           dplyr::arrange(date) |>
           dplyr::mutate(
-            return = (adjusted / dplyr::lag(adjusted)) - 1
+            return = (adjusted_close / dplyr::lag(adjusted_close)) - 1
           ) |>
           dplyr::select(date, return) |>
           dplyr::filter(!is.na(return))
@@ -82,11 +82,11 @@ plan_integration <- function() {
 
         # Get benchmark asset returns (SPY, TLT, GLD, DBC)
         benchmark_assets <- hd_ohlcv(c("SPY", "TLT", "GLD", "DBC")) |>
-          dplyr::select(date, ticker, adjusted) |>
+          dplyr::select(date, ticker, adjusted_close) |>
           dplyr::arrange(ticker, date) |>
           dplyr::group_by(ticker) |>
           dplyr::mutate(
-            return = (adjusted / dplyr::lag(adjusted)) - 1
+            return = (adjusted_close / dplyr::lag(adjusted_close)) - 1
           ) |>
           dplyr::filter(!is.na(return)) |>
           dplyr::select(date, ticker, return) |>
@@ -113,7 +113,7 @@ plan_integration <- function() {
         # but that's 50+ tickers and slow for demo
         equity_data <- hd_ohlcv("SPY") |>
           dplyr::mutate(ticker = "SPY") |>
-          dplyr::select(date, ticker, open, high, low, close, adjusted, volume)
+          dplyr::select(date, ticker, open, high, low, close, adjusted_close, volume)
 
         calculate_adv(equity_data, window_days = 20)
       }

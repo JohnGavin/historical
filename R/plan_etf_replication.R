@@ -49,10 +49,10 @@ plan_etf_replication <- function() {
       raw |>
         group_by(ticker) |>
         arrange(date) |>
-        mutate(daily_ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        mutate(daily_ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
         filter(!is.na(daily_ret)) |>
         ungroup() |>
-        select(ticker, date, daily_ret, close, adjusted) |>
+        select(ticker, date, daily_ret, close, adjusted_close) |>
         dplyr::mutate(date = as.Date(date, tz = "UTC"))
     }),
 
@@ -67,7 +67,7 @@ plan_etf_replication <- function() {
         ungroup() |>
         group_by(ticker) |>
         arrange(date) |>
-        mutate(monthly_ret = adjusted / dplyr::lag(adjusted) - 1) |>
+        mutate(monthly_ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
         filter(!is.na(monthly_ret)) |>
         ungroup() |>
         select(ticker, date, ym, monthly_ret) |>

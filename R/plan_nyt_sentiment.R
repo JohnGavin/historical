@@ -146,7 +146,7 @@ plan_nyt_sentiment <- function() {
         hd_ohlcv("SPY") |>
           mutate(date = as.Date(date)) |>
           arrange(date) |>
-          mutate(daily_ret = adjusted / dplyr::lag(adjusted) - 1) |>
+          mutate(daily_ret = adjusted_close / dplyr::lag(adjusted_close) - 1) |>
           filter(!is.na(daily_ret)),
         error = function(e) {
           cli::cli_warn("Could not load SPY data: {e$message}")
