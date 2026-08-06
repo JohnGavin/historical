@@ -1,8 +1,19 @@
-# Manual, one-shot Validation-partition evaluation (#648)
+# Manual, one-shot Validation-partition evaluation (#648, boundary moved #660)
 #
 # ============================================================================
 # READ THIS BEFORE RUNNING
 # ============================================================================
+#
+# #660 re-cut the partitions: `val_start` (R/plan_partitions.R bt_partitions)
+# moved from 2023-01-01 to 2026-05-01 -- the 2024-2026 span that used to open
+# Validation was burned (docs/stock-backtest.qmd published figures from it
+# and drew a strategy conclusion; see #660) and is now the `Holdout` tier
+# instead (observed, NOT sealed -- see .claude/rules/backtest-partitions.md).
+# 2026-05-01 is the first month past the current data boundary (2026-04-15
+# equity, 2026-02-27 factor as of #660), so THIS SCRIPT WILL PRINT AN EMPTY
+# (all-NA) Validation table until new data arrives past that boundary. That
+# is expected, not a bug -- do not treat an empty run as "nothing to
+# report"; it means the seal is intact because there is nothing yet to seal.
 #
 # `.claude/rules/backtest-partitions.md` requires that Validation metrics are
 # NEVER computed automatically by `tar_make()` — only via an explicit manual
@@ -131,6 +142,24 @@ if (!is.null(port_returns) && !is.null(port_optimal_weights)) {
 }
 
 validation_metrics <- bind_rows(rows)
+
+# #660: val_start (2026-05-01) is the first month past the current data
+# boundary, so this window is expected to be empty today -- warn explicitly
+# rather than letting an all-NA table look like "nothing to report" or a
+# silent failure. `validation_row()` always returns a row (months = 0, all
+# other columns NA) even for a zero-observation slice, so check `months`
+# rather than `nrow()`.
+if (nrow(validation_metrics) > 0L &&
+    all(is.na(validation_metrics$months) | validation_metrics$months == 0L)) {
+  cli_alert_warning(paste0(
+    "Validation window (", format(val_start_equity), " onwards) has ZERO ",
+    "observations for every strategy -- this is EXPECTED, not an error. ",
+    "2026-05-01 is the first month past the current data boundary ",
+    "(equity/factor data currently ends ~2026-04-15 / ~2026-02-27, #660). ",
+    "The all-NA table below reflects that, not a broken query. Re-run this ",
+    "script once new data extends past the Validation boundary."
+  ))
+}
 
 cli_h2("Validation partition results — SEALED, one-shot")
 print(validation_metrics)

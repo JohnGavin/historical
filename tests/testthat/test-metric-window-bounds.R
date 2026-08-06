@@ -57,6 +57,26 @@ full_period_metrics <- tibble::tibble(
   window_end   = as.Date(c("2022-06-30", "2026-01-31"))
 )
 
+# The "Holdout" tier (#660): observed but NOT sealed, computed automatically,
+# and its whole purpose (like Validation and Full Period) is to extend past
+# test_end -- it must be exempt from the bound the same way those two are.
+holdout_metrics <- tibble::tibble(
+  strategy     = c("TS-Mom L/S", "TS-Mom L/S"),
+  period       = c("OOS", "Holdout"),
+  window_start = as.Date(c("2010-01-01", "2024-01-01")),
+  window_end   = as.Date(c("2022-06-30", "2026-04-30"))
+)
+
+# A genuine #645-style regression must still be caught even after the #660
+# Holdout exemption is added -- an OOS window that extends past test_end and
+# is NOT labelled Holdout or Validation must still abort.
+unbounded_oos_with_holdout_metrics <- tibble::tibble(
+  strategy     = c("TS-Mom L/S", "TS-Mom L/S", "TS-Mom L/S"),
+  period       = c("OOS", "Holdout", "Full Period"),
+  window_start = as.Date(c("2010-01-01", "2024-01-01", "2005-01-01")),
+  window_end   = as.Date(c("2026-04-30", "2026-04-30", "2026-04-30"))
+)
+
 # ── Tests: bounded window passes ──────────────────────────────────────────────
 
 test_that("check_metric_window_bounds passes when all non-Validation windows are bounded at test_end", {
@@ -91,6 +111,25 @@ test_that("check_metric_window_bounds exempts period == 'Validation'", {
 
 test_that("check_metric_window_bounds exempts period == 'Full Period'", {
   expect_true(check_metric_window_bounds(full_period_metrics, test_end, "mf_metrics"))
+})
+
+# ── Tests: 'Holdout' exemption (#660) ─────────────────────────────────────────
+
+test_that("check_metric_window_bounds exempts period == 'Holdout'", {
+  expect_true(check_metric_window_bounds(holdout_metrics, test_end, "mf_metrics"))
+})
+
+test_that("check_metric_window_bounds still catches a genuine #645 regression when a Holdout row is also present", {
+  expect_error(
+    check_metric_window_bounds(unbounded_oos_with_holdout_metrics, test_end, "mf_metrics"),
+    regexp = "OOS"
+  )
+  # Holdout and Full Period rows in the same fixture must NOT be flagged --
+  # only the offending OOS row should appear in the error.
+  expect_error(
+    check_metric_window_bounds(unbounded_oos_with_holdout_metrics, test_end, "mf_metrics"),
+    regexp = "1 row"
+  )
 })
 
 # ── Tests: required columns ───────────────────────────────────────────────────

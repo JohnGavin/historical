@@ -321,24 +321,40 @@ if (!is.null(lb)) {
   params <- safe_tar_read("stk_params")
 
   # Create years lookup
+  #
+  # "Holdout" (#660, 2024-01-01..2026-04-30) is included here for
+  # forward-compatibility with `period_order` below, but as of #660 the
+  # assembled `leaderboard` target does not yet emit any row with this
+  # label -- the source metrics targets (stk_max_metrics, stk_drif_metrics,
+  # xgb_drif_metrics, fm_metrics, drif_metrics, port_metrics) only compute
+  # Training/Testing/(Validation, filtered)/Full Period, so the Holdout cost
+  # rows built in R/plan_leaderboard.R's `slice_portfolio()` are dropped by
+  # its LEFT join before reaching `lb`. This row is therefore currently
+  # inert (matches zero rows) -- see the #660 PR report for the follow-up
+  # needed to surface it.
   years_map <- tibble(
-    period = c("Training", "Testing", "Full Period"),
+    period = c("Training", "Testing", "Holdout", "Full Period"),
     Years = if (!is.null(params)) {
       c(
         paste0(format(as.Date(params$start_date), "%Y"), "-", format(as.Date(params$is_end), "%Y")),
         paste0(format(as.Date(params$test_start), "%Y"), "-", format(as.Date(params$test_end), "%Y")),
+        paste0(format(as.Date(params$holdout_start), "%Y"), "-", format(as.Date(params$holdout_end), "%Y")),
         paste0(format(as.Date(params$start_date), "%Y"), "-", format(as.Date(params$test_end), "%Y"))
       )
     } else {
-      c("—", "—", "—")
+      c("—", "—", "—", "—")
     }
   )
 
   # Explicit period display order (NOT alphabetical, per rule): Testing,
-  # Full Period, Training. Implemented via factor levels so dplyr::arrange()
-  # sorts by this order rather than alphabetically ("Full Period" < "Testing"
-  # < "Training").
-  period_order <- c("Testing", "Full Period", "Training")
+  # Holdout, Full Period, Training. Testing and Holdout are adjacent because
+  # Holdout is the more recent, more-informative-but-unsealed evaluation
+  # window that directly follows Testing chronologically; Full Period and
+  # Training close out the table the same way they always have (#660).
+  # Implemented via factor levels so dplyr::arrange() sorts by this order
+  # rather than alphabetically ("Full Period" < "Holdout" < "Testing" <
+  # "Training").
+  period_order <- c("Testing", "Holdout", "Full Period", "Training")
 
   by_part <- lb |>
     filter(period != "Validation") |>
@@ -359,7 +375,7 @@ if (!is.null(lb)) {
     select(Strategy = strategy, Period, Sharpe, Years, CAGR, Vol, `Max DD`, `CVaR 95%`)
 
   # Bespoke DT call (not hd_dt()): rows above are already sorted by Period
-  # (Testing / Full Period / Training) then Sharpe descending. hd_dt()'s
+  # (Testing / Holdout / Full Period / Training) then Sharpe descending. hd_dt()'s
   # fixed options list has no `order` entry, so DT would apply its default
   # initial sort (column 0 ascending = Strategy) and silently undo the sort
   # above -- `order = list()` (empty array) disables DT's initial sort and
@@ -372,7 +388,7 @@ if (!is.null(lb)) {
     caption = htmltools::tags$caption(
       style = "caption-side: top; text-align: left; font-weight: bold;",
       class = "dt-caption",
-      "All strategies × Training and Testing partitions, ordered Testing / Full Period / Training then by Sharpe (descending). Years column shows date ranges. Validation partition is sealed — not shown until production deployment."
+      "All strategies × Training, Testing, and Holdout partitions, ordered Testing / Holdout / Full Period / Training then by Sharpe (descending). Years column shows date ranges. Holdout (2024-2026) is observed, not sealed -- treat it with a discount relative to a genuinely untouched sample (#660). Validation partition is sealed and genuinely untouched (2026-05-01 onwards) — not shown until production deployment."
     ),
     rownames = FALSE,
     filter = "top",
@@ -980,18 +996,27 @@ Per `backtesting-assumptions` rule, all strategies use:
 ```{r}
 params <- safe_tar_read("stk_params")
 if (!is.null(params)) {
+  # Four-tier re-cut (#660): Holdout is the observed-but-unsealed tier that
+  # absorbs the 2024-2026 span burned by #660 (docs/stock-backtest.qmd
+  # published Validation figures and drew a strategy conclusion from them).
+  # It is computed automatically, unlike Validation -- see
+  # .claude/rules/backtest-partitions.md.
   param_df <- tibble(
-    Partition = c("Training", "Testing", "Validation"),
+    Partition = c("Training", "Testing", "Holdout", "Validation"),
     Period = c(
       paste(params$start_date, "to", params$is_end),
       paste(params$test_start, "to", params$test_end),
+      paste(params$holdout_start, "to", params$holdout_end),
       paste(params$val_start, "to", "present")
     ),
-    Purpose = c("Model fitting, expanding window signal estimation",
-                "Calibration, hyperparameter tuning, strategy comparison",
-                "SEALED — not computed or shown until production deployment")
+    Purpose = c(
+      "Model fitting, expanding window signal estimation",
+      "Calibration, hyperparameter tuning, strategy comparison",
+      "OBSERVED, NOT SEALED — usable for evaluation with a stated discount; never a one-shot result (#660)",
+      "SEALED — not computed or shown until production deployment"
+    )
   )
-  hd_dt(param_df, "Shared partitions across all strategies. Validation is sealed: metrics are NOT computed until a one-shot production decision.")
+  hd_dt(param_df, "Shared partitions across all strategies. Holdout is observed but not sealed (#660). Validation is sealed: metrics are NOT computed until a one-shot production decision.")
 }
 ```
 

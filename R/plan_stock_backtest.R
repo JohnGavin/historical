@@ -459,6 +459,8 @@ plan_stock_backtest <- function() {
         is_end = p$train_end,
         test_start = p$test_start,
         test_end = p$test_end,
+        holdout_start = p$holdout_start,  # #660: observed, not sealed
+        holdout_end = p$holdout_end,
         val_start = p$val_start,
         val_end = p$val_end,
         oos_start = p$test_start,

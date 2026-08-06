@@ -386,6 +386,9 @@ check_leaderboard_metric_ranges <- function(leaderboard) {
 #'      vocabulary. "OOS" is deliberately its own label, distinct from
 #'      "Testing" -- see the `PERIOD_LABELS_ALLOWED` comment in
 #'      R/plan_partitions.R for why the two windows are not interchangeable.
+#'      "Holdout" (#660) is accepted the same way "OOS" is: a strategy MAY
+#'      report a Holdout row or not -- assertion 1 only requires "Full
+#'      Period", never "Holdout" -- so a strategy without one still passes.
 #'
 #' @param leaderboard Tibble with at least `strategy` and `period` columns
 #'   (the output of the `leaderboard` targets pipeline target).
@@ -462,10 +465,18 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 #' (R/plan_partitions.R `bt_partitions`, `backtest-partitions` rule) on every
 #' `tar_make()`.
 #'
-#' Two period labels are exempt from the `test_end` bound, both by design of
+#' Three period labels are exempt from the `test_end` bound, all by design of
 #' `backtest-partitions.md`:
 #'   - `"Validation"` -- the sealed partition itself; its whole purpose is to
 #'     extend past `test_end`.
+#'   - `"Holdout"` -- the observed-but-unsealed tier added in #660
+#'     (2024-01-01..2026-04-30). `test_end` moved back to 2023-12-31 as part
+#'     of the same change (absorbing the burned 2023 into Testing), so
+#'     Holdout's `window_end` legitimately sits past `test_end` on every
+#'     `tar_make()` -- that is the entire point of the tier, not a #645-style
+#'     leak. Unlike Validation, Holdout IS computed automatically; see
+#'     `.claude/rules/backtest-partitions.md`'s Holdout subsection for why
+#'     that is by design rather than a seal breach.
 #'   - `"Full"` / `"Full Period"` -- the rule's own canonical reference
 #'     implementation lists `calc_metrics(all_data, "Full Period")` alongside
 #'     Training/Testing/Validation as an accepted, full-sample summary that is
@@ -473,7 +484,8 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 #'     definition -- it is not a bespoke evaluation/test window like `"OOS"`.
 #'     Every other strategy on the leaderboard already reports a Full Period
 #'     row this way; only a genuinely bespoke window (not itself the sealed
-#'     partition or the full-sample summary) is what #645 is about.
+#'     partition, the Holdout tier, or the full-sample summary) is what #645
+#'     is about.
 #'
 #' @param metrics A tibble with at least `strategy`, `period`, `window_end`
 #'   columns (the output of a strategy metrics target, e.g. `mf_metrics` or
@@ -518,7 +530,7 @@ check_metric_window_bounds <- function(metrics, test_end, source_label) {
     ))
   }
 
-  exempt_periods <- c("Validation", "Full", "Full Period")
+  exempt_periods <- c("Validation", "Holdout", "Full", "Full Period")
 
   is_offender <- !is.na(metrics$window_end) &
     !(metrics$period %in% exempt_periods) &
@@ -586,6 +598,15 @@ check_metric_window_bounds <- function(metrics, test_end, source_label) {
 #' Validation values directly in vignette prose (e.g. docs/stock-backtest.qmd),
 #' which is a separate, wider display-side leak not covered by this gate.
 #' This gate only guarantees the `leaderboard` target's own output.
+#'
+#' @section Holdout is deliberately unaffected (#660):
+#' This gate checks ONLY for `period == "Validation"`. The `"Holdout"` label
+#' added in #660 (R/plan_partitions.R, 2024-01-01..2026-04-30) is an
+#' automatically-computed, observed-but-unsealed tier -- it is EXPECTED to
+#' reach the `leaderboard` target and must never be rejected here. Widening
+#' this gate to reject Holdout would misapply the Validation seal to a
+#' partition that was never sealed in the first place; see
+#' `.claude/rules/backtest-partitions.md`'s Holdout subsection.
 #'
 #' @param leaderboard Tibble with at least `strategy`, `period` columns (the
 #'   output of the `leaderboard` targets pipeline target).
