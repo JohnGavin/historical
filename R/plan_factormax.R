@@ -206,11 +206,17 @@ plan_factormax <- function() {
 
       train_data <- fm_portfolio |> filter(date <= fm_params$is_end)
       test_data <- fm_portfolio |> filter(date >= fm_params$test_start, date <= fm_params$test_end)
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the Holdout row emitted by slice_portfolio() in R/plan_leaderboard.R
+      # finds a matching base row here and survives the left_join instead of
+      # being silently dropped (the #660 KNOWN GAP).
+      holdout_data <- fm_portfolio |> filter(date >= fm_params$holdout_start, date <= fm_params$holdout_end)
       val_data <- fm_portfolio |> filter(date >= fm_params$val_start)
 
       bind_rows(
         calc_metrics(train_data, "Training"),
         calc_metrics(test_data, "Testing"),
+        calc_metrics(holdout_data, "Holdout"),
         calc_metrics(val_data, "Validation"),
         calc_metrics(fm_portfolio, "Full Period")
       )

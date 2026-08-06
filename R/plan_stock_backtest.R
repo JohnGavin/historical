@@ -778,9 +778,14 @@ plan_stock_backtest <- function() {
       library(dplyr)
 
       p <- stk_max_portfolio
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the Holdout row emitted by slice_portfolio() in R/plan_leaderboard.R
+      # finds a matching base row here and survives the left_join instead of
+      # being silently dropped (the #660 KNOWN GAP).
       bind_rows(
         calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training"),
         calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout"),
         calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
       ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
@@ -1095,9 +1100,14 @@ plan_stock_backtest <- function() {
     targets::tar_target(stk_drif_metrics, {
       library(dplyr)
       p <- stk_drif_portfolio
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the Holdout row emitted by slice_portfolio() in R/plan_leaderboard.R
+      # finds a matching base row here and survives the left_join instead of
+      # being silently dropped (the #660 KNOWN GAP).
       bind_rows(
         calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training"),
         calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout"),
         calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
         calc_backtest_metrics(p, "Full Period")
       ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150

@@ -31,6 +31,8 @@ plan_ltr_momentum <- function() {
         is_end              = p$train_end,
         test_start          = p$test_start,
         test_end            = p$test_end,
+        holdout_start       = p$holdout_start,  # #666: observed, not sealed
+        holdout_end         = p$holdout_end,
         val_start           = p$val_start,
         xgb_params = list(
           max_depth    = 5L,
@@ -176,10 +178,16 @@ plan_ltr_momentum <- function() {
 
       port <- ltr_portfolio
 
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the Holdout row emitted by slice_portfolio() in R/plan_leaderboard.R
+      # finds a matching base row here and survives the left_join instead of
+      # being silently dropped (the #660 KNOWN GAP).
       bind_rows(Filter(Negate(is.null), list(
         compute_ltr_metrics(port |> filter(as.Date(date) <= p$is_end),         "Training"),
         compute_ltr_metrics(port |> filter(as.Date(date) >= p$test_start,
                                             as.Date(date) <= p$test_end),       "Testing"),
+        compute_ltr_metrics(port |> filter(as.Date(date) >= p$holdout_start,
+                                            as.Date(date) <= p$holdout_end),    "Holdout"),
         compute_ltr_metrics(port |> filter(as.Date(date) >= p$val_start),      "Validation"),
         compute_ltr_metrics(port,                                               "Full Period")
       )))

@@ -308,9 +308,14 @@ plan_drif <- function() {
         )
       }
 
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the Holdout row emitted by slice_portfolio() in R/plan_leaderboard.R
+      # finds a matching base row here and survives the left_join instead of
+      # being silently dropped (the #660 KNOWN GAP).
       bind_rows(
         calc_metrics(drif_portfolio |> filter(date <= drif_params$is_end), "Training"),
         calc_metrics(drif_portfolio |> filter(date >= drif_params$test_start, date <= drif_params$test_end), "Testing"),
+        calc_metrics(drif_portfolio |> filter(date >= drif_params$holdout_start, date <= drif_params$holdout_end), "Holdout"),
         calc_metrics(drif_portfolio |> filter(date >= drif_params$val_start), "Validation"),
         calc_metrics(drif_portfolio, "Full Period")
       )
