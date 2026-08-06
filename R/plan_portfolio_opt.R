@@ -303,9 +303,15 @@ plan_portfolio_opt <- function() {
         )
       }
 
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the "PSO Optimal" Holdout base row (R/plan_leaderboard.R's
+      # `port_row`) exists to match the pso_cost Holdout row emitted by
+      # slice_portfolio() and survives the left_join instead of being
+      # silently dropped (the #660 KNOWN GAP).
       bind_rows(
         calc_port_metrics(port_combined |> filter(date <= stk_params$is_end), "Training"),
         calc_port_metrics(port_combined |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
+        calc_port_metrics(port_combined |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout"),
         calc_port_metrics(port_combined |> filter(date >= stk_params$val_start), "Validation"),
         calc_port_metrics(port_combined, "Full Period")
       )

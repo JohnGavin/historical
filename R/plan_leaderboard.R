@@ -335,13 +335,36 @@ plan_leaderboard <- function() {
       # for it on every `tar_make()` -- an automatic-computation violation of
       # `backtest-partitions.md` ("Validation metrics are NOT computed
       # automatically"). That slice is removed: the automatic path now only
-      # ever produces Training / Testing / Full Period cost rows. A one-shot
-      # Validation evaluation, when authorised, belongs in
+      # ever produces Training / Testing / Holdout / Full Period cost rows. A
+      # one-shot Validation evaluation, when authorised, belongs in
       # scripts/evaluate_validation.R (never invoked by tar_make()), not here.
+      #
+      # NOTE (#660): `Holdout` is added below (2024-01-01..2026-04-30,
+      # R/plan_partitions.R `bt_partitions`) -- it is computed automatically
+      # by design (observed, not sealed; see backtest-partitions.md's Holdout
+      # subsection), unlike Validation above.
+      #
+      # KNOWN GAP (#660, flagged not fixed -- out of this change's scope):
+      # `calc_cost_metrics()` never returns NULL (an empty window yields a
+      # row of NAs, not zero rows), so `cost_rows` below always gets a
+      # `period == "Holdout"` row per strategy. But the join two blocks down
+      # is `all_metrics |> left_join(cost_rows, by = c("strategy", "period"))`
+      # -- LEFT-driven by `all_metrics`, whose base rows come from the source
+      # metrics targets (stk_max_metrics, stk_drif_metrics, xgb_drif_metrics,
+      # fm_metrics, drif_metrics, port_metrics) via `calc_backtest_metrics()`
+      # / `calc_metrics()` / `calc_port_metrics()`. None of those functions
+      # compute a "Holdout" period today -- only Training/Testing/Validation
+      # (filtered)/Full Period. A right-side-only period value is silently
+      # dropped by `left_join()`, so the Holdout rows built here currently do
+      # NOT surface in the assembled `leaderboard` target or on
+      # docs/leaderboard.qmd's "By Partition" table. Making Holdout actually
+      # visible requires adding a Holdout slice to those source targets too
+      # -- a separate, wider change than this one; see the #660 PR report.
       slice_portfolio <- function(port_df, ret_col_name, params) {
         ret <- list(
           Training     = port_df[port_df$date <= params$is_end, ][[ret_col_name]],
           Testing      = port_df[port_df$date >= params$test_start & port_df$date <= params$test_end, ][[ret_col_name]],
+          Holdout      = port_df[port_df$date >= params$holdout_start & port_df$date <= params$holdout_end, ][[ret_col_name]],
           `Full Period` = port_df[[ret_col_name]]
         )
         bind_rows(lapply(names(ret), function(p) {

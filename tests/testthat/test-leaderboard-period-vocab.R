@@ -109,11 +109,34 @@ test_that("check_leaderboard_period_vocab throws when required columns are missi
   )
 })
 
+# ── 'Holdout' acceptance (#660) ───────────────────────────────────────────────
+
+# A strategy WITH a Holdout row -- must not be rejected as an unknown label.
+holdout_leaderboard <- tibble::tibble(
+  strategy = c("Factor MAX", "Factor MAX", "Factor MAX", "Factor MAX"),
+  period   = c("Training", "Testing", "Holdout", "Full Period")
+)
+
+# A strategy WITHOUT a Holdout row -- Holdout is optional per strategy, same
+# as "OOS"/"Testing"; only "Full Period" is mandatory (assertion 1).
+no_holdout_leaderboard <- tibble::tibble(
+  strategy = c("Value (HML)", "Value (HML)", "Value (HML)"),
+  period   = c("Training", "Testing", "Full Period")
+)
+
+test_that("check_leaderboard_period_vocab accepts 'Holdout' as canonical vocabulary", {
+  expect_true(check_leaderboard_period_vocab(holdout_leaderboard))
+})
+
+test_that("check_leaderboard_period_vocab does not require every strategy to have a Holdout row", {
+  expect_true(check_leaderboard_period_vocab(no_holdout_leaderboard))
+})
+
 # ── PERIOD_LABELS_ALLOWED itself ─────────────────────────────────────────────
 
-test_that("PERIOD_LABELS_ALLOWED contains the 5 expected canonical labels", {
+test_that("PERIOD_LABELS_ALLOWED contains the 6 expected canonical labels (#660 adds Holdout)", {
   expect_setequal(
     PERIOD_LABELS_ALLOWED,
-    c("Training", "Testing", "Validation", "Full Period", "OOS")
+    c("Training", "Testing", "Holdout", "Validation", "Full Period", "OOS")
   )
 })

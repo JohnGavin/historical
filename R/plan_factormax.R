@@ -19,6 +19,8 @@ plan_factormax <- function() {
         is_end = p$train_end,
         test_start = p$test_start,
         test_end = p$test_end,
+        holdout_start = p$holdout_start,  # #660: observed, not sealed
+        holdout_end = p$holdout_end,
         val_start = p$val_start,
         val_end = p$val_end,
         oos_start = p$test_start,      # backwards compat
@@ -170,6 +172,16 @@ plan_factormax <- function() {
 
       calc_metrics <- function(df, label) {
         n <- nrow(df)
+        # #660: val_start moves to 2026-05-01 (first month past the current
+        # data boundary), so the Validation slice below is empty against
+        # today's data (0 rows) -- without this guard, n=0 would propagate
+        # through 1^Inf/NA arithmetic and emit a spurious row instead of
+        # silently contributing nothing, unlike every sibling calc_metrics()/
+        # calc_backtest_metrics() in this codebase (R/plan_drif.R,
+        # R/plan_stock_backtest.R, R/plan_etf_replication.R,
+        # R/plan_portfolio_opt.R, R/plan_ltr_momentum.R all already guard
+        # at n < 12 or n < 6).
+        if (n < 12) return(NULL)
         ann_ret <- prod(1 + df$portfolio_ret)^(12/n) - 1
         ann_vol <- sd(df$portfolio_ret) * sqrt(12)
         sharpe <- (ann_ret - mean(df$rf_ret) * 12) / ann_vol
@@ -194,11 +206,17 @@ plan_factormax <- function() {
 
       train_data <- fm_portfolio |> filter(date <= fm_params$is_end)
       test_data <- fm_portfolio |> filter(date >= fm_params$test_start, date <= fm_params$test_end)
+      # #666: Holdout (2024-01-01..2026-04-30, observed but not sealed) --
+      # so the Holdout row emitted by slice_portfolio() in R/plan_leaderboard.R
+      # finds a matching base row here and survives the left_join instead of
+      # being silently dropped (the #660 KNOWN GAP).
+      holdout_data <- fm_portfolio |> filter(date >= fm_params$holdout_start, date <= fm_params$holdout_end)
       val_data <- fm_portfolio |> filter(date >= fm_params$val_start)
 
       bind_rows(
         calc_metrics(train_data, "Training"),
         calc_metrics(test_data, "Testing"),
+        calc_metrics(holdout_data, "Holdout"),
         calc_metrics(val_data, "Validation"),
         calc_metrics(fm_portfolio, "Full Period")
       )

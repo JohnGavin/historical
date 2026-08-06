@@ -55,10 +55,28 @@ multi_validation_leaderboard <- tibble::tibble(
   )
 )
 
+# A leaderboard with "Holdout" rows (#660) but no "Validation" row -- the
+# tier this gate must NOT reject, since Holdout is observed-but-unsealed and
+# allowed on the automatic path by design (backtest-partitions.md).
+holdout_leaderboard <- tibble::tibble(
+  strategy = c(
+    "Factor MAX", "Factor MAX", "Factor MAX", "Factor MAX",
+    "Stock DRIF", "Stock DRIF", "Stock DRIF", "Stock DRIF"
+  ),
+  period = c(
+    "Training", "Testing", "Holdout", "Full Period",
+    "Training", "Testing", "Holdout", "Full Period"
+  )
+)
+
 # ── Tests: passes when no Validation row is present ──────────────────────────
 
 test_that("check_leaderboard_no_validation_rows passes when no strategy has a Validation row", {
   expect_true(check_leaderboard_no_validation_rows(good_leaderboard))
+})
+
+test_that("check_leaderboard_no_validation_rows permits Holdout rows (#660) -- not the same tier as Validation", {
+  expect_true(check_leaderboard_no_validation_rows(holdout_leaderboard))
 })
 
 # ── Tests: throws when a Validation row leaks through ────────────────────────
