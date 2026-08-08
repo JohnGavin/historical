@@ -1,83 +1,87 @@
-# Current Work — session 23 end (2026-08-05, ENDED)
+# Current Work — session 24 end (2026-08-08, ENDED)
 
 ## State: all work merged + pushed
 
-`main` at `4268094`, working tree clean. 11 PRs merged (#627, #628, #630,
-#632, #633, #634, #636, #638, #639, #642, #644) plus three render commits.
-`scripts/verify.sh` PASS on merged main; `tar_make()` completes; leaderboard
-re-rendered and deployed.
+`main` at `92b726f` (last code commit `bb02089`; the seven commits after it are
+automated `data:` refreshes). Working tree clean. **9 PRs merged** — #647, #649,
+#650, #651, #652, #658, #659, #661, #662, #666, #670.
+
+Final `tar_make()`: **59 built, 703 skipped, 2m 35s, 0 errors**, all seven QA
+gates (S9–S15) passing on real data.
 
 ## What this session was
 
-Started as "how do we handle liquidity, leverage and concentration?" — an
-audit. Became a data-integrity cascade: measuring leverage meant dividing
-`vol` by gross exposure, which put two unit scales side by side and exposed
-that the published leaderboard had been showing **1720% volatility**.
+Continued session 23's through-line — *an unexpected value silently coerced to a
+null-ish state instead of failing loudly* — and found that it had a sibling:
+**a guard whose scope is drawn around the known instances rather than the
+property being guarded.**
 
-The through-line: the `.norm_*` helpers in `plan_leaderboard.R` rename columns
-but normalise nothing. That produced the unit bug (#637), the period-vocabulary
-bug (#643), and — via a `factor()` added while fixing the second — the
-null-Period bug (#646). Same shape three times: **an unexpected value silently
-coerced to a null-ish state instead of failing loudly.**
+Both failed the same way, twice each:
+
+- The `backtest-partitions` rule's `paths:` glob matched only files that
+  *compute* partitions, so the rule never loaded for the file that *published*
+  them (#660). Fixed in PR #661.
+- Gate S11's scope is a hardcoded pair (`mf_metrics`, `ev_metrics`), so it could
+  not see the third and fourth targets with the identical defect (#667). Open.
+
+That is the argument behind #668: replace per-instance gates with one
+registry-driven gate.
 
 ### Shipped
-- Leverage measurement from zero: `hd_exposure_metrics()` + gross-convention
-  registry + `Gross` column (#628). `hd_risk_contribution()` with the Euler
-  identity as anchor and the ERC property asserted (#633).
-- Unit scale normalised to fractions + S9 range gate (#639); period vocabulary
-  + `PERIOD_LABELS_ALLOWED` + S10 gate (#644); leaderboard 15 → 17 strategies.
-- Tri-state `not computed` labelling for `Credible`/`Redundant`/`Material` (#642).
-- Kyle's lambda was byte-identical to Amihud; now a real price-impact slope (#627).
-- Tail independence surfaced (#630); ADV-cap axis surfaced (#634); liquidity
-  on `equity_daily` + non-US volume corruption-guard fix (#636).
-- llm#903 acceptance test: footer KV metadata over `hf://` = **one 256 KB
-  range request**, 0.19% of a 134.9 MB file. Slice 1 unblocked.
 
-## Next task (highest value first)
+- **Validation seal, four leaks** — unbounded `OOS` (#645/PR #649, gate S11);
+  automatic `Validation` slice for 7 strategies (#648/PR #659, gate S14);
+  published in vignette prose with a conclusion drawn from it (#660/PR #662,
+  gate S15). The fourth (#655, committed digest parquet) is open.
+- **Partition re-cut to four tiers** (#660/PR #666): Training ≤2019-12-31,
+  Testing →2023-12-31, **Holdout** 2024-01-01→2026-04-30 (observed, never
+  sealed), Validation 2026-05-01→ (untouched). Holdout surfaced on the
+  leaderboard via all 7 source-metrics targets.
+- **#641 March gap** — a 21-day lookback built from one calendar month; February
+  never supplies 21 days, so `c20`/`c21` were `NA` and glmnet propagated `NA`
+  across the row (PR #652). Plus the `inner_join` chain that spread one gap to
+  all four constituents (PR #651, gates S12/S13).
+- **#640 registry units** (PR #650), **#654 verify.sh now asserts skips**
+  (PR #658), **#669 `adjusted_close` schema break across 12 files** (PR #670).
+- **#635 decided:** σ_target 11.5%, gross backstop 3.5×, book vol 6.57%.
+- **Two rules:** `fail-loud-not-null` (PR #647); `backtest-partitions` extended
+  to storage/display/reasoning + `paths:` widened (PR #661/#666).
 
-1. **#645 — the validation seal is broken.** `Managed Futures` / `Value (HML)`
-   compute `OOS` as `dates >= 2010-01-01` **unbounded**, spanning sealed
-   Validation, automatically every run — and both now sit on the headline
-   ranking, so it is more prominent than before. Bound at `test_end` (one
-   line) as the stop-gap; re-cutting onto canonical partitions is the
-   considered fix, but check DBC availability (live 2006) first.
-2. **#641 — every March missing.** `stk_drif_portfolio` has no March rows;
-   `port_returns` chains four `inner_join`s so one gap deletes the month for
-   all four (128 rows vs ~156). Blocks the book-level anchor in #635.
-3. **#646 — 2 null Period cells live on the page.** Build the factor levels
-   from `PERIOD_LABELS_ALLOWED`; assert no `NA` survives the coercion.
-4. **#635 — set the leverage level.** Per-strategy done (median vol/gross
-   **8.92%**; at a 19% target implied gross ≈ 2.13× ≈ the 2.0× already run).
-   Still needed: our own equity-universe vol (replaces the imported ~16%),
-   a stress-period recompute, realised gross for the four `is_cap` rows, and
-   #641 fixed before trusting any book-level figure.
-5. **#640** — `bt.metric` records `metric_unit` but nothing validates it on
-   write or converts on read; #639 fixed the dashboard path only, so
-   leaderboard and registry now disagree.
-6. Smaller: **#629** (OLMAR missing from `strategy_names`), **#631** (19 bare
-   source URLs + the unbuilt `qa_no_bare_source_urls` gate).
+### Numbers
 
-## Decisions taken (do not relitigate)
+`stk_drif_portfolio` 129 → 195 rows (March 0 → 17) · `port_returns` 128 → 195 ·
+PSO Optimal max_dd −0.099 → **−0.212** · registry NULL units ~256 → **0** ·
+root tests 326 → 397 · QA gates **2 → 7**.
 
-- Leverage policy constrains **gross**, layered beneath a vol-normalised
-  allocator. Net rejected (unreachable for a dollar-neutral book — scaling by
-  any *k* leaves net 0); cash-borrowing rejected (never binds; neutral books
-  borrow securities, not cash). #626.
-- `OOS` is **not** remapped to `Testing` — different window, includes
-  Validation. #645.
-- Canonical metric unit is **fraction**; percent formatting belongs to the
-  presentation layer. #639.
+## Next session — start here
 
-## Traps that cost time
+1. **#667 (highest value, smallest change).** Bound the two unbounded `Testing`
+   windows — `R/plan_risk_state.R:301-304` and `R/plan_avoid_worst.R:459` — at
+   `test_end` from `bt_partitions`, **and widen S11 beyond its hardcoded pair**.
+   The regression test is cheap and already described on the issue: perturb
+   `test_end`, assert every `Testing` window moves.
+2. **#655** — find why `tar_make()` does not refresh the tracked digest
+   snapshot. A tracked artefact a full run silently skips is worse than a stale
+   one. It also carries Validation rows into git history.
+3. **#665 / #664** — financing modelled on neither side consistently; three
+   strategies' returns overstated by an unmodelled borrow cost.
+4. **#668** — the glossary/entity-resolution registry, once the partition work
+   has settled (user's sequencing decision).
+5. **Re-derive σ = 11.5%** after #667 and #665 land — both change its inputs.
 
-- `audits/*.md` are point-in-time and never updated when the defects are
-  fixed. The June cost audit was 2 months stale and produced false CRITICAL
-  claims twice. Saved to project memory.
-- Squash merges make `git merge-base --is-ancestor` report "unmerged"
-  forever — worktree GC must use PR state, not ancestry (llm#902).
-- DuckDB 1.5.1 removed `SET enable_http_logging`; use `CALL enable_logging('HTTP')`.
-  And `count(*)` is answered from the parquet footer, so it is useless as a
-  full-read control.
-- `x[c(TRUE, NA, FALSE)]` inserts a literal `NA` — the source of the
-  `WARNING: NA, NA, ...` caption.
-- Only `leaderboard.qmd` was re-rendered; other dashboards remain stale.
+Also open: #656 (two live `inner_join` hazards), #657 (~20 unaudited join
+sites), #663 (turnover / cost-drag bridge).
+
+## Carried lessons
+
+- **"Pipeline green" ≠ "pipeline works."** #669's targets were unbuildable for
+  ~10 weeks while every run reported success, because caching hid them. A
+  periodic full-rebuild check is not built.
+- **A `tryCatch` that substitutes its own diagnosis is worse than no handler.**
+  `olmar_prices` reported "check network access" for what was a schema error —
+  and I repeated that misdiagnosis in #669 before it was traced.
+- **Dispatch agents to run `scripts/verify.sh` in the foreground**
+  (`timeout=600000`). Backgrounding it made three agents stall and report
+  "waiting for the build" as a result. Recorded in memory.
+- **Re-verify the remote after any agent completion report** — one agent
+  believed it was done while nothing had been pushed.
