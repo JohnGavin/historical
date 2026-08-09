@@ -167,13 +167,20 @@ plan_fip_screen <- function() {
     # ── Comparison metrics: FIP-screened vs unscreened baseline ───────────────
     # Baseline is mom_combined_returns (standard 12-2 momentum, no FIP filter).
     # Reports Full, Training, OOS periods matching mom_prepeak partition windows.
+    # #667: OOS is bounded at bt_partitions$equity$test_end so it no longer
+    # silently extends past the sealed Validation partition on every
+    # tar_make(). window_start/window_end columns added so gate S11
+    # (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(fip_comparison, {
       library(dplyr)
 
-      oos <- bt_partitions$equity$test_start
+      oos      <- bt_partitions$equity$test_start
+      test_end <- bt_partitions$equity$test_end
 
-      calc_metrics <- function(ret_vec, strategy_name, period_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      calc_metrics <- function(ret_vec, date_vec, strategy_name, period_name) {
+        keep     <- !is.na(ret_vec)
+        ret_vec  <- ret_vec[keep]
+        date_vec <- date_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
         years   <- length(ret_vec) / 12
         cagr    <- (prod(1 + ret_vec)^(1 / years) - 1) * 100
@@ -189,7 +196,9 @@ plan_fip_screen <- function() {
           cagr     = round(cagr, 2),
           vol      = round(vol, 2),
           sharpe   = round(sharpe, 3),
-          max_dd   = round(max_dd, 2)
+          max_dd   = round(max_dd, 2),
+          window_start = min(date_vec),
+          window_end   = max(date_vec)
         )
       }
 
@@ -202,17 +211,17 @@ plan_fip_screen <- function() {
         baseline = "12-2 Momentum (unscreened, mom_combined baseline)"
       )
       dates  <- fip_returns$exec_date
-      is_oos <- dates >= oos
 
       rows <- list()
       for (nm in names(strategies)) {
-        r <- strategies[[nm]]
-        d <- if (nm == "fip") dates else mom_combined_returns$exec_date
-        io <- d >= oos
+        r  <- strategies[[nm]]
+        d  <- if (nm == "fip") dates else mom_combined_returns$exec_date
+        it <- d < oos
+        io <- d >= oos & d <= test_end
         rows <- c(rows,
-          list(calc_metrics(r,       labels[nm], "Full")),
-          list(calc_metrics(r[!io],  labels[nm], "Training")),
-          list(calc_metrics(r[io],   labels[nm], "OOS"))
+          list(calc_metrics(r,      d,      labels[nm], "Full")),
+          list(calc_metrics(r[it],  d[it],  labels[nm], "Training")),
+          list(calc_metrics(r[io],  d[io],  labels[nm], "OOS"))
         )
       }
       dplyr::bind_rows(Filter(Negate(is.null), rows))

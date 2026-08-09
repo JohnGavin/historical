@@ -145,3 +145,35 @@ test_that("check_metric_window_bounds throws when required columns are missing",
     check_metric_window_bounds(bad, test_end, "mf_metrics")
   )
 })
+
+# ── Tests: check_s11_registry_consistency (#667) ──────────────────────────────
+#
+# Guards the `qa_metric_window_bounds` target's own S11_METRICS_REGISTRY
+# against silently drifting out of sync with the `metrics_by_name` list
+# literal it fetches from -- an omission there would mean a registered
+# target is never actually checked by S11, the exact "scope drawn around
+# known instances" failure #667 widened S11 to fix in the first place.
+
+test_that("check_s11_registry_consistency passes when every registry name is fetched", {
+  expect_true(check_s11_registry_consistency(
+    registry_names       = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+    metrics_by_name_names = c("mf_metrics", "ev_metrics", "rsc_metrics", "extra_ok")
+  ))
+})
+
+test_that("check_s11_registry_consistency throws when a registry name is never fetched", {
+  expect_error(
+    check_s11_registry_consistency(
+      registry_names       = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+      metrics_by_name_names = c("mf_metrics", "ev_metrics")
+    ),
+    regexp = "rsc_metrics"
+  )
+  expect_snapshot(
+    error = TRUE,
+    check_s11_registry_consistency(
+      registry_names       = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+      metrics_by_name_names = c("mf_metrics", "ev_metrics")
+    )
+  )
+})
