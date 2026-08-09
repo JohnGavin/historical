@@ -20,7 +20,12 @@ plan_rafi <- function() {
   list(
 
     # ── Parameters ──────────────────────────────────────────────────────────
+    # #667: test_end wired from bt_partitions$factor (RAFI is built from
+    # Fama-French factor returns) so rafi_metrics can bound its OOS window.
+    # oos_start is unchanged -- 2010-01-01 is a deliberate choice ("RAFI
+    # products widely known by then"), not the canonical test_start.
     targets::tar_target(rafi_params, {
+      p <- bt_partitions$factor
       list(
         # Synthetic RAFI weights on FF factors (monthly, decimal form)
         rafi_composite = c(HML = 0.50, SMB = 0.30, Mom = 0.20),
@@ -31,7 +36,8 @@ plan_rafi <- function() {
         cost_per_rebalance = 0.002,
 
         # OOS start: post-2010 (RAFI products widely known by then)
-        oos_start = as.Date("2010-01-01")
+        oos_start = as.Date("2010-01-01"),
+        test_end  = p$test_end   # #667: bounds rafi_metrics' OOS window
       )
     }),
 
@@ -131,13 +137,20 @@ plan_rafi <- function() {
 
 
     # ── Metrics: performance table across periods ────────────────────────────
+    # #667: OOS is bounded at rafi_params$test_end (bt_partitions$factor) so
+    # it no longer silently extends past the sealed Validation partition on
+    # every tar_make(). window_start/window_end columns added so gate S11
+    # (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(rafi_metrics, {
       library(dplyr)
 
-      oos <- rafi_params$oos_start
+      oos      <- rafi_params$oos_start
+      test_end <- rafi_params$test_end
 
-      calc_metrics <- function(ret_vec, strategy_name, period_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      calc_metrics <- function(ret_vec, date_vec, strategy_name, period_name) {
+        keep     <- !is.na(ret_vec)
+        ret_vec  <- ret_vec[keep]
+        date_vec <- date_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
 
         # Monthly annualisation
@@ -160,7 +173,9 @@ plan_rafi <- function() {
           vol      = round(vol, 2),
           sharpe   = round(sharpe, 3),
           max_dd   = round(max_dd, 2),
-          calmar   = round(calmar, 3)
+          calmar   = round(calmar, 3),
+          window_start = min(date_vec),
+          window_end   = max(date_vec)
         )
       }
 
@@ -178,19 +193,20 @@ plan_rafi <- function() {
         market  = "Benchmark (Cap-Weighted Market)"
       )
 
-      dates  <- rafi_portfolios$date
-      is_oos <- dates >= oos
+      dates    <- rafi_portfolios$date
+      is_train <- dates < oos
+      is_oos   <- dates >= oos & dates <= test_end
 
       rows <- list()
       for (nm in names(strategies)) {
         ret_full  <- strategies[[nm]]
-        ret_train <- strategies[[nm]][!is_oos]
+        ret_train <- strategies[[nm]][is_train]
         ret_oos   <- strategies[[nm]][is_oos]
 
         rows <- c(rows,
-          list(calc_metrics(ret_full,  labels[nm], "Full")),
-          list(calc_metrics(ret_train, labels[nm], "Training")),
-          list(calc_metrics(ret_oos,   labels[nm], "OOS"))
+          list(calc_metrics(ret_full,  dates,           labels[nm], "Full")),
+          list(calc_metrics(ret_train, dates[is_train],  labels[nm], "Training")),
+          list(calc_metrics(ret_oos,   dates[is_oos],    labels[nm], "OOS"))
         )
       }
 

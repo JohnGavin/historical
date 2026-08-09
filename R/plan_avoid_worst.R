@@ -10,12 +10,17 @@
 plan_avoid_worst <- function() {
   list(
     # ── Parameters ──────────────────────────────────────────────
+    # #667: test_end wired from bt_partitions$equity so aw_metrics can bound
+    # its Testing window. oos_start unchanged (already equals test_start).
     targets::tar_target(aw_params, {
+      p <- bt_partitions$equity
       list(
         n_remove = c(1L, 5L, 10L, 20L, 50L),
         primary_ticker = "SPY",
         index_tickers = c("SPY", "QQQ", "IWM", "DIA"),
-        oos_start = as.Date("2020-01-01")
+        oos_start = p$test_start,
+        test_start = p$test_start,
+        test_end   = p$test_end        # #667: bounds aw_metrics' Testing window
       )
     }),
 
@@ -417,6 +422,10 @@ plan_avoid_worst <- function() {
     }),
 
     # ── Summary metrics by partition ────────────────────────────
+    # #667: Testing is bounded at aw_params$test_end (bt_partitions$equity)
+    # so it no longer silently extends past the sealed Validation partition
+    # on every tar_make(). strategy + window_start/window_end columns added
+    # so gate S11 (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(aw_metrics, {
       library(dplyr)
 
@@ -424,6 +433,7 @@ plan_avoid_worst <- function() {
 
       calc <- function(d, label) {
         ret <- d$ret
+        dts <- as.Date(d$date)
         n <- length(ret)
         if (n < 20) return(NULL)
         ord <- order(ret)
@@ -433,6 +443,7 @@ plan_avoid_worst <- function() {
 
         metrics_for <- function(r, scenario) {
           tibble::tibble(
+            strategy = "SPY",
             period = label,
             scenario = scenario,
             years = round(years, 1),
@@ -442,7 +453,9 @@ plan_avoid_worst <- function() {
             max_dd = round(min((cumprod(1 + r) -
                                   cummax(cumprod(1 + r))) /
                                  cummax(cumprod(1 + r))) * 100, 1),
-            sharpe = round(mean(r) / sd(r) * sqrt(252), 2)
+            sharpe = round(mean(r) / sd(r) * sqrt(252), 2),
+            window_start = min(dts),
+            window_end   = max(dts)
           )
         }
 
@@ -453,10 +466,11 @@ plan_avoid_worst <- function() {
         )
       }
 
-      oos <- as.Date(aw_params$oos_start)
+      oos      <- as.Date(aw_params$oos_start)
+      test_end <- as.Date(aw_params$test_end)
       bind_rows(
         calc(spy |> filter(as.Date(date) < oos), "Training"),
-        calc(spy |> filter(as.Date(date) >= oos), "Testing"),
+        calc(spy |> filter(as.Date(date) >= oos, as.Date(date) <= test_end), "Testing"),
         calc(spy, "Full Period")
       )
     }),

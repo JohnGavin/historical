@@ -520,6 +520,76 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 #' same-shape sibling next to S9/S10 was the smaller change. See S14's own
 #' roxygen block below for the fix.
 #' @noRd
+#' Registry of metrics targets checked by S11 (`check_metric_window_bounds()`)
+#'
+#' @section #667 -- widening S11 beyond an enumerated pair:
+#' Before #667, S11 was called on exactly two hardcoded targets
+#' (`mf_metrics`, `ev_metrics`) -- the same "scope drawn around the known
+#' instances" failure the `backtest-partitions.md` rule's `paths:` glob had.
+#' This registry is the fix: every metrics target with `strategy`/`period`/
+#' `window_end` columns is listed here ONCE, mapped to the `bt_partitions`
+#' class whose `test_end` bounds it, and the `qa_metric_window_bounds` gate
+#' below iterates the registry instead of repeating one hardcoded call per
+#' target. Adding a new metrics target now costs one list entry, not a new
+#' `check_metric_window_bounds()` call to remember to write.
+#'
+#' @section Why this is NOT full auto-discovery:
+#' The issue asked for the gate to `cli_abort()` when a target carrying a
+#' `period` column exists but is absent from this registry -- i.e. omission
+#' should be an error, not silent non-coverage. That is infeasible from
+#' *inside* this target's command: targets' dependency graph is built by
+#' static analysis of symbols literally referenced in each target's command
+#' expression, so `qa_metric_window_bounds` can only "see" targets named
+#' here -- it has no way to enumerate "every other target in the pipeline"
+#' at runtime. `R/utils_validation.R`'s `.make_store_reader()` documents the
+#' same constraint for `dv_join_key_types`: "`tar_read_raw()` is forbidden
+#' inside a targets pipeline (nested store access)", and its workaround
+#' (reading RDS objects directly from the store by name) still requires the
+#' names to be registered up front -- it decouples the *dependency edge*
+#' from the registry, not the *registration requirement* itself. Adopting
+#' that pattern here would trade a real problem (the gate wouldn't be
+#' tracked as depending on its metrics targets, so it could go stale
+#' without rerunning) for a cosmetic one (avoiding the literal symbol list
+#' below), which is a worse trade for a QA gate. A genuinely automatic
+#' omission check would need a source-level lint (grep `R/plan_*.R` for a
+#' `tibble::tibble(...)` block containing both `strategy =`/`period =` and
+#' `window_end = max(`, then diff the target names found against this
+#' registry) -- that is a `scripts/` check, not a targets target, and is
+#' flagged as a follow-up rather than built here.
+#' @noRd
+S11_METRICS_REGISTRY <- list(
+  mf_metrics       = "macro",   # #645 original
+  ev_metrics       = "factor",  # #645 original
+  rsc_metrics      = "macro",   # #667
+  aw_metrics       = "equity",  # #667
+  mr_metrics       = "equity",  # #667
+  rafi_metrics     = "factor",  # #667
+  fip_comparison   = "equity",  # #667
+  eur_results      = "macro",   # #667
+  eur_comparison   = "macro",   # #667
+  eur_ciss_results = "macro"    # #667
+)
+
+#' Assert every S11_METRICS_REGISTRY name has a matching entry in the
+#' `metrics_by_name` list literal the `qa_metric_window_bounds` target
+#' actually fetched (#667)
+#'
+#' Extracted out of the target's command (rather than left inline) so it is
+#' unit-testable directly, per `fail-loud-not-null.md` and
+#' `snapshot-test-policy.md` -- see tests/testthat/test-metric-window-bounds.R.
+#' @noRd
+check_s11_registry_consistency <- function(registry_names, metrics_by_name_names) {
+  missing_from_metrics <- setdiff(registry_names, metrics_by_name_names)
+  if (length(missing_from_metrics) > 0L) {
+    cli::cli_abort(c(
+      "x" = "S11_METRICS_REGISTRY names {length(missing_from_metrics)} target(s) qa_metric_window_bounds never fetched:",
+      "i" = paste(missing_from_metrics, collapse = ", "),
+      "i" = "Add the target to the metrics_by_name list literal in R/plan_qa_gates.R (S11)."
+    ))
+  }
+  invisible(TRUE)
+}
+
 check_metric_window_bounds <- function(metrics, test_end, source_label) {
   required_cols <- c("strategy", "period", "window_end")
   missing_cols <- setdiff(required_cols, names(metrics))
@@ -1064,14 +1134,46 @@ plan_qa_gates <- function() {
     # QA gate: no automatically-computed metric window extends past
     # `test_end` unless its partition is explicitly "Validation" (S11) --
     # guards against the #645 defect class where a strategy's bespoke OOS
-    # window (mf_metrics, ev_metrics) is unbounded above and silently
-    # includes the sealed Validation partition on every tar_make().
+    # window is unbounded above and silently includes the sealed Validation
+    # partition on every tar_make(). #667 widened this from an enumerated
+    # pair (mf_metrics, ev_metrics) to the S11_METRICS_REGISTRY list above
+    # -- every metrics target with strategy/period/window_end columns is
+    # checked. The literal `list(mf_metrics = mf_metrics, ...)` below is
+    # required (not `get(nm)` in a loop over the registry's names) so
+    # targets' static dependency analysis can see each metrics target as a
+    # real dependency edge -- see S11_METRICS_REGISTRY's roxygen for why a
+    # fully dynamic lookup can't do this from inside a target's command.
     targets::tar_target(
       qa_metric_window_bounds,
       command = {
-        check_metric_window_bounds(mf_metrics, bt_partitions$macro$test_end, "mf_metrics")
-        check_metric_window_bounds(ev_metrics, bt_partitions$factor$test_end, "ev_metrics")
-        cli::cli_inform(c("v" = "qa_metric_window_bounds: S11 passed (no non-Validation window extends past test_end)"))
+        metrics_by_name <- list(
+          mf_metrics       = mf_metrics,
+          ev_metrics       = ev_metrics,
+          rsc_metrics      = rsc_metrics,
+          aw_metrics       = aw_metrics,
+          mr_metrics       = mr_metrics,
+          rafi_metrics     = rafi_metrics,
+          fip_comparison   = fip_comparison,
+          eur_results      = eur_results,
+          eur_comparison   = eur_comparison,
+          eur_ciss_results = eur_ciss_results
+        )
+
+        check_s11_registry_consistency(names(S11_METRICS_REGISTRY), names(metrics_by_name))
+
+        for (nm in names(S11_METRICS_REGISTRY)) {
+          partition <- S11_METRICS_REGISTRY[[nm]]
+          check_metric_window_bounds(
+            metrics_by_name[[nm]],
+            bt_partitions[[partition]]$test_end,
+            nm
+          )
+        }
+
+        cli::cli_inform(c("v" = paste0(
+          "qa_metric_window_bounds: S11 passed (", length(S11_METRICS_REGISTRY),
+          " registered targets, no non-Validation window extends past test_end)"
+        )))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

@@ -17,3 +17,14 @@
       x mf_metrics is missing 1 required column(s): window_end.
       i check_metric_window_bounds() (S11) requires strategy, period, window_end.
 
+# check_s11_registry_consistency throws when a registry name is never fetched
+
+    Code
+      check_s11_registry_consistency(registry_names = c("mf_metrics", "ev_metrics",
+        "rsc_metrics"), metrics_by_name_names = c("mf_metrics", "ev_metrics"))
+    Condition
+      Error in `check_s11_registry_consistency()`:
+      x S11_METRICS_REGISTRY names 1 target(s) qa_metric_window_bounds never fetched:
+      i rsc_metrics
+      i Add the target to the metrics_by_name list literal in R/plan_qa_gates.R (S11).
+

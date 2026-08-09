@@ -20,7 +20,15 @@ plan_risk_state <- function() {
   list(
 
     # ── Parameters ──────────────────────────────────────────────
+    # #667: test_end wired from bt_partitions so rsc_metrics can bound its
+    # Testing window instead of leaving it open above oos_start. RSC is a
+    # VIX/VVIX-driven regime-timing overlay -- the same macro-signal family
+    # as Managed Futures (plan_managed_futures.R) -- so bt_partitions$macro
+    # is the matching partition set, even though the instrument it trades is
+    # SPY (an equity ticker). oos_start is unchanged (2020-01-01 already
+    # equals bt_partitions$macro$test_start).
     targets::tar_target(rsc_params, {
+      p <- bt_partitions$macro
       list(
         vvix_hostile_pct       = 0.95,   # VVIX percentile threshold
         vvix_cautious_pct      = 0.80,
@@ -32,7 +40,9 @@ plan_risk_state <- function() {
         exposure_cautious = 0.50,
         exposure_hostile  = 0.10,
         slope_change_window = 5L,        # days for delta computation
-        oos_start = as.Date("2020-01-01"),
+        oos_start = p$test_start,
+        test_start = p$test_start,
+        test_end   = p$test_end,         # #667: bounds rsc_metrics' Testing window
         # Cost model (#425): SPY-level trades; 5 bps one-way
         # Applied only on regime-switch days (exposure changes)
         cost_per_trade = 0.0005
@@ -254,11 +264,17 @@ plan_risk_state <- function() {
 
 
     # ── Metrics: summary per partition for all strategy variants ──
+    # #667: Testing is bounded at rsc_params$test_end (bt_partitions$macro)
+    # so it no longer silently extends past the sealed Validation partition
+    # on every tar_make(). window_start/window_end columns added so gate S11
+    # (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(rsc_metrics, {
       library(dplyr)
 
-      calc_metrics <- function(ret_vec, label, strategy_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      calc_metrics <- function(ret_vec, date_vec, label, strategy_name) {
+        keep     <- !is.na(ret_vec)
+        ret_vec  <- ret_vec[keep]
+        date_vec <- date_vec[keep]
         if (length(ret_vec) < 20) return(NULL)
         years <- length(ret_vec) / 252
         cum <- prod(1 + ret_vec)
@@ -272,11 +288,14 @@ plan_risk_state <- function() {
           max_dd    = round(min((cum_dd - cummax(cum_dd)) /
                                   cummax(cum_dd)) * 100, 2),
           hac_tstat = round(hac$hac_tstat, 3),
-          hac_sharpe = round(hac$naive_sharpe, 3)
+          hac_sharpe = round(hac$naive_sharpe, 3),
+          window_start = min(date_vec),
+          window_end   = max(date_vec)
         )
       }
 
-      oos   <- rsc_params$oos_start
+      oos      <- rsc_params$oos_start
+      test_end <- rsc_params$test_end
       port  <- rsc_portfolio
       drif  <- rsc_overlay_drif
       facmx <- rsc_overlay_fac_max
@@ -291,25 +310,28 @@ plan_risk_state <- function() {
         )
       }
 
+      is_train <- port$date < oos
+      is_test  <- port$date >= oos & port$date <= test_end
+
       # SPY buy-and-hold, SPY with overlay
-      spy_bh_full  <- calc_metrics(port$ret_buyhold,   "Full Period", "SPY_buyhold")
-      spy_ov_full  <- calc_metrics(port$ret_strategy,  "Full Period", "SPY_overlay")
-      spy_bh_train <- calc_metrics(port$ret_buyhold[port$date < oos],
+      spy_bh_full  <- calc_metrics(port$ret_buyhold,  port$date,  "Full Period", "SPY_buyhold")
+      spy_ov_full  <- calc_metrics(port$ret_strategy, port$date,  "Full Period", "SPY_overlay")
+      spy_bh_train <- calc_metrics(port$ret_buyhold[is_train],  port$date[is_train],
                                    "Training", "SPY_buyhold")
-      spy_ov_train <- calc_metrics(port$ret_strategy[port$date < oos],
+      spy_ov_train <- calc_metrics(port$ret_strategy[is_train], port$date[is_train],
                                    "Training", "SPY_overlay")
-      spy_bh_test  <- calc_metrics(port$ret_buyhold[port$date >= oos],
+      spy_bh_test  <- calc_metrics(port$ret_buyhold[is_test],  port$date[is_test],
                                    "Testing", "SPY_buyhold")
-      spy_ov_test  <- calc_metrics(port$ret_strategy[port$date >= oos],
+      spy_ov_test  <- calc_metrics(port$ret_strategy[is_test], port$date[is_test],
                                    "Testing", "SPY_overlay")
 
       # DRIF raw vs overlaid
-      drif_raw_full <- calc_metrics(drif$ret_raw,     "Full Period", "DRIF_raw")
-      drif_ov_full  <- calc_metrics(drif$ret_overlay, "Full Period", "DRIF_overlay")
+      drif_raw_full <- calc_metrics(drif$ret_raw,     drif$date, "Full Period", "DRIF_raw")
+      drif_ov_full  <- calc_metrics(drif$ret_overlay, drif$date, "Full Period", "DRIF_overlay")
 
       # FacMAX raw vs overlaid
-      fm_raw_full   <- calc_metrics(facmx$ret_raw,     "Full Period", "FacMAX_raw")
-      fm_ov_full    <- calc_metrics(facmx$ret_overlay, "Full Period", "FacMAX_overlay")
+      fm_raw_full   <- calc_metrics(facmx$ret_raw,     facmx$date, "Full Period", "FacMAX_raw")
+      fm_ov_full    <- calc_metrics(facmx$ret_overlay, facmx$date, "Full Period", "FacMAX_overlay")
 
       dplyr::bind_rows(
         spy_bh_full, spy_ov_full,
@@ -593,6 +615,18 @@ plan_risk_state <- function() {
 
 
     # ── Subperiod analysis: three sub-periods ────────────────────
+    # #667 audit: the "2020-2026" row below is unbounded above, same as the
+    # Testing defect fixed in rsc_metrics -- but its labels ("2009-2014",
+    # "2015-2019", "2020-2026", "Full Period") are explicit custom date
+    # ranges, not the canonical Training/Testing/Holdout/Validation
+    # vocabulary, so it is a DIFFERENT shape from #667's core defect (a
+    # reader cannot mistake "2020-2026" for the bounded canonical Testing
+    # window the way they could mistake a bare "Testing" label). Not fixed
+    # here. Flagged as a related risk: since 2026-08-08's automated data
+    # refreshes may have pushed the data past val_start (2026-05-01,
+    # R/plan_partitions.R), this window could now silently include sealed
+    # Validation-period returns, unlabelled. See CHANGELOG.md "Known
+    # Limitations" (2026-08-08) for the same open concern.
     targets::tar_target(rsc_subperiod, {
       library(dplyr)
 

@@ -18,7 +18,13 @@ plan_european_overlay <- function() {
   list(
 
     # ── Parameters ──────────────────────────────────────────────────────
+    # #667: test_end wired from bt_partitions$macro (same partition class as
+    # the parent RSC target this overlay reuses -- the timing driver is the
+    # shared VIX-based macro regime signal, not the EU-equity instrument) so
+    # eur_results/eur_comparison/eur_ciss_results can bound their OOS window.
+    # oos_start unchanged (already equals bt_partitions$macro$test_start).
     targets::tar_target(eur_params, {
+      p <- bt_partitions$macro
       list(
         eu_tickers      = c("EXSA.DE", "FEZ", "VGK", "EWG", "EWQ"),
         eu_ticker_labels = c(
@@ -32,7 +38,8 @@ plan_european_overlay <- function() {
         exposure_benign   = 1.00,
         exposure_cautious = 0.50,
         exposure_hostile  = 0.10,
-        oos_start         = as.Date("2020-01-01")
+        oos_start         = p$test_start,
+        test_end          = p$test_end   # #667: bounds the OOS window
       )
     }),
 
@@ -108,11 +115,17 @@ plan_european_overlay <- function() {
 
 
     # ── Results: overlay metrics per EU ticker ───────────────────────────
+    # #667: OOS is bounded at eur_params$test_end so it no longer silently
+    # extends past the sealed Validation partition on every tar_make().
+    # window_start/window_end columns added so gate S11
+    # (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(eur_results, {
       library(dplyr)
 
-      calc_metrics <- function(ret_vec, label, strategy_name, ticker) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, ticker) {
+        keep     <- !is.na(ret_vec)
+        ret_vec  <- ret_vec[keep]
+        date_vec <- date_vec[keep]
         if (length(ret_vec) < 20) return(NULL)
         years  <- length(ret_vec) / 252
         cum    <- prod(1 + ret_vec)
@@ -128,11 +141,14 @@ plan_european_overlay <- function() {
           max_dd       = round(min((cum_dd - cummax(cum_dd)) /
                                      cummax(cum_dd)) * 100, 2),
           hac_tstat    = round(hac$hac_tstat, 3),
-          hac_sharpe   = round(hac$naive_sharpe, 3)
+          hac_sharpe   = round(hac$naive_sharpe, 3),
+          window_start = min(date_vec),
+          window_end   = max(date_vec)
         )
       }
 
-      oos <- eur_params$oos_start
+      oos      <- eur_params$oos_start
+      test_end <- eur_params$test_end
 
       purrr::map_dfr(eur_params$eu_tickers, function(tkr) {
         d <- eur_daily |>
@@ -146,13 +162,16 @@ plan_european_overlay <- function() {
 
         if (nrow(d) < 20) return(NULL)
 
+        is_train <- d$date < oos
+        is_test  <- d$date >= oos & d$date <= test_end
+
         bind_rows(
-          calc_metrics(d$ret_buyhold,                          "Full",     "Buy & Hold", tkr),
-          calc_metrics(d$ret_overlay,                          "Full",     "RSC Overlay", tkr),
-          calc_metrics(d$ret_buyhold[d$date < oos],            "Training", "Buy & Hold", tkr),
-          calc_metrics(d$ret_overlay[d$date < oos],            "Training", "RSC Overlay", tkr),
-          calc_metrics(d$ret_buyhold[d$date >= oos],           "OOS",      "Buy & Hold", tkr),
-          calc_metrics(d$ret_overlay[d$date >= oos],           "OOS",      "RSC Overlay", tkr)
+          calc_metrics(d$ret_buyhold, d$date,                   "Full",     "Buy & Hold", tkr),
+          calc_metrics(d$ret_overlay, d$date,                   "Full",     "RSC Overlay", tkr),
+          calc_metrics(d$ret_buyhold[is_train], d$date[is_train], "Training", "Buy & Hold", tkr),
+          calc_metrics(d$ret_overlay[is_train], d$date[is_train], "Training", "RSC Overlay", tkr),
+          calc_metrics(d$ret_buyhold[is_test],  d$date[is_test],  "OOS",      "Buy & Hold", tkr),
+          calc_metrics(d$ret_overlay[is_test],  d$date[is_test],  "OOS",      "RSC Overlay", tkr)
         )
       })
     }),
@@ -211,6 +230,8 @@ plan_european_overlay <- function() {
 
 
     # ── Comparison: US (SPY) vs European overlays ────────────────────────
+    # #667: OOS is bounded at eur_params$test_end so it no longer silently
+    # extends past the sealed Validation partition on every tar_make().
     targets::tar_target(eur_comparison, {
       library(dplyr)
 
@@ -218,6 +239,7 @@ plan_european_overlay <- function() {
       spy_oos <- rsc_portfolio |>
         mutate(date = as.Date(date)) |>
         filter(date >= eur_params$oos_start,
+               date <= eur_params$test_end,
                !is.na(ret_strategy), !is.na(ret_buyhold)) |>
         (function(d) {
           years <- nrow(d) / 252
@@ -230,7 +252,9 @@ plan_european_overlay <- function() {
               max_dd = round(min((cumprod(1 + d$ret_buyhold) - cummax(cumprod(1 + d$ret_buyhold))) /
                                    cummax(cumprod(1 + d$ret_buyhold))) * 100, 2),
               hac_tstat  = round(hd_hac_sharpe(d$ret_buyhold)$hac_tstat, 3),
-              hac_sharpe = round(hd_hac_sharpe(d$ret_buyhold)$naive_sharpe, 3)
+              hac_sharpe = round(hd_hac_sharpe(d$ret_buyhold)$naive_sharpe, 3),
+              window_start = min(d$date),
+              window_end   = max(d$date)
             ),
             tibble::tibble(
               ticker = "SPY", asset = "S&P 500 (US)", strategy = "RSC Overlay",
@@ -240,14 +264,17 @@ plan_european_overlay <- function() {
               max_dd = round(min((cumprod(1 + d$ret_strategy) - cummax(cumprod(1 + d$ret_strategy))) /
                                    cummax(cumprod(1 + d$ret_strategy))) * 100, 2),
               hac_tstat  = round(hd_hac_sharpe(d$ret_strategy)$hac_tstat, 3),
-              hac_sharpe = round(hd_hac_sharpe(d$ret_strategy)$naive_sharpe, 3)
+              hac_sharpe = round(hd_hac_sharpe(d$ret_strategy)$naive_sharpe, 3),
+              window_start = min(d$date),
+              window_end   = max(d$date)
             )
           )
         })()
 
       eur_oos <- eur_results |>
         filter(period == "OOS") |>
-        select(ticker, asset, strategy, period, cagr, vol, max_dd, hac_tstat, hac_sharpe)
+        select(ticker, asset, strategy, period, cagr, vol, max_dd, hac_tstat, hac_sharpe,
+               window_start, window_end)
 
       bind_rows(spy_oos, eur_oos) |>
         arrange(ticker, strategy)
@@ -290,6 +317,10 @@ plan_european_overlay <- function() {
     }),
 
     # ── CISS overlay results ───────────────────────────────────────────
+    # #667: OOS is bounded at eur_params$test_end so it no longer silently
+    # extends past the sealed Validation partition on every tar_make().
+    # window_start/window_end columns added so gate S11
+    # (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(eur_ciss_results, {
       library(dplyr)
 
@@ -305,7 +336,7 @@ plan_european_overlay <- function() {
             ret_ciss_overlay = ciss_exposure * eu_ret + (1 - ciss_exposure) * rf_use,
             ret_buyhold = eu_ret
           ) |>
-          filter(date >= eur_params$oos_start)
+          filter(date >= eur_params$oos_start, date <= eur_params$test_end)
 
         if (nrow(d) < 20) return(NULL)
 
@@ -333,7 +364,9 @@ plan_european_overlay <- function() {
           hac_sharpe = round(c(
             hd_hac_sharpe(d$ret_buyhold)$naive_sharpe,
             hd_hac_sharpe(d$ret_ciss_overlay)$naive_sharpe
-          ), 3)
+          ), 3),
+          window_start = min(d$date),
+          window_end   = max(d$date)
         )
       })
     }),

@@ -194,11 +194,16 @@ plan_mean_reversion <- function() {
     }),
 
     # ── Metrics ─────────────────────────────────────────────────
+    # #667: Testing is bounded at mr_params$test_end (bt_partitions$equity)
+    # so it no longer silently extends past the sealed Validation partition
+    # on every tar_make(). strategy + window_start/window_end columns added
+    # so gate S11 (check_metric_window_bounds()) can assert the bound.
     targets::tar_target(mr_metrics, {
       library(dplyr)
 
       calc <- function(d, label) {
         ret <- d$net_ret
+        dts <- d$date[!is.na(ret)]
         ret <- ret[!is.na(ret)]
         n <- length(ret)
         if (n < 20) return(NULL)
@@ -213,21 +218,25 @@ plan_mean_reversion <- function() {
         avg_pos <- mean(d$n_positions)
 
         tibble::tibble(
+          strategy = "Mean Reversion",
           period = label, days = n, years = round(years, 1),
           cagr = round(cagr * 100, 1), vol = round(vol * 100, 1),
           sharpe = round(sharpe, 2), max_dd = round(max_dd * 100, 1),
           avg_positions = round(avg_pos, 1),
-          avg_daily_trades = round(avg_trades, 2)
+          avg_daily_trades = round(avg_trades, 2),
+          window_start = min(dts),
+          window_end   = max(dts)
         )
       }
 
       port <- mr_portfolio |>
         dplyr::mutate(date = as.Date(date))
-      oos <- as.Date(mr_params$test_start)
+      oos      <- as.Date(mr_params$test_start)
+      test_end <- as.Date(mr_params$test_end)
 
       dplyr::bind_rows(
         calc(port |> filter(date < oos), "Training"),
-        calc(port |> filter(date >= oos), "Testing"),
+        calc(port |> filter(date >= oos, date <= test_end), "Testing"),
         calc(port, "Full Period")
       )
     }),
