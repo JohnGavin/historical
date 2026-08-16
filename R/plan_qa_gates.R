@@ -520,6 +520,7 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 #' same-shape sibling next to S9/S10 was the smaller change. See S14's own
 #' roxygen block below for the fix.
 #' @noRd
+
 #' Registry of metrics targets checked by S11 (`check_metric_window_bounds()`)
 #'
 #' @section #667 -- widening S11 beyond an enumerated pair:
@@ -570,13 +571,20 @@ S11_METRICS_REGISTRY <- list(
   eur_ciss_results = "macro"    # #667
 )
 
-#' Assert every S11_METRICS_REGISTRY name has a matching entry in the
-#' `metrics_by_name` list literal the `qa_metric_window_bounds` target
-#' actually fetched (#667)
+#' Assert `S11_METRICS_REGISTRY` and the `metrics_by_name` list literal the
+#' `qa_metric_window_bounds` target actually fetched agree EXACTLY (#667, #673)
 #'
 #' Extracted out of the target's command (rather than left inline) so it is
 #' unit-testable directly, per `fail-loud-not-null.md` and
 #' `snapshot-test-policy.md` -- see tests/testthat/test-metric-window-bounds.R.
+#'
+#' #673 made this bidirectional. It originally checked only
+#' `setdiff(registry, fetched)` -- a registry entry never fetched. The mirror
+#' case was silent: a target added to the `metrics_by_name` literal but
+#' forgotten in the registry is simply never iterated, so S11 skips it and the
+#' gate still reports PASS. That is the `fail-loud-not-null.md` shape applied
+#' to the guard itself -- an omission producing a plausible pass rather than an
+#' error, which is precisely what S11 exists to prevent one level down.
 #' @noRd
 check_s11_registry_consistency <- function(registry_names, metrics_by_name_names) {
   missing_from_metrics <- setdiff(registry_names, metrics_by_name_names)
@@ -587,6 +595,16 @@ check_s11_registry_consistency <- function(registry_names, metrics_by_name_names
       "i" = "Add the target to the metrics_by_name list literal in R/plan_qa_gates.R (S11)."
     ))
   }
+
+  missing_from_registry <- setdiff(metrics_by_name_names, registry_names)
+  if (length(missing_from_registry) > 0L) {
+    cli::cli_abort(c(
+      "x" = "qa_metric_window_bounds fetched {length(missing_from_registry)} target(s) absent from S11_METRICS_REGISTRY, so S11 never checked them:",
+      "i" = paste(missing_from_registry, collapse = ", "),
+      "i" = "Add each to S11_METRICS_REGISTRY in R/plan_qa_gates.R, mapped to its bt_partitions class (equity/macro/factor)."
+    ))
+  }
+
   invisible(TRUE)
 }
 

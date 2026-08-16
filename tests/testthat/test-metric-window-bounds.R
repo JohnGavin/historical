@@ -146,25 +146,37 @@ test_that("check_metric_window_bounds throws when required columns are missing",
   )
 })
 
-# ── Tests: check_s11_registry_consistency (#667) ──────────────────────────────
+# ── Tests: check_s11_registry_consistency (#667, bidirectional #673) ─────────
 #
 # Guards the `qa_metric_window_bounds` target's own S11_METRICS_REGISTRY
 # against silently drifting out of sync with the `metrics_by_name` list
-# literal it fetches from -- an omission there would mean a registered
-# target is never actually checked by S11, the exact "scope drawn around
-# known instances" failure #667 widened S11 to fix in the first place.
+# literal it fetches from -- an omission on EITHER side means a target is
+# never actually checked by S11, the exact "scope drawn around known
+# instances" failure #667 widened S11 to fix in the first place.
+#
+# #673 made the check bidirectional. Note the pass-case fixture below no
+# longer carries an unmatched "extra_ok" entry: under the original
+# one-directional check a fetched-but-unregistered target passed silently,
+# which is the very hole #673 closed. The two lists must now agree exactly.
 
-test_that("check_s11_registry_consistency passes when every registry name is fetched", {
+test_that("check_s11_registry_consistency passes when registry and fetched list agree exactly", {
   expect_true(check_s11_registry_consistency(
-    registry_names       = c("mf_metrics", "ev_metrics", "rsc_metrics"),
-    metrics_by_name_names = c("mf_metrics", "ev_metrics", "rsc_metrics", "extra_ok")
+    registry_names        = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+    metrics_by_name_names = c("mf_metrics", "ev_metrics", "rsc_metrics")
+  ))
+})
+
+test_that("check_s11_registry_consistency is order-insensitive", {
+  expect_true(check_s11_registry_consistency(
+    registry_names        = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+    metrics_by_name_names = c("rsc_metrics", "mf_metrics", "ev_metrics")
   ))
 })
 
 test_that("check_s11_registry_consistency throws when a registry name is never fetched", {
   expect_error(
     check_s11_registry_consistency(
-      registry_names       = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+      registry_names        = c("mf_metrics", "ev_metrics", "rsc_metrics"),
       metrics_by_name_names = c("mf_metrics", "ev_metrics")
     ),
     regexp = "rsc_metrics"
@@ -172,8 +184,30 @@ test_that("check_s11_registry_consistency throws when a registry name is never f
   expect_snapshot(
     error = TRUE,
     check_s11_registry_consistency(
-      registry_names       = c("mf_metrics", "ev_metrics", "rsc_metrics"),
+      registry_names        = c("mf_metrics", "ev_metrics", "rsc_metrics"),
       metrics_by_name_names = c("mf_metrics", "ev_metrics")
+    )
+  )
+})
+
+# The #673 direction: a target added to the metrics_by_name literal but
+# forgotten in S11_METRICS_REGISTRY. Under the original one-directional
+# check this passed silently and S11 simply never inspected that target --
+# an omission producing a plausible PASS instead of an error, which is the
+# `fail-loud-not-null.md` shape applied to the guard itself.
+test_that("check_s11_registry_consistency throws when a fetched target is absent from the registry", {
+  expect_error(
+    check_s11_registry_consistency(
+      registry_names        = c("mf_metrics", "ev_metrics"),
+      metrics_by_name_names = c("mf_metrics", "ev_metrics", "aw_metrics")
+    ),
+    regexp = "aw_metrics"
+  )
+  expect_snapshot(
+    error = TRUE,
+    check_s11_registry_consistency(
+      registry_names        = c("mf_metrics", "ev_metrics"),
+      metrics_by_name_names = c("mf_metrics", "ev_metrics", "aw_metrics")
     )
   )
 })

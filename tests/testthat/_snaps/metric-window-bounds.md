@@ -28,3 +28,14 @@
       i rsc_metrics
       i Add the target to the metrics_by_name list literal in R/plan_qa_gates.R (S11).
 
+# check_s11_registry_consistency throws when a fetched target is absent from the registry
+
+    Code
+      check_s11_registry_consistency(registry_names = c("mf_metrics", "ev_metrics"),
+      metrics_by_name_names = c("mf_metrics", "ev_metrics", "aw_metrics"))
+    Condition
+      Error in `check_s11_registry_consistency()`:
+      x qa_metric_window_bounds fetched 1 target(s) absent from S11_METRICS_REGISTRY, so S11 never checked them:
+      i aw_metrics
+      i Add each to S11_METRICS_REGISTRY in R/plan_qa_gates.R, mapped to its bt_partitions class (equity/macro/factor).
+

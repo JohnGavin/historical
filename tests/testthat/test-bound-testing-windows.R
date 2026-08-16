@@ -240,3 +240,75 @@ test_that("fip_comparison's OOS window_end moves when bt_partitions$equity$test_
   expect_true(all(test_b$window_end <= as.Date("2021-06-30")))
   expect_false(identical(sort(test_a$window_end), sort(test_b$window_end)))
 })
+
+# ── 3. rsc_subperiod's trailing slice is bounded at holdout_end (#673) ──────
+#
+# rsc_subperiod is deliberately NOT in S11_METRICS_REGISTRY: its window
+# legitimately runs to holdout_end, past test_end, and its labels are bespoke
+# date ranges rather than the canonical vocabulary S11 assumes. So the gate
+# cannot guard it and this test is the only thing standing between a future
+# equity_daily refresh (#673 -- currently frozen at 2026-04-13, below
+# val_start) and sealed Validation returns silently entering that slice.
+
+test_that("rsc_params$holdout_end tracks bt_partitions$macro$holdout_end", {
+  cmd <- .target_command(plan_risk_state(), "rsc_params")
+  mock <- function(holdout_end) list(macro = list(
+    test_start  = as.Date("2020-01-01"),
+    test_end    = as.Date("2023-12-31"),
+    holdout_end = holdout_end
+  ))
+  p_a <- .eval_command(cmd, bt_partitions = mock(as.Date("2026-04-30")))
+  p_b <- .eval_command(cmd, bt_partitions = mock(as.Date("2025-06-30")))
+  expect_equal(p_a$holdout_end, as.Date("2026-04-30"))
+  expect_equal(p_b$holdout_end, as.Date("2025-06-30"))
+  expect_false(identical(p_a$holdout_end, p_b$holdout_end))
+})
+
+test_that("rsc_subperiod's trailing window stops at holdout_end, not the data's max date", {
+  cmd <- .target_command(plan_risk_state(), "rsc_subperiod")
+
+  # Portfolio deliberately runs to 2026-12-31 -- PAST every holdout_end tested
+  # below, standing in for a post-refresh equity_daily that has crossed
+  # val_start. If the slice were unbounded it would swallow all of it.
+  days <- seq(as.Date("2009-01-01"), as.Date("2026-12-31"), by = "day")
+  set.seed(673)
+  port <- tibble::tibble(
+    date         = days,
+    ret_strategy = stats::rnorm(length(days), 0.0004, 0.01),
+    ret_buyhold  = stats::rnorm(length(days), 0.0004, 0.012),
+    regime       = rep_len(c("benign", "cautious", "hostile"), length(days))
+  )
+
+  run <- function(holdout_end) {
+    .eval_command(
+      cmd,
+      rsc_portfolio  = port,
+      rsc_params     = list(holdout_end = holdout_end),
+      hd_hac_sharpe  = .mock_hac_sharpe
+    )
+  }
+
+  res_a <- run(as.Date("2026-04-30"))
+  res_b <- run(as.Date("2024-06-30"))
+
+  # The label is derived from the bounds, so it moves with them.
+  expect_true("2020-2026" %in% res_a$period)
+  expect_true("2020-2024" %in% res_b$period)
+
+  # ...and the earlier, fully-bounded slices are unaffected by holdout_end.
+  expect_true(all(c("2009-2014", "2015-2019", "Full Period") %in% res_a$period))
+  expect_true(all(c("2009-2014", "2015-2019", "Full Period") %in% res_b$period))
+
+  # The trailing slice must not be the same row under both bounds -- if it
+  # were unbounded, both runs would cover 2020-01-01..2026-12-31 identically.
+  row_a <- res_a[res_a$period == "2020-2026", ]
+  row_b <- res_b[res_b$period == "2020-2024", ]
+  expect_false(identical(row_a$vol, row_b$vol))
+
+  # "Full Period" is exempt by design (whole-sample aggregate) and still
+  # spans everything, so it is NOT expected to move with holdout_end.
+  expect_equal(
+    res_a[res_a$period == "Full Period", ]$vol,
+    res_b[res_b$period == "Full Period", ]$vol
+  )
+})

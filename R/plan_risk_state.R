@@ -43,6 +43,10 @@ plan_risk_state <- function() {
         oos_start = p$test_start,
         test_start = p$test_start,
         test_end   = p$test_end,         # #667: bounds rsc_metrics' Testing window
+        # #673: bounds rsc_subperiod's trailing slice. Holdout, not test_end --
+        # that target deliberately spans Testing AND Holdout; only Validation
+        # must stay out. See the comment above rsc_subperiod.
+        holdout_end = p$holdout_end,
         # Cost model (#425): SPY-level trades; 5 bps one-way
         # Applied only on regime-switch days (exposure changes)
         cost_per_trade = 0.0005
@@ -615,18 +619,35 @@ plan_risk_state <- function() {
 
 
     # ── Subperiod analysis: three sub-periods ────────────────────
-    # #667 audit: the "2020-2026" row below is unbounded above, same as the
-    # Testing defect fixed in rsc_metrics -- but its labels ("2009-2014",
-    # "2015-2019", "2020-2026", "Full Period") are explicit custom date
-    # ranges, not the canonical Training/Testing/Holdout/Validation
-    # vocabulary, so it is a DIFFERENT shape from #667's core defect (a
-    # reader cannot mistake "2020-2026" for the bounded canonical Testing
-    # window the way they could mistake a bare "Testing" label). Not fixed
-    # here. Flagged as a related risk: since 2026-08-08's automated data
-    # refreshes may have pushed the data past val_start (2026-05-01,
-    # R/plan_partitions.R), this window could now silently include sealed
-    # Validation-period returns, unlabelled. See CHANGELOG.md "Known
-    # Limitations" (2026-08-08) for the same open concern.
+    # #667 audit / #673 fix. The trailing slice was `date >= 2020-01-01` with
+    # no upper bound. That is a DIFFERENT shape from #667's core defect -- the
+    # labels here are explicit custom date ranges, not the canonical
+    # Training/Testing/Holdout/Validation vocabulary, so no reader mistakes
+    # this for the bounded canonical Testing window -- which is why #667/PR
+    # #672 correctly left it alone. But unbounded is unbounded: #673 measured
+    # equity_daily's boundary at 2026-04-13, below val_start (2026-05-01), so
+    # the slice held no sealed data at that moment. It held none only because
+    # equity_daily has NO SCHEDULED REFRESH (#673): the boundary is stationary
+    # because the fetcher is unscheduled, not because it has yet to catch up.
+    # The first run of scripts/fetch_equity.py would have carried it past
+    # val_start and pulled sealed Validation returns in here, unlabelled, on
+    # the next tar_make() -- and that fetch is the PREREQUISITE for the
+    # one-shot evaluation in scripts/evaluate_validation.R. The protection
+    # would have vanished in the same action that needed it. Now bounded at
+    # holdout_end so the refresh is safe whenever it happens.
+    #
+    # Bound is holdout_end (2026-04-30), NOT test_end (2023-12-31): this is a
+    # descriptive breakdown that spans Testing and Holdout on purpose, and
+    # Holdout is observed-not-sealed per backtest-partitions.md. Validation is
+    # the only line that must not be crossed. Bounding at test_end would
+    # amputate two years of legitimate data.
+    #
+    # Do NOT add rsc_subperiod to S11_METRICS_REGISTRY (R/plan_qa_gates.R).
+    # S11 asserts window_end <= test_end; this target's window legitimately
+    # runs to holdout_end, so registering it would make the gate reject a
+    # correct target. Its bespoke date-range labels are also outside the
+    # canonical vocabulary S11's exempt_periods list assumes. Different shape,
+    # deliberately unregistered.
     targets::tar_target(rsc_subperiod, {
       library(dplyr)
 
@@ -658,15 +679,24 @@ plan_risk_state <- function() {
       }
 
       port <- rsc_portfolio
+
+      # #673: inclusive [start, end] slice whose label is DERIVED from its own
+      # bounds, so the label cannot drift out of sync with the window when
+      # partition dates move (the "2020-2026" string was previously hardcoded
+      # next to a window that is now parameterised by holdout_end).
+      slice_years <- function(data, start, end) {
+        start <- as.Date(start)
+        end   <- as.Date(end)
+        calc_sp(
+          data |> filter(as.Date(date) >= start, as.Date(date) <= end),
+          paste0(format(start, "%Y"), "-", format(end, "%Y"))
+        )
+      }
+
       dplyr::bind_rows(
-        calc_sp(port |> filter(date >= as.Date("2009-01-01"),
-                               date <  as.Date("2015-01-01")),
-                "2009-2014"),
-        calc_sp(port |> filter(date >= as.Date("2015-01-01"),
-                               date <  as.Date("2020-01-01")),
-                "2015-2019"),
-        calc_sp(port |> filter(date >= as.Date("2020-01-01")),
-                "2020-2026"),
+        slice_years(port, "2009-01-01", "2014-12-31"),
+        slice_years(port, "2015-01-01", "2019-12-31"),
+        slice_years(port, "2020-01-01", rsc_params$holdout_end),
         calc_sp(port, "Full Period")
       )
     }),
