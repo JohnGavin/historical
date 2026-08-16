@@ -28,7 +28,18 @@ plan_mom_prepeak <- function() {
         min_obs_days             = 100L,  # minimum trading days in formation window
         n_quantiles              = 10L,   # deciles
         min_stocks_per_month     = 30L,   # matches ltr_params$min_stocks_per_month
-        cost_per_trade           = 0.0010 # 10bps per trade (matches ltr_params)
+        cost_per_trade           = 0.0010, # 10bps per trade (matches ltr_params)
+        # MANUAL: no source -- general-collateral (GC) borrow estimate, not a
+        # measured series (#665). ltr_universe is 529 tickers approximating
+        # S&P 500 constituents + liquid ETFs (SPY/QQQ/IWM/TLT/GLD/EEM/EFA...);
+        # the short leg here is the loser DECILE of that universe (~53 US
+        # large caps), which is general-collateral borrow in practice
+        # (0.25-0.50%/yr), not the hard-to-borrow population the original
+        # #665 argued for a flat 3%. 0.005 (0.50%) is the conservative end
+        # of GC. A real borrow-cost series (e.g. from a securities-lending
+        # data vendor) is still needed to replace this estimate -- see PR
+        # body for the measured CAGR/Sharpe impact at 0%, 0.5%, and 3%.
+        borrow_rate_annual       = 0.005
       )
     }),
 
@@ -102,27 +113,33 @@ plan_mom_prepeak <- function() {
     # Returns: as_of_date (signal date), exec_date (t+1 month-end),
     #          ret_long, ret_short, ret_ls (net of cost on full turnover).
 
+    # Borrow charge (#665) applied ONLY on these three published targets --
+    # see .mom_prepeak_compute_returns() roxygen for why every other caller
+    # (FIP screen, gauntlet) keeps the zero default.
     targets::tar_target(mom_prepeak_returns, {
       .mom_prepeak_compute_returns(
-        portfolio_tbl   = mom_prepeak_portfolio,
-        universe_tbl    = ltr_universe,
-        cost_per_trade  = mom_prepeak_params$cost_per_trade
+        portfolio_tbl       = mom_prepeak_portfolio,
+        universe_tbl        = ltr_universe,
+        cost_per_trade      = mom_prepeak_params$cost_per_trade,
+        borrow_rate_annual  = mom_prepeak_params$borrow_rate_annual
       )
     }),
 
     targets::tar_target(mom_postpeak_returns, {
       .mom_prepeak_compute_returns(
-        portfolio_tbl   = mom_postpeak_portfolio,
-        universe_tbl    = ltr_universe,
-        cost_per_trade  = mom_prepeak_params$cost_per_trade
+        portfolio_tbl       = mom_postpeak_portfolio,
+        universe_tbl        = ltr_universe,
+        cost_per_trade      = mom_prepeak_params$cost_per_trade,
+        borrow_rate_annual  = mom_prepeak_params$borrow_rate_annual
       )
     }),
 
     targets::tar_target(mom_combined_returns, {
       .mom_prepeak_compute_returns(
-        portfolio_tbl   = mom_combined_portfolio,
-        universe_tbl    = ltr_universe,
-        cost_per_trade  = mom_prepeak_params$cost_per_trade
+        portfolio_tbl       = mom_combined_portfolio,
+        universe_tbl        = ltr_universe,
+        cost_per_trade      = mom_prepeak_params$cost_per_trade,
+        borrow_rate_annual  = mom_prepeak_params$borrow_rate_annual
       )
     }),
 
@@ -243,6 +260,20 @@ plan_mom_prepeak <- function() {
 #' @param portfolio_tbl Tibble from .mom_prepeak_form_portfolio().
 #' @param universe_tbl Tibble with columns ticker, date, adjusted (ltr_universe).
 #' @param cost_per_trade Numeric. One-way transaction cost fraction.
+#' @param borrow_rate_annual Numeric. Annualised borrow-cost rate charged on
+#'   the short leg's notional, default 0 (unchanged behaviour for existing
+#'   callers -- FIP screen, walk-forward gauntlet, random-peak falsification).
+#'   The short leg is 100% of NAV under this portfolio's construction
+#'   (equal-weight `-1/n_short` per short position, summing to -1 in
+#'   absolute value -- see `.mom_prepeak_form_portfolio()`), matching the
+#'   convention already used by `portfolio_longshort()`
+#'   (R/plan_stock_backtest.R: `borrow_cost <- borrow_rate_annual / 12`) and
+#'   by `packages/historicaldata/R/commodities_mean_reversion.R`. Only the
+#'   three published targets (`mom_prepeak_returns`, `mom_postpeak_returns`,
+#'   `mom_combined_returns`) pass a non-zero rate (#665); every other caller
+#'   keeps the zero default so this fix does not silently change FIP or the
+#'   gauntlet's cost basis (fail-loud-not-null.md: an unstated behaviour
+#'   change is exactly the defect class this rule targets).
 #'
 #' @return Tibble with: as_of_date, exec_date, ret_long, ret_short, ret_ls.
 #'
@@ -258,10 +289,13 @@ plan_mom_prepeak <- function() {
 #' some short positions while others retain their unscaled returns.
 #'
 #' Cost convention is unchanged: 2 × cost_per_trade ≈ full turnover round-trip.
+#' Borrow convention (#665): `borrow_rate_annual / 12` charged monthly against
+#' 100% short notional, additive to the transaction-cost deduction.
 #' @noRd
 .mom_prepeak_compute_returns <- function(portfolio_tbl,
                                           universe_tbl,
-                                          cost_per_trade = 0.001) {
+                                          cost_per_trade = 0.001,
+                                          borrow_rate_annual = 0) {
   library(dplyr)
 
   # Build monthly return table from universe: for each ticker, compute
@@ -335,7 +369,10 @@ plan_mom_prepeak <- function() {
     ) |>
     dplyr::mutate(
       # Net L/S return minus round-trip transaction cost (full turnover assumed)
-      ret_ls = .data$ret_long - .data$ret_short - 2 * cost_per_trade
+      # minus monthly borrow charge on 100% short notional (#665; 0 for
+      # callers that don't pass borrow_rate_annual -- see roxygen above).
+      ret_ls = .data$ret_long - .data$ret_short - 2 * cost_per_trade -
+        borrow_rate_annual / 12
     ) |>
     dplyr::arrange(.data$as_of_date)
 }
