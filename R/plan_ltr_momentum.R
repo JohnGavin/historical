@@ -25,6 +25,15 @@ plan_ltr_momentum <- function() {
         train_years         = 10L,          # years of training (not 15 — less data)
         retrain_freq        = "yearly",     # retrain annually
         cost_per_trade      = 0.0010,       # 10bps per trade (tighter for demo)
+        # MANUAL: no source -- 3% annualised borrow cost is a round-number
+        # assumption, not derived from a machine-readable borrow-rate series.
+        # NOTE: this ltr_params value is not itself consumed downstream in
+        # this file -- the value that actually drives ltr_portfolio's
+        # published return is the separate `borrow_cost_annual` constant in
+        # scripts/compute_ltr_model.R:33 (also marked). Per
+        # reproducible-ingestion (~/.claude/CLAUDE.md) and
+        # fail-loud-not-null.md this is technical debt: a follow-up issue
+        # should source a real equity-borrow series (#664/#665 PR body).
         borrow_rate_annual  = 0.03,
         max_monthly_ret     = 0.20,
         oos_start           = p$test_start,

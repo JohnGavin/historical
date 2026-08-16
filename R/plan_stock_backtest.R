@@ -466,7 +466,12 @@ plan_stock_backtest <- function() {
         oos_start = p$test_start,
         # Cost model (Options 1, 4, 5)
         cost_per_trade = 0.005,       # 0.50% per trade (Option 1: higher than 0.10%)
-        borrow_rate_annual = 0.03,    # 3% annualised borrow cost for shorts (Option 5)
+        # MANUAL: no source -- 3% annualised borrow cost for shorts (Option 5)
+        # is a round-number assumption, not derived from a machine-readable
+        # borrow-rate series. Per reproducible-ingestion (~/.claude/CLAUDE.md)
+        # and fail-loud-not-null.md this is technical debt: a follow-up issue
+        # should source a real equity-borrow series (#664/#665 PR body).
+        borrow_rate_annual = 0.03,
         max_monthly_ret = 0.20,       # Winsorise at ±20% (Option 2)
         hrp_lookback_months = 36L,    # HRP covariance lookback for stock-level long-short
         adv_pct_cap = 0.10,           # ADV participation cap: 10% of ADV-weighted share × n
