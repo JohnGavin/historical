@@ -30,6 +30,14 @@ train_years <- 10L
 min_stocks <- 30L
 n_quantiles <- 10L
 cost_per_trade <- 0.0010  # 10bps
+# MANUAL: no source -- 3% annualised borrow cost is a round-number
+# assumption, not derived from a machine-readable borrow-rate series. This
+# is the constant that actually drives ltr_portfolio's published return
+# (via ls_ret_net below); R/plan_ltr_momentum.R:28 carries the same value
+# in ltr_params for documentation but does not consume it downstream. Per
+# reproducible-ingestion (~/.claude/CLAUDE.md) and fail-loud-not-null.md
+# this is technical debt: a follow-up issue should source a real
+# equity-borrow series (#664/#665 PR body).
 borrow_cost_annual <- 0.03  # 3% for shorts
 oos_start <- as.Date("2020-01-01")
 

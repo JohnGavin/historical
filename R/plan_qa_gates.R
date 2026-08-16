@@ -969,6 +969,99 @@ check_portfolio_join_coverage <- function(port_returns) {
 }
 
 
+#' Assert every strategy's borrow_status is derivable, in the allowed
+#' vocabulary, and consistent with borrow_rate_annual (S16)
+#'
+#' Guards against the #664 defect class: `strategy_cost_convention`'s
+#' `borrow_rate_annual` column conflated "no short leg -- borrow correctly
+#' N/A" with "short leg exists, borrow genuinely unmodelled" as a single NA
+#' value, with the distinction recorded only as free prose in
+#' `cost_source_ref` that nothing could filter, sort, count, or gate on
+#' (fail-loud-not-null.md). `borrow_status` (derived by
+#' `derive_borrow_status()`, R/plan_cost_convention.R) makes the distinction
+#' machine-readable; this gate is the belt-and-braces check that the
+#' derivation actually held for every row -- no NA status, no status outside
+#' `BORROW_STATUS_ALLOWED`, and no row where the derived status contradicts
+#' whether a `borrow_rate_annual` is actually present (a `"modelled"` row
+#' with no rate, or a non-`"modelled"` row WITH a rate, is a contradiction
+#' and must abort).
+#'
+#' @param strategy_cost_convention Tibble with at least `strategy`,
+#'   `borrow_status`, `borrow_rate_annual` columns (the output of the
+#'   `strategy_cost_convention` target, R/plan_cost_convention.R).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_borrow_status_registry <- function(strategy_cost_convention) {
+  required_cols <- c("strategy", "borrow_status", "borrow_rate_annual")
+  missing_cols <- setdiff(required_cols, names(strategy_cost_convention))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "strategy_cost_convention is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_borrow_status_registry() (S16) requires strategy, borrow_status, borrow_rate_annual."
+    ))
+  }
+
+  # ── Assertion 1: no NA borrow_status ─────────────────────────────────────
+  na_status <- strategy_cost_convention$strategy[is.na(strategy_cost_convention$borrow_status)]
+  if (length(na_status) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "strategy_cost_convention has ", length(na_status),
+        " strategy/strategies with NA borrow_status (#664):"
+      ),
+      setNames(sprintf("  %s", na_status), rep("i", length(na_status))),
+      "i" = "Every strategy must resolve to a status in BORROW_STATUS_ALLOWED (R/plan_cost_convention.R) -- never NA."
+    ))
+  }
+
+  # ── Assertion 2: no out-of-vocabulary borrow_status ──────────────────────
+  bad_vocab <- unique(setdiff(strategy_cost_convention$borrow_status, BORROW_STATUS_ALLOWED))
+  if (length(bad_vocab) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "strategy_cost_convention has borrow_status value(s) outside the allowed vocabulary: ",
+        paste(bad_vocab, collapse = ", ")
+      ),
+      "i" = paste0("Allowed values: ", paste(BORROW_STATUS_ALLOWED, collapse = ", "), ".")
+    ))
+  }
+
+  # ── Assertion 3: status must agree with whether a rate is recorded ──────
+  is_modelled   <- strategy_cost_convention$borrow_status == "modelled"
+  has_rate      <- !is.na(strategy_cost_convention$borrow_rate_annual)
+  contradiction <- is_modelled != has_rate
+  offenders <- strategy_cost_convention[contradiction,
+    c("strategy", "borrow_status", "borrow_rate_annual"), drop = FALSE]
+
+  if (nrow(offenders) > 0L) {
+    msgs <- purrr::pmap_chr(
+      offenders,
+      function(strategy, borrow_status, borrow_rate_annual) {
+        sprintf(
+          "  %s -- borrow_status = %s, borrow_rate_annual = %s",
+          strategy, borrow_status,
+          if (is.na(borrow_rate_annual)) "NA" else format(borrow_rate_annual)
+        )
+      }
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "strategy_cost_convention has ", nrow(offenders),
+        " row(s) where borrow_status contradicts borrow_rate_annual (#664):"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "A \"modelled\" row must have a non-NA borrow_rate_annual; every ",
+        "other status must have NA -- fix the registry row or the ",
+        "derivation in R/plan_cost_convention.R."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -1288,6 +1381,22 @@ plan_qa_gates <- function() {
         }
         cli::cli_inform(c("v" = "qa_no_published_validation_reads: S15 passed (no published document reads Validation)"))
         nrow(hits)
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: strategy_cost_convention's borrow_status is derivable, in the
+    # allowed vocabulary, and consistent with borrow_rate_annual (S16) --
+    # guards against the #664 defect class where borrow_rate_annual == NA
+    # conflated "no short leg" with "short leg exists, borrow genuinely
+    # unmodelled" into a single value that nothing could filter, sort,
+    # count, or gate on.
+    targets::tar_target(
+      qa_borrow_status_registry,
+      command = {
+        check_borrow_status_registry(strategy_cost_convention)
+        cli::cli_inform(c("v" = "qa_borrow_status_registry: S16 passed (all borrow_status values derivable, in vocabulary, and consistent with borrow_rate_annual)"))
+        TRUE
       },
       cue = targets::tar_cue(mode = "always")
     )
