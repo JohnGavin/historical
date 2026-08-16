@@ -327,3 +327,46 @@ test_that(".mom_prepeak_compute_returns: cap does not alter normal-month returns
   expect_equal(result$ret_ls,    0.025, tolerance = 1e-10,
     info = "ret_ls matches manual calculation; cap is a no-op in normal months")
 })
+
+
+# ---- 8. borrow_rate_annual (#665): charged monthly on the short leg -------
+
+test_that(".mom_prepeak_compute_returns: borrow_rate_annual reduces ret_ls by exactly rate/12, default 0 leaves existing callers unchanged", {
+  skip_no_plan()
+
+  # Same fixture as test 7 (no cap triggered) — isolates the borrow term.
+  tickers  <- c("T_LONG1", "T_LONG2", "T_SH1", "T_SH2")
+  weights  <- c(0.5, 0.5, -0.5, -0.5)
+  month1   <- c(T_LONG1 = 100, T_LONG2 = 100, T_SH1 = 100, T_SH2 = 100)
+  month2   <- c(T_LONG1 = 100, T_LONG2 = 100, T_SH1 = 100, T_SH2 = 100)
+  month3   <- c(T_LONG1 = 110, T_LONG2 = 105, T_SH1 = 120, T_SH2 = 90)
+
+  port <- make_portfolio_tbl(tickers = tickers, weights = weights)
+  univ <- make_universe_tbl(
+    tickers       = tickers,
+    month1_prices = month1,
+    month2_prices = month2,
+    month3_prices = month3
+  )
+
+  # Default (no borrow_rate_annual argument) must match an explicit 0 --
+  # every caller except the 3 published mom_prepeak targets relies on this
+  # (FIP screen, walk-forward gauntlet, random-peak falsification).
+  result_no_arg  <- compute_returns(portfolio_tbl = port, universe_tbl = univ, cost_per_trade = 0)
+  result_zero    <- compute_returns(portfolio_tbl = port, universe_tbl = univ, cost_per_trade = 0,
+                                     borrow_rate_annual = 0)
+  expect_equal(result_no_arg$ret_ls, result_zero$ret_ls, tolerance = 1e-10,
+    info = "omitting borrow_rate_annual must be identical to passing 0 (unchanged behaviour for existing callers)")
+
+  # Non-zero rate: ret_ls must fall by exactly rate/12 (monthly charge on
+  # 100% short notional -- see roxygen on .mom_prepeak_compute_returns()).
+  rate <- 0.12
+  result_borrow <- compute_returns(portfolio_tbl = port, universe_tbl = univ, cost_per_trade = 0,
+                                    borrow_rate_annual = rate)
+  expect_equal(result_zero$ret_ls - result_borrow$ret_ls, rate / 12, tolerance = 1e-10,
+    info = "borrow charge must equal borrow_rate_annual / 12 exactly")
+  expect_equal(result_borrow$ret_long,  result_zero$ret_long,  tolerance = 1e-10,
+    info = "borrow charge must not alter ret_long")
+  expect_equal(result_borrow$ret_short, result_zero$ret_short, tolerance = 1e-10,
+    info = "borrow charge must not alter ret_short (it's a separate deduction on ret_ls)")
+})

@@ -93,10 +93,27 @@ BORROW_STATUS_ALLOWED <- c(
 #     short-borrow cost (R/plan_managed_futures.R). This is a JUDGEMENT
 #     CALL, not a verified absence like the other three rows -- flagged in
 #     the PR body for review rather than asserted as settled fact.
+#   - "CMR": directionality is long_short (10-long/10-short construction,
+#     R/plan_commodities_mean_reversion.R), and it previously derived to
+#     "unmodelled" (short leg exists, no borrow_rate_annual set). #665
+#     reclassifies it to "not_applicable" -- CMR's universe (verified
+#     against data/raw/commodities.parquet: CL=F/GC=F/ZC=F.../ commodity
+#     FUTURES, IMF PxxxUSDM price indices, and commodity ETFs DBA/DBC/GLD/
+#     USO/...) has no equity-style short-borrow leg at all. Futures
+#     financing is embedded in the futures curve, the identical reasoning
+#     already used for the Managed Futures override above -- a JUDGEMENT
+#     CALL like that row, not a verified absence, flagged in the PR body.
+#     Charging CMR an equity borrow rate would be wrong in KIND, not just
+#     magnitude, and CMR is the most borrow-sensitive of the eight rows
+#     swept by borrow_sensitivity_sweep (-0.58 Sharpe at a flat 3%), so an
+#     incorrect rate there does the most damage.
 BORROW_STATUS_OVERRIDES <- tibble::tibble(
-  strategy = c("Value (HML)", "PSO Optimal", "Avoid Worst", "Managed Futures"),
+  strategy = c(
+    "Value (HML)", "PSO Optimal", "Avoid Worst", "Managed Futures", "CMR"
+  ),
   borrow_status_override = c(
-    "embedded_in_source", "inherited", "not_tradeable", "not_applicable"
+    "embedded_in_source", "inherited", "not_tradeable", "not_applicable",
+    "not_applicable"
   )
 )
 
@@ -313,7 +330,7 @@ plan_cost_convention <- function() {
           NA_real_, NA_real_,
           0.03, 0.03, 0.03,
           0.03, NA_real_, NA_real_, NA_real_, NA_real_, NA_real_,
-          NA_real_, NA_real_, NA_real_,
+          0.005, 0.005, 0.005,
           NA_real_, NA_real_, NA_real_
         ),
         cost_source_ref = c(
@@ -325,12 +342,12 @@ plan_cost_convention <- function() {
           "R/plan_ltr_momentum.R:27-28 (cost_per_trade = 0.0010, borrow_rate_annual = 0.03), scripts/compute_ltr_model.R:146-150 (cost = 2*cost_per_trade; borrow = borrow_cost_annual/12)",
           "R/plan_olmar.R:30 (cost_bps = 10), R/plan_olmar.R:277 (net_ret = gross_ret - (cost_bps/1e4) * turnover); long-only simplex projection -- borrow NA",
           "R/plan_turn_of_month.R:31 (cost_bps = 5L), R/plan_turn_of_month.R:222 (cost_daily = if_else(is_switch, cost_bps/1e4, 0)); SPY/cash only -- borrow NA",
-          "R/plan_commodities_mean_reversion.R:51,61,71 (cost_bps = 20 for all 3 lookback variants); 10-long/10-short construction has no borrow cost modelled for the short leg -- verified absent, not a long-only NA",
+          "R/plan_commodities_mean_reversion.R:51,61,71 (cost_bps = 20 for all 3 lookback variants); 10-long/10-short construction on commodity futures/ETFs/price indices (data/raw/commodities.parquet) -- no equity-style borrow leg applies (#665: reclassified not_applicable, see BORROW_STATUS_OVERRIDES; supersedes the prior 'verified absent, not a long-only NA' framing)",
           "R/plan_risk_state.R:38 (cost_per_trade = 0.0005, comment: '5 bps one-way ... applied only on regime-switch days'), R/plan_risk_state.R:194 (trade_cost = rsc_params$cost_per_trade * exposure_change * 2.0); exposure in [0.10, 1.00], never short -- borrow NA",
           "R/plan_avoid_worst.R:5 (comment: 'NOT a tradeable strategy'); no cost_per_trade/cost_bps field exists anywhere in this file -- zero is a verified absence, not a default",
-          "R/plan_mom_prepeak.R:31 (cost_per_trade = 0.0010, comment: 'matches ltr_params'), R/plan_mom_prepeak.R:338 (ret_ls = ret_long - ret_short - 2*cost_per_trade); 100% short leg exists but no borrow cost is modelled -- verified absent, not a long-only NA",
-          "R/plan_mom_prepeak.R:31,338 (same shared param + formula as Mom Pre-Peak); same unmodelled-borrow gap on its 100% short leg",
-          "R/plan_mom_prepeak.R:31,338 (same shared param + formula as Mom Pre-Peak); same unmodelled-borrow gap on its 100% short leg",
+          "R/plan_mom_prepeak.R:31 (cost_per_trade = 0.0010, comment: 'matches ltr_params'), R/plan_mom_prepeak.R (borrow_rate_annual = 0.005, `# MANUAL: no source`, GC-rate reasoning), R/plan_mom_prepeak.R:.mom_prepeak_compute_returns() (ret_ls = ret_long - ret_short - 2*cost_per_trade - borrow_rate_annual/12); #665 -- 100% short leg on the loser decile of ltr_universe (~53 of 529 tickers) charged at 0.5%/yr general-collateral rate; supersedes the prior 'verified absent' framing",
+          "R/plan_mom_prepeak.R (same shared helper + params as Mom Pre-Peak; borrow_rate_annual = 0.005); #665 -- same GC-rate borrow charge on its 100% short leg",
+          "R/plan_mom_prepeak.R (same shared helper + params as Mom Pre-Peak; borrow_rate_annual = 0.005); #665 -- same GC-rate borrow charge on its 100% short leg",
           "R/plan_ev_ebit.R:33 (cost_per_rebalance = 0.002), R/plan_ev_ebit.R:79 (ret_value_hml = RF + HML - cost); pre-computed FF factor-return series, no explicit short-borrow leg -- borrow NA",
           "R/plan_managed_futures.R:48 (cost_monthly = 0.001, comment: '10 bps/month: ETF proxy (real futures ~20bps)'); no borrow cost field found in this file -- borrow NA",
           "R/plan_portfolio_opt.R (no cost_per_trade/cost_bps field found; w <- w/sum(w) blends already cost-net constituent returns; see R/plan_exposure.R source_ref for the same meta-portfolio caveat on gross exposure)"
@@ -399,20 +416,33 @@ plan_cost_convention <- function() {
     #
     # REPORTING ONLY -- see build_borrow_sensitivity_table() /
     # compute_borrow_sensitivity() roxygen above. Does NOT feed leaderboard,
-    # all_metrics, or any published return. Covers the 4 currently-
-    # "unmodelled" strategies (their whole edge is at stake if a borrow cost
-    # is ever added) plus the 4 currently-"modelled" strategies (so a reader
-    # can see how sensitive the already-costed strategies are to the flat
-    # 0.03 rate being wrong -- see the `# MANUAL: no source` markers on that
-    # constant in R/plan_stock_backtest.R and R/plan_ltr_momentum.R).
+    # all_metrics, or any published return.
+    #
+    # Post-#665 status of the 8 rows below: Mom Pre-Peak / Mom Post-Peak /
+    # Mom 12-2 moved from "unmodelled" to "modelled" (0.005 GC rate, see
+    # mom_prepeak_params); CMR moved from "unmodelled" to "not_applicable"
+    # (commodity futures/ETF short leg, no equity-style borrow -- see
+    # BORROW_STATUS_OVERRIDES above). CMR is kept in this sweep for
+    # illustrative "what if we were wrong about the reclassification"
+    # comparison only -- it is NOT evidence that CMR should be charged an
+    # equity borrow rate (Part 2 of #665's PR argues the opposite: wrong in
+    # KIND, not just magnitude). Stock MAX / Stock DRIF / XGB DRIF / LTR
+    # remain "modelled" at the flat 0.03 rate (so a reader can see how
+    # sensitive those already-costed strategies are to that rate being
+    # wrong -- see the `# MANUAL: no source` markers in
+    # R/plan_stock_backtest.R and R/plan_ltr_momentum.R).
     #
     # Each series is reconstructed as the PRE-BORROW monthly return:
-    #   - unmodelled strategies: their return series already has zero
-    #     borrow charge, so it is used as-is.
-    #   - modelled strategies: the currently-applied 0.03/12 monthly charge
-    #     is added back (port_ret + borrow_cost, or ls_ret_net + borrow for
-    #     LTR's pre-computed parquet columns) so the sweep starts from the
-    #     same zero-borrow baseline as the unmodelled strategies.
+    #   - CMR: its return series has zero borrow charge (not_applicable, no
+    #     rate was ever subtracted), so it is used as-is.
+    #   - Mom Pre-Peak / Mom Post-Peak / Mom 12-2: the now-applied
+    #     mom_prepeak_params$borrow_rate_annual/12 monthly charge is added
+    #     back so the sweep starts from the same zero-borrow baseline as
+    #     CMR (#665 -- without this, the 0-rate row here would silently
+    #     double-subtract the borrow already baked into ret_ls).
+    #   - Stock MAX / Stock DRIF / XGB DRIF / LTR: the currently-applied
+    #     0.03/12 monthly charge is added back (port_ret + borrow_cost, or
+    #     ls_ret_net + borrow for LTR's pre-computed parquet columns).
     #
     # CMR reports 3 lookback variants (1m/3m/6m); the leaderboard displays
     # whichever has the best Sharpe (.norm_cmr(), R/plan_leaderboard.R) --
@@ -430,10 +460,15 @@ plan_cost_convention <- function() {
         ))
       )
 
+      # Add back the now-embedded 0.005/12 monthly borrow charge (#665) so
+      # these three start from the same zero-borrow baseline as CMR below --
+      # see the target-level comment above for why this is required.
+      mom_borrow_monthly <- mom_prepeak_params$borrow_rate_annual / 12
+
       returns_by_strategy <- list(
-        "Mom Pre-Peak"  = mom_prepeak_returns$ret_ls,
-        "Mom Post-Peak" = mom_postpeak_returns$ret_ls,
-        "Mom 12-2"      = mom_combined_returns$ret_ls,
+        "Mom Pre-Peak"  = mom_prepeak_returns$ret_ls + mom_borrow_monthly,
+        "Mom Post-Peak" = mom_postpeak_returns$ret_ls + mom_borrow_monthly,
+        "Mom 12-2"      = mom_combined_returns$ret_ls + mom_borrow_monthly,
         "CMR"           = cmr_port$net_ret,
         "Stock MAX"     = stk_max_portfolio$port_ret + stk_max_portfolio$borrow_cost,
         "Stock DRIF"    = stk_drif_portfolio$port_ret + stk_drif_portfolio$borrow_cost,
