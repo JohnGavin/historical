@@ -275,20 +275,39 @@ plan_risk_state <- function() {
     targets::tar_target(rsc_metrics, {
       library(dplyr)
 
-      calc_metrics <- function(ret_vec, date_vec, label, strategy_name) {
+      # #677: rf_vec is OPTIONAL here (unlike sharpe_ratio_rf() itself,
+      # which aborts on a NULL rf per fail-loud-not-null.md) because only
+      # SPY_buyhold/SPY_overlay have an aligned risk-free series wired in
+      # today (rsc_portfolio$rf_daily, from FF3 RF -- see rsc_data/
+      # rsc_signals above). DRIF_raw/DRIF_overlay/FacMAX_raw/FacMAX_overlay
+      # do not have a matching daily rf series joined onto their overlay
+      # return streams -- sourcing one is out of scope for #677 slice 1
+      # (see PR body). `sharpe` is deliberately left NA_real_ for those
+      # rows; `hac_sharpe` (HAC-adjusted, no rf) is retained for all rows
+      # and is unaffected by this change.
+      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, rf_vec = NULL) {
         keep     <- !is.na(ret_vec)
         ret_vec  <- ret_vec[keep]
         date_vec <- date_vec[keep]
+        if (!is.null(rf_vec)) rf_vec <- rf_vec[keep]
         if (length(ret_vec) < 20) return(NULL)
         years <- length(ret_vec) / 252
         cum <- prod(1 + ret_vec)
         cum_dd <- cumprod(1 + ret_vec)
         hac <- hd_hac_sharpe(ret_vec)
+        # Canonical, risk-free-adjusted Sharpe (#677) -- see
+        # R/utils_metrics.R::sharpe_ratio_rf(). Distinct from hac_sharpe.
+        sharpe_val <- if (!is.null(rf_vec)) {
+          sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 252L)$sharpe
+        } else {
+          NA_real_
+        }
         tibble::tibble(
           strategy  = strategy_name,
           period    = label,
           cagr      = round((cum^(1 / years) - 1) * 100, 2),
           vol       = round(sd(ret_vec) * sqrt(252) * 100, 2),
+          sharpe    = round(sharpe_val, 3),
           max_dd    = round(min((cum_dd - cummax(cum_dd)) /
                                   cummax(cum_dd)) * 100, 2),
           hac_tstat = round(hac$hac_tstat, 3),
@@ -318,16 +337,21 @@ plan_risk_state <- function() {
       is_test  <- port$date >= oos & port$date <= test_end
 
       # SPY buy-and-hold, SPY with overlay
-      spy_bh_full  <- calc_metrics(port$ret_buyhold,  port$date,  "Full Period", "SPY_buyhold")
-      spy_ov_full  <- calc_metrics(port$ret_strategy, port$date,  "Full Period", "SPY_overlay")
+      # rf_vec = port$rf_daily: FF3 daily RF, already lagged (t+1) and
+      # zero-filled for leading NAs at rsc_portfolio construction time
+      # (R/plan_risk_state.R rsc_portfolio target) -- safe to pass directly.
+      spy_bh_full  <- calc_metrics(port$ret_buyhold,  port$date,  "Full Period", "SPY_buyhold",
+                                   rf_vec = port$rf_daily)
+      spy_ov_full  <- calc_metrics(port$ret_strategy, port$date,  "Full Period", "SPY_overlay",
+                                   rf_vec = port$rf_daily)
       spy_bh_train <- calc_metrics(port$ret_buyhold[is_train],  port$date[is_train],
-                                   "Training", "SPY_buyhold")
+                                   "Training", "SPY_buyhold", rf_vec = port$rf_daily[is_train])
       spy_ov_train <- calc_metrics(port$ret_strategy[is_train], port$date[is_train],
-                                   "Training", "SPY_overlay")
+                                   "Training", "SPY_overlay", rf_vec = port$rf_daily[is_train])
       spy_bh_test  <- calc_metrics(port$ret_buyhold[is_test],  port$date[is_test],
-                                   "Testing", "SPY_buyhold")
+                                   "Testing", "SPY_buyhold", rf_vec = port$rf_daily[is_test])
       spy_ov_test  <- calc_metrics(port$ret_strategy[is_test], port$date[is_test],
-                                   "Testing", "SPY_overlay")
+                                   "Testing", "SPY_overlay", rf_vec = port$rf_daily[is_test])
 
       # DRIF raw vs overlaid
       drif_raw_full <- calc_metrics(drif$ret_raw,     drif$date, "Full Period", "DRIF_raw")
@@ -775,8 +799,10 @@ plan_risk_state <- function() {
 
   # Record SPY_overlay / Full Period metrics row (the primary RSC result)
   # Units (#640): rsc_metrics stores cagr/vol/max_dd as PERCENT
-  # (round(x*100, ...) in calc_metrics() above); hac_tstat/hac_sharpe are
-  # scale-free ratios.
+  # (round(x*100, ...) in calc_metrics() above); sharpe/hac_tstat/hac_sharpe
+  # are scale-free ratios (#677: `sharpe` is the new canonical,
+  # risk-free-adjusted column added alongside the pre-existing `hac_sharpe`
+  # -- both need a unit or hd_metric_record() aborts loud per #640).
   full_row <- rsc_metrics[
     rsc_metrics$strategy == "SPY_overlay" & rsc_metrics$period == "Full Period",
     , drop = FALSE
@@ -785,7 +811,7 @@ plan_risk_state <- function() {
     metric_cols <- setdiff(names(full_row), c("strategy", "period"))
     rsc_units <- c(
       cagr = "percent", vol = "percent", max_dd = "percent",
-      hac_tstat = "ratio", hac_sharpe = "ratio"
+      sharpe = "ratio", hac_tstat = "ratio", hac_sharpe = "ratio"
     )
     historicaldata::hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = rsc_units

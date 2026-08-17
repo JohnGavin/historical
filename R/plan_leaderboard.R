@@ -65,13 +65,15 @@ plan_leaderboard <- function() {
       # comment above. Each helper below converts from its source's native
       # unit (fraction or percent) at this boundary.
 
-      # ltr_metrics has hac_sharpe instead of sharpe; no months column.
+      # ltr_metrics carries its own canonical `sharpe` (#677: (ann_ret -
+      # ann_rf) / ann_vol, via R/utils_metrics.R::sharpe_ratio_rf()) AS
+      # WELL AS `hac_sharpe` (a separate, HAC-adjusted statistic) -- no
+      # longer renamed/substituted, see plan_ltr_momentum.R:compute_ltr_metrics().
       # Source: R/plan_ltr_momentum.R:167-169 (compute_ltr_metrics) stores
       # cagr/vol/max_dd as PERCENT (round(x * 100, 1)) -- convert to fraction.
       .norm_ltr <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
-          rename(sharpe = hac_sharpe) |>
           mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
@@ -126,7 +128,11 @@ plan_leaderboard <- function() {
 
       # rsc_metrics contains multiple internal strategy variants (SPY_overlay,
       # DRIF_overlay, etc.). Pick only the SPY_overlay rows which represent the
-      # strategy's own performance.
+      # strategy's own performance. Those rows now carry a canonical `sharpe`
+      # (#677: (ann_ret - ann_rf) / ann_vol, via
+      # R/utils_metrics.R::sharpe_ratio_rf(), rf = rsc_portfolio$rf_daily) AS
+      # WELL AS `hac_sharpe` -- no longer renamed/substituted, see
+      # plan_risk_state.R:calc_metrics().
       # Source: R/plan_risk_state.R:270-273 stores cagr/vol/max_dd as PERCENT
       # (round(x * 100, 2)) -- convert to fraction.
       .norm_rsc <- function(m) {
@@ -134,7 +140,6 @@ plan_leaderboard <- function() {
         m |>
           filter(strategy == "SPY_overlay") |>
           select(-strategy) |>
-          rename(sharpe = hac_sharpe) |>
           mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
       }
 
