@@ -144,12 +144,39 @@ plan_ltr_momentum <- function() {
       cli::cli_inform(c(
         "v" = "LTR portfolio: {nrow(port)} months, {format(min(port$date), '%Y-%m')} to {format(max(port$date), '%Y-%m')}"
       ))
-      port |>
+      port <- port |>
         mutate(
           port_ret = ls_ret_net,
           port_cum = cumprod(1 + port_ret)
         ) |>
         dplyr::mutate(date = as.Date(date, tz = "UTC"))
+
+      # ── #677 defect B ──────────────────────────────────────────────────
+      # ltr_portfolio previously had no `rf_ret` column at all. Every
+      # downstream Sharpe computed against it (`ltr_subperiod$sharpe` via
+      # compute_sp_metrics() below, and `ltr_metrics$sharpe` via
+      # compute_ltr_metrics()) evaluated `mean(df$rf_ret, na.rm = TRUE)`
+      # against a NULL column, which returns NA silently -- every
+      # subperiod Sharpe was NA from the day this target was written,
+      # discovered only by accident (see fail-loud-not-null.md). Join the
+      # shared monthly risk-free series (`stk_rf`: ym, rf_ret --
+      # R/plan_stock_backtest.R) onto `ym`, and abort loud rather than let
+      # a partial join reintroduce the same silent-NA defect one level
+      # down.
+      port_ym_range <- range(port$ym)
+      port <- port |> left_join(stk_rf, by = "ym")
+
+      missing_rf_ym <- sort(port$ym[is.na(port$rf_ret)])
+      if (length(missing_rf_ym) > 0L) {
+        cli::cli_abort(c(
+          "x" = "{length(missing_rf_ym)} month{?s} in ltr_portfolio have no matching stk_rf risk-free rate.",
+          "i" = "Missing ym: {.val {missing_rf_ym}}.",
+          "i" = "ltr_portfolio spans {port_ym_range[1]}..{port_ym_range[2]}; stk_rf spans {min(stk_rf$ym)}..{max(stk_rf$ym)}.",
+          "i" = "Extend stk_rf's `from` date (R/plan_stock_backtest.R) or investigate the FF3 data source before trusting any downstream LTR Sharpe figure."
+        ))
+      }
+
+      port
     }),
 
 
@@ -169,6 +196,15 @@ plan_ltr_momentum <- function() {
         cum     <- cumprod(1 + df$port_ret)
         max_dd  <- min(cum / cummax(cum) - 1)
 
+        # #677: canonical, risk-free-adjusted Sharpe -- see
+        # R/utils_metrics.R::sharpe_ratio_rf(). This is the statistic used
+        # for cross-strategy leaderboard ranking (R/plan_leaderboard.R).
+        # `hac_sharpe` below is a SEPARATE, HAC-adjusted naive/arithmetic
+        # statistic -- both are kept as distinct columns; do not conflate
+        # them. `df$rf_ret` is guaranteed present and fully covered by the
+        # `ltr_portfolio` target's join + coverage check above.
+        sr <- sharpe_ratio_rf(df$port_ret, df$rf_ret, periods_per_year = 12L)
+
         hac <- tryCatch(hd_hac_sharpe(df$port_ret),
                         error = function(e) list(hac_tstat = NA_real_, naive_sharpe = NA_real_))
 
@@ -178,6 +214,7 @@ plan_ltr_momentum <- function() {
           cagr       = round(ann_ret * 100, 1),
           vol        = round(ann_vol * 100, 1),
           max_dd     = round(max_dd * 100, 1),
+          sharpe     = round(sr$sharpe, 2),
           hac_sharpe = round(hac$naive_sharpe, 2),
           hac_tstat  = round(hac$hac_tstat, 2),
           avg_long   = if ("n_long" %in% names(df)) round(mean(df$n_long, na.rm = TRUE)) else NA_integer_,
@@ -368,11 +405,17 @@ plan_ltr_momentum <- function() {
         nm <- nrow(df)
         if (nm < 6L) return(NULL)
         ann_ret <- prod(1 + df$port_ret)^(12 / nm) - 1
-        ann_vol <- sd(df$port_ret) * sqrt(12)
-        rf_ann  <- mean(df$rf_ret, na.rm = TRUE) * 12
         cum     <- cumprod(1 + df$port_ret)
         max_dd  <- min(cum / cummax(cum) - 1)
-        sharpe  <- if (ann_vol < 1e-8) NA_real_ else (ann_ret - rf_ann) / ann_vol
+
+        # #677 defect B: this used to be `mean(df$rf_ret, na.rm = TRUE)`
+        # against a column that did not exist on ltr_portfolio -- silently
+        # NA, so `sharpe` below was NA for every subperiod. `df$rf_ret` is
+        # now guaranteed present (ltr_portfolio's join + coverage check in
+        # this file), and sharpe_ratio_rf() aborts loud if it ever isn't.
+        sr      <- sharpe_ratio_rf(df$port_ret, df$rf_ret, periods_per_year = 12L)
+        ann_vol <- sr$ann_vol
+        sharpe  <- sr$sharpe
 
         hac <- tryCatch(hd_hac_sharpe(df$port_ret),
                         error = function(e) list(hac_tstat = NA_real_))
@@ -469,14 +512,17 @@ plan_ltr_momentum <- function() {
 
   # Record full-period metrics row
   # Units (#640): ltr_metrics stores cagr/vol/max_dd as PERCENT (round(x*100,1)
-  # above — the source #637 flagged as percent-native), hac_sharpe/hac_tstat
-  # are scale-free ratios, and months/avg_long/avg_short are counts.
+  # above — the source #637 flagged as percent-native), sharpe/hac_sharpe/
+  # hac_tstat are scale-free ratios (#677: `sharpe` is the new canonical,
+  # risk-free-adjusted column added alongside the pre-existing `hac_sharpe`
+  # -- both need a unit or hd_metric_record() aborts loud per #640), and
+  # months/avg_long/avg_short are counts.
   full_row <- ltr_metrics[ltr_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
     ltr_units <- c(
       months = "count", cagr = "percent", vol = "percent", max_dd = "percent",
-      hac_sharpe = "ratio", hac_tstat = "ratio",
+      sharpe = "ratio", hac_sharpe = "ratio", hac_tstat = "ratio",
       avg_long = "count", avg_short = "count"
     )
     historicaldata::hd_metric_record(

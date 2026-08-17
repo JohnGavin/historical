@@ -22,6 +22,11 @@ source(here::here("R/plan_stock_backtest.R"))
 source(here::here("R/plan_xgb_signal.R"))
 source(here::here("R/plan_ltr_momentum.R"))
 source(here::here("R/plan_portfolio_opt.R"))
+# #677: ltr_metrics' compute_ltr_metrics() now calls sharpe_ratio_rf() (the
+# shared canonical Sharpe helper) -- source it so .eval_target()'s eval env
+# (parent = globalenv()) can resolve it, same as every other top-level
+# helper this file relies on being sourced.
+source(here::here("R/utils_metrics.R"))
 
 .eval_bt_partitions <- function() {
   targets_list <- plan_partitions()
