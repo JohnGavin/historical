@@ -172,3 +172,60 @@ test_that("ltr_subperiod: aborts loud (not silent NA) if rf_ret is missing from 
     class = "rlang_error"
   )
 })
+
+# ── .ltr_join_rf() coverage policy (#677 follow-up) ─────────────────────────
+#
+# PR #678 aborted on ANY uncovered month. On its first real run that took the
+# whole leaderboard down: ltr_portfolio spanned 2005-01..2026-03 while stk_rf
+# (Fama-French) ended 2026-02. FF3 publishes with a lag, so the newest month
+# routinely has no rf yet and this recurs monthly. The policy now distinguishes
+# a trailing lag (trim + loud warn) from an interior hole (still abort).
+
+.mk_port <- function(yms) tibble::tibble(ym = yms, port_ret = seq_along(yms) / 1000)
+.mk_rf   <- function(yms) tibble::tibble(ym = yms, rf_ret = rep(0.001, length(yms)))
+
+test_that(".ltr_join_rf attaches rf_ret with no NA when coverage is complete", {
+  out <- .ltr_join_rf(.mk_port(c("2026-01", "2026-02")), .mk_rf(c("2026-01", "2026-02")))
+  expect_equal(nrow(out), 2L)
+  expect_false(anyNA(out$rf_ret))
+})
+
+test_that(".ltr_join_rf trims a trailing uncovered month and warns (the #678 breakage)", {
+  port <- .mk_port(c("2026-01", "2026-02", "2026-03"))
+  rf   <- .mk_rf(c("2026-01", "2026-02"))
+
+  expect_warning(out <- .ltr_join_rf(port, rf), regexp = "2026-03")
+  # The uncovered month is REMOVED, not carried as NA -- carrying it is the
+  # defect B this join exists to fix.
+  expect_equal(nrow(out), 2L)
+  expect_false(anyNA(out$rf_ret))
+  expect_false("2026-03" %in% out$ym)
+})
+
+test_that(".ltr_join_rf warning names the effective end date, not just the drop", {
+  expect_warning(
+    .ltr_join_rf(.mk_port(c("2026-01", "2026-02", "2026-03")), .mk_rf(c("2026-01", "2026-02"))),
+    regexp = "2026-02"
+  )
+})
+
+test_that(".ltr_join_rf still aborts on an INTERIOR hole -- a real FF3 gap, not a lag", {
+  port <- .mk_port(c("2026-01", "2026-02", "2026-03"))
+  rf   <- .mk_rf(c("2026-01", "2026-03"))  # 2026-02 missing, inside the span
+
+  expect_error(.ltr_join_rf(port, rf), regexp = "2026-02")
+  expect_error(.ltr_join_rf(port, rf), regexp = "HOLE")
+})
+
+test_that(".ltr_join_rf aborts when stk_rf lacks required columns", {
+  expect_error(
+    .ltr_join_rf(.mk_port("2026-01"), tibble::tibble(ym = "2026-01")),
+    regexp = "rf_ret"
+  )
+})
+
+test_that(".ltr_join_rf abort messages are stable", {
+  port <- .mk_port(c("2026-01", "2026-02", "2026-03"))
+  expect_snapshot(error = TRUE, .ltr_join_rf(port, .mk_rf(c("2026-01", "2026-03"))))
+  expect_snapshot(error = TRUE, .ltr_join_rf(.mk_port("2026-01"), tibble::tibble(ym = "2026-01")))
+})

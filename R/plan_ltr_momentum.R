@@ -163,20 +163,7 @@ plan_ltr_momentum <- function() {
       # R/plan_stock_backtest.R) onto `ym`, and abort loud rather than let
       # a partial join reintroduce the same silent-NA defect one level
       # down.
-      port_ym_range <- range(port$ym)
-      port <- port |> left_join(stk_rf, by = "ym")
-
-      missing_rf_ym <- sort(port$ym[is.na(port$rf_ret)])
-      if (length(missing_rf_ym) > 0L) {
-        cli::cli_abort(c(
-          "x" = "{length(missing_rf_ym)} month{?s} in ltr_portfolio have no matching stk_rf risk-free rate.",
-          "i" = "Missing ym: {.val {missing_rf_ym}}.",
-          "i" = "ltr_portfolio spans {port_ym_range[1]}..{port_ym_range[2]}; stk_rf spans {min(stk_rf$ym)}..{max(stk_rf$ym)}.",
-          "i" = "Extend stk_rf's `from` date (R/plan_stock_backtest.R) or investigate the FF3 data source before trusting any downstream LTR Sharpe figure."
-        ))
-      }
-
-      port
+      .ltr_join_rf(port, stk_rf)
     }),
 
 
@@ -459,6 +446,78 @@ plan_ltr_momentum <- function() {
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Prefixed .ltr_* (private; not exported from the package).
 # Mirrors .mom_prepeak_register_runs() from plan_mom_prepeak.R.
+
+#' Join the shared risk-free series onto an LTR portfolio, handling coverage
+#'
+#' Extracted from the `ltr_portfolio` target so the coverage policy is pure
+#' and unit-testable (the target itself reads a gitignored parquet, so it
+#' cannot be exercised portably).
+#'
+#' #677 defect B gave `ltr_portfolio` an `rf_ret` column for the first time;
+#' before that, `mean(df$rf_ret, na.rm = TRUE)` evaluated against a NULL
+#' column and every downstream Sharpe was silently `NA`.
+#'
+#' PR #678's first form then aborted on ANY uncovered month, which took the
+#' whole leaderboard down on its first real run: `ltr_portfolio` spanned
+#' 2005-01..2026-03 while `stk_rf` (Fama-French) spanned 2005-01..2026-02.
+#' That is not a defect — FF3 publishes with a lag, so the newest portfolio
+#' month routinely has no risk-free rate yet, and it recurs every month.
+#' Aborting turned an expected data-lag condition into a hard failure.
+#'
+#' Silently keeping `NA` rf is the defect this join exists to fix, so the
+#' policy distinguishes the two cases:
+#'   - **trailing** uncovered months (beyond `max(stk_rf$ym)`) — a
+#'     publication lag. TRIM them and `cli_warn`, naming the dropped months
+#'     and the effective end date, per `fail-loud-not-null.md`'s "Make the
+#'     drop observable". The drop is counted and reported, never silent.
+#'   - **interior** uncovered months (at or before `max(stk_rf$ym)`) — a real
+#'     hole in the FF3 series, not a lag. Still `cli_abort`.
+#'
+#' @param port Tibble with a `ym` column (the LTR portfolio).
+#' @param stk_rf Tibble with columns `ym`, `rf_ret`.
+#' @return `port` with `rf_ret` joined, trailing uncovered months removed.
+#' @noRd
+.ltr_join_rf <- function(port, stk_rf) {
+  required <- c("ym", "rf_ret")
+  missing_cols <- setdiff(required, names(stk_rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = ".ltr_join_rf(): stk_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R)."
+    ))
+  }
+  if (!"ym" %in% names(port)) {
+    cli::cli_abort(c("x" = ".ltr_join_rf(): port has no {.field ym} column to join on."))
+  }
+
+  port_ym_range <- range(port$ym)
+  port <- dplyr::left_join(port, stk_rf, by = "ym")
+
+  missing_rf_ym <- sort(port$ym[is.na(port$rf_ret)])
+  if (length(missing_rf_ym) == 0L) return(port)
+
+  rf_max   <- max(stk_rf$ym)
+  interior <- missing_rf_ym[missing_rf_ym <= rf_max]
+
+  if (length(interior) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(interior)} month{?s} inside stk_rf's own span have no risk-free rate.",
+      "i" = "Missing ym: {.val {interior}}.",
+      "i" = "stk_rf spans {min(stk_rf$ym)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
+      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R) before trusting any LTR Sharpe figure."
+    ))
+  }
+
+  n_before <- nrow(port)
+  port <- dplyr::filter(port, !is.na(.data$rf_ret))
+  cli::cli_warn(c(
+    "!" = "Dropped {n_before - nrow(port)} trailing month{?s} from ltr_portfolio with no risk-free rate yet.",
+    "i" = "Dropped ym: {.val {missing_rf_ym}}.",
+    "i" = "ltr_portfolio spans {port_ym_range[1]}..{port_ym_range[2]}; stk_rf ends {rf_max} (Fama-French publication lag).",
+    "i" = "Every LTR metric is therefore computed through {rf_max}, not {port_ym_range[2]}."
+  ))
+  port
+}
 
 #' Register LTR backtest run in the strategy registry
 #'
