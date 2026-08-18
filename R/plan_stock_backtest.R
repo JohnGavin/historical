@@ -560,15 +560,50 @@ plan_stock_backtest <- function() {
     }),
 
     # ── Group 1: Risk-free rate (monthly) ─────────────────────────
+    # #677: stk_rf is no longer the stock backtest's private risk-free series.
+    # It is now the SHARED monthly rf consumed by ltr_portfolio
+    # (R/plan_ltr_momentum.R), cmr_metrics_* (R/plan_commodities_mean_reversion.R)
+    # and the three mom_prepeak siblings (R/plan_mom_prepeak.R) after those
+    # strategies migrated onto the canonical rf-adjusted Sharpe.
+    #
+    # It was fetched `from = stk_params$start_date` (2005-01) -- the stock
+    # backtest's own window. That truncation is invisible while only the stock
+    # backtest reads it, and fatal once anything with a longer history does:
+    # mom_prepeak's returns start 1973-02 and CMR's 1992-03, so on the first
+    # build after slice 3 those targets aborted with 383 and 1367 "months
+    # inside stk_rf's own span have no risk-free rate", taking `leaderboard`
+    # down with them.
+    #
+    # FF3 daily RF is available 1926-07-01..2026-02-27 (verified), so the data
+    # was always there -- only this filter was hiding it. Fetch the full
+    # series: a shared reference series must not be scoped to one consumer's
+    # window. Widening is safe for existing consumers, which all left_join by
+    # `ym` and simply ignore the extra earlier months.
     targets::tar_target(stk_rf, {
       library(dplyr)
 
-      hd_factors(dataset = "FF3", frequency = "daily",
-                 from = as.character(stk_params$start_date)) |>
+      # FF3's earliest available date, NOT any single strategy's start_date.
+      RF_SERIES_START <- "1926-07-01"
+
+      out <- hd_factors(dataset = "FF3", frequency = "daily",
+                        from = RF_SERIES_START) |>
         filter(factor_name == "RF") |>
         mutate(value = value / 100, ym = format(date, "%Y-%m")) |>
         group_by(ym) |>
         summarise(rf_ret = prod(1 + value) - 1, .groups = "drop")
+
+      if (nrow(out) == 0L || anyNA(out$rf_ret)) {
+        cli::cli_abort(c(
+          "x" = "stk_rf came back empty or with NA rf_ret.",
+          "i" = "Rows: {nrow(out)}; NA rf_ret: {sum(is.na(out$rf_ret))}.",
+          "i" = "Every strategy's Sharpe depends on this series -- check the FF3 source before proceeding."
+        ))
+      }
+
+      cli::cli_inform(c(
+        "v" = "stk_rf: {nrow(out)} months, {min(out$ym)}..{max(out$ym)} (shared rf series, #677)."
+      ))
+      out
     }),
 
     # ── Group 1: Monthly ADV per ticker (for ADV participation cap) ──
