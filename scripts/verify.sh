@@ -6,31 +6,71 @@
 # the same for a human or an agent, and runs (full mode) with NOT_CRAN=true
 # set — WITHOUT it, testthat silently skips every skip_on_cran()-gated test,
 # which includes this repo's mandated snapshot tests:
-#   1. parse("_targets.R")                                  (always)
-#   2. root testthat suite  (tests/testthat/)                (full mode only)
-#   3. package testthat suite (packages/historicaldata/)      (full mode only)
+#   1. parse("_targets.R")                                    (always)
+#   2. parse("docs/_targets.R")                                (always, #680)
+#   3. tar_validate(script="docs/_targets.R")                  (always, #680)
+#   4. root testthat suite  (tests/testthat/)                  (full mode only)
+#   5. package testthat suite (packages/historicaldata/)        (full mode only)
 #
-# Both suites carry a small number of known pre-existing failures (see the
-# BASELINE_* arrays below, issue #569) that predate this script and are NOT
-# regressions. verify.sh exits 0 only if a suite's failing-test signatures
-# are EXACTLY its baseline set — any addition, removal, or substitution is
-# treated as a change worth a human's attention. A NEW failure that testthat
-# reports as snapshot-related is called out as [NEW-SNAPSHOT] rather than
-# [NEW] — it means a snapshot is missing or stale, not that behaviour
-# regressed. SKIP counts are always printed alongside PASS/FAIL; for the
-# package suite, a rise above BASELINE_PKG_SKIP_COUNT now FAILS the run
-# (#654) rather than merely printing a warning. The root suite has no
-# maintained skip baseline (normally 0) and is printed only.
+# TWO PIPELINES — always pass script= explicitly (#680). `_targets.R` at repo
+# root is a small "rn node" sandbox pipeline (~4 plan_ references). The real
+# one is `docs/_targets.R` (~148 plan_ references) — it produces `leaderboard`
+# and everything this repo publishes. Which one `targets` uses by default is
+# decided by `_targets.yaml`, and that file is GITIGNORED — it exists only in
+# the main checkout, never in a worktree. Any check that omits an explicit
+# `script =` therefore silently validates the wrong pipeline in a worktree.
+# Checks 1-3 above avoid that trap by naming the file directly.
+#
+# WHAT THIS SCRIPT DOES NOT PROVE — read before trusting a PASS (#680).
+# tar_validate() needs no store and runs no target body: it only confirms the
+# pipeline is STRUCTURALLY sound (parses, no duplicate target names, no
+# circular deps, no unresolved symbols). It would NOT have caught either
+# failure that broke `main` this week:
+#   - PR #678 — a runtime cli_abort() inside ltr_portfolio (rf coverage).
+#   - PR #683 — the same class, from stk_rf being scoped to one consumer's
+#     window.
+#   Both are structurally valid pipelines that abort on real data. Catching
+#   that class needs an actual build (`tar_make()`) plus
+#   `tar_meta(fields = error)` against a real store — see
+#   scripts/check_pipeline_errors.R, a separate, post-build, main-checkout-
+#   only script (a worktree has no store, and must not build one that could
+#   race the main checkout's store).
+# `error = "continue"` is set project-wide in docs/_targets.R, which means
+# tar_make() itself EXITS 0 even when targets errored — a green tar_make()
+# run is not proof either. That is exactly why check_pipeline_errors.R reads
+# tar_meta() directly instead of trusting the exit code.
+# A THIRD, still-uncovered surface: docs/*.qmd chunks call tar_read() for a
+# specific target name. A chunk referencing a target that no longer exists
+# (typo, rename, removal) fails only at RENDER time — not at parse, not at
+# tar_validate(), not at tar_make(). Nothing in this script, and nothing else
+# in the repo yet, catches that; it requires an actual quarto render pass.
+#
+# Both testthat suites carry a small number of known pre-existing failures
+# (see the BASELINE_* arrays below, issue #569) that predate this script and
+# are NOT regressions. verify.sh exits 0 only if a suite's failing-test
+# signatures are EXACTLY its baseline set — any addition, removal, or
+# substitution is treated as a change worth a human's attention. A NEW
+# failure that testthat reports as snapshot-related is called out as
+# [NEW-SNAPSHOT] rather than [NEW] — it means a snapshot is missing or stale,
+# not that behaviour regressed. SKIP counts are always printed alongside
+# PASS/FAIL; for the package suite, a rise above BASELINE_PKG_SKIP_COUNT now
+# FAILS the run (#654) rather than merely printing a warning. The root suite
+# has no maintained skip baseline (normally 0) and is printed only.
 #
 # Usage:
 #   scripts/verify.sh            # full verification (can take a few minutes)
-#   scripts/verify.sh --quick    # parse-only, fast pre-commit check
+#   scripts/verify.sh --quick    # parse + structural DAG validate (fast; the
+#                                 # tar_validate() call measured ~7s warm —
+#                                 # see #680 PR body — so it stays in --quick)
 #
 # Exit codes:
-#   0  verified: parse OK, both suites' failures == their baseline exactly
-#   1  verification RAN and found a problem (new/missing failure, parse error)
+#   0  verified: both pipelines parse, docs/_targets.R validates structurally
+#      OK, and both testthat suites' failures == their baseline exactly
+#   1  verification RAN and found a problem (new/missing test failure, a
+#      parse error in docs/_targets.R, or a tar_validate() structural error)
 #   2  verification did NOT run at all (nix develop / Rscript unavailable or
-#      crashed) — this is NOT a pass, never treat it as one
+#      crashed, or the ROOT _targets.R failed to parse) — this is NOT a pass,
+#      never treat it as one
 
 set -euo pipefail
 
@@ -131,15 +171,51 @@ fi
 echo "=== scripts/verify.sh ==="
 echo "Repo root: $REPO_ROOT"
 if [[ "$QUICK" -eq 1 ]]; then
-  echo "Mode: --quick (parse only)"
+  echo "Mode: --quick (parse + docs/_targets.R structural validate)"
 else
-  echo "Mode: full (parse + root suite + package suite)"
+  echo "Mode: full (parse + docs/_targets.R structural validate + root suite + package suite)"
 fi
 echo ""
 
 WORK_DIR="$(mktemp -d)"
 trap 'rm -rf "$WORK_DIR"' EXIT
 R_OUT="$WORK_DIR/r_out.txt"
+
+# R fragment shared by both modes (#680): validate the REAL pipeline
+# (docs/_targets.R), always naming script= explicitly — see the header
+# comment for why relying on the ambient (gitignored) _targets.yaml is the
+# bug this issue is about. Does NOT quit() on failure -- unlike the root
+# _targets.R gate above, a failure here is reported via OVERALL_STATUS
+# (exit 1), never treated as "verification did not run" (exit 2).
+DOCS_VALIDATE_FRAGMENT='
+    docs_parse_ok <- tryCatch({
+      parse(file.path("docs", "_targets.R"))
+      TRUE
+    }, error = function(e) {
+      message("DOCS_PARSE_ERROR: ", conditionMessage(e))
+      FALSE
+    })
+    cat("::VERIFY:DOCS_PARSE_OK::", docs_parse_ok, "\n")
+
+    # tar_validate() needs no store and runs no target body -- see the
+    # header comment for exactly what this does and does not prove.
+    validate_start <- Sys.time()
+    validate_ok <- if (isTRUE(docs_parse_ok)) {
+      tryCatch({
+        targets::tar_validate(script = file.path("docs", "_targets.R"), store = tempfile())
+        TRUE
+      }, error = function(e) {
+        message("TAR_VALIDATE_ERROR: ", conditionMessage(e))
+        FALSE
+      })
+    } else {
+      message("TAR_VALIDATE_ERROR: skipped -- docs/_targets.R failed to parse")
+      FALSE
+    }
+    validate_elapsed <- as.numeric(Sys.time() - validate_start, units = "secs")
+    cat("::VERIFY:TAR_VALIDATE_OK::", validate_ok, "\n")
+    cat(sprintf("::VERIFY:TAR_VALIDATE_ELAPSED:: %.2f\n", validate_elapsed))
+'
 
 if [[ "$QUICK" -eq 1 ]]; then
   R_SCRIPT='
@@ -153,6 +229,7 @@ if [[ "$QUICK" -eq 1 ]]; then
     })
     if (!isTRUE(parse_ok)) quit(status = 1, save = "no")
     cat("::VERIFY:PARSE_OK::\n")
+'"$DOCS_VALIDATE_FRAGMENT"'
   '
 else
   R_SCRIPT='
@@ -169,6 +246,7 @@ else
     })
     if (!isTRUE(parse_ok)) quit(status = 1, save = "no")
     cat("::VERIFY:PARSE_OK::\n")
+'"$DOCS_VALIDATE_FRAGMENT"'
 
     # NOT_CRAN=true — WITHOUT this, testthat silently SKIPS every
     # skip_on_cran()-gated test, and that gate is what this project uses to
@@ -301,6 +379,28 @@ if [[ "$(cd "$R_CWD" 2>/dev/null && pwd -P)" != "$(cd "$REPO_ROOT" && pwd -P)" ]
 fi
 echo "PASS: _targets.R parses (verified tree: $R_CWD)"
 
+# The REAL pipeline (#680) — root _targets.R above is a small sandbox
+# pipeline; docs/_targets.R is the one that builds `leaderboard`. A failure
+# here is a genuine problem, reported below (exit 1), never the "did not run"
+# gate above (exit 2) — see the header comment for exactly what tar_validate()
+# does and does not prove.
+DOCS_STATUS=0
+if grep -q '::VERIFY:DOCS_PARSE_OK:: TRUE' "$R_OUT"; then
+  echo "PASS: docs/_targets.R parses"
+else
+  echo "FAIL: docs/_targets.R failed to parse — see DOCS_PARSE_ERROR above"
+  DOCS_STATUS=1
+fi
+
+VALIDATE_STATUS=0
+VALIDATE_ELAPSED="$(grep '::VERIFY:TAR_VALIDATE_ELAPSED::' "$R_OUT" | head -1 | sed 's/.*:: *//' | tr -d '[:space:]')"
+if grep -q '::VERIFY:TAR_VALIDATE_OK:: TRUE' "$R_OUT"; then
+  echo "PASS: docs/_targets.R is structurally valid (tar_validate, ${VALIDATE_ELAPSED}s — structural only, see header comment for what this does not prove)"
+else
+  echo "FAIL: docs/_targets.R failed tar_validate() (${VALIDATE_ELAPSED}s) — see TAR_VALIDATE_ERROR above"
+  VALIDATE_STATUS=1
+fi
+
 # Edition guard. If this ever reads 2, every skip_on_cran()-gated snapshot test
 # silently changes behaviour while the suite still reports green — the #574
 # failure mode. Loud is the only acceptable outcome.
@@ -316,8 +416,12 @@ fi
 
 if [[ "$QUICK" -eq 1 ]]; then
   echo ""
-  echo "=== scripts/verify.sh: PASS (--quick, parse only) ==="
-  exit 0
+  if [[ "$DOCS_STATUS" -eq 0 ]] && [[ "$VALIDATE_STATUS" -eq 0 ]]; then
+    echo "=== scripts/verify.sh: PASS (--quick, parse + docs/_targets.R structural validate) ==="
+    exit 0
+  fi
+  echo "=== scripts/verify.sh: FAIL (--quick) ==="
+  exit 1
 fi
 
 if ! grep -q "::VERIFY:DONE::" "$R_OUT"; then
@@ -381,6 +485,9 @@ compare_failure_set() {
 }
 
 OVERALL_STATUS=0
+if [[ "$DOCS_STATUS" -ne 0 ]] || [[ "$VALIDATE_STATUS" -ne 0 ]]; then
+  OVERALL_STATUS=1
+fi
 
 CURRENT_ROOT_SIGNATURES="$(awk '/::VERIFY:ROOT_SIGNATURES_START::/{flag=1; next} /::VERIFY:ROOT_SIGNATURES_END::/{flag=0} flag' "$R_OUT")"
 CURRENT_ROOT_SNAPSHOT="$(awk '/::VERIFY:ROOT_SNAPSHOT_FAILS_START::/{flag=1; next} /::VERIFY:ROOT_SNAPSHOT_FAILS_END::/{flag=0} flag' "$R_OUT")"
