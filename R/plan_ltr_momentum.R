@@ -546,14 +546,15 @@ plan_ltr_momentum <- function() {
   # hac_tstat are scale-free ratios (#677: `sharpe` is the new canonical,
   # risk-free-adjusted column added alongside the pre-existing `hac_sharpe`
   # -- both need a unit or hd_metric_record() aborts loud per #640), and
-  # months/avg_long/avg_short are counts.
+  # months/avg_long/avg_short are counts. ann_rf (#677 slice 4, #691) is
+  # PERCENT, same convention as cagr (round(sr$ann_rf * 100, 1) above).
   full_row <- ltr_metrics[ltr_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
     ltr_units <- c(
       months = "count", cagr = "percent", vol = "percent", max_dd = "percent",
       sharpe = "ratio", hac_sharpe = "ratio", hac_tstat = "ratio",
-      avg_long = "count", avg_short = "count"
+      avg_long = "count", avg_short = "count", ann_rf = "percent"
     )
     historicaldata::hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = ltr_units

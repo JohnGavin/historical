@@ -442,6 +442,8 @@ plan_turn_of_month <- function() {
   # Record Full Period metrics row (#640: cagr_*/vol_*/max_dd_*/pct_in_tom
   # are PERCENT — round(x*100, ...) in calc() above; sharpe_* are scale-free
   # ratios; n_days/n_tom_days are counts; years is a year-duration).
+  # ann_rf_tom (#677 slice 4, #691) is PERCENT, same convention as cagr_tom
+  # (round(sr_s$ann_rf * 100, 2) above).
   full_row <- tom_metrics[tom_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     metric_cols <- setdiff(names(full_row), "period")
@@ -451,7 +453,8 @@ plan_turn_of_month <- function() {
       max_dd_tom = "percent",
       cagr_bh = "percent", vol_bh = "percent", sharpe_bh = "ratio",
       max_dd_bh = "percent",
-      n_tom_days = "count", pct_in_tom = "percent"
+      n_tom_days = "count", pct_in_tom = "percent",
+      ann_rf_tom = "percent"
     )
     historicaldata::hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = tom_units
