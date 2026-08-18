@@ -51,8 +51,28 @@ if (!dir.exists(store_path)) {
   quit(status = 2, save = "no")
 }
 
+# NOT `complete_only = TRUE` (#693). tar_meta()'s own source
+# (targets::tar_meta, confirmed against the installed package version in
+# this nix shell) does:
+#   out <- out[, base::union("name", fields), drop = FALSE]
+#   if (complete_only) out <- out[stats::complete.cases(out), , drop = FALSE]
+# With `fields = error`, `out` has exactly two columns: name, error.
+# `complete.cases()` on that requires BOTH non-NA -- so `complete_only =
+# TRUE` silently keeps only the rows whose `error` is NOT NA, i.e. it
+# returns the ERRORED set *before* the `errored <- meta[!is.na(meta$error),
+# ]` line below even runs. That line was therefore a no-op on the already-
+# filtered result, and `nrow(meta)` -- printed as "Complete targets
+# checked" -- was actually the errored count, not the inspected count: on
+# a clean pipeline it printed 0, one line above "PASS: no errored targets",
+# reading as "nothing was inspected" rather than "nothing was wrong". This
+# is precisely the "green means nothing changed" failure this script
+# exists to prevent (.claude/rules/fail-loud-not-null.md). `targets_only =
+# TRUE` is added for the same reason `tar_meta()`'s default
+# `targets_only = FALSE` also returns metadata rows for functions and
+# other global objects, not just targets -- without it, the count would
+# never have meant "targets" even after fixing complete_only.
 meta <- tryCatch(
-  targets::tar_meta(store = store_path, fields = error, complete_only = TRUE),
+  targets::tar_meta(store = store_path, fields = error, targets_only = TRUE),
   error = function(e) {
     message("!!! tar_meta() failed: ", conditionMessage(e), " !!!")
     NULL
@@ -67,7 +87,8 @@ if (is.null(meta)) {
 errored <- meta[!is.na(meta$error), , drop = FALSE]
 
 cat(sprintf("Store: %s\n", store_path))
-cat(sprintf("Complete targets checked: %d\n", nrow(meta)))
+cat(sprintf("Targets inspected: %d\n", nrow(meta)))
+cat(sprintf("Targets errored:   %d\n", nrow(errored)))
 
 if (nrow(errored) == 0) {
   cat("PASS: no errored targets\n")
