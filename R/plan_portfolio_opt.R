@@ -299,7 +299,19 @@ plan_portfolio_opt <- function() {
           hrp_maxdd  = maxdd_of(df$hrp_ret),
           eq_cagr    = cagr_of(df$equalwt_ret),
           eq_sharpe  = sharpe_of(df$equalwt_ret, rf_ann),
-          eq_maxdd   = maxdd_of(df$equalwt_ret)
+          eq_maxdd   = maxdd_of(df$equalwt_ret),
+          # ann_rf published alongside opt_sharpe (#677 slice 4). All three
+          # sharpe_of() calls above share this SAME rf_ann (one risk-free
+          # rate per period, not per weighting scheme), so a single ann_rf
+          # column is correct here -- it is specifically the rate behind
+          # opt_sharpe, which is the only one of the three that reaches the
+          # leaderboard as "PSO Optimal" (R/plan_leaderboard.R port_row).
+          # FRACTION convention (port_metrics is never *100 -- see
+          # R/plan_leaderboard.R port_row, which uses opt_cagr/opt_vol/
+          # opt_sharpe/opt_maxdd unconverted) -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+          # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          ann_rf     = rf_ann
         )
       }
 

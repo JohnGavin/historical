@@ -202,6 +202,11 @@ plan_ltr_momentum <- function() {
           vol        = round(ann_vol * 100, 1),
           max_dd     = round(max_dd * 100, 1),
           sharpe     = round(sr$sharpe, 2),
+          # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
+          # convention as cagr/vol above -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+          # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          ann_rf     = round(sr$ann_rf * 100, 1),
           hac_sharpe = round(hac$naive_sharpe, 2),
           hac_tstat  = round(hac$hac_tstat, 2),
           avg_long   = if ("n_long" %in% names(df)) round(mean(df$n_long, na.rm = TRUE)) else NA_integer_,

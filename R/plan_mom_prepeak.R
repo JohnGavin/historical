@@ -150,6 +150,11 @@ plan_mom_prepeak <- function() {
       rets <- .mom_prepeak_join_rf(mom_prepeak_returns, stk_rf)
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_prepeak")
       m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
+      # convention as cagr/vol (.mom_prepeak_compute_metrics(), packages/
+      # historicaldata/R/utils_mom_prepeak_metrics.R stores them as
+      # round(x * 100, 1)).
+      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m) * 100, 2)
       m
     }),
 
@@ -157,6 +162,7 @@ plan_mom_prepeak <- function() {
       rets <- .mom_prepeak_join_rf(mom_postpeak_returns, stk_rf)
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_postpeak")
       m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m) * 100, 2)
       m
     }),
 
@@ -164,6 +170,7 @@ plan_mom_prepeak <- function() {
       rets <- .mom_prepeak_join_rf(mom_combined_returns, stk_rf)
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_combined")
       m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m) * 100, 2)
       m
     }),
 
@@ -441,9 +448,9 @@ plan_mom_prepeak <- function() {
 #' @param metrics_row One-row tibble from \code{.mom_prepeak_compute_metrics()}
 #'   (needs `blown_up`, `bankrupt_month`).
 #' @param ann_factor Integer. Annualisation factor (12 for monthly).
-#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @return A list with `sharpe` and `ann_rf` (either may be NA_real_).
 #' @noRd
-.mom_prepeak_sharpe <- function(returns_tbl, metrics_row, ann_factor = 12L) {
+.mom_prepeak_sr <- function(returns_tbl, metrics_row, ann_factor = 12L) {
   if (!"rf_ret" %in% names(returns_tbl)) {
     cli::cli_abort(c(
       "x" = ".mom_prepeak_sharpe(): {.arg returns_tbl} has no {.field rf_ret} column.",
@@ -455,18 +462,40 @@ plan_mom_prepeak <- function() {
   r    <- returns_tbl$ret_ls[keep]
   rf   <- returns_tbl$rf_ret[keep]
   n    <- length(r)
-  if (n < 12L) return(NA_real_)
+  if (n < 12L) return(list(sharpe = NA_real_, ann_rf = NA_real_))
 
   blown_up       <- isTRUE(metrics_row$blown_up[[1L]])
   bankrupt_month <- metrics_row$bankrupt_month[[1L]]
 
   if (blown_up) {
-    if (is.na(bankrupt_month) || bankrupt_month <= 1L) return(NA_real_)
+    if (is.na(bankrupt_month) || bankrupt_month <= 1L) return(list(sharpe = NA_real_, ann_rf = NA_real_))
     r  <- r[seq_len(bankrupt_month - 1L)]
     rf <- rf[seq_len(bankrupt_month - 1L)]
   }
 
-  sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)$sharpe
+  sr <- sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)
+  list(sharpe = sr$sharpe, ann_rf = sr$ann_rf)
+}
+
+#' Thin wrapper over .mom_prepeak_sr() returning just the Sharpe ratio
+#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @noRd
+.mom_prepeak_sharpe <- function(returns_tbl, metrics_row, ann_factor = 12L) {
+  .mom_prepeak_sr(returns_tbl, metrics_row, ann_factor)$sharpe
+}
+
+#' Companion accessor to \code{.mom_prepeak_sharpe()}: the annualised
+#' risk-free rate used in the same Sharpe computation (#677 slice 4)
+#'
+#' Published alongside `sharpe` in `mom_prepeak_metrics` /
+#' `mom_postpeak_metrics` / `mom_combined_metrics` so QA gate S17
+#' (\code{check_leaderboard_sharpe_coherence()}, R/plan_qa_gates.R) can
+#' assert \code{sharpe == (cagr - ann_rf) / vol} for every leaderboard row.
+#'
+#' @return Numeric scalar annualised risk-free rate (may be NA_real_).
+#' @noRd
+.mom_prepeak_ann_rf <- function(returns_tbl, metrics_row, ann_factor = 12L) {
+  .mom_prepeak_sr(returns_tbl, metrics_row, ann_factor)$ann_rf
 }
 
 

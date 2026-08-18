@@ -179,6 +179,11 @@ plan_turn_of_month <- function() {
           cagr_tom     = round(cagr_s * 100, 2),
           vol_tom      = round(vol_s  * 100, 2),
           sharpe_tom   = round(sharpe_s,   3),
+          # ann_rf_tom published alongside sharpe_tom (#677 slice 4), same
+          # PERCENT convention as cagr_tom/vol_tom above -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+          # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          ann_rf_tom   = round(sr_s$ann_rf * 100, 2),
           max_dd_tom   = round(max_dd_s * 100, 2),
 
           # Buy & hold

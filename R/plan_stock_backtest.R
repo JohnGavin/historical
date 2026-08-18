@@ -440,7 +440,10 @@ calc_backtest_metrics <- function(df, label, rf_col = "rf_ret") {
 
   dplyr::tibble(
     period = label, months = n,
-    cagr = ann_ret, vol = ann_vol, sharpe = sharpe, max_dd = max_dd,
+    # ann_rf published alongside sharpe (#677 slice 4) so QA gate S17
+    # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) can assert
+    # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+    cagr = ann_ret, vol = ann_vol, sharpe = sharpe, ann_rf = rf_ann, max_dd = max_dd,
     avg_long = mean(df$n_long), avg_short = mean(df$n_short, na.rm = TRUE)
   )
 }

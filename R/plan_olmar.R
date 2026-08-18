@@ -146,6 +146,11 @@ plan_olmar <- function() {
           cagr     = round(sr$ann_ret * 100, 2),
           vol      = round(sr$ann_vol * 100, 2),
           sharpe   = round(sr$sharpe, 3),
+          # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
+          # convention as cagr/vol above -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+          # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          ann_rf   = round(sr$ann_rf * 100, 2),
           max_dd   = round(max_dd * 100, 2),
           avg_turnover_daily = round(avg_tv, 4)
         )

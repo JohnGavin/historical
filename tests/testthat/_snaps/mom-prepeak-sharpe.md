@@ -31,7 +31,7 @@
     Code
       .mom_prepeak_sharpe(rets, metrics_row)
     Condition
-      Error in `.mom_prepeak_sharpe()`:
+      Error in `.mom_prepeak_sr()`:
       x .mom_prepeak_sharpe(): `returns_tbl` has no rf_ret column.
       i Join a risk-free series onto returns_tbl first -- see `.mom_prepeak_join_rf()`.
 

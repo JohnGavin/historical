@@ -326,17 +326,23 @@ plan_risk_state <- function() {
         hac <- hd_hac_sharpe(ret_vec, ann_factor = periods_per_year)
         # Canonical, risk-free-adjusted Sharpe (#677) -- see
         # R/utils_metrics.R::sharpe_ratio_rf(). Distinct from hac_sharpe.
-        sharpe_val <- if (!is.null(rf_vec)) {
-          sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = periods_per_year)$sharpe
+        sr_result <- if (!is.null(rf_vec)) {
+          sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = periods_per_year)
         } else {
-          NA_real_
+          list(sharpe = NA_real_, ann_rf = NA_real_)
         }
+        sharpe_val <- sr_result$sharpe
         tibble::tibble(
           strategy  = strategy_name,
           period    = label,
           cagr      = round((cum^(1 / years) - 1) * 100, 2),
           vol       = round(sd(ret_vec) * sqrt(periods_per_year) * 100, 2),
           sharpe    = round(sharpe_val, 3),
+          # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
+          # convention as cagr/vol above -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+          # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          ann_rf    = round(sr_result$ann_rf * 100, 2),
           max_dd    = round(min((cum_dd - cummax(cum_dd)) /
                                   cummax(cum_dd)) * 100, 2),
           hac_tstat = round(hac$hac_tstat, 3),
