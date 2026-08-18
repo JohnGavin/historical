@@ -221,10 +221,26 @@ testthat::local_edition(3)
 
 # Combines the two extractors above: the numeric-column set a metrics-
 # computing function emits, minus its known non-numeric/excluded columns.
+#
+# Guards against the vacuous-pass hole this test was written to close: if
+# `fn_name` no longer contains a recognisable tibble()/tibble::tibble() call
+# (e.g. refactored to data.frame(), as_tibble(), or a dplyr::transmute()
+# pipeline), .extract_tibble_column_names() silently returns character(0),
+# and absent this check `required` below would become character(0) too --
+# making the caller's expect_equal(missing, character(0)) pass without
+# checking anything (#693 follow-up; see .claude/rules/fail-loud-not-null.md).
 .derive_required_from_tibble <- function(file, fn_name, exclude = character(0)) {
   body <- .extract_function_body(file, fn_name)
   all_cols <- .extract_tibble_column_names(body)
-  setdiff(all_cols, exclude)
+  required <- setdiff(all_cols, exclude)
+  if (length(required) == 0) {
+    cli::cli_abort(c(
+      "x" = "{.fn {fn_name}} in {.file {basename(file)}} has no tibble() columns left after excluding {.val {exclude}}.",
+      "i" = "{.fn {fn_name}} was probably refactored away from a {.code tibble(...)}/{.code tibble::tibble(...)} constructor (e.g. to {.code data.frame()}, {.code as_tibble()}, or a {.code dplyr::transmute()} pipeline) -- {.fn .extract_tibble_column_names} only recognises the former.",
+      "i" = "Update this test's extractor (or its {.arg fn_name}/{.arg exclude}) to match the new constructor; an empty required set would make this test's coverage check pass vacuously."
+    ))
+  }
+  required
 }
 
 # For the one writer (pso_optimal) that uses an explicit intersect()
@@ -241,7 +257,35 @@ testthat::local_edition(3)
       "i" = "This extractor only handles the explicit allow-list pattern; the case may need re-classifying."
     ))
   }
-  eval(rhs[[2]])
+  allowlist <- eval(rhs[[2]])
+  # Same guard as .derive_required_from_tibble() above, for the same reason:
+  # an empty allow-list would make required <- character(0) and the caller's
+  # expect_equal(missing, character(0)) would pass without checking anything
+  # (#693 follow-up; .claude/rules/fail-loud-not-null.md).
+  if (length(allowlist) == 0) {
+    cli::cli_abort(c(
+      "x" = "{.code {varname}}'s {.code intersect(...)} allow-list in {.file {basename(file)}} is empty.",
+      "i" = "The allow-list's first argument was probably emptied, or replaced with something that no longer lists columns explicitly.",
+      "i" = "An empty allow-list would make this test's coverage check pass vacuously; fix the allow-list or re-classify this case."
+    ))
+  }
+  allowlist
+}
+
+# Guard for `mode = "declared"` cases: `required` there is hand-written in
+# this file's `unit_map_cases` list below, not derived from source, so it
+# cannot go empty via a refactor the way the two extractors above can. It is
+# guarded anyway for uniformity with them -- the cost is one length() check,
+# and the failure mode (a vacuously-passing coverage check) is identical.
+.check_declared_required <- function(required, varname) {
+  if (length(required) > 0) {
+    return(required)
+  }
+  cli::cli_abort(c(
+    "x" = "{.code {varname}}'s hand-declared required-columns list is empty.",
+    "i" = "Check the {.code unit_map_cases} entry for {.code {varname}} in {.file test-registry-unit-map-coverage.R}.",
+    "i" = "An empty required set would make this test's coverage check pass vacuously, per .claude/rules/fail-loud-not-null.md."
+  ))
 }
 
 plan_dir <- here::here("R")
@@ -364,7 +408,7 @@ for (case in unit_map_cases) {
             .derive_required_from_tibble(fn_file, this_case$fn_name, this_case$exclude)
           },
           intersect = .extract_intersect_allowlist(file, this_case$allowlist_varname),
-          declared = this_case$required,
+          declared = .check_declared_required(this_case$required, this_case$varname),
           cli::cli_abort("Unknown unit_map_cases mode: {this_case$mode}")
         )
 
@@ -399,4 +443,47 @@ test_that("mom_prepeak_units declares cagr/vol/max_dd as percent, not fraction (
 test_that(".extract_units_map aborts informatively when the variable is not found", {
   file <- file.path(plan_dir, "plan_ltr_momentum.R")
   expect_snapshot(error = TRUE, .extract_units_map(file, "nonexistent_units"))
+})
+
+# ── Vacuous-pass guard coverage (#693 follow-up) ───────────────────────────
+# The three tests below exercise the empty-`required` guards added to
+# .derive_required_from_tibble(), .extract_intersect_allowlist(), and
+# .check_declared_required(). Each constructs the minimal input that makes
+# its extractor return character(0), and asserts the guard aborts instead of
+# silently letting `required` become empty (which, upstream in the test
+# loop, would make expect_equal(missing, character(0)) pass vacuously).
+#
+# The fixture files use a fixed basename ("toy_plan.R") inside a temp
+# directory: basename(file) is the only part of the path that reaches the
+# abort message, so the snapshot stays stable even though the directory
+# itself is different on every run (portable-build-artifacts).
+test_that(".derive_required_from_tibble aborts informatively when no tibble() columns remain (#693 follow-up)", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_plan.R")
+  writeLines(
+    c(
+      "toy_fn <- function() {",
+      "  tibble::tibble(strategy = 'x', period = 'Full')",
+      "}"
+    ),
+    file
+  )
+  expect_snapshot(
+    error = TRUE,
+    .derive_required_from_tibble(file, "toy_fn", exclude = c("strategy", "period"))
+  )
+})
+
+test_that(".extract_intersect_allowlist aborts informatively when the allow-list is empty (#693 follow-up)", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_plan.R")
+  writeLines("toy_cols <- intersect(character(0), names(full_row))", file)
+  expect_snapshot(
+    error = TRUE,
+    .extract_intersect_allowlist(file, "toy_cols")
+  )
+})
+
+test_that(".check_declared_required aborts informatively when the declared list is empty (#693 follow-up)", {
+  expect_snapshot(error = TRUE, .check_declared_required(character(0), "toy_units"))
 })
