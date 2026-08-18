@@ -35,23 +35,6 @@ plan_turn_of_month <- function() {
       )
     }),
 
-    # ── Data: daily risk-free rate (#677 slice 2 — no-rf family) ──
-    # TOM previously computed sharpe = cagr/vol with NO risk-free deduction
-    # (implied rf of exactly 0.00% -- a formula signature, see #677). TOM is
-    # a DAILY strategy (sqrt(252) annualisation), so it needs its own daily
-    # rf series rather than the monthly stk_rf series used by the
-    # monthly strategies migrated alongside it in this slice.
-    targets::tar_target(tom_rf_daily, {
-      library(dplyr)
-
-      hd_factors(dataset = "FF3", frequency = "daily",
-                 from = as.character(tom_params$start_date)) |>
-        dplyr::filter(factor_name == "RF") |>
-        dplyr::mutate(date = as.Date(date), rf_ret = value / 100) |>
-        dplyr::select(date, rf_ret) |>
-        dplyr::arrange(date)
-    }),
-
     # ── Data: SPY daily returns ───────────────────────────────────
     targets::tar_target(tom_daily, {
       library(dplyr)
@@ -66,7 +49,7 @@ plan_turn_of_month <- function() {
         dplyr::filter(!is.na(ret)) |>
         dplyr::select(date, ret)
 
-      .tom_join_rf_daily(spy, tom_rf_daily)
+      .tom_join_rf_daily(spy, daily_rf)
     }),
 
     # ── TOM window indicator ─────────────────────────────────────
@@ -113,7 +96,7 @@ plan_turn_of_month <- function() {
 
       # Daily cash rate from the annual assumption -- this is the CASH
       # RETURN earned while resting outside the TOM window (a strategy-
-      # return assumption). Distinct from the tom_rf_daily-joined `rf_ret`
+      # return assumption). Distinct from the daily_rf-joined `rf_ret`
       # column used below for the Sharpe risk-free deduction (#677 slice 2)
       # -- do not conflate the two.
       cash_rf_daily <- (1 + tom_params$rf_annual)^(1 / 252) - 1
@@ -379,58 +362,24 @@ plan_turn_of_month <- function() {
 #' \code{date} at DAILY granularity instead of \code{ym} at monthly
 #' granularity -- TOM is a daily strategy (\code{sqrt(252)} annualisation).
 #'
-#' Per \code{fail-loud-not-null.md}, a missing risk-free rate must never be
-#' silently coerced to \code{NA}/zero. As with \code{.ltr_join_rf()}, a
-#' **trailing** uncovered date range (beyond \code{max(rf$date)}) is a Fama-
-#' French publication lag, not a defect -- it is TRIMMED with a loud, counted
-#' \code{cli_warn} naming the dropped range and the effective end date. An
-#' **interior** uncovered date range is a real hole in the FF3 series and
-#' \code{cli_abort}s.
+#' As of #677 slice 3b the coverage policy itself lives in the shared
+#' \code{.join_rf_series()} (R/utils_metrics.R), which distinguishes THREE
+#' cases (leading / trailing / interior) -- see that function's roxygen for
+#' the full policy.
 #'
 #' @param port Tibble with a `date` column (TOM's daily return series).
-#' @param rf Tibble with columns `date`, `rf_ret` (the `tom_rf_daily` target).
+#' @param rf Tibble with columns `date`, `rf_ret` (the `daily_rf` target,
+#'   R/plan_stock_backtest.R).
 #' @return `port` with `rf_ret` joined, trailing uncovered dates removed.
 #' @noRd
 .tom_join_rf_daily <- function(port, rf) {
-  required <- c("date", "rf_ret")
-  missing_cols <- setdiff(required, names(rf))
-  if (length(missing_cols) > 0L) {
-    cli::cli_abort(c(
-      "x" = ".tom_join_rf_daily(): rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
-      "i" = "Expected a tibble with date and rf_ret (the tom_rf_daily target)."
-    ))
-  }
-  if (!"date" %in% names(port)) {
-    cli::cli_abort(c("x" = ".tom_join_rf_daily(): port has no {.field date} column to join on."))
-  }
-
-  port_date_range <- range(port$date)
-  port <- dplyr::left_join(port, rf, by = "date")
-
-  missing_rf_date <- sort(port$date[is.na(port$rf_ret)])
-  if (length(missing_rf_date) == 0L) return(port)
-
-  rf_max   <- max(rf$date)
-  interior <- missing_rf_date[missing_rf_date <= rf_max]
-
-  if (length(interior) > 0L) {
-    cli::cli_abort(c(
-      "x" = "{length(interior)} date{?s} inside tom_rf_daily's own span have no risk-free rate.",
-      "i" = "Missing date{?s}: {.val {format(interior)}}.",
-      "i" = "tom_rf_daily spans {min(rf$date)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
-      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R's stk_rf pattern) before trusting any TOM Sharpe figure."
-    ))
-  }
-
-  n_before <- nrow(port)
-  port <- dplyr::filter(port, !is.na(.data$rf_ret))
-  cli::cli_warn(c(
-    "!" = "Dropped {n_before - nrow(port)} trailing date{?s} from tom_daily with no risk-free rate yet.",
-    "i" = "Dropped date range: {format(min(missing_rf_date))}..{format(max(missing_rf_date))}.",
-    "i" = "tom_daily spans {port_date_range[1]}..{port_date_range[2]}; tom_rf_daily ends {rf_max} (Fama-French publication lag).",
-    "i" = "Every TOM metric is therefore computed through {rf_max}, not {port_date_range[2]}."
-  ))
-  port
+  .join_rf_series(
+    df = port, rf = rf, key = "date",
+    label = ".tom_join_rf_daily", rf_label = "daily_rf",
+    rf_source = "the daily_rf target, R/plan_stock_backtest.R",
+    df_label = "tom_daily", strategy_label = "TOM",
+    period_noun = "date", df_arg_name = "port"
+  )
 }
 
 #' Register Turn-of-the-Month backtest run in the strategy registry

@@ -390,11 +390,12 @@ plan_mom_prepeak <- function() {
 #' Join a monthly risk-free series onto mom_prepeak returns (#677)
 #'
 #' Mirrors \code{.ltr_join_rf()} in R/plan_ltr_momentum.R: joins on
-#' \code{ym} derived from \code{exec_date}, aborts on an INTERIOR gap
-#' (a hole inside stk_rf's own span -- investigate, don't silently drop),
-#' and trims + \code{cli_warn}s on a TRAILING gap (Fama-French publication
-#' lag -- expected, not a bug). A missing risk-free series must never be
-#' treated as zero -- see fail-loud-not-null.md.
+#' \code{ym} derived from \code{exec_date}. As of #677 slice 3b the
+#' coverage policy itself lives in the shared \code{.join_rf_series()}
+#' (R/utils_metrics.R), which distinguishes THREE cases (leading /
+#' trailing / interior) -- see that function's roxygen for the full
+#' policy. A missing risk-free series must never be treated as zero --
+#' see fail-loud-not-null.md.
 #'
 #' @param returns_tbl Tibble with an `exec_date` column (mom_prepeak_returns
 #'   / mom_postpeak_returns / mom_combined_returns).
@@ -402,46 +403,19 @@ plan_mom_prepeak <- function() {
 #' @return `returns_tbl` with `rf_ret` joined, trailing uncovered months removed.
 #' @noRd
 .mom_prepeak_join_rf <- function(returns_tbl, stk_rf) {
-  required <- c("ym", "rf_ret")
-  missing_cols <- setdiff(required, names(stk_rf))
-  if (length(missing_cols) > 0L) {
-    cli::cli_abort(c(
-      "x" = ".mom_prepeak_join_rf(): stk_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
-      "i" = "Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R)."
-    ))
-  }
   if (!"exec_date" %in% names(returns_tbl)) {
     cli::cli_abort(c("x" = ".mom_prepeak_join_rf(): returns_tbl has no {.field exec_date} column to join on."))
   }
 
   returns_tbl <- dplyr::mutate(returns_tbl, ym = format(as.Date(.data$exec_date), "%Y-%m"))
-  ret_ym_range <- range(returns_tbl$ym)
-  joined <- dplyr::left_join(returns_tbl, stk_rf, by = "ym")
 
-  missing_rf_ym <- sort(joined$ym[is.na(joined$rf_ret)])
-  if (length(missing_rf_ym) == 0L) return(joined)
-
-  rf_max   <- max(stk_rf$ym)
-  interior <- missing_rf_ym[missing_rf_ym <= rf_max]
-
-  if (length(interior) > 0L) {
-    cli::cli_abort(c(
-      "x" = "{length(interior)} month{?s} inside stk_rf's own span have no risk-free rate.",
-      "i" = "Missing ym: {.val {interior}}.",
-      "i" = "stk_rf spans {min(stk_rf$ym)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
-      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R) before trusting any mom_prepeak Sharpe figure."
-    ))
-  }
-
-  n_before <- nrow(joined)
-  joined <- dplyr::filter(joined, !is.na(.data$rf_ret))
-  cli::cli_warn(c(
-    "!" = "Dropped {n_before - nrow(joined)} trailing month{?s} from mom_prepeak returns with no risk-free rate yet.",
-    "i" = "Dropped ym: {.val {missing_rf_ym}}.",
-    "i" = "returns_tbl spans {ret_ym_range[1]}..{ret_ym_range[2]}; stk_rf ends {rf_max} (Fama-French publication lag).",
-    "i" = "Every mom_prepeak Sharpe is therefore computed through {rf_max}, not {ret_ym_range[2]}."
-  ))
-  joined
+  .join_rf_series(
+    df = returns_tbl, rf = stk_rf, key = "ym",
+    label = ".mom_prepeak_join_rf", rf_label = "stk_rf",
+    rf_source = "R/plan_stock_backtest.R",
+    df_label = "mom_prepeak returns", strategy_label = "mom_prepeak",
+    period_noun = "month", check_key_col = FALSE
+  )
 }
 
 

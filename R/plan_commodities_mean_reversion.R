@@ -179,11 +179,11 @@ plan_commodities_mean_reversion <- function() {
 #' Join a monthly risk-free series onto a CMR portfolio (#677)
 #'
 #' Mirrors \code{.ltr_join_rf()} in R/plan_ltr_momentum.R: joins on \code{ym}
-#' derived from \code{date}, aborts on an INTERIOR gap (a hole inside
-#' stk_rf's own span -- investigate, don't silently drop), and trims +
-#' \code{cli_warn}s on a TRAILING gap (Fama-French publication lag --
-#' expected, not a bug). A missing risk-free series must never be treated
-#' as zero -- see fail-loud-not-null.md.
+#' derived from \code{date}. As of #677 slice 3b the coverage policy itself
+#' lives in the shared \code{.join_rf_series()} (R/utils_metrics.R), which
+#' distinguishes THREE cases (leading / trailing / interior) -- see that
+#' function's roxygen for the full policy. A missing risk-free series must
+#' never be treated as zero -- see fail-loud-not-null.md.
 #'
 #' @param df Tibble with a `ym` column already derived, and `net_ret`.
 #' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
@@ -191,42 +191,14 @@ plan_commodities_mean_reversion <- function() {
 #' @return `df` with `rf_ret` joined, trailing uncovered months removed.
 #' @noRd
 .cmr_join_rf <- function(df, stk_rf, lookback) {
-  required <- c("ym", "rf_ret")
-  missing_cols <- setdiff(required, names(stk_rf))
-  if (length(missing_cols) > 0L) {
-    cli::cli_abort(c(
-      "x" = ".cmr_join_rf(): stk_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
-      "i" = "Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R)."
-    ))
-  }
-
-  df_ym_range <- range(df$ym)
-  joined <- dplyr::left_join(df, stk_rf, by = "ym")
-
-  missing_rf_ym <- sort(joined$ym[is.na(joined$rf_ret)])
-  if (length(missing_rf_ym) == 0L) return(joined)
-
-  rf_max   <- max(stk_rf$ym)
-  interior <- missing_rf_ym[missing_rf_ym <= rf_max]
-
-  if (length(interior) > 0L) {
-    cli::cli_abort(c(
-      "x" = "{length(interior)} month{?s} inside stk_rf's own span have no risk-free rate (CMR {lookback} lookback).",
-      "i" = "Missing ym: {.val {interior}}.",
-      "i" = "stk_rf spans {min(stk_rf$ym)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
-      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R) before trusting any CMR Sharpe figure."
-    ))
-  }
-
-  n_before <- nrow(joined)
-  joined <- dplyr::filter(joined, !is.na(.data$rf_ret))
-  cli::cli_warn(c(
-    "!" = "Dropped {n_before - nrow(joined)} trailing month{?s} from CMR {lookback} portfolio with no risk-free rate yet.",
-    "i" = "Dropped ym: {.val {missing_rf_ym}}.",
-    "i" = "Portfolio spans {df_ym_range[1]}..{df_ym_range[2]}; stk_rf ends {rf_max} (Fama-French publication lag).",
-    "i" = "Every CMR {lookback} Sharpe is therefore computed through {rf_max}, not {df_ym_range[2]}."
-  ))
-  joined
+  .join_rf_series(
+    df = df, rf = stk_rf, key = "ym",
+    label = ".cmr_join_rf", rf_label = "stk_rf",
+    rf_source = "R/plan_stock_backtest.R",
+    df_label = paste0("CMR ", lookback, " portfolio"),
+    strategy_label = paste0("CMR ", lookback),
+    period_noun = "month", check_key_col = FALSE
+  )
 }
 
 .compute_cmr_metrics <- function(portfolio_tbl, lookback, stk_rf, ann_factor = 12L) {

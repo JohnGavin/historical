@@ -3,9 +3,9 @@
     Code
       .mom_prepeak_join_rf(rets, rf)
     Condition
-      Error in `.mom_prepeak_join_rf()`:
-      x 1 month inside stk_rf's own span have no risk-free rate.
-      i Missing ym: "2020-10".
+      Error in `.join_rf_series()`:
+      x 1 month inside stk_rf's own span have no risk-free rate (mom_prepeak).
+      i Missing month: "2020-10".
       i stk_rf spans 2020-01..2021-12, so this is a HOLE in the series, not a publication lag.
       i Investigate the FF3 source (R/plan_stock_backtest.R) before trusting any mom_prepeak Sharpe figure.
 
@@ -14,7 +14,7 @@
     Code
       .mom_prepeak_join_rf(rets, bad_rf)
     Condition
-      Error in `.mom_prepeak_join_rf()`:
+      Error in `.join_rf_series()`:
       x .mom_prepeak_join_rf(): stk_rf is missing 1 required column: rf_ret.
       i Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R).
 
