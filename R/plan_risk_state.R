@@ -227,8 +227,14 @@ plan_risk_state <- function() {
         ungroup() |>
         select(ym, regime, exposure)
 
+      # #677 slice 2: carry drif_portfolio's own monthly rf_ret column through
+      # so rsc_metrics can compute a real (non-NA) Sharpe for the DRIF_raw/
+      # DRIF_overlay rows below -- see R/plan_drif.R's drif_portfolio target,
+      # which already joins RF (from the same FF5+Mom daily pull used to
+      # build drif_ret) onto each ym at construction time. No additional join
+      # is needed here: rf_ret already lives on the same rows as drif_ret.
       drif_ret <- drif_portfolio |>
-        select(date, drif_ret = portfolio_ret)
+        select(date, drif_ret = portfolio_ret, rf_ret)
 
       drif_ret |>
         mutate(ym = format(date, "%Y-%m")) |>
@@ -253,8 +259,12 @@ plan_risk_state <- function() {
         ungroup() |>
         select(ym, regime, exposure)
 
+      # #677 slice 2: carry fm_portfolio's own monthly rf_ret column through --
+      # same reasoning as rsc_overlay_drif above. fm_portfolio (R/plan_factormax.R)
+      # already joins RF (from fm_monthly, the same FF5+Mom daily pull used to
+      # build fm_ret) onto each ym, so rf_ret already lives on the same rows.
       fm_ret <- fm_portfolio |>
-        select(date, fm_ret = portfolio_ret)
+        select(date, fm_ret = portfolio_ret, rf_ret)
 
       fm_ret |>
         mutate(ym = format(date, "%Y-%m")) |>
@@ -275,30 +285,49 @@ plan_risk_state <- function() {
     targets::tar_target(rsc_metrics, {
       library(dplyr)
 
-      # #677: rf_vec is OPTIONAL here (unlike sharpe_ratio_rf() itself,
-      # which aborts on a NULL rf per fail-loud-not-null.md) because only
-      # SPY_buyhold/SPY_overlay have an aligned risk-free series wired in
-      # today (rsc_portfolio$rf_daily, from FF3 RF -- see rsc_data/
-      # rsc_signals above). DRIF_raw/DRIF_overlay/FacMAX_raw/FacMAX_overlay
-      # do not have a matching daily rf series joined onto their overlay
-      # return streams -- sourcing one is out of scope for #677 slice 1
-      # (see PR body). `sharpe` is deliberately left NA_real_ for those
-      # rows; `hac_sharpe` (HAC-adjusted, no rf) is retained for all rows
-      # and is unaffected by this change.
-      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, rf_vec = NULL) {
+      # #677 slice 2: rf_vec is OPTIONAL here (unlike sharpe_ratio_rf() itself,
+      # which aborts on a NULL rf per fail-loud-not-null.md) so calc_metrics()
+      # keeps working for any future row that genuinely has no rf series --
+      # but as of this change every row DOES have one wired: SPY_buyhold/
+      # SPY_overlay via rsc_portfolio$rf_daily (daily FF3 RF -- see rsc_data/
+      # rsc_signals above), DRIF_raw/DRIF_overlay/FacMAX_raw/FacMAX_overlay
+      # via drif_portfolio$rf_ret / fm_portfolio$rf_ret (monthly FF5+Mom RF,
+      # already joined at construction time -- see rsc_overlay_drif /
+      # rsc_overlay_fac_max above). `hac_sharpe` (HAC-adjusted, no rf) is
+      # retained for all rows as a separate, non-rf-adjusted statistic.
+      #
+      # periods_per_year is now a parameter, not hardcoded 252. Discovered
+      # while wiring the above: rsc_portfolio (SPY) is DAILY, but
+      # rsc_overlay_drif/rsc_overlay_fac_max are MONTHLY (one row per ym --
+      # see drif_portfolio/fm_portfolio, R/plan_drif.R, R/plan_factormax.R).
+      # `years`/`vol` and hd_hac_sharpe()'s ann_factor were previously
+      # hardcoded to 252 for EVERY row including the monthly DRIF/FacMAX
+      # ones -- inflating `years` ~21x (so `cagr` was wildly wrong) and `vol`/
+      # `hac_sharpe` ~4.6x (sqrt(252/12)). This was invisible because these 4
+      # rows never reach the leaderboard (.norm_rsc() in R/plan_leaderboard.R
+      # filters to "SPY_overlay" only) and no test asserted their magnitude
+      # (only NA-ness). Per fail-loud-not-null.md: shipping a real, non-NA
+      # Sharpe on the wrong annualisation basis would be exactly the
+      # "plausible-looking wrong number" that rule prohibits, one level
+      # deeper than the NA it replaces -- so it is fixed alongside the rf
+      # wiring rather than left for a future session to discover by
+      # accident. Every other calc_metrics() call site in this file passes
+      # daily data and is unaffected (periods_per_year defaults to 252L).
+      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, rf_vec = NULL,
+                                periods_per_year = 252L) {
         keep     <- !is.na(ret_vec)
         ret_vec  <- ret_vec[keep]
         date_vec <- date_vec[keep]
         if (!is.null(rf_vec)) rf_vec <- rf_vec[keep]
         if (length(ret_vec) < 20) return(NULL)
-        years <- length(ret_vec) / 252
+        years <- length(ret_vec) / periods_per_year
         cum <- prod(1 + ret_vec)
         cum_dd <- cumprod(1 + ret_vec)
-        hac <- hd_hac_sharpe(ret_vec)
+        hac <- hd_hac_sharpe(ret_vec, ann_factor = periods_per_year)
         # Canonical, risk-free-adjusted Sharpe (#677) -- see
         # R/utils_metrics.R::sharpe_ratio_rf(). Distinct from hac_sharpe.
         sharpe_val <- if (!is.null(rf_vec)) {
-          sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 252L)$sharpe
+          sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = periods_per_year)$sharpe
         } else {
           NA_real_
         }
@@ -306,7 +335,7 @@ plan_risk_state <- function() {
           strategy  = strategy_name,
           period    = label,
           cagr      = round((cum^(1 / years) - 1) * 100, 2),
-          vol       = round(sd(ret_vec) * sqrt(252) * 100, 2),
+          vol       = round(sd(ret_vec) * sqrt(periods_per_year) * 100, 2),
           sharpe    = round(sharpe_val, 3),
           max_dd    = round(min((cum_dd - cummax(cum_dd)) /
                                   cummax(cum_dd)) * 100, 2),
@@ -353,13 +382,22 @@ plan_risk_state <- function() {
       spy_ov_test  <- calc_metrics(port$ret_strategy[is_test], port$date[is_test],
                                    "Testing", "SPY_overlay", rf_vec = port$rf_daily[is_test])
 
-      # DRIF raw vs overlaid
-      drif_raw_full <- calc_metrics(drif$ret_raw,     drif$date, "Full Period", "DRIF_raw")
-      drif_ov_full  <- calc_metrics(drif$ret_overlay, drif$date, "Full Period", "DRIF_overlay")
+      # DRIF raw vs overlaid (#677 slice 2: rf_vec = drif$rf_ret, monthly FF5+
+      # Mom RF already joined onto drif_portfolio -- see rsc_overlay_drif
+      # above; periods_per_year = 12L because this is a monthly series, not
+      # daily -- see the calc_metrics() comment above)
+      drif_raw_full <- calc_metrics(drif$ret_raw,     drif$date, "Full Period", "DRIF_raw",
+                                    rf_vec = drif$rf_ret, periods_per_year = 12L)
+      drif_ov_full  <- calc_metrics(drif$ret_overlay, drif$date, "Full Period", "DRIF_overlay",
+                                    rf_vec = drif$rf_ret, periods_per_year = 12L)
 
-      # FacMAX raw vs overlaid
-      fm_raw_full   <- calc_metrics(facmx$ret_raw,     facmx$date, "Full Period", "FacMAX_raw")
-      fm_ov_full    <- calc_metrics(facmx$ret_overlay, facmx$date, "Full Period", "FacMAX_overlay")
+      # FacMAX raw vs overlaid (#677 slice 2: rf_vec = facmx$rf_ret, monthly
+      # FF5+Mom RF already joined onto fm_portfolio -- see
+      # rsc_overlay_fac_max above; periods_per_year = 12L, same reasoning)
+      fm_raw_full   <- calc_metrics(facmx$ret_raw,     facmx$date, "Full Period", "FacMAX_raw",
+                                    rf_vec = facmx$rf_ret, periods_per_year = 12L)
+      fm_ov_full    <- calc_metrics(facmx$ret_overlay, facmx$date, "Full Period", "FacMAX_overlay",
+                                    rf_vec = facmx$rf_ret, periods_per_year = 12L)
 
       dplyr::bind_rows(
         spy_bh_full, spy_ov_full,

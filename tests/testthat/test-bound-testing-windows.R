@@ -62,9 +62,13 @@ source(here::here("R/plan_european_overlay.R"))
 
 # Minimal stand-in for historicaldata::hd_hac_sharpe() -- rsc_metrics calls
 # it for hac_tstat/hac_sharpe columns this test does not assert on. Real HAC
-# math is out of scope here; only the window bound is under test.
-.mock_hac_sharpe <- function(ret_vec) {
-  list(hac_tstat = 0, naive_sharpe = mean(ret_vec) / stats::sd(ret_vec) * sqrt(252))
+# math is out of scope here; only the window bound is under test. ann_factor
+# mirrors the real function's signature (default 252): rsc_metrics' internal
+# calc_metrics() now calls hd_hac_sharpe(ret_vec, ann_factor = periods_per_year)
+# for the monthly DRIF/FacMAX rows too (#677 slice 2), so the mock must
+# accept the argument or those calls error with "unused argument".
+.mock_hac_sharpe <- function(ret_vec, ann_factor = 252) {
+  list(hac_tstat = 0, naive_sharpe = mean(ret_vec) / stats::sd(ret_vec) * sqrt(ann_factor))
 }
 
 # ── 1. Params-wiring: test_end tracks bt_partitions, not a literal ─────────
