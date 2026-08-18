@@ -31,9 +31,10 @@
 #' @param rets Numeric vector of daily returns.
 #' @param aw_daily_rf Tibble with columns `date`, `rf_ret` (daily Fama-French RF).
 #' @param ann_factor Integer. Annualisation factor (252 for daily).
-#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @return A list with `sharpe` and `ann_rf` (either may be NA_real_ -- see
+#'   `.aw_sharpe_rf()`'s roxygen for when).
 #' @noRd
-.aw_sharpe_rf <- function(dates, rets, aw_daily_rf, ann_factor = 252L) {
+.aw_sharpe_rf_full <- function(dates, rets, aw_daily_rf, ann_factor = 252L) {
   required <- c("date", "rf_ret")
   missing_cols <- setdiff(required, names(aw_daily_rf))
   if (length(missing_cols) > 0L) {
@@ -47,7 +48,7 @@
     dplyr::filter(!is.na(.data$ret)) |>
     dplyr::left_join(aw_daily_rf, by = "date")
 
-  if (nrow(df) < 2L) return(NA_real_)
+  if (nrow(df) < 2L) return(list(sharpe = NA_real_, ann_rf = NA_real_))
 
   missing_rf_dates <- sort(df$date[is.na(df$rf_ret)])
   if (length(missing_rf_dates) > 0L) {
@@ -69,7 +70,14 @@
     ))
   }
 
-  sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)$sharpe
+  sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)
+}
+
+#' Thin wrapper over .aw_sharpe_rf_full() returning just the Sharpe ratio
+#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @noRd
+.aw_sharpe_rf <- function(dates, rets, aw_daily_rf, ann_factor = 252L) {
+  .aw_sharpe_rf_full(dates, rets, aw_daily_rf, ann_factor)$sharpe
 }
 
 plan_avoid_worst <- function() {
@@ -516,6 +524,11 @@ plan_avoid_worst <- function() {
         best_10 <- ord[seq(max(1, n - 9), n)]
 
         metrics_for <- function(r, scenario, r_dts) {
+          # #677 slice 4: capture the full sharpe_ratio_rf() result so
+          # ann_rf can be published alongside sharpe -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R)
+          # asserts sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          sr <- .aw_sharpe_rf_full(r_dts, r, aw_daily_rf, ann_factor = 252L)
           tibble::tibble(
             strategy = "SPY",
             period = label,
@@ -529,7 +542,9 @@ plan_avoid_worst <- function() {
                                  cummax(cumprod(1 + r))) * 100, 1),
             # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
             # replacing the arithmetic-mean, no-rf formula.
-            sharpe = round(.aw_sharpe_rf(r_dts, r, aw_daily_rf, ann_factor = 252L), 2),
+            sharpe = round(sr$sharpe, 2),
+            # ann_rf published in the same PERCENT convention as cagr/vol above.
+            ann_rf = round(sr$ann_rf * 100, 2),
             window_start = min(dts),
             window_end   = max(dts)
           )

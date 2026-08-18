@@ -184,7 +184,12 @@ plan_factormax <- function() {
         if (n < 12) return(NULL)
         ann_ret <- prod(1 + df$portfolio_ret)^(12/n) - 1
         ann_vol <- sd(df$portfolio_ret) * sqrt(12)
-        sharpe <- (ann_ret - mean(df$rf_ret) * 12) / ann_vol
+        # ann_rf captured as its own variable (#677 slice 4) so it can be
+        # published alongside sharpe -- QA gate S17
+        # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+        # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+        ann_rf <- mean(df$rf_ret) * 12
+        sharpe <- (ann_ret - ann_rf) / ann_vol
         cum <- cumprod(1 + df$portfolio_ret)
         dd <- cum / cummax(cum) - 1
         max_dd <- min(dd)
@@ -197,7 +202,7 @@ plan_factormax <- function() {
         tibble(
           period = label,
           months = n,
-          cagr = ann_ret, vol = ann_vol, sharpe = sharpe,
+          cagr = ann_ret, vol = ann_vol, sharpe = sharpe, ann_rf = ann_rf,
           max_dd = max_dd, hit_rate = hit,
           bench_cagr = bench_ann, bench_vol = bench_vol,
           bench_sharpe = bench_sharpe

@@ -213,7 +213,7 @@ plan_commodities_mean_reversion <- function() {
   if (n < 12L) {
     return(tibble::tibble(
       lookback = lookback, n_months = n,
-      sharpe = NA_real_, cagr = NA_real_, vol = NA_real_,
+      sharpe = NA_real_, cagr = NA_real_, vol = NA_real_, ann_rf = NA_real_,
       max_dd = NA_real_, avg_dd_duration = NA_real_, max_dd_duration = NA_real_
     ))
   }
@@ -254,6 +254,11 @@ plan_commodities_mean_reversion <- function() {
     sharpe          = round(sharpe, 3),
     cagr            = round(cagr, 4),
     vol             = round(vol, 4),
+    # ann_rf published alongside sharpe (#677 slice 4), same FRACTION
+    # convention as cagr/vol above -- QA gate S17
+    # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+    # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+    ann_rf          = round(sr$ann_rf, 4),
     max_dd          = round(max_dd, 4),
     avg_dd_duration = dd_stats$avg_dd_duration,
     max_dd_duration = dd_stats$max_dd_duration

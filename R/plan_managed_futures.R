@@ -216,6 +216,11 @@ plan_managed_futures <- function() {
           cagr         = round(cagr, 2),
           vol          = round(vol, 2),
           sharpe       = round(sharpe, 3),
+          # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
+          # convention as cagr/vol above -- QA gate S17
+          # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
+          # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
+          ann_rf       = round(sr$ann_rf * 100, 2),
           max_dd       = round(max_dd, 2),
           calmar       = round(calmar, 3),
           window_start = min(date_vec),

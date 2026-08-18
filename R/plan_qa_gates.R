@@ -1062,6 +1062,163 @@ check_borrow_status_registry <- function(strategy_cost_convention) {
 }
 
 
+#' Assert leaderboard `sharpe` is coherent with `cagr`, `vol`, and `ann_rf`
+#' published beside it (S17)
+#'
+#' Guards against the #677 defect class: `sharpe` on the `leaderboard`
+#' target was computed by at least FOUR distinct mathematical bases across
+#' ~13 source metrics targets (geometric vs arithmetic numerator; risk-free
+#' deducted or not), so strategies were ranked against each other on a
+#' statistic that was not actually comparable -- LTR's implied risk-free
+#' rate of -32.89% (a \code{hac_sharpe} value renamed into \code{sharpe},
+#' pre-#677 \code{R/plan_leaderboard.R}) was the sharpest symptom, but three
+#' further strategies (TOM, Value (HML), Managed Futures) deducted NO
+#' risk-free rate at all -- an implied rf of exactly 0.00%, a formula
+#' signature, not a coincidence.
+#'
+#' #677 slices 1-3b migrated every leaderboard-feeding source metrics target
+#' onto the canonical, risk-free-adjusted \code{sharpe_ratio_rf()}
+#' (R/utils_metrics.R) and required every one of them to ALSO publish the
+#' \code{ann_rf} it used (see the module-level "ann_rf (#677 slice 4)"
+#' comment in R/plan_leaderboard.R). This gate is the belt-and-braces check
+#' that the migration held EXACTLY, not approximately: rather than a
+#' "plausible band" on the implied risk-free rate -- which cannot distinguish
+#' a strategy whose sample genuinely spans a near-zero-rate era from one that
+#' silently deducted no risk-free rate at all, see
+#' \code{.claude/rules/fail-loud-not-null.md} -- it recomputes
+#' \code{(cagr - ann_rf) / vol} from the published columns and asserts it
+#' equals the published \code{sharpe} to within a rounding tolerance.
+#'
+#' Three assertions, per \code{fail-loud-not-null.md}'s "a row that cannot be
+#' checked must fail, not pass silently" -- an uncheckable row is NEVER
+#' skipped, only ever aborted:
+#'   \enumerate{
+#'     \item \code{ann_rf} must be present (non-NA) on EVERY row. A missing
+#'       \code{ann_rf} is exactly #677 defect B's failure mode one level up
+#'       the stack: a source metrics target computing \code{sharpe} without
+#'       ever publishing the risk-free rate it used to compute it.
+#'     \item \code{vol} must be a positive, non-NA number on every row -- the
+#'       coherence formula divides by it, and a zero/NA \code{vol} makes the
+#'       published \code{sharpe} itself unverifiable.
+#'     \item \code{abs(sharpe - (cagr - ann_rf) / vol) < tol} for every row.
+#'       A \code{sharpe} that is \code{NA} while \code{cagr}/\code{vol}/
+#'       \code{ann_rf} are all present and checkable is treated as an
+#'       INFINITE discrepancy (a genuine incoherence), never silently
+#'       excluded from the check.
+#'   }
+#'
+#' @section Tolerance:
+#' \code{tol} defaults to 0.02 (2 Sharpe-ratio "points"). This is not a slack
+#' number picked to make the check pass -- it is sized to the single
+#' coarsest ACTUAL rounding combination among the ~13 source metrics targets
+#' that feed this gate: \code{aw_metrics} (R/plan_avoid_worst.R) and
+#' \code{ltr_metrics} (R/plan_ltr_momentum.R) both round
+#' \code{cagr}/\code{vol}/\code{ann_rf} to ONE decimal place of PERCENT (a
+#' rounding half-width of 0.05 percentage points = 0.0005 as a fraction,
+#' applied independently to \code{cagr}, \code{vol}, AND \code{ann_rf}) and
+#' round \code{sharpe} itself to only TWO decimal places (a rounding
+#' half-width of 0.005). Propagating those three independent 0.0005-fraction
+#' errors through \code{(cagr - ann_rf) / vol} at their smallest observed
+#' \code{vol} (Avoid Worst's ~0.18, LTR's ~0.17) bounds the coherence gap at
+#' ~0.012 in the worst case; \code{tol = 0.02} keeps a margin above that
+#' bound. Every other source target
+#' (fm_metrics/drif_metrics/stk_max_metrics/stk_drif_metrics/xgb_drif_metrics:
+#' unrounded floats; cmr_summary: 4-decimal fractions;
+#' tom_metrics/rsc_metrics/mf_metrics/ev_metrics/mom_prepeak siblings:
+#' 2-decimal-percent + 3-decimal sharpe; port_metrics: unrounded floats) is
+#' comfortably tighter than this bound, so \code{tol} is NOT tuned
+#' per-strategy -- one shared tolerance, sized to the worst case, keeps the
+#' gate from ever needing a strategy-specific carve-out (the exact
+#' anti-pattern \code{fail-loud-not-null.md} warns against: "Widening tol to
+#' accommodate a real incoherence would defeat the entire purpose of this
+#' slice").
+#'
+#' @param leaderboard Tibble with at least \code{strategy}, \code{period},
+#'   \code{cagr}, \code{vol}, \code{sharpe}, \code{ann_rf} columns (the
+#'   output of the \code{leaderboard} targets pipeline target).
+#' @param tol Numeric. Coherence tolerance on \code{sharpe}. See the
+#'   Tolerance section.
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_sharpe_coherence <- function(leaderboard, tol = 0.02) {
+  required_cols <- c("strategy", "period", "cagr", "vol", "sharpe", "ann_rf")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_leaderboard_sharpe_coherence() (S17) requires strategy, period, cagr, vol, sharpe, ann_rf."
+    ))
+  }
+
+  # ── Assertion 1: ann_rf must never be NA -- fail-loud-not-null.md ────────
+  # A row whose Sharpe coherence cannot be verified must ABORT, never pass
+  # silently (#677 defect B: a missing risk-free rate was previously
+  # indistinguishable from "legitimately zero").
+  na_rf <- is.na(leaderboard$ann_rf)
+  if (any(na_rf)) {
+    offenders <- unique(paste(leaderboard$strategy[na_rf], leaderboard$period[na_rf], sep = " / "))
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(offenders),
+        " row(s) with NA ann_rf -- Sharpe coherence cannot be verified (#677):"
+      ),
+      setNames(sprintf("  %s", offenders), rep("i", length(offenders))),
+      "i" = paste0(
+        "Every source metrics target that computes sharpe MUST also publish ",
+        "the ann_rf it used -- see R/utils_metrics.R::sharpe_ratio_rf() and ",
+        "the module-level 'ann_rf (#677 slice 4)' comment in R/plan_leaderboard.R."
+      )
+    ))
+  }
+
+  # ── Assertion 2: vol must be a checkable (positive, non-NA) denominator ──
+  bad_vol <- is.na(leaderboard$vol) | leaderboard$vol <= 0
+  if (any(bad_vol)) {
+    offenders <- unique(paste(leaderboard$strategy[bad_vol], leaderboard$period[bad_vol], sep = " / "))
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(offenders),
+        " row(s) with a non-positive or NA vol -- Sharpe coherence cannot be verified:"
+      ),
+      setNames(sprintf("  %s", offenders), rep("i", length(offenders))),
+      "i" = "(cagr - ann_rf) / vol is undefined when vol is 0 or NA."
+    ))
+  }
+
+  # ── Assertion 3: sharpe == (cagr - ann_rf) / vol, within rounding tol ────
+  computed <- (leaderboard$cagr - leaderboard$ann_rf) / leaderboard$vol
+  diff <- abs(leaderboard$sharpe - computed)
+  # An NA sharpe alongside checkable cagr/vol/ann_rf is itself an
+  # incoherence -- Inf so it is caught below, never silently excluded.
+  diff[is.na(leaderboard$sharpe)] <- Inf
+
+  bad <- diff > tol
+  if (any(bad)) {
+    msgs <- sprintf(
+      "  %s / %s -- sharpe = %s, (cagr - ann_rf) / vol = %s, diff = %s",
+      leaderboard$strategy[bad], leaderboard$period[bad],
+      format(leaderboard$sharpe[bad], digits = 4),
+      format(computed[bad], digits = 4),
+      format(diff[bad], digits = 3)
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard sharpe is incoherent with cagr/vol/ann_rf in ",
+        sum(bad), " place(s) (tol = ", tol, "), #677:"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "sharpe must equal (cagr - ann_rf) / vol -- check the offending ",
+        "strategy's source metrics target and its .norm_* helper in ",
+        "R/plan_leaderboard.R for a formula or unit-conversion bug."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -1396,6 +1553,29 @@ plan_qa_gates <- function() {
       command = {
         check_borrow_status_registry(strategy_cost_convention)
         cli::cli_inform(c("v" = "qa_borrow_status_registry: S16 passed (all borrow_status values derivable, in vocabulary, and consistent with borrow_rate_annual)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: leaderboard sharpe is coherent with cagr/vol/ann_rf (S17) --
+    # guards against the #677 defect class where sharpe was computed by at
+    # least FOUR distinct mathematical bases across ~13 source metrics
+    # targets (geometric vs arithmetic numerator; risk-free deducted or
+    # not), so strategies were ranked against each other on a statistic
+    # that was not actually comparable. #677 slices 1-3b migrated every
+    # leaderboard-feeding source metrics target onto the canonical
+    # sharpe_ratio_rf() (R/utils_metrics.R) and required each to publish
+    # the ann_rf it used; this gate asserts
+    # sharpe == (cagr - ann_rf) / vol exactly (within a documented
+    # rounding tolerance), never a "plausible band" -- see
+    # check_leaderboard_sharpe_coherence() roxygen for the full rationale
+    # and tolerance derivation.
+    targets::tar_target(
+      qa_leaderboard_sharpe_coherence,
+      command = {
+        check_leaderboard_sharpe_coherence(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_sharpe_coherence: S17 passed (sharpe coherent with cagr/vol/ann_rf for every row)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

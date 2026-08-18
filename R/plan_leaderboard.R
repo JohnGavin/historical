@@ -33,6 +33,17 @@
 # See also: R/plan_qa_gates.R `qa_leaderboard_metric_ranges` -- the range gate
 # that asserts every row here is within a plausible fractional range.
 #
+# ── ann_rf (#677 slice 4) ───────────────────────────────────────────────────
+# `ann_rf` is the annualised risk-free rate each source metrics target
+# actually deducted when computing `sharpe`. It follows the EXACT SAME
+# fraction/percent convention as `cagr` in its own source target -- every
+# `.norm_*` helper below divides `ann_rf` by 100 in lockstep with `cagr`, and
+# the direct add_meta() targets (fm_metrics, drif_metrics, stk_max_metrics,
+# stk_drif_metrics, xgb_drif_metrics, port_metrics) already
+# carry it as a fraction, same as their `cagr`. It is REQUIRED (never NA) --
+# see R/plan_qa_gates.R `check_leaderboard_sharpe_coherence()` (S17), which
+# asserts `sharpe == (cagr - ann_rf) / vol` for every leaderboard row.
+#
 # ── Period vocabulary (#643) ────────────────────────────────────────────────
 # The `period` column MUST only contain values from `PERIOD_LABELS_ALLOWED`
 # (R/plan_partitions.R). Two source targets (mf_metrics, ev_metrics) used
@@ -74,7 +85,8 @@ plan_leaderboard <- function() {
       .norm_ltr <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
-          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+                 ann_rf = ann_rf / 100)
       }
 
       # olmar_metrics has `days` instead of `months`; daily ann_factor.
@@ -84,7 +96,8 @@ plan_leaderboard <- function() {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           rename(months = days) |>
-          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+                 ann_rf = ann_rf / 100)
       }
 
       # tom_metrics uses cagr_tom, vol_tom, sharpe_tom, max_dd_tom.
@@ -101,6 +114,7 @@ plan_leaderboard <- function() {
           cagr   = cagr_tom / 100,
           vol    = vol_tom / 100,
           sharpe = sharpe_tom,
+          ann_rf = ann_rf_tom / 100,
           max_dd = max_dd_tom / 100
         )
       }
@@ -121,6 +135,7 @@ plan_leaderboard <- function() {
           cagr   = cagr,
           vol    = vol,
           sharpe = sharpe,
+          ann_rf = ann_rf,
           max_dd = max_dd,
           cmr_lookback = lookback  # preserve for inspection
         )
@@ -140,7 +155,8 @@ plan_leaderboard <- function() {
         m |>
           filter(strategy == "SPY_overlay") |>
           select(-strategy) |>
-          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+                 ann_rf = ann_rf / 100)
       }
 
       # mom_prepeak_metrics / siblings have no period column (one row per
@@ -159,6 +175,7 @@ plan_leaderboard <- function() {
             cagr   = cagr / 100,
             vol    = vol / 100,
             sharpe = sharpe,
+            ann_rf = ann_rf / 100,
             max_dd = max_dd / 100
           )
       }
@@ -173,7 +190,8 @@ plan_leaderboard <- function() {
           filter(scenario == "Remove 10 Worst") |>
           select(-scenario) |>
           rename(months = n_days) |>
-          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100)
+          mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+                 ann_rf = ann_rf / 100)
       }
 
       # mf_metrics has multiple internal strategies (Long-Only, Long-Short, EW benchmark)
@@ -200,7 +218,8 @@ plan_leaderboard <- function() {
           rename(months = n_months) |>
           mutate(
             period = ifelse(period == "Full", "Full Period", period),
-            cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100
+            cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+            ann_rf = ann_rf / 100
           )
       }
 
@@ -222,7 +241,8 @@ plan_leaderboard <- function() {
           rename(months = n_months) |>
           mutate(
             period = ifelse(period == "Full", "Full Period", period),
-            cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100
+            cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+            ann_rf = ann_rf / 100
           )
       }
 
@@ -278,7 +298,8 @@ plan_leaderboard <- function() {
         port_row <- port_metrics |>
           transmute(
             period = period, months = months,
-            cagr = opt_cagr, vol = opt_vol, sharpe = opt_sharpe, max_dd = opt_maxdd,
+            cagr = opt_cagr, vol = opt_vol, sharpe = opt_sharpe, ann_rf = ann_rf,
+            max_dd = opt_maxdd,
             strategy = "PSO Optimal", level = "Combined",
             signal = "Weighted portfolio",
             definition = "stock-backtest.html#comparison"
