@@ -80,8 +80,38 @@ plan_bootstrap_ci <- function() {
     targets::tar_target(boot_metrics, {
       library(dplyr)
 
-      strat_names <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+      # Derive the strategy list from the data, NOT a hardcoded vector. The
+      # pre-#677 code used colnames(boot_monthly_returns |> select(-ym));
+      # adding the paired `<strat>_rf` columns broke that (an rf column would
+      # be treated as a strategy), and the first fix was to enumerate the
+      # four names literally. That is the "scope drawn around the known
+      # instances" pattern this repo keeps being bitten by (#667 S11's
+      # enumerated pair, PR #661's paths: glob, #674's one-directional
+      # registry check) -- a fifth strategy added to boot_monthly_returns
+      # would have been silently dropped from the bootstrap with nothing
+      # saying so. Derive by excluding the `_rf` suffix instead, and assert
+      # the pairing is complete (fail-loud-not-null.md).
+      # Derived from the draws matrix boot_metrics already holds, NOT from
+      # boot_monthly_returns -- reading the latter here would add a new DAG
+      # edge for nothing, since every draw carries the same columns.
+      all_cols    <- setdiff(colnames(boot_draws[[1]]), "ym")
+      strat_names <- all_cols[!grepl("_rf$", all_cols)]
       rf_names    <- paste0(strat_names, "_rf")
+
+      missing_rf <- setdiff(rf_names, all_cols)
+      if (length(missing_rf) > 0L) {
+        cli::cli_abort(c(
+          "x" = "{length(missing_rf)} strateg{?y/ies} in boot_monthly_returns have no paired risk-free column:",
+          "i" = "Missing: {.field {missing_rf}}.",
+          "i" = "Every `<strategy>` column must have a matching `<strategy>_rf` (see boot_monthly_returns above, #677)."
+        ))
+      }
+      if (length(strat_names) == 0L) {
+        cli::cli_abort(c(
+          "x" = "boot_monthly_returns has no strategy columns (only ym and/or _rf columns).",
+          "i" = "Check the select() in boot_monthly_returns (R/plan_bootstrap_ci.R)."
+        ))
+      }
 
       # Compute rf-adjusted Sharpe, CAGR, max DD for a return + rf pair
       calc_boot_metrics <- function(ret, rf) {

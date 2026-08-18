@@ -96,3 +96,45 @@ test_that("boot_metrics: sharpe is rf-adjusted, positive rf lowers sharpe vs zer
     expect_lt(sharpe_pos, sharpe_zero)
   }
 })
+
+# ── strat_names is derived, not enumerated (#677 slice 2 review) ────────────
+#
+# The first form of this migration hardcoded
+#   strat_names <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+# which would silently drop a fifth strategy from the bootstrap. These tests
+# pin the derived behaviour so it cannot regress to an enumerated list.
+
+.boot_strat_names <- function(cols) {
+  all_cols <- setdiff(cols, "ym")
+  all_cols[!grepl("_rf$", all_cols)]
+}
+
+test_that("boot strategy list is derived from the data, not hardcoded", {
+  cols <- c("ym", "stk_max", "stk_max_rf", "fac_max", "fac_max_rf")
+  expect_equal(.boot_strat_names(cols), c("stk_max", "fac_max"))
+})
+
+test_that("a NEW strategy column is picked up automatically", {
+  cols <- c("ym", "stk_max", "stk_max_rf", "brand_new", "brand_new_rf")
+  expect_true("brand_new" %in% .boot_strat_names(cols))
+  expect_length(.boot_strat_names(cols), 2L)
+})
+
+test_that("rf columns are never mistaken for strategies", {
+  cols <- c("ym", "stk_max", "stk_max_rf")
+  expect_false(any(grepl("_rf$", .boot_strat_names(cols))))
+})
+
+test_that("boot_metrics aborts when a strategy has no paired rf column", {
+  cmd <- .target_command(plan_bootstrap_ci(), "boot_metrics")
+  set.seed(677)
+  bad <- cbind(
+    stk_max    = rnorm(12, 0.01, 0.02),
+    stk_max_rf = rep(0.001, 12),
+    orphan     = rnorm(12, 0.01, 0.02)   # no orphan_rf
+  )
+  expect_error(
+    .eval_command(cmd, boot_draws = list(bad), sharpe_ratio_rf = sharpe_ratio_rf),
+    regexp = "orphan_rf"
+  )
+})
