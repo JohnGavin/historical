@@ -109,16 +109,24 @@ plan_ev_ebit <- function() {
       oos      <- ev_params$oos_start
       test_end <- bt_partitions$factor$test_end
 
-      calc_metrics <- function(ret_vec, date_vec, strategy_name, period_name) {
+      # #677 slice 2: sharpe now uses the canonical risk-free-adjusted
+      # helper (R/utils_metrics.R::sharpe_ratio_rf()) instead of bare
+      # cagr/vol -- this file was one of the "no rf deducted" family
+      # (implied rf of exactly 0.00%, a formula signature -- see #677).
+      # ev_portfolios$RF is already carried on every row (ev_data pivots
+      # the RF column directly out of FF5), so no new join is needed here.
+      calc_metrics <- function(ret_vec, rf_vec, date_vec, strategy_name, period_name) {
         keep     <- !is.na(ret_vec)
         ret_vec  <- ret_vec[keep]
+        rf_vec   <- rf_vec[keep]
         date_vec <- date_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
         years    <- length(ret_vec) / 12
         cum_ret  <- prod(1 + ret_vec)
         cagr     <- (cum_ret^(1 / years) - 1) * 100
         vol      <- sd(ret_vec) * sqrt(12) * 100
-        sharpe   <- ifelse(vol > 0, (cagr / 100) / (vol / 100), NA_real_)
+        sr       <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 12L)
+        sharpe   <- sr$sharpe
         cum_w    <- cumprod(1 + ret_vec)
         drawdown <- (cum_w - cummax(cum_w)) / cummax(cum_w)
         max_dd   <- min(drawdown) * 100
@@ -147,7 +155,8 @@ plan_ev_ebit <- function() {
         value_qual = "Value+Quality (50% HML + 50% RMW, QVAL proxy)",
         market     = "Benchmark (Cap-Weighted Market)"
       )
-      dates <- ev_portfolios$date
+      dates  <- ev_portfolios$date
+      rf_all <- ev_portfolios$RF
 
       is_pre_oos <- dates < oos
       is_oos     <- dates >= oos & dates <= test_end
@@ -155,9 +164,9 @@ plan_ev_ebit <- function() {
       rows <- list()
       for (nm in names(strategies)) {
         rows <- c(rows,
-          list(calc_metrics(strategies[[nm]],            dates,             labels[nm], "Full")),
-          list(calc_metrics(strategies[[nm]][is_pre_oos], dates[is_pre_oos], labels[nm], "Training")),
-          list(calc_metrics(strategies[[nm]][is_oos],     dates[is_oos],     labels[nm], "OOS"))
+          list(calc_metrics(strategies[[nm]],            rf_all,            dates,             labels[nm], "Full")),
+          list(calc_metrics(strategies[[nm]][is_pre_oos], rf_all[is_pre_oos], dates[is_pre_oos], labels[nm], "Training")),
+          list(calc_metrics(strategies[[nm]][is_oos],     rf_all[is_oos],     dates[is_oos],     labels[nm], "OOS"))
         )
       }
       dplyr::bind_rows(Filter(Negate(is.null), rows))
@@ -175,6 +184,7 @@ plan_ev_ebit <- function() {
       dates <- ev_portfolios$date
       rval  <- ev_portfolios$ret_value_qual
       rmkt  <- ev_portfolios$ret_market
+      rf    <- ev_portfolios$RF   # #677 slice 2: rf-adjusted sharpe below
 
       # Known value underperformance periods (from Swedroe documentation)
       p_pre66   <- dates < as.Date("1966-01-01")
@@ -183,34 +193,39 @@ plan_ev_ebit <- function() {
       p_under00 <- dates >= as.Date("2000-01-01") & dates <= as.Date("2012-12-31")
       p_recent  <- dates >= as.Date("2013-01-01")
 
-      calc_row <- function(ret_vec, period_label, strategy_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      # #677 slice 2: sharpe now uses sharpe_ratio_rf() (R/utils_metrics.R)
+      # instead of bare cagr/vol -- see calc_metrics() above for the same
+      # fix applied to ev_metrics.
+      calc_row <- function(ret_vec, rf_vec, period_label, strategy_name) {
+        keep    <- !is.na(ret_vec)
+        ret_vec <- ret_vec[keep]
+        rf_vec  <- rf_vec[keep]
         if (length(ret_vec) < 6L) return(NULL)
         years  <- length(ret_vec) / 12
         cagr   <- (prod(1 + ret_vec)^(1 / years) - 1) * 100
         vol    <- sd(ret_vec) * sqrt(12) * 100
-        sharpe <- ifelse(vol > 0, cagr / vol, NA_real_)
+        sr     <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 12L)
         tibble::tibble(
           strategy = strategy_name,
           period   = period_label,
           n_months = length(ret_vec),
           cagr     = round(cagr, 2),
           vol      = round(vol, 2),
-          sharpe   = round(sharpe, 3)
+          sharpe   = round(sr$sharpe, 3)
         )
       }
 
       dplyr::bind_rows(
-        calc_row(rval[p_pre66],   "Pre-1966 (Value leadership)",         "Value+Quality"),
-        calc_row(rmkt[p_pre66],   "Pre-1966 (Value leadership)",         "Market"),
-        calc_row(rval[p_under66], "1966-1982 (Value underperformance)",  "Value+Quality"),
-        calc_row(rmkt[p_under66], "1966-1982 (Value underperformance)",  "Market"),
-        calc_row(rval[p_bull83],  "1983-1999 (Value recovery)",          "Value+Quality"),
-        calc_row(rmkt[p_bull83],  "1983-1999 (Value recovery)",          "Market"),
-        calc_row(rval[p_under00], "2000-2012 (Value underperformance)",  "Value+Quality"),
-        calc_row(rmkt[p_under00], "2000-2012 (Value underperformance)",  "Market"),
-        calc_row(rval[p_recent],  "2013+ (Recent period)",               "Value+Quality"),
-        calc_row(rmkt[p_recent],  "2013+ (Recent period)",               "Market")
+        calc_row(rval[p_pre66],   rf[p_pre66],   "Pre-1966 (Value leadership)",         "Value+Quality"),
+        calc_row(rmkt[p_pre66],   rf[p_pre66],   "Pre-1966 (Value leadership)",         "Market"),
+        calc_row(rval[p_under66], rf[p_under66], "1966-1982 (Value underperformance)",  "Value+Quality"),
+        calc_row(rmkt[p_under66], rf[p_under66], "1966-1982 (Value underperformance)",  "Market"),
+        calc_row(rval[p_bull83],  rf[p_bull83],  "1983-1999 (Value recovery)",          "Value+Quality"),
+        calc_row(rmkt[p_bull83],  rf[p_bull83],  "1983-1999 (Value recovery)",          "Market"),
+        calc_row(rval[p_under00], rf[p_under00], "2000-2012 (Value underperformance)",  "Value+Quality"),
+        calc_row(rmkt[p_under00], rf[p_under00], "2000-2012 (Value underperformance)",  "Market"),
+        calc_row(rval[p_recent],  rf[p_recent],  "2013+ (Recent period)",               "Value+Quality"),
+        calc_row(rmkt[p_recent],  rf[p_recent],  "2013+ (Recent period)",               "Market")
       )
     }),
 
