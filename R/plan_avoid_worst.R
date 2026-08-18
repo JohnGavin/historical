@@ -529,13 +529,32 @@ plan_avoid_worst <- function() {
           # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R)
           # asserts sharpe == (cagr - ann_rf) / vol for every leaderboard row.
           sr <- .aw_sharpe_rf_full(r_dts, r, aw_daily_rf, ann_factor = 252L)
+
+          # Annualise over THIS scenario's own length, not the enclosing
+          # full-sample `years`. Found by S17 on its first production run:
+          # "Avoid Worst / Testing -- sharpe = 1.5, (cagr - ann_rf) / vol =
+          # 1.476, diff = 0.0239".
+          #
+          # `years <- n / 252` above is the FULL series. The "Remove 10
+          # Worst"/"Remove 10 Best" scenarios compound only `r`, which has 10
+          # fewer observations, yet divided by the full-sample horizon --
+          # while sharpe_ratio_rf() annualises over length(r). CAGR and Sharpe
+          # were therefore annualised over DIFFERENT horizons, and the
+          # leaderboard publishes the "Remove 10 Worst" row, so the published
+          # CAGR was understated. The error scales with 10/length(r), which is
+          # why Testing (shortest window) failed at 0.0239 while Training
+          # passed at 0.0006 -- the same bug, invisible on the longer windows.
+          #
+          # "All Days" is unaffected: r == ret there, so scen_years == years.
+          scen_years <- length(r) / 252
+
           tibble::tibble(
             strategy = "SPY",
             period = label,
             scenario = scenario,
-            years = round(years, 1),
+            years = round(scen_years, 1),
             n_days = length(r),
-            cagr = round((prod(1 + r)^(1 / years) - 1) * 100, 1),
+            cagr = round((prod(1 + r)^(1 / scen_years) - 1) * 100, 1),
             vol = round(sd(r) * sqrt(252) * 100, 1),
             max_dd = round(min((cumprod(1 + r) -
                                   cummax(cumprod(1 + r))) /
