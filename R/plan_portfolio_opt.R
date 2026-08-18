@@ -539,6 +539,15 @@ plan_portfolio_opt <- function() {
   # if they are ever registered.
   # Units (#640): opt_cagr/opt_vol/opt_maxdd are decimal fractions (per the
   # comment above), opt_sharpe is a scale-free ratio, months is a count.
+  # ann_rf (#677 slice 4) was added to port_metrics as a decimal fraction
+  # (calc_port_metrics() above, never *100) but is NOT currently selected by
+  # `pso_cols` below -- unlike the other ten registry writers in this repo,
+  # this one uses an explicit intersect() allow-list rather than a
+  # setdiff()-based exclusion, so new columns on port_metrics do not
+  # automatically flow into hd_metric_record() here. `ann_rf` is declared in
+  # `pso_units` for forward-compatibility/consistency with the leaderboard's
+  # unit convention, but this target does not currently attempt to write
+  # ann_rf and was therefore not among the writers erroring under #691.
   full_row <- port_metrics[port_metrics$period == "Full Period", , drop = FALSE]
   if (nrow(full_row) == 1L) {
     pso_cols <- intersect(
@@ -547,7 +556,7 @@ plan_portfolio_opt <- function() {
     )
     pso_units <- c(
       months = "count", opt_cagr = "fraction", opt_vol = "fraction",
-      opt_sharpe = "ratio", opt_maxdd = "fraction"
+      opt_sharpe = "ratio", opt_maxdd = "fraction", ann_rf = "fraction"
     )
     if (length(pso_cols) > 0L) {
       historicaldata::hd_metric_record(

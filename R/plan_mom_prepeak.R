@@ -579,15 +579,21 @@ plan_mom_prepeak <- function() {
       wide <- metrics_row[, metric_cols, drop = FALSE]
       # Units (#640): see .mom_prepeak_compute_metrics() in
       # packages/historicaldata/R/utils_mom_prepeak_metrics.R — cagr/vol/
-      # max_dd are decimal fractions, sharpe is a scale-free ratio,
-      # n_months/max_cons_losses/bankrupt_month are counts, avg_dd_days/
+      # max_dd are PERCENT (round(x * 100, 1) at lines 128-130 there; also
+      # confirmed by R/plan_leaderboard.R's .norm_mom_sibling(), which
+      # divides cagr/vol/max_dd/ann_rf by 100 -- corrected from the
+      # previously-declared "fraction" under #691), sharpe is a scale-free
+      # ratio, n_months/max_cons_losses/bankrupt_month are counts, avg_dd_days/
       # max_dd_days are day-durations. blown_up/loss_clustered are logical
       # and are auto-skipped by .normalise_metric_long (no unit needed).
+      # ann_rf (#677 slice 4, #691) is PERCENT, same convention as cagr
+      # (round(.mom_prepeak_ann_rf(...) * 100, 2) above).
       mom_prepeak_units <- c(
-        n_months = "count", sharpe = "ratio", cagr = "fraction",
-        vol = "fraction", max_dd = "fraction",
+        n_months = "count", sharpe = "ratio", cagr = "percent",
+        vol = "percent", max_dd = "percent",
         bankrupt_month = "count", avg_dd_days = "days",
-        max_dd_days = "days", max_cons_losses = "count"
+        max_dd_days = "days", max_cons_losses = "count",
+        ann_rf = "percent"
       )
       historicaldata::hd_metric_record(con, uu, wide, units = mom_prepeak_units)
     }

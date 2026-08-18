@@ -1270,6 +1270,8 @@ plan_avoid_worst <- function() {
   # Units (#640): aw_metrics stores cagr/vol/max_dd as PERCENT (x*100 in
   # metrics_for() above — the source #637 flagged as percent-native), sharpe
   # is a scale-free ratio, n_days is a count, and years is a year-duration.
+  # ann_rf (#677 slice 4, #691) is PERCENT, same convention as cagr
+  # (round(sr$ann_rf * 100, 2) above).
   full_row <- aw_metrics[
     aw_metrics$period == "Full Period" & aw_metrics$scenario == "All Days",
     , drop = FALSE
@@ -1278,7 +1280,8 @@ plan_avoid_worst <- function() {
     metric_cols <- setdiff(names(full_row), c("period", "scenario"))
     aw_units <- c(
       years = "years", n_days = "count", cagr = "percent",
-      vol = "percent", max_dd = "percent", sharpe = "ratio"
+      vol = "percent", max_dd = "percent", sharpe = "ratio",
+      ann_rf = "percent"
     )
     historicaldata::hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = aw_units

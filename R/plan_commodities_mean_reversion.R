@@ -323,6 +323,8 @@ plan_commodities_mean_reversion <- function() {
     # n_months is a count. avg_dd_duration/max_dd_duration are drawdown
     # lengths measured in the return series' own periodicity (months, for
     # CMR's monthly returns) — classified as "count" (periods), not "days".
+    # ann_rf (#677 slice 4, #691) is a decimal fraction, same convention as
+    # cagr (round(sr$ann_rf, 4) above, never *100).
     row <- cmr_summary[cmr_summary$lookback == p, , drop = FALSE]
     if (nrow(row) == 1L) {
       metric_cols <- setdiff(names(row), "lookback")
@@ -330,7 +332,8 @@ plan_commodities_mean_reversion <- function() {
       cmr_units <- c(
         n_months = "count", sharpe = "ratio", cagr = "fraction",
         vol = "fraction", max_dd = "fraction",
-        avg_dd_duration = "count", max_dd_duration = "count"
+        avg_dd_duration = "count", max_dd_duration = "count",
+        ann_rf = "fraction"
       )
       historicaldata::hd_metric_record(con, uu, wide, units = cmr_units)
     }

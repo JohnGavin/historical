@@ -846,7 +846,9 @@ plan_risk_state <- function() {
   # (round(x*100, ...) in calc_metrics() above); sharpe/hac_tstat/hac_sharpe
   # are scale-free ratios (#677: `sharpe` is the new canonical,
   # risk-free-adjusted column added alongside the pre-existing `hac_sharpe`
-  # -- both need a unit or hd_metric_record() aborts loud per #640).
+  # -- both need a unit or hd_metric_record() aborts loud per #640). ann_rf
+  # (#677 slice 4, #691) is PERCENT, same convention as cagr
+  # (round(sr_result$ann_rf * 100, 2) above).
   full_row <- rsc_metrics[
     rsc_metrics$strategy == "SPY_overlay" & rsc_metrics$period == "Full Period",
     , drop = FALSE
@@ -855,7 +857,8 @@ plan_risk_state <- function() {
     metric_cols <- setdiff(names(full_row), c("strategy", "period"))
     rsc_units <- c(
       cagr = "percent", vol = "percent", max_dd = "percent",
-      sharpe = "ratio", hac_tstat = "ratio", hac_sharpe = "ratio"
+      sharpe = "ratio", hac_tstat = "ratio", hac_sharpe = "ratio",
+      ann_rf = "percent"
     )
     historicaldata::hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = rsc_units
