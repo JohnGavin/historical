@@ -1062,6 +1062,78 @@ check_borrow_status_registry <- function(strategy_cost_convention) {
 }
 
 
+#' Assert every strategy's `lending_status` is derivable and in the allowed
+#' vocabulary (S18)
+#'
+#' Sibling to `check_borrow_status_registry()` (S16), not an extension of it
+#' -- deliberately a separate gate rather than folded into S16, for three
+#' reasons: (1) S16's docstring, tests, and error messages are scoped
+#' specifically to `borrow_status` vs `borrow_rate_annual` consistency, and
+#' widening it to also reason about lending would make one function assert
+#' two independent claims about two independently-derived columns; (2)
+#' `lending_status` has no numeric counterpart to cross-check for
+#' contradiction the way S16 checks `borrow_status` against
+#' `borrow_rate_annual` -- the #665 decision is qualitative-only (a
+#' materiality judgement, not a rate), so a "contradiction" assertion would
+#' have nothing to compare against; (3) keeping the gates separate keeps the
+#' failure message unambiguous -- a `borrow_status` regression and a
+#' `lending_status` regression are different defects with different fixes,
+#' and a shared gate would force a reader to work out which one actually
+#' broke from a single generic message.
+#'
+#' Guards against the #665 defect class: securities-lending income was
+#' previously modelled NOWHERE, with no decision recorded either way
+#' (fail-loud-not-null.md: an absence nobody decided on is indistinguishable
+#' from a deliberate zero unless the decision itself is machine-readable).
+#' `lending_status` (derived by `derive_lending_status()`,
+#' R/plan_cost_convention.R) makes that decision explicit; this gate is the
+#' belt-and-braces check that the derivation actually held for every row --
+#' no NA status and no status outside `LENDING_STATUS_ALLOWED`.
+#'
+#' @param strategy_cost_convention Tibble with at least `strategy`,
+#'   `lending_status` columns (the output of the `strategy_cost_convention`
+#'   target, R/plan_cost_convention.R).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_lending_status_registry <- function(strategy_cost_convention) {
+  required_cols <- c("strategy", "lending_status")
+  missing_cols <- setdiff(required_cols, names(strategy_cost_convention))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "strategy_cost_convention is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_lending_status_registry() (S18) requires strategy, lending_status."
+    ))
+  }
+
+  # ── Assertion 1: no NA lending_status ────────────────────────────────────
+  na_status <- strategy_cost_convention$strategy[is.na(strategy_cost_convention$lending_status)]
+  if (length(na_status) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "strategy_cost_convention has ", length(na_status),
+        " strategy/strategies with NA lending_status (#665):"
+      ),
+      setNames(sprintf("  %s", na_status), rep("i", length(na_status))),
+      "i" = "Every strategy must resolve to a status in LENDING_STATUS_ALLOWED (R/plan_cost_convention.R) -- never NA."
+    ))
+  }
+
+  # ── Assertion 2: no out-of-vocabulary lending_status ─────────────────────
+  bad_vocab <- unique(setdiff(strategy_cost_convention$lending_status, LENDING_STATUS_ALLOWED))
+  if (length(bad_vocab) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "strategy_cost_convention has lending_status value(s) outside the allowed vocabulary: ",
+        paste(bad_vocab, collapse = ", ")
+      ),
+      "i" = paste0("Allowed values: ", paste(LENDING_STATUS_ALLOWED, collapse = ", "), ".")
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Assert leaderboard `sharpe` is coherent with `cagr`, `vol`, and `ann_rf`
 #' published beside it (S17)
 #'
@@ -1553,6 +1625,21 @@ plan_qa_gates <- function() {
       command = {
         check_borrow_status_registry(strategy_cost_convention)
         cli::cli_inform(c("v" = "qa_borrow_status_registry: S16 passed (all borrow_status values derivable, in vocabulary, and consistent with borrow_rate_annual)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: strategy_cost_convention's lending_status is derivable and in
+    # the allowed vocabulary (S18) -- sibling to S16, not an extension of it
+    # (see check_lending_status_registry() roxygen for why). Guards against
+    # the #665 defect class where securities-lending income was modelled
+    # nowhere, with no decision recorded either way.
+    targets::tar_target(
+      qa_lending_status_registry,
+      command = {
+        check_lending_status_registry(strategy_cost_convention)
+        cli::cli_inform(c("v" = "qa_lending_status_registry: S18 passed (all lending_status values derivable and in vocabulary)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

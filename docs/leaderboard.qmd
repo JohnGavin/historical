@@ -418,6 +418,139 @@ if (!is.null(lb)) {
 }
 ```
 
+#### Financing Sensitivity
+
+The leaderboard above charges each strategy a single, unsourced borrow rate — and, as of [#665](https://github.com/JohnGavin/historical/issues/665), assumes zero securities-lending income everywhere (a documented materiality judgement, not a measurement — see `lending_status` in `strategy_cost_convention`, R/plan_cost_convention.R). This tab does not correct that number; it measures how much of each strategy's edge survives if the single borrow-rate assumption is wrong. Two things to read correctly here: the 0% column is a no-financing counterfactual, not a claim that financing is free — do not treat it as "the" answer; and this sweep's Sharpe omits the risk-free rate (it reports *relative* deltas across borrow rates, where rf cancels), so its levels are **not** directly comparable to the leaderboard's own rf-adjusted Sharpe above — only the delta column is.
+
+```{r}
+#| label: financing-sensitivity
+bss <- safe_tar_read("borrow_sensitivity_sweep")
+scc <- safe_tar_read("strategy_cost_convention")
+if (!is.null(bss)) {
+  gh_url <- tryCatch({
+    remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+    sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+  }, error = function(e) NULL)
+  git_sha <- tryCatch(
+    system("git rev-parse HEAD 2>/dev/null", intern = TRUE),
+    error = function(e) "main"
+  )
+  git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
+  gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
+    "https://github.com/JohnGavin/historical"
+  sweep_link <- sprintf(
+    "[`borrow_sensitivity_sweep`](%s/blob/%s/R/plan_cost_convention.R#L601)",
+    gh_base, git_sha
+  )
+  fn_link <- sprintf(
+    "[`compute_borrow_sensitivity()`](%s/blob/%s/R/plan_cost_convention.R#L322)",
+    gh_base, git_sha
+  )
+
+  rates_sorted <- sort(unique(bss$borrow_rate_annual))
+  max_rate <- max(rates_sorted)
+  n_swept <- dplyr::n_distinct(bss$strategy)
+
+  status_lookup <- if (!is.null(scc)) {
+    dplyr::select(scc, strategy, borrow_status)
+  } else {
+    tibble(strategy = character(0), borrow_status = character(0))
+  }
+
+  # Wide pivot: one row per strategy, one Sharpe column per swept borrow
+  # rate. rate_label's rounding formula is reused verbatim below to build
+  # `rate_cols` so the two never drift apart.
+  sharpe_wide <- bss |>
+    mutate(rate_label = paste0("Sharpe @", round(borrow_rate_annual * 100), "%")) |>
+    select(strategy, rate_label, sharpe) |>
+    tidyr::pivot_wider(names_from = rate_label, values_from = sharpe)
+
+  rate_cols <- paste0("Sharpe @", round(rates_sorted * 100), "%")
+  delta_col <- paste0("Delta Sharpe (0%->", round(max_rate * 100), "%)")
+
+  # sharpe_delta at the HIGHEST swept rate -- the largest, not smallest,
+  # degradation is what a reader needs to see first (#665: "the single most
+  # informative number in the issue" for the previously-unmodelled trio).
+  delta_tbl <- bss |>
+    filter(borrow_rate_annual == max_rate) |>
+    select(strategy, sharpe_delta)
+  names(delta_tbl)[names(delta_tbl) == "sharpe_delta"] <- delta_col
+
+  sens_table <- sharpe_wide |>
+    left_join(delta_tbl, by = "strategy") |>
+    left_join(status_lookup, by = "strategy") |>
+    select(strategy, dplyr::all_of(rate_cols), dplyr::all_of(delta_col), borrow_status) |>
+    arrange(.data[[delta_col]]) |>
+    mutate(dplyr::across(dplyr::where(is.numeric), ~round(., 2))) |>
+    rename(Strategy = strategy, `Borrow Status` = borrow_status)
+
+  most_affected <- head(sens_table$Strategy, 3)
+
+  cmr_note <- if ("CMR" %in% sens_table$Strategy) {
+    cmr_status <- sens_table$`Borrow Status`[sens_table$Strategy == "CMR"]
+    if (!is.na(cmr_status) && cmr_status == "not_applicable") {
+      paste0(
+        " CMR is included for illustration only: its borrow_status is \"not_applicable\" -- ",
+        "its universe is commodity futures/ETFs/price indices, where financing sits in the ",
+        "futures curve, not an equity-style short-borrow rate, so this row is a sensitivity ",
+        "illustration, not a cost CMR would actually pay."
+      )
+    } else ""
+  } else ""
+
+  sens_caption <- paste0(
+    "Sharpe at borrow rate ", paste0(round(rates_sorted * 100), "%", collapse = " / "),
+    " (annualised), holding trade cost, signal, and weights fixed, for the ", n_swept,
+    " strategies with a real short leg, computed by ", fn_link, " and assembled in ", sweep_link,
+    " (reporting only -- feeds no published return, #665). Ordered by ", delta_col,
+    " (most sensitive first): ", paste(most_affected, collapse = ", "),
+    " lose the most Sharpe as the borrow assumption rises, so read this table from the top, ",
+    "not from the leaderboard's own ranking. The 0% column is a no-financing counterfactual, ",
+    "not a claim that financing is free. This sweep's Sharpe omits the risk-free rate (it ",
+    "reports RELATIVE deltas across borrow rates, where rf cancels), so its levels are NOT ",
+    "comparable to the leaderboard's own rf-adjusted Sharpe above -- ", delta_col,
+    " is the column that means something here.",
+    cmr_note
+  )
+
+  numeric_cols <- which(sapply(sens_table, function(x) is.numeric(x) ||
+                                  grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
+  DT::datatable(
+    sens_table,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption",
+      sens_caption
+    ),
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      order = list(),
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
+}
+```
+
 #### Strategy Details
 
 Each strategy links to its full definition, implementation, and backtest:

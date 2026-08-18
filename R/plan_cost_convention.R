@@ -185,6 +185,105 @@ derive_borrow_status <- function(strategy, directionality, has_borrow_rate,
 }
 
 # ─────────────────────────────────────────────────────────────────────────
+# #665 (Part 1 of 2): record the securities-lending decision as data.
+#
+# Securities-lending income was previously modelled NOWHERE -- an absence
+# nobody had decided on, not a decision (fail-loud-not-null.md: the null-ish
+# state and the deliberate-zero state are indistinguishable unless the
+# decision is itself recorded). `lending_status` below is that decision,
+# made explicit and machine-readable, alongside `borrow_status` above.
+#
+# THE DECISION (recorded here, not re-derived -- see the PR body for the
+# reasoning that produced it): securities-lending income is deliberately
+# modelled as ZERO for every strategy. Not because it is zero, but because
+# it is judged IMMATERIAL at this book's composition -- the long book is
+# S&P-500-constituent/liquid-ETF names (`ltr_universe`, R/plan_mom_prepeak.R,
+# 529 tickers), which lend as general collateral at single-digit bps,
+# against a 50bp borrow assumption whose own uncertainty is roughly +-25bp.
+# A ~1-5bp revenue line sits below the resolution of everything around it.
+# This is a MATERIALITY JUDGEMENT, not a measurement -- `# MANUAL: no
+# source` below, the same convention as the unsourced `0.03`/`0.005`
+# borrow_rate_annual constants above -- and it stops holding the moment the
+# book holds hard-to-borrow names.
+#
+# LENDING_STATUS_ALLOWED is the single source of truth for the vocabulary,
+# deliberately reusing BORROW_STATUS_ALLOWED's non-numeric categories --
+# lending shares the same three "no independently-financeable position"
+# exceptions borrow already documents (Value (HML), PSO Optimal, Avoid
+# Worst -- LENDING_STATUS_OVERRIDES below), because whether a position can
+# be lent is symmetric with whether it can be borrowed against: both require
+# a position that exists, separately, in this codebase's model.
+#   - "zero_assumed_immaterial" -- the default; a real, separately-held long
+#                                  position exists, lending income on it is
+#                                  assumed zero per the documented judgement
+#                                  above.
+#   - "embedded_in_source"       -- long exposure is inside a pre-computed
+#                                  factor return series, not a
+#                                  separately-lendable position.
+#   - "inherited"                 -- a meta-portfolio blending already-net
+#                                  constituent returns; lending (if any) is a
+#                                  property of the constituents, not this row.
+#   - "not_tradeable"             -- registry states this is not a tradeable
+#                                  strategy at all (no cost model of any
+#                                  kind, so no modelled position to lend).
+LENDING_STATUS_ALLOWED <- c(
+  "zero_assumed_immaterial", "embedded_in_source", "inherited", "not_tradeable"
+)
+
+# Three rows have no independently-financeable position at all (regardless
+# of side), for the identical reason their borrow_status is overridden away
+# from a directionality-derived default -- see BORROW_STATUS_OVERRIDES above
+# for the source verification each of these three cites. Managed Futures and
+# CMR are NOT in this list: their borrow_status override is about their
+# SHORT leg (futures financing embedded in the curve), which says nothing
+# about whether their ETF-proxy LONG leg is a real, lendable position -- it
+# is, so they take the "zero_assumed_immaterial" default like every other
+# row with a real long book.
+LENDING_STATUS_OVERRIDES <- tibble::tibble(
+  strategy = c("Value (HML)", "PSO Optimal", "Avoid Worst"),
+  lending_status_override = c("embedded_in_source", "inherited", "not_tradeable")
+)
+
+#' Derive each strategy's lending_status (#665)
+#'
+#' Every strategy defaults to `"zero_assumed_immaterial"` -- the single,
+#' portfolio-level decision documented in the comment block above. Three
+#' rows have no independently-financeable position at all, mirroring the
+#' identical three borrow_status overrides for the identical reason
+#' (`LENDING_STATUS_OVERRIDES`). Fails loud (fail-loud-not-null.md) on an
+#' override outside `LENDING_STATUS_ALLOWED` rather than silently accepting
+#' it.
+#'
+#' @param strategy Character vector. Strategy display names, used only in
+#'   error messages.
+#' @param override Character vector (same length as `strategy`), or NA where
+#'   the default applies. Values from `LENDING_STATUS_OVERRIDES`.
+#' @return Character vector of lending_status values, each a member of
+#'   `LENDING_STATUS_ALLOWED`.
+#' @noRd
+derive_lending_status <- function(strategy, override = NA_character_) {
+  n <- length(strategy)
+  if (length(override) == 1L) override <- rep(override, n)
+  if (length(override) != n) {
+    cli::cli_abort(c("x" = "derive_lending_status(): override must have length 1 or {n}."))
+  }
+
+  vapply(seq_len(n), function(i) {
+    ov <- override[i]
+    if (!is.na(ov)) {
+      if (!ov %in% LENDING_STATUS_ALLOWED) {
+        cli::cli_abort(c(
+          "x" = "{.val {strategy[i]}}: override lending_status {.val {ov}} is not in the allowed set.",
+          "i" = "Allowed values: {paste(LENDING_STATUS_ALLOWED, collapse = ', ')}."
+        ))
+      }
+      return(ov)
+    }
+    "zero_assumed_immaterial"
+  }, character(1L))
+}
+
+# ─────────────────────────────────────────────────────────────────────────
 # #665 (quantification only): borrow-rate sensitivity sweep.
 #
 # REPORTING ONLY. Nothing here feeds `leaderboard` / `all_metrics` / any
@@ -391,9 +490,60 @@ plan_cost_convention <- function() {
         ) |>
         dplyr::select(-directionality, -borrow_status_override)
 
+      # ── #665 Part 1: attach the securities-lending decision ────────────
+      # See the LENDING_STATUS_ALLOWED comment block above for the decision
+      # itself. lending_source_ref follows the SAME "file:line, verified at
+      # authoring commit" convention as cost_source_ref, except the claim
+      # being verified is a materiality JUDGEMENT, not a code fact -- hence
+      # the `# MANUAL: no source` marker on every row (reproducible-ingestion
+      # discipline, CLAUDE.md: a hand-entered figure/decision with no parser
+      # is technical debt, flagged on sight, not silently treated as settled).
+      with_lending <- with_status |>
+        dplyr::left_join(LENDING_STATUS_OVERRIDES, by = "strategy") |>
+        dplyr::mutate(
+          lending_status = derive_lending_status(
+            strategy = strategy,
+            override = lending_status_override
+          ),
+          lending_source_ref = dplyr::case_when(
+            strategy == "Value (HML)" ~ paste0(
+              "# MANUAL: no source -- #665 zero-lending decision; ",
+              "embedded_in_source for the same reason as its borrow_status ",
+              "override (R/plan_ev_ebit.R:33,79): the pre-computed FF ",
+              "factor series holds no separately-tradeable long position ",
+              "to lend."
+            ),
+            strategy == "PSO Optimal" ~ paste0(
+              "# MANUAL: no source -- #665 zero-lending decision; ",
+              "inherited for the same reason as its borrow_status override ",
+              "(R/plan_portfolio_opt.R): a meta-portfolio blending ",
+              "already-net constituent returns, so lending income (if any) ",
+              "is a property of the constituents, not this row."
+            ),
+            strategy == "Avoid Worst" ~ paste0(
+              "# MANUAL: no source -- #665 zero-lending decision; ",
+              "not_tradeable for the same reason as its borrow_status ",
+              "override (R/plan_avoid_worst.R:5): no cost model of any ",
+              "kind exists in code, so there is no modelled position to ",
+              "lend."
+            ),
+            TRUE ~ paste0(
+              "# MANUAL: no source -- #665 zero-lending decision; deliberate ",
+              "zero, judged immaterial for this book's composition, not a ",
+              "measurement. Long book here is general collateral ",
+              "(ltr_universe: 529 S&P-500-constituent/liquid-ETF tickers, ",
+              "R/plan_mom_prepeak.R), lending revenue on GC is single-digit ",
+              "bps against a 50bp borrow assumption whose own uncertainty ",
+              "is ~25bp -- below the resolution of everything around it. ",
+              "Reassess if the book ever holds hard-to-borrow names."
+            )
+          )
+        ) |>
+        dplyr::select(-lending_status_override)
+
       # Visible at every tar_make() (fail-loud-not-null.md: an unrecognised /
       # unmodelled state must be visible, never silently absorbed).
-      unmodelled <- with_status$strategy[with_status$borrow_status == "unmodelled"]
+      unmodelled <- with_lending$strategy[with_lending$borrow_status == "unmodelled"]
       if (length(unmodelled) > 0L) {
         cli::cli_warn(c(
           "!" = paste0(
@@ -409,7 +559,7 @@ plan_cost_convention <- function() {
         ))
       }
 
-      with_status
+      with_lending
     }),
 
     # ── #665 (quantification only): borrow-rate sensitivity sweep ───────
