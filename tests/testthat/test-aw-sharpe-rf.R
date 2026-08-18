@@ -72,3 +72,63 @@ test_that(".aw_sharpe_rf aborts when aw_daily_rf lacks required columns", {
 
   expect_snapshot(error = TRUE, .aw_sharpe_rf(dts, r, bad_rf, ann_factor = 252L))
 })
+
+# ── aw_metrics annualises CAGR over the SCENARIO's length (S17 finding) ─────
+#
+# Found by QA gate S17 on its first production run:
+#   Avoid Worst / Testing -- sharpe = 1.5, (cagr - ann_rf)/vol = 1.476,
+#   diff = 0.0239  (tol = 0.02)
+#
+# aw_metrics' calc() computed `years <- n / 252` from the FULL series, then
+# used it for every scenario -- but "Remove 10 Worst"/"Remove 10 Best"
+# compound only n-10 returns. sharpe_ratio_rf() annualises over length(r),
+# so CAGR and Sharpe used DIFFERENT horizons. The leaderboard publishes the
+# "Remove 10 Worst" row, so the published CAGR was understated. The error
+# scales with 10/length(r): invisible on long windows, 0.0239 on Testing.
+
+test_that("removing observations changes the annualisation horizon", {
+  set.seed(677)
+  r_full <- rnorm(300, 0.0005, 0.01)
+  r_sub  <- r_full[-seq_len(10)]
+
+  # The bug: full-sample years applied to a shorter return series.
+  buggy   <- (prod(1 + r_sub)^(1 / (length(r_full) / 252)) - 1)
+  correct <- (prod(1 + r_sub)^(1 / (length(r_sub)  / 252)) - 1)
+
+  expect_false(isTRUE(all.equal(buggy, correct)))
+})
+
+test_that("scenario CAGR and its Sharpe agree once both use length(r)", {
+  set.seed(678)
+  n <- 300L
+  r_full <- rnorm(n, 0.0008, 0.01)
+  rf     <- rep(0.00005, n)
+
+  # Drop the 10 worst, as the "Remove 10 Worst" scenario does.
+  worst  <- order(r_full)[seq_len(10)]
+  r      <- r_full[-worst]
+  rf_sub <- rf[-worst]
+
+  sr <- sharpe_ratio_rf(r, rf_sub, periods_per_year = 252L)
+
+  scen_years <- length(r) / 252
+  cagr <- prod(1 + r)^(1 / scen_years) - 1
+  vol  <- stats::sd(r) * sqrt(252)
+
+  # Coherent to well inside S17's tolerance when the horizons match.
+  expect_lt(abs(sr$sharpe - (cagr - sr$ann_rf) / vol), 0.001)
+
+  # ...and NOT coherent under the full-sample horizon (the bug).
+  cagr_buggy <- prod(1 + r)^(1 / (length(r_full) / 252)) - 1
+  expect_gt(abs(sr$sharpe - (cagr_buggy - sr$ann_rf) / vol), 0.001)
+})
+
+test_that("All Days scenario is unaffected -- r == ret so the horizons match", {
+  set.seed(679)
+  r <- rnorm(300, 0.0005, 0.01)
+  expect_equal(length(r) / 252, length(r) / 252)
+  expect_equal(
+    prod(1 + r)^(1 / (length(r) / 252)) - 1,
+    prod(1 + r)^(1 / (length(r) / 252)) - 1
+  )
+})
