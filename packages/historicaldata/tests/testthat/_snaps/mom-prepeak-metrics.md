@@ -6,7 +6,7 @@
       tibble [1 x 12] (S3: tbl_df/tbl/data.frame)
        $ strategy       : chr "test_struct"
        $ n_months       : int 24
-       $ sharpe         : num -0.59
+       $ sharpe         : num NA
        $ cagr           : num NA
        $ vol            : num 85.6
        $ max_dd         : num -100

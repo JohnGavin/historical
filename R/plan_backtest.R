@@ -5,6 +5,68 @@
 #
 # Usage (from docs/ directory):
 #   targets::tar_make()
+#
+# NOTE (#677 slice 3): this file is a standalone vignette
+# (docs/macro-defense-rotation.qmd) -- none of its targets (bt_metrics_is,
+# bt_comparison, bt_replication_metrics, bt_oos_vs_is) feed the published
+# leaderboard (R/plan_leaderboard.R). Migrated anyway for consistency with
+# the rest of the codebase's Sharpe basis.
+
+#' Canonical rf-adjusted geometric Sharpe for a dated monthly return vector (#677)
+#'
+#' Joins `dates`/`rets` to `stk_rf` (ym, rf_ret) and calls the canonical
+#' `sharpe_ratio_rf()` (R/utils_metrics.R), replacing the previous
+#' arithmetic-mean numerator + hardcoded 2%/yr `rf_annual` used throughout
+#' this file. Mirrors `.ltr_join_rf()` (R/plan_ltr_momentum.R) for coverage
+#' handling: aborts on an INTERIOR gap (a hole inside stk_rf's own span),
+#' trims + `cli_warn`s on a TRAILING gap (Fama-French publication lag).
+#'
+#' @param dates Date vector, position-aligned with `rets`.
+#' @param rets Numeric vector of monthly returns.
+#' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
+#' @param ann_factor Integer. Annualisation factor (12 for monthly).
+#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @noRd
+.bt_sharpe_rf <- function(dates, rets, stk_rf, ann_factor = 12L) {
+  required <- c("ym", "rf_ret")
+  missing_cols <- setdiff(required, names(stk_rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = ".bt_sharpe_rf(): stk_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R)."
+    ))
+  }
+
+  df <- tibble::tibble(date = as.Date(dates), ret = rets) |>
+    dplyr::filter(!is.na(.data$ret)) |>
+    dplyr::mutate(ym = format(.data$date, "%Y-%m")) |>
+    dplyr::left_join(stk_rf, by = "ym")
+
+  if (nrow(df) < 2L) return(NA_real_)
+
+  missing_rf_ym <- sort(df$ym[is.na(df$rf_ret)])
+  if (length(missing_rf_ym) > 0L) {
+    rf_max   <- max(stk_rf$ym)
+    interior <- missing_rf_ym[missing_rf_ym <= rf_max]
+    if (length(interior) > 0L) {
+      cli::cli_abort(c(
+        "x" = "{length(interior)} month{?s} inside stk_rf's own span have no risk-free rate.",
+        "i" = "Missing ym: {.val {interior}}.",
+        "i" = "stk_rf spans {min(stk_rf$ym)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
+        "i" = "Investigate the FF3 source (R/plan_stock_backtest.R) before trusting this Sharpe."
+      ))
+    }
+    n_before <- nrow(df)
+    df <- dplyr::filter(df, !is.na(.data$rf_ret))
+    cli::cli_warn(c(
+      "!" = "Dropped {n_before - nrow(df)} trailing month{?s} with no risk-free rate yet.",
+      "i" = "Dropped ym: {.val {missing_rf_ym}}.",
+      "i" = "stk_rf ends {rf_max} (Fama-French publication lag)."
+    ))
+  }
+
+  sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)$sharpe
+}
 
 plan_backtest <- function() {
   list(
@@ -178,19 +240,25 @@ plan_backtest <- function() {
     # ── In-sample metrics ─────────────────────────────────────────
     targets::tar_target(bt_metrics_is, {
       library(dplyr)
+      dts <- bt_expanding$date
       port <- bt_expanding$actual_return
       bench <- bt_expanding$benchmark_return
       n <- length(port)
+      # rf_annual retained ONLY for sortino, which is out of #677's scope
+      # (issue #677's inventory covers sharpe formulas only) -- sortino
+      # stays on the old arithmetic-mean + hardcoded-rf basis by design.
       rf_annual <- 0.02  # approximate risk-free rate
 
-      compute_metrics <- function(rets, label) {
+      compute_metrics <- function(rets, label, rdts) {
         n <- length(rets)
         cum <- prod(1 + rets)
         years <- n / 12
         cagr <- cum^(1 / years) - 1
         vol <- sd(rets) * sqrt(12)
-        sharpe <- (mean(rets) * 12 - rf_annual) / vol
-        # Sortino: downside deviation
+        # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+        # replacing the arithmetic-mean numerator + hardcoded 2%/yr rf_annual.
+        sharpe <- .bt_sharpe_rf(rdts, rets, stk_rf, ann_factor = 12L)
+        # Sortino: downside deviation (unchanged -- out of #677 scope)
         down <- rets[rets < 0]
         sortino <- if (length(down) > 0) (mean(rets) * 12 - rf_annual) / (sd(down) * sqrt(12)) else NA
         # Max drawdown
@@ -212,8 +280,8 @@ plan_backtest <- function() {
       }
 
       bind_rows(
-        compute_metrics(port, "Defense First"),
-        compute_metrics(bench, "SPY (buy & hold)")
+        compute_metrics(port, "Defense First", dts),
+        compute_metrics(bench, "SPY (buy & hold)", dts)
       )
     }),
 
@@ -263,17 +331,20 @@ plan_backtest <- function() {
     # ── Comparison table (in-sample) ──────────────────────────────
     targets::tar_target(bt_comparison, {
       library(dplyr)
-      rf_annual <- 0.02
 
-      metrics <- function(rets, label) {
-        rets <- rets[!is.na(rets)]
+      metrics <- function(rdts, rets, label) {
+        keep <- !is.na(rets)
+        rdts <- rdts[keep]
+        rets <- rets[keep]
         n <- length(rets)
         if (n < 12) return(tibble(strategy = label, n_months = n))
         years <- n / 12
         cum <- prod(1 + rets)
         cagr <- cum^(1/years) - 1
         vol <- sd(rets) * sqrt(12)
-        sharpe <- (mean(rets) * 12 - rf_annual) / vol
+        # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+        # replacing the arithmetic-mean numerator + hardcoded 2%/yr rf_annual.
+        sharpe <- .bt_sharpe_rf(rdts, rets, stk_rf, ann_factor = 12L)
         cum_s <- cumprod(1 + rets)
         max_dd <- min((cum_s - cummax(cum_s)) / cummax(cum_s))
 
@@ -284,10 +355,10 @@ plan_backtest <- function() {
       }
 
       bind_rows(
-        metrics(bt_expanding$actual_return, "Defense First (momentum)"),
-        metrics(bt_expanding$benchmark_return, "SPY (buy & hold)"),
-        metrics(bt_equalwt$port_ret, "Equal weight (25% each)"),
-        metrics(bt_topone$port_ret, "Top 1 only (100%)")
+        metrics(bt_expanding$date, bt_expanding$actual_return, "Defense First (momentum)"),
+        metrics(bt_expanding$date, bt_expanding$benchmark_return, "SPY (buy & hold)"),
+        metrics(bt_equalwt$date, bt_equalwt$port_ret, "Equal weight (25% each)"),
+        metrics(bt_topone$date, bt_topone$port_ret, "Top 1 only (100%)")
       )
     }),
 
@@ -421,13 +492,16 @@ plan_backtest <- function() {
     # ── Replication metrics ───────────────────────────────────────
     targets::tar_target(bt_replication_metrics, {
       library(dplyr)
-      rf <- 0.02
-      m <- function(rets, label) {
-        rets <- rets[!is.na(rets)]
+      m <- function(rdts, rets, label) {
+        keep <- !is.na(rets)
+        rdts <- rdts[keep]
+        rets <- rets[keep]
         n <- length(rets); years <- n/12
         cum <- prod(1+rets); cagr <- cum^(1/years)-1
         vol <- sd(rets)*sqrt(12)
-        sharpe <- (mean(rets)*12-rf)/vol
+        # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+        # replacing the arithmetic-mean numerator + hardcoded 2%/yr rf.
+        sharpe <- .bt_sharpe_rf(rdts, rets, stk_rf, ann_factor = 12L)
         cum_s <- cumprod(1+rets)
         max_dd <- min((cum_s-cummax(cum_s))/cummax(cum_s))
         calmar <- cagr / abs(max_dd)
@@ -436,10 +510,13 @@ plan_backtest <- function() {
                max_dd=round(max_dd,4), calmar=round(calmar,2))
       }
       bind_rows(
+        # "Article claims"/"Article SPY" are external reference numbers from
+        # the source article, not computed here -- left untouched (#677 is
+        # about OUR computed sharpe formulas, not third-party citations).
         tibble(source="Article claims", months=207, years=17.2,
                cagr=0.1083, vol=NA, sharpe=1.01, max_dd=-0.10, calmar=1.33),
-        m(bt_replication$actual_return, "Our replication (fixed lookback, 2009+)"),
-        m(bt_replication$benchmark_return, "SPY (our data, 2009+)"),
+        m(bt_replication$date, bt_replication$actual_return, "Our replication (fixed lookback, 2009+)"),
+        m(bt_replication$date, bt_replication$benchmark_return, "SPY (our data, 2009+)"),
         tibble(source="Article SPY", months=207, years=17.2,
                cagr=0.1399, vol=NA, sharpe=NA, max_dd=NA, calmar=0.58)
       )
@@ -448,15 +525,18 @@ plan_backtest <- function() {
     # ── OOS vs IS comparison ──────────────────────────────────────
     targets::tar_target(bt_oos_vs_is, {
       library(dplyr)
-      rf <- 0.02
 
-      m <- function(rets, label) {
-        rets <- rets[!is.na(rets)]
+      m <- function(rdts, rets, label) {
+        keep <- !is.na(rets)
+        rdts <- rdts[keep]
+        rets <- rets[keep]
         n <- length(rets); years <- n/12
         if (n < 6) return(tibble(period = label, months = n))
         cum <- prod(1+rets); cagr <- cum^(1/years)-1
         vol <- sd(rets)*sqrt(12)
-        sharpe <- (mean(rets)*12-rf)/vol
+        # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+        # replacing the arithmetic-mean numerator + hardcoded 2%/yr rf.
+        sharpe <- .bt_sharpe_rf(rdts, rets, stk_rf, ann_factor = 12L)
         cum_s <- cumprod(1+rets)
         max_dd <- min((cum_s-cummax(cum_s))/cummax(cum_s))
         tibble(period=label, months=n, cagr=round(cagr,4), vol=round(vol,4),
@@ -464,10 +544,10 @@ plan_backtest <- function() {
       }
 
       bind_rows(
-        m(bt_expanding$actual_return, "In-sample (2009-2022)"),
-        m(bt_expanding$benchmark_return, "SPY in-sample"),
-        m(bt_oos$actual_return, "Out-of-sample (2023+)"),
-        m(bt_oos$benchmark_return, "SPY out-of-sample")
+        m(bt_expanding$date, bt_expanding$actual_return, "In-sample (2009-2022)"),
+        m(bt_expanding$date, bt_expanding$benchmark_return, "SPY in-sample"),
+        m(bt_oos$date, bt_oos$actual_return, "Out-of-sample (2023+)"),
+        m(bt_oos$date, bt_oos$benchmark_return, "SPY out-of-sample")
       )
     })
   )

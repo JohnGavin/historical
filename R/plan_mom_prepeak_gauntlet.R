@@ -168,11 +168,30 @@ plan_mom_prepeak_gauntlet <- function() {
       )
     }),
 
+    # #677: .mom_prepeak_compute_metrics() returns sharpe = NA_real_ by design
+    # -- the canonical helper lives at the pipeline layer and the package
+    # cannot call it -- so EVERY caller must overwrite it via
+    # .mom_prepeak_sharpe(). This caller previously did not, which made
+    # mom_prepeak_random_peak_test's `null_dominates` silently NA: its
+    # is.na() guard turns a missing Sharpe into "no verdict" rather than an
+    # error, so the random-peak falsification test would have quietly
+    # stopped testing anything. Same defect class as #677 defect B
+    # (fail-loud-not-null.md), inside a falsification battery.
     targets::tar_target(mom_prepeak_random_peak_metrics, {
-      .mom_prepeak_compute_metrics(
-        mom_prepeak_random_peak_returns,
+      rets <- .mom_prepeak_join_rf(mom_prepeak_random_peak_returns, stk_rf)
+      m <- .mom_prepeak_compute_metrics(
+        rets,
         strategy = "mom_prepeak_random_peak"
       )
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      if (is.na(m$sharpe)) {
+        cli::cli_abort(c(
+          "x" = "mom_prepeak_random_peak_metrics: sharpe is NA after .mom_prepeak_sharpe().",
+          "i" = "mom_prepeak_random_peak_test compares this against mom_prepeak_metrics$sharpe;",
+          "i" = "an NA here makes `null_dominates` silently NA -- the falsification test would report no verdict (#677)."
+        ))
+      }
+      m
     }),
 
     # Comparison: random-peak Sharpe vs actual Sharpe

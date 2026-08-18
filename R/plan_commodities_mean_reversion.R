@@ -95,15 +95,15 @@ plan_commodities_mean_reversion <- function() {
     # Sharpe, MDD, max DD duration (hd_dd_duration from risk_metrics.R).
 
     targets::tar_target(cmr_metrics_1m, {
-      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", ann_factor = 12L)
+      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", stk_rf = stk_rf, ann_factor = 12L)
     }),
 
     targets::tar_target(cmr_metrics_3m, {
-      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", ann_factor = 12L)
+      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", stk_rf = stk_rf, ann_factor = 12L)
     }),
 
     targets::tar_target(cmr_metrics_6m, {
-      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", ann_factor = 12L)
+      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", stk_rf = stk_rf, ann_factor = 12L)
     }),
 
 
@@ -176,12 +176,67 @@ plan_commodities_mean_reversion <- function() {
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Not exported; called only within this plan's targets.
 
-.compute_cmr_metrics <- function(portfolio_tbl, lookback, ann_factor = 12L) {
+#' Join a monthly risk-free series onto a CMR portfolio (#677)
+#'
+#' Mirrors \code{.ltr_join_rf()} in R/plan_ltr_momentum.R: joins on \code{ym}
+#' derived from \code{date}, aborts on an INTERIOR gap (a hole inside
+#' stk_rf's own span -- investigate, don't silently drop), and trims +
+#' \code{cli_warn}s on a TRAILING gap (Fama-French publication lag --
+#' expected, not a bug). A missing risk-free series must never be treated
+#' as zero -- see fail-loud-not-null.md.
+#'
+#' @param df Tibble with a `ym` column already derived, and `net_ret`.
+#' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
+#' @param lookback Character. Lookback label, used only for error/warning text.
+#' @return `df` with `rf_ret` joined, trailing uncovered months removed.
+#' @noRd
+.cmr_join_rf <- function(df, stk_rf, lookback) {
+  required <- c("ym", "rf_ret")
+  missing_cols <- setdiff(required, names(stk_rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = ".cmr_join_rf(): stk_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R)."
+    ))
+  }
+
+  df_ym_range <- range(df$ym)
+  joined <- dplyr::left_join(df, stk_rf, by = "ym")
+
+  missing_rf_ym <- sort(joined$ym[is.na(joined$rf_ret)])
+  if (length(missing_rf_ym) == 0L) return(joined)
+
+  rf_max   <- max(stk_rf$ym)
+  interior <- missing_rf_ym[missing_rf_ym <= rf_max]
+
+  if (length(interior) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(interior)} month{?s} inside stk_rf's own span have no risk-free rate (CMR {lookback} lookback).",
+      "i" = "Missing ym: {.val {interior}}.",
+      "i" = "stk_rf spans {min(stk_rf$ym)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
+      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R) before trusting any CMR Sharpe figure."
+    ))
+  }
+
+  n_before <- nrow(joined)
+  joined <- dplyr::filter(joined, !is.na(.data$rf_ret))
+  cli::cli_warn(c(
+    "!" = "Dropped {n_before - nrow(joined)} trailing month{?s} from CMR {lookback} portfolio with no risk-free rate yet.",
+    "i" = "Dropped ym: {.val {missing_rf_ym}}.",
+    "i" = "Portfolio spans {df_ym_range[1]}..{df_ym_range[2]}; stk_rf ends {rf_max} (Fama-French publication lag).",
+    "i" = "Every CMR {lookback} Sharpe is therefore computed through {rf_max}, not {df_ym_range[2]}."
+  ))
+  joined
+}
+
+.compute_cmr_metrics <- function(portfolio_tbl, lookback, stk_rf, ann_factor = 12L) {
   library(dplyr)
 
-  r    <- portfolio_tbl$net_ret
-  r    <- r[!is.na(r)]
-  n    <- length(r)
+  df <- portfolio_tbl |>
+    dplyr::filter(!is.na(.data$net_ret)) |>
+    dplyr::mutate(ym = format(as.Date(.data$date), "%Y-%m"))
+
+  n <- nrow(df)
 
   if (n < 12L) {
     return(tibble::tibble(
@@ -191,15 +246,24 @@ plan_commodities_mean_reversion <- function() {
     ))
   }
 
-  monthly_rf <- (1.02)^(1 / ann_factor) - 1
-  mean_r     <- mean(r)
-  sd_r       <- sd(r)
-  sharpe     <- if (sd_r > 0) (mean_r - monthly_rf) / sd_r * sqrt(ann_factor) else NA_real_
+  # #677: real Fama-French monthly rf (stk_rf), replacing the hardcoded
+  # "MANUAL: no source" 2%/yr assumption previously baked into monthly_rf.
+  df <- .cmr_join_rf(df, stk_rf, lookback = lookback)
+  n  <- nrow(df)  # may shrink if a trailing rf gap was trimmed above
+
+  r  <- df$net_ret
+  rf <- df$rf_ret
 
   cum        <- cumprod(1 + r)
   years      <- n / ann_factor
   cagr       <- (cum[n])^(1 / years) - 1
+  sd_r       <- sd(r)
   vol        <- sd_r * sqrt(ann_factor)
+
+  # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R::sharpe_ratio_rf()),
+  # replacing the arithmetic-mean numerator + hardcoded rf formula.
+  sr     <- sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)
+  sharpe <- sr$sharpe
 
   cum_max    <- cummax(cum)
   dd         <- (cum - cum_max) / cum_max

@@ -147,15 +147,24 @@ plan_mom_prepeak <- function() {
     # ── Performance metrics (one row per sibling) ────────────────────────────
 
     targets::tar_target(mom_prepeak_metrics, {
-      .mom_prepeak_compute_metrics(mom_prepeak_returns, strategy = "mom_prepeak")
+      rets <- .mom_prepeak_join_rf(mom_prepeak_returns, stk_rf)
+      m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_prepeak")
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      m
     }),
 
     targets::tar_target(mom_postpeak_metrics, {
-      .mom_prepeak_compute_metrics(mom_postpeak_returns, strategy = "mom_postpeak")
+      rets <- .mom_prepeak_join_rf(mom_postpeak_returns, stk_rf)
+      m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_postpeak")
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      m
     }),
 
     targets::tar_target(mom_combined_metrics, {
-      .mom_prepeak_compute_metrics(mom_combined_returns, strategy = "mom_combined")
+      rets <- .mom_prepeak_join_rf(mom_combined_returns, stk_rf)
+      m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_combined")
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      m
     }),
 
 
@@ -375,6 +384,115 @@ plan_mom_prepeak <- function() {
         borrow_rate_annual / 12
     ) |>
     dplyr::arrange(.data$as_of_date)
+}
+
+
+#' Join a monthly risk-free series onto mom_prepeak returns (#677)
+#'
+#' Mirrors \code{.ltr_join_rf()} in R/plan_ltr_momentum.R: joins on
+#' \code{ym} derived from \code{exec_date}, aborts on an INTERIOR gap
+#' (a hole inside stk_rf's own span -- investigate, don't silently drop),
+#' and trims + \code{cli_warn}s on a TRAILING gap (Fama-French publication
+#' lag -- expected, not a bug). A missing risk-free series must never be
+#' treated as zero -- see fail-loud-not-null.md.
+#'
+#' @param returns_tbl Tibble with an `exec_date` column (mom_prepeak_returns
+#'   / mom_postpeak_returns / mom_combined_returns).
+#' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
+#' @return `returns_tbl` with `rf_ret` joined, trailing uncovered months removed.
+#' @noRd
+.mom_prepeak_join_rf <- function(returns_tbl, stk_rf) {
+  required <- c("ym", "rf_ret")
+  missing_cols <- setdiff(required, names(stk_rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = ".mom_prepeak_join_rf(): stk_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with ym and rf_ret (R/plan_stock_backtest.R)."
+    ))
+  }
+  if (!"exec_date" %in% names(returns_tbl)) {
+    cli::cli_abort(c("x" = ".mom_prepeak_join_rf(): returns_tbl has no {.field exec_date} column to join on."))
+  }
+
+  returns_tbl <- dplyr::mutate(returns_tbl, ym = format(as.Date(.data$exec_date), "%Y-%m"))
+  ret_ym_range <- range(returns_tbl$ym)
+  joined <- dplyr::left_join(returns_tbl, stk_rf, by = "ym")
+
+  missing_rf_ym <- sort(joined$ym[is.na(joined$rf_ret)])
+  if (length(missing_rf_ym) == 0L) return(joined)
+
+  rf_max   <- max(stk_rf$ym)
+  interior <- missing_rf_ym[missing_rf_ym <= rf_max]
+
+  if (length(interior) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(interior)} month{?s} inside stk_rf's own span have no risk-free rate.",
+      "i" = "Missing ym: {.val {interior}}.",
+      "i" = "stk_rf spans {min(stk_rf$ym)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
+      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R) before trusting any mom_prepeak Sharpe figure."
+    ))
+  }
+
+  n_before <- nrow(joined)
+  joined <- dplyr::filter(joined, !is.na(.data$rf_ret))
+  cli::cli_warn(c(
+    "!" = "Dropped {n_before - nrow(joined)} trailing month{?s} from mom_prepeak returns with no risk-free rate yet.",
+    "i" = "Dropped ym: {.val {missing_rf_ym}}.",
+    "i" = "returns_tbl spans {ret_ym_range[1]}..{ret_ym_range[2]}; stk_rf ends {rf_max} (Fama-French publication lag).",
+    "i" = "Every mom_prepeak Sharpe is therefore computed through {rf_max}, not {ret_ym_range[2]}."
+  ))
+  joined
+}
+
+
+#' Canonical rf-adjusted geometric Sharpe for a mom_prepeak sibling (#677)
+#'
+#' \code{.mom_prepeak_compute_metrics()} (packages/historicaldata) cannot
+#' call \code{sharpe_ratio_rf()} -- that helper lives at the pipeline layer
+#' (R/utils_metrics.R), not inside the historicaldata package -- so it
+#' returns \code{sharpe = NA_real_} as a placeholder. This function computes
+#' the real value: it reconstructs the SAME pre-bankruptcy slice from
+#' \code{blown_up}/\code{bankrupt_month} (already computed by
+#' \code{.mom_prepeak_compute_metrics()}) and calls the canonical
+#' \code{sharpe_ratio_rf()} on it, so the Sharpe FORMULA stays single-sourced
+#' even though the two halves of the calculation live on either side of the
+#' package/pipeline boundary. Post-bankruptcy: geometric annualised return
+#' is undefined once cumulative equity crosses zero (a negative base raised
+#' to a fractional power is NaN in R) -- exactly why cagr is NA there too --
+#' so using the pre-bankruptcy slice keeps Sharpe finite, matching the
+#' pre-#677 arithmetic formula's "Sharpe survives bankruptcy" behaviour.
+#'
+#' @param returns_tbl Tibble with `ret_ls` and `rf_ret` columns (output of
+#'   \code{.mom_prepeak_join_rf()}).
+#' @param metrics_row One-row tibble from \code{.mom_prepeak_compute_metrics()}
+#'   (needs `blown_up`, `bankrupt_month`).
+#' @param ann_factor Integer. Annualisation factor (12 for monthly).
+#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @noRd
+.mom_prepeak_sharpe <- function(returns_tbl, metrics_row, ann_factor = 12L) {
+  if (!"rf_ret" %in% names(returns_tbl)) {
+    cli::cli_abort(c(
+      "x" = ".mom_prepeak_sharpe(): {.arg returns_tbl} has no {.field rf_ret} column.",
+      "i" = "Join a risk-free series onto returns_tbl first -- see {.fn .mom_prepeak_join_rf}."
+    ))
+  }
+
+  keep <- !is.na(returns_tbl$ret_ls)
+  r    <- returns_tbl$ret_ls[keep]
+  rf   <- returns_tbl$rf_ret[keep]
+  n    <- length(r)
+  if (n < 12L) return(NA_real_)
+
+  blown_up       <- isTRUE(metrics_row$blown_up[[1L]])
+  bankrupt_month <- metrics_row$bankrupt_month[[1L]]
+
+  if (blown_up) {
+    if (is.na(bankrupt_month) || bankrupt_month <= 1L) return(NA_real_)
+    r  <- r[seq_len(bankrupt_month - 1L)]
+    rf <- rf[seq_len(bankrupt_month - 1L)]
+  }
+
+  sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)$sharpe
 }
 
 
