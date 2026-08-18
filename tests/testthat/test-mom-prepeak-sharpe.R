@@ -142,3 +142,44 @@ test_that(".mom_prepeak_sharpe aborts when rf_ret column is missing", {
 
   expect_snapshot(error = TRUE, .mom_prepeak_sharpe(rets, metrics_row))
 })
+
+# ── Every caller of .mom_prepeak_compute_metrics() must overwrite sharpe ────
+#
+# The package function returns sharpe = NA_real_ by design (see header). That
+# makes "the caller MUST overwrite it" a contract enforced by nothing. On
+# review, R/plan_mom_prepeak_gauntlet.R's mom_prepeak_random_peak_metrics did
+# NOT overwrite it -- and mom_prepeak_random_peak_test's is.na() guard turns a
+# missing Sharpe into `null_dominates = NA` rather than an error, so the
+# random-peak falsification test would have silently stopped producing a
+# verdict. These tests pin every call site.
+
+source(here::here("R/plan_mom_prepeak_gauntlet.R"))
+
+.plan_target_names <- function(target_list) {
+  vapply(target_list, function(t) t$settings$name, character(1))
+}
+
+test_that("the package function still returns NA sharpe (the contract these tests guard)", {
+  m <- .mom_prepeak_compute_metrics(
+    make_returns_tbl_exec(rep(0.01, 24)), strategy = "toy"
+  )
+  expect_true(is.na(m$sharpe))
+})
+
+test_that("every .mom_prepeak_compute_metrics() call site overwrites sharpe", {
+  files <- c(
+    here::here("R/plan_mom_prepeak.R"),
+    here::here("R/plan_mom_prepeak_gauntlet.R")
+  )
+  lines <- unlist(lapply(files, readLines))
+  n_calls     <- sum(grepl("\\.mom_prepeak_compute_metrics\\(", lines) & !grepl("^\\s*#", lines))
+  n_overwrite <- sum(grepl("\\$sharpe\\s*<-\\s*round\\(\\.mom_prepeak_sharpe\\(", lines))
+  # Every call must be paired with an overwrite. If this fails, a new call
+  # site was added without one -- see the header comment.
+  expect_equal(n_overwrite, n_calls)
+})
+
+test_that("mom_prepeak_random_peak_metrics is defined in the gauntlet plan", {
+  nms <- .plan_target_names(plan_mom_prepeak_gauntlet())
+  expect_true("mom_prepeak_random_peak_metrics" %in% nms)
+})
