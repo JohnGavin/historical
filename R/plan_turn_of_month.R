@@ -35,11 +35,28 @@ plan_turn_of_month <- function() {
       )
     }),
 
+    # ── Data: daily risk-free rate (#677 slice 2 — no-rf family) ──
+    # TOM previously computed sharpe = cagr/vol with NO risk-free deduction
+    # (implied rf of exactly 0.00% -- a formula signature, see #677). TOM is
+    # a DAILY strategy (sqrt(252) annualisation), so it needs its own daily
+    # rf series rather than the monthly stk_rf series used by the
+    # monthly strategies migrated alongside it in this slice.
+    targets::tar_target(tom_rf_daily, {
+      library(dplyr)
+
+      hd_factors(dataset = "FF3", frequency = "daily",
+                 from = as.character(tom_params$start_date)) |>
+        dplyr::filter(factor_name == "RF") |>
+        dplyr::mutate(date = as.Date(date), rf_ret = value / 100) |>
+        dplyr::select(date, rf_ret) |>
+        dplyr::arrange(date)
+    }),
+
     # ── Data: SPY daily returns ───────────────────────────────────
     targets::tar_target(tom_daily, {
       library(dplyr)
 
-      hd_ohlcv(tom_params$ticker,
+      spy <- hd_ohlcv(tom_params$ticker,
                from = as.character(tom_params$start_date)) |>
         dplyr::arrange(date) |>
         dplyr::mutate(
@@ -48,6 +65,8 @@ plan_turn_of_month <- function() {
         ) |>
         dplyr::filter(!is.na(ret)) |>
         dplyr::select(date, ret)
+
+      .tom_join_rf_daily(spy, tom_rf_daily)
     }),
 
     # ── TOM window indicator ─────────────────────────────────────
@@ -81,7 +100,7 @@ plan_turn_of_month <- function() {
           in_head = rank_start <= tom_params$n_head,
           in_tom  = in_tail | in_head
         ) |>
-        dplyr::select(date, ret, yr_mon, rank_start, rank_end, in_tail, in_head, in_tom)
+        dplyr::select(date, ret, rf_ret, yr_mon, rank_start, rank_end, in_tail, in_head, in_tom)
     }),
 
     # ── Strategy returns ─────────────────────────────────────────
@@ -92,8 +111,12 @@ plan_turn_of_month <- function() {
     targets::tar_target(tom_portfolio, {
       library(dplyr)
 
-      # Daily RF rate from annual assumption
-      rf_daily <- (1 + tom_params$rf_annual)^(1 / 252) - 1
+      # Daily cash rate from the annual assumption -- this is the CASH
+      # RETURN earned while resting outside the TOM window (a strategy-
+      # return assumption). Distinct from the tom_rf_daily-joined `rf_ret`
+      # column used below for the Sharpe risk-free deduction (#677 slice 2)
+      # -- do not conflate the two.
+      cash_rf_daily <- (1 + tom_params$rf_annual)^(1 / 252) - 1
 
       d <- tom_indicator |>
         dplyr::arrange(date) |>
@@ -103,7 +126,7 @@ plan_turn_of_month <- function() {
           is_switch    = in_tom != prev_in_tom,
 
           # Strategy gross return
-          ret_gross = dplyr::if_else(in_tom, ret, rf_daily),
+          ret_gross = dplyr::if_else(in_tom, ret, cash_rf_daily),
 
           # Apply one-way transaction cost on switch days
           # One switch out + one switch in per TOM window cycle
@@ -126,26 +149,37 @@ plan_turn_of_month <- function() {
     targets::tar_target(tom_metrics, {
       library(dplyr)
 
+      # #677 slice 2: sharpe_tom/sharpe_bh now use the canonical
+      # risk-free-adjusted helper (R/utils_metrics.R::sharpe_ratio_rf())
+      # instead of bare cagr/vol -- TOM was one of the "no rf deducted"
+      # family (implied rf of exactly 0.00%, a formula signature -- see
+      # #677). TOM is daily, so periods_per_year = 252L (not the 12L used
+      # by the monthly strategies migrated alongside it in this slice).
       calc <- function(d, label) {
         # Strategy
-        ret_s <- d$ret_net
-        ret_s <- ret_s[!is.na(ret_s)]
+        keep_s <- !is.na(d$ret_net)
+        ret_s  <- d$ret_net[keep_s]
+        rf_s   <- d$rf_ret[keep_s]
         n     <- length(ret_s)
         if (n < 20L) return(NULL)
         years     <- n / 252
         cum_s     <- prod(1 + ret_s)
         cagr_s    <- cum_s^(1 / years) - 1
         vol_s     <- sd(ret_s) * sqrt(252)
-        sharpe_s  <- if (vol_s > 0) cagr_s / vol_s else NA_real_
+        sr_s      <- sharpe_ratio_rf(ret_s, rf_s, periods_per_year = 252L)
+        sharpe_s  <- sr_s$sharpe
         eq_s      <- cumprod(1 + ret_s)
         max_dd_s  <- min(eq_s / cummax(eq_s) - 1)
 
         # Benchmark (buy & hold)
-        ret_b  <- d$ret[!is.na(d$ret)]
+        keep_b <- !is.na(d$ret)
+        ret_b  <- d$ret[keep_b]
+        rf_b   <- d$rf_ret[keep_b]
         cum_b  <- prod(1 + ret_b)
         cagr_b <- cum_b^(1 / years) - 1
         vol_b  <- sd(ret_b) * sqrt(252)
-        sharpe_b <- if (vol_b > 0) cagr_b / vol_b else NA_real_
+        sr_b     <- sharpe_ratio_rf(ret_b, rf_b, periods_per_year = 252L)
+        sharpe_b <- sr_b$sharpe
         eq_b   <- cumprod(1 + ret_b)
         max_dd_b <- min(eq_b / cummax(eq_b) - 1)
 
@@ -205,7 +239,7 @@ plan_turn_of_month <- function() {
         nt <- grid$n_tail[i]
         nh <- grid$n_head[i]
 
-        rf_daily <- (1 + tom_params$rf_annual)^(1 / 252) - 1
+        cash_rf_daily <- (1 + tom_params$rf_annual)^(1 / 252) - 1
 
         d <- d_base |>
           dplyr::group_by(yr_mon) |>
@@ -218,19 +252,26 @@ plan_turn_of_month <- function() {
             in_tom = (rank_end <= nt) | (rank_start <= nh),
             prev_in_tom  = dplyr::lag(in_tom, default = FALSE),
             is_switch    = in_tom != prev_in_tom,
-            ret_gross    = dplyr::if_else(in_tom, ret, rf_daily),
+            ret_gross    = dplyr::if_else(in_tom, ret, cash_rf_daily),
             cost_daily   = dplyr::if_else(is_switch, tom_params$cost_bps / 1e4, 0),
             ret_net      = ret_gross - cost_daily
           )
 
-        ret_vec <- d$ret_net[!is.na(d$ret_net)]
+        # #677 slice 2: same rf-adjusted sharpe fix as tom_metrics above,
+        # applied to the parameter-sweep table (same file, same formula
+        # signature) so the sweep ranks (n_tail, n_head) combinations on
+        # the same basis as the published TOM metrics.
+        keep    <- !is.na(d$ret_net)
+        ret_vec <- d$ret_net[keep]
+        rf_vec  <- d$rf_ret[keep]
         n       <- length(ret_vec)
         if (n < 20L) return(NULL)
         years   <- n / 252
         cum     <- prod(1 + ret_vec)
         cagr    <- cum^(1 / years) - 1
         vol     <- sd(ret_vec) * sqrt(252)
-        sharpe  <- if (vol > 0) cagr / vol else NA_real_
+        sr      <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 252L)
+        sharpe  <- sr$sharpe
         eq_c    <- cumprod(1 + ret_vec)
         max_dd  <- min(eq_c / cummax(eq_c) - 1)
         pct_in  <- mean(d$in_tom, na.rm = TRUE)
@@ -331,6 +372,66 @@ plan_turn_of_month <- function() {
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Prefixed .tom_* (private; not exported from the package).
 # Mirrors .drif_register_runs() from plan_drif.R.
+
+#' Join daily risk-free rate onto TOM's daily return series (#677 slice 2)
+#'
+#' Mirrors \code{.ltr_join_rf()} (\code{R/plan_ltr_momentum.R}) but keyed on
+#' \code{date} at DAILY granularity instead of \code{ym} at monthly
+#' granularity -- TOM is a daily strategy (\code{sqrt(252)} annualisation).
+#'
+#' Per \code{fail-loud-not-null.md}, a missing risk-free rate must never be
+#' silently coerced to \code{NA}/zero. As with \code{.ltr_join_rf()}, a
+#' **trailing** uncovered date range (beyond \code{max(rf$date)}) is a Fama-
+#' French publication lag, not a defect -- it is TRIMMED with a loud, counted
+#' \code{cli_warn} naming the dropped range and the effective end date. An
+#' **interior** uncovered date range is a real hole in the FF3 series and
+#' \code{cli_abort}s.
+#'
+#' @param port Tibble with a `date` column (TOM's daily return series).
+#' @param rf Tibble with columns `date`, `rf_ret` (the `tom_rf_daily` target).
+#' @return `port` with `rf_ret` joined, trailing uncovered dates removed.
+#' @noRd
+.tom_join_rf_daily <- function(port, rf) {
+  required <- c("date", "rf_ret")
+  missing_cols <- setdiff(required, names(rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = ".tom_join_rf_daily(): rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with date and rf_ret (the tom_rf_daily target)."
+    ))
+  }
+  if (!"date" %in% names(port)) {
+    cli::cli_abort(c("x" = ".tom_join_rf_daily(): port has no {.field date} column to join on."))
+  }
+
+  port_date_range <- range(port$date)
+  port <- dplyr::left_join(port, rf, by = "date")
+
+  missing_rf_date <- sort(port$date[is.na(port$rf_ret)])
+  if (length(missing_rf_date) == 0L) return(port)
+
+  rf_max   <- max(rf$date)
+  interior <- missing_rf_date[missing_rf_date <= rf_max]
+
+  if (length(interior) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(interior)} date{?s} inside tom_rf_daily's own span have no risk-free rate.",
+      "i" = "Missing date{?s}: {.val {format(interior)}}.",
+      "i" = "tom_rf_daily spans {min(rf$date)}..{rf_max}, so this is a HOLE in the series, not a publication lag.",
+      "i" = "Investigate the FF3 source (R/plan_stock_backtest.R's stk_rf pattern) before trusting any TOM Sharpe figure."
+    ))
+  }
+
+  n_before <- nrow(port)
+  port <- dplyr::filter(port, !is.na(.data$rf_ret))
+  cli::cli_warn(c(
+    "!" = "Dropped {n_before - nrow(port)} trailing date{?s} from tom_daily with no risk-free rate yet.",
+    "i" = "Dropped date range: {format(min(missing_rf_date))}..{format(max(missing_rf_date))}.",
+    "i" = "tom_daily spans {port_date_range[1]}..{port_date_range[2]}; tom_rf_daily ends {rf_max} (Fama-French publication lag).",
+    "i" = "Every TOM metric is therefore computed through {rf_max}, not {port_date_range[2]}."
+  ))
+  port
+}
 
 #' Register Turn-of-the-Month backtest run in the strategy registry
 #'

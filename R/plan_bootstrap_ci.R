@@ -19,13 +19,28 @@ plan_bootstrap_ci <- function() {
     }),
 
     # Collect monthly returns per strategy into wide format
+    #
+    # #677 slice 2: also carry each strategy's own risk-free series --
+    # already joined onto its portfolio target upstream (stk_max_portfolio,
+    # stk_drif_portfolio, fm_portfolio, drif_portfolio all carry `rf_ret`)
+    # -- so the bootstrap Sharpe below uses the SAME rf-adjusted definition
+    # as the leaderboard (sharpe_ratio_rf(), R/utils_metrics.R). Without
+    # this, boot_ci_summary's "does the Sharpe CI cross zero" flag was
+    # computed on an inflated no-rf Sharpe (cagr/vol with implied rf =
+    # exactly 0.00%, the same formula signature flagged in #677), which is
+    # systematically more lenient than the rf-adjusted Sharpe published
+    # for the same strategy elsewhere on the leaderboard -- a decision
+    # judged on this file's own terms rather than migrated reflexively:
+    # this IS a statistical-inference display (does the strategy's Sharpe
+    # differ from zero), so it must use the same basis as what it is
+    # implicitly being compared against.
     targets::tar_target(boot_monthly_returns, {
       library(dplyr)
 
-      stk_max <- stk_max_portfolio |> select(ym, stk_max = port_ret)
-      stk_drif <- stk_drif_portfolio |> select(ym, stk_drif = port_ret)
-      fac_max <- fm_portfolio |> select(ym, fac_max = portfolio_ret)
-      fac_drif <- drif_portfolio |> select(ym, fac_drif = portfolio_ret)
+      stk_max  <- stk_max_portfolio  |> select(ym, stk_max = port_ret,       stk_max_rf = rf_ret)
+      stk_drif <- stk_drif_portfolio |> select(ym, stk_drif = port_ret,      stk_drif_rf = rf_ret)
+      fac_max  <- fm_portfolio       |> select(ym, fac_max = portfolio_ret,  fac_max_rf = rf_ret)
+      fac_drif <- drif_portfolio     |> select(ym, fac_drif = portfolio_ret, fac_drif_rf = rf_ret)
 
       stk_max |>
         inner_join(stk_drif, by = "ym") |>
@@ -58,27 +73,32 @@ plan_bootstrap_ci <- function() {
     }),
 
     # Compute metrics for each draw
+    #
+    # #677 slice 2: sharpe now uses sharpe_ratio_rf() (R/utils_metrics.R)
+    # paired with each strategy's own risk-free draw column (added to
+    # boot_monthly_returns / boot_draws above), instead of bare cagr/vol.
     targets::tar_target(boot_metrics, {
       library(dplyr)
 
-      strat_names <- colnames(boot_monthly_returns |> select(-ym))
+      strat_names <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+      rf_names    <- paste0(strat_names, "_rf")
 
-      # Compute Sharpe, CAGR, max DD for a return vector
-      calc_boot_metrics <- function(ret) {
+      # Compute rf-adjusted Sharpe, CAGR, max DD for a return + rf pair
+      calc_boot_metrics <- function(ret, rf) {
         n <- length(ret)
         cagr <- prod(1 + ret)^(12 / n) - 1
         vol <- sd(ret) * sqrt(12)
-        sharpe <- if (vol > 0) cagr / vol else NA_real_
+        sr <- sharpe_ratio_rf(ret, rf, periods_per_year = 12L)
         cum <- cumprod(1 + ret)
         max_dd <- min(cum / cummax(cum) - 1)
-        c(sharpe = sharpe, cagr = cagr, max_dd = max_dd)
+        c(sharpe = sr$sharpe, cagr = cagr, max_dd = max_dd)
       }
 
       # For each draw, compute metrics per strategy
       results <- lapply(seq_along(boot_draws), function(i) {
         mat <- boot_draws[[i]]
         lapply(seq_along(strat_names), function(j) {
-          m <- calc_boot_metrics(mat[, j])
+          m <- calc_boot_metrics(mat[, strat_names[j]], mat[, rf_names[j]])
           tibble(
             draw = i,
             strategy = strat_names[j],
