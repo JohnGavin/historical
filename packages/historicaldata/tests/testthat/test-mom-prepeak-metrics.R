@@ -84,9 +84,18 @@ test_that("normal drawdown without bankruptcy: max_dd between (-100, 0)", {
   expect_true(result$max_dd < 0)         # there IS a drawdown
 })
 
-# ---- 5. Sharpe computable even when blown_up --------------------------------
+# ---- 5. Sharpe is a placeholder from this function as of #677 ---------------
+#
+# .mom_prepeak_compute_metrics() no longer computes sharpe itself: the
+# canonical rf-adjusted geometric sharpe_ratio_rf() lives at the pipeline
+# layer (R/utils_metrics.R), not inside this package, so it cannot be called
+# here. sharpe is always NA_real_ from this function alone; the caller
+# (.mom_prepeak_sharpe() in R/plan_mom_prepeak.R) overwrites it. See
+# tests/testthat/test-mom-prepeak-sharpe.R (root-level) for coverage of the
+# actual Sharpe computation, including the "still finite when blown_up" case
+# this test used to assert.
 
-test_that("sharpe still computable even when blown_up", {
+test_that("sharpe is always NA_real_ from this function alone (#677)", {
   r <- rep(0.01, 24)
   r[13] <- -1.2   # same bankruptcy fixture as test 2
 
@@ -95,7 +104,18 @@ test_that("sharpe still computable even when blown_up", {
   )
 
   expect_true(result$blown_up)
-  expect_false(is.na(result$sharpe))     # sharpe uses per-period r, unaffected
+  expect_true(is.na(result$sharpe))
+})
+
+test_that("sharpe is always NA_real_ from this function alone, non-bankrupt case (#677)", {
+  r <- rep(0.01, 24)
+
+  result <- historicaldata:::.mom_prepeak_compute_metrics(
+    make_returns_tbl(r), strategy = "test_sharpe_normal"
+  )
+
+  expect_false(result$blown_up)
+  expect_true(is.na(result$sharpe))
 })
 
 # ---- 6. Snapshot: output tibble structure includes new columns --------------
@@ -159,9 +179,9 @@ test_that("Pillar-8 metrics computed on pre-bankruptcy slice when blown_up", {
   expect_true(is.na(result$avg_dd_days) || result$avg_dd_days >= 0)
 })
 
-# ---- 9. Pillar-8: sharpe preserved when blown_up ────────────────────────────
+# ---- 9. Pillar-8 columns present even when blown_up (sharpe is a placeholder) --
 
-test_that("sharpe preserved and Pillar-8 columns present even when blown_up", {
+test_that("Pillar-8 columns present even when blown_up; sharpe is a placeholder (#677)", {
   r <- rep(0.01, 24)
   r[13] <- -1.2
 
@@ -170,7 +190,7 @@ test_that("sharpe preserved and Pillar-8 columns present even when blown_up", {
   )
 
   expect_true(result$blown_up)
-  expect_false(is.na(result$sharpe))
+  expect_true(is.na(result$sharpe))
   # All four Pillar-8 columns must exist
   expect_true(all(c("avg_dd_days", "max_dd_days", "max_cons_losses", "loss_clustered") %in% names(result)))
 })

@@ -6,6 +6,71 @@
 #
 # Source: Morningstar, "You Can Beat the Stock Market by Avoiding
 # Its Worst Days. You Won't."
+#
+# NOTE (#677 slice 3): aw_metrics (via avoid_worst_register_runs) is the
+# only target in this file published to the bt.* registry/leaderboard.
+# aw_practical_sensitivity, aw_walkforward, and aw_alpha_decay are
+# exploratory sensitivity tables, migrated for consistency with aw_metrics.
+# aw_cross_market and aw_bootstrap_ci still use the OLD arithmetic, no-rf,
+# daily formula (mean(r)/sd(r)*sqrt(252)) -- NOT migrated in this slice; see
+# the PR body for why (bootstrap CI resamples returns in blocks, requiring
+# the daily rf series to be resampled in lockstep, which needs more care
+# than this slice's time budget allowed -- flagged as a follow-up).
+
+#' Canonical rf-adjusted geometric Sharpe for a dated daily return vector (#677)
+#'
+#' Joins `dates`/`rets` to `aw_daily_rf` (date, rf_ret) and calls the
+#' canonical `sharpe_ratio_rf()` (R/utils_metrics.R), replacing the
+#' arithmetic-mean numerator used throughout this file's daily strategies --
+#' none of which previously deducted any risk-free rate at all. Mirrors
+#' `.ltr_join_rf()` (R/plan_ltr_momentum.R) for coverage handling: aborts on
+#' an INTERIOR gap (a hole inside the daily rf series' own span), trims +
+#' `cli_warn`s on a TRAILING gap (Fama-French publication lag).
+#'
+#' @param dates Date vector, position-aligned with `rets`.
+#' @param rets Numeric vector of daily returns.
+#' @param aw_daily_rf Tibble with columns `date`, `rf_ret` (daily Fama-French RF).
+#' @param ann_factor Integer. Annualisation factor (252 for daily).
+#' @return Numeric scalar Sharpe (may be NA_real_).
+#' @noRd
+.aw_sharpe_rf <- function(dates, rets, aw_daily_rf, ann_factor = 252L) {
+  required <- c("date", "rf_ret")
+  missing_cols <- setdiff(required, names(aw_daily_rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = ".aw_sharpe_rf(): aw_daily_rf is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with date and rf_ret (this file's aw_daily_rf target)."
+    ))
+  }
+
+  df <- tibble::tibble(date = as.Date(dates), ret = rets) |>
+    dplyr::filter(!is.na(.data$ret)) |>
+    dplyr::left_join(aw_daily_rf, by = "date")
+
+  if (nrow(df) < 2L) return(NA_real_)
+
+  missing_rf_dates <- sort(df$date[is.na(df$rf_ret)])
+  if (length(missing_rf_dates) > 0L) {
+    rf_max   <- max(aw_daily_rf$date)
+    interior <- missing_rf_dates[missing_rf_dates <= rf_max]
+    if (length(interior) > 0L) {
+      cli::cli_abort(c(
+        "x" = "{length(interior)} day{?s} inside the daily risk-free series' own span have no rate.",
+        "i" = "Missing dates: {.val {format(utils::head(interior, 5), '%Y-%m-%d')}}.",
+        "i" = "Fama-French daily RF spans {min(aw_daily_rf$date)}..{rf_max}, so this is a HOLE, not a publication lag.",
+        "i" = "Investigate hd_factors() (factor_name == \"RF\", frequency == \"daily\") before trusting this Sharpe."
+      ))
+    }
+    n_before <- nrow(df)
+    df <- dplyr::filter(df, !is.na(.data$rf_ret))
+    cli::cli_warn(c(
+      "!" = "Dropped {n_before - nrow(df)} trailing day{?s} with no risk-free rate yet.",
+      "i" = "Daily RF ends {rf_max} (Fama-French publication lag)."
+    ))
+  }
+
+  sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)$sharpe
+}
 
 plan_avoid_worst <- function() {
   list(
@@ -59,6 +124,15 @@ plan_avoid_worst <- function() {
         select(date, rf)
 
       ff |> left_join(rf, by = "date") |> mutate(ticker = "Mkt-RF")
+    }),
+
+    # ── Daily risk-free series for #677 Sharpe migration ────────
+    # Re-shapes aw_daily_ff's already-fetched daily FF RF column (date, rf)
+    # into the (date, rf_ret) shape .aw_sharpe_rf() expects -- no new fetch.
+    targets::tar_target(aw_daily_rf, {
+      aw_daily_ff |>
+        dplyr::select(date, rf_ret = rf) |>
+        dplyr::arrange(date)
     }),
 
     # ── Core: remove N worst/best days ──────────────────────────
@@ -441,7 +515,7 @@ plan_avoid_worst <- function() {
         worst_10 <- ord[seq_len(min(10, n - 1))]
         best_10 <- ord[seq(max(1, n - 9), n)]
 
-        metrics_for <- function(r, scenario) {
+        metrics_for <- function(r, scenario, r_dts) {
           tibble::tibble(
             strategy = "SPY",
             period = label,
@@ -453,16 +527,18 @@ plan_avoid_worst <- function() {
             max_dd = round(min((cumprod(1 + r) -
                                   cummax(cumprod(1 + r))) /
                                  cummax(cumprod(1 + r))) * 100, 1),
-            sharpe = round(mean(r) / sd(r) * sqrt(252), 2),
+            # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+            # replacing the arithmetic-mean, no-rf formula.
+            sharpe = round(.aw_sharpe_rf(r_dts, r, aw_daily_rf, ann_factor = 252L), 2),
             window_start = min(dts),
             window_end   = max(dts)
           )
         }
 
         bind_rows(
-          metrics_for(ret, "All Days"),
-          metrics_for(ret[-worst_10], "Remove 10 Worst"),
-          metrics_for(ret[-best_10], "Remove 10 Best")
+          metrics_for(ret, "All Days", dts),
+          metrics_for(ret[-worst_10], "Remove 10 Worst", dts[-worst_10]),
+          metrics_for(ret[-best_10], "Remove 10 Best", dts[-best_10])
         )
       }
 
@@ -667,7 +743,9 @@ plan_avoid_worst <- function() {
           cagr = round((cum^(1 / years) - 1) * 100, 1),
           vol = round(sd(strat_ret) * sqrt(252) * 100, 1),
           max_dd = round(min((cum_dd - cummax(cum_dd)) / cummax(cum_dd)) * 100, 1),
-          sharpe = round(mean(strat_ret) / sd(strat_ret) * sqrt(252), 2),
+          # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+          # replacing the arithmetic-mean, no-rf formula.
+          sharpe = round(.aw_sharpe_rf(d$date, strat_ret, aw_daily_rf, ann_factor = 252L), 2),
           pct_cash = round(sum(!in_market) / n * 100, 1)
         )
       }
@@ -720,7 +798,9 @@ plan_avoid_worst <- function() {
         cum_dd <- cumprod(1 + sr)
         list(
           cagr = (cum^(1 / yrs) - 1) * 100,
-          sharpe = mean(sr) / sd(sr) * sqrt(252),
+          # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+          # replacing the arithmetic-mean, no-rf formula.
+          sharpe = .aw_sharpe_rf(data$date, sr, aw_daily_rf, ann_factor = 252L),
           max_dd = min((cum_dd - cummax(cum_dd)) / cummax(cum_dd)) * 100,
           n_switches = sum(diff(as.integer(in_mkt)) != 0),
           pct_cash = sum(!in_mkt) / n * 100
@@ -1065,7 +1145,9 @@ plan_avoid_worst <- function() {
           cagr = round((cum^(1 / yrs) - 1) * 100, 1),
           vol = round(sd(sr) * sqrt(252) * 100, 1),
           max_dd = round(min((cum_dd - cummax(cum_dd)) / cummax(cum_dd)) * 100, 1),
-          sharpe = round(mean(sr) / sd(sr) * sqrt(252), 2),
+          # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
+          # replacing the arithmetic-mean, no-rf formula.
+          sharpe = round(.aw_sharpe_rf(d$date, sr, aw_daily_rf, ann_factor = 252L), 2),
           pct_cash = round(sum(!in_mkt) / n * 100, 1)
         )
       }

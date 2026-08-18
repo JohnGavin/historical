@@ -34,6 +34,7 @@ testthat::local_edition(3)
 # test_end -- full behavioural re-derivation for all eight targets was
 # judged not to add proportionate signal over these two layers together.
 
+source(here::here("R/utils_metrics.R"))
 source(here::here("R/plan_qa_gates.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_avoid_worst.R"))
@@ -187,11 +188,18 @@ test_that("aw_metrics' Testing window_end moves when aw_params$test_end is pertu
     date   = dates,
     ret    = stats::rnorm(length(dates), 0.0003, 0.01)
   )
+  # #677: aw_metrics now depends on aw_daily_rf (daily Fama-French RF) via
+  # .aw_sharpe_rf() -- must be supplied to .eval_command()'s mock env, else
+  # evaluating the target's own command expression fails with "object
+  # 'aw_daily_rf' not found". Covers the full synthetic date range so the
+  # rf join never trims/aborts inside this test.
+  aw_daily_rf <- tibble::tibble(date = dates, rf_ret = rep(0.00006, length(dates)))
 
   run <- function(test_end) {
     result <- .eval_command(
       cmd,
       aw_daily_returns = aw_daily_returns,
+      aw_daily_rf      = aw_daily_rf,
       aw_params        = list(oos_start = as.Date("2020-01-01"), test_end = test_end)
     )
     result[result$period == "Testing" & result$scenario == "All Days", ]

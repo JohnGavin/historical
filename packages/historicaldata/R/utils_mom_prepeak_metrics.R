@@ -12,7 +12,20 @@
 #'   - cagr = NA_real_ (no meaningful CAGR after bankruptcy)
 #'   - max_dd = -100% (floor; -100 on the percentage scale returned)
 #'
-#' Sharpe is computed from per-period returns and is unaffected by bankruptcy.
+#' Sharpe is NOT computed by this function as of #677. The canonical
+#' rf-adjusted geometric Sharpe helper (\code{sharpe_ratio_rf()}) lives in
+#' \code{R/utils_metrics.R} at the pipeline layer, not inside the
+#' \code{historicaldata} package -- this package cannot call it (it is not
+#' part of the package's NAMESPACE/Imports; calling it here would only work
+#' by accident when both happen to be loaded in the same session, and would
+#' fail \code{R CMD check} / \code{devtools::test()} on the package alone).
+#' \code{sharpe} is therefore returned as \code{NA_real_} here; the caller
+#' MUST overwrite it -- see \code{.mom_prepeak_sharpe()} in
+#' \code{R/plan_mom_prepeak.R}, which reuses \code{blown_up} /
+#' \code{bankrupt_month} from this function's output to recompute the same
+#' pre-bankruptcy slice and calls \code{sharpe_ratio_rf()} on it, keeping
+#' the Sharpe FORMULA single-sourced even though the two halves of the
+#' calculation live either side of the package/pipeline boundary.
 #'
 #' Pillar-8 drawdown-duration and loss-clustering metrics (avg_dd_days,
 #' max_dd_days, max_cons_losses, loss_clustered) are computed on the
@@ -24,9 +37,10 @@
 #' @param strategy Character. Strategy code_name label.
 #' @param ann_factor Integer. Annualisation factor (12 for monthly).
 #'
-#' @return One-row tibble: strategy, n_months, sharpe, cagr, vol, max_dd,
-#'   blown_up (logical), bankrupt_month (integer or NA), avg_dd_days (numeric),
-#'   max_dd_days (numeric), max_cons_losses (integer), loss_clustered (logical).
+#' @return One-row tibble: strategy, n_months, sharpe (always NA_real_ -- see
+#'   above), cagr, vol, max_dd, blown_up (logical), bankrupt_month (integer
+#'   or NA), avg_dd_days (numeric), max_dd_days (numeric), max_cons_losses
+#'   (integer), loss_clustered (logical).
 #' @noRd
 .mom_prepeak_compute_metrics <- function(returns_tbl,
                                           strategy,
@@ -52,11 +66,6 @@
     ))
   }
 
-  monthly_rf <- (1.02)^(1 / ann_factor) - 1
-  mean_r     <- mean(r)
-  sd_r       <- sd(r)
-  sharpe     <- if (sd_r > 0) (mean_r - monthly_rf) / sd_r * sqrt(ann_factor) else NA_real_
-
   cum   <- cumprod(1 + r)
   years <- n / ann_factor
 
@@ -79,16 +88,24 @@
     max_dd       <- min(dd)
   }
 
-  vol <- sd_r * sqrt(ann_factor)
+  vol <- stats::sd(r) * sqrt(ann_factor)
 
   # ── Pillar-8: dd-duration + loss-clustering ──────────────────────────────
   # Use only the pre-bankruptcy slice so post-bankruptcy zero-equity "returns"
-  # do not inflate duration estimates.  When not blown_up the full series is used.
+  # do not inflate duration estimates.  When not blown_up the full series is
+  # used.  #677: the same slice is independently reconstructed by
+  # .mom_prepeak_sharpe() (R/plan_mom_prepeak.R) from blown_up/bankrupt_month
+  # to compute the geometric rf-adjusted Sharpe outside this package -- see
+  # roxygen above.
   r_pillar <- if (blown_up && !is.na(bankrupt_idx)) {
     r[seq_len(bankrupt_idx - 1L)]
   } else {
     r
   }
+
+  # sharpe is a placeholder here -- see roxygen above (#677). The caller
+  # (R/plan_mom_prepeak.R) MUST overwrite it via .mom_prepeak_sharpe().
+  sharpe <- NA_real_
 
   if (length(r_pillar) >= 3L) {
     dd_dur  <- hd_dd_duration(r_pillar)
