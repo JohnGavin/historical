@@ -198,3 +198,138 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
     n       = n
   )
 }
+
+#' Join a risk-free series onto a return series by a shared key (#677 slice 3b)
+#'
+#' Canonical THREE-CASE risk-free coverage policy, shared by every strategy
+#' that left-joins a Fama-French risk-free series onto its own return
+#' series. Before this helper existed, the same ~40-line policy was
+#' duplicated near-verbatim across four call sites -- \code{.ltr_join_rf()}
+#' (\code{R/plan_ltr_momentum.R}), \code{.tom_join_rf_daily()}
+#' (\code{R/plan_turn_of_month.R}), \code{.mom_prepeak_join_rf()}
+#' (\code{R/plan_mom_prepeak.R}), and CMR's own
+#' (\code{R/plan_commodities_mean_reversion.R}) -- see issue #677.
+#'
+#' Consolidating also fixes the gap PR #684 found: none of the four
+#' distinguished a LEADING gap (the return series starts before the
+#' risk-free series does) from an INTERIOR one (a real hole inside the
+#' risk-free series' own span). A leading gap was reported as "a HOLE in
+#' the series", sending a reader hunting for a gap that does not exist.
+#'
+#' Per \code{fail-loud-not-null.md}, a missing risk-free rate must NEVER be
+#' silently coerced to \code{NA}/zero/a dropped row without comment. The
+#' three cases:
+#'   \describe{
+#'     \item{LEADING}{\code{key < min(rf[[key]])}. The risk-free series
+#'       simply does not go back this far -- by construction, not because
+#'       of a gap in its own coverage. \strong{Aborts}, naming it
+#'       "leading", never "hole".}
+#'     \item{TRAILING}{\code{key > max(rf[[key]])}. A Fama-French
+#'       publication lag -- expected, not a bug. TRIMMED with a loud,
+#'       counted \code{cli_warn} naming the dropped periods and the
+#'       effective end date (per fail-loud-not-null.md's "Make the drop
+#'       observable").}
+#'     \item{INTERIOR}{\code{min(rf[[key]]) <= key <= max(rf[[key]])} but
+#'       missing. A real hole inside the risk-free series' own span.
+#'       \strong{Aborts.}}
+#'   }
+#' If a return series has both leading and interior gaps, leading is
+#' reported first -- it is the more fundamental "no risk-free rate exists
+#' for this period at all" case.
+#'
+#' This is a pure function (no target/database access), so it is
+#' unit-testable directly -- see \code{tests/testthat/test-join-rf-series.R}.
+#' PR #678's guard shipped untested because it lived inside a target
+#' reading a gitignored parquet, which is exactly how it broke `main` twice.
+#'
+#' @param df Tibble to join `rf` onto. Must already have the `key` column
+#'   (or pass \code{check_key_col = FALSE} when the caller derives it
+#'   itself immediately before calling).
+#' @param rf Tibble with columns `key`, `rf_ret`.
+#' @param key Character. Name of the shared join column: \code{"ym"}
+#'   (monthly, character \code{"YYYY-MM"}) or \code{"date"} (daily, a
+#'   `Date` column).
+#' @param label Character. Function identity used in error/warning message
+#'   prefixes, e.g. \code{".ltr_join_rf"}.
+#' @param rf_label Character. How the risk-free series is named in prose,
+#'   e.g. \code{"stk_rf"} or \code{"daily_rf"}.
+#' @param rf_source Character. Where `rf` comes from, cited in the
+#'   missing-columns message and the interior-gap investigate line, e.g.
+#'   \code{"R/plan_stock_backtest.R"}.
+#' @param df_label Character. Name of `df` for warning/abort text, e.g.
+#'   \code{"ltr_portfolio"} or \code{"CMR 1m portfolio"}.
+#' @param strategy_label Character. Strategy name for the
+#'   trust-this-Sharpe line, e.g. \code{"LTR"} or \code{"CMR 1m"}.
+#' @param period_noun Character. \code{"month"} or \code{"date"} -- used
+#'   for cli's pluralisation (\code{{period_noun}{?s}}).
+#' @param check_key_col Logical. If \code{TRUE} (default), abort when `df`
+#'   has no `key` column. Callers that derive `key` themselves just before
+#'   calling (e.g. mom_prepeak deriving `ym` from `exec_date`), or that
+#'   already guarantee it by construction (e.g. CMR), pass `FALSE`.
+#' @param df_arg_name Character. Word used for `df` in the
+#'   missing-key-column message, e.g. \code{"port"}.
+#'
+#' @return `df` with `rf_ret` joined; trailing uncovered periods removed.
+#' @noRd
+.join_rf_series <- function(df, rf, key,
+                             label, rf_label, rf_source, df_label,
+                             strategy_label, period_noun = "month",
+                             check_key_col = TRUE, df_arg_name = "df") {
+  required <- c(key, "rf_ret")
+  missing_cols <- setdiff(required, names(rf))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{label}(): {rf_label} is missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected a tibble with {key} and rf_ret ({rf_source})."
+    ))
+  }
+  if (isTRUE(check_key_col) && !key %in% names(df)) {
+    cli::cli_abort(c(
+      "x" = "{label}(): {df_arg_name} has no {.field {key}} column to join on."
+    ))
+  }
+
+  fmt <- function(x) if (inherits(x, "Date")) format(x) else x
+
+  df_key_range <- range(df[[key]])
+  joined <- dplyr::left_join(df, rf, by = key)
+
+  missing_key <- sort(joined[[key]][is.na(joined$rf_ret)])
+  if (length(missing_key) == 0L) return(joined)
+
+  rf_min <- min(rf[[key]])
+  rf_max <- max(rf[[key]])
+
+  leading  <- missing_key[missing_key < rf_min]
+  interior <- missing_key[missing_key >= rf_min & missing_key <= rf_max]
+
+  if (length(leading) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(leading)} {period_noun}{?s} come before {rf_label} even starts ({strategy_label}).",
+      "i" = "Missing {period_noun}{?s}: {.val {fmt(leading)}}.",
+      "i" = "{rf_label} starts {fmt(rf_min)}; {df_label} starts {fmt(df_key_range[1])}.",
+      "i" = "This is LEADING coverage: the risk-free series simply does not reach this far back yet -- a different situation from a gap inside its own span.",
+      "i" = "Trim {df_label} to start no earlier than {fmt(rf_min)}, or source an earlier {rf_label}."
+    ))
+  }
+
+  if (length(interior) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(interior)} {period_noun}{?s} inside {rf_label}'s own span have no risk-free rate ({strategy_label}).",
+      "i" = "Missing {period_noun}{?s}: {.val {fmt(interior)}}.",
+      "i" = "{rf_label} spans {fmt(rf_min)}..{fmt(rf_max)}, so this is a HOLE in the series, not a publication lag.",
+      "i" = "Investigate the FF3 source ({rf_source}) before trusting any {strategy_label} Sharpe figure."
+    ))
+  }
+
+  # trailing -- Fama-French publication lag; trim + loud, counted warn
+  n_before <- nrow(joined)
+  joined <- dplyr::filter(joined, !is.na(.data$rf_ret))
+  cli::cli_warn(c(
+    "!" = "Dropped {n_before - nrow(joined)} trailing {period_noun}{?s} from {df_label} with no risk-free rate yet.",
+    "i" = "Dropped {period_noun}{?s}: {.val {fmt(missing_key)}}.",
+    "i" = "{df_label} spans {fmt(df_key_range[1])}..{fmt(df_key_range[2])}; {rf_label} ends {fmt(rf_max)} (Fama-French publication lag).",
+    "i" = "Every {strategy_label} metric is therefore computed through {fmt(rf_max)}, not {fmt(df_key_range[2])}."
+  ))
+  joined
+}

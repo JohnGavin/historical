@@ -109,23 +109,31 @@ plan_olmar <- function() {
           date     = as.Date(date),
           cum_gross = cumprod(1 + gross_ret),
           cum_net   = cumprod(1 + net_ret)
-        )
+        ) |>
+        .olmar_join_rf(daily_rf)
     }),
 
     # ── Metrics ─────────────────────────────────────────────────
+    # #677 slice 3b: sharpe was previously mean(ret)*252/vol -- arithmetic
+    # numerator, NO risk-free deduction, while cagr two lines above was
+    # already geometric. The reported Sharpe was not the Sharpe of the
+    # reported CAGR. Now uses the canonical sharpe_ratio_rf()
+    # (R/utils_metrics.R): geometric numerator, rf-deducted, daily
+    # (periods_per_year = 252L) -- and cagr/vol are read straight off the
+    # same sharpe_ratio_rf() call so all three figures are guaranteed
+    # coherent with each other (the inconsistency this migration fixes).
     targets::tar_target(olmar_metrics, {
       library(dplyr)
 
       calc <- function(d, label) {
-        ret <- d$net_ret
-        ret <- ret[!is.na(ret)]
-        n   <- length(ret)
+        keep   <- !is.na(d$net_ret)
+        d      <- d[keep, , drop = FALSE]
+        ret    <- d$net_ret
+        rf_ret <- d$rf_ret
+        n      <- length(ret)
         if (n < 20L) return(NULL)
-        years    <- n / 252
-        cum      <- prod(1 + ret)
-        cagr     <- cum^(1 / years) - 1
-        vol      <- sd(ret) * sqrt(252)
-        sharpe   <- if (vol > 0) mean(ret) * 252 / vol else NA_real_
+
+        sr       <- sharpe_ratio_rf(ret, rf_ret, periods_per_year = 252L, na.rm = TRUE)
         eq_curve <- cumprod(1 + ret)
         dd       <- (eq_curve - cummax(eq_curve)) / cummax(eq_curve)
         max_dd   <- min(dd)
@@ -134,10 +142,10 @@ plan_olmar <- function() {
         tibble::tibble(
           period   = label,
           days     = n,
-          years    = round(years, 1),
-          cagr     = round(cagr * 100, 2),
-          vol      = round(vol * 100, 2),
-          sharpe   = round(sharpe, 3),
+          years    = round(n / 252, 1),
+          cagr     = round(sr$ann_ret * 100, 2),
+          vol      = round(sr$ann_vol * 100, 2),
+          sharpe   = round(sr$sharpe, 3),
           max_dd   = round(max_dd * 100, 2),
           avg_turnover_daily = round(avg_tv, 4)
         )
@@ -328,5 +336,33 @@ plan_olmar <- function() {
       })
     })
 
+  )
+}
+
+
+# ── Internal helper ────────────────────────────────────────────────────────────
+# Prefixed .olmar_* (private; not exported from the package).
+
+#' Join the shared daily risk-free series onto OLMAR's daily portfolio (#677)
+#'
+#' Mirrors \code{.tom_join_rf_daily()} in R/plan_turn_of_month.R -- OLMAR-1
+#' is the fifth strategy to consume the coverage policy in
+#' \code{.join_rf_series()} (R/utils_metrics.R), which distinguishes THREE
+#' cases (leading / trailing / interior) -- see that function's roxygen for
+#' the full policy. A missing risk-free series must never be treated as
+#' zero -- see fail-loud-not-null.md.
+#'
+#' @param port Tibble with a `date` column (the OLMAR-1 daily portfolio).
+#' @param rf Tibble with columns `date`, `rf_ret` (the `daily_rf` target,
+#'   R/plan_stock_backtest.R).
+#' @return `port` with `rf_ret` joined, trailing uncovered dates removed.
+#' @noRd
+.olmar_join_rf <- function(port, rf) {
+  .join_rf_series(
+    df = port, rf = rf, key = "date",
+    label = ".olmar_join_rf", rf_label = "daily_rf",
+    rf_source = "the daily_rf target, R/plan_stock_backtest.R",
+    df_label = "olmar_portfolio", strategy_label = "OLMAR-1",
+    period_noun = "date", df_arg_name = "port"
   )
 }

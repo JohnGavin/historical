@@ -606,6 +606,47 @@ plan_stock_backtest <- function() {
       out
     }),
 
+    # ── Group 1: Risk-free rate (daily) ────────────────────────────
+    # Shared DAILY rf series, consumed by TOM (R/plan_turn_of_month.R,
+    # sqrt(252) annualisation) and OLMAR-1 (R/plan_olmar.R, same). Mirrors
+    # stk_rf immediately above: fetched from FF3's earliest available date,
+    # NOT scoped to any one consumer's start_date.
+    #
+    # This target was previously `tom_rf_daily`, defined in
+    # R/plan_turn_of_month.R and fetched `from = tom_params$start_date`
+    # (1994-01-01) -- invisible while TOM was its only reader, and exactly
+    # the same scoping bug that broke stk_rf in #684 the moment a second
+    # consumer needed the series too. #677 slice 3b renamed and moved it
+    # here, alongside stk_rf, before OLMAR (start_date 2010-01-01) became
+    # that second consumer. Both TOM's and OLMAR's start dates are safely
+    # after 1926-07, so no leading-coverage gap exists for either today --
+    # but the series itself no longer depends on that being true.
+    targets::tar_target(daily_rf, {
+      library(dplyr)
+
+      RF_SERIES_START <- "1926-07-01"   # FF3's earliest available date
+
+      out <- hd_factors(dataset = "FF3", frequency = "daily",
+                        from = RF_SERIES_START) |>
+        filter(factor_name == "RF") |>
+        mutate(date = as.Date(date), rf_ret = value / 100) |>
+        select(date, rf_ret) |>
+        arrange(date)
+
+      if (nrow(out) == 0L || anyNA(out$rf_ret)) {
+        cli::cli_abort(c(
+          "x" = "daily_rf came back empty or with NA rf_ret.",
+          "i" = "Rows: {nrow(out)}; NA rf_ret: {sum(is.na(out$rf_ret))}.",
+          "i" = "Every daily-frequency strategy's Sharpe depends on this series -- check the FF3 source before proceeding."
+        ))
+      }
+
+      cli::cli_inform(c(
+        "v" = "daily_rf: {nrow(out)} days, {min(out$date)}..{max(out$date)} (shared daily rf series, #677)."
+      ))
+      out
+    }),
+
     # ── Group 1: Monthly ADV per ticker (for ADV participation cap) ──
     targets::tar_target(stk_monthly_adv, {
       library(dplyr)
