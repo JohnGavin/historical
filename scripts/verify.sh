@@ -9,8 +9,9 @@
 #   1. parse("_targets.R")                                    (always)
 #   2. parse("docs/_targets.R")                                (always, #680)
 #   3. tar_validate(script="docs/_targets.R")                  (always, #680)
-#   4. root testthat suite  (tests/testthat/)                  (full mode only)
-#   5. package testthat suite (packages/historicaldata/)        (full mode only)
+#   4. dashboard freshness Check 1 + Check 2 (#695)            (full mode only)
+#   5. root testthat suite  (tests/testthat/)                  (full mode only)
+#   6. package testthat suite (packages/historicaldata/)        (full mode only)
 #
 # TWO PIPELINES — always pass script= explicitly (#680). `_targets.R` at repo
 # root is a small "rn node" sandbox pipeline (~4 plan_ references). The real
@@ -39,11 +40,22 @@
 # tar_make() itself EXITS 0 even when targets errored — a green tar_make()
 # run is not proof either. That is exactly why check_pipeline_errors.R reads
 # tar_meta() directly instead of trusting the exit code.
-# A THIRD, still-uncovered surface: docs/*.qmd chunks call tar_read() for a
-# specific target name. A chunk referencing a target that no longer exists
-# (typo, rename, removal) fails only at RENDER time — not at parse, not at
-# tar_validate(), not at tar_make(). Nothing in this script, and nothing else
-# in the repo yet, catches that; it requires an actual quarto render pass.
+# A THIRD surface — docs/*.qmd chunks calling tar_read()/tar_read_raw()/
+# safe_tar_read() for a specific target name — used to be entirely
+# uncovered: a chunk referencing a target that no longer exists (typo,
+# rename, removal) fails only at RENDER time, not at parse, not at
+# tar_validate(), not at tar_make(). scripts/check_dashboard_freshness.R
+# (#695) now closes the DEAD-REFERENCE half of that gap (its Check 1, run
+# below in full mode only — see the fragment's own comment for why it is
+# not in --quick) plus a related but distinct gap, source-vs-render
+# staleness (its Check 2: a committed .html older than its own .qmd source —
+# GitHub Pages serves the committed .html directly, so nothing else notices
+# this). What remains uncovered by THIS script: DATA staleness — a
+# correctly-rendered page still showing month-old target values because
+# nothing re-renders it after the pipeline rebuilds. That needs a real
+# targets store, so it is Check 3 of the same script, wired into
+# scripts/build.sh instead (main-checkout only) — see that script and
+# check_dashboard_freshness.R own header comment.
 #
 # Both testthat suites carry a small number of known pre-existing failures
 # (see the BASELINE_* arrays below, issue #569) that predate this script and
@@ -65,9 +77,15 @@
 #
 # Exit codes:
 #   0  verified: both pipelines parse, docs/_targets.R validates structurally
-#      OK, and both testthat suites' failures == their baseline exactly
+#      OK, dashboard freshness Check 1 found no dead target references (full
+#      mode only — see #695), and both testthat suites' failures == their
+#      baseline exactly
 #   1  verification RAN and found a problem (new/missing test failure, a
-#      parse error in docs/_targets.R, or a tar_validate() structural error)
+#      parse error in docs/_targets.R, a tar_validate() structural error, a
+#      dead target reference in a docs/*.qmd chunk (#695 Check 1 — always a
+#      hard failure), or — only when HD_FAIL_ON_STALE_DASHBOARDS is set — a
+#      stale dashboard (#695 Check 2, informational-only by default; see
+#      scripts/check_dashboard_freshness.R header comment for why)
 #   2  verification did NOT run at all (nix develop / Rscript unavailable or
 #      crashed, or the ROOT _targets.R failed to parse) — this is NOT a pass,
 #      never treat it as one
@@ -217,6 +235,30 @@ DOCS_VALIDATE_FRAGMENT='
     cat(sprintf("::VERIFY:TAR_VALIDATE_ELAPSED:: %.2f\n", validate_elapsed))
 '
 
+# scripts/check_dashboard_freshness.R Check 1 (dead target references) and
+# Check 2 (source-vs-render staleness) -- #695, the third render-time
+# surface named by #680 that nothing else in this script catches: a
+# docs/*.qmd chunk calling tar_read() for a target name that no longer
+# exists fails only at an actual quarto render (Check 1); a committed .html
+# older than its own .qmd source silently keeps serving stale content, since
+# GitHub Pages serves the committed .html directly with nothing re-rendering
+# it (Check 2). FULL MODE ONLY, not --quick: Check 1 needs
+# targets::tar_manifest(docs/_targets.R), which must fully evaluate the real
+# pipeline script -- the same order of cost (~7-8s warm, measured
+# 2026-08-20) as this script own tar_validate() call above, and --quick is
+# documented as parse plus structural validate only. Embedded via source()
+# into THIS Rscript process rather than a second nix develop --command call,
+# to avoid paying a second ~13s nix-develop entry on top of that ~7-8s
+# manifest cost. Does NOT quit() on failure, matching
+# DOCS_VALIDATE_FRAGMENT above and check_dashboard_freshness.R own internal
+# contract (see that script header comment) -- a problem is reported via
+# OVERALL_STATUS below via the printed ::VERIFY:DASHBOARD_FRESHNESS_STATUS::
+# marker, never treated as verification did not run.
+DASHBOARD_FRESHNESS_FRAGMENT='
+    source(file.path("scripts", "check_dashboard_freshness.R"))
+    invisible(.cdf_main(data_staleness = FALSE))
+'
+
 if [[ "$QUICK" -eq 1 ]]; then
   R_SCRIPT='
     cat("::VERIFY:CWD::", getwd(), "\n")
@@ -247,6 +289,7 @@ else
     if (!isTRUE(parse_ok)) quit(status = 1, save = "no")
     cat("::VERIFY:PARSE_OK::\n")
 '"$DOCS_VALIDATE_FRAGMENT"'
+'"$DASHBOARD_FRESHNESS_FRAGMENT"'
 
     # NOT_CRAN=true — WITHOUT this, testthat silently SKIPS every
     # skip_on_cran()-gated test, and that gate is what this project uses to
@@ -488,6 +531,38 @@ OVERALL_STATUS=0
 if [[ "$DOCS_STATUS" -ne 0 ]] || [[ "$VALIDATE_STATUS" -ne 0 ]]; then
   OVERALL_STATUS=1
 fi
+
+# scripts/check_dashboard_freshness.R Check 1 + Check 2 (#695). The full
+# human-readable report already streamed to the terminal above (tee), since
+# this check runs embedded inside the same nix develop -- command Rscript
+# call as everything else in this section -- only the final status marker is
+# parsed here. A status of 2 (the check itself could not run, e.g.
+# tar_manifest() failed to evaluate docs/_targets.R) is folded into
+# OVERALL_STATUS=1 rather than exiting this script with 2: by this point the
+# root and package test suites have ALREADY run and their results are known
+# (this R process never quit() early -- see check_dashboard_freshness.R
+# header comment on why), so discarding that information to report "did not
+# run at all" would be wrong. A tar_manifest() failure of the real pipeline
+# is also very likely to have already surfaced above as a tar_validate()
+# FAILURE (VALIDATE_STATUS), since both evaluate the same docs/_targets.R.
+DASHBOARD_FRESHNESS_STATUS_RAW="$(grep '::VERIFY:DASHBOARD_FRESHNESS_STATUS::' "$R_OUT" | tail -1 | sed 's/.*:: *//' | tr -d '[:space:]')"
+case "$DASHBOARD_FRESHNESS_STATUS_RAW" in
+  0)
+    echo "PASS: dashboard freshness (scripts/check_dashboard_freshness.R Check 1 + Check 2 — see full report above)"
+    ;;
+  1)
+    echo "FAIL: dashboard freshness found a problem — see [DEAD-REF]/[STALE] lines in the report above"
+    OVERALL_STATUS=1
+    ;;
+  2)
+    echo "!!! dashboard freshness check could not run (status 2) — see the report above for the underlying error !!!"
+    OVERALL_STATUS=1
+    ;;
+  *)
+    echo "!!! dashboard freshness check produced no ::VERIFY:DASHBOARD_FRESHNESS_STATUS:: marker at all — see report above !!!"
+    OVERALL_STATUS=1
+    ;;
+esac
 
 CURRENT_ROOT_SIGNATURES="$(awk '/::VERIFY:ROOT_SIGNATURES_START::/{flag=1; next} /::VERIFY:ROOT_SIGNATURES_END::/{flag=0} flag' "$R_OUT")"
 CURRENT_ROOT_SNAPSHOT="$(awk '/::VERIFY:ROOT_SNAPSHOT_FAILS_START::/{flag=1; next} /::VERIFY:ROOT_SNAPSHOT_FAILS_END::/{flag=0} flag' "$R_OUT")"
