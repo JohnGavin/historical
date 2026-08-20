@@ -20,6 +20,14 @@
 # the demonstration: six registry writers errored on every build for four
 # commits, surfaced only on the first occasion anyone ran the check by hand.
 #
+# STEP 3 (#695): after the store exists, this script also runs
+# scripts/check_dashboard_freshness.R --data-staleness, which needs a real
+# store to compare each docs/*.qmd page own referenced targets build times
+# against that page rendered .html -- the ONE surface of #695's three that
+# verify.sh cannot cover (verify.sh runs Check 1 + Check 2 of the same
+# script, which need no store -- see that script header comment for the
+# full three-check design).
+#
 # MAIN CHECKOUT ONLY. A worktree has no targets store of its own and must
 # not build one that could race the main checkout's docs/_targets store (see
 # .claude/CLAUDE.md "Verifying a change" and the worktree-location rule).
@@ -30,19 +38,23 @@
 #   scripts/build.sh
 #
 # Exit codes:
-#   0  tar_make() ran and scripts/check_pipeline_errors.R found no errored
-#      targets.
+#   0  tar_make() ran, scripts/check_pipeline_errors.R found no errored
+#      targets, and scripts/check_dashboard_freshness.R --data-staleness
+#      found no dead target references (and no staleness escalated to a
+#      failure -- see that script header for HD_FAIL_ON_STALE_DASHBOARDS).
 #   1  the build RAN but reported a problem: one or more targets errored
-#      (per check_pipeline_errors.R), and/or tar_make() itself exited
-#      non-zero (a crashed build still leaves a store worth inspecting, so
-#      check_pipeline_errors.R always runs -- see Step 2 below -- but a
+#      (per check_pipeline_errors.R), a dead target reference or escalated
+#      staleness (per check_dashboard_freshness.R), and/or tar_make() itself
+#      exited non-zero (a crashed build still leaves a store worth
+#      inspecting, so Steps 2 and 3 always run -- see below -- but a
 #      non-zero tar_make() exit is never silently treated as a pass even
 #      when the store it left behind happens to read clean).
 #   2  the build did NOT run at all: wrong location (not the main checkout,
 #      or run from a linked worktree), the nix shell itself could not be
-#      entered (pre-flight check below), or check_pipeline_errors.R could
-#      not read a store at all (no store / tar_meta() failed). This is NOT
-#      a pass -- never treat it as one.
+#      entered (pre-flight check below), check_pipeline_errors.R could not
+#      read a store at all (no store / tar_meta() failed), or
+#      check_dashboard_freshness.R --data-staleness could not run its checks
+#      at all. This is NOT a pass -- never treat it as one.
 
 set -euo pipefail
 
@@ -137,14 +149,37 @@ echo "--- check_pipeline_errors.R exited $CHECK_STATUS ---"
 echo ""
 
 # ---------------------------------------------------------------------------
+# Step 3: scripts/check_dashboard_freshness.R --data-staleness (#695). Runs
+# UNCONDITIONALLY, same reasoning as Step 2: a crashed or partially-errored
+# tar_make() (docs/_targets.R sets error = "continue" project-wide) still
+# leaves a store with real build times for whatever DID succeed, worth
+# checking. This re-runs Check 1 (dead target references) and Check 2
+# (source-vs-render staleness) as well as Check 3 (data staleness) -- see
+# that script header comment for the full three-check design and why Check
+# 3 specifically needs a real store (hence living here, not in
+# scripts/verify.sh). Staleness (Check 2/Check 3) is informational-only by
+# default (HD_FAIL_ON_STALE_DASHBOARDS=1 escalates it) -- dead references
+# (Check 1) are always a hard failure. See that script header for the full
+# exit-code contract; the same 0/1/2 meaning is reused here.
+# ---------------------------------------------------------------------------
+echo "--- Step 3: scripts/check_dashboard_freshness.R --data-staleness (#695) ---"
+set +e
+nix develop "$REPO_ROOT" --command Rscript scripts/check_dashboard_freshness.R --data-staleness
+DASHBOARD_STATUS=$?
+set -e
+echo "--- check_dashboard_freshness.R --data-staleness exited $DASHBOARD_STATUS ---"
+echo ""
+
+# ---------------------------------------------------------------------------
 # Final verdict -- printed LAST and kept short, so it is the final thing on
 # screen rather than buried 900+ lines up in the tar_make() build log
-# (#693). The errored-target list itself was already printed by Step 2,
-# directly above this block.
+# (#693). The errored-target/dead-reference/staleness lists were already
+# printed by Step 2 and Step 3, directly above this block.
 # ---------------------------------------------------------------------------
 echo "=== scripts/build.sh: summary ==="
-echo "tar_make() exit code:               $TAR_MAKE_STATUS"
-echo "check_pipeline_errors.R exit code:  $CHECK_STATUS"
+echo "tar_make() exit code:                              $TAR_MAKE_STATUS"
+echo "check_pipeline_errors.R exit code:                 $CHECK_STATUS"
+echo "check_dashboard_freshness.R --data-staleness exit: $DASHBOARD_STATUS"
 echo ""
 
 if [[ "$CHECK_STATUS" -eq 2 ]]; then
@@ -154,10 +189,23 @@ if [[ "$CHECK_STATUS" -eq 2 ]]; then
   exit 2
 fi
 
-if [[ "$TAR_MAKE_STATUS" -ne 0 ]] || [[ "$CHECK_STATUS" -ne 0 ]]; then
+if [[ "$DASHBOARD_STATUS" -eq 2 ]]; then
+  echo "!!! check_dashboard_freshness.R --data-staleness could not run the check at all"
+  echo "!!! (no store, tar_manifest()/tar_meta() failed, or a broken extractor) -- see"
+  echo "!!! its output above."
+  echo "!!! BUILD DID NOT RUN. This is NOT a pass.                                   !!!"
+  exit 2
+fi
+
+if [[ "$TAR_MAKE_STATUS" -ne 0 ]] || [[ "$CHECK_STATUS" -ne 0 ]] || [[ "$DASHBOARD_STATUS" -ne 0 ]]; then
   echo "=== scripts/build.sh: FAIL ==="
   if [[ "$CHECK_STATUS" -ne 0 ]]; then
     echo "One or more targets errored -- see the [ERROR] list above."
+  fi
+  if [[ "$DASHBOARD_STATUS" -ne 0 ]]; then
+    echo "Dashboard freshness found a problem -- see the [DEAD-REF]/[STALE]/[DATA-STALE]"
+    echo "lines above (staleness only fails when HD_FAIL_ON_STALE_DASHBOARDS is set --"
+    echo "see scripts/check_dashboard_freshness.R header comment)."
   fi
   if [[ "$TAR_MAKE_STATUS" -ne 0 ]]; then
     echo "tar_make() itself also exited non-zero ($TAR_MAKE_STATUS) -- see the build"
@@ -168,5 +216,5 @@ if [[ "$TAR_MAKE_STATUS" -ne 0 ]] || [[ "$CHECK_STATUS" -ne 0 ]]; then
   exit 1
 fi
 
-echo "=== scripts/build.sh: PASS (tar_make() clean, no errored targets) ==="
+echo "=== scripts/build.sh: PASS (tar_make() clean, no errored targets, dashboard freshness clean) ==="
 exit 0
