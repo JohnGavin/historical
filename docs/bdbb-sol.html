@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-07-01">
+<meta name="dcterms.date" content="2026-08-20">
 <meta name="description" content="M/G/infinity queueing model (Varma 2026) applied to SOL/USD Kraken hourly data. Replicates resilience half-life estimation and tail-risk predictivity test.">
 
 <title>BDBB Queueing Diagnostics — SOL/USD (Phase 1)</title>
@@ -100,7 +100,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">July 1, 2026</p>
+      <p class="date">August 20, 2026</p>
     </div>
   </div>
   
@@ -219,26 +219,34 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="tail-risk-predictivity-r-vs-amihud-vs-kyle" class="level2">
 <h2 class="anchored" data-anchor-id="tail-risk-predictivity-r-vs-amihud-vs-kyle">Tail-Risk Predictivity (R vs Amihud vs Kyle)</h2>
 <div class="cell">
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
-<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tar_read</span>(bdbb_sol_tail_predict),</span>
-<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">digits  =</span> <span class="dv">2</span>,</span>
-<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="fu">paste0</span>(</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Tail-risk predictivity by predictor. "</span>,</span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). "</span>,</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Varma BTC benchmarks: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp."</span></span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>tp <span class="ot">&lt;-</span> <span class="fu">tar_read</span>(bdbb_sol_tail_predict)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>pull_spread <span class="ot">&lt;-</span> <span class="cf">function</span>(pred) {</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(dplyr<span class="sc">::</span><span class="fu">filter</span>(tp, predictor <span class="sc">==</span> pred)<span class="sc">$</span>spread_pp, <span class="dv">2</span>)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  tp,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">digits  =</span> <span class="dv">2</span>,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="fu">paste0</span>(</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Tail-risk predictivity by predictor. "</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). "</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"SOL/USD spreads computed here: R = "</span>, <span class="fu">pull_spread</span>(<span class="st">"R"</span>), <span class="st">" pp, "</span>,</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Amihud = "</span>, <span class="fu">pull_spread</span>(<span class="st">"amihud_mean"</span>), <span class="st">" pp, "</span>,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Kyle = "</span>, <span class="fu">pull_spread</span>(<span class="st">"kyle_mean"</span>), <span class="st">" pp. "</span>,</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Varma (2026) BTC benchmarks, shown for reference only: R = 8.6 pp, "</span>,</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Amihud = 4.7 pp, Kyle = 1.1 pp. Kyle's lambda is estimated as the OLS "</span>,</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">"price-impact slope of log-returns on signed order flow within each "</span>,</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="st">"rolling window (cov/var; see "</span>,</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46)"</span>,</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="st">"), not a per-bar ratio. Prior to [#624](https://github.com/JohnGavin/historical/issues/624), "</span>,</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="st">"the `kyle_mean` column was numerically identical to `amihud_mean`, so any "</span>,</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="st">"earlier apparent agreement with the Varma Kyle benchmark was spurious and "</span>,</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="st">"the corrected figures above should not be assumed to reproduce it."</span></span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>  )</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Tail-risk predictivity by predictor. Spread = P(top-decile hourly move | high tercile) - P(… | low tercile). Varma BTC benchmarks: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp.</caption>
-<colgroup>
-<col style="width: 15%">
-<col style="width: 28%">
-<col style="width: 27%">
-<col style="width: 12%">
-<col style="width: 8%">
-<col style="width: 7%">
-</colgroup>
+<caption>Tail-risk predictivity by predictor. Spread = P(top-decile hourly move | high tercile) - P(… | low tercile). SOL/USD spreads computed here: R = 7.63 pp, Amihud = 3.99 pp, Kyle = 3.99 pp.&nbsp;Varma (2026) BTC benchmarks, shown for reference only: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp.&nbsp;Kyle’s lambda is estimated as the OLS price-impact slope of log-returns on signed order flow within each rolling window (cov/var; see <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46"><code>bdbb_fit()</code></a>), not a per-bar ratio. Prior to <a href="https://github.com/JohnGavin/historical/issues/624">#624</a>, the <code>kyle_mean</code> column was numerically identical to <code>amihud_mean</code>, so any earlier apparent agreement with the Varma Kyle benchmark was spurious and the corrected figures above should not be assumed to reproduce it.</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">predictor</th>
