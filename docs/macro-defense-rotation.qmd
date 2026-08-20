@@ -146,7 +146,7 @@ Normalised price history of the 4 defensive ETFs + SPY benchmark since 2007, reb
 prices <- tar_read(bt_prices) |>
   filter(ticker != "BIL") |>  # exclude cash proxy from price chart
   group_by(ticker) |>
-  mutate(normalised = adjusted / first(adjusted) * 100) |>
+  mutate(normalised = adjusted_close / first(adjusted_close) * 100) |>
   ungroup()
 
 n_tickers <- length(unique(prices$ticker))
