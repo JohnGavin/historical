@@ -163,6 +163,158 @@ test_that(".cdf_extract_qmd_targets aborts informatively when knitr::purl() itse
   expect_snapshot(error = TRUE, .cdf_extract_qmd_targets(missing_file))
 })
 
+# ── .cdf_extract_include_paths() ────────────────────────────────────────────
+
+test_that(".cdf_extract_include_paths finds the unquoted bare-path form (the one real usage in this repo)", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    "{{< include _includes/build-info-footer.qmd >}}"
+  ), file)
+  expect_equal(.cdf_extract_include_paths(file), "_includes/build-info-footer.qmd")
+})
+
+test_that(".cdf_extract_include_paths finds the double-quoted form", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    '{{< include "path with space.qmd" >}}'
+  ), file)
+  expect_equal(.cdf_extract_include_paths(file), "path with space.qmd")
+})
+
+test_that(".cdf_extract_include_paths returns character(0) for a page with no include directive", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c("---", "title: Parent", "---", "", "Just prose, no includes."), file)
+  expect_equal(.cdf_extract_include_paths(file), character(0))
+})
+
+test_that(".cdf_extract_include_paths finds multiple include directives", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    "{{< include one.qmd >}}", "", "{{< include two.qmd >}}"
+  ), file)
+  expect_equal(.cdf_extract_include_paths(file), c("one.qmd", "two.qmd"))
+})
+
+# ── .cdf_resolve_include_path() ─────────────────────────────────────────────
+
+test_that(".cdf_resolve_include_path resolves relative to the INCLUDING file's directory, not the cwd", {
+  dir <- withr::local_tempdir()
+  including <- file.path(dir, "toy_dashboard.qmd")
+  writeLines("parent", including)
+  target <- file.path(dir, "toy_child.qmd")
+  writeLines("child", target)
+  resolved <- .cdf_resolve_include_path("toy_child.qmd", including)
+  expect_equal(normalizePath(resolved), normalizePath(target))
+})
+
+test_that(".cdf_resolve_include_path aborts informatively when the include target does not exist (#695 follow-up)", {
+  dir <- withr::local_tempdir()
+  including <- file.path(dir, "toy_dashboard.qmd")
+  writeLines("parent", including)
+  expect_snapshot(error = TRUE, .cdf_resolve_include_path("toy_missing_child.qmd", including))
+})
+
+# ── .cdf_extract_qmd_targets() -- {{< include >}} resolution (#695 follow-up) ──
+# The gap this closes: knitr::purl() never sees a target file's contents
+# through a Quarto include shortcode, so a tar_read() living only inside an
+# included file was previously invisible to Check 1/Check 3. These tests use
+# FIXED basenames per file (toy_parent.qmd / toy_child.qmd / toy_grandchild.qmd)
+# so any future cli_abort() snapshot stays portable (portable-build-artifacts).
+
+test_that(".cdf_extract_qmd_targets sees a tar_read() that lives only inside an included file", {
+  dir <- withr::local_tempdir()
+  parent <- file.path(dir, "toy_parent.qmd")
+  child <- file.path(dir, "toy_child.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    "```{r}", "#| label: parent-chunk", "x <- 1", "```", "",
+    "{{< include toy_child.qmd >}}"
+  ), parent)
+  writeLines(c(
+    "```{r}", "#| label: child-chunk",
+    'y <- tar_read("included_target")',
+    "```"
+  ), child)
+  expect_equal(.cdf_extract_qmd_targets(parent), "included_target")
+})
+
+test_that(".cdf_extract_qmd_targets sees a tar_read() through a NESTED include chain (parent -> child -> grandchild)", {
+  dir <- withr::local_tempdir()
+  parent <- file.path(dir, "toy_parent.qmd")
+  child <- file.path(dir, "toy_child.qmd")
+  grandchild <- file.path(dir, "toy_grandchild.qmd")
+  writeLines(c("---", "title: Parent", "---", "", "{{< include toy_child.qmd >}}"), parent)
+  writeLines(c("{{< include toy_grandchild.qmd >}}"), child)
+  writeLines(c(
+    "```{r}", "#| label: grandchild-chunk",
+    'z <- tar_read("nested_target")',
+    "```"
+  ), grandchild)
+  expect_equal(.cdf_extract_qmd_targets(parent), "nested_target")
+})
+
+test_that(".cdf_extract_qmd_targets unions the parent's own targets with its include's targets", {
+  dir <- withr::local_tempdir()
+  parent <- file.path(dir, "toy_parent.qmd")
+  child <- file.path(dir, "toy_child.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    "```{r}", "#| label: parent-chunk",
+    'a <- tar_read("parent_target")',
+    "```", "",
+    "{{< include toy_child.qmd >}}"
+  ), parent)
+  writeLines(c(
+    "```{r}", "#| label: child-chunk",
+    'b <- tar_read("child_target")',
+    "```"
+  ), child)
+  expect_equal(
+    sort(.cdf_extract_qmd_targets(parent)),
+    c("child_target", "parent_target")
+  )
+})
+
+test_that(".cdf_extract_qmd_targets aborts when a page includes a file that does not exist (#695 follow-up)", {
+  dir <- withr::local_tempdir()
+  parent <- file.path(dir, "toy_parent.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    "{{< include toy_missing_child.qmd >}}"
+  ), parent)
+  expect_snapshot(error = TRUE, .cdf_extract_qmd_targets(parent))
+})
+
+test_that(".cdf_extract_qmd_targets does not infinite-loop on a circular include graph", {
+  dir <- withr::local_tempdir()
+  parent <- file.path(dir, "toy_parent.qmd")
+  child <- file.path(dir, "toy_child.qmd")
+  writeLines(c(
+    "---", "title: Parent", "---", "",
+    "```{r}", "#| label: parent-chunk",
+    'a <- tar_read("parent_target")',
+    "```", "",
+    "{{< include toy_child.qmd >}}"
+  ), parent)
+  writeLines(c(
+    "```{r}", "#| label: child-chunk",
+    'b <- tar_read("child_target")',
+    "```", "",
+    "{{< include toy_parent.qmd >}}"
+  ), child)
+  expect_equal(
+    sort(.cdf_extract_qmd_targets(parent)),
+    c("child_target", "parent_target")
+  )
+})
+
 # ── .cdf_env_flag_true() ───────────────────────────────────────────────────
 # Exists specifically because isTRUE(as.logical(Sys.getenv(...))) is a known
 # footgun -- as.logical("1") is NA, not TRUE (.claude/rules/fail-loud-not-null.md).
@@ -368,6 +520,9 @@ test_that(".cdf_check_data_staleness surfaces unknown (never-built) references v
 test_that("key .cdf_* function signatures are stable", {
   expect_snapshot(args(.cdf_extract_qmd_targets))
   expect_snapshot(args(.cdf_extract_read_targets))
+  expect_snapshot(args(.cdf_extract_include_paths))
+  expect_snapshot(args(.cdf_resolve_include_path))
+  expect_snapshot(args(.cdf_purl_and_extract))
   expect_snapshot(args(.cdf_check_dead_references))
   expect_snapshot(args(.cdf_check_source_staleness))
   expect_snapshot(args(.cdf_check_data_staleness))

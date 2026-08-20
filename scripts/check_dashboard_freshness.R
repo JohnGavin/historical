@@ -79,7 +79,10 @@
 #     ZERO targets -- confirmed legitimate (a landing page with no
 #     tar_read-family calls at all), and is NOT flagged, because the
 #     fence-vs-zero-expression check (not a zero-target-reference check) is
-#     what distinguishes "broken" from "genuinely nothing here".
+#     what distinguishes "broken" from "genuinely nothing here". This
+#     per-file purl()+parse() step now lives in .cdf_purl_and_extract();
+#     .cdf_extract_qmd_targets() wraps it with include resolution (see
+#     "QUARTO {{< include >}} RESOLUTION" below).
 #   - Every tar_read()/tar_read_raw() call's first argument across all 15
 #     files is a character literal or a bare symbol (0 calls with the target
 #     name in a variable/expression) -- confirmed via
@@ -103,6 +106,37 @@
 # non-empty for falsification.qmd specifically ("cg_dag", "cg_caption" --
 # see the inline-expression limitation below), so the wrapper cannot be
 # ignored without a real coverage gap.
+#
+# QUARTO {{< include >}} RESOLUTION (closed 2026-08-20, #695 follow-up) --
+# knitr::purl() tangles only the fenced chunks physically present in the
+# file it is HANDED. It does not resolve Quarto's `{{< include path.qmd >}}`
+# shortcode (that expansion happens inside quarto render's own pandoc
+# preprocessing, never inside knitr), so a tar_read() living in an included
+# file was previously invisible to Check 1 and Check 3 -- SILENTLY: no
+# error, no log line, nothing. Verified empirically 2026-08-20 with a
+# synthetic parent.qmd containing only `{{< include child.qmd >}}` (child.qmd
+# has one fenced `tar_read()` chunk): knitr::purl(parent.qmd) tangles to an
+# EMPTY file (zero expressions), and .cdf_has_r_chunk_fence(parent.qmd) is
+# FALSE (the fence lives in child.qmd, not parent.qmd) -- so the old
+# zero-expressions-but-no-fence branch treated it exactly like index.qmd's
+# legitimate "no code here" case and never flagged the hidden tar_read().
+# .cdf_extract_qmd_targets() now resolves every `{{< include >}}` directive
+# in a page (.cdf_extract_include_paths(), a raw-text regex -- Quarto
+# shortcodes are not knitr chunks, so there is no purl()-based way to find
+# them; this is NOT the tar_read-extraction regex ruled out above, it only
+# locates WHICH FILES to also purl()) and recurses the SAME
+# purl()+parse()-based .cdf_purl_and_extract() into each one, transitively,
+# unioning target references into the including page's set. A `visited`
+# accumulator prevents a circular include graph from recursing forever.
+# Per .claude/rules/fail-loud-not-null.md, an include directive whose target
+# file does not exist is a hard cli_abort() (.cdf_resolve_include_path()),
+# never a silent skip -- a dead include fails at Quarto render time too, so
+# treating it as "nothing to see here" would just move the surprise later.
+# Confirmed against the real repo 2026-08-20: docs/_includes/ contains
+# exactly one file (build-info-footer.qmd), it has zero tar_read calls, and
+# exactly one page (docs/macro-defense-rotation.qmd:710) includes it -- so
+# this gap is provably empty today; the fix exists so the NEXT include that
+# adds a tar_read() does not repeat the silent-miss pattern.
 #
 # KNOWN LIMITATION -- inline R expressions (single-backtick `` `r { ... } ``
 # `` syntax, as opposed to fenced ```{r} chunks) are NOT tangled by
@@ -254,11 +288,83 @@ suppressPackageStartupMessages({
   any(grepl("^```\\{r", lines))
 }
 
-# Purls `qmd_path`'s R chunks to a temp file, parses it (no evaluation), and
-# returns the unique set of target names referenced via .CDF_READ_FN_NAMES.
-# Aborts if purl()/parse() itself fails, or if purl() extracts zero
-# expressions from a file that plainly has R chunks (see header comment).
-.cdf_extract_qmd_targets <- function(qmd_path) {
+# ---------------------------------------------------------------------------
+# Quarto {{< include >}} resolution (#695 follow-up -- knitr::purl() tangles
+# only the fenced chunks physically present in the file it is handed; it
+# does NOT resolve Quarto's `{{< include path.qmd >}}` shortcode, so a
+# tar_read() living inside an included file was previously invisible to both
+# Check 1 (dead references) and Check 3 (data staleness) -- silently, with
+# no error and no log line. Verified empirically 2026-08-20:
+# knitr::purl() on a synthetic parent.qmd containing only
+# `{{< include child.qmd >}}` (child.qmd has one fenced tar_read() chunk)
+# purls to a completely empty file -- zero expressions, and
+# .cdf_has_r_chunk_fence(parent.qmd) is FALSE (the fence lives in child.qmd,
+# not parent.qmd), so the old code took the SAME "legitimate empty page"
+# path as index.qmd and never flagged anything. This section closes that gap
+# by resolving each include directive to its target file and recursing the
+# SAME purl()+parse() extraction into it, per fail-loud-not-null.md: a
+# missing include target aborts, it is never silently skipped.
+# ---------------------------------------------------------------------------
+
+# Matches a Quarto include shortcode `{{< include PATH >}}`, where PATH is
+# either a bare unquoted token (no spaces/`>`) or a double-quoted string
+# (may contain spaces). Both forms are part of Quarto's shortcode grammar;
+# the one real usage in this repo today
+# (docs/macro-defense-rotation.qmd:710) is the unquoted form. This is
+# regex-on-raw-text, same category as .cdf_has_r_chunk_fence() above --
+# Quarto shortcodes are not knitr chunks and purl() never sees them, so
+# there is no purl()-based way to locate them. This is NOT the
+# tar_read-extraction regex the header comment's "EXTRACTION APPROACH"
+# section rules out -- that restriction is about resolving WHICH targets a
+# chunk reads (still purl()+parse()-only, unchanged below); this regex only
+# locates WHICH FILES to also purl().
+.CDF_INCLUDE_RE <- '\\{\\{<\\s*include\\s+(?:"([^"]+)"|([^\\s>]+))\\s*>\\}\\}'
+
+# Returns the raw (unresolved) include path string(s) found in `qmd_path`'s
+# text, in the order they appear, NOT deduplicated and NOT yet resolved to
+# absolute paths (path resolution happens in .cdf_resolve_include_path()).
+# character(0) if the file contains no include shortcode.
+.cdf_extract_include_paths <- function(qmd_path) {
+  text <- paste(readLines(qmd_path, warn = FALSE), collapse = "\n")
+  whole_matches <- regmatches(text, gregexpr(.CDF_INCLUDE_RE, text, perl = TRUE))[[1]]
+  if (length(whole_matches) == 0) {
+    return(character(0))
+  }
+  groups <- regmatches(whole_matches, regexec(.CDF_INCLUDE_RE, whole_matches, perl = TRUE))
+  vapply(groups, function(g) if (nzchar(g[2])) g[2] else g[3], character(1))
+}
+
+# Resolves `raw_path` (as it appeared in an include shortcode inside
+# `including_path`) to an absolute path, the way Quarto itself resolves
+# includes: relative to the directory of the file that CONTAINS the
+# directive (not relative to the top-level page being rendered, and not
+# relative to the repo root). Aborts if the resolved file does not exist --
+# per .claude/rules/fail-loud-not-null.md, a dead include target must stop
+# the check; it must never be silently treated as "nothing to extract here".
+.cdf_resolve_include_path <- function(raw_path, including_path) {
+  resolved <- file.path(dirname(including_path), raw_path)
+  resolved <- normalizePath(resolved, mustWork = FALSE)
+  if (!file.exists(resolved)) {
+    # NOTE: the message deliberately shows only `raw_path` (as written in the
+    # include directive) and basename(including_path) -- NEVER the resolved
+    # absolute path, which lives under a volatile tempdir in tests and would
+    # break snapshot portability across machines/CI runs (portable-build-artifacts).
+    cli::cli_abort(c(
+      "x" = "{.file {basename(including_path)}} includes {.file {raw_path}}, but that file does not exist.",
+      "i" = "Looked for it relative to {.file {basename(including_path)}}'s own directory (Quarto's include-resolution rule).",
+      "i" = "A dead include target fails at Quarto render time; fix the path or restore the file."
+    ))
+  }
+  resolved
+}
+
+# Purls a single file's R chunks to a temp file, parses it (no evaluation),
+# and returns the unique set of target names referenced via
+# .CDF_READ_FN_NAMES in THIS FILE ONLY (no include recursion -- that is
+# layered on by .cdf_extract_qmd_targets() below). Aborts if purl()/parse()
+# itself fails, or if purl() extracts zero expressions from a file that
+# plainly has R chunks (see header comment).
+.cdf_purl_and_extract <- function(qmd_path) {
   qmd_basename <- basename(qmd_path)
   tmp_dir <- tempfile("dashboard_freshness_")
   dir.create(tmp_dir)
@@ -298,6 +404,34 @@ suppressPackageStartupMessages({
   }
 
   .cdf_extract_read_targets(exprs, qmd_basename)
+}
+
+# Purls `qmd_path`'s own R chunks AND recurses into every file it reaches
+# via `{{< include >}}` (directly or transitively), returning the union of
+# target names referenced anywhere in that include tree. `visited` (a
+# character vector of already-processed absolute paths, internal use only)
+# guards against a circular include graph re-processing a file forever --
+# not expected in this repo today, but cheap to guard against structurally
+# rather than assume away.
+.cdf_extract_qmd_targets <- function(qmd_path, visited = character(0)) {
+  qmd_path <- normalizePath(qmd_path, mustWork = FALSE)
+  if (qmd_path %in% visited) {
+    return(character(0))
+  }
+  visited <- c(visited, qmd_path)
+
+  own_targets <- .cdf_purl_and_extract(qmd_path)
+
+  include_paths <- .cdf_extract_include_paths(qmd_path)
+  included_targets <- unlist(
+    lapply(include_paths, function(raw_path) {
+      resolved <- .cdf_resolve_include_path(raw_path, qmd_path)
+      .cdf_extract_qmd_targets(resolved, visited)
+    }),
+    use.names = FALSE
+  )
+
+  unique(c(own_targets, included_targets))
 }
 
 # Sorted docs/*.qmd paths under `docs_dir`.
