@@ -45,6 +45,13 @@ jobs:
             extra-substituters = https://rstats-on-nix.cachix.org
             extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
 
+      # Retry budget (both steps, #703): lychee's --retry-wait-time is a MINIMUM
+      # wait, applied with exponential backoff per retry (observed in the
+      # 2026-08-21 failing run: wait-time=2 + max-retries=3 produced retries at
+      # ~2s/4s/8s, total ~14s). retry-wait-time=5 with max-retries=3 gives
+      # ~5s/10s/20s = ~35s total budget per failing link, landing in the
+      # 30-60s region requested for riding out a momentary origin hiccup
+      # without letting a genuinely-dead link hang the job.
       - name: Lychee — in-repo HTML pre-deploy check
         if: github.event_name == 'push'
         run: |
@@ -54,7 +61,7 @@ jobs:
             --max-redirects 5 \
             --max-concurrency 8 \
             --max-retries 3 \
-            --retry-wait-time 2 \
+            --retry-wait-time 5 \
             --accept 200,206,403,429 \
             --output ./lychee-out.md \
             --format markdown \
@@ -62,6 +69,14 @@ jobs:
             './docs/**/*.qmd' \
             './*.md'
 
+      # --max-concurrency lowered to 2 for THIS step only (live crawl against a
+      # single host, johngavin.github.io). #703's failure was a single 503 on
+      # our own Pages origin among 455 checks against 9 seed pages fanning out
+      # to their assets — consistent with, but not proven to be, our own crawl
+      # rate-limiting the origin. This is a precaution against a SUSPECTED
+      # cause, not a confirmed one: if a future scheduled run still 503s
+      # despite the larger retry budget above, the rate-limit theory is wrong
+      # and the cause lies elsewhere (see PR body).
       - name: Lychee — live Pages crawl (scheduled / manual)
         if: github.event_name != 'push'
         run: |
@@ -69,13 +84,13 @@ jobs:
             --no-progress \
             --verbose \
             --max-redirects 5 \
-            --max-concurrency 8 \
+            --max-concurrency 2 \
             --max-retries 3 \
-            --retry-wait-time 2 \
+            --retry-wait-time 5 \
             --accept 200,206,403,429 \
             --output ./lychee-out.md \
             --format markdown \
-            --base 'https://johngavin.github.io/historical/' \
+            --base-url 'https://johngavin.github.io/historical/' \
             'https://johngavin.github.io/historical/' \
             'https://johngavin.github.io/historical/leaderboard.html' \
             'https://johngavin.github.io/historical/falsification.html' \
