@@ -59,10 +59,12 @@ source(here::here("R/plan_portfolio_opt.R"))
     frequency = c(
       "daily", "monthly", "monthly", "daily", "monthly", "daily",
       "monthly", "monthly", "monthly", "monthly",
-      "monthly", "monthly", "monthly", "monthly"
+      # #717: cmr (position 11) is daily, not monthly -- matches
+      # R/plan_strategy_names.R's corrected declaration.
+      "daily", "monthly", "monthly", "monthly"
     ),
     ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L,
-                   12L, 12L, 12L, 12L),
+                   252L, 12L, 12L, 12L),
     vignette_url = c(
       "avoid-worst-days.html", "drif.html", "factor-max.html",
       "leaderboard.html", "leaderboard.html", "turn-of-month.html",
@@ -199,12 +201,18 @@ test_that(".cmr_register_runs schema and row counts are stable", {
     max_dd_duration = c(12L, 10L, 9L)
   )
 
-  # portfolio_list: one tibble per lookback with net_ret column
-  n_months <- 48L
+  # portfolio_list: one tibble per lookback with net_ret column.
+  # #717: n = 300 daily obs (not 48 monthly) -- .cmr_register_runs() now
+  # calls hd_record_stability_metrics(w = 252L, ann_factor = 252L), so the
+  # fixture needs >= 252 rows for a complete rolling window; a shorter
+  # series produces 0 windows, which drops the NA-valued ssr/ssr_mean_sharpe/
+  # ssr_se/ssr_lag_nw rows in hd_metric_record() and desyncs the
+  # n_metric_rows snapshot below (< 8 stability rows instead of 8).
+  n_days <- 300L
   make_port <- function() {
     tibble::tibble(
-      date    = seq.Date(as.Date("2018-01-31"), by = "month", length.out = n_months),
-      net_ret = rnorm(n_months, -0.002, 0.04)
+      date    = seq.Date(as.Date("2018-01-02"), by = "day", length.out = n_days),
+      net_ret = rnorm(n_days, -0.0002, 0.01)
     )
   }
 
@@ -232,7 +240,7 @@ test_that(".cmr_register_runs schema and row counts are stable", {
   expect_equal(nrow(q$strat), 1L)
   expect_equal(q$strat$strategy_id, "cmr")
   expect_equal(q$strat$asset_class, "commodities")
-  expect_equal(q$strat$frequency, "monthly")
+  expect_equal(q$strat$frequency, "daily")  # #717
   expect_equal(q$strat$lifecycle, "stable")
 
   # bt.run: one row per partition (1m, 3m, 6m)

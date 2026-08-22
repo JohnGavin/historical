@@ -10,7 +10,13 @@
 # Signal at month t uses returns through t-1 only (look-ahead-safe).
 # Execution: signal at t -> trade at t+1 close (t+1 execution discipline).
 #
-# Data: monthly commodity prices (37 series, 1992-2026, ann_factor=12).
+# Data: 37-series commodity universe (1992-2026); #717: the merged universe
+#   is daily-dominated (ann_factor=252), not monthly (ann_factor=12) despite
+#   this file's "monthly"/lookback_months naming throughout -- see
+#   R/plan_commodities_mean_reversion.R's file header for the source
+#   evidence. `lookback_months` here counts unique dates in the merged
+#   universe (one row per date), not calendar months; cosmetic-only fix,
+#   left un-renamed per #720's note (shared with commodities_momentum.R).
 # Universe re-uses commodities_returns from plan_commodities_momentum.R.
 
 

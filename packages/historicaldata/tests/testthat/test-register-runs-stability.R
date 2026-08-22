@@ -75,8 +75,8 @@
     short_name              = "CMR",
     long_name               = "Commodities Mean Reversion",
     asset_class             = "commodities",
-    frequency               = "monthly",
-    ann_factor              = 12L,
+    frequency               = "daily",  # #717: matches R/plan_strategy_names.R
+    ann_factor              = 252L,
     directionality          = factor("long_short",
                                levels = c("long_only", "long_short",
                                           "market_neutral", "overlay")),
@@ -124,12 +124,20 @@
   )
 }
 
-.make_cmr_portfolio <- function(n = 100L) {
+.make_cmr_portfolio <- function(n = 300L) {
+  # #717: CMR's real return series is daily (~252 obs/year), not monthly --
+  # .cmr_register_runs() now calls hd_record_stability_metrics(w = 252L,
+  # ann_factor = 252L) to match. n = 300 gives 300 - 252 + 1 = 49 complete
+  # rolling windows, enough for hd_sharpe_stability_ratio() to return
+  # non-NA ssr/ssr_mean_sharpe/ssr_se -- the previous n = 100L (monthly-
+  # dated fixture, w = 36L pre-#717) is too short for a w = 252L window and
+  # produces < 8 stability rows (NA metric_value rows are dropped by
+  # hd_metric_record(), not written).
   set.seed(7L)
-  gross <- rnorm(n, 0, 0.04)
-  cost  <- rep(0.002, n)
+  gross <- rnorm(n, 0, 0.01)
+  cost  <- rep(0.0002, n)
   tibble::tibble(
-    date      = seq.Date(as.Date("2015-01-31"), by = "month", length.out = n),
+    date      = seq.Date(as.Date("2015-01-02"), by = "day", length.out = n),
     gross_ret = gross,
     cost      = cost,
     net_ret   = gross - cost,

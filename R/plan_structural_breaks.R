@@ -29,7 +29,7 @@
 #   xgb_drif_portfolio     — monthly XGB DRIF portfolio (col: port_ret)
 #   olmar_portfolio        — daily OLMAR-1 portfolio (col: net_ret)
 #   fals_tom_input         — daily TOM overlay (col: strategy_ret)
-#   fals_cmr_input         — monthly CMR 3m (col: strategy_ret)
+#   fals_cmr_input         — daily CMR 3m (col: strategy_ret; #717)
 #   mom_prepeak_returns    — monthly Mom Pre-Peak L/S (col: ret_ls, date: exec_date)
 #   mom_postpeak_returns   — monthly Mom Post-Peak L/S (col: ret_ls, date: exec_date)
 #   mom_combined_returns   — monthly Mom 12-2 L/S (col: ret_ls, date: exec_date)
@@ -134,7 +134,8 @@ plan_structural_breaks <- function() {
           `Risk State`    = extract_series(fals_rsc_input),
           # TOM is daily (fals_tom_input: date + strategy_ret)
           TOM             = extract_series(fals_tom_input),
-          # CMR is monthly (fals_cmr_input = cmr_returns_3m: date + strategy_ret)
+          # CMR is daily (#717; fals_cmr_input = cmr_returns_3m: date + strategy_ret,
+          # the raw net_ret series -- no monthly resampling despite the name)
           CMR             = extract_series(fals_cmr_input),
           # Mom strategies are monthly (exec_date + ret_ls)
           `Mom Pre-Peak`  = extract_series(mom_prepeak_returns,
@@ -158,7 +159,7 @@ plan_structural_breaks <- function() {
           `Avoid Worst`  = 252L,
           `Risk State`   = 252L,
           TOM            = 252L,
-          CMR            = 12L,
+          CMR            = 252L,  # #717: daily, not monthly
           `Mom Pre-Peak` = 12L,  `Mom Post-Peak` = 12L,
           `Mom 12-2`     = 12L
         )

@@ -82,7 +82,12 @@ plan_commodities_mean_reversion <- function() {
     }),
 
 
-    # ── Monthly net returns (thin wrappers for falsification bridge) ──────
+    # ── Daily net returns (thin wrappers for falsification bridge) ────────
+    # #717: these are the SAME net_ret column as cmr_portfolio_1m/3m/6m
+    # (one row per date, ~252 obs/year) with no monthly resampling -- despite
+    # the misleading name/comment this file previously carried. Consumers
+    # (plan_falsification.R, plan_structural_breaks.R) must use ann_factor/
+    # ppy = 252, not 12.
 
     targets::tar_target(cmr_returns_1m, {
       cmr_portfolio_1m |>
@@ -433,7 +438,14 @@ plan_commodities_mean_reversion <- function() {
     }
 
     # Record SSR + top5pct stability metrics (#400 PR 5/6).
-    # Monthly series: w = 36 rolling windows, ann_factor = 12.
+    # #717: CMR's returns are daily (see file header + .assert_cmr_ann_factor()
+    # above), not monthly. w = ann_factor = 252 matches every other daily
+    # strategy's call site (avoid_worst, turn_of_month, risk_state all pass
+    # w = 252L, ann_factor = 252L; the monthly strategies -- drif, factormax,
+    # ltr_momentum, xgb_signal, portfolio_opt, stock_backtest, mom_prepeak --
+    # all pass w = 36L, ann_factor = 12L). hd_record_stability_metrics()'s own
+    # @param w roxygen doc states this exact convention: "Typical choices: 252
+    # (daily) or 36 (monthly)."
     port <- portfolio_list[[p]]
     if (!is.null(port) && is.data.frame(port) && "net_ret" %in% names(port)) {
       rets <- port$net_ret
@@ -442,8 +454,8 @@ plan_commodities_mean_reversion <- function() {
           con        = con,
           run_uuid   = uu,
           returns    = rets,
-          w          = 36L,
-          ann_factor = 12L
+          w          = 252L,
+          ann_factor = 252L
         )
       }
     }

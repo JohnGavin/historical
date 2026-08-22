@@ -60,12 +60,14 @@ plan_strategy_names <- function() {
         frequency = c(
           "daily", "monthly", "monthly", "daily", "monthly", "daily",
           "monthly", "monthly", "monthly", "monthly",
-          "monthly",
+          # #717: cmr (position 11) is daily, not monthly -- the 37-series
+          # universe is 96% Yahoo daily futures/ETF rows (see #717/#720).
+          "daily",
           "monthly", "monthly", "monthly",
           "monthly",
           "monthly"
         ),
-        ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L, 12L,
+        ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L, 252L,
                        12L, 12L, 12L, 12L, 12L),
         vignette_url = c(
           "avoid-worst-days.html", "drif.html", "factor-max.html",
