@@ -110,9 +110,11 @@
 }
 
 .make_cmr_summary <- function() {
+  # Column is n_days, not n_months (#717: CMR's underlying data is daily,
+  # not monthly -- .compute_cmr_metrics() renamed the column at source).
   tibble::tibble(
     lookback        = c("1m", "3m", "6m"),
-    n_months        = c(100L, 98L, 95L),
+    n_days          = c(100L, 98L, 95L),
     sharpe          = c(-0.21, -0.18, -0.15),
     cagr            = c(-2.1, -1.8, -1.5),
     vol             = c(12.0, 11.5, 11.0),
