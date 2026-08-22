@@ -36,7 +36,16 @@
 #     manifest, no target extraction -- just `git log -1 --format=%ct`, ~30
 #     calls, measured well under a second. Runs in verify.sh full mode
 #     alongside Check 1 (kept together as one "dashboard freshness" report
-#     rather than splitting across --quick/full).
+#     rather than splitting across --quick/full). REDIRECT STUBS (#695
+#     follow-up) are excluded from this check's staleness verdict: a page
+#     whose entire content is "this page has moved" (see
+#     .cdf_is_redirect_stub() below) has its .qmd permanently postdate its
+#     .html, because nobody re-renders a redirect -- reporting that as STALE
+#     forever is not a real signal, it is noise that trains readers to stop
+#     reading the report. Exclusion is NEVER silent: every excluded page is
+#     still named in the output (per .claude/rules/fail-loud-not-null.md,
+#     "report, do not hide" -- filtering a real check's output must stay
+#     observable, or the filter itself becomes the next undetected defect).
 #   Check 3 (data staleness) -- for each docs/*.qmd, compare its page-render
 #     time (parsed from the committed .html's build_info() "Built" footer,
 #     falling back to the .html's own git commit date when no footer is
@@ -48,7 +57,15 @@
 #     is NOT part of verify.sh; it runs only under --data-staleness, called
 #     from scripts/build.sh after scripts/check_pipeline_errors.R, in the
 #     MAIN CHECKOUT ONLY (a worktree has no store and must not build one that
-#     could race the main checkout's -- see .claude/CLAUDE.md).
+#     could race the main checkout's -- see .claude/CLAUDE.md). Redirect
+#     stubs need NO explicit exclusion here (#695 follow-up): a stub purls to
+#     zero R expressions, so .cdf_collect_page_targets() maps it to
+#     character(0) referenced targets, and .cdf_check_data_staleness()
+#     already `next`s past any page with zero references -- a page that
+#     reads nothing cannot have stale data. This is structural (a
+#     consequence of stubs referencing no targets), not a name- or
+#     redirect-marker-based filter like Check 2's, so it needs no code
+#     change and no separate "excluded" report line.
 #
 # EXTRACTION APPROACH -- knitr::purl(), not regex on the .qmd text. This repo
 # spent a whole session (#691->#696) on the cost of fragile ad-hoc
@@ -286,6 +303,40 @@ suppressPackageStartupMessages({
 .cdf_has_r_chunk_fence <- function(qmd_path) {
   lines <- readLines(qmd_path, warn = FALSE)
   any(grepl("^```\\{r", lines))
+}
+
+# Matches the `<meta http-equiv="refresh" ...>` tag every redirect stub in
+# this repo carries (verified 2026-08-20 against drif.qmd, factor-max.qmd,
+# jst-dashboard.qmd, negative-results.qmd -- all four, identically).
+.CDF_REDIRECT_META_RE <- '<meta\\s+http-equiv="refresh"'
+
+# TRUE if `qmd_path` is a "redirect stub" page (#695 follow-up): its whole
+# purpose is to send a reader elsewhere, so its .qmd will ALWAYS postdate its
+# .html (nobody re-renders a page whose entire content is "this page has
+# moved") -- Check 2 (source-vs-render staleness) treats this as a real,
+# permanent, uninteresting signal and excludes it rather than reporting it as
+# STALE forever.
+#
+# Requires BOTH conditions, deliberately -- NOT ".cdf_has_r_chunk_fence() ==
+# FALSE" alone:
+#   1. No fenced R chunk (a real dashboard always has at least one).
+#   2. The actual redirect mechanism these pages use: a
+#      `<meta http-equiv="refresh" ...>` tag.
+# "No R chunks" alone is necessary but not sufficient. A hypothetical future
+# page with genuinely no R chunks and no redirect (e.g. a pure-prose landing
+# section) would be silently dropped from Check 2's staleness reporting by
+# the weaker test -- which is exactly the failure mode
+# .claude/rules/fail-loud-not-null.md exists to prevent: an exclusion rule
+# that is too loose turns a real staleness signal into a hidden one. Testing
+# for the meta-refresh tag -- the mechanism itself, not a name-based
+# allowlist on the four known stubs -- also means a FUTURE fifth stub of the
+# same shape is detected automatically, without editing this script.
+.cdf_is_redirect_stub <- function(qmd_path) {
+  if (.cdf_has_r_chunk_fence(qmd_path)) {
+    return(FALSE)
+  }
+  text <- paste(readLines(qmd_path, warn = FALSE), collapse = "\n")
+  grepl(.CDF_REDIRECT_META_RE, text, perl = TRUE)
 }
 
 # ---------------------------------------------------------------------------
@@ -541,13 +592,24 @@ suppressPackageStartupMessages({
 # Returns a named list: page basename -> gap in days (.qmd commit time minus
 # .html commit time) for every page whose .qmd is newer than its .html.
 # Pages with no git history for the .qmd, or no .html counterpart at all,
-# are reported separately by the caller (not silently dropped).
-.cdf_check_source_staleness <- function(qmd_files, repo_root) {
+# are reported separately by the caller (not silently dropped). Pages that
+# `is_stub_fn` identifies as redirect stubs (#695 follow-up) are excluded
+# from `stale`/`no_html`/`untracked` entirely and returned instead in
+# `excluded_stub` -- see .cdf_is_redirect_stub() for why. `excluded_stub` is
+# always returned, never silently dropped, so the caller can name every
+# excluded page: filtering a check's output must stay observable
+# (.claude/rules/fail-loud-not-null.md, "report, do not hide").
+.cdf_check_source_staleness <- function(qmd_files, repo_root, is_stub_fn = .cdf_is_redirect_stub) {
   stale <- list()
   no_html <- character(0)
   untracked <- character(0)
+  excluded_stub <- character(0)
   for (f in qmd_files) {
     base <- basename(f)
+    if (is_stub_fn(f)) {
+      excluded_stub <- c(excluded_stub, base)
+      next
+    }
     html_path <- sub("\\.qmd$", ".html", f)
     qmd_time <- .cdf_git_last_commit_time(f, repo_root)
     if (is.na(qmd_time)) {
@@ -567,7 +629,7 @@ suppressPackageStartupMessages({
       stale[[base]] <- as.numeric(difftime(qmd_time, html_time, units = "days"))
     }
   }
-  list(stale = stale, no_html = no_html, untracked = untracked)
+  list(stale = stale, no_html = no_html, untracked = untracked, excluded_stub = excluded_stub)
 }
 
 # ---------------------------------------------------------------------------
@@ -706,19 +768,26 @@ suppressPackageStartupMessages({
 
   cat("\n=== Check 2: source-vs-render staleness (git commit date, .qmd vs .html) ===\n")
   src_stale <- .cdf_check_source_staleness(qmd_files, repo_root)
+  if (length(src_stale$excluded_stub) > 0) {
+    cat(sprintf(
+      "  [STUB] excluded %d redirect stub page(s) -- no R chunks + <meta refresh> marker; their .qmd will always postdate their .html, so reporting them STALE forever is not a real signal: %s\n",
+      length(src_stale$excluded_stub), paste(src_stale$excluded_stub, collapse = ", ")
+    ))
+  }
   for (base in src_stale$untracked) {
     cat(sprintf("  [SKIP] %s -- not tracked by git; cannot assess staleness\n", base))
   }
   for (base in src_stale$no_html) {
     cat(sprintf("  [NO-HTML] %s -- no committed .html counterpart found\n", base))
   }
+  n_checked <- length(qmd_files) - length(src_stale$excluded_stub)
   if (length(src_stale$stale) == 0) {
     cat("PASS: no page's .qmd source is newer than its committed .html\n")
   } else {
     ordered <- names(src_stale$stale)[order(-unlist(src_stale$stale))]
     cat(sprintf(
       "STALE: %d of %d page(s) have .qmd source newer than their committed .html:\n",
-      length(src_stale$stale), length(qmd_files)
+      length(src_stale$stale), n_checked
     ))
     for (page in ordered) {
       cat(sprintf(

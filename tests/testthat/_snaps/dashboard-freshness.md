@@ -107,9 +107,17 @@
 ---
 
     Code
+      args(.cdf_is_redirect_stub)
+    Output
+      function (qmd_path) 
+      NULL
+
+---
+
+    Code
       args(.cdf_check_source_staleness)
     Output
-      function (qmd_files, repo_root) 
+      function (qmd_files, repo_root, is_stub_fn = .cdf_is_redirect_stub) 
       NULL
 
 ---
