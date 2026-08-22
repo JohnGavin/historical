@@ -67,7 +67,35 @@ if (nrow(x) < n_before) {
 
 A silent `return(NULL)` inside an `lapply()` is the single most common instance of this in `R/` — it removes a whole period from a series and leaves no trace.
 
-### 5. Add a QA gate, not just a test
+### 5. Guard where the value ENTERS, not only where it is used
+
+A correct guard on the wrong code path is silent. Validate at the point a value is
+**supplied**, not only at the point it is **consumed** — because the consuming path
+is frequently the harder one to reach, and a value supplied on a path that never
+consumes it escapes validation entirely.
+
+The tell: the guard lives inside an `if`, a mode flag, a command-line branch, or a
+target that only some runs build. Ask **"on which invocations does my guard not
+run, and can a bad value arrive on one of those?"** If yes, the guard is
+mis-placed, however correct its logic.
+
+| instance | guard was correct, but ran only… | so what escaped |
+|---|---|---|
+| #691 | when a registry writer executed | `error = "continue"` meant the writer errored silently for four commits; the guard never fired |
+| #693/#694 | when the extractor found a `tibble()` | a refactor to `data.frame()` returned `character(0)` and the check passed vacuously |
+| #710 | in `--data-staleness` mode, which needs a store | a malformed `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is silently ignored in default mode *and in CI* |
+
+All three were written to satisfy **this rule**, by someone who had read it, and
+all three left a hole one level up. That is the evidence that "add a guard" is not
+sufficient guidance on its own — placement is a separate decision from existence,
+and it is the one that keeps going wrong.
+
+Corollary for configuration: **if a variable is set, validate it — even if this
+code path ignores it.** Setting an environment variable is an expression of intent;
+silently ignoring a malformed one is the null-coercion this rule prohibits, applied
+to config instead of data.
+
+### 6. Add a QA gate, not just a test
 
 Every instance of this class that we fix gets a gate target in `R/plan_qa_gates.R` so it runs on every `tar_make()`, not only under `testthat`. A test proves the fix once; a gate stops the next occurrence. The gate must abort, and its `cli_abort` message needs `expect_snapshot(error = TRUE, ...)` coverage per `snapshot-test-policy`.
 
@@ -90,6 +118,8 @@ The gap this rule closes: **#640 (registry units) and #641 (join-key coverage) h
 | `filter(period == "Full Period")` against un-normalised upstream labels | A spelling variant becomes a dropped strategy | Compare against the shared vocabulary constant after normalising |
 | `if (length(y_train) < 200) return(NULL)` inside `lapply()` | Removes a whole month from the series with no signal | Count and `cli_warn` the dropped keys |
 | `isTRUE(as.logical(Sys.getenv("X")))` | `as.logical("1")` is `NA`, so the flag silently defaults off | Parse explicitly against `c("1","true","TRUE","yes")` |
+| A validator called only inside `if (mode)` / a branch / an optional target | The guard cannot fire on the paths that do not enter that branch, so a bad value supplied there is silently accepted | Validate where the value is supplied; see Required Pattern 5 |
+| `Sys.getenv("X")` read and validated only where `X` is used | A malformed value set on a path that ignores `X` is never reported — the user believes it took effect | Validate whenever the variable is non-empty, regardless of mode |
 | `suppressWarnings(as.numeric(x))` | Converts a parse failure into `NA` and hides it | Check `is.na()` after conversion and abort |
 | Fixing an instance with a test but no gate | The next instance is unguarded | Add the `R/plan_qa_gates.R` target |
 
@@ -101,6 +131,15 @@ Before merging any code that reads a value from another target, a database, an e
 
 If the answer is "produces a number", it is not finished.
 
+Then a second question, about the guard you just wrote:
+
+> On which invocations does this guard **not** run — and can a bad value arrive on
+> one of those?
+
+If it can, the guard is mis-placed however correct its logic. This second question
+is the one that keeps being skipped: #691, #694 and #710 all passed the first test
+and failed the second, in code written by people who had read this rule.
+
 ## Related
 
 - `.claude/rules/backtest-partitions.md` — the canonical partition vocabulary this rule protects
@@ -109,3 +148,4 @@ If the answer is "produces a number", it is not finished.
 - `data-glossary-and-entity-resolution` (global) — canonical units and canonical entity names are the same problem
 - `data-validation-timeseries` (global) — temporal-coverage checks belong in the pipeline as targets, not only in tests
 - [#637](https://github.com/JohnGavin/historical/issues/637), [#640](https://github.com/JohnGavin/historical/issues/640), [#641](https://github.com/JohnGavin/historical/issues/641), [#643](https://github.com/JohnGavin/historical/issues/643) — the four instances that motivated this rule
+- [#691](https://github.com/JohnGavin/historical/issues/691), [#693](https://github.com/JohnGavin/historical/issues/693), [#710](https://github.com/JohnGavin/historical/issues/710) — the three instances that motivated Required Pattern 5 (guard placement). All post-date the rule and were written in compliance with it, which is the point: existence and placement are separate decisions, and the rule previously governed only the first.
