@@ -246,6 +246,29 @@ jobs:
         with:
           ref: ${{ github.ref_name }}
 
+      # Fail in seconds, not after ~4 minutes of setup + build (#705). An
+      # empty HF_TOKEN keeps the existing graceful "not configured" path
+      # below untouched; a SET token that whoami-v2 rejects (expired,
+      # revoked, wrong scope) means the build that follows is wasted work —
+      # the parquet cannot be published either way, so stop before spending
+      # runner minutes on setup-r/apt-get/R-install/build_macro_daily.R.
+      - name: Preflight — validate HF_TOKEN before any build work
+        if: env.HF_TOKEN != ''
+        run: |
+          set -euo pipefail
+          # -o /dev/null: never capture/echo the response body just in case
+          # it ever changed shape to include anything sensitive. Only the
+          # HTTP status is inspected. -H passes the token but the value is
+          # masked by Actions' log redaction; no -v, no echo of $HF_TOKEN.
+          status=$(curl -s -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${HF_TOKEN}" \
+            https://huggingface.co/api/whoami-v2)
+          if [ "$status" != "200" ]; then
+            echo "::error::HF_TOKEN is invalid or expired — https://huggingface.co/api/whoami-v2 returned HTTP $status instead of 200. Publishing to HuggingFace would fail with this token, so failing now rather than after ~4 minutes of setup and build. Rotate it: (1) generate a new token with write access to JohnGavin/finance-data at https://huggingface.co/settings/tokens, (2) gh secret set HF_TOKEN --repo JohnGavin/historical."
+            exit 1
+          fi
+          echo "HF_TOKEN preflight OK — whoami-v2 returned 200."
+
       # The poll jobs commit their parquets during this same run, so the
       # checkout above predates them.
       - name: Pull the parquets the poll just committed
