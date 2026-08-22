@@ -625,6 +625,53 @@ test_that(".cdf_check_data_staleness cannot flag a redirect stub: end-to-end, a 
   expect_equal(result, list())
 })
 
+test_that(".cdf_force_utc_tzone relabels tzone without altering the underlying instant (#714)", {
+  local_time <- as.POSIXct("2026-01-01 12:00:00", tz = "America/New_York")
+  utc_labelled <- .cdf_force_utc_tzone(local_time)
+  expect_equal(attr(utc_labelled, "tzone"), "UTC")
+  # as.numeric() strips every attribute, leaving the raw epoch-seconds value
+  # -- proving the relabel changes only the `tzone` attribute (which governs
+  # print formatting), never the instant itself. (unclass() alone is NOT a
+  # valid check here: it strips only the `class` attribute, `tzone` is a
+  # separate, unrelated attribute unclass() leaves untouched.)
+  expect_equal(as.numeric(utc_labelled), as.numeric(local_time))
+})
+
+test_that(".cdf_check_data_staleness against a snapshot-style (explicit tz='UTC') meta_time emits ZERO tzone warnings and matches the live-store-style (no explicit tzone) answer (#714)", {
+  repo <- .make_scratch_git_repo()
+  html <- "<html><body><strong>Built</strong> 2026-01-01 00:00:00</body></html>"
+  qmd_path <- .commit_file_at(repo, "toy_dashboard.qmd", "source", "2026-01-01T00:00:00")
+  .commit_file_at(repo, "toy_dashboard.html", html, "2026-01-01T00:00:00")
+  page_targets <- list("toy_dashboard.qmd" = "some_target")
+
+  # "Live store"-style meta_time: no explicit tzone attribute, the shape
+  # targets::tar_meta() returns -- this is the path #714 confirmed never
+  # warned.
+  meta_time_live <- stats::setNames(
+    as.POSIXct("2026-01-05 00:00:00", tz = Sys.timezone()),
+    "some_target"
+  )
+  attr(meta_time_live, "tzone") <- NULL
+  result_live <- expect_no_warning(
+    .cdf_check_data_staleness(qmd_path, page_targets, meta_time_live, repo)
+  )
+
+  # "Snapshot"-style meta_time: explicit tz="UTC", exactly what
+  # .cdf_parse_snapshot_time() produces -- this is the path #714 found
+  # emitting ten 'tzone attributes are inconsistent' warnings.
+  meta_time_snapshot <- stats::setNames(
+    as.POSIXct("2026-01-05 00:00:00", tz = "UTC"),
+    "some_target"
+  )
+  result_snapshot <- expect_no_warning(
+    .cdf_check_data_staleness(qmd_path, page_targets, meta_time_snapshot, repo)
+  )
+
+  expect_equal(result_snapshot, result_live)
+  expect_equal(names(result_snapshot), "toy_dashboard.qmd")
+  expect_equal(result_snapshot[["toy_dashboard.qmd"]]$gap_hrs, 96, tolerance = 0.1)
+})
+
 test_that(".cdf_check_data_staleness surfaces unknown (never-built) references via note_fn without failing", {
   repo <- .make_scratch_git_repo()
   html <- paste0("<html><body><strong>Built</strong> 2026-01-01 00:00:00</body></html>")
@@ -685,6 +732,20 @@ test_that(".cdf_data_staleness_threshold_hours aborts informatively on an unpars
 test_that(".cdf_data_staleness_threshold_hours aborts informatively on a negative value", {
   withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = "-1"))
   expect_snapshot(error = TRUE, .cdf_data_staleness_threshold_hours())
+})
+
+test_that(".cdf_main aborts on a malformed HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS in DEFAULT mode, not only under --data-staleness (#710)", {
+  # Pins the #710 fix: .cdf_data_staleness_threshold_hours() validation now
+  # runs as literally the FIRST statement inside .cdf_main(), before
+  # docs_dir/repo_root are touched -- so this aborts before doing anything
+  # that needs a real repo, and repo_root need not point at a real checkout.
+  # Before the fix, this call ran clean (no output, no abort) because
+  # data_staleness = FALSE meant the validating call was never reached.
+  withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = "banana"))
+  expect_snapshot(
+    error = TRUE,
+    .cdf_main(data_staleness = FALSE, repo_root = "/nonexistent-repo-root-for-this-test")
+  )
 })
 
 test_that(".cdf_data_staleness_over_threshold does not flag a page whose gap is under the threshold", {

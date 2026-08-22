@@ -565,6 +565,30 @@ suppressPackageStartupMessages({
 # Shared helpers
 # ---------------------------------------------------------------------------
 
+# Forces a POSIXct vector's `tzone` attribute to "UTC" WITHOUT altering the
+# instant(s) it represents. POSIXct's underlying value is always epoch
+# seconds (timezone-independent); the `tzone` attribute only controls how the
+# value FORMATS for display, so reassigning it is a pure relabelling, never a
+# time shift -- `unclass()` of the result is identical to `unclass()` of the
+# input. Call this immediately before comparing/subtracting two POSIXct
+# values that may carry different EXPLICIT `tzone` attributes: R's
+# `Ops.POSIXt` (`>`, `<`, `==`, ...) and `difftime()` both route through
+# `.check_tzones()`, which warns ("'tzone' attributes are inconsistent")
+# whenever both operands carry a non-NULL `tzone` attribute and those
+# attributes differ -- even when the comparison is already numerically
+# correct (#714). Concretely: the committed metadata snapshot's times are
+# parsed with an explicit `tz = "UTC"` (.cdf_parse_snapshot_time()); a page's
+# render time is parsed with an explicit `tz = Sys.timezone()`
+# (.cdf_page_render_time()) -- comparing the two unmodified warns on every
+# snapshot-backed Check 3 run. `targets::tar_meta()`'s live-store times carry
+# NO explicit `tzone` attribute, which is why the live-store path never
+# warned: `.check_tzones()` only compares attributes that are actually
+# present, and a single explicit attribute plus a NULL one is not a mismatch.
+.cdf_force_utc_tzone <- function(t) {
+  attr(t, "tzone") <- "UTC"
+  t
+}
+
 # Parses an env var as a boolean flag against a fixed, explicit vocabulary --
 # NEVER `isTRUE(as.logical(Sys.getenv(...)))`: as.logical("1") is NA, not
 # TRUE, which would silently default the flag OFF. See
@@ -995,9 +1019,21 @@ suppressPackageStartupMessages({
     render <- .cdf_page_render_time(html_path, repo_root)
     if (is.na(render$time)) next
 
-    if (max_target_time > render$time) {
+    # Normalise both operands' `tzone` attribute to "UTC" before comparing --
+    # `max_target_time` may come from the committed snapshot (explicit
+    # tz="UTC") or a live store (no explicit tzone); `render$time` always
+    # carries an explicit tz=Sys.timezone(). Left unmodified, the snapshot
+    # path's mismatched explicit attributes make every comparison/difftime()
+    # below warn ("'tzone' attributes are inconsistent", #714) -- this does
+    # NOT change either value's underlying instant (see
+    # .cdf_force_utc_tzone()), so the comparison outcome and gap_hrs are
+    # unchanged, only the warning is gone.
+    max_target_time_utc <- .cdf_force_utc_tzone(max_target_time)
+    render_time_utc <- .cdf_force_utc_tzone(render$time)
+
+    if (max_target_time_utc > render_time_utc) {
       stale[[base]] <- list(
-        gap_hrs = as.numeric(difftime(max_target_time, render$time, units = "hours")),
+        gap_hrs = as.numeric(difftime(max_target_time_utc, render_time_utc, units = "hours")),
         source = render$source
       )
     }
@@ -1032,6 +1068,26 @@ suppressPackageStartupMessages({
 # with whatever status this function returns, since those are each their
 # own standalone process with nothing left to run afterward.
 .cdf_main <- function(data_staleness = FALSE, repo_root = here::here()) {
+  # Validate HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS whenever it is SET,
+  # unconditionally -- INDEPENDENT of `data_staleness` (#710). Previously
+  # this call lived only inside the `if (data_staleness)` branch far below
+  # (originally ~L938, now the Check 3 section), so a malformed value was
+  # silently ignored in the mode that is hardest to reach a real store from:
+  # default mode (Check 1 + Check 2 only), which is exactly what the weekly
+  # dashboard-freshness workflow and scripts/verify.sh both run. Setting the
+  # env var is an expression of intent regardless of which checks execute
+  # this session; per .claude/rules/fail-loud-not-null.md ("validate at
+  # every boundary, in both directions"), an unparseable or negative value
+  # must abort here too, not only when --data-staleness happens to also be
+  # passed. .cdf_data_staleness_threshold_hours() itself already no-ops
+  # (returns the default silently) when the var is unset -- see its own
+  # `nzchar(raw)` guard -- so this call is safe to make unconditionally; the
+  # return value is discarded here on purpose, this call exists solely for
+  # its validation side effect. Check 3 below still calls it again when it
+  # actually needs the parsed threshold, which is cheap and deterministic
+  # given the same env var.
+  .cdf_data_staleness_threshold_hours()
+
   docs_dir <- file.path(repo_root, "docs")
 
   cat("=== scripts/check_dashboard_freshness.R ===\n")
