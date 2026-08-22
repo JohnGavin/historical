@@ -74,6 +74,15 @@
       x `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is set to "-1", which is not a non-negative number of days.
       i Unset it to use the default (14 days), or set it to a non-negative number.
 
+# .cdf_main aborts on a malformed HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS in DEFAULT mode, not only under --data-staleness (#710)
+
+    Code
+      .cdf_main(data_staleness = FALSE, repo_root = "/nonexistent-repo-root-for-this-test")
+    Condition
+      Error in `.cdf_data_staleness_threshold_hours()`:
+      x `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is set to "banana", which is not a non-negative number of days.
+      i Unset it to use the default (14 days), or set it to a non-negative number.
+
 # .cdf_write_meta_snapshot aborts if a real target collides with the reserved sentinel name
 
     Code
