@@ -712,6 +712,198 @@ test_that(".cdf_data_staleness_over_threshold partitions a mix of under- and ove
   expect_equal(.cdf_data_staleness_over_threshold(data_stale, threshold_hrs = 14 * 24), "over.qmd")
 })
 
+# ── Metadata snapshot (#695 Check 3 CI gap) ─────────────────────────────────
+# .cdf_write_meta_snapshot() / .cdf_read_meta_snapshot() round-trip, plus the
+# malformed-file abort paths -- all against synthetic fixtures under
+# withr::local_tempdir(), FIXED basenames for snapshot portability
+# (portable-build-artifacts), no store or manifest needed.
+
+test_that(".cdf_meta_snapshot_path() joins the fixed relative path onto repo_root", {
+  expect_equal(
+    .cdf_meta_snapshot_path("/some/repo"),
+    file.path("/some/repo", "docs", "_targets_meta_snapshot.csv")
+  )
+})
+
+test_that(".cdf_write_meta_snapshot / .cdf_read_meta_snapshot round-trip target times and the generated_at row", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  meta_time <- stats::setNames(
+    as.POSIXct(c("2026-01-05 10:00:00", "2026-01-03 08:30:00"), tz = "UTC"),
+    c("target_b", "target_a")
+  )
+  generated_at <- as.POSIXct("2026-01-10 12:00:00", tz = "UTC")
+
+  .cdf_write_meta_snapshot(meta_time, snapshot_path, generated_at = generated_at)
+  expect_true(file.exists(snapshot_path))
+
+  snap <- .cdf_read_meta_snapshot(snapshot_path)
+  expect_equal(snap$generated_at, generated_at)
+  expect_equal(sort(names(snap$meta_time)), c("target_a", "target_b"))
+  expect_equal(unname(snap$meta_time["target_a"]), meta_time[["target_a"]])
+  expect_equal(unname(snap$meta_time["target_b"]), meta_time[["target_b"]])
+  # The sentinel row must never leak into meta_time as a "target".
+  expect_false(.CDF_META_SNAPSHOT_SENTINEL_NAME %in% names(snap$meta_time))
+})
+
+test_that(".cdf_write_meta_snapshot writes target rows sorted by name (deterministic diff)", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  meta_time <- stats::setNames(
+    as.POSIXct(c("2026-01-01 00:00:00", "2026-01-01 00:00:00", "2026-01-01 00:00:00"), tz = "UTC"),
+    c("zzz_target", "aaa_target", "mmm_target")
+  )
+  .cdf_write_meta_snapshot(meta_time, snapshot_path, generated_at = as.POSIXct("2026-01-01 00:00:00", tz = "UTC"))
+  raw <- readLines(snapshot_path)
+  # First data row (after the header) is the sentinel; the three target rows
+  # that follow must already be in sorted order.
+  target_name_lines <- raw[-1][-1] # drop header, drop sentinel row
+  written_names <- sub(",.*$", "", gsub('"', "", target_name_lines))
+  expect_equal(written_names, c("aaa_target", "mmm_target", "zzz_target"))
+})
+
+test_that(".cdf_write_meta_snapshot aborts if a real target collides with the reserved sentinel name", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  meta_time <- stats::setNames(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"), "__generated_at__")
+  expect_snapshot(error = TRUE, .cdf_write_meta_snapshot(meta_time, snapshot_path))
+})
+
+test_that(".cdf_read_meta_snapshot aborts informatively when the file does not exist", {
+  dir <- withr::local_tempdir()
+  missing_path <- file.path(dir, "toy_snapshot.csv")
+  expect_snapshot(error = TRUE, .cdf_read_meta_snapshot(missing_path))
+})
+
+test_that(".cdf_read_meta_snapshot aborts informatively on unexpected columns", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  writeLines(c("wrong,columns", "a,b"), snapshot_path)
+  expect_snapshot(error = TRUE, .cdf_read_meta_snapshot(snapshot_path))
+})
+
+test_that(".cdf_read_meta_snapshot aborts informatively when the sentinel row is missing", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  writeLines(c("name,time", "some_target,2026-01-01T00:00:00Z"), snapshot_path)
+  expect_snapshot(error = TRUE, .cdf_read_meta_snapshot(snapshot_path))
+})
+
+test_that(".cdf_read_meta_snapshot aborts informatively when the sentinel row is duplicated", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  writeLines(c(
+    "name,time",
+    "__generated_at__,2026-01-01T00:00:00Z",
+    "__generated_at__,2026-01-02T00:00:00Z"
+  ), snapshot_path)
+  expect_snapshot(error = TRUE, .cdf_read_meta_snapshot(snapshot_path))
+})
+
+test_that(".cdf_read_meta_snapshot aborts informatively on an unparseable generated_at value", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  writeLines(c("name,time", "__generated_at__,not-a-timestamp"), snapshot_path)
+  expect_snapshot(error = TRUE, .cdf_read_meta_snapshot(snapshot_path))
+})
+
+test_that(".cdf_meta_snapshot_age_hours computes elapsed hours between generated_at and now", {
+  generated_at <- as.POSIXct("2026-01-01 00:00:00", tz = "UTC")
+  now <- as.POSIXct("2026-01-03 12:00:00", tz = "UTC")
+  expect_equal(.cdf_meta_snapshot_age_hours(generated_at, now = now), 60)
+})
+
+# ── .cdf_check3_source_decision() (#695 Check 3 CI gap) ─────────────────────
+# The store-vs-snapshot-vs-too-old decision, factored out specifically so it
+# is testable without a real store or docs/_targets.R manifest -- see this
+# file's header comment on why .cdf_main() as a whole is not unit-tested
+# elsewhere. Covers exactly the four scenarios named in the #695 follow-up:
+# snapshot present and fresh, snapshot absent, snapshot over-age, and (the
+# priority case) a live store taking precedence over any snapshot state.
+
+test_that(".cdf_check3_source_decision prefers a live store over any snapshot state", {
+  dir <- withr::local_tempdir()
+  # Deliberately point at a snapshot path that does not even exist -- if the
+  # live-store branch is buggy and tries to read it anyway, this would error
+  # instead of silently passing.
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  result <- .cdf_check3_source_decision(store_exists = TRUE, snapshot_path, threshold_hrs = 14 * 24)
+  expect_equal(result$decision, "live")
+})
+
+test_that(".cdf_check3_source_decision reports no_source when there is no store and no snapshot file", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  result <- .cdf_check3_source_decision(store_exists = FALSE, snapshot_path, threshold_hrs = 14 * 24)
+  expect_equal(result$decision, "no_source")
+})
+
+test_that(".cdf_check3_source_decision uses a present, fresh snapshot and returns its meta_time", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  meta_time <- stats::setNames(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"), "some_target")
+  generated_at <- as.POSIXct("2026-01-05 00:00:00", tz = "UTC") # 4 days old
+  .cdf_write_meta_snapshot(meta_time, snapshot_path, generated_at = generated_at)
+
+  now <- as.POSIXct("2026-01-06 00:00:00", tz = "UTC") # snapshot is 1 day (24h) old at "now"
+  result <- .cdf_check3_source_decision(
+    store_exists = FALSE, snapshot_path,
+    threshold_hrs = 14 * 24, now = now
+  )
+  expect_equal(result$decision, "snapshot")
+  expect_equal(result$age_hrs, 24)
+  expect_equal(unname(result$meta_time["some_target"]), meta_time[["some_target"]])
+})
+
+test_that(".cdf_check3_source_decision flags an over-age snapshot as snapshot_too_old, not snapshot", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  meta_time <- stats::setNames(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"), "some_target")
+  generated_at <- as.POSIXct("2026-01-01 00:00:00", tz = "UTC")
+  .cdf_write_meta_snapshot(meta_time, snapshot_path, generated_at = generated_at)
+
+  now <- as.POSIXct("2026-01-20 00:00:00", tz = "UTC") # 19 days old, over the 14-day threshold
+  result <- .cdf_check3_source_decision(
+    store_exists = FALSE, snapshot_path,
+    threshold_hrs = 14 * 24, now = now
+  )
+  expect_equal(result$decision, "snapshot_too_old")
+  expect_equal(result$age_hrs, 19 * 24)
+  expect_null(result$meta_time)
+})
+
+test_that(".cdf_check3_source_decision is a strict >, not >=, at the age/threshold boundary", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  meta_time <- stats::setNames(as.POSIXct("2026-01-01 00:00:00", tz = "UTC"), "some_target")
+  generated_at <- as.POSIXct("2026-01-01 00:00:00", tz = "UTC")
+  .cdf_write_meta_snapshot(meta_time, snapshot_path, generated_at = generated_at)
+
+  now_at_boundary <- generated_at + (14 * 24 * 3600) # exactly 14 days
+  at_boundary <- .cdf_check3_source_decision(
+    store_exists = FALSE, snapshot_path,
+    threshold_hrs = 14 * 24, now = now_at_boundary
+  )
+  expect_equal(at_boundary$decision, "snapshot")
+
+  now_over_boundary <- generated_at + (14 * 24 * 3600) + 1 # one second over
+  over_boundary <- .cdf_check3_source_decision(
+    store_exists = FALSE, snapshot_path,
+    threshold_hrs = 14 * 24, now = now_over_boundary
+  )
+  expect_equal(over_boundary$decision, "snapshot_too_old")
+})
+
+test_that(".cdf_check3_source_decision propagates a malformed snapshot's error rather than treating it as no_source", {
+  dir <- withr::local_tempdir()
+  snapshot_path <- file.path(dir, "toy_snapshot.csv")
+  writeLines(c("name,time", "some_target,2026-01-01T00:00:00Z"), snapshot_path) # no sentinel row
+  expect_snapshot(
+    error = TRUE,
+    .cdf_check3_source_decision(store_exists = FALSE, snapshot_path, threshold_hrs = 14 * 24)
+  )
+})
+
 # ── Function signature stability (catches API drift, snapshot-test-policy.md) ──
 
 test_that("key .cdf_* function signatures are stable", {
@@ -729,4 +921,9 @@ test_that("key .cdf_* function signatures are stable", {
   expect_snapshot(args(.cdf_data_staleness_threshold_hours))
   expect_snapshot(args(.cdf_data_staleness_over_threshold))
   expect_snapshot(args(.cdf_main))
+  expect_snapshot(args(.cdf_meta_snapshot_path))
+  expect_snapshot(args(.cdf_write_meta_snapshot))
+  expect_snapshot(args(.cdf_read_meta_snapshot))
+  expect_snapshot(args(.cdf_meta_snapshot_age_hours))
+  expect_snapshot(args(.cdf_check3_source_decision))
 })

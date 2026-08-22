@@ -74,6 +74,71 @@
       x `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is set to "-1", which is not a non-negative number of days.
       i Unset it to use the default (14 days), or set it to a non-negative number.
 
+# .cdf_write_meta_snapshot aborts if a real target collides with the reserved sentinel name
+
+    Code
+      .cdf_write_meta_snapshot(meta_time, snapshot_path)
+    Condition
+      Error in `.cdf_write_meta_snapshot()`:
+      x A real target is named "__generated_at__", which collides with the metadata snapshot's reserved sentinel row name.
+      i Rename the target, or change .CDF_META_SNAPSHOT_SENTINEL_NAME in scripts/check_dashboard_freshness.R.
+
+# .cdf_read_meta_snapshot aborts informatively when the file does not exist
+
+    Code
+      .cdf_read_meta_snapshot(missing_path)
+    Condition
+      Error in `.cdf_read_meta_snapshot()`:
+      x Metadata snapshot not found at 'toy_snapshot.csv'.
+      i Run `scripts/build.sh` in the main checkout to generate one.
+
+# .cdf_read_meta_snapshot aborts informatively on unexpected columns
+
+    Code
+      .cdf_read_meta_snapshot(snapshot_path)
+    Condition
+      Error in `.cdf_read_meta_snapshot()`:
+      x Metadata snapshot at 'toy_snapshot.csv' does not have the expected `name,time` columns.
+      i Found columns: wrong, columns
+      i Regenerate it with `scripts/build.sh` rather than hand-editing.
+
+# .cdf_read_meta_snapshot aborts informatively when the sentinel row is missing
+
+    Code
+      .cdf_read_meta_snapshot(snapshot_path)
+    Condition
+      Error in `.cdf_read_meta_snapshot()`:
+      x Metadata snapshot at 'toy_snapshot.csv' has 0 "__generated_at__" row(s); expected exactly 1.
+      i The file is malformed -- regenerate it with `scripts/build.sh` rather than hand-editing.
+
+# .cdf_read_meta_snapshot aborts informatively when the sentinel row is duplicated
+
+    Code
+      .cdf_read_meta_snapshot(snapshot_path)
+    Condition
+      Error in `.cdf_read_meta_snapshot()`:
+      x Metadata snapshot at 'toy_snapshot.csv' has 2 "__generated_at__" row(s); expected exactly 1.
+      i The file is malformed -- regenerate it with `scripts/build.sh` rather than hand-editing.
+
+# .cdf_read_meta_snapshot aborts informatively on an unparseable generated_at value
+
+    Code
+      .cdf_read_meta_snapshot(snapshot_path)
+    Condition
+      Error in `.cdf_read_meta_snapshot()`:
+      x Metadata snapshot at 'toy_snapshot.csv' has an unparseable generated_at value: "not-a-timestamp"
+      i The file is malformed -- regenerate it with `scripts/build.sh` rather than hand-editing.
+
+# .cdf_check3_source_decision propagates a malformed snapshot's error rather than treating it as no_source
+
+    Code
+      .cdf_check3_source_decision(store_exists = FALSE, snapshot_path, threshold_hrs = 14 *
+        24)
+    Condition
+      Error in `.cdf_read_meta_snapshot()`:
+      x Metadata snapshot at 'toy_snapshot.csv' has 0 "__generated_at__" row(s); expected exactly 1.
+      i The file is malformed -- regenerate it with `scripts/build.sh` rather than hand-editing.
+
 # key .cdf_* function signatures are stable
 
     Code
@@ -184,5 +249,45 @@
       args(.cdf_main)
     Output
       function (data_staleness = FALSE, repo_root = here::here()) 
+      NULL
+
+---
+
+    Code
+      args(.cdf_meta_snapshot_path)
+    Output
+      function (repo_root) 
+      NULL
+
+---
+
+    Code
+      args(.cdf_write_meta_snapshot)
+    Output
+      function (meta_time, snapshot_path, generated_at = Sys.time()) 
+      NULL
+
+---
+
+    Code
+      args(.cdf_read_meta_snapshot)
+    Output
+      function (snapshot_path) 
+      NULL
+
+---
+
+    Code
+      args(.cdf_meta_snapshot_age_hours)
+    Output
+      function (generated_at, now = Sys.time()) 
+      NULL
+
+---
+
+    Code
+      args(.cdf_check3_source_decision)
+    Output
+      function (store_exists, snapshot_path, threshold_hrs, now = Sys.time()) 
       NULL
 

@@ -25,33 +25,52 @@ name: Dashboard freshness (weekly)
 # review + commit), not link-audit's usually-passive "the target link came
 # back" or "fix the URL".
 #
-# CHECK 3 (DATA STALENESS) DOES NOT RUN HERE, AND CANNOT WITH THIS DESIGN.
-# It needs a real targets store (targets::tar_meta() against docs/_targets),
-# and a GitHub Actions runner starts with none. Building one here to run
-# Check 3 would mean running tar_make() against docs/_targets.R on every
-# scheduled run (#695's issue: recent full builds took real wall-clock time,
-# well past sensible workflow budgets) AND would produce a store that is
-# NOT the main checkout's -- see .claude/CLAUDE.md and the worktree-location
-# rule for why a second, unofficial store must never race the canonical one.
-# scripts/build.sh already refuses to run from anything but the main
-# checkout for the same reason; a CI runner is never the main checkout. This
-# workflow therefore enforces Check 1 (dead target references, always a hard
-# failure) and Check 2 (source staleness, zero grace once
-# HD_FAIL_ON_STALE_DASHBOARDS is set) ONLY. The 14-day Check 3 threshold is
-# enforced solely by a human running `scripts/build.sh --render` in the main
-# checkout -- there is no CI equivalent today. Treat a green run here as "no
-# dead target references, no unpublished source edits" -- NOT as "all
-# dashboard data is fresh"; only `scripts/build.sh` (main checkout) proves
-# that.
+# CHECK 3 (DATA STALENESS) NOW RUNS HERE, VIA A COMMITTED SNAPSHOT (#695
+# Check 3 CI gap, closed). It still needs SOME source of tar_meta() build
+# times, and a GitHub Actions runner still starts with no store -- building
+# one here to run Check 3 would still mean running tar_make() against
+# docs/_targets.R on every scheduled run (real wall-clock cost, well past
+# sensible workflow budgets) AND would still produce a store that is NOT the
+# main checkout's (see .claude/CLAUDE.md and the worktree-location rule for
+# why a second, unofficial store must never race the canonical one; this is
+# still true and this workflow still never runs tar_make()).
 #
-# A theoretical way to close this gap without building a store: commit a
-# small, versioned snapshot of tar_meta()'s relevant build-time columns
-# (target name + time) as a build artifact whenever the main checkout runs
-# scripts/build.sh, then have this workflow diff render times against that
-# snapshot instead of a live store. Not implemented -- it adds a second
-# provenance surface to keep in sync with the real store and was judged out
-# of scope for this PR; left here as a description, not a proposal to
-# silently pursue later.
+# The fix instead is exactly the "theoretical way" this comment used to
+# describe as out of scope: scripts/build.sh, immediately after a clean
+# tar_make() + scripts/check_pipeline_errors.R (main checkout only), now
+# also runs scripts/write_targets_meta_snapshot.R, which writes a small,
+# deterministic, COMMITTABLE snapshot of every target's name + tar_meta()
+# build time to docs/_targets_meta_snapshot.csv. A human reviews and commits
+# that file the same way they already review and commit `--render` output --
+# scripts/build.sh never commits or pushes it itself.
+# scripts/check_dashboard_freshness.R's Check 3 section reads this
+# COMMITTED file (checked out here like any other repo file) whenever no
+# live store exists, which is unconditionally true on this runner -- see
+# that script's "Metadata snapshot" section header comment for the full
+# read/write design.
+#
+# THE SNAPSHOT'S OWN AGE IS ITSELF PART OF WHAT THIS WORKFLOW ENFORCES. If
+# nobody runs `scripts/build.sh` in the main checkout, docs/_targets_meta_snapshot.csv
+# freezes -- and a Check 3 that silently compared page render times against
+# arbitrarily old reference data would report "fresh" forever, exactly the
+# failure mode this whole policy exists to catch. So
+# check_dashboard_freshness.R treats a snapshot older than
+# HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS (the SAME threshold Check 3 uses
+# for ordinary data staleness) as UNTRUSTWORTHY: Check 3 does not run at all
+# in that case, and the step below fails (exit 2, not gated behind
+# HD_FAIL_ON_STALE_DASHBOARDS -- an untrustworthy data source is the same
+# class of failure as "no data source at all"). The failure message always
+# names `scripts/build.sh` as the fix, because the problem is never "the
+# check is broken", only "nobody ran the one command that refreshes this
+# file's reference data" -- the intended effect of enabling Check 3 here is
+# that this workflow now ALSO enforces "someone ran scripts/build.sh
+# recently enough", not just "no dead references, no unpublished source
+# edits".
+#
+# Treat a green run here as "no dead target references, no unpublished
+# source edits, AND no dashboard's own referenced data is stale beyond the
+# configured grace period, as of the last time a human ran `scripts/build.sh`
+# in the main checkout and committed its snapshot".
 
 on:
   schedule:
@@ -76,15 +95,21 @@ jobs:
             extra-substituters = https://rstats-on-nix.cachix.org
             extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
 
-      # Check 1 + Check 2 ONLY -- no store, no tar_make(). See header comment
-      # for why Check 3 (data staleness) cannot run here. HD_FAIL_ON_STALE_DASHBOARDS
-      # escalates Check 2 with zero grace; Check 1 (dead target references)
-      # is always a hard failure regardless of this env var.
-      - name: Check 1 (dead target refs) + Check 2 (source staleness, zero grace)
+      # Check 1 + Check 2 + Check 3 -- no store, no tar_make(). Check 3 (data
+      # staleness) now runs via the committed docs/_targets_meta_snapshot.csv
+      # fallback (--data-staleness); see header comment above and
+      # scripts/check_dashboard_freshness.R's "Metadata snapshot" section for
+      # the full design. HD_FAIL_ON_STALE_DASHBOARDS escalates Check 2 (zero
+      # grace) and Check 3 (HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS grace,
+      # default 14 days); Check 1 (dead target references) is always a hard
+      # failure regardless of this env var, and an over-age or missing
+      # snapshot is always a hard failure regardless of this env var too (see
+      # header comment).
+      - name: Check 1 (dead target refs) + Check 2 (source staleness) + Check 3 (data staleness, via snapshot)
         env:
           HD_FAIL_ON_STALE_DASHBOARDS: "1"
         run: |
-          nix develop --command Rscript scripts/check_dashboard_freshness.R \
+          nix develop --command Rscript scripts/check_dashboard_freshness.R --data-staleness \
             | tee ./dashboard-freshness-out.md
 
       - name: Upload report
