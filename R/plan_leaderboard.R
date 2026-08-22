@@ -54,6 +54,61 @@
 # and R/plan_partitions.R for why the two windows differ. See also:
 # R/plan_qa_gates.R `qa_leaderboard_period_vocab` -- the vocabulary gate that
 # asserts every row here uses an allowed label.
+#
+# ── Detection-power diagnostic periodicity (#711 Gap 1) ────────────────────
+# `historicaldata::hd_detection_power()` needs the TRUE periods-per-year of
+# each row's `months` observation count to convert `sharpe` (always
+# annualised, see above) into a per-period effect size. Naively assuming
+# ann_factor = 12 for every row would be WRONG for four strategies whose
+# `months` column actually holds a DAILY observation count (renamed at the
+# .norm_* boundary above, same pattern as the unit conversions -- see
+# `.norm_olmar()`, `.norm_tom()`, `.norm_aw()` comments): OLMAR-1, TOM, Risk
+# State, and Avoid Worst are all daily strategies. Guessing 12 for them would
+# understate the true per-period effect size by a factor of sqrt(252/12) ~=
+# 4.6, silently reporting a much larger `detection_min_n_years` than correct
+# -- exactly the fail-loud-not-null.md defect class (#637/#640/#641/#643)
+# this repo has hit four times already. STRATEGY_OBS_ANN_FACTOR is the
+# boundary-validation table instead: each strategy's periodicity, verified
+# against its own calc_metrics()/compute_*() annualisation (sqrt(12) vs
+# sqrt(252)) at the commit this table was authored against.
+#
+# `qa_leaderboard_detection_power_coverage` (R/plan_qa_gates.R, S19) aborts
+# the pipeline if a leaderboard strategy has no row here -- so a strategy
+# added later without updating this table fails loudly instead of silently
+# returning NA forever for the new diagnostic below.
+STRATEGY_OBS_ANN_FACTOR <- tibble::tibble(
+  strategy = c(
+    "Factor MAX", "Factor DRIF", "Stock MAX", "Stock DRIF", "XGB DRIF",
+    "LTR", "CMR", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2",
+    "Value (HML)", "Managed Futures", "PSO Optimal",
+    "OLMAR-1", "TOM", "Risk State", "Avoid Worst"
+  ),
+  obs_ann_factor = c(
+    12, 12, 12, 12, 12,
+    12, 12, 12, 12, 12,
+    12, 12, 12,
+    252, 252, 252, 252
+  ),
+  obs_ann_factor_source = c(
+    "R/plan_factormax.R (ann_vol <- sd(...) * sqrt(12))",
+    "R/plan_drif.R (ann_vol <- sd(...) * sqrt(12))",
+    "R/plan_stock_backtest.R (shared portfolio_longshort()/calc_backtest_metrics() helper, sqrt(12))",
+    "R/plan_stock_backtest.R (shared helper, same as Stock MAX)",
+    "R/plan_stock_backtest.R (shared helper, same as Stock MAX; XGB operates on the same monthly port_ret)",
+    "R/plan_ltr_momentum.R (ann_ret <- prod(1+port_ret)^(12/n) - 1)",
+    "R/plan_commodities_mean_reversion.R:14 ('Frequency: monthly (ann_factor = 12)')",
+    "packages/historicaldata/R/utils_mom_prepeak_metrics.R (ann_factor = 12L default)",
+    "packages/historicaldata/R/utils_mom_prepeak_metrics.R (shared helper, same as Mom Pre-Peak)",
+    "packages/historicaldata/R/utils_mom_prepeak_metrics.R (shared helper, same as Mom Pre-Peak)",
+    "R/plan_ev_ebit.R (vol <- sd(ret_vec) * sqrt(12) * 100)",
+    "R/plan_managed_futures.R (vol <- sd(ret_vec) * sqrt(12) * 100)",
+    "R/plan_portfolio_opt.R (ann_vol <- sd(port_ret) * sqrt(12))",
+    "This file's own .norm_olmar() comment ('daily ann_factor'); OLMAR (Li & Hoi 2012) rebalances daily",
+    "R/plan_turn_of_month.R:368 ('TOM is a daily strategy (sqrt(252) annualisation)')",
+    "R/plan_risk_state.R calc_metrics(periods_per_year = 252L default); rsc_metrics has no months/n_days column at all, so this row's `months` is always NA -- included for completeness/future-proofing",
+    "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())"
+  )
+)
 
 plan_leaderboard <- function() {
   list(
@@ -668,6 +723,62 @@ plan_leaderboard <- function() {
         all_metrics <- all_metrics |>
           left_join(strategy_cost_convention, by = "strategy")
       }
+
+      # ── Detection-power diagnostic (#711 Gap 1) ────────────────────────────
+      # "Is this row's sample long enough to detect the Sharpe it claims?"
+      # Computed PER ROW (not just Full Period, unlike the joins above) --
+      # this is deliberate: a short sub-period row (e.g. a 3-year Testing
+      # partition) is exactly the underpowered case #711 is about, and it
+      # would be invisible if this diagnostic only ran on Full Period.
+      #
+      # detection_min_n_years: minimum YEARS of data (not periods -- see
+      # STRATEGY_OBS_ANN_FACTOR comment above for why periods are not
+      # comparable across strategies of different periodicity) for 80% power
+      # to detect this row's own annualised `sharpe` at alpha = 0.05
+      # (historicaldata::hd_detection_power() defaults -- NOT the #711
+      # article's SNR=2/~2500-bar figures, which this repo deliberately does
+      # not port; see that function's roxygen "Derivation" section).
+      # detection_underpowered: TRUE if this row's actual sample (months /
+      # obs_ann_factor, in years) is below detection_min_n_years.
+      # Both are NA where sharpe/months/obs_ann_factor are unavailable, or
+      # where sharpe <= 0 (the underlying test is one-sided H1: SR > 0 --
+      # hd_detection_power() has no power calculation for a non-positive
+      # claimed effect, so "underpowered" is not a meaningful question for
+      # a strategy that isn't even claiming a positive edge in this row).
+      all_metrics <- all_metrics |>
+        dplyr::left_join(STRATEGY_OBS_ANN_FACTOR, by = "strategy")
+
+      .detection_diag_row <- function(sr, n, af) {
+        if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2) {
+          return(tibble::tibble(
+            detection_min_n_years  = NA_real_,
+            detection_underpowered = NA
+          ))
+        }
+        dp <- tryCatch(
+          historicaldata::hd_detection_power(sharpe_annual = sr, n_obs = n, ann_factor = af),
+          error = function(e) NULL
+        )
+        if (is.null(dp)) {
+          return(tibble::tibble(
+            detection_min_n_years  = NA_real_,
+            detection_underpowered = NA
+          ))
+        }
+        tibble::tibble(
+          detection_min_n_years  = dp$min_n_years,
+          detection_underpowered = dp$underpowered
+        )
+      }
+
+      detection_diag <- purrr::pmap_dfr(
+        list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor),
+        .detection_diag_row
+      )
+
+      all_metrics <- all_metrics |>
+        dplyr::bind_cols(detection_diag) |>
+        dplyr::select(-obs_ann_factor, -obs_ann_factor_source)
 
       all_metrics
     }),

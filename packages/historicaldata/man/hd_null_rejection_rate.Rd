@@ -35,6 +35,7 @@ implied by \code{alpha_level} under the standard normal.
 Other falsification: 
 \code{\link{hd_deflated_sharpe}()},
 \code{\link{hd_delta_z}()},
+\code{\link{hd_detection_power}()},
 \code{\link{hd_drawdown_overlap}()},
 \code{\link{hd_factor_null_test}()},
 \code{\link{hd_hac_sharpe}()},
