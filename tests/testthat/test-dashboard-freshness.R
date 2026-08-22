@@ -101,6 +101,56 @@ test_that(".cdf_has_r_chunk_fence is FALSE for a pure-prose page", {
   expect_false(.cdf_has_r_chunk_fence(file))
 })
 
+# ── .cdf_is_redirect_stub() (#695 follow-up) ────────────────────────────────
+# Requires BOTH no-R-chunk-fence AND the <meta http-equiv="refresh"> marker
+# -- see the function's own comment in check_dashboard_freshness.R for why
+# "no R chunks" alone is not used as the test.
+
+test_that(".cdf_is_redirect_stub is TRUE for a drif.qmd-style redirect stub", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Redirect stub", "---", "",
+    "> **This page has moved.**", "",
+    "Redirecting automatically…", "",
+    '<meta http-equiv="refresh" content="0; url=elsewhere.html">',
+    '<script>window.location.href = "elsewhere.html";</script>'
+  ), file)
+  expect_true(.cdf_is_redirect_stub(file))
+})
+
+test_that(".cdf_is_redirect_stub is FALSE for a page with no R chunks and no redirect marker (pins the #695 decision)", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Bare prose page", "---", "",
+    "Just prose, no chunks, and definitely no redirect to anywhere."
+  ), file)
+  expect_false(.cdf_has_r_chunk_fence(file)) # would wrongly qualify under the weaker test
+  expect_false(.cdf_is_redirect_stub(file))
+})
+
+test_that(".cdf_is_redirect_stub is FALSE for a page that has R chunks, even if it also carries a meta-refresh tag", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Not actually a stub", "---", "",
+    "```{r}", "1 + 1", "```", "",
+    '<meta http-equiv="refresh" content="30">'
+  ), file)
+  expect_false(.cdf_is_redirect_stub(file))
+})
+
+test_that(".cdf_is_redirect_stub is FALSE for a normal dashboard page (has chunks, no redirect marker)", {
+  dir <- withr::local_tempdir()
+  file <- file.path(dir, "toy_dashboard.qmd")
+  writeLines(c(
+    "---", "title: Real dashboard", "---", "",
+    "```{r}", 'a <- tar_read("some_target")', "```"
+  ), file)
+  expect_false(.cdf_is_redirect_stub(file))
+})
+
 # ── .cdf_extract_qmd_targets() ─────────────────────────────────────────────
 # End-to-end: knitr::purl() + parse() + .cdf_extract_read_targets(), against
 # small synthetic .qmd fixtures under a fixed basename.
@@ -441,6 +491,57 @@ test_that(".cdf_check_source_staleness reports an untracked .qmd separately from
   expect_equal(result$untracked, "toy_dashboard.qmd")
 })
 
+# ── .cdf_check_source_staleness() -- redirect stub exclusion (#695 follow-up) ──
+
+test_that(".cdf_check_source_staleness excludes a redirect stub from staleness, but names it in excluded_stub", {
+  repo <- .make_scratch_git_repo()
+  # Same shape as the real drif.qmd/factor-max.qmd/etc: old .html, much
+  # newer .qmd -- which would be flagged STALE under the pre-#695 logic.
+  .commit_file_at(repo, "toy_dashboard.html", "old render", "2026-01-01T00:00:00")
+  stub_content <- c(
+    "> **This page has moved.**",
+    '<meta http-equiv="refresh" content="0; url=elsewhere.html">'
+  )
+  .commit_file_at(repo, "toy_dashboard.qmd", stub_content, "2026-01-15T00:00:00")
+  result <- .cdf_check_source_staleness(file.path(repo, "toy_dashboard.qmd"), repo)
+  expect_equal(result$stale, list())
+  expect_equal(result$no_html, character(0))
+  expect_equal(result$untracked, character(0))
+  expect_equal(result$excluded_stub, "toy_dashboard.qmd")
+})
+
+test_that(".cdf_check_source_staleness excludes a stub while still flagging a genuinely stale real page alongside it", {
+  repo <- .make_scratch_git_repo()
+  .commit_file_at(repo, "toy_stub.html", "old render", "2026-01-01T00:00:00")
+  stub_content <- c(
+    "> **This page has moved.**",
+    '<meta http-equiv="refresh" content="0; url=elsewhere.html">'
+  )
+  .commit_file_at(repo, "toy_stub.qmd", stub_content, "2026-01-15T00:00:00")
+
+  .commit_file_at(repo, "toy_real.html", "old render", "2026-01-01T00:00:00")
+  .commit_file_at(repo, "toy_real.qmd", "```{r}\n1+1\n```", "2026-01-20T00:00:00")
+
+  result <- .cdf_check_source_staleness(
+    c(file.path(repo, "toy_stub.qmd"), file.path(repo, "toy_real.qmd")),
+    repo
+  )
+  expect_equal(result$excluded_stub, "toy_stub.qmd")
+  expect_equal(names(result$stale), "toy_real.qmd")
+})
+
+test_that(".cdf_check_source_staleness does NOT exclude a stale page with no R chunks and no redirect marker (pins the #695 decision)", {
+  repo <- .make_scratch_git_repo()
+  .commit_file_at(repo, "toy_dashboard.html", "old render", "2026-01-01T00:00:00")
+  # No R chunk fence, but also no redirect marker -- must be treated as a
+  # normal page, i.e. still reported STALE, not silently excluded.
+  .commit_file_at(repo, "toy_dashboard.qmd", "Just prose, no chunks, no redirect.", "2026-01-15T00:00:00")
+  result <- .cdf_check_source_staleness(file.path(repo, "toy_dashboard.qmd"), repo)
+  expect_equal(result$excluded_stub, character(0))
+  expect_equal(names(result$stale), "toy_dashboard.qmd")
+  expect_equal(result$stale[["toy_dashboard.qmd"]], 14, tolerance = 0.1)
+})
+
 # ── .cdf_page_render_time() ─────────────────────────────────────────────────
 
 test_that(".cdf_page_render_time reads the build_info() footer timestamp when present", {
@@ -497,6 +598,33 @@ test_that(".cdf_check_data_staleness skips pages with no referenced targets", {
   expect_equal(result, list())
 })
 
+test_that(".cdf_check_data_staleness cannot flag a redirect stub: end-to-end, a stub purls to zero targets and is therefore always skipped (#695 follow-up)", {
+  # Confirms Check 3 needs NO stub-specific exclusion logic: a stub's own
+  # .cdf_extract_qmd_targets() output feeds page_targets, and it is always
+  # character(0) (see .cdf_extract_qmd_targets 'redirect stub' test above),
+  # which .cdf_check_data_staleness() already `next`s past. This wires the
+  # real extractor's output into the check, rather than hand-constructing an
+  # empty page_targets entry as the generic test above does.
+  dir <- withr::local_tempdir()
+  stub_file <- file.path(dir, "toy_stub.qmd")
+  writeLines(c(
+    "> **This page has moved.**",
+    '<meta http-equiv="refresh" content="0; url=elsewhere.html">'
+  ), stub_file)
+  extracted <- .cdf_extract_qmd_targets(stub_file)
+  expect_equal(extracted, character(0))
+
+  repo <- .make_scratch_git_repo()
+  qmd_path <- .commit_file_at(repo, "toy_stub.qmd", "stub source", "2026-01-01T00:00:00")
+  page_targets <- list("toy_stub.qmd" = extracted)
+  # Even a target rebuilt long after any plausible render time cannot matter,
+  # because the stub references nothing -- there is no known_refs entry to
+  # compare against.
+  meta_time <- stats::setNames(as.POSIXct("2099-01-01", tz = Sys.timezone()), "unrelated_target")
+  result <- .cdf_check_data_staleness(qmd_path, page_targets, meta_time, repo)
+  expect_equal(result, list())
+})
+
 test_that(".cdf_check_data_staleness surfaces unknown (never-built) references via note_fn without failing", {
   repo <- .make_scratch_git_repo()
   html <- paste0("<html><body><strong>Built</strong> 2026-01-01 00:00:00</body></html>")
@@ -524,6 +652,7 @@ test_that("key .cdf_* function signatures are stable", {
   expect_snapshot(args(.cdf_resolve_include_path))
   expect_snapshot(args(.cdf_purl_and_extract))
   expect_snapshot(args(.cdf_check_dead_references))
+  expect_snapshot(args(.cdf_is_redirect_stub))
   expect_snapshot(args(.cdf_check_source_staleness))
   expect_snapshot(args(.cdf_check_data_staleness))
   expect_snapshot(args(.cdf_page_render_time))
