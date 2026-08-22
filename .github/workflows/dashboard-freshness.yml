@@ -1,0 +1,104 @@
+name: Dashboard freshness (weekly)
+
+# Enforcement half of #695's escalation policy. Detection has existed since
+# #698 (scripts/check_dashboard_freshness.R); nothing ran it on a schedule or
+# failed on it until this workflow. HD_FAIL_ON_STALE_DASHBOARDS escalates
+# Check 2 and Check 3 differently (see that script's own header comment,
+# section "ESCALATION POLICY", for the full rationale):
+#   - Check 2 (source staleness -- a page's .qmd committed newer than its own
+#     .html) gets ZERO grace: a human edited a page and it never reached
+#     readers, which is wrong the moment it happens.
+#   - Check 3 (data staleness -- the pipeline rebuilt after a page rendered)
+#     gets a configurable grace period, HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS
+#     (default 14 days). Measured 2026-08-22: two pages became data-stale
+#     within 45.9 hours of a routine tar_make() that touched none of their
+#     own source -- a zero-grace threshold there would be permanently red.
+#
+# WEEKLY, NOT DAILY: re-rendering a stale page is a ~20-minute human act
+# (#695's own evidence -- the 9 pages flagged when this policy was written
+# took ~20 minutes of wall clock to re-render). A daily nag would arrive
+# faster than anyone could reasonably act on it and would be muted within a
+# fortnight -- the same fate #695 itself documents for a check nobody reads.
+# Monday morning gives the whole working week to act on whatever the
+# previous week left stale, mirroring link-audit.yml's own daily cadence but
+# scaled to a check whose fix is a deliberate human action (re-render +
+# review + commit), not link-audit's usually-passive "the target link came
+# back" or "fix the URL".
+#
+# CHECK 3 (DATA STALENESS) DOES NOT RUN HERE, AND CANNOT WITH THIS DESIGN.
+# It needs a real targets store (targets::tar_meta() against docs/_targets),
+# and a GitHub Actions runner starts with none. Building one here to run
+# Check 3 would mean running tar_make() against docs/_targets.R on every
+# scheduled run (#695's issue: recent full builds took real wall-clock time,
+# well past sensible workflow budgets) AND would produce a store that is
+# NOT the main checkout's -- see .claude/CLAUDE.md and the worktree-location
+# rule for why a second, unofficial store must never race the canonical one.
+# scripts/build.sh already refuses to run from anything but the main
+# checkout for the same reason; a CI runner is never the main checkout. This
+# workflow therefore enforces Check 1 (dead target references, always a hard
+# failure) and Check 2 (source staleness, zero grace once
+# HD_FAIL_ON_STALE_DASHBOARDS is set) ONLY. The 14-day Check 3 threshold is
+# enforced solely by a human running `scripts/build.sh --render` in the main
+# checkout -- there is no CI equivalent today. Treat a green run here as "no
+# dead target references, no unpublished source edits" -- NOT as "all
+# dashboard data is fresh"; only `scripts/build.sh` (main checkout) proves
+# that.
+#
+# A theoretical way to close this gap without building a store: commit a
+# small, versioned snapshot of tar_meta()'s relevant build-time columns
+# (target name + time) as a build artifact whenever the main checkout runs
+# scripts/build.sh, then have this workflow diff render times against that
+# snapshot instead of a live store. Not implemented -- it adds a second
+# provenance surface to keep in sync with the real store and was judged out
+# of scope for this PR; left here as a description, not a proposal to
+# silently pursue later.
+
+on:
+  schedule:
+    - cron: '0 8 * * 1'      # weekly, Monday 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write               # to auto-file an issue on failure
+
+jobs:
+  dashboard-freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: DeterminateSystems/nix-installer-action@main
+        with:
+          extra-conf: |
+            trusted-users = root runner
+            extra-substituters = https://rstats-on-nix.cachix.org
+            extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
+
+      # Check 1 + Check 2 ONLY -- no store, no tar_make(). See header comment
+      # for why Check 3 (data staleness) cannot run here. HD_FAIL_ON_STALE_DASHBOARDS
+      # escalates Check 2 with zero grace; Check 1 (dead target references)
+      # is always a hard failure regardless of this env var.
+      - name: Check 1 (dead target refs) + Check 2 (source staleness, zero grace)
+        env:
+          HD_FAIL_ON_STALE_DASHBOARDS: "1"
+        run: |
+          nix develop --command Rscript scripts/check_dashboard_freshness.R \
+            | tee ./dashboard-freshness-out.md
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-freshness-output
+          path: ./dashboard-freshness-out.md
+          retention-days: 14
+
+      - name: Create issue on schedule failure
+        if: failure() && github.event_name == 'schedule'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "dashboard-freshness: dead reference or unpublished source edit detected"
+          content-filepath: ./dashboard-freshness-out.md
+          labels: bug, theme:infra, dashboard-freshness

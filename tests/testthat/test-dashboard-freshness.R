@@ -643,6 +643,75 @@ test_that(".cdf_check_data_staleness surfaces unknown (never-built) references v
   expect_equal(noted[["toy_dashboard.qmd"]], "never_built_target")
 })
 
+# ── Escalation policy (#695 rescope) ────────────────────────────────────────
+# Check 2 (source staleness) gets ZERO grace once HD_FAIL_ON_STALE_DASHBOARDS
+# is set; Check 3 (data staleness) gets a configurable grace period via
+# HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS (default 14 days). See this file's
+# "ESCALATION POLICY" header comment for the full rationale.
+
+test_that(".cdf_check_source_staleness flags a page stale even when the gap is a single hour (zero grace at the detection level, #695 rescope)", {
+  # There is no minimum-age parameter to .cdf_check_source_staleness() --
+  # unlike Check 3's threshold, ANY positive gap is reported stale. This pins
+  # that as a deliberate fact: Check 2 escalation (tested at the .cdf_main()
+  # driver level is impractical here -- it needs a real manifest/store, see
+  # this file's header comment on why .cdf_main() itself is not unit-tested)
+  # has nothing to gate on except "is `stale` non-empty", which this proves
+  # is true for even a tiny gap.
+  repo <- .make_scratch_git_repo()
+  .commit_file_at(repo, "toy_dashboard.html", "old render", "2026-01-01T00:00:00")
+  .commit_file_at(repo, "toy_dashboard.qmd", "```{r}\n1+1\n```", "2026-01-01T01:00:00")
+  result <- .cdf_check_source_staleness(file.path(repo, "toy_dashboard.qmd"), repo)
+  expect_equal(names(result$stale), "toy_dashboard.qmd")
+  expect_equal(result$stale[["toy_dashboard.qmd"]], 1 / 24, tolerance = 0.01)
+})
+
+test_that(".cdf_data_staleness_threshold_hours defaults to 14 days when the env var is unset", {
+  withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = NA))
+  expect_equal(.cdf_data_staleness_threshold_hours(), 14 * 24)
+})
+
+test_that(".cdf_data_staleness_threshold_hours honours HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS when set", {
+  withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = "7"))
+  expect_equal(.cdf_data_staleness_threshold_hours(), 7 * 24)
+  withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = "0"))
+  expect_equal(.cdf_data_staleness_threshold_hours(), 0)
+})
+
+test_that(".cdf_data_staleness_threshold_hours aborts informatively on an unparseable value (#695 rescope, fail-loud-not-null.md)", {
+  withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = "not-a-number"))
+  expect_snapshot(error = TRUE, .cdf_data_staleness_threshold_hours())
+})
+
+test_that(".cdf_data_staleness_threshold_hours aborts informatively on a negative value", {
+  withr::local_envvar(c(HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS = "-1"))
+  expect_snapshot(error = TRUE, .cdf_data_staleness_threshold_hours())
+})
+
+test_that(".cdf_data_staleness_over_threshold does not flag a page whose gap is under the threshold", {
+  data_stale <- list("toy_dashboard.qmd" = list(gap_hrs = 100, source = "build_info() footer"))
+  expect_equal(.cdf_data_staleness_over_threshold(data_stale, threshold_hrs = 14 * 24), character(0))
+})
+
+test_that(".cdf_data_staleness_over_threshold flags a page whose gap is over the threshold", {
+  data_stale <- list("toy_dashboard.qmd" = list(gap_hrs = 400, source = "build_info() footer"))
+  expect_equal(.cdf_data_staleness_over_threshold(data_stale, threshold_hrs = 14 * 24), "toy_dashboard.qmd")
+})
+
+test_that(".cdf_data_staleness_over_threshold is a strict >, not >=, at the boundary", {
+  data_stale <- list("toy_dashboard.qmd" = list(gap_hrs = 336, source = "build_info() footer"))
+  expect_equal(.cdf_data_staleness_over_threshold(data_stale, threshold_hrs = 336), character(0))
+  data_stale_over <- list("toy_dashboard.qmd" = list(gap_hrs = 336.1, source = "build_info() footer"))
+  expect_equal(.cdf_data_staleness_over_threshold(data_stale_over, threshold_hrs = 336), "toy_dashboard.qmd")
+})
+
+test_that(".cdf_data_staleness_over_threshold partitions a mix of under- and over-threshold pages correctly", {
+  data_stale <- list(
+    "under.qmd" = list(gap_hrs = 45.9, source = "build_info() footer"), # #695's own measured gap
+    "over.qmd"  = list(gap_hrs = 1524, source = "build_info() footer") # #695's own measured worst-case gap
+  )
+  expect_equal(.cdf_data_staleness_over_threshold(data_stale, threshold_hrs = 14 * 24), "over.qmd")
+})
+
 # ── Function signature stability (catches API drift, snapshot-test-policy.md) ──
 
 test_that("key .cdf_* function signatures are stable", {
@@ -657,5 +726,7 @@ test_that("key .cdf_* function signatures are stable", {
   expect_snapshot(args(.cdf_check_data_staleness))
   expect_snapshot(args(.cdf_page_render_time))
   expect_snapshot(args(.cdf_git_last_commit_time))
+  expect_snapshot(args(.cdf_data_staleness_threshold_hours))
+  expect_snapshot(args(.cdf_data_staleness_over_threshold))
   expect_snapshot(args(.cdf_main))
 })

@@ -176,10 +176,43 @@
 # non-regex alternative within knitr's public API) -- it is documented here,
 # at the one call site the gap affects, instead.
 #
+# ESCALATION POLICY (#695 rescope, decided 2026-08-22) -- Check 2 and Check 3
+# are DIFFERENT DEFECT CLASSES and get different grace periods, but a SINGLE
+# switch (HD_FAIL_ON_STALE_DASHBOARDS) turns escalation on for both, each
+# applying its own threshold:
+#   - Check 2 (source staleness -- a page's .qmd committed newer than its own
+#     .html) gets ZERO grace: a human edited a page and it never reached
+#     readers, which is unambiguously wrong the moment it happens, not after
+#     N days. Any amount of source staleness escalates once the switch is on.
+#   - Check 3 (data staleness -- the pipeline rebuilt after a page rendered)
+#     gets a configurable grace period, HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS
+#     (default 14 days, see .cdf_data_staleness_threshold_hours() below).
+#     Data staleness is the NORMAL consequence of any rebuild, not a mistake:
+#     measured 2026-08-22, two pages (falsification.qmd, european-overlay.qmd)
+#     became data-stale within 45.9 hours of a routine tar_make() run that
+#     touched none of their own source. A zero-grace threshold here would be
+#     permanently red days after every build, and a permanently red check is
+#     one nobody reads (exactly the failure mode the redirect-stub exclusion
+#     above was already added to prevent, applied to a second cause).
+#
+# ONE SWITCH, NOT TWO, is the deliberate choice here (over separate
+# HD_FAIL_ON_STALE_SOURCE / HD_FAIL_ON_STALE_DATA switches): the two checks
+# already answer two different questions with two different, independently
+# tunable thresholds (Check 2's is fixed at zero; Check 3's is
+# HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS) -- adding a second on/off switch on
+# top would let someone configure "escalate data staleness but not source
+# staleness," which is backwards: source staleness is the more clear-cut
+# defect of the two and should never be the one left unescalated. Fewer knobs
+# also means fewer states to reason about when reading a CI failure. The
+# counter-argument -- a project might genuinely want Check 3 enforcement
+# (e.g. in the new weekly workflow) without Check 2 enforcement, or vice
+# versa, and a single switch cannot express that -- is real, but no caller of
+# this script has needed that split yet; add a second switch if one does.
+#
 # EXIT CODES:
 #   0  ran clean: no dead target references (Check 1 -- ALWAYS a hard
 #      failure when found, see below), and no staleness escalated to a
-#      failure (see HD_FAIL_ON_STALE_DASHBOARDS below).
+#      failure (see the ESCALATION POLICY section above).
 #   1  a real problem was found and treated as a failure:
 #        - Check 1 always fails the run when it finds a dead reference --
 #          confirmed today: zero instances, so this does not turn a green
@@ -187,16 +220,19 @@
 #          the live leaderboard is missing two merged features precisely
 #          because nothing else in the repo detects it), not a style
 #          preference, so it is not gated behind an opt-in flag.
-#        - Check 2/Check 3 staleness is REPORTED but does NOT fail the run
-#          by default -- ~8 of 15 dashboards are stale RIGHT NOW (#695's own
-#          evidence), so defaulting staleness to a hard failure would turn
-#          verify.sh/build.sh red on main until #695's separate re-render PR
-#          lands. Set HD_FAIL_ON_STALE_DASHBOARDS=1 (any of "1"/"true"/"yes",
+#        - Check 2 (source staleness) and Check 3 (data staleness) are both
+#          REPORTED but do NOT fail the run by default -- ~8 of 15 dashboards
+#          were stale under one measure or the other when this script
+#          shipped (#695's own evidence), so defaulting staleness to a hard
+#          failure would turn verify.sh/build.sh red on main until the
+#          re-render half of #695 landed (it has -- see #702). Set
+#          HD_FAIL_ON_STALE_DASHBOARDS=1 (any of "1"/"true"/"yes",
 #          case-insensitive -- see .cdf_env_flag_true(), which exists
 #          specifically because `isTRUE(as.logical(Sys.getenv(...)))` is a
 #          known footgun: as.logical("1") is NA, not TRUE, per
-#          .claude/rules/fail-loud-not-null.md) to escalate staleness to a
-#          hard failure once the re-render half of #695 is done. This is the
+#          .claude/rules/fail-loud-not-null.md) to escalate: Check 2 always
+#          (zero grace) and Check 3 once a page's gap exceeds
+#          HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS (default 14). This is the
 #          explicit, documented escalation path -- not an unwritten
 #          intention.
 #   2  could not run the check(s) at all: knitr::purl()/parse() failed or
@@ -209,11 +245,19 @@
 #     scripts/verify.sh's full mode calls, but embedded via source() into
 #     its existing Rscript process rather than spawned as a second process
 #     (see the cost note above) -- run this file directly only for a
-#     standalone/manual check.
+#     standalone/manual check. This is ALSO the only mode a CI runner can use
+#     (no store -- see .github/workflows/dashboard-freshness.yml, which runs
+#     this mode weekly with HD_FAIL_ON_STALE_DASHBOARDS=1 and therefore
+#     enforces Check 1 + Check 2 only; it CANNOT enforce Check 3, see that
+#     workflow's header comment).
 #   nix develop --command Rscript scripts/check_dashboard_freshness.R --data-staleness
 #     Additionally runs Check 3. MAIN CHECKOUT ONLY in practice (needs a
 #     real docs/_targets store) -- this is what scripts/build.sh calls,
-#     after scripts/check_pipeline_errors.R.
+#     after scripts/check_pipeline_errors.R. There is currently no CI
+#     equivalent (see .github/workflows/dashboard-freshness.yml's header
+#     comment for why); the HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS grace
+#     period is therefore enforced only when a human (or a future CI job that
+#     solves the store problem) runs this locally.
 #
 # This file is also source()'d directly by
 # tests/testthat/test-dashboard-freshness.R to unit-test the extractor
@@ -513,6 +557,49 @@ suppressPackageStartupMessages({
   tolower(val) %in% c("1", "true", "yes")
 }
 
+# Default grace period (days) for Check 3 (data staleness) before it
+# escalates to a hard failure under HD_FAIL_ON_STALE_DASHBOARDS=1 -- see the
+# "ESCALATION POLICY" section in this file's header comment for the full
+# rationale (a rebuild is the normal consequence of the pipeline moving on;
+# Check 2/source staleness gets NO such grace period).
+.CDF_DEFAULT_DATA_STALENESS_THRESHOLD_DAYS <- 14
+
+# Reads HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS, defaulting to
+# .CDF_DEFAULT_DATA_STALENESS_THRESHOLD_DAYS days, and returns it in HOURS
+# (the unit .cdf_check_data_staleness() already reports gaps in, via
+# gap_hrs). Aborts loudly -- never silently falls back to the default -- on a
+# set-but-unparseable or negative value, per
+# .claude/rules/fail-loud-not-null.md: a misconfigured threshold must stop
+# the run, not silently mask the misconfiguration with a value nobody chose.
+.cdf_data_staleness_threshold_hours <- function() {
+  var_name <- "HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS"
+  raw <- Sys.getenv(var_name, unset = "")
+  if (!nzchar(raw)) {
+    return(.CDF_DEFAULT_DATA_STALENESS_THRESHOLD_DAYS * 24)
+  }
+  days <- suppressWarnings(as.numeric(raw))
+  if (is.na(days) || days < 0) {
+    default_days <- .CDF_DEFAULT_DATA_STALENESS_THRESHOLD_DAYS
+    cli::cli_abort(c(
+      "x" = "{.envvar {var_name}} is set to {.val {raw}}, which is not a non-negative number of days.",
+      "i" = "Unset it to use the default ({.val {default_days}} days), or set it to a non-negative number."
+    ))
+  }
+  days * 24
+}
+
+# Returns the subset of `data_stale`'s page names whose gap_hrs exceeds
+# `threshold_hrs`. Pure logic, no I/O -- factored out from the driver so it
+# can be unit-tested directly against a synthetic `data_stale` list (#695
+# rescope: "data staleness under the threshold does not fail; data staleness
+# over the threshold does"), rather than only indirectly through a full
+# .cdf_main() run (which needs a real manifest/store and is not unit-tested
+# elsewhere in this file either). `data_stale` is shaped like
+# .cdf_check_data_staleness()'s return value: page basename -> list(gap_hrs=, source=).
+.cdf_data_staleness_over_threshold <- function(data_stale, threshold_hrs) {
+  names(data_stale)[vapply(data_stale, function(d) d$gap_hrs > threshold_hrs, logical(1))]
+}
+
 # Last commit time (POSIXct, seconds resolution) of `abs_path` under
 # `repo_root`, via `git log -1 --format=%ct` (committer date, unix epoch --
 # avoids ISO-8601 timezone-offset parsing entirely). Returns NA (POSIXct) if
@@ -796,11 +883,11 @@ suppressPackageStartupMessages({
       ))
     }
     if (.cdf_env_flag_true("HD_FAIL_ON_STALE_DASHBOARDS")) {
-      cat("HD_FAIL_ON_STALE_DASHBOARDS is set -- treating source staleness as a hard failure.\n")
+      cat("HD_FAIL_ON_STALE_DASHBOARDS is set -- treating source staleness as a hard failure (zero grace period; see script header \"ESCALATION POLICY\").\n")
       overall_status <- 1
     } else {
       cat("NOTE: staleness is reported but does NOT fail this run by default (see script header for rationale).\n")
-      cat("      Set HD_FAIL_ON_STALE_DASHBOARDS=1 to escalate this to a hard failure.\n")
+      cat("      Set HD_FAIL_ON_STALE_DASHBOARDS=1 to escalate this to a hard failure (zero grace -- any source staleness escalates).\n")
     }
   }
 
@@ -848,12 +935,28 @@ suppressPackageStartupMessages({
           page, d$gap_hrs, d$source
         ))
       }
+      threshold_hrs <- .cdf_data_staleness_threshold_hours()
+      threshold_days <- threshold_hrs / 24
+      over_threshold <- .cdf_data_staleness_over_threshold(data_stale, threshold_hrs)
       if (.cdf_env_flag_true("HD_FAIL_ON_STALE_DASHBOARDS")) {
-        cat("HD_FAIL_ON_STALE_DASHBOARDS is set -- treating data staleness as a hard failure.\n")
-        overall_status <- 1
+        if (length(over_threshold) > 0) {
+          cat(sprintf(
+            "HD_FAIL_ON_STALE_DASHBOARDS is set -- %d of %d stale page(s) exceed the %.0f-day data-staleness grace period (HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS), treating as a hard failure: %s\n",
+            length(over_threshold), length(data_stale), threshold_days, paste(over_threshold, collapse = ", ")
+          ))
+          overall_status <- 1
+        } else {
+          cat(sprintf(
+            "HD_FAIL_ON_STALE_DASHBOARDS is set, but all %d stale page(s) are within the %.0f-day data-staleness grace period -- not escalating.\n",
+            length(data_stale), threshold_days
+          ))
+        }
       } else {
         cat("NOTE: data staleness is reported but does NOT fail this run by default (see script header for rationale).\n")
-        cat("      Set HD_FAIL_ON_STALE_DASHBOARDS=1 to escalate this to a hard failure.\n")
+        cat(sprintf(
+          "      Set HD_FAIL_ON_STALE_DASHBOARDS=1 to escalate page(s) past the %.0f-day grace period (HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS) to a hard failure.\n",
+          threshold_days
+        ))
       }
     }
   }
