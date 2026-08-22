@@ -28,6 +28,21 @@
 # script, which need no store -- see that script header comment for the
 # full three-check design).
 #
+# STEP 2.5 / metadata snapshot (#695 Check 3 CI gap): immediately after a
+# clean Step 1 + Step 2, this script also writes
+# docs/_targets_meta_snapshot.csv via scripts/write_targets_meta_snapshot.R
+# -- a small, deterministic, committable copy of every target's tar_meta()
+# build time. .github/workflows/dashboard-freshness.yml reads this file as
+# its ONLY source for Check 3 (a CI runner never has a store); see that
+# script and scripts/check_dashboard_freshness.R's "Metadata snapshot"
+# section header comment for the full design, including why the snapshot's
+# own age is itself a hard-failure signal in CI. Deliberately gated on Step
+# 1 + Step 2 being clean (NOT on Step 3's DASHBOARD_STATUS, which is
+# informational staleness reporting, unrelated to whether the underlying
+# build times are trustworthy) -- a snapshot taken from a store with errored
+# targets would encode wrong build times for whatever failed. Like --render
+# below, this step never commits or pushes what it writes.
+#
 # STEP 4 / --render (#695): closes the OTHER half of #695. Step 3 above only
 # DETECTS stale dashboards -- nothing republishes them. GitHub Pages serves
 # whatever .html is committed to main:/docs directly (no render-on-deploy
@@ -78,14 +93,17 @@
 #      With --render: additionally, every page Step 4 rendered did so
 #      cleanly (see exit code 3 below for the alternative).
 #   1  the build RAN but reported a problem: one or more targets errored
-#      (per check_pipeline_errors.R), a dead target reference or escalated
-#      staleness (per check_dashboard_freshness.R), and/or tar_make() itself
-#      exited non-zero (a crashed build still leaves a store worth
-#      inspecting, so Steps 2 and 3 always run -- see below -- but a
-#      non-zero tar_make() exit is never silently treated as a pass even
-#      when the store it left behind happens to read clean). With --render:
-#      also covers the build being too dirty to render at all -- Step 4 is
-#      skipped (not attempted) and says so; the render never even starts.
+#      (per check_pipeline_errors.R), the metadata snapshot could not be
+#      written (per write_targets_meta_snapshot.R -- #695 Check 3 CI gap; see
+#      Step 2.5 above), a dead target reference or escalated staleness (per
+#      check_dashboard_freshness.R), and/or tar_make() itself exited
+#      non-zero (a crashed build still leaves a store worth inspecting, so
+#      Steps 2, 2.5, and 3 always run when Steps 1 + 2 permit -- see below --
+#      but a non-zero tar_make() exit is never silently treated as a pass
+#      even when the store it left behind happens to read clean). With
+#      --render: also covers the build being too dirty to render at all --
+#      Step 4 is skipped (not attempted) and says so; the render never even
+#      starts.
 #   2  the build did NOT run at all: wrong location (not the main checkout,
 #      or run from a linked worktree), the nix shell itself could not be
 #      entered (pre-flight check below), check_pipeline_errors.R could not
@@ -218,6 +236,26 @@ echo "--- check_pipeline_errors.R exited $CHECK_STATUS ---"
 echo ""
 
 # ---------------------------------------------------------------------------
+# Step 2.5: scripts/write_targets_meta_snapshot.R (#695 Check 3 CI gap). See
+# the header comment above for why this is gated on Step 1 + Step 2 only,
+# and why it never commits/pushes.
+# ---------------------------------------------------------------------------
+SNAPSHOT_STATUS=0
+if [[ "$TAR_MAKE_STATUS" -eq 0 ]] && [[ "$CHECK_STATUS" -eq 0 ]]; then
+  echo "--- Step 2.5: scripts/write_targets_meta_snapshot.R (#695 Check 3 CI gap) ---"
+  set +e
+  nix develop "$REPO_ROOT" --command Rscript scripts/write_targets_meta_snapshot.R
+  SNAPSHOT_STATUS=$?
+  set -e
+  echo "--- write_targets_meta_snapshot.R exited $SNAPSHOT_STATUS ---"
+  echo ""
+else
+  echo "--- Step 2.5: skipping metadata snapshot write -- build not clean (tar_make() exit $TAR_MAKE_STATUS, check_pipeline_errors.R exit $CHECK_STATUS) ---"
+  echo "!!! A snapshot from a store with errored targets would encode wrong build times -- not writing one. !!!"
+  echo ""
+fi
+
+# ---------------------------------------------------------------------------
 # Step 3: scripts/check_dashboard_freshness.R --data-staleness (#695). Runs
 # UNCONDITIONALLY, same reasoning as Step 2: a crashed or partially-errored
 # tar_make() (docs/_targets.R sets error = "continue" project-wide) still
@@ -254,6 +292,7 @@ echo ""
 echo "=== scripts/build.sh: summary ==="
 echo "tar_make() exit code:                              $TAR_MAKE_STATUS"
 echo "check_pipeline_errors.R exit code:                 $CHECK_STATUS"
+echo "write_targets_meta_snapshot.R exit code:           $SNAPSHOT_STATUS"
 echo "check_dashboard_freshness.R --data-staleness exit: $DASHBOARD_STATUS"
 echo ""
 
@@ -369,10 +408,15 @@ if [[ "$RENDER" == "true" ]]; then
   fi
 fi
 
-if [[ "$TAR_MAKE_STATUS" -ne 0 ]] || [[ "$CHECK_STATUS" -ne 0 ]] || [[ "$DASHBOARD_STATUS" -ne 0 ]]; then
+if [[ "$TAR_MAKE_STATUS" -ne 0 ]] || [[ "$CHECK_STATUS" -ne 0 ]] || [[ "$SNAPSHOT_STATUS" -ne 0 ]] || [[ "$DASHBOARD_STATUS" -ne 0 ]]; then
   echo "=== scripts/build.sh: FAIL ==="
   if [[ "$CHECK_STATUS" -ne 0 ]]; then
     echo "One or more targets errored -- see the [ERROR] list above."
+  fi
+  if [[ "$SNAPSHOT_STATUS" -ne 0 ]]; then
+    echo "write_targets_meta_snapshot.R failed to write docs/_targets_meta_snapshot.csv"
+    echo "-- see its output above (#695 Check 3 CI gap). CI's Check 3 relies entirely on"
+    echo "this committed file; a build that can't produce it leaves that gap open again."
   fi
   if [[ "$DASHBOARD_STATUS" -ne 0 ]]; then
     echo "Dashboard freshness found a problem -- see the [DEAD-REF]/[STALE]/[DATA-STALE]"

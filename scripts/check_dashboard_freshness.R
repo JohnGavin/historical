@@ -53,19 +53,26 @@
 #     against the newest targets::tar_meta() build time among the SPECIFIC
 #     targets that page reads (not the store's global newest time -- that
 #     would mark every page stale the instant anything rebuilds, defeating
-#     the point of per-page restriction). Needs a REAL targets store, so it
-#     is NOT part of verify.sh; it runs only under --data-staleness, called
-#     from scripts/build.sh after scripts/check_pipeline_errors.R, in the
-#     MAIN CHECKOUT ONLY (a worktree has no store and must not build one that
-#     could race the main checkout's -- see .claude/CLAUDE.md). Redirect
-#     stubs need NO explicit exclusion here (#695 follow-up): a stub purls to
-#     zero R expressions, so .cdf_collect_page_targets() maps it to
-#     character(0) referenced targets, and .cdf_check_data_staleness()
-#     already `next`s past any page with zero references -- a page that
-#     reads nothing cannot have stale data. This is structural (a
-#     consequence of stubs referencing no targets), not a name- or
-#     redirect-marker-based filter like Check 2's, so it needs no code
-#     change and no separate "excluded" report line.
+#     the point of per-page restriction). Needs target build times from
+#     EITHER a REAL targets store OR the committed
+#     docs/_targets_meta_snapshot.csv fallback (#695 Check 3 CI gap -- see
+#     the "Metadata snapshot" section below for the full design). It is NOT
+#     part of verify.sh (both sources are more expensive/stateful than
+#     verify.sh's no-store contract); it runs only under --data-staleness,
+#     from TWO callers: scripts/build.sh (MAIN CHECKOUT ONLY, after
+#     scripts/check_pipeline_errors.R, always uses the live store -- a
+#     worktree has no store and must not build one that could race the main
+#     checkout's, see .claude/CLAUDE.md) and
+#     .github/workflows/dashboard-freshness.yml (CI, no store ever exists on
+#     a runner, always uses the committed snapshot). Redirect stubs need NO
+#     explicit exclusion here (#695 follow-up): a stub purls to zero R
+#     expressions, so .cdf_collect_page_targets() maps it to character(0)
+#     referenced targets, and .cdf_check_data_staleness() already `next`s
+#     past any page with zero references -- a page that reads nothing cannot
+#     have stale data. This is structural (a consequence of stubs
+#     referencing no targets), not a name- or redirect-marker-based filter
+#     like Check 2's, so it needs no code change and no separate "excluded"
+#     report line.
 #
 # EXTRACTION APPROACH -- knitr::purl(), not regex on the .qmd text. This repo
 # spent a whole session (#691->#696) on the cost of fragile ad-hoc
@@ -237,7 +244,12 @@
 #          intention.
 #   2  could not run the check(s) at all: knitr::purl()/parse() failed or
 #      found a broken extraction, targets::tar_manifest()/tar_meta() failed,
-#      or (--data-staleness only) no store was found. NOT a pass.
+#      or (--data-staleness only) neither a live store nor the committed
+#      docs/_targets_meta_snapshot.csv fallback was available, OR the
+#      snapshot exists but is older than HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS
+#      itself (see "Metadata snapshot" section below -- a snapshot that old
+#      cannot support a Check 3 verdict at all, so it is treated the same as
+#      "no data source found", never as a pass). NOT a pass.
 #
 # Usage:
 #   nix develop --command Rscript scripts/check_dashboard_freshness.R
@@ -245,19 +257,25 @@
 #     scripts/verify.sh's full mode calls, but embedded via source() into
 #     its existing Rscript process rather than spawned as a second process
 #     (see the cost note above) -- run this file directly only for a
-#     standalone/manual check. This is ALSO the only mode a CI runner can use
-#     (no store -- see .github/workflows/dashboard-freshness.yml, which runs
-#     this mode weekly with HD_FAIL_ON_STALE_DASHBOARDS=1 and therefore
-#     enforces Check 1 + Check 2 only; it CANNOT enforce Check 3, see that
-#     workflow's header comment).
+#     standalone/manual check.
 #   nix develop --command Rscript scripts/check_dashboard_freshness.R --data-staleness
-#     Additionally runs Check 3. MAIN CHECKOUT ONLY in practice (needs a
-#     real docs/_targets store) -- this is what scripts/build.sh calls,
-#     after scripts/check_pipeline_errors.R. There is currently no CI
-#     equivalent (see .github/workflows/dashboard-freshness.yml's header
-#     comment for why); the HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS grace
-#     period is therefore enforced only when a human (or a future CI job that
-#     solves the store problem) runs this locally.
+#     Additionally runs Check 3. Two callers, two data sources, both
+#     documented on the same command:
+#       - scripts/build.sh (MAIN CHECKOUT ONLY, after
+#         scripts/check_pipeline_errors.R): a real docs/_targets store always
+#         exists at that point, so Check 3 always uses live tar_meta() data
+#         here -- unchanged from before the #695 Check 3 CI gap fix.
+#       - .github/workflows/dashboard-freshness.yml (CI, weekly + manual
+#         dispatch, HD_FAIL_ON_STALE_DASHBOARDS=1): a GitHub Actions runner
+#         never has a store, so Check 3 here always falls back to the
+#         committed docs/_targets_meta_snapshot.csv (written by
+#         scripts/write_targets_meta_snapshot.R, called from scripts/build.sh
+#         after a clean build, and committed by a human -- see that script
+#         and the "Metadata snapshot" section below). If the snapshot is
+#         missing or older than HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS, this
+#         is a hard failure (exit 2) naming `scripts/build.sh` as the fix --
+#         see "THE SNAPSHOT'S OWN AGE IS A FIRST-CLASS, CHECKABLE SIGNAL"
+#         below for why this is not merely a warning.
 #
 # This file is also source()'d directly by
 # tests/testthat/test-dashboard-freshness.R to unit-test the extractor
@@ -720,7 +738,239 @@ suppressPackageStartupMessages({
 }
 
 # ---------------------------------------------------------------------------
-# Check 3 -- data staleness (needs a real store)
+# Metadata snapshot -- committed docs/_targets_meta_snapshot.csv (#695 Check 3
+# CI gap). A GitHub Actions runner never has a real targets store (see the
+# "MAIN CHECKOUT ONLY" note on Check 3 below), so Check 3 could not run in CI
+# at all until now. The fix: scripts/write_targets_meta_snapshot.R (invoked
+# by scripts/build.sh, main checkout only, after a clean tar_make() +
+# check_pipeline_errors.R) writes a small, deterministic, COMMITTED snapshot
+# of every target's name + tar_meta() build time. .cdf_main()'s Check 3
+# section below reads this file as a fallback when no live store exists --
+# see "WHICH SOURCE DID CHECK 3 USE" further down.
+#
+# FORMAT -- one flat CSV, `name,time`, written by .cdf_write_meta_snapshot()
+# and read back by .cdf_read_meta_snapshot():
+#   - Real target rows are sorted by name (method = "radix", so the row
+#     order never depends on the writing machine's locale -- a meaningful,
+#     non-churny git diff on every re-generation, per the Part 1 requirement
+#     that the diff be deterministic).
+#   - `time` is ISO-8601 UTC (.cdf_format_snapshot_time() /
+#     .cdf_parse_snapshot_time()), so a round-trip through the file never
+#     depends on the writer's or reader's local timezone
+#     (.claude/rules/portable-build-artifacts.md).
+#   - ONE extra row, name = .CDF_META_SNAPSHOT_SENTINEL_NAME
+#     ("__generated_at__"), records when the snapshot itself was written.
+#     See .cdf_write_meta_snapshot()'s own comment for why this is a sentinel
+#     ROW in the same table rather than a `#`-prefixed header comment line or
+#     a second file.
+#
+# THE SNAPSHOT'S OWN AGE IS A FIRST-CLASS, CHECKABLE SIGNAL (Part 2 of the
+# #695 Check 3 CI gap follow-up) -- this is the part of the design that
+# matters most. If nobody re-runs scripts/build.sh, this file freezes; a
+# Check 3 that silently compared render times against an arbitrarily old
+# snapshot would report "fresh" forever, which is exactly the defect class
+# this repo has spent the week on (#680, #691, #695: a check that reports
+# success because its own reference data stopped moving). So
+# .cdf_main() treats a snapshot whose age (.cdf_meta_snapshot_age_hours())
+# exceeds .cdf_data_staleness_threshold_hours() -- the SAME
+# HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS threshold Check 3 itself uses to
+# decide whether data staleness is tolerable, deliberately reused rather than
+# adding a second, independently-tunable knob (mirrors the "ONE SWITCH, NOT
+# TWO" reasoning in the ESCALATION POLICY section above) -- as UNTRUSTWORTHY:
+# a snapshot that old cannot support a freshness verdict within the very
+# grace period it is being asked to police. This is a HARD FAILURE (exit
+# code 2, "could not run the check(s) at all"), not a warning and NOT gated
+# behind HD_FAIL_ON_STALE_DASHBOARDS -- the same treatment already given to
+# "no store found at all" (see the pre-existing `!dir.exists(store_path)`
+# branch this replaces): an untrustworthy data source means Check 3 cannot
+# run, full stop, exactly like a missing store always has. Making it merely
+# a WARNING would recreate the precise failure mode being fixed here: a
+# green Check 3 that is actually reporting on month-old data. The message
+# always names the fix (`scripts/build.sh`), because the failure is never
+# "something is broken", only "nobody ran the one command that updates this".
+# ---------------------------------------------------------------------------
+
+.CDF_META_SNAPSHOT_RELPATH <- file.path("docs", "_targets_meta_snapshot.csv")
+
+.CDF_META_SNAPSHOT_SENTINEL_NAME <- "__generated_at__"
+
+# Absolute path to the committed snapshot under `repo_root`.
+.cdf_meta_snapshot_path <- function(repo_root) {
+  file.path(repo_root, .CDF_META_SNAPSHOT_RELPATH)
+}
+
+# ISO-8601 UTC formatting/parsing shared by write + read -- see "FORMAT"
+# above for why UTC specifically.
+.cdf_format_snapshot_time <- function(t) {
+  format(t, "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+}
+.cdf_parse_snapshot_time <- function(s) {
+  as.POSIXct(s, format = "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
+}
+
+# Writes `meta_time` (a named POSIXct vector, name -> build time, typically
+# straight from targets::tar_meta(fields = time, targets_only = TRUE)) to
+# `snapshot_path` as a small, deterministic CSV -- see the "Metadata
+# snapshot" section header above for the full file-format rationale.
+# `generated_at` defaults to Sys.time(); the real caller,
+# scripts/write_targets_meta_snapshot.R, always passes the actual write time
+# explicitly so a test can pin it.
+#
+# WHY A SENTINEL ROW, NOT A SEPARATE FILE OR A `#`-PREFIXED HEADER COMMENT:
+# keeps the ENTIRE file one flat table read by ONE read.csv() call (no second
+# parser path grepping a comment line out of the file), while still letting
+# .cdf_read_meta_snapshot() recover the generation timestamp from the same
+# read. "__generated_at__" cannot collide with a real target name in
+# practice (targets requires syntactically valid R symbol names;
+# double-leading/trailing-underscore names are not used anywhere in this
+# repo's pipeline) -- this function still aborts loudly rather than silently
+# overwriting/hiding a same-named real target, per
+# .claude/rules/fail-loud-not-null.md.
+.cdf_write_meta_snapshot <- function(meta_time, snapshot_path, generated_at = Sys.time()) {
+  target_names <- names(meta_time)
+  # sentinel_name (NOT the leading-dot constant directly) is interpolated
+  # below -- cli's glue parser treats a `{...}` expression starting with a
+  # dot as an attempted (invalid) nested style span, not a variable
+  # reference, so `{.val {.CDF_META_SNAPSHOT_SENTINEL_NAME}}` errors with
+  # "Invalid cli literal ... starts with a dot" instead of the intended
+  # abort message (caught by this file's own test suite -- see
+  # .cdf_write_meta_snapshot's sentinel-collision test).
+  sentinel_name <- .CDF_META_SNAPSHOT_SENTINEL_NAME
+  if (sentinel_name %in% target_names) {
+    cli::cli_abort(c(
+      "x" = "A real target is named {.val {sentinel_name}}, which collides with the metadata snapshot's reserved sentinel row name.",
+      "i" = "Rename the target, or change .CDF_META_SNAPSHOT_SENTINEL_NAME in scripts/check_dashboard_freshness.R."
+    ))
+  }
+  ordered_names <- sort(target_names, method = "radix")
+  rows <- data.frame(
+    name = c(.CDF_META_SNAPSHOT_SENTINEL_NAME, ordered_names),
+    time = c(
+      .cdf_format_snapshot_time(generated_at),
+      .cdf_format_snapshot_time(meta_time[ordered_names])
+    ),
+    stringsAsFactors = FALSE
+  )
+  dir.create(dirname(snapshot_path), recursive = TRUE, showWarnings = FALSE)
+  utils::write.csv(rows, snapshot_path, row.names = FALSE)
+  invisible(snapshot_path)
+}
+
+# Reads `snapshot_path` back into list(meta_time = <named POSIXct vector,
+# sentinel row excluded>, generated_at = <POSIXct>). Aborts loudly -- never
+# returns a partial/NA result -- on a missing file, a missing/duplicated
+# sentinel row, or an unparseable generated_at value, per
+# .claude/rules/fail-loud-not-null.md: a snapshot this function cannot fully
+# trust must stop the check, never be silently treated as "no data" or
+# "assume it's fine".
+.cdf_read_meta_snapshot <- function(snapshot_path) {
+  # basename only, NEVER the resolved absolute path, in every cli_abort()
+  # below -- same discipline as .cdf_resolve_include_path()'s own comment:
+  # the absolute path lives under a volatile tempdir in tests and would
+  # break snapshot portability across machines/CI runs
+  # (portable-build-artifacts).
+  snapshot_basename <- basename(snapshot_path)
+  if (!file.exists(snapshot_path)) {
+    cli::cli_abort(c(
+      "x" = "Metadata snapshot not found at {.file {snapshot_basename}}.",
+      "i" = "Run {.code scripts/build.sh} in the main checkout to generate one."
+    ))
+  }
+  rows <- tryCatch(
+    utils::read.csv(snapshot_path, colClasses = "character", stringsAsFactors = FALSE),
+    error = function(e) {
+      cli::cli_abort(c(
+        "x" = "Failed to read metadata snapshot at {.file {snapshot_basename}}.",
+        "i" = conditionMessage(e)
+      ))
+    }
+  )
+  if (!identical(names(rows), c("name", "time"))) {
+    cli::cli_abort(c(
+      "x" = "Metadata snapshot at {.file {snapshot_basename}} does not have the expected {.code name,time} columns.",
+      "i" = "Found columns: {paste(names(rows), collapse = ', ')}",
+      "i" = "Regenerate it with {.code scripts/build.sh} rather than hand-editing."
+    ))
+  }
+  # sentinel_name, not the leading-dot constant directly, is interpolated
+  # below -- see .cdf_write_meta_snapshot()'s equivalent comment for why.
+  sentinel_name <- .CDF_META_SNAPSHOT_SENTINEL_NAME
+  sentinel_rows <- rows[rows$name == sentinel_name, , drop = FALSE]
+  if (nrow(sentinel_rows) != 1) {
+    cli::cli_abort(c(
+      "x" = "Metadata snapshot at {.file {snapshot_basename}} has {nrow(sentinel_rows)} {.val {sentinel_name}} row(s); expected exactly 1.",
+      "i" = "The file is malformed -- regenerate it with {.code scripts/build.sh} rather than hand-editing."
+    ))
+  }
+  generated_at <- .cdf_parse_snapshot_time(sentinel_rows$time[1])
+  if (is.na(generated_at)) {
+    cli::cli_abort(c(
+      "x" = "Metadata snapshot at {.file {snapshot_basename}} has an unparseable generated_at value: {.val {sentinel_rows$time[1]}}",
+      "i" = "The file is malformed -- regenerate it with {.code scripts/build.sh} rather than hand-editing."
+    ))
+  }
+  target_rows <- rows[rows$name != .CDF_META_SNAPSHOT_SENTINEL_NAME, , drop = FALSE]
+  meta_time <- .cdf_parse_snapshot_time(target_rows$time)
+  names(meta_time) <- target_rows$name
+  list(meta_time = meta_time, generated_at = generated_at)
+}
+
+# Hours elapsed between `generated_at` (the snapshot's own sentinel
+# timestamp) and `now` (defaults to Sys.time()) -- factored out as pure
+# arithmetic, no file I/O, so it is unit-testable directly (see "THE
+# SNAPSHOT'S OWN AGE IS A FIRST-CLASS, CHECKABLE SIGNAL" above).
+.cdf_meta_snapshot_age_hours <- function(generated_at, now = Sys.time()) {
+  as.numeric(difftime(now, generated_at, units = "hours"))
+}
+
+# Decides which data source Check 3 should use, and whether that source is
+# trustworthy -- factored out of .cdf_main() specifically so this decision is
+# unit-testable without a real store or a real docs/_targets.R manifest (see
+# this file's header comment on why .cdf_main() as a whole is not
+# unit-tested elsewhere). Deliberately does NOT call targets::tar_meta()
+# itself (that needs a real store -- the caller does that read when
+# `$decision == "live"`); it DOES read `snapshot_path` off disk via
+# .cdf_read_meta_snapshot() when a live store is unavailable, because the
+# snapshot's own age (the thing this function exists to police) can only be
+# known by actually reading its generated_at row.
+#
+# `store_exists` is a plain boolean (typically `dir.exists(store_path)`) --
+# passed in rather than computed here so tests can exercise "store present"
+# without needing a real docs/_targets directory. Returns one of:
+#   list(decision = "live")
+#     A live store exists and takes priority -- caller reads it directly.
+#   list(decision = "snapshot", meta_time =, age_hrs =, generated_at =)
+#     No live store, but the committed snapshot exists and is within
+#     `threshold_hrs` of its own generated_at -- caller uses `meta_time`
+#     as-is.
+#   list(decision = "snapshot_too_old", age_hrs =, generated_at =)
+#     No live store, and the committed snapshot exists but is OLDER than
+#     `threshold_hrs` -- per "THE SNAPSHOT'S OWN AGE IS A FIRST-CLASS,
+#     CHECKABLE SIGNAL" above, this is a hard failure, never treated as
+#     "snapshot" data.
+#   list(decision = "no_source")
+#     No live store and no committed snapshot file at all.
+# Propagates (does not catch) any error .cdf_read_meta_snapshot() raises
+# (missing/duplicated sentinel row, unparseable timestamp, etc.) -- per
+# .claude/rules/fail-loud-not-null.md, a malformed snapshot must stop the
+# check, never be silently treated as "no snapshot" or "trust it anyway".
+.cdf_check3_source_decision <- function(store_exists, snapshot_path, threshold_hrs, now = Sys.time()) {
+  if (isTRUE(store_exists)) {
+    return(list(decision = "live"))
+  }
+  if (!file.exists(snapshot_path)) {
+    return(list(decision = "no_source"))
+  }
+  snap <- .cdf_read_meta_snapshot(snapshot_path)
+  age_hrs <- .cdf_meta_snapshot_age_hours(snap$generated_at, now = now)
+  if (age_hrs > threshold_hrs) {
+    return(list(decision = "snapshot_too_old", age_hrs = age_hrs, generated_at = snap$generated_at))
+  }
+  list(decision = "snapshot", meta_time = snap$meta_time, age_hrs = age_hrs, generated_at = snap$generated_at)
+}
+
+# ---------------------------------------------------------------------------
+# Check 3 -- data staleness (needs a real store, OR the committed snapshot)
 # ---------------------------------------------------------------------------
 
 # Returns a named list: page basename -> list(gap_hrs=, source=) for every
@@ -893,27 +1143,73 @@ suppressPackageStartupMessages({
 
   if (data_staleness) {
     store_path <- file.path(docs_dir, "_targets")
+    snapshot_path <- .cdf_meta_snapshot_path(repo_root)
     cat("\n=== Check 3: data staleness (page render time vs newest tar_meta() time of its own targets) ===\n")
-    if (!dir.exists(store_path)) {
-      cat(sprintf("!!! No targets store found at '%s' !!!\n", store_path))
-      cat("!!! Check 3 needs a real store (tar_make() must run first) -- see scripts/build.sh Step 1. !!!\n")
-      cat("!!! CHECK 3 DID NOT RUN. This is NOT a pass. !!!\n")
-      cat("::VERIFY:DASHBOARD_FRESHNESS_STATUS:: 2\n")
-      return(invisible(2L))
-    }
-    meta <- tryCatch(
-      targets::tar_meta(store = store_path, fields = time, targets_only = TRUE),
+
+    # WHICH SOURCE DID CHECK 3 USE -- always stated explicitly, and never
+    # ambiguous between the two: a live store (the main checkout, right
+    # after scripts/build.sh's own tar_make()) is authoritative and always
+    # preferred when present; the committed snapshot
+    # (docs/_targets_meta_snapshot.csv) is the ONLY option in CI, which never
+    # has a store, and is used as a fallback in the main checkout too if a
+    # store somehow does not exist. See the "Metadata snapshot" section
+    # above this function for the full design (file format + the
+    # snapshot-age hard-failure policy), and .cdf_check3_source_decision()
+    # for why this decision is factored out into its own testable function.
+    threshold_hrs <- .cdf_data_staleness_threshold_hours()
+    decision <- tryCatch(
+      .cdf_check3_source_decision(dir.exists(store_path), snapshot_path, threshold_hrs),
       error = function(e) {
-        cat("!!! targets::tar_meta() failed -- cannot run Check 3. This is NOT a pass. !!!\n")
+        cat("!!! Failed to read the committed metadata snapshot -- cannot run Check 3. This is NOT a pass. !!!\n")
         cat(rlang::cnd_message(e), "\n")
         NULL
       }
     )
-    if (is.null(meta)) {
+    if (is.null(decision)) {
       cat("::VERIFY:DASHBOARD_FRESHNESS_STATUS:: 2\n")
       return(invisible(2L))
     }
-    meta_time <- stats::setNames(meta$time, meta$name)
+
+    if (decision$decision == "live") {
+      cat(sprintf("Check 3 data source: LIVE STORE (%s)\n", store_path))
+      meta <- tryCatch(
+        targets::tar_meta(store = store_path, fields = time, targets_only = TRUE),
+        error = function(e) {
+          cat("!!! targets::tar_meta() failed -- cannot run Check 3. This is NOT a pass. !!!\n")
+          cat(rlang::cnd_message(e), "\n")
+          NULL
+        }
+      )
+      if (is.null(meta)) {
+        cat("::VERIFY:DASHBOARD_FRESHNESS_STATUS:: 2\n")
+        return(invisible(2L))
+      }
+      meta_time <- stats::setNames(meta$time, meta$name)
+    } else if (decision$decision == "snapshot") {
+      cat(sprintf(
+        "Check 3 data source: COMMITTED SNAPSHOT (%s)\n  generated_at=%s UTC, age=%.1fh (max allowed %.1fh / %.0f day(s), HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS)\n",
+        snapshot_path, format(decision$generated_at, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+        decision$age_hrs, threshold_hrs, threshold_hrs / 24
+      ))
+      meta_time <- decision$meta_time
+    } else if (decision$decision == "snapshot_too_old") {
+      cat(sprintf(
+        "Check 3 data source: COMMITTED SNAPSHOT (%s) -- TOO OLD TO TRUST\n  generated_at=%s UTC, age=%.1fh (max allowed %.1fh / %.0f day(s), HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS)\n",
+        snapshot_path, format(decision$generated_at, "%Y-%m-%d %H:%M:%S", tz = "UTC"),
+        decision$age_hrs, threshold_hrs, threshold_hrs / 24
+      ))
+      cat("!!! A snapshot this old cannot support a Check 3 verdict at all -- it is not a warning, it is a hard failure. !!!\n")
+      cat("!!! Run `scripts/build.sh` in the main checkout to regenerate docs/_targets_meta_snapshot.csv, then commit it. !!!\n")
+      cat("!!! CHECK 3 DID NOT RUN (snapshot too old to trust). This is NOT a pass. !!!\n")
+      cat("::VERIFY:DASHBOARD_FRESHNESS_STATUS:: 2\n")
+      return(invisible(2L))
+    } else { # "no_source"
+      cat(sprintf("!!! No live store found at '%s' and no committed metadata snapshot at '%s' !!!\n", store_path, snapshot_path))
+      cat("!!! Run `scripts/build.sh` in the main checkout to build the store and write the snapshot. !!!\n")
+      cat("!!! CHECK 3 DID NOT RUN. This is NOT a pass. !!!\n")
+      cat("::VERIFY:DASHBOARD_FRESHNESS_STATUS:: 2\n")
+      return(invisible(2L))
+    }
 
     data_stale <- .cdf_check_data_staleness(
       qmd_files, page_targets, meta_time, repo_root,
