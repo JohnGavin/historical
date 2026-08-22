@@ -596,7 +596,11 @@ plan_falsification <- function() {
 
     # ═══════════════════════════════════════════════════════════════════
     # Per-strategy tests: cmr (Commodities Mean Reversion — #138)
-    # Monthly strategy. Three lookback variants (1m, 3m, 6m).
+    # #717: DAILY strategy (~252 obs/year), despite this section's original
+    # "monthly" framing -- cmr_returns_*m is the raw daily net_ret series,
+    # not a monthly resample (see plan_commodities_mean_reversion.R header).
+    # Three lookback *signal* variants (1m, 3m, 6m); all three produce daily
+    # return series.
     # Bridge targets fals_cmr_input_*m live in plan_commodities_mean_reversion.R
     # via the cmr_returns_*m targets.
     # Note: FF alpha test is omitted for CMR — the commodity universe does
@@ -614,7 +618,7 @@ plan_falsification <- function() {
 
     # ── 1m lookback ──────────────────────────────────────────────────────
     targets::tar_target(fals_hac_cmr_1m, {
-      hd_hac_sharpe(cmr_returns_1m$strategy_ret, ann_factor = 12L)
+      hd_hac_sharpe(cmr_returns_1m$strategy_ret, ann_factor = 252L)
     }),
     targets::tar_target(fals_wn_cmr_1m, {
       ret   <- cmr_returns_1m$strategy_ret
@@ -677,12 +681,12 @@ plan_falsification <- function() {
       )
     }),
     targets::tar_target(fals_dsr_cmr_1m, {
-      hd_deflated_sharpe(cmr_returns_1m$strategy_ret, K_trials = 3L, ann_factor = 12L)
+      hd_deflated_sharpe(cmr_returns_1m$strategy_ret, K_trials = 3L, ann_factor = 252L)
     }),
 
     # ── 3m lookback ──────────────────────────────────────────────────────
     targets::tar_target(fals_hac_cmr_3m, {
-      hd_hac_sharpe(cmr_returns_3m$strategy_ret, ann_factor = 12L)
+      hd_hac_sharpe(cmr_returns_3m$strategy_ret, ann_factor = 252L)
     }),
     targets::tar_target(fals_wn_cmr_3m, {
       ret   <- cmr_returns_3m$strategy_ret
@@ -745,12 +749,12 @@ plan_falsification <- function() {
       )
     }),
     targets::tar_target(fals_dsr_cmr_3m, {
-      hd_deflated_sharpe(cmr_returns_3m$strategy_ret, K_trials = 3L, ann_factor = 12L)
+      hd_deflated_sharpe(cmr_returns_3m$strategy_ret, K_trials = 3L, ann_factor = 252L)
     }),
 
     # ── 6m lookback ──────────────────────────────────────────────────────
     targets::tar_target(fals_hac_cmr_6m, {
-      hd_hac_sharpe(cmr_returns_6m$strategy_ret, ann_factor = 12L)
+      hd_hac_sharpe(cmr_returns_6m$strategy_ret, ann_factor = 252L)
     }),
     targets::tar_target(fals_wn_cmr_6m, {
       ret   <- cmr_returns_6m$strategy_ret
@@ -813,7 +817,7 @@ plan_falsification <- function() {
       )
     }),
     targets::tar_target(fals_dsr_cmr_6m, {
-      hd_deflated_sharpe(cmr_returns_6m$strategy_ret, K_trials = 3L, ann_factor = 12L)
+      hd_deflated_sharpe(cmr_returns_6m$strategy_ret, K_trials = 3L, ann_factor = 252L)
     }),
 
     # ── CMR falsification summary (standalone; not in main fals_summary) ──
