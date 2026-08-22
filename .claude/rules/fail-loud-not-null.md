@@ -81,14 +81,26 @@ mis-placed, however correct its logic.
 
 | instance | guard was correct, but ran only… | so what escaped |
 |---|---|---|
-| #691 | when a registry writer executed | `error = "continue"` meant the writer errored silently for four commits; the guard never fired |
-| #693/#694 | when the extractor found a `tibble()` | a refactor to `data.frame()` returned `character(0)` and the check passed vacuously |
-| #710 | in `--data-staleness` mode, which needs a store | a malformed `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is silently ignored in default mode *and in CI* |
+| #693/#694 | when the extractor found a `tibble()` | a refactor to `data.frame()` returned `character(0)`, so `required` was empty and the coverage check passed vacuously |
+| #710 | in `--data-staleness` mode, which needs a store | a malformed `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is silently ignored in default mode *and in the weekly CI job* |
 
-All three were written to satisfy **this rule**, by someone who had read it, and
-all three left a hole one level up. That is the evidence that "add a guard" is not
-sufficient guidance on its own — placement is a separate decision from existence,
-and it is the one that keeps going wrong.
+Both were written to satisfy **this rule**, by someone who had read it, and both
+left a hole one level up. That is the evidence that "add a guard" is not sufficient
+guidance on its own — placement is a separate decision from existence, and it is
+the one that keeps going wrong.
+
+**A related but distinct failure — the guard fires and nobody sees it.** #691 is
+often cited alongside the two above and it is not the same thing:
+`hd_metric_record()`'s unit guard was correctly placed and *did* fire, erroring
+eleven registry writers. What failed is that `error = "continue"` in
+`docs/_targets.R` made `tar_make()` exit 0 anyway, so the guard's output was
+invisible for four commits.
+
+Keep the two apart, because the fixes differ. A mis-placed guard is fixed by moving
+it; an unseen guard is fixed by making its output reachable — which is why
+`scripts/build.sh` and `scripts/check_pipeline_errors.R` exist. Both defeat the
+same intent, so when a guard fails to protect you, ask **which** of the two it was
+before reaching for a fix.
 
 Corollary for configuration: **if a variable is set, validate it — even if this
 code path ignores it.** Setting an environment variable is an expression of intent;
@@ -137,8 +149,8 @@ Then a second question, about the guard you just wrote:
 > one of those?
 
 If it can, the guard is mis-placed however correct its logic. This second question
-is the one that keeps being skipped: #691, #694 and #710 all passed the first test
-and failed the second, in code written by people who had read this rule.
+is the one that keeps being skipped: #694 and #710 both passed the first test and
+failed the second, in code written by people who had read this rule.
 
 ## Related
 
@@ -148,4 +160,5 @@ and failed the second, in code written by people who had read this rule.
 - `data-glossary-and-entity-resolution` (global) — canonical units and canonical entity names are the same problem
 - `data-validation-timeseries` (global) — temporal-coverage checks belong in the pipeline as targets, not only in tests
 - [#637](https://github.com/JohnGavin/historical/issues/637), [#640](https://github.com/JohnGavin/historical/issues/640), [#641](https://github.com/JohnGavin/historical/issues/641), [#643](https://github.com/JohnGavin/historical/issues/643) — the four instances that motivated this rule
-- [#691](https://github.com/JohnGavin/historical/issues/691), [#693](https://github.com/JohnGavin/historical/issues/693), [#710](https://github.com/JohnGavin/historical/issues/710) — the three instances that motivated Required Pattern 5 (guard placement). All post-date the rule and were written in compliance with it, which is the point: existence and placement are separate decisions, and the rule previously governed only the first.
+- [#693](https://github.com/JohnGavin/historical/issues/693), [#710](https://github.com/JohnGavin/historical/issues/710) — the two instances that motivated Required Pattern 5 (guard placement). Both post-date the rule and were written in compliance with it, which is the point: existence and placement are separate decisions, and the rule previously governed only the first.
+- [#691](https://github.com/JohnGavin/historical/issues/691) — the adjacent failure named in Pattern 5: a correctly-placed guard whose output was invisible because `error = "continue"` let `tar_make()` exit 0. Fixed by [#693](https://github.com/JohnGavin/historical/issues/693)'s `scripts/build.sh`, not by moving any guard.
