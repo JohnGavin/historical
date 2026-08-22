@@ -56,6 +56,24 @@
       i Looked for it relative to 'toy_parent.qmd''s own directory (Quarto's include-resolution rule).
       i A dead include target fails at Quarto render time; fix the path or restore the file.
 
+# .cdf_data_staleness_threshold_hours aborts informatively on an unparseable value (#695 rescope, fail-loud-not-null.md)
+
+    Code
+      .cdf_data_staleness_threshold_hours()
+    Condition
+      Error in `.cdf_data_staleness_threshold_hours()`:
+      x `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is set to "not-a-number", which is not a non-negative number of days.
+      i Unset it to use the default (14 days), or set it to a non-negative number.
+
+# .cdf_data_staleness_threshold_hours aborts informatively on a negative value
+
+    Code
+      .cdf_data_staleness_threshold_hours()
+    Condition
+      Error in `.cdf_data_staleness_threshold_hours()`:
+      x `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is set to "-1", which is not a non-negative number of days.
+      i Unset it to use the default (14 days), or set it to a non-negative number.
+
 # key .cdf_* function signatures are stable
 
     Code
@@ -142,6 +160,22 @@
       args(.cdf_git_last_commit_time)
     Output
       function (abs_path, repo_root) 
+      NULL
+
+---
+
+    Code
+      args(.cdf_data_staleness_threshold_hours)
+    Output
+      function () 
+      NULL
+
+---
+
+    Code
+      args(.cdf_data_staleness_over_threshold)
+    Output
+      function (data_stale, threshold_hrs) 
       NULL
 
 ---
