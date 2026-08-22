@@ -11,7 +11,16 @@
 #
 # Data: re-uses commodities_raw + commodities_returns from
 #       plan_commodities_momentum.R (DO NOT re-define those targets here).
-# Frequency: monthly (ann_factor = 12).
+# Frequency: DAILY (ann_factor = 252). #717: the universe mixes 13 FRED
+#   monthly price indexes with 24 Yahoo Finance daily futures/ETF series
+#   (scripts/fetch_commodities.R); the 24 daily series dominate the merged
+#   `date` column (~96% of rows; measured 2026-08-22: 147821 total rows,
+#   142426 from `source == "yahoo"`), so cmr_portfolio_1m/3m/6m -- one row
+#   per unique date in the combined universe -- are themselves daily series
+#   (median gap between dates = 1 day), not monthly, despite every function
+#   in this file being named/commented as if they were. Verified against
+#   scripts/fetch_commodities.R + data/raw/commodities.parquet directly for
+#   #717, not merely re-asserted from this comment's own prior (wrong) text.
 # Look-ahead safety: signal at t uses returns through t-1 only.
 # Execution: signal at t -> trade at t+1 close.
 # Transaction cost: 0.2% per trade (same as commodity momentum, #134).
@@ -95,15 +104,15 @@ plan_commodities_mean_reversion <- function() {
     # Sharpe, MDD, max DD duration (hd_dd_duration from risk_metrics.R).
 
     targets::tar_target(cmr_metrics_1m, {
-      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", stk_rf = stk_rf, ann_factor = 12L)
+      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", stk_rf = stk_rf, ann_factor = 252L)
     }),
 
     targets::tar_target(cmr_metrics_3m, {
-      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", stk_rf = stk_rf, ann_factor = 12L)
+      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", stk_rf = stk_rf, ann_factor = 252L)
     }),
 
     targets::tar_target(cmr_metrics_6m, {
-      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", stk_rf = stk_rf, ann_factor = 12L)
+      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", stk_rf = stk_rf, ann_factor = 252L)
     }),
 
 
@@ -201,18 +210,98 @@ plan_commodities_mean_reversion <- function() {
   )
 }
 
-.compute_cmr_metrics <- function(portfolio_tbl, lookback, stk_rf, ann_factor = 12L) {
+#' Reconcile a declared `ann_factor` against the observed date frequency
+#'
+#' Guard from #717 (fail-loud-not-null.md Required Pattern 5): computes the
+#' median gap between the distinct, sorted dates in \code{dates} and aborts
+#' if that gap is inconsistent with \code{ann_factor}. This is deliberately
+#' placed at the point where \code{ann_factor} is SUPPLIED to
+#' \code{.compute_cmr_metrics()} -- not buried in the CAGR/vol arithmetic
+#' further down -- so a future caller that passes the wrong constant fails
+#' immediately, on the value it got wrong, rather than producing a
+#' plausible-looking but silently mis-annualised number (exactly what
+#' happened with \code{ann_factor = 12L} against CMR's actually-daily data).
+#'
+#' Uses the MEDIAN gap, not the mean or min: commodity data has real gaps
+#' (weekends, holidays, and -- because CMR's universe mixes 24 Yahoo daily
+#' futures/ETF series with 13 FRED monthly indexes, #717 -- occasional
+#' months where only the sparser monthly series print). The median is
+#' robust to that without a hand-tuned outlier filter. Bands are
+#' deliberately wide (e.g. daily tolerates gaps up to 3 days) to absorb long
+#' weekends/holiday clusters without false-positiving on a genuine daily
+#' series; they are not so wide that a real classification error (e.g.
+#' monthly data declared daily) would slip through undetected.
+#'
+#' @param dates A date vector (one entry per observation; duplicates and
+#'   unsorted input are handled).
+#' @param ann_factor Integer. The annualisation factor about to be used.
+#' @param lookback Character. Lookback label, used only for the abort message.
+#' @return `NULL`, invisibly. Called for its abort side effect.
+#' @noRd
+.assert_cmr_ann_factor <- function(dates, ann_factor, lookback) {
+  d <- sort(unique(as.Date(dates)))
+  if (length(d) < 3L) {
+    # Too few points for a frequency to be meaningfully observed.
+    return(invisible(NULL))
+  }
+  gaps <- as.numeric(diff(d))
+  median_gap <- stats::median(gaps)
+
+  expected_ann_factor <- dplyr::case_when(
+    median_gap <= 3   ~ 252L,  # daily (business days; weekends widen some gaps)
+    median_gap <= 10  ~ 52L,   # weekly
+    median_gap <= 45  ~ 12L,   # monthly
+    median_gap <= 135 ~ 4L,    # quarterly
+    TRUE ~ NA_integer_
+  )
+
+  if (is.na(expected_ann_factor)) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "CMR {lookback}: cannot classify the observed data frequency ",
+        "against declared ann_factor {ann_factor}."
+      ),
+      "i" = paste0(
+        "Median gap between observation dates is {median_gap} day{?s}, ",
+        "which does not match a recognised daily/weekly/monthly/quarterly band."
+      ),
+      "i" = "See .claude/rules/fail-loud-not-null.md Required Pattern 5."
+    ))
+  }
+
+  if (expected_ann_factor != ann_factor) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "CMR {lookback}: declared ann_factor ({ann_factor}) disagrees with ",
+        "the observed data frequency."
+      ),
+      "i" = paste0(
+        "Median gap between observation dates is {median_gap} day{?s}, ",
+        "consistent with ann_factor = {expected_ann_factor}, not {ann_factor}."
+      ),
+      "i" = "This is the reconciliation guard added for #717 -- see .claude/rules/fail-loud-not-null.md Required Pattern 5."
+    ))
+  }
+
+  invisible(NULL)
+}
+
+.compute_cmr_metrics <- function(portfolio_tbl, lookback, stk_rf, ann_factor = 252L) {
   library(dplyr)
 
   df <- portfolio_tbl |>
     dplyr::filter(!is.na(.data$net_ret)) |>
     dplyr::mutate(ym = format(as.Date(.data$date), "%Y-%m"))
 
+  # #717 guard: declared ann_factor must match the observed frequency of
+  # this portfolio's own dates, checked at the point ann_factor is supplied.
+  .assert_cmr_ann_factor(df$date, ann_factor, lookback)
+
   n <- nrow(df)
 
   if (n < 12L) {
     return(tibble::tibble(
-      lookback = lookback, n_months = n,
+      lookback = lookback, n_days = n,
       sharpe = NA_real_, cagr = NA_real_, vol = NA_real_, ann_rf = NA_real_,
       max_dd = NA_real_, avg_dd_duration = NA_real_, max_dd_duration = NA_real_
     ))
@@ -250,7 +339,7 @@ plan_commodities_mean_reversion <- function() {
   # belongs to the consumer (DT::datatable, plot label), not the producer.
   tibble::tibble(
     lookback        = lookback,
-    n_months        = n,
+    n_days          = n,
     sharpe          = round(sharpe, 3),
     cagr            = round(cagr, 4),
     vol             = round(vol, 4),
@@ -318,11 +407,16 @@ plan_commodities_mean_reversion <- function() {
     uuids[i] <- uu
 
     # PR 3/4 — record long-form metrics for this partition.
-    # Units (#640): cagr/vol/max_dd are decimal fractions per the "Unit
-    # convention (#336)" comment above, sharpe is a scale-free ratio,
-    # n_months is a count. avg_dd_duration/max_dd_duration are drawdown
-    # lengths measured in the return series' own periodicity (months, for
-    # CMR's monthly returns) — classified as "count" (periods), not "days".
+    # Units (#640, corrected #717): cagr/vol/max_dd are decimal fractions per
+    # the "Unit convention (#336)" comment above, sharpe is a scale-free
+    # ratio, n_days is a count. avg_dd_duration/max_dd_duration are drawdown
+    # lengths measured in the return series' own periodicity (days, for
+    # CMR's daily returns, #717) — classified as "count" (periods), not
+    # "days" [hd_metric_units()'s "days" unit type], matching the same
+    # count-of-periods convention every other daily strategy in this
+    # registry uses for its own period column (e.g. tom_units/aw_units
+    # classify n_days as "count", not "days" -- R/plan_turn_of_month.R,
+    # R/plan_avoid_worst.R).
     # ann_rf (#677 slice 4, #691) is a decimal fraction, same convention as
     # cagr (round(sr$ann_rf, 4) above, never *100).
     row <- cmr_summary[cmr_summary$lookback == p, , drop = FALSE]
@@ -330,7 +424,7 @@ plan_commodities_mean_reversion <- function() {
       metric_cols <- setdiff(names(row), "lookback")
       wide <- row[, metric_cols, drop = FALSE]
       cmr_units <- c(
-        n_months = "count", sharpe = "ratio", cagr = "fraction",
+        n_days = "count", sharpe = "ratio", cagr = "fraction",
         vol = "fraction", max_dd = "fraction",
         avg_dd_duration = "count", max_dd_duration = "count",
         ann_rf = "fraction"

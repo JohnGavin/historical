@@ -186,9 +186,11 @@ test_that(".cmr_register_runs schema and row counts are stable", {
   strategy_names <- .make_strategy_names_t3()
 
   # cmr_summary shape: lookback + metrics columns (decimal fractions per #336)
+  # Column is n_days, not n_months (#717: CMR's underlying data is daily,
+  # not monthly -- .compute_cmr_metrics() renamed the column at source).
   cmr_summary <- tibble::tibble(
     lookback        = c("1m", "3m", "6m"),
-    n_months        = c(48L, 48L, 48L),
+    n_days          = c(48L, 48L, 48L),
     sharpe          = c(-0.42, -0.31, -0.25),
     cagr            = c(-0.04, -0.03, -0.02),
     vol             = c(0.18, 0.17, 0.16),

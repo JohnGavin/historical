@@ -124,14 +124,16 @@ plan_leaderboard <- function() {
       # We create one synthetic "Full Period" row = the best lookback.
       # Source: R/plan_commodities_mean_reversion.R:210-221 already stores
       # cagr/vol/max_dd as FRACTION (documented convention, #336) -- no
-      # conversion needed here.
+      # conversion needed here. Column is n_days, not n_months (#717: CMR's
+      # data is daily, not monthly -- same explicit-rename pattern as
+      # .norm_tom/.norm_aw below, which map their own n_days into `months`).
       .norm_cmr <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         best <- m |> filter(!is.na(sharpe)) |> arrange(desc(sharpe)) |> slice(1)
         if (nrow(best) == 0L) return(NULL)
         best |> transmute(
           period = "Full Period",
-          months = n_months,
+          months = n_days,
           cagr   = cagr,
           vol    = vol,
           sharpe = sharpe,
