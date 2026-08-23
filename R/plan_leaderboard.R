@@ -778,9 +778,10 @@ plan_leaderboard <- function() {
       # corrected verdict. k_eff_leaderboard is joined from
       # strat_deflated_sharpe earlier in this target (see "Deflated Sharpe"
       # section above) and is now populated for every strategy in
-      # STRAT_RETURNS_WIDE_CODES (plan_strategy_correlation.R) -- 11 of 17,
-      # up from 4. The remaining 6 (CMR, OLMAR-1, TOM, Risk State, Avoid
-      # Worst, PSO Optimal) are genuine, documented exclusions -- see that
+      # STRAT_RETURNS_WIDE_CODES (plan_strategy_correlation.R) -- 16 of 17,
+      # up from 11 after #728 and 4 before it (#733 folded the five daily
+      # strategies in via monthly resampling). The one remaining exclusion,
+      # PSO Optimal, is a genuine, documented exclusion -- see that
       # constant's comment -- not something this target guesses a value
       # for. The `_mt` columns are deliberately NA wherever
       # k_eff_leaderboard is NA or < 1 (a K below 1 would WIDEN alpha, the
@@ -898,8 +899,8 @@ plan_leaderboard <- function() {
     # in strat_corr_matrix (stk_max, stk_drif, fac_max, fac_drif, ltr) --
     # NOT the full leaderboard. Surfaced below as `k_eff_family`, distinct
     # from `k_eff_leaderboard` (plan_strategy_correlation.R's
-    # strat_keff_vertox_leaderboard, scoped to the 11-strategy
-    # STRAT_RETURNS_WIDE_CODES) so no consumer can conflate "effective tests
+    # strat_keff_vertox_leaderboard, scoped to the 16-strategy
+    # STRAT_RETURNS_WIDE_CODES, #733) so no consumer can conflate "effective tests
     # within one family" with "effective tests across the whole
     # leaderboard" -- #728's core finding was that the two had been
     # conflated under one ambiguous name, `k_eff_strat`. Published
@@ -910,7 +911,7 @@ plan_leaderboard <- function() {
       historicaldata::hd_strat_keff_vertox(strat_corr_matrix, n_sim = 20000L, seed = 160L)
     }),
 
-    # ── Deflated Sharpe per strategy (#160, widened by #728 items 1+2) ────────
+    # ── Deflated Sharpe per strategy (#160, widened by #728 items 1+2, #733) ─
     # K_trials = k_eff_leaderboard (strat_keff_vertox_leaderboard,
     # plan_strategy_correlation.R) -- the LEADERBOARD-WIDE correlation-aware
     # effective strategy count -- NOT the family-scoped strat_keff_vertox
@@ -922,22 +923,36 @@ plan_leaderboard <- function() {
     # within the factor/stock MAX/DRIF family... The multiplicity that
     # should deflate any individual Sharpe is the leaderboard-wide one").
     #
-    # Source return series come from strat_returns_wide
-    # (plan_strategy_correlation.R), which already aligns every strategy in
-    # STRAT_RETURNS_WIDE_CODES onto a common ym spine via full_join (not
-    # inner_join -- see that target's comment, and fail-loud-not-null.md).
-    # col_map here mirrors that constant; every strategy NOT in col_map is a
-    # genuine, documented exclusion (daily frequency, or PSO Optimal's
-    # linear-combination circularity) -- see STRAT_RETURNS_WIDE_CODES's
-    # comment in plan_strategy_correlation.R, not an oversight. That leaves
-    # 11 of 17 leaderboard strategies covered here (#728 item 1), up from 4
-    # before this change: CMR, OLMAR-1, TOM, Risk State, Avoid Worst, and
-    # PSO Optimal remain NA on deflated_sharpe/dsr_pvalue/k_eff_leaderboard,
-    # each for the documented reason above -- not fabricated coverage.
+    # Two source groups, each read at its OWN native periodicity so
+    # naive_sharpe/deflated_sharpe stay consistent with the figures already
+    # published elsewhere on the leaderboard for these rows
+    # (STRATEGY_OBS_ANN_FACTOR above) -- K_trials is the SAME scalar for
+    # both groups (it is a property of the whole leaderboard-wide
+    # correlation matrix, not of any one strategy's frequency):
     #
-    # ann_factor = 12 for every row: every strategy in col_map is
-    # monthly-frequency (that is precisely why it qualifies for
-    # strat_returns_wide -- see STRAT_RETURNS_WIDE_CODES's comment).
+    #   col_map_monthly: return series come from strat_returns_wide
+    #     (plan_strategy_correlation.R), which aligns every monthly
+    #     strategy onto a common ym spine via full_join (not inner_join --
+    #     see that target's comment, and fail-loud-not-null.md).
+    #     ann_factor = 12L for every row here: every strategy in
+    #     col_map_monthly is monthly-frequency.
+    #
+    #   col_map_daily (#733): return series come from
+    #     strat_returns_daily_native (plan_strategy_correlation.R) at their
+    #     OWN native daily frequency -- NOT the monthly-resampled columns
+    #     strat_returns_wide also carries for these five strategies, which
+    #     exist only to give the CORRELATION matrix (and hence K_eff) a
+    #     common spine, not to drive deflated_sharpe (resampling first
+    #     would shrink T_obs and change hd_deflated_sharpe()'s
+    #     distributional assumptions for no reason). ann_factor = 252L for
+    #     every row here, matching STRATEGY_OBS_ANN_FACTOR.
+    #
+    # Together these cover 16 of 17 leaderboard strategies (#733), up from
+    # 11 after #728 and 4 before it. The one remaining exclusion, PSO
+    # Optimal, is a genuine, documented exclusion (linear-combination
+    # circularity) -- see STRAT_RETURNS_WIDE_CODES's comment in
+    # plan_strategy_correlation.R, not an oversight -- and remains NA on
+    # deflated_sharpe/dsr_pvalue/k_eff_leaderboard.
     #
     # k_eff_family / k_raw_family are populated ONLY for the original
     # 5-strategy family (NA elsewhere) -- informational context, no longer
@@ -945,7 +960,7 @@ plan_leaderboard <- function() {
     targets::tar_target(strat_deflated_sharpe, {
       library(dplyr)
 
-      col_map <- c(
+      col_map_monthly <- c(
         stk_max         = "Stock MAX",
         stk_drif        = "Stock DRIF",
         fac_max         = "Factor MAX",
@@ -958,6 +973,16 @@ plan_leaderboard <- function() {
         value_hml       = "Value (HML)",
         managed_futures = "Managed Futures"
       )
+      # #733: keys match strat_returns_daily_native's names
+      # (plan_strategy_correlation.R), values match STRATEGY_OBS_ANN_FACTOR's
+      # strategy labels above.
+      col_map_daily <- c(
+        cmr         = "CMR",
+        olmar_1     = "OLMAR-1",
+        tom         = "TOM",
+        risk_state  = "Risk State",
+        avoid_worst = "Avoid Worst"
+      )
       family_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr")
 
       k_eff_lb  <- max(1, round(strat_keff_vertox_leaderboard))
@@ -965,13 +990,11 @@ plan_leaderboard <- function() {
       k_eff_fam <- max(1L, round(strat_keff_vertox))
       k_raw_fam <- nrow(strat_corr_matrix)
 
-      bind_rows(lapply(names(col_map), function(col) {
-        r <- strat_returns_wide[[col]]
+      .dsr_row <- function(strategy_label, r, ann_factor, is_family = FALSE) {
         r <- r[!is.na(r)]
-        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = 12L)
-        is_family <- col %in% family_cols
+        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
         tibble::tibble(
-          strategy          = unname(col_map[[col]]),
+          strategy          = strategy_label,
           naive_sharpe      = d$naive_sharpe,
           deflated_sharpe   = d$dsr,
           dsr_pvalue        = d$dsr_pvalue,
@@ -981,7 +1004,26 @@ plan_leaderboard <- function() {
           k_eff_family      = if (is_family) k_eff_fam else NA_real_,
           k_raw_family      = if (is_family) k_raw_fam else NA_integer_
         )
+      }
+
+      monthly_rows <- bind_rows(lapply(names(col_map_monthly), function(col) {
+        .dsr_row(
+          unname(col_map_monthly[[col]]),
+          strat_returns_wide[[col]],
+          ann_factor = 12L,
+          is_family  = col %in% family_cols
+        )
       }))
+
+      daily_rows <- bind_rows(lapply(names(col_map_daily), function(nm) {
+        .dsr_row(
+          unname(col_map_daily[[nm]]),
+          strat_returns_daily_native[[nm]]$ret,
+          ann_factor = 252L
+        )
+      }))
+
+      bind_rows(monthly_rows, daily_rows)
     })
   )
 }

@@ -1380,12 +1380,13 @@ check_leaderboard_detection_power_coverage <- function(leaderboard, obs_ann_fact
 #' \code{k_eff_leaderboard} is itself usable (non-NA and >= 1) -- see the
 #' \code{.detection_diag_row()} comment in R/plan_leaderboard.R for why
 #' \code{k_eff_leaderboard} is deliberately NA for some strategies today (it
-#' is populated for the 11 strategies in
+#' is populated for the 16 strategies in
 #' \code{STRAT_RETURNS_WIDE_CODES}, R/plan_strategy_correlation.R -- up from
-#' 4 before #728 -- and NA for the 6 genuine, documented exclusions listed
-#' on that constant: CMR, OLMAR-1, TOM, Risk State, Avoid Worst are
-#' daily-frequency; PSO Optimal is a linear combination of already-included
-#' series), which is an explicit, documented default per
+#' 11 after #728 and 4 before it (#733 folded in the five daily-frequency
+#' strategies via monthly resampling) -- and NA for the one remaining
+#' genuine, documented exclusion on that constant: PSO Optimal, a linear
+#' combination of already-included series), which is an explicit, documented
+#' default per
 #' fail-loud-not-null.md's Required Pattern item 2, not something this gate
 #' treats as a defect. This column was named \code{k_eff_strat} before
 #' #728; it was renamed alongside the scope widening so the family-scoped
@@ -1500,7 +1501,8 @@ check_leaderboard_detection_power_values <- function(leaderboard) {
 }
 
 
-#' Declared exemptions from deflated-Sharpe / K_eff coverage (S21, #728 item 4)
+#' Declared exemptions from deflated-Sharpe / K_eff coverage (S21, #728 item
+#' 4, narrowed by #733)
 #'
 #' Per \code{.claude/rules/fail-loud-not-null.md}: "the absence of a reason
 #' is what fails". A leaderboard strategy with a positive Full-Period Sharpe
@@ -1510,39 +1512,25 @@ check_leaderboard_detection_power_values <- function(leaderboard) {
 #' (S21, below) must abort on -- never a silent NA that looks identical to
 #' the exempted case.
 #'
-#' These six strategies are exactly \code{STRAT_RETURNS_WIDE_CODES}'s
-#' complement (R/plan_strategy_correlation.R) among the 17 leaderboard
-#' strategies -- see that constant's comment for the underlying reasoning;
-#' the \code{reason} column here restates it per-strategy so this table is
-#' self-contained without a second file open.
+#' #728 items 1+2 widened \code{STRAT_RETURNS_WIDE_CODES} to 11 of 17
+#' strategies, leaving six exemptions here: the five daily-frequency
+#' strategies (CMR, OLMAR-1, TOM, Risk State, Avoid Worst) plus PSO Optimal.
+#' #733 folds the five daily strategies INTO \code{STRAT_RETURNS_WIDE_CODES}
+#' by monthly-resampling their return series (see
+#' \code{.resample_daily_to_monthly()}, R/plan_strategy_correlation.R) --
+#' they now have real \code{deflated_sharpe}/\code{dsr_pvalue}/
+#' \code{k_eff_leaderboard} verdicts (computed at their own native
+#' ann_factor = 252, see R/plan_leaderboard.R's \code{strat_deflated_sharpe}),
+#' so they are removed from this table. PSO Optimal is the ONE remaining
+#' exemption -- exactly \code{STRAT_RETURNS_WIDE_CODES}'s complement
+#' (R/plan_strategy_correlation.R) among the 17 leaderboard strategies -- see
+#' that constant's comment for the underlying reasoning; the \code{reason}
+#' column here restates it so this table is self-contained without a second
+#' file open.
 #' @noRd
 DEFLATED_SHARPE_EXEMPTIONS <- tibble::tibble(
-  strategy = c("CMR", "OLMAR-1", "TOM", "Risk State", "Avoid Worst", "PSO Optimal"),
+  strategy = c("PSO Optimal"),
   reason = c(
-    paste0(
-      "Daily-frequency return series (ann_factor = 252, STRATEGY_OBS_ANN_FACTOR, ",
-      "R/plan_leaderboard.R). strat_returns_wide (R/plan_strategy_correlation.R) ",
-      "only aligns monthly series -- mixing daily and monthly series into one ",
-      "correlation matrix requires an aggregation step that risks the ",
-      "look-ahead bias described in #215."
-    ),
-    paste0(
-      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
-      "above -- OLMAR (Li & Hoi 2012) rebalances daily)."
-    ),
-    paste0(
-      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
-      "above -- R/plan_turn_of_month.R uses sqrt(252) annualisation)."
-    ),
-    paste0(
-      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
-      "above -- R/plan_risk_state.R's calc_metrics() defaults to ",
-      "periods_per_year = 252L)."
-    ),
-    paste0(
-      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
-      "above -- R/plan_avoid_worst.R uses ann_factor = 252L throughout)."
-    ),
     paste0(
       "PSO Optimal is not an independent data source: it is ",
       "port_optimal_weights %*% c(stk_max, stk_drif, fac_max, fac_drif) (the ",
@@ -1568,9 +1556,10 @@ DEFLATED_SHARPE_EXEMPTIONS <- tibble::tibble(
 #' strategies claiming a positive Full-Period Sharpe, only 1 (Factor DRIF)
 #' had any multiple-testing correction at all -- the wrong seven were
 #' missing (the ones a reader is most likely to act on). #728 items 1+2
-#' widen coverage to 11 of 17 (R/plan_strategy_correlation.R's
-#' STRAT_RETURNS_WIDE_CODES); this gate is what keeps that count from
-#' silently regressing back down.
+#' widened coverage to 11 of 17, and #733 widened it further to 16 of 17 by
+#' folding in the five daily-frequency strategies via monthly resampling
+#' (R/plan_strategy_correlation.R's STRAT_RETURNS_WIDE_CODES); this gate is
+#' what keeps that count from silently regressing back down.
 #'
 #' Scoped to \code{period == "Full Period"}: \code{deflated_sharpe} is a
 #' full-sample statistic broadcast to every period row (see the "Deflated
@@ -2073,7 +2062,9 @@ plan_qa_gates <- function() {
     # #728 found deflated_sharpe covered only 4 of 17 strategies -- and of
     # the 8 strategies claiming a positive Full-Period Sharpe, only 1
     # (Factor DRIF) had any multiple-testing correction. #728 items 1+2
-    # widened coverage to 11 of 17; this gate is what keeps that count from
+    # widened coverage to 11 of 17; #733 widened it further to 16 of 17 by
+    # folding the five daily-frequency strategies into the correlation
+    # spine via monthly resampling. This gate is what keeps that count from
     # silently regressing. Expected to fail on the current, unrebuilt store
     # until a fresh tar_make() picks up the widened strat_deflated_sharpe --
     # see check_leaderboard_deflated_sharpe_coverage() roxygen for the full

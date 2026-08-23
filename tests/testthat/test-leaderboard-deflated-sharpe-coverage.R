@@ -9,8 +9,9 @@ testthat::local_edition(3)
 # k_eff_leaderboard verdict either has a written reason in
 # DEFLATED_SHARPE_EXEMPTIONS, or the gate aborts.
 #
-# Background (#728): deflated_sharpe covered only 4 of 17 leaderboard
-# strategies before items 1+2 widened it to 11 (see
+# Background (#728, #733): deflated_sharpe covered only 4 of 17 leaderboard
+# strategies before items 1+2 widened it to 11, and #733 widened it further
+# to 16 by monthly-resampling the five daily strategies (see
 # R/plan_strategy_correlation.R's STRAT_RETURNS_WIDE_CODES). This gate is
 # what keeps that count from silently regressing -- and, per
 # fail-loud-not-null.md, ensures any remaining gap either has a written
@@ -117,10 +118,13 @@ test_that("DEFLATED_SHARPE_EXEMPTIONS has strategy/reason columns with no blank 
   expect_true(all(nzchar(DEFLATED_SHARPE_EXEMPTIONS$reason)))
 })
 
-test_that("DEFLATED_SHARPE_EXEMPTIONS lists exactly the six documented STRAT_RETURNS_WIDE_CODES exclusions", {
+test_that("DEFLATED_SHARPE_EXEMPTIONS lists exactly the one remaining STRAT_RETURNS_WIDE_CODES exclusion after #733", {
+  # #733 folds CMR/OLMAR-1/TOM/Risk State/Avoid Worst into
+  # STRAT_RETURNS_WIDE_CODES via monthly resampling -- only PSO Optimal's
+  # linear-combination circularity remains exempt.
   expect_setequal(
     DEFLATED_SHARPE_EXEMPTIONS$strategy,
-    c("CMR", "OLMAR-1", "TOM", "Risk State", "Avoid Worst", "PSO Optimal")
+    c("PSO Optimal")
   )
 })
 
