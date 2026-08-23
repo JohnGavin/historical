@@ -252,28 +252,63 @@ fi
 # not under docs/_targets, because docs/_targets may not exist yet on a
 # first-ever build.
 # ---------------------------------------------------------------------------
-LOCKDIR="$GIT_DIR_ABS/build.lock.d"
-if ! mkdir "$LOCKDIR" 2>/dev/null; then
-  LOCK_PID="$(cat "$LOCKDIR/pid" 2>/dev/null || true)"
-  if [[ -n "$LOCK_PID" ]] && kill -0 "$LOCK_PID" 2>/dev/null; then
+
+# `kill -0 "$pid"` alone cannot tell EPERM ("process exists, not ours to
+# signal") apart from ESRCH ("no such process") -- both give a non-zero exit.
+# Treating that non-zero exit as "not running" (as this script used to)
+# means a live PID this user simply cannot signal -- e.g. PID 1 (launchd),
+# or any build owned by another user -- reads as dead and its lock gets
+# reclaimed out from under a build that is, in fact, still running. Where
+# the two failures disagree, the safe direction is to treat an
+# unsignallable PID as ALIVE: refusing to build is always safer than
+# building concurrently. Returns 0 (treat as alive) unless `kill -0`
+# reports ESRCH.
+_build_lock_pid_alive() {
+  local pid="$1" kill_err
+  if kill -0 "$pid" 2>/dev/null; then
+    return 0
+  fi
+  kill_err="$(kill -0 "$pid" 2>&1 1>/dev/null || true)"
+  [[ "$kill_err" == *"not permitted"* ]]
+}
+
+# The candidate lock path is resolved here, but $LOCKDIR (the variable the
+# EXIT trap above actually acts on) is deliberately NOT assigned until
+# ownership of the lock is actually claimed, below. Assigning $LOCKDIR this
+# early was the #730-class bug: a REFUSED invocation (another build already
+# holds the lock -- the `exit 2` a few lines down) would still populate
+# $LOCKDIR, so the trap on that invocation's own exit deleted the lock the
+# live build still held -- silently defeating the guard and inviting a
+# retry to race the live build for real.
+LOCK_PATH="$GIT_DIR_ABS/build.lock.d"
+if ! mkdir "$LOCK_PATH" 2>/dev/null; then
+  LOCK_PID="$(cat "$LOCK_PATH/pid" 2>/dev/null || true)"
+  if [[ -n "$LOCK_PID" ]] && _build_lock_pid_alive "$LOCK_PID"; then
     echo "!!! Refusing to start: another scripts/build.sh (PID $LOCK_PID) appears to be" >&2
-    echo "!!! running against this store already -- lock: $LOCKDIR" >&2
+    echo "!!! running against this store already -- lock: $LOCK_PATH" >&2
     echo "!!! Two overlapping tar_make() runs against ONE store is exactly the incident" >&2
     echo "!!! that corrupted docs/_targets/meta/meta and produced issue #730 (a checker" >&2
     echo "!!! fail-open that then silently reported PASS on the truncated result)." >&2
     echo "!!! If PID $LOCK_PID is definitely not running scripts/build.sh (e.g. a stale" >&2
-    echo "!!! lock left behind by a killed session), remove $LOCKDIR by hand and re-run." >&2
+    echo "!!! lock left behind by a killed session), remove $LOCK_PATH by hand and re-run." >&2
     echo "!!! BUILD DID NOT RUN. This is NOT a pass.                                   !!!" >&2
+    # $LOCKDIR is still "" here on purpose -- this invocation never claimed
+    # the lock, so the EXIT trap (which only rm -rf's a non-empty $LOCKDIR)
+    # must not touch it. See the comment above LOCK_PATH.
     exit 2
   fi
   echo "--- Step 0.5: stale build lock found (PID $LOCK_PID not running) -- removing and retrying ---"
-  rm -rf "$LOCKDIR"
-  if ! mkdir "$LOCKDIR" 2>/dev/null; then
-    echo "!!! Could not acquire build lock even after removing a stale one: $LOCKDIR !!!" >&2
+  rm -rf "$LOCK_PATH"
+  if ! mkdir "$LOCK_PATH" 2>/dev/null; then
+    echo "!!! Could not acquire build lock even after removing a stale one: $LOCK_PATH !!!" >&2
     echo "!!! BUILD DID NOT RUN. This is NOT a pass.                                   !!!" >&2
     exit 2
   fi
 fi
+# Ownership is claimed HERE -- only after `mkdir` has actually succeeded
+# (first try, or after reclaiming a stale lock above) -- which is the
+# earliest point at which the EXIT trap should be allowed to remove it.
+LOCKDIR="$LOCK_PATH"
 # Written immediately after mkdir succeeds, before anything else, to
 # minimise (not eliminate) the window in which a second, near-simultaneous
 # invocation could read an empty pid file and mistake this lock for stale.
