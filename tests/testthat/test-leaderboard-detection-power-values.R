@@ -8,7 +8,7 @@ testthat::local_edition(3)
 # INPUT (a declared row in STRATEGY_OBS_ANN_FACTOR); it does not check that
 # the diagnostic actually produced a value. S20 asserts the property #726
 # wants: every row with sharpe > 0 has a non-NA detection_min_n_years /
-# detection_underpowered, and (where k_eff_strat is itself usable) a non-NA
+# detection_underpowered, and (where k_eff_leaderboard is itself usable) a non-NA
 # detection_min_n_years_mt / detection_underpowered_mt.
 #
 # Background (#726): Risk State passed S19 (it IS in STRATEGY_OBS_ANN_FACTOR,
@@ -25,7 +25,7 @@ source(here::here("R/plan_qa_gates.R"))
 # negative sharpe with an NA verdict -- deliberately included to prove the
 # gate correctly ignores non-positive-Sharpe rows (path a, #726's own text:
 # "underpowered is not a meaningful question for a strategy that isn't even
-# claiming a positive edge"). "Value (HML)" has k_eff_strat = NA, so its mt
+# claiming a positive edge"). "Value (HML)" has k_eff_leaderboard = NA, so its mt
 # columns are legitimately NA too (#726 item 4's documented guard) and must
 # NOT trip the mt assertion.
 good_leaderboard <- tibble::tibble(
@@ -37,7 +37,7 @@ good_leaderboard <- tibble::tibble(
   detection_underpowered     = c(FALSE, NA, TRUE),
   detection_min_n_years_mt   = c(12, NA_real_, NA_real_),
   detection_underpowered_mt  = c(FALSE, NA, NA),
-  k_eff_strat                = c(4.847, 4.847, NA_real_)
+  k_eff_leaderboard          = c(4.847, 4.847, NA_real_)
 )
 
 # Path (b): Risk State's actual #726 shape -- sharpe > 0, months NA.
@@ -50,7 +50,7 @@ months_na_leaderboard <- tibble::tibble(
   detection_underpowered     = NA,
   detection_min_n_years_mt   = NA_real_,
   detection_underpowered_mt  = NA,
-  k_eff_strat                = NA_real_
+  k_eff_leaderboard          = NA_real_
 )
 
 # Path (c): months is usable (present, >= 2) but hd_detection_power() still
@@ -65,10 +65,10 @@ power_fail_leaderboard <- tibble::tibble(
   detection_underpowered     = NA,
   detection_min_n_years_mt   = NA_real_,
   detection_underpowered_mt  = NA,
-  k_eff_strat                = NA_real_
+  k_eff_leaderboard          = NA_real_
 )
 
-# #726 item 4: single-test verdict is fine, but k_eff_strat IS usable
+# #726 item 4: single-test verdict is fine, but k_eff_leaderboard IS usable
 # (>= 1, non-NA) and the mt columns are still NA -- must trip the mt
 # assertion even though the single-test assertion passes.
 mt_missing_leaderboard <- tibble::tibble(
@@ -80,7 +80,7 @@ mt_missing_leaderboard <- tibble::tibble(
   detection_underpowered     = TRUE,
   detection_min_n_years_mt   = NA_real_,
   detection_underpowered_mt  = NA,
-  k_eff_strat                = 4.847
+  k_eff_leaderboard          = 4.847
 )
 
 # ── Tests: single-test assertion ────────────────────────────────────────────
@@ -122,7 +122,7 @@ test_that("check_leaderboard_detection_power_values throws and names path (c) wh
 
 # ── Tests: multiple-testing-corrected assertion (#726 item 4) ──────────────
 
-test_that("check_leaderboard_detection_power_values throws when k_eff_strat is usable but the mt verdict is NA", {
+test_that("check_leaderboard_detection_power_values throws when k_eff_leaderboard is usable but the mt verdict is NA", {
   expect_error(
     check_leaderboard_detection_power_values(mt_missing_leaderboard),
     regexp = "Factor DRIF"
@@ -133,9 +133,9 @@ test_that("check_leaderboard_detection_power_values throws when k_eff_strat is u
   )
 })
 
-test_that("check_leaderboard_detection_power_values does not require mt columns when k_eff_strat is NA", {
-  # power_fail_leaderboard has k_eff_strat = NA and NA mt columns -- would
-  # wrongly trip the mt assertion if it didn't guard on k_eff_strat's own
+test_that("check_leaderboard_detection_power_values does not require mt columns when k_eff_leaderboard is NA", {
+  # power_fail_leaderboard has k_eff_leaderboard = NA and NA mt columns -- would
+  # wrongly trip the mt assertion if it didn't guard on k_eff_leaderboard's own
   # usability. Isolate that shape with a passing single-test verdict so only
   # the mt guard is under test.
   fixture <- power_fail_leaderboard
