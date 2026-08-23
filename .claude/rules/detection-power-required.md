@@ -3,21 +3,31 @@
 ## Source
 
 [#726](https://github.com/JohnGavin/historical/issues/726). The first live run of the
-`hd_detection_power()` columns showed that **five of the seven computable
-positive-Sharpe strategies on the leaderboard cannot be distinguished from zero by
-their own samples**, two of them by more than an order of magnitude:
+`hd_detection_power()` columns showed that **six of the eight positive-Sharpe
+strategies on the leaderboard cannot be distinguished from zero by their own
+samples**, two of them by more than an order of magnitude:
 
 | strategy | sharpe | have (yrs) | need (yrs) | shortfall |
 |---|---:|---:|---:|---:|
-| Value (HML) | 0.068 | 62.7 | 1337 | 21× |
-| Factor DRIF | 0.076 | 57.6 | 1067 | 19× |
-| Mom Pre-Peak | 0.226 | 53.1 | 121 | 2.3× |
-| LTR | 0.330 | 21.2 | 57 | 2.7× |
-| Managed Futures | 0.477 | 18.9 | 27 | 1.4× |
+| Value (HML) | 0.068 | 62.7 | 1337.1 | 21× |
+| Factor DRIF | 0.076 | 57.6 | 1067.2 | 19× |
+| Mom Pre-Peak | 0.226 | 53.1 | 121.1 | 2.3× |
+| Risk State | 0.252 | 33.2 | 97.4 | 2.9× |
+| LTR | 0.330 | 21.2 | 56.9 | 2.7× |
+| Managed Futures | 0.477 | 18.9 | 27.3 | 1.4× |
+
+Only Avoid Worst (0.620, needs 16.1 of 33.1 available) and OLMAR-1 (0.780, needs 10.2
+of 16.1) clear the bar.
 
 Value (HML) has one of the longest samples in the repo and is still 21× short. No
 attainable sample fixes that. The metric had existed as leaderboard column 60 of 61
 and had never been read.
+
+Risk State is the row worth remembering. It first appeared as *not computable* — its
+`months` arrived NA because `calc_metrics()` computed `n_obs` and discarded it one
+line before returning. Filling that blank did not add a reassuring seventh row; it
+added a sixth adverse one. **The NA was standing in for a verdict, and the verdict was
+against us.** That is the argument for requirement 1 below in a single case.
 
 ## When This Applies
 
