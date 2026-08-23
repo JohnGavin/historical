@@ -92,7 +92,8 @@
 #'     must be positive -- see Details.
 #'   \item Does not itself apply a multiple-testing correction. Combine with
 #'     \code{\link{hd_strat_keff_vertox}} by tightening \code{alpha} (e.g.
-#'     Bonferroni: \code{alpha / k_eff_strat}) if testing several strategies.
+#'     Bonferroni: \code{alpha / k_eff_leaderboard}) if testing several
+#'     strategies.
 #' }
 #'
 #' @param sharpe_annual Numeric scalar, must be > 0. The annualised Sharpe

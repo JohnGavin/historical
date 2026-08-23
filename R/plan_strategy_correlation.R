@@ -30,7 +30,7 @@ CORR_MIN_OBS  <- 12L
 # Redundancy threshold: |r| >= this with a better-Sharpe peer → flag as redundant
 REDUNDANCY_THRESH <- 0.80
 
-# ── Leaderboard-wide return alignment (#728 items 1+2) ──────────────────────
+# ── Leaderboard-wide return alignment (#728 items 1+2, widened by #733) ─────
 #
 # strat_corr_matrix above (and the K_eff it feeds, strat_keff_vertox) is
 # scoped to a 5-strategy FAMILY: stk_max, stk_drif, fac_max, fac_drif, ltr.
@@ -41,31 +41,46 @@ REDUNDANCY_THRESH <- 0.80
 #
 # STRAT_RETURNS_WIDE_CODES names every strategy this widened alignment
 # covers, using the same code_name vocabulary as port_returns/strat_cols
-# above. Deliberately NOT all 17 leaderboard strategies -- two genuine,
-# documented data constraints (#728 item 1: "if it is a genuine data
-# constraint... say so precisely and leave those NA rather than fabricating
-# inputs"):
+# above. #728 items 1+2 widened this from the 5-strategy family to 11 of 17
+# by adding every OTHER monthly-frequency strategy. #733 widens it further
+# to 16 of 17 by folding in the five DAILY-frequency strategies (CMR,
+# OLMAR-1, TOM, Risk State, Avoid Worst; ann_factor = 252 in
+# STRATEGY_OBS_ANN_FACTOR, R/plan_leaderboard.R) via monthly resampling --
+# see strat_returns_daily_native and .resample_daily_to_monthly() below.
 #
-#   1. DAILY-frequency strategies (CMR, OLMAR-1, TOM, Risk State, Avoid
-#      Worst; ann_factor = 252 in STRATEGY_OBS_ANN_FACTOR,
-#      R/plan_leaderboard.R) are excluded, same reason
-#      strat_returns_aligned above already excludes avoid_worst/risk_state:
-#      mixing daily and monthly series into one correlation matrix requires
-#      an aggregation step that risks the look-ahead bias described in #215.
-#      A future daily-frequency alignment target is a separate project.
-#   2. PSO Optimal is excluded: it is not an independent data source. It is
-#      port_optimal_weights %*% c(stk_max, stk_drif, fac_max, fac_drif) (see
-#      the "PSO Optimal" block in plan_leaderboard.R's `leaderboard`
-#      target) -- a linear combination of four series already in this
-#      matrix. Including a near-collinear combination alongside its own
-#      components adds no independent information and risks a near-singular
-#      correlation matrix in hd_strat_keff_vertox()'s Cholesky step.
+# Chosen mixed-frequency-spine design (#733, over the alternative of a
+# separate daily spine combined post hoc): a single K_eff computed across
+# every strategy the leaderboard actually ranks is a more faithful
+# multiple-testing count than two K_effs that would need combining after
+# the fact, and #728's own complaint was precisely that a narrower scope
+# understates the true multiplicity. The five daily series are compounded
+# to monthly (prod(1 + daily_ret) - 1 within each calendar month) and
+# joined onto the SAME `ym` spine as the 11 already-monthly strategies --
+# see .resample_daily_to_monthly()'s roxygen for why this does NOT
+# reintroduce the #215 look-ahead-bias risk the pre-#733 comment here used
+# to cite as the reason for excluding daily strategies outright: compounding
+# ALREADY-REALISED daily returns into a monthly total is accounting, not a
+# new signal-timing decision, so no future information crosses into an
+# earlier trade.
 #
-# That leaves 11 of 17 strategies covered here (up from the family's 4-5).
+# Only ONE genuine, documented exclusion remains after #733:
+#
+#   PSO Optimal is excluded: it is not an independent data source. It is
+#   port_optimal_weights %*% c(stk_max, stk_drif, fac_max, fac_drif) (see
+#   the "PSO Optimal" block in plan_leaderboard.R's `leaderboard`
+#   target) -- a linear combination of four series already in this
+#   matrix. Including a near-collinear combination alongside its own
+#   components adds no independent information and risks a near-singular
+#   correlation matrix in hd_strat_keff_vertox()'s Cholesky step.
+#
+# That leaves 16 of 17 strategies covered here (up from 11 after #728, and
+# 4-5 in the original family).
 STRAT_RETURNS_WIDE_CODES <- c(
   "stk_max", "stk_drif", "fac_max", "fac_drif", "ltr", "xgb_drif",
   "mom_prepeak", "mom_postpeak", "mom_combined", "value_hml",
-  "managed_futures"
+  "managed_futures",
+  # ── #733: daily strategies, monthly-resampled ──
+  "cmr", "olmar_1", "tom", "risk_state", "avoid_worst"
 )
 
 #' Full-join a list of per-strategy return tables onto a common `ym` spine
@@ -86,6 +101,97 @@ STRAT_RETURNS_WIDE_CODES <- c(
 #' @noRd
 .full_join_return_spine <- function(parts) {
   Reduce(function(x, y) dplyr::full_join(x, y, by = "ym"), parts)
+}
+
+
+#' Resample a daily return series to monthly by compounding within each
+#' calendar month (#733 mixed-frequency spine)
+#'
+#' Extends the leaderboard-wide correlation spine (STRAT_RETURNS_WIDE_CODES)
+#' to the five daily-frequency strategies (CMR, OLMAR-1, TOM, Risk State,
+#' Avoid Worst) by converting each one's daily return series to a monthly
+#' return series that can join the existing `ym` spine alongside the
+#' already-monthly strategies. The conversion is plain compounding of
+#' ALREADY-REALISED returns (\code{prod(1 + r) - 1} within each calendar
+#' month) -- not a new signal or trading decision -- so it does not
+#' reintroduce the #215 look-ahead-bias risk the pre-#733 STRAT_RETURNS_WIDE
+#' comment cited as the reason daily strategies were excluded outright: no
+#' information from later in the month is used to inform an earlier trade,
+#' the month's return is simply re-stated at monthly granularity.
+#'
+#' Partial months (fewer than \code{min_days} trading-day observations) are
+#' EXCLUDED from the output rather than silently compounded with whatever
+#' days happen to be present. This is the fail-loud-not-null.md discipline
+#' applied to a periodicity transformation (see that rule's "unexpected
+#' value silently coerced" defect class, #637/#640/#641/#643, and its
+#' explicit warning against exactly this kind of resampling going wrong): an
+#' incomplete month's compounded return LOOKS like a normal monthly
+#' observation but is actually built from a fraction of the month's trading
+#' days, understating (or overstating) the true monthly move. Exclusions are
+#' never silent -- \code{cli::cli_inform()} names every excluded month and
+#' its day count so a reviewer can see exactly what was dropped and why,
+#' satisfying the rule's "the drop must be observable" requirement.
+#'
+#' @param dates Date vector (or coercible via \code{as.Date()}), one entry
+#'   per daily observation.
+#' @param rets Numeric return vector, same length as \code{dates}, one entry
+#'   per trading day. Entries where either `dates` or `rets` is `NA` are
+#'   treated as no-observation days: excluded from both the compounding and
+#'   the day count for that calendar month (never silently coerced into a
+#'   0% contribution, which would understate the month's volatility).
+#' @param min_days Minimum non-NA trading-day observations required in a
+#'   calendar month for it to be included in the output (default `15L` --
+#'   roughly 3/4 of a typical ~19-23 trading-day month; catches partial
+#'   first/last months of a series without over-trimming genuinely short-
+#'   but-complete months, e.g. a December with several holiday closures).
+#' @param label Strategy label used only in the \code{cli_inform()} message,
+#'   so a reviewer can tell which strategy's exclusions they are reading.
+#' @return Tibble with columns \code{ym} (character, `"YYYY-MM"`) and
+#'   \code{ret} (compounded monthly return), one row per COMPLETE month,
+#'   sorted by \code{ym}. Zero rows (not an error) if every month is
+#'   partial or no data was supplied -- the caller's downstream
+#'   \code{.build_wide_corr_matrix()} / `CORR_MIN_OBS` check is what turns
+#'   "too little data" into a loud failure, not this function.
+#' @noRd
+.resample_daily_to_monthly <- function(dates, rets, min_days = 15L, label = "strategy") {
+  dates <- as.Date(dates)
+  keep  <- !is.na(dates) & !is.na(rets)
+  dates <- dates[keep]
+  rets  <- rets[keep]
+
+  if (length(dates) == 0L) {
+    return(tibble::tibble(ym = character(0L), ret = numeric(0L)))
+  }
+
+  ym       <- format(dates, "%Y-%m")
+  by_month <- split(rets, ym)
+  n_days   <- vapply(by_month, length, integer(1L))
+
+  complete <- names(by_month)[n_days >= min_days]
+  excluded <- names(by_month)[n_days < min_days]
+
+  if (length(excluded) > 0L) {
+    excl_desc <- sprintf(
+      "%s (%d day%s)", excluded, n_days[excluded],
+      ifelse(n_days[excluded] == 1L, "", "s")
+    )
+    cli::cli_inform(c(
+      "i" = paste0(
+        "{label}: excluded {length(excluded)} partial month{?s} from the ",
+        "monthly-resampled spine ({paste(excl_desc, collapse = ', ')}) -- ",
+        "fewer than {min_days} trading days."
+      )
+    ))
+  }
+
+  if (length(complete) == 0L) {
+    return(tibble::tibble(ym = character(0L), ret = numeric(0L)))
+  }
+
+  monthly_ret <- vapply(complete, function(m) prod(1 + by_month[[m]]) - 1, numeric(1L))
+
+  tibble::tibble(ym = complete, ret = unname(monthly_ret)) |>
+    dplyr::arrange(ym)
 }
 
 
@@ -334,8 +440,92 @@ plan_strategy_correlation <- function() {
       result
     }),
 
-    # ── Leaderboard-wide return alignment (#728 items 1+2) ───────────────────
-    # Widens strat_returns_aligned's scope from 5 strategies to the 11 named
+    # ── Daily-native return series for the five daily strategies (#733) ──────
+    # Kept SEPARATE from strat_returns_wide's monthly `ym` spine because
+    # strat_deflated_sharpe (R/plan_leaderboard.R) needs each daily
+    # strategy's return series at its OWN native frequency (ann_factor =
+    # 252) to compute naive_sharpe/deflated_sharpe consistently with the
+    # figures already published elsewhere on the leaderboard for these rows
+    # (STRATEGY_OBS_ANN_FACTOR) -- resampling to monthly BEFORE computing
+    # deflated_sharpe would shrink T_obs and change the statistic's
+    # properties for no reason; only the CORRELATION matrix (which needs a
+    # common spine across strategies of different native frequency) is
+    # built from the monthly-RESAMPLED version, via .resample_daily_to_monthly()
+    # in strat_returns_wide below.
+    #
+    # Returns a plain named list (not a joined tibble): each strategy's
+    # dates generally do NOT align 1:1 with any other's (different trading
+    # calendars, different history start dates), so there is no shared
+    # `date` spine to join onto here -- unlike the monthly `ym` parts below,
+    # which share a coarser key. Each element is a tibble with `date` and
+    # `ret` columns.
+    #
+    # Source selection per strategy (matches R/plan_leaderboard.R's
+    # .norm_cmr()/.norm_olmar()/.norm_tom()/.norm_rsc()/.norm_aw() so the
+    # series feeding K_eff is the SAME series the leaderboard's own row is
+    # scored on, not a lookalike):
+    #   cmr:         best-Sharpe lookback among cmr_returns_1m/3m/6m, chosen
+    #                the same way .norm_cmr() picks cmr_summary's best row
+    #                (R/plan_commodities_mean_reversion.R).
+    #   olmar_1:     olmar_portfolio$net_ret (R/plan_olmar.R).
+    #   tom:         tom_portfolio$ret_net (R/plan_turn_of_month.R).
+    #   risk_state:  rsc_portfolio$ret_strategy -- the SPY_overlay series
+    #                (R/plan_risk_state.R; .norm_rsc() filters rsc_metrics
+    #                to this same variant).
+    #   avoid_worst: SPY daily returns with the worst 10 days (by return,
+    #                over the WHOLE series) removed -- replicates aw_metrics'
+    #                own "Remove 10 Worst" / "Full Period" construction
+    #                (R/plan_avoid_worst.R's calc()) rather than
+    #                re-deriving a different selection.
+    targets::tar_target(strat_returns_daily_native, {
+      library(dplyr)
+
+      best_lookback <- cmr_summary |>
+        filter(!is.na(sharpe)) |>
+        arrange(desc(sharpe)) |>
+        slice(1) |>
+        pull(lookback)
+      cmr_source <- switch(best_lookback,
+        "1m" = cmr_returns_1m,
+        "3m" = cmr_returns_3m,
+        "6m" = cmr_returns_6m,
+        cli::cli_abort(c(
+          "x" = "Unrecognised CMR lookback {.val {best_lookback}} from cmr_summary.",
+          "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
+        ))
+      )
+      cmr_daily <- cmr_source |>
+        transmute(date = as.Date(date), ret = strategy_ret)
+
+      olmar_daily <- olmar_portfolio |>
+        transmute(date = as.Date(date), ret = net_ret)
+
+      tom_daily <- tom_portfolio |>
+        transmute(date = as.Date(date), ret = ret_net)
+
+      risk_state_daily <- rsc_portfolio |>
+        transmute(date = as.Date(date), ret = ret_strategy)
+
+      # Avoid Worst: worst-10-day removal over the full SPY series, same
+      # selection as aw_metrics' calc(period = "Full Period", scenario =
+      # "Remove 10 Worst") in R/plan_avoid_worst.R.
+      spy <- aw_daily_returns |> filter(ticker == "SPY") |> arrange(date)
+      ord <- order(spy$ret)
+      worst_10 <- ord[seq_len(min(10L, nrow(spy) - 1L))]
+      avoid_worst_daily <- spy[-worst_10, ] |>
+        transmute(date = as.Date(date), ret = ret)
+
+      list(
+        cmr         = cmr_daily,
+        olmar_1     = olmar_daily,
+        tom         = tom_daily,
+        risk_state  = risk_state_daily,
+        avoid_worst = avoid_worst_daily
+      )
+    }),
+
+    # ── Leaderboard-wide return alignment (#728 items 1+2, widened by #733) ──
+    # Widens strat_returns_aligned's scope from 5 strategies to the 16 named
     # in STRAT_RETURNS_WIDE_CODES above. Deliberately uses full_join (spine =
     # union of every ym across all sources), NOT inner_join: an inner_join
     # across N series lets any one series' shorter history truncate every
@@ -345,6 +535,12 @@ plan_strategy_correlation <- function() {
     # no return that month) and are handled downstream by
     # .build_wide_corr_matrix()'s pairwise-complete correlation, not by
     # dropping rows.
+    #
+    # #733: the five daily-frequency parts are built by resampling
+    # strat_returns_daily_native's native series to monthly via
+    # .resample_daily_to_monthly() (compounding, with partial months
+    # excluded and reported -- see that function's roxygen) so they can
+    # join the SAME `ym` spine as the 11 already-monthly parts below.
     targets::tar_target(strat_returns_wide, {
       library(dplyr)
 
@@ -396,9 +592,36 @@ plan_strategy_correlation <- function() {
         mutate(ym = format(as.Date(date), "%Y-%m")) |>
         select(ym, managed_futures = ret_ls)
 
-      parts <- list(
-        base, ltr_col, xgb_col, mom_prepeak_col, mom_postpeak_col,
-        mom_combined_col, value_hml_col, managed_futures_col
+      # #733: monthly-resample each daily-native series and rename its
+      # `ret` column to the strategy's code_name so it can enter
+      # .full_join_return_spine() alongside the already-monthly parts
+      # above. label = names(strat_returns_daily_native) so
+      # .resample_daily_to_monthly()'s cli_inform() exclusion messages
+      # name the actual strategy, not a generic placeholder.
+      #
+      # Base-R column rename (names<-), NOT dplyr::rename(!!nm := ret):
+      # targets' tidy_eval feature (tar_option_get("tidy_eval"), default
+      # TRUE) eagerly unquotes any `!!` found ANYWHERE in a target's command
+      # body at PLAN-DEFINITION time (rlang::expr()'s AST walk does not
+      # respect the enclosing function(nm) {...} closure's scope -- `nm` is
+      # only bound at lapply()'s RUN time, so plan-definition-time unquoting
+      # fails with "object 'nm' not found", confirmed via
+      # targets:::tar_tidy_eval() -> rlang::expr() -> enexpr() in this
+      # target's own call stack). base::names<-() has no unquoting syntax
+      # for tidy_eval to misfire on.
+      daily_monthly_cols <- lapply(names(strat_returns_daily_native), function(nm) {
+        d <- strat_returns_daily_native[[nm]]
+        out <- .resample_daily_to_monthly(d$date, d$ret, min_days = 15L, label = nm)
+        names(out)[names(out) == "ret"] <- nm
+        out
+      })
+
+      parts <- c(
+        list(
+          base, ltr_col, xgb_col, mom_prepeak_col, mom_postpeak_col,
+          mom_combined_col, value_hml_col, managed_futures_col
+        ),
+        daily_monthly_cols
       )
 
       .full_join_return_spine(parts) |>
