@@ -264,8 +264,9 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
 #'   for cli's pluralisation (\code{{period_noun}{?s}}).
 #' @param check_key_col Logical. If \code{TRUE} (default), abort when `df`
 #'   has no `key` column. Callers that derive `key` themselves just before
-#'   calling (e.g. mom_prepeak deriving `ym` from `exec_date`), or that
-#'   already guarantee it by construction (e.g. CMR), pass `FALSE`.
+#'   calling (e.g. mom_prepeak deriving `ym` from `exec_date`) pass `FALSE`;
+#'   callers whose `df` already carries `key` by construction (e.g. CMR's
+#'   `date` column, since #722) leave it at the default `TRUE`.
 #' @param df_arg_name Character. Word used for `df` in the
 #'   missing-key-column message, e.g. \code{"port"}.
 #'
