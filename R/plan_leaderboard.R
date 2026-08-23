@@ -107,7 +107,7 @@ STRATEGY_OBS_ANN_FACTOR <- tibble::tibble(
     "R/plan_portfolio_opt.R (ann_vol <- sd(port_ret) * sqrt(12))",
     "This file's own .norm_olmar() comment ('daily ann_factor'); OLMAR (Li & Hoi 2012) rebalances daily",
     "R/plan_turn_of_month.R:368 ('TOM is a daily strategy (sqrt(252) annualisation)')",
-    "R/plan_risk_state.R calc_metrics(periods_per_year = 252L default); rsc_metrics has no months/n_days column at all, so this row's `months` is always NA -- included for completeness/future-proofing",
+    "R/plan_risk_state.R calc_metrics(periods_per_year = 252L default); calc_metrics() now returns n_obs (#726 item 3), renamed to `months` by .norm_rsc() below -- previously this row's `months` was always NA because rsc_metrics had no months/n_days column at all",
     "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())"
   )
 )
@@ -209,11 +209,18 @@ plan_leaderboard <- function() {
       # plan_risk_state.R:calc_metrics().
       # Source: R/plan_risk_state.R:270-273 stores cagr/vol/max_dd as PERCENT
       # (round(x * 100, 2)) -- convert to fraction.
+      # #726 item 3: rsc_metrics now carries n_obs (raw observation count,
+      # added to calc_metrics() in R/plan_risk_state.R) -- renamed to
+      # `months` here, same convention as .norm_aw()'s n_days rename below,
+      # so the detection-power diagnostic (#711 Gap 1) below can finally
+      # compute a real verdict for this row instead of silently NA-ing on a
+      # missing `months` column (#726's "close the NA hole" finding).
       .norm_rsc <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
           filter(strategy == "SPY_overlay") |>
           select(-strategy) |>
+          rename(months = n_obs) |>
           mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
                  ann_rf = ann_rf / 100)
       }
@@ -747,34 +754,108 @@ plan_leaderboard <- function() {
       # hd_detection_power() has no power calculation for a non-positive
       # claimed effect, so "underpowered" is not a meaningful question for
       # a strategy that isn't even claiming a positive edge in this row).
+      # Every row where sharpe > 0 is expected to end up with a non-NA verdict
+      # here -- R/plan_qa_gates.R's check_leaderboard_detection_power_values()
+      # (S20, #726 item 3) aborts the pipeline if one doesn't, naming which of
+      # the three possible NA paths (months missing/too short, or
+      # hd_detection_power() itself failing inside the tryCatch below) is
+      # responsible, so a future gap like Risk State's (months was never
+      # populated -- see .norm_rsc() and the STRATEGY_OBS_ANN_FACTOR comment
+      # above) fails loudly instead of surviving silently forever.
+      #
+      # detection_min_n_years_mt / detection_underpowered_mt (#726 item 4):
+      # the SAME calculation, but at alpha = 0.05 / k_eff_strat instead of the
+      # single-test alpha = 0.05 above -- the Bonferroni multiple-testing
+      # correction hd_detection_power()'s own roxygen "Assumptions and
+      # limits" section already suggests combining with
+      # hd_strat_keff_vertox(), and which #726's issue text argues nothing
+      # currently applies. k_eff_strat is joined from strat_deflated_sharpe
+      # earlier in this target (see "Deflated Sharpe" section above) and, as
+      # of this table, strat_deflated_sharpe only has one row per column in
+      # that section's `col_map` (Stock MAX, Stock DRIF, Factor MAX, Factor
+      # DRIF) -- every OTHER strategy's k_eff_strat is NA after the left_join,
+      # not because the multiple-testing correction doesn't apply to them
+      # (it does -- #726 names Value (HML) and Factor DRIF specifically) but
+      # because strat_keff_vertox()/strategy_correlation's correlation matrix
+      # is itself only computed over those four columns. Rather than guess a
+      # k_eff_strat for strategies outside that matrix, the `_mt` columns are
+      # deliberately NA wherever k_eff_strat is NA or < 1 (a k_eff_strat below
+      # 1 would WIDEN alpha, the opposite of a Bonferroni correction, and
+      # cannot be a valid effective-test count) -- an explicit, commented
+      # default per fail-loud-not-null.md's "Required Pattern" item 2, not a
+      # silent coercion, and S20 only asserts `_mt` coverage where k_eff_strat
+      # is actually non-NA (see check_leaderboard_detection_power_values()).
+      # Widening strat_corr_matrix's coverage to every strategy is out of
+      # scope here (#726 lists it as neither item 3 nor item 4) and is left
+      # as a follow-up.
       all_metrics <- all_metrics |>
         dplyr::left_join(STRATEGY_OBS_ANN_FACTOR, by = "strategy")
 
-      .detection_diag_row <- function(sr, n, af) {
-        if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2) {
-          return(tibble::tibble(
+      # Defensive: strat_deflated_sharpe's join above is itself guarded by
+      # `!is.null(strat_deflated_sharpe) && nrow(strat_deflated_sharpe) > 0`,
+      # so k_eff_strat may not exist as a column at all (e.g. in a partial
+      # test harness that omits that upstream target) -- pmap_dfr below needs
+      # every element to be a real vector, not a NULL, so backfill NA here.
+      if (!"k_eff_strat" %in% names(all_metrics)) {
+        all_metrics$k_eff_strat <- NA_real_
+      }
+
+      .detection_diag_row <- function(sr, n, af, keff) {
+        single <- if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2) {
+          tibble::tibble(
             detection_min_n_years  = NA_real_,
             detection_underpowered = NA
-          ))
+          )
+        } else {
+          dp <- tryCatch(
+            historicaldata::hd_detection_power(sharpe_annual = sr, n_obs = n, ann_factor = af),
+            error = function(e) NULL
+          )
+          if (is.null(dp)) {
+            tibble::tibble(
+              detection_min_n_years  = NA_real_,
+              detection_underpowered = NA
+            )
+          } else {
+            tibble::tibble(
+              detection_min_n_years  = dp$min_n_years,
+              detection_underpowered = dp$underpowered
+            )
+          }
         }
-        dp <- tryCatch(
-          historicaldata::hd_detection_power(sharpe_annual = sr, n_obs = n, ann_factor = af),
-          error = function(e) NULL
-        )
-        if (is.null(dp)) {
-          return(tibble::tibble(
-            detection_min_n_years  = NA_real_,
-            detection_underpowered = NA
-          ))
+
+        mt <- if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2 ||
+                    is.na(keff) || keff < 1) {
+          tibble::tibble(
+            detection_min_n_years_mt  = NA_real_,
+            detection_underpowered_mt = NA
+          )
+        } else {
+          dp_mt <- tryCatch(
+            historicaldata::hd_detection_power(
+              sharpe_annual = sr, n_obs = n, ann_factor = af, alpha = 0.05 / keff
+            ),
+            error = function(e) NULL
+          )
+          if (is.null(dp_mt)) {
+            tibble::tibble(
+              detection_min_n_years_mt  = NA_real_,
+              detection_underpowered_mt = NA
+            )
+          } else {
+            tibble::tibble(
+              detection_min_n_years_mt  = dp_mt$min_n_years,
+              detection_underpowered_mt = dp_mt$underpowered
+            )
+          }
         }
-        tibble::tibble(
-          detection_min_n_years  = dp$min_n_years,
-          detection_underpowered = dp$underpowered
-        )
+
+        dplyr::bind_cols(single, mt)
       }
 
       detection_diag <- purrr::pmap_dfr(
-        list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor),
+        list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor,
+             all_metrics$k_eff_strat),
         .detection_diag_row
       )
 

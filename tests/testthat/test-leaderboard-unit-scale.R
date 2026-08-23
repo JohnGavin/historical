@@ -152,6 +152,46 @@ test_that(".norm_tom converts percent-native source metrics to fraction", {
   expect_equal(res$sharpe, 0.28)  # sharpe is scale-free, never converted
 })
 
+.norm_rsc_test <- function(m) {
+  if (is.null(m) || nrow(m) == 0) return(NULL)
+  m |>
+    dplyr::filter(strategy == "SPY_overlay") |>
+    dplyr::select(-strategy) |>
+    dplyr::rename(months = n_obs) |>
+    dplyr::mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
+                  ann_rf = ann_rf / 100)
+}
+
+# n_obs (#726 item 3): rsc_metrics' calc_metrics() (R/plan_risk_state.R) now
+# publishes a raw observation count -- previously absent entirely, which is
+# why the real .norm_rsc()'s `months` column was always NA (see the
+# STRATEGY_OBS_ANN_FACTOR comment in R/plan_leaderboard.R and QA gate S20,
+# test-leaderboard-detection-power-values.R).
+synthetic_rsc_metrics <- tibble::tibble(
+  strategy   = c("SPY_buyhold", "SPY_overlay"),
+  period     = c("Full Period", "Full Period"),
+  cagr       = c(9.80, 11.30),
+  vol        = c(16.00, 13.20),
+  sharpe     = c(0.40, 0.55),
+  ann_rf     = c(1.80, 1.80),
+  max_dd     = c(-30.00, -22.00),
+  hac_tstat  = c(1.9, 2.5),
+  hac_sharpe = c(0.59, 0.83),
+  n_obs      = c(4000L, 4000L)
+)
+
+test_that(".norm_rsc converts percent-native source metrics to fraction and renames n_obs to months (#726 item 3)", {
+  res <- .norm_rsc_test(synthetic_rsc_metrics)
+  expect_equal(nrow(res), 1L)
+  expect_equal(res$cagr, 0.1130, tolerance = 1e-8)
+  expect_equal(res$vol, 0.1320, tolerance = 1e-8)
+  expect_equal(res$max_dd, -0.2200, tolerance = 1e-8)
+  expect_equal(res$ann_rf, 0.0180, tolerance = 1e-8)
+  expect_true("months" %in% names(res))
+  expect_false("n_obs" %in% names(res))
+  expect_equal(res$months, 4000L)
+})
+
 .norm_mom_sibling_test <- function(m) {
   if (is.null(m) || nrow(m) == 0) return(NULL)
   m |>

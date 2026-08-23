@@ -80,6 +80,43 @@ test_that("rsc_metrics: SPY_overlay Full Period row has both sharpe and hac_shar
   expect_false(isTRUE(all.equal(full_row$sharpe, full_row$hac_sharpe)))
 })
 
+test_that("rsc_metrics: calc_metrics() now publishes n_obs, the raw observation count (#726 item 3)", {
+  # #726: rsc_metrics had no months/n_obs/n_days column at all, so
+  # R/plan_leaderboard.R's .norm_rsc() had nothing to rename into `months`
+  # and the SPY_overlay row's detection-power diagnostic
+  # (.detection_diag_row(), R/plan_leaderboard.R) was silently NA forever
+  # regardless of sharpe -- QA gate S20 (check_leaderboard_detection_power_
+  # values(), R/plan_qa_gates.R) now catches that gap at pipeline time. This
+  # test guards the root-cause fix: n_obs must equal the actual number of
+  # non-NA return observations backing each row, for every strategy variant
+  # calc_metrics() produces (not just SPY_overlay).
+  cmd <- .target_command(plan_risk_state(), "rsc_metrics")
+  inputs <- .toy_rsc_inputs(n_days = 500L, rf_val = 0.0001)
+
+  result <- .eval_command(
+    cmd,
+    hd_hac_sharpe       = .mock_hac_sharpe,
+    sharpe_ratio_rf     = sharpe_ratio_rf,
+    rsc_params          = list(oos_start = as.Date("2019-01-01"), test_end = as.Date("2019-06-30")),
+    rsc_portfolio       = inputs$port,
+    rsc_overlay_drif    = inputs$overlay,
+    rsc_overlay_fac_max = inputs$overlay
+  )
+
+  expect_true("n_obs" %in% names(result))
+  expect_false(any(is.na(result$n_obs)))
+
+  full_row <- result[result$strategy == "SPY_overlay" & result$period == "Full Period", ]
+  expect_equal(nrow(full_row), 1L)
+  # Full Period spans the whole 500-day toy series -- no NAs injected by
+  # .toy_rsc_inputs(), so n_obs must equal n_days exactly.
+  expect_equal(full_row$n_obs, 500L)
+
+  training_row <- result[result$strategy == "SPY_overlay" & result$period == "Training", ]
+  expect_equal(nrow(training_row), 1L)
+  expect_true(training_row$n_obs < full_row$n_obs)
+})
+
 test_that("rsc_metrics: DRIF_raw/FacMAX_raw rows have a real sharpe now rf_ret is wired (#677 slice 2)", {
   cmd <- .target_command(plan_risk_state(), "rsc_metrics")
   inputs <- .toy_rsc_inputs(n_days = 500L)
