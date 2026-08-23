@@ -1291,6 +1291,63 @@ check_leaderboard_sharpe_coherence <- function(leaderboard, tol = 0.02) {
 }
 
 
+#' Assert every leaderboard strategy has a declared observation periodicity
+#' for the detection-power diagnostic (S19)
+#'
+#' Guards against a NEW instance of the fail-loud-not-null.md defect class
+#' (#637/#640/#641/#643): `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R)
+#' declares each strategy's native return periodicity (12 = monthly,
+#' 252 = daily) so `historicaldata::hd_detection_power()` converts each
+#' row's annualised `sharpe` into the correct per-period effect size. If a
+#' new strategy is added to the leaderboard without a matching row in
+#' `STRATEGY_OBS_ANN_FACTOR`, the join in the `leaderboard` target would
+#' silently produce NA `detection_min_n_years`/`detection_underpowered`
+#' forever -- indistinguishable from "checked, adequately powered" unless
+#' this gate catches the gap at pipeline time.
+#'
+#' @param leaderboard Tibble with a `strategy` column (the output of the
+#'   `leaderboard` target).
+#' @param obs_ann_factor_tbl Tibble with a `strategy` column --
+#'   `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_detection_power_coverage <- function(leaderboard, obs_ann_factor_tbl) {
+  if (!"strategy" %in% names(leaderboard)) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing required column: strategy.",
+      "i" = "check_leaderboard_detection_power_coverage() (S19) requires a strategy column."
+    ))
+  }
+  if (!"strategy" %in% names(obs_ann_factor_tbl)) {
+    cli::cli_abort(c(
+      "x" = "obs_ann_factor_tbl is missing required column: strategy.",
+      "i" = "check_leaderboard_detection_power_coverage() (S19) requires STRATEGY_OBS_ANN_FACTOR's strategy column."
+    ))
+  }
+
+  all_strategies <- unique(leaderboard$strategy)
+  missing <- setdiff(all_strategies, obs_ann_factor_tbl$strategy)
+
+  if (length(missing) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(missing), " leaderboard strategy/strategies have no declared ",
+        "observation periodicity for the detection-power diagnostic (#711):"
+      ),
+      setNames(sprintf("  %s", missing), rep("i", length(missing))),
+      "i" = paste0(
+        "Add a row to STRATEGY_OBS_ANN_FACTOR (R/plan_leaderboard.R) with ",
+        "the strategy's true periods-per-year (12 = monthly, 252 = daily) ",
+        "and a source citation, verified against its calc_metrics()/",
+        "compute_*() annualisation."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -1663,6 +1720,21 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_sharpe_coherence(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_sharpe_coherence: S17 passed (sharpe coherent with cagr/vol/ann_rf for every row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every leaderboard strategy has a declared observation
+    # periodicity for the detection-power diagnostic (S19) -- guards against
+    # a new strategy silently getting NA detection_min_n_years/
+    # detection_underpowered forever if STRATEGY_OBS_ANN_FACTOR
+    # (R/plan_leaderboard.R) isn't updated alongside it. #711 Gap 1.
+    targets::tar_target(
+      qa_leaderboard_detection_power_coverage,
+      command = {
+        check_leaderboard_detection_power_coverage(leaderboard, STRATEGY_OBS_ANN_FACTOR)
+        cli::cli_inform(c("v" = "qa_leaderboard_detection_power_coverage: S19 passed (all strategies have a declared periodicity)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
