@@ -76,8 +76,10 @@ test_that("STRATEGY_OBS_ANN_FACTOR declares every strategy with a positive integ
   expect_true(all(STRATEGY_OBS_ANN_FACTOR$obs_ann_factor %in% c(12, 52, 252)))
 })
 
-test_that("STRATEGY_OBS_ANN_FACTOR flags the four known daily strategies as ann_factor = 252", {
-  daily <- c("OLMAR-1", "TOM", "Risk State", "Avoid Worst")
+test_that("STRATEGY_OBS_ANN_FACTOR flags the five known daily strategies as ann_factor = 252", {
+  # CMR joined this list after #717/#720/#721 corrected its ann_factor from
+  # the originally (wrongly) assumed monthly value.
+  daily <- c("OLMAR-1", "TOM", "Risk State", "Avoid Worst", "CMR")
   daily_rows <- STRATEGY_OBS_ANN_FACTOR |>
     dplyr::filter(strategy %in% daily)
   expect_equal(nrow(daily_rows), length(daily))

@@ -59,15 +59,17 @@
 # `historicaldata::hd_detection_power()` needs the TRUE periods-per-year of
 # each row's `months` observation count to convert `sharpe` (always
 # annualised, see above) into a per-period effect size. Naively assuming
-# ann_factor = 12 for every row would be WRONG for four strategies whose
+# ann_factor = 12 for every row would be WRONG for five strategies whose
 # `months` column actually holds a DAILY observation count (renamed at the
 # .norm_* boundary above, same pattern as the unit conversions -- see
-# `.norm_olmar()`, `.norm_tom()`, `.norm_aw()` comments): OLMAR-1, TOM, Risk
-# State, and Avoid Worst are all daily strategies. Guessing 12 for them would
-# understate the true per-period effect size by a factor of sqrt(252/12) ~=
-# 4.6, silently reporting a much larger `detection_min_n_years` than correct
-# -- exactly the fail-loud-not-null.md defect class (#637/#640/#641/#643)
-# this repo has hit four times already. STRATEGY_OBS_ANN_FACTOR is the
+# `.norm_olmar()`, `.norm_tom()`, `.norm_aw()`, `.norm_cmr()` comments):
+# OLMAR-1, TOM, Risk State, Avoid Worst, and CMR are all daily strategies
+# (CMR corrected by #717/#720/#721 -- it was originally, and wrongly,
+# assumed monthly). Guessing 12 for them would understate the true
+# per-period effect size by a factor of sqrt(252/12) ~= 4.6, silently
+# reporting a much larger `detection_min_n_years` than correct -- exactly
+# the fail-loud-not-null.md defect class (#637/#640/#641/#643) this repo
+# has hit four times already. STRATEGY_OBS_ANN_FACTOR is the
 # boundary-validation table instead: each strategy's periodicity, verified
 # against its own calc_metrics()/compute_*() annualisation (sqrt(12) vs
 # sqrt(252)) at the commit this table was authored against.
@@ -85,7 +87,7 @@ STRATEGY_OBS_ANN_FACTOR <- tibble::tibble(
   ),
   obs_ann_factor = c(
     12, 12, 12, 12, 12,
-    12, 12, 12, 12, 12,
+    12, 252, 12, 12, 12,
     12, 12, 12,
     252, 252, 252, 252
   ),
@@ -96,7 +98,7 @@ STRATEGY_OBS_ANN_FACTOR <- tibble::tibble(
     "R/plan_stock_backtest.R (shared helper, same as Stock MAX)",
     "R/plan_stock_backtest.R (shared helper, same as Stock MAX; XGB operates on the same monthly port_ret)",
     "R/plan_ltr_momentum.R (ann_ret <- prod(1+port_ret)^(12/n) - 1)",
-    "R/plan_commodities_mean_reversion.R:14 ('Frequency: monthly (ann_factor = 12)')",
+    "R/plan_commodities_mean_reversion.R:14 ('Frequency: DAILY (ann_factor = 252)'); corrected by #717/#720/#721 -- the 37-series universe is ~96% Yahoo daily futures/ETF rows, not monthly as originally assumed",
     "packages/historicaldata/R/utils_mom_prepeak_metrics.R (ann_factor = 12L default)",
     "packages/historicaldata/R/utils_mom_prepeak_metrics.R (shared helper, same as Mom Pre-Peak)",
     "packages/historicaldata/R/utils_mom_prepeak_metrics.R (shared helper, same as Mom Pre-Peak)",
