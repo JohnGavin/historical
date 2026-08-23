@@ -24,6 +24,14 @@
 # Look-ahead safety: signal at t uses returns through t-1 only.
 # Execution: signal at t -> trade at t+1 close.
 # Transaction cost: 0.2% per trade (same as commodity momentum, #134).
+# Risk-free join: #724. daily_rf follows the NYSE trading calendar; this
+#   mixed universe needs some dates that were never NYSE trading days.
+#   .cmr_fill_non_trading_rf_gaps() carries the last available rf forward
+#   for short (<=7 calendar day) gaps before the shared #679 interior-hole
+#   guard runs. NOTE (explicitly out of scope for #724): cmr_portfolio's
+#   own date column still mixes daily and monthly-stamped observations, so
+#   ann_factor = 252 over-annualises the vol/cagr contribution of every
+#   FRED-only month-start row. #724 fixes the crash; it does not fix that.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -190,6 +198,113 @@ plan_commodities_mean_reversion <- function() {
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Not exported; called only within this plan's targets.
 
+#' Carry `daily_rf` forward across short non-trading gaps CMR's universe needs (#724)
+#'
+#' #723 switched CMR to the daily \code{daily_rf} target (#722's fix for the
+#' month-vs-day frequency bug), which immediately tripped the #679
+#' interior-hole guard: 163 dates CMR's merged universe needs have no
+#' \code{daily_rf} row (measured 2026-08-23, against
+#' \code{data/raw/commodities.parquet} + the live FF3 daily series -- see
+#' #724). Every single one was checked BY HAND against the actual NYSE
+#' calendar for that date, not assumed: weekends, New Year's Day, Memorial
+#' Day, Independence Day, Labor Day, Thanksgiving, Christmas, Good Friday
+#' (1994-04-01), the four-day 9/11 closure (2001-09-11..14), and three
+#' presidential state-funeral closures (2004-06-11 Reagan, 2007-01-02 Ford,
+#' 2025-01-09 Carter). None were a genuine hole in \code{daily_rf} itself --
+#' \code{daily_rf} follows the NYSE trading calendar (it IS the Fama-French
+#' daily series), and CMR's 13 FRED monthly commodity series stamp
+#' month-start dates without regard to whether the equity market traded that
+#' day, while a handful of the 24 Yahoo daily series occasionally carry a
+#' stray row on an equity holiday too (e.g. 2002-07-04).
+#'
+#' A hardcoded holiday table would have missed several of the above on day
+#' one (Good Friday and the funeral closures are exactly the kind of
+#' one-off this function was written to avoid enumerating) and would still
+#' be incomplete for the next one. Instead: for every date `df` needs that
+#' falls INSIDE `daily_rf`'s own span but has no row, find the nearest PRIOR
+#' available `daily_rf` date (never a later one -- that would be
+#' look-ahead) and carry its `rf_ret` forward, but ONLY if that date is
+#' within `max_gap_days` calendar days. Every one of the 163 real #724 gaps
+#' was <= 4 days from its prior available date (the 9/11 closure was the
+#' longest); `max_gap_days = 7L` leaves a week of headroom. A date further
+#' than that is left unfilled and falls straight through to
+#' \code{.join_rf_series()}'s INTERIOR abort, unchanged -- at that distance
+#' something other than a holiday is wrong, and the guard should still fire.
+#'
+#' This function touches nothing outside CMR: \code{.join_rf_series()}
+#' (R/utils_metrics.R) and its other three callers (LTR, ToM, mom_prepeak,
+#' #677) are not modified. CMR pre-fills its own COPY of \code{daily_rf}
+#' before handing it to that shared guard, so a genuine interior hole --
+#' here or on any other strategy's rf join -- still aborts exactly as
+#' before.
+#'
+#' @param df Tibble with a `date` column (CMR's daily portfolio).
+#' @param daily_rf Tibble with columns `date`, `rf_ret` (the `daily_rf`
+#'   target, R/plan_stock_backtest.R).
+#' @param lookback Character. Lookback label, used only for the inform message.
+#' @param max_gap_days Integer. Maximum calendar-day distance to the nearest
+#'   prior available `daily_rf` date that may be carried forward. See #724
+#'   for how this bound was set.
+#' @return `daily_rf` with synthetic LOCF rows appended for short gaps that
+#'   `df` needs; dates further than `max_gap_days` from the nearest prior
+#'   available rate are left uncovered.
+#' @noRd
+.cmr_fill_non_trading_rf_gaps <- function(df, daily_rf, lookback, max_gap_days = 7L) {
+  needed    <- sort(unique(as.Date(df$date)))
+  rf_dates  <- sort(unique(as.Date(daily_rf$date)))
+  if (length(rf_dates) == 0L) return(daily_rf)  # let .join_rf_series report the real problem
+
+  rf_min <- min(rf_dates)
+  rf_max <- max(rf_dates)
+
+  missing  <- needed[!(needed %in% rf_dates)]
+  interior <- missing[missing >= rf_min & missing <= rf_max]
+  if (length(interior) == 0L) return(daily_rf)
+
+  fill_dates <- as.Date(character(0))
+  fill_gaps  <- integer(0)
+
+  # NOTE: `for (d in interior)` would silently strip the Date class on each
+  # iteration (a base-R for-loop gotcha) -- index instead, per #724 review.
+  for (i in seq_along(interior)) {
+    d <- interior[i]
+    prior_candidates <- rf_dates[rf_dates < d]
+    if (length(prior_candidates) == 0L) next  # defensive; d >= rf_min makes this unreachable
+    prior <- max(prior_candidates)
+    gap   <- as.numeric(d - prior)
+    if (gap <= max_gap_days) {
+      fill_dates <- c(fill_dates, d)
+      fill_gaps  <- c(fill_gaps, gap)
+    }
+  }
+
+  if (length(fill_dates) == 0L) return(daily_rf)
+
+  # NOTE: vapply()/sapply() also silently drop the Date class from a Date
+  # return value (they unlist() the result) -- round-trip through numeric
+  # explicitly rather than relying on FUN.VALUE to preserve it (#724 review;
+  # same underlying gotcha as the for-loop fix above).
+  prior_for <- as.Date(
+    vapply(fill_dates, function(d) as.numeric(max(rf_dates[rf_dates < d])), numeric(1)),
+    origin = "1970-01-01"
+  )
+  filled_rows <- tibble::tibble(
+    date   = fill_dates,
+    rf_ret = daily_rf$rf_ret[match(prior_for, daily_rf$date)]
+  )
+
+  cli::cli_inform(c(
+    "v" = paste0(
+      "CMR {lookback}: carried daily_rf forward for {length(fill_dates)} ",
+      "non-trading date{?s} inside its own span (weekends/market holidays; ",
+      "longest gap to the prior available rate was {max(fill_gaps)} day{?s})."
+    ),
+    "i" = "Dates more than {max_gap_days} day{?s} from the prior available rate are left uncovered and still abort via the #679 interior-hole guard."
+  ))
+
+  dplyr::bind_rows(daily_rf, filled_rows) |> dplyr::arrange(.data$date)
+}
+
 #' Join a daily risk-free series onto a CMR portfolio (#722)
 #'
 #' Mirrors \code{.tom_join_rf_daily()} in R/plan_turn_of_month.R and
@@ -327,7 +442,12 @@ plan_commodities_mean_reversion <- function() {
   # that was previously joined against this daily portfolio (#677 introduced
   # the real rf but on the wrong frequency; #717 fixed ann_factor without
   # fixing the rf join that #722 catches).
-  df <- .cmr_join_rf(df, daily_rf, lookback = lookback)
+  # #724: daily_rf follows the NYSE trading calendar; CMR's merged universe
+  # needs some dates NYSE didn't trade (weekends, holidays, one-off
+  # closures). Pre-fill short (<=7 calendar day) non-trading gaps via LOCF
+  # before the shared #679 guard runs -- genuine interior holes still abort.
+  daily_rf_filled <- .cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = lookback)
+  df <- .cmr_join_rf(df, daily_rf_filled, lookback = lookback)
   n  <- nrow(df)  # may shrink if a trailing rf gap was trimmed above
 
   r  <- df$net_ret

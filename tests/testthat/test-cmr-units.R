@@ -131,3 +131,85 @@ test_that(".cmr_join_rf aborts when daily_rf lacks required columns", {
 
   expect_snapshot(error = TRUE, .cmr_join_rf(df, bad_rf, lookback = "test"))
 })
+
+# ── #724: LOCF fill for short non-trading gaps inside daily_rf's span ──────
+# daily_rf follows the NYSE calendar; CMR's merged universe needs some dates
+# NYSE never traded (weekends, market holidays, one-off closures). See the
+# roxygen on .cmr_fill_non_trading_rf_gaps() (R/plan_commodities_mean_reversion.R)
+# for the full #724 investigation (163 real gaps, all confirmed non-trading
+# days, longest 4 calendar days from the prior available rate).
+
+test_that(".cmr_fill_non_trading_rf_gaps fills a short weekend/holiday gap and lets the join succeed", {
+  # Fri 8/30, Tue 9/3, Wed 9/4 present; Sat/Sun/Mon(Labor Day) missing.
+  daily_rf <- tibble::tibble(
+    date   = as.Date(c("2024-08-30", "2024-09-03", "2024-09-04")),
+    rf_ret = c(0.0001, 0.00012, 0.00011)
+  )
+  df <- tibble::tibble(
+    date = as.Date(c(
+      "2024-08-30", "2024-08-31", "2024-09-01",
+      "2024-09-02", "2024-09-03", "2024-09-04"
+    )),
+    net_ret = c(0.001, 0.002, 0.0015, 0.001, 0.0005, 0.0007)
+  )
+
+  suppressMessages(filled <- .cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = "1m"))
+
+  expect_equal(nrow(filled), 6L)
+  expect_false(anyNA(filled$rf_ret))
+  # Carried forward from the prior available date (2024-08-30), not
+  # interpolated or borrowed from a later date (no look-ahead).
+  expect_equal(
+    filled$rf_ret[filled$date %in% as.Date(c("2024-08-31", "2024-09-01", "2024-09-02"))],
+    rep(0.0001, 3L)
+  )
+
+  joined <- .cmr_join_rf(df, filled, lookback = "1m")
+  expect_equal(nrow(joined), 6L)
+  expect_false(anyNA(joined$rf_ret))
+})
+
+test_that(".cmr_fill_non_trading_rf_gaps reports what it filled (#724 observability)", {
+  daily_rf <- tibble::tibble(
+    date   = as.Date(c("2024-08-30", "2024-09-03", "2024-09-04")),
+    rf_ret = c(0.0001, 0.00012, 0.00011)
+  )
+  df <- tibble::tibble(
+    date = as.Date(c(
+      "2024-08-30", "2024-08-31", "2024-09-01",
+      "2024-09-02", "2024-09-03", "2024-09-04"
+    )),
+    net_ret = 0
+  )
+
+  expect_snapshot(.cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = "1m"))
+})
+
+test_that(".cmr_fill_non_trading_rf_gaps leaves a gap wider than max_gap_days unfilled, and the join still aborts (real hole, not weakened)", {
+  daily_rf <- tibble::tibble(date = as.Date(c("2024-01-01", "2024-01-20")), rf_ret = c(0.0001, 0.0001))
+  df <- tibble::tibble(date = as.Date(c("2024-01-01", "2024-01-10", "2024-01-20")), net_ret = 0)
+
+  filled <- .cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = "1m", max_gap_days = 7L)
+  # Unchanged: the 9-day-distant gap (2024-01-10, 9 days after 2024-01-01) is
+  # NOT filled -- it is exactly the kind of gap the #679 guard exists to catch.
+  expect_equal(nrow(filled), nrow(daily_rf))
+
+  expect_snapshot(error = TRUE, .cmr_join_rf(df, filled, lookback = "1m"))
+})
+
+test_that(".cmr_fill_non_trading_rf_gaps does not touch a LEADING gap -- .cmr_join_rf still aborts LEADING", {
+  daily_rf <- tibble::tibble(date = as.Date(c("2024-01-10", "2024-01-11")), rf_ret = c(0.0001, 0.0001))
+  df <- tibble::tibble(date = as.Date(c("2024-01-01", "2024-01-10", "2024-01-11")), net_ret = 0)
+
+  filled <- .cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = "1m")
+  expect_equal(nrow(filled), nrow(daily_rf))  # no interior gap to fill
+
+  expect_snapshot(error = TRUE, .cmr_join_rf(df, filled, lookback = "1m"))
+})
+
+test_that(".cmr_fill_non_trading_rf_gaps is a no-op when df has no gaps against daily_rf", {
+  df <- toy_portfolio |> dplyr::mutate(date = as.Date(date))
+
+  filled <- .cmr_fill_non_trading_rf_gaps(df, toy_daily_rf, lookback = "test")
+  expect_identical(filled, toy_daily_rf)
+})
