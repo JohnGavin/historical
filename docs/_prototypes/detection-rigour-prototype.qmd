@@ -1,0 +1,449 @@
+---
+title: "PROTOTYPE — Detection Power + Rigour Coverage (Phase 0, #726 / #728)"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="../vignette-shared.css">
+          <script src="../vignette-shared.js"></script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+::: {.callout-important title="Phase 0 prototype -- NOT for merge"}
+This page is a throwaway design artifact for [dashboard-output-first](https://github.com/JohnGavin/historical/blob/main/.claude/rules/dashboard-output-first.md)
+Phase 0, steps 1 and 4. It clones the `leaderboard.qmd` Full Period ranking
+table and adds two new columns (`Detection`, `Rigour`) proposed to close
+[#726](https://github.com/JohnGavin/historical/issues/726) item 1 and
+[#728](https://github.com/JohnGavin/historical/issues/728) item 3. It is not
+wired into `_quarto.yml`, does not run `tar_make()`, and reads the live store
+read-only. Production implementation waits for explicit approval (Class C
+gate per `human-in-the-loop-decision-points`) and, once approved, belongs in
+`leaderboard.qmd` itself -- see "Step 2 -- home" below.
+:::
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(dplyr)
+library(DT)
+
+
+# This is a worktree checkout (agent-identity-and-task-scopes rule) -- the
+# live targets store is gitignored and exists only in the main checkout, not
+# here. Try the normal in-project relative locations first (so this chunk
+# still works if the file is ever moved into the main checkout's docs/), then
+# fall back to the absolute main-checkout path this dispatch was told to read
+# from (READ ONLY -- see the dispatch prompt; never tar_make() against it).
+store_path <- if (dir.exists("../_targets")) "../_targets" else
+  if (dir.exists(file.path(here::here(), "docs/_targets"))) file.path(here::here(), "docs/_targets") else
+  "/Users/johngavin/docs_gh/proj/finance/data/historical/docs/_targets"
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("../vignette_utils.R")) "../vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+
+git_sha <- tryCatch(system("git -C .. rev-parse HEAD 2>/dev/null", intern = TRUE),
+                     error = function(e) "main")
+git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
+gh_base <- paste0("https://github.com/JohnGavin/historical/blob/", git_sha)
+```
+
+# Step 1 -- Relationship Diagram
+
+## Row
+
+Extends the existing causal-DAG surface in `falsification.qmd` (the
+"Strategy & Dashboard Relationship Map" tab, itself a #481/#514 seed diagram)
+rather than starting a new standalone diagram. This is the missing branch:
+where does a Sharpe's *credibility* come from, before it ever reaches a
+dashboard row.
+
+```{mermaid}
+%%| label: fig-detection-rigour-dag
+%%| fig-cap: "Sharpe to leaderboard row: detection-power verdict and rigour-coverage verdict as the two gates between a raw statistic and a published row."
+graph LR
+  SR["Sharpe<br/>(leaderboard row)"]
+  OBS["STRATEGY_OBS_ANN_FACTOR<br/>declared periodicity"]
+  ROW[".detection_diag_row()<br/>per-row diagnostic"]
+  DP["hd_detection_power()"]
+  S19{{"S19 gate<br/>periodicity coverage"}}
+  S20{{"S20 gate<br/>verdict coverage"}}
+  DET{{"3-state<br/>detection verdict"}}
+  DETOK["detectable"]
+  UNDER["underpowered"]
+  NAPP["not applicable<br/>(Sharpe &le; 0)"]
+  NACOMP["not computed<br/>DEFECT -- S20 blocks this"]
+  RIG["Rigour metrics<br/>deflated Sharpe / DSR / K_eff"]
+  S21{{"S21 gate<br/>rigour coverage or exemption"}}
+  LB["leaderboard.qmd<br/>Full Period table"]
+
+  OBS --> ROW
+  SR --> ROW
+  ROW --> DP
+  DP --> DET
+  DET --> DETOK
+  DET --> UNDER
+  DET --> NAPP
+  DET --> NACOMP
+  S19 -. guards input .-> ROW
+  S20 -. guards output .-> DET
+  SR --> RIG
+  S21 -. guards coverage .-> RIG
+  DETOK --> LB
+  UNDER --> LB
+  NAPP --> LB
+  NACOMP --> LB
+  RIG --> LB
+
+  click SR "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/docs/leaderboard.qmd#L55" _blank
+  click ROW "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_leaderboard.R#L809" _blank
+  click DP "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/packages/historicaldata/R/hd_detection_power.R#L154" _blank
+  click S19 "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1314" _blank
+  click S20 "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1408" _blank
+  click S21 "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1598" _blank
+  click RIG "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_leaderboard.R#L945" _blank
+  click LB "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/docs/leaderboard.qmd#L52" _blank
+```
+
+Every node link is pinned to commit `4713e67` with a `#L<n>` line anchor per
+[`mermaid-click-anchors`](https://github.com/JohnGavin/llm/blob/main/.claude/rules/mermaid-click-anchors.md).
+**Known limitation of this prototype:** Quarto's native `{mermaid}` fenced
+block runs mermaid.js in an iframe whose click-through behaviour is less
+reliable than the project's own `causal-diagrams.js` mount system --
+`docs/MERMAID_LESSONS.md` documents exactly why `falsification.qmd` moved off
+native fenced blocks. Production wiring should add this as a new tab (or new
+nodes) inside `dag-portcons-mount` / the existing tabbed causal-graph
+component in `causal-diagrams.js`, not as a standalone native block. `R/`
+files are out of scope for this dispatch (another agent is active in
+`plan_leaderboard.R` / `plan_qa_gates.R`), so `R/diagram_node_links.R` is not
+extended here -- the node -> file:line pairs above are hand-anchored for the
+prototype and should be migrated into that helper when this ships for real.
+
+# Step 4 -- Table Prototype
+
+## Row {height="20%"}
+
+```{r}
+#| label: rigour-summary
+#| results: asis
+lb <- safe_tar_read("leaderboard")
+if (!is.null(lb)) {
+  full <- lb |>
+    filter(period == "Full Period") |>
+    arrange(desc(sharpe))
+
+  n_pos          <- sum(full$sharpe > 0, na.rm = TRUE)
+  n_underpowered <- sum(full$detection_underpowered, na.rm = TRUE)
+  n_detectable   <- sum(!is.na(full$detection_underpowered) & !full$detection_underpowered)
+  n_det_missing  <- sum(full$sharpe > 0 & is.na(full$detection_underpowered), na.rm = TRUE)
+
+  rigour_exemptions <- c(
+    "CMR" = "daily-frequency series", "OLMAR-1" = "daily-frequency series",
+    "TOM" = "daily-frequency series", "Risk State" = "daily-frequency series",
+    "Avoid Worst" = "daily-frequency series",
+    "PSO Optimal" = "linear combination of 4 covered strategies"
+  )
+  full$.rig_n <- rowSums(!is.na(full[, c("deflated_sharpe", "dsr_pvalue", "k_eff_leaderboard")]))
+  n_rig_full    <- sum(full$sharpe > 0 & full$.rig_n == 3L, na.rm = TRUE)
+  n_rig_exempt  <- sum(full$sharpe > 0 & full$strategy %in% names(rigour_exemptions), na.rm = TRUE)
+  n_rig_partial <- sum(full$sharpe > 0 & full$.rig_n > 0 & full$.rig_n < 3L &
+                          !(full$strategy %in% names(rigour_exemptions)), na.rm = TRUE)
+  n_rig_none    <- sum(full$sharpe > 0 & full$.rig_n == 0L &
+                          !(full$strategy %in% names(rigour_exemptions)), na.rm = TRUE)
+
+  cat(paste0(
+    '<div class="callout-warning" style="border-left:4px solid #b35900;padding:0.6em 1em;margin-bottom:0.5em;">',
+    "<strong>Statistical rigour, this build:</strong> of ", n_pos,
+    " strategies with a positive Full-Period Sharpe, <strong>", n_underpowered,
+    "</strong> are underpowered (cannot be distinguished from zero by their own sample) and ",
+    n_detectable, " are detectable",
+    if (n_det_missing > 0) paste0(" -- <strong>", n_det_missing, " have NO verdict at all, which is a defect</strong>") else "",
+    ". See <a href='https://github.com/JohnGavin/historical/issues/726' target='_blank'>#726</a>. ",
+    "Rigour-metric coverage (deflated Sharpe / DSR / K_eff): <strong>", n_rig_full, "</strong> full, ",
+    n_rig_partial, " partial, ", n_rig_exempt, " documented exclusions, ",
+    if (n_rig_none > 0) paste0("<strong>", n_rig_none, " with zero coverage and no exemption -- a defect</strong>") else "0 undefected gaps",
+    ". See <a href='https://github.com/JohnGavin/historical/issues/728' target='_blank'>#728</a>.",
+    '</div>'
+  ))
+} else {
+  cat("*`leaderboard` target not available from the read-only store.*")
+}
+```
+
+## Row
+
+```{r}
+#| label: detection-rigour-table
+#| results: asis
+if (!is.null(lb) && nrow(full) > 0) {
+
+  rigour_exemption_reason <- c(
+    "CMR" = "Daily-frequency series (ann_factor=252) -- not in the monthly correlation universe used by hd_strat_keff_vertox() (look-ahead risk, #215).",
+    "OLMAR-1" = "Daily-frequency series (ann_factor=252) -- OLMAR rebalances daily.",
+    "TOM" = "Daily-frequency series (ann_factor=252).",
+    "Risk State" = "Daily-frequency series (ann_factor=252).",
+    "Avoid Worst" = "Daily-frequency series (ann_factor=252).",
+    "PSO Optimal" = "Linear combination of 4 already-covered strategies -- near-singular correlation risk in hd_strat_keff_vertox()."
+  )
+
+  detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
+    if (is.na(sr) || sr <= 0) {
+      list(html = "<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a</span>",
+           rank = 3L, sort = -999)
+    } else if (is.na(under)) {
+      list(html = "<span class='det-badge notcomputed' title='Positive Sharpe with NO detection verdict. This should never render live -- QA gate S20 (#726 item 3) blocks the build until it is fixed.'>&#10007; NOT COMPUTED</span>",
+           rank = 4L, sort = -1000)
+    } else if (isTRUE(under)) {
+      mt <- if (!is.na(under_mt)) sprintf(" | multiple-testing-corrected: %s (%.0fyr)",
+                                           ifelse(under_mt, "still underpowered", "clears correction"), dmin_mt)
+           else " | multiple-testing-corrected: not computed (k_eff unavailable for this strategy)"
+      list(html = sprintf("<span class='det-badge underpowered' title='Needs %.0f years of data at alpha=0.05, one-sided%s. See #726.'>&#9888; Underpowered (needs %.0fyr)</span>",
+                           dmin, mt, dmin),
+           rank = 2L, sort = dmin)
+    } else {
+      mt <- if (!is.na(under_mt)) sprintf(" | multiple-testing-corrected: %s (%.0fyr)",
+                                           ifelse(under_mt, "underpowered", "clears correction"), dmin_mt)
+           else ""
+      list(html = sprintf("<span class='det-badge detectable' title='Needs %.1f years at alpha=0.05, one-sided%s. See #726.'>&#10003; Detectable</span>",
+                           dmin, mt),
+           rank = 1L, sort = -dmin)
+    }
+  }
+
+  rigour_badge <- function(strategy, sr, n_present) {
+    if (is.na(sr) || sr <= 0) {
+      sprintf("<span class='rig-badge neutral'>%d/3</span>", n_present)
+    } else if (strategy %in% names(rigour_exemption_reason)) {
+      sprintf("<span class='rig-badge excluded' title='%s'>&#9675; excluded</span>", rigour_exemption_reason[[strategy]])
+    } else if (n_present == 3L) {
+      "<span class='rig-badge computed'>&#10003; 3/3</span>"
+    } else if (n_present > 0L) {
+      sprintf("<span class='rig-badge partial' title='Positive-Sharpe strategy missing %d of 3 rigour metrics (deflated Sharpe / DSR / K_eff). Tracked by #728, QA gate S21.'>&#9686; %d/3</span>",
+              3L - n_present, n_present)
+    } else {
+      "<span class='rig-badge notcomputed' title='Positive-Sharpe strategy with ZERO rigour-metric coverage and no declared exemption. This should never render live -- QA gate S21 (#728 item 4) blocks the build until it is fixed.'>&#10007; 0/3 NOT COMPUTED</span>"
+    }
+  }
+
+  det <- mapply(detection_badge, full$sharpe, full$detection_underpowered,
+                full$detection_min_n_years, full$detection_underpowered_mt,
+                full$detection_min_n_years_mt, SIMPLIFY = FALSE)
+
+  proto <- full |>
+    mutate(
+      Sharpe     = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 3))),
+      Detection  = vapply(det, function(x) x$html, character(1)),
+      .det_rank  = vapply(det, function(x) x$sort, numeric(1)),
+      `Net CAGR` = ifelse(is.na(net_cagr), "—", paste0(round(net_cagr * 100, 1), "%")),
+      `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
+      `CVaR 95%` = ifelse(is.na(cvar_95), "—", paste0(round(cvar_95 * 100, 1), "%")),
+      SSR        = ifelse(is.na(ssr), "—", as.character(round(ssr, 2))),
+      Rigour     = mapply(rigour_badge, strategy, sharpe, .rig_n),
+      Credible   = dplyr::case_when(
+        is.na(credible) ~ "not computed", !credible ~ "NO", TRUE ~ "yes"
+      )
+    ) |>
+    select(Strategy = strategy, Sharpe, Detection, .det_rank, `Net CAGR`, `Max DD`,
+           `CVaR 95%`, SSR, Rigour, Credible)
+
+  det_col  <- which(names(proto) == "Detection") - 1L
+  rank_col <- which(names(proto) == ".det_rank") - 1L
+
+  cap <- paste0(
+    "PROTOTYPE ranking table -- Full Period, ", nrow(proto), " strategies. ",
+    "Detection = 3-state verdict from `hd_detection_power()`, placed immediately ",
+    "right of Sharpe per the `detection-power-required` rule requirement 2. ",
+    "Rigour = coverage of deflated Sharpe / DSR / K_eff (3 metrics). Hover any ",
+    "badge for the full reasoning; click column header to sort by verdict severity. ",
+    "All other columns unchanged from the live `leaderboard.qmd` Full Period table."
+  )
+
+  DT::datatable(
+    proto,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption", cap
+    ),
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 20,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(visible = FALSE, targets = rank_col),
+        list(orderData = rank_col, targets = det_col)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
+}
+```
+
+```{=html}
+<style>
+.det-badge, .rig-badge { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.det-badge.detectable   { color: #1a7f37; }
+.det-badge.underpowered { color: #9a5b00; }
+.det-badge.napp         { color: #6c757d; font-style: italic; font-weight: 400; }
+.det-badge.notcomputed  { color: #fff; background: #c0392b; }
+.rig-badge.computed     { color: #1a7f37; }
+.rig-badge.partial      { color: #9a5b00; }
+.rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
+.rig-badge.notcomputed  { color: #fff; background: #c0392b; }
+.rig-badge.neutral      { color: #6c757d; font-weight: 400; }
+
+[data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
+[data-bs-theme="dark"] .det-badge.underpowered, body.dark-mode .det-badge.underpowered { color: #fbbf24; }
+[data-bs-theme="dark"] .det-badge.napp,         body.dark-mode .det-badge.napp         { color: #9ca3af; }
+[data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
+[data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
+[data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
+@media (prefers-color-scheme: dark) {
+  .det-badge.detectable   { color: #4ade80; }
+  .det-badge.underpowered { color: #fbbf24; }
+  .rig-badge.computed     { color: #4ade80; }
+  .rig-badge.partial      { color: #fbbf24; }
+}
+</style>
+```
+
+# Design Notes
+
+## Row
+
+### Step 2 -- Locate the home
+
+**Target: `docs/leaderboard.qmd`, "Full Period" tab, the existing metrics
+table (chunk starting
+[`docs/leaderboard.qmd#L52`](https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/docs/leaderboard.qmd#L52)).**
+Not a new dashboard. Grep confirms zero references to `detection` anywhere
+under `docs/*.qmd` today -- the columns exist on the `leaderboard` target
+(`detection_min_n_years`, `detection_underpowered`, and their `_mt`
+variants) but have never been rendered on any dashboard. This is exactly
+column-60-of-61 as #726 describes it, except currently it is column
+*none-of-61* -- the table this prototype clones does not select the
+detection columns at all. `leaderboard.qmd` is also where `SSR`, `Credible`,
+and `Redundant` already live using the identical hidden-sort-rank badge
+pattern this prototype reuses (see Step 3).
+
+A NEW dashboard is not justified: the rule's default is to extend, and this
+output belongs beside the Sharpe it qualifies -- moving it anywhere else
+recreates the "column 60 of 61" problem in a different location.
+
+### Step 3 -- Comparable-output audit
+
+This table sits beside, and must stay consistent with:
+
+- **`Credible` / `Redundant`** (same table, `docs/leaderboard.qmd` lines
+  ~86-125) -- both already use the exact pattern this prototype copies: a
+  `dplyr::case_when()` producing a **display string** plus a hidden
+  `.xxx_rank` integer column so DT's default alphabetical sort doesn't scramble
+  assessed-good / assessed-bad / never-assessed ordering. `Detection` follows
+  the same shape (`.det_rank`); `Rigour` intentionally does not need a
+  separate rank column because its four states already sort in a sensible
+  default order for this prototype's purposes.
+- **Strategy naming** ([`strategy-name-consistency`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/strategy-name-consistency.md)):
+  the `strategy` column values ("OLMAR-1", "Avoid Worst", "Value (HML)", ...)
+  are used unchanged -- no new naming is introduced.
+- **Captions** ([`visualization-standards`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/) family):
+  the caption is assembled dynamically from the live data (counts, not
+  hardcoded numbers) exactly like the real table's `flag_note` /
+  `bias_note` / `gross_note` / `cost_note` / `diversification_note` blocks.
+- **Table styling** ([`dashboard-table-styling`](https://github.com/JohnGavin/llm/blob/main/.claude/rules/dashboard-table-styling.md)):
+  no inline `width:100%`; badges are inline `<span>` elements inside a cell,
+  which keeps the table shrink-to-content and right-justified per the
+  existing global CSS.
+- **Deflated Sharpe tab** (`docs/leaderboard.qmd`, "Deflated Sharpe" tab,
+  `strat_deflated_sharpe` target): the `Rigour` badge summarises exactly the
+  three columns (`deflated_sharpe`, `dsr_pvalue`, `k_eff_leaderboard`) that
+  tab already renders in full for the strategies it covers -- see Step 5 for
+  the resulting consolidation proposal.
+
+### Amber must be acknowledged, not wallpaper
+
+Four defences, none of them relying on the reader noticing a colour:
+
+1. **Structural adjacency.** `Detection` is the column immediately right of
+   `Sharpe` -- not reachable only by scrolling past 50 other columns, which
+   is documented as the actual mechanism of the original failure (#726: "the
+   metric had existed as leaderboard column 60 of 61 and had never been
+   read").
+2. **Every state carries a distinct symbol AND a text label**, not colour
+   alone (&#10003;/&#9888;/&ndash;/&#10007; plus "Detectable" /
+   "Underpowered" / "n/a" / "NOT COMPUTED") -- satisfies colour-blind
+   accessibility and dark/light contrast simultaneously.
+3. **A always-visible summary callout above the table**, in the same visual
+   register as the existing `::: {.callout-warning}` survivorship-bias block
+   at the top of `leaderboard.qmd` -- the project's own established pattern
+   for "this caveat is load-bearing, not decoration." It states the counts in
+   prose, dynamically computed, every render -- a reader who never hovers a
+   badge still reads "6 of 8 strategies are underpowered."
+4. **Every amber/red badge links to the tracking issue** (#726 or #728) in
+   its tooltip -- "acknowledge" has a concrete next action (read the issue,
+   or close it once the underlying gap is fixed), not just a colour a reader
+   learns to filter out.
+
+### Step 5 -- Consolidation review (mandatory)
+
+**Proposal: fold "Deflated Sharpe" from a standalone tab into a `Rigour`
+detail expansion on the main ranking table, once this Phase 0 design is
+built for real.**
+
+Today `docs/leaderboard.qmd` has a "Deflated Sharpe" tab
+(`strat_deflated_sharpe` target) that exists solely to show the same three
+numbers (`deflated_sharpe`, `dsr_pvalue`, `k_eff_leaderboard`) this
+prototype's `Rigour` badge already summarises inline, for the same set of
+strategies. With coverage now at 11 of 17 (up from 4, per #728 items 1-2,
+landed concurrently with this dispatch) the standalone tab is close to
+covering the same footprint as the main table anyway. Once `Rigour` ships
+with a working tooltip/expand-row showing the three numeric values on
+demand (DT's `render = "expand"` column pattern, no new tab needed), the
+"Deflated Sharpe" tab's unique remaining value is near zero and it should be
+retired, folding its content into a badge hover/expand on the ranking table.
+This is a genuine simplification, not a relabeling: one fewer tab, zero lost
+information (the exemption reasons and numeric values both survive as
+tooltip content), and the information moves from a separately-navigated tab
+to the same row as the Sharpe it qualifies -- consistent with the
+requirement 2 in the `detection-power-required` rule ("beside its Sharpe,
+not in a distant column"), which applies equally to rigour metrics per
+#728 item 3's framing of the same defect one layer up.
+
+**Net effect on `docs/DASHBOARDS.md` inventory: dashboard count unchanged
+(11), tab count within `leaderboard.qmd` reduced by one** once implemented.
+This is a smaller consolidation than a dashboard merge, but it is concrete,
+and "no change" was not available as an honest answer -- the Deflated Sharpe
+tab's argument for existing separately gets weaker every time rigour
+coverage widens, which is exactly what is happening in this repo this week.
+
+### Data sources
+
+- `tar_read("leaderboard")` -- [`R/plan_leaderboard.R#L120`](https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_leaderboard.R#L120)
+- [`historicaldata::hd_detection_power()`](https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/packages/historicaldata/R/hd_detection_power.R#L154)
+- [`check_leaderboard_detection_power_coverage()` (S19)](https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1314)
+- [`check_leaderboard_detection_power_values()` (S20)](https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1408)
+- [`check_leaderboard_deflated_sharpe_coverage()` / `DEFLATED_SHARPE_EXEMPTIONS` (S21)](https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1519)
+- [#726](https://github.com/JohnGavin/historical/issues/726), [#728](https://github.com/JohnGavin/historical/issues/728), [`detection-power-required`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/detection-power-required.md)
