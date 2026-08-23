@@ -1372,16 +1372,26 @@ check_leaderboard_detection_power_coverage <- function(leaderboard, obs_ann_fact
 #' property actually wanted: "every positive-Sharpe row has a detection
 #' verdict."
 #'
-#' A second, independent assertion (per #726 item 4) covers the
-#' multiple-testing-corrected columns \code{detection_min_n_years_mt}/
-#' \code{detection_underpowered_mt} (alpha = 0.05 / \code{k_eff_strat}
-#' instead of the single-test alpha = 0.05): this is only checked for rows
-#' where \code{k_eff_strat} is itself usable (non-NA and >= 1) -- see the
+#' A second, independent assertion (per #726 item 4, widened by #728 items
+#' 1+2) covers the multiple-testing-corrected columns
+#' \code{detection_min_n_years_mt}/\code{detection_underpowered_mt}
+#' (alpha = 0.05 / \code{k_eff_leaderboard} instead of the single-test
+#' alpha = 0.05): this is only checked for rows where
+#' \code{k_eff_leaderboard} is itself usable (non-NA and >= 1) -- see the
 #' \code{.detection_diag_row()} comment in R/plan_leaderboard.R for why
-#' \code{k_eff_strat} is deliberately NA for most strategies today (it is
-#' only populated for the four columns \code{strat_deflated_sharpe} covers),
-#' which is an explicit, documented default per fail-loud-not-null.md's
-#' Required Pattern item 2, not something this gate treats as a defect.
+#' \code{k_eff_leaderboard} is deliberately NA for some strategies today (it
+#' is populated for the 11 strategies in
+#' \code{STRAT_RETURNS_WIDE_CODES}, R/plan_strategy_correlation.R -- up from
+#' 4 before #728 -- and NA for the 6 genuine, documented exclusions listed
+#' on that constant: CMR, OLMAR-1, TOM, Risk State, Avoid Worst are
+#' daily-frequency; PSO Optimal is a linear combination of already-included
+#' series), which is an explicit, documented default per
+#' fail-loud-not-null.md's Required Pattern item 2, not something this gate
+#' treats as a defect. This column was named \code{k_eff_strat} before
+#' #728; it was renamed alongside the scope widening so the family-scoped
+#' and leaderboard-wide counts cannot be confused (see
+#' \code{k_eff_family}/\code{k_eff_leaderboard} in
+#' R/plan_leaderboard.R's \code{strat_deflated_sharpe}).
 #'
 #' Both assertions name the offending \code{strategy}/\code{period} pairs and
 #' state which NA path applies, per fail-loud-not-null.md's requirement that
@@ -1391,7 +1401,7 @@ check_leaderboard_detection_power_coverage <- function(leaderboard, obs_ann_fact
 #' @param leaderboard Tibble with at least \code{strategy}, \code{period},
 #'   \code{sharpe}, \code{months}, \code{detection_min_n_years},
 #'   \code{detection_underpowered}, \code{detection_min_n_years_mt},
-#'   \code{detection_underpowered_mt}, \code{k_eff_strat} columns (the
+#'   \code{detection_underpowered_mt}, \code{k_eff_leaderboard} columns (the
 #'   output of the \code{leaderboard} target).
 #' @return \code{TRUE} invisibly on success.
 #' @noRd
@@ -1399,7 +1409,7 @@ check_leaderboard_detection_power_values <- function(leaderboard) {
   required_cols <- c(
     "strategy", "period", "sharpe", "months",
     "detection_min_n_years", "detection_underpowered",
-    "detection_min_n_years_mt", "detection_underpowered_mt", "k_eff_strat"
+    "detection_min_n_years_mt", "detection_underpowered_mt", "k_eff_leaderboard"
   )
   missing_cols <- setdiff(required_cols, names(leaderboard))
   if (length(missing_cols) > 0L) {
@@ -1408,7 +1418,7 @@ check_leaderboard_detection_power_values <- function(leaderboard) {
       "i" = paste0(
         "check_leaderboard_detection_power_values() (S20) requires strategy, ",
         "period, sharpe, months, detection_min_n_years, detection_underpowered, ",
-        "detection_min_n_years_mt, detection_underpowered_mt, k_eff_strat."
+        "detection_min_n_years_mt, detection_underpowered_mt, k_eff_leaderboard."
       )
     ))
   }
@@ -1456,33 +1466,190 @@ check_leaderboard_detection_power_values <- function(leaderboard) {
   }
 
   # ── Assertion 2: multiple-testing-corrected verdict must be non-NA
-  # wherever k_eff_strat is itself usable (#726 item 4).
-  mt_applicable <- positive & !is.na(leaderboard$k_eff_strat) & leaderboard$k_eff_strat >= 1
+  # wherever k_eff_leaderboard is itself usable (#726 item 4, #728 items 1+2).
+  mt_applicable <- positive & !is.na(leaderboard$k_eff_leaderboard) & leaderboard$k_eff_leaderboard >= 1
   mt_missing <- mt_applicable &
     (is.na(leaderboard$detection_min_n_years_mt) | is.na(leaderboard$detection_underpowered_mt))
 
   if (any(mt_missing)) {
     idx <- which(mt_missing)
     offenders <- sprintf(
-      "  %s / %s -- sharpe = %s, k_eff_strat = %s",
+      "  %s / %s -- sharpe = %s, k_eff_leaderboard = %s",
       leaderboard$strategy[idx], leaderboard$period[idx],
       format(leaderboard$sharpe[idx], digits = 3),
-      format(leaderboard$k_eff_strat[idx], digits = 4)
+      format(leaderboard$k_eff_leaderboard[idx], digits = 4)
     )
     cli::cli_abort(c(
       "x" = paste0(
         "Leaderboard has ", length(idx),
-        " row(s) with sharpe > 0 and a usable k_eff_strat but no multiple-",
-        "testing-corrected detection-power verdict (#726 item 4):"
+        " row(s) with sharpe > 0 and a usable k_eff_leaderboard but no ",
+        "multiple-testing-corrected detection-power verdict (#726 item 4):"
       ),
       setNames(offenders, rep("i", length(offenders))),
       "i" = paste0(
         "check_leaderboard_detection_power_values() (S20) requires ",
         "detection_min_n_years_mt/detection_underpowered_mt to be non-NA ",
-        "whenever k_eff_strat is non-NA and >= 1 -- see the alpha = 0.05 / ",
-        "keff tryCatch in R/plan_leaderboard.R's .detection_diag_row()."
+        "whenever k_eff_leaderboard is non-NA and >= 1 -- see the ",
+        "alpha = 0.05 / keff tryCatch in R/plan_leaderboard.R's ",
+        ".detection_diag_row()."
       )
     ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Declared exemptions from deflated-Sharpe / K_eff coverage (S21, #728 item 4)
+#'
+#' Per \code{.claude/rules/fail-loud-not-null.md}: "the absence of a reason
+#' is what fails". A leaderboard strategy with a positive Full-Period Sharpe
+#' but no \code{deflated_sharpe}/\code{dsr_pvalue}/\code{k_eff_leaderboard}
+#' is either a genuine, documented data-coverage limit (declared here, with
+#' a written reason) or a bug that \code{check_leaderboard_deflated_sharpe_coverage()}
+#' (S21, below) must abort on -- never a silent NA that looks identical to
+#' the exempted case.
+#'
+#' These six strategies are exactly \code{STRAT_RETURNS_WIDE_CODES}'s
+#' complement (R/plan_strategy_correlation.R) among the 17 leaderboard
+#' strategies -- see that constant's comment for the underlying reasoning;
+#' the \code{reason} column here restates it per-strategy so this table is
+#' self-contained without a second file open.
+#' @noRd
+DEFLATED_SHARPE_EXEMPTIONS <- tibble::tibble(
+  strategy = c("CMR", "OLMAR-1", "TOM", "Risk State", "Avoid Worst", "PSO Optimal"),
+  reason = c(
+    paste0(
+      "Daily-frequency return series (ann_factor = 252, STRATEGY_OBS_ANN_FACTOR, ",
+      "R/plan_leaderboard.R). strat_returns_wide (R/plan_strategy_correlation.R) ",
+      "only aligns monthly series -- mixing daily and monthly series into one ",
+      "correlation matrix requires an aggregation step that risks the ",
+      "look-ahead bias described in #215."
+    ),
+    paste0(
+      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
+      "above -- OLMAR (Li & Hoi 2012) rebalances daily)."
+    ),
+    paste0(
+      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
+      "above -- R/plan_turn_of_month.R uses sqrt(252) annualisation)."
+    ),
+    paste0(
+      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
+      "above -- R/plan_risk_state.R's calc_metrics() defaults to ",
+      "periods_per_year = 252L)."
+    ),
+    paste0(
+      "Daily-frequency return series (ann_factor = 252, same reason as CMR ",
+      "above -- R/plan_avoid_worst.R uses ann_factor = 252L throughout)."
+    ),
+    paste0(
+      "PSO Optimal is not an independent data source: it is ",
+      "port_optimal_weights %*% c(stk_max, stk_drif, fac_max, fac_drif) (the ",
+      "'PSO Optimal' block in R/plan_leaderboard.R's leaderboard target) -- a ",
+      "linear combination of four series already covered. Including a ",
+      "near-collinear combination alongside its own components adds no ",
+      "independent information and risks a near-singular correlation matrix ",
+      "in hd_strat_keff_vertox()'s Cholesky step."
+    )
+  )
+)
+
+
+#' Assert deflated-Sharpe / K_eff coverage for every positive-Sharpe
+#' leaderboard strategy, or a documented exemption (S21, #728 item 4)
+#'
+#' Follows the same shape as \code{check_leaderboard_detection_power_values()}
+#' (S20) above: a positive Full-Period Sharpe with no
+#' \code{deflated_sharpe}/\code{dsr_pvalue}/\code{k_eff_leaderboard} verdict
+#' either has a written reason in \code{DEFLATED_SHARPE_EXEMPTIONS} above, or
+#' the gate aborts naming the offending strategy and column. #728 found that
+#' \code{deflated_sharpe} covered only 4 of 17 strategies and, of the 8
+#' strategies claiming a positive Full-Period Sharpe, only 1 (Factor DRIF)
+#' had any multiple-testing correction at all -- the wrong seven were
+#' missing (the ones a reader is most likely to act on). #728 items 1+2
+#' widen coverage to 11 of 17 (R/plan_strategy_correlation.R's
+#' STRAT_RETURNS_WIDE_CODES); this gate is what keeps that count from
+#' silently regressing back down.
+#'
+#' Scoped to \code{period == "Full Period"}: \code{deflated_sharpe} is a
+#' full-sample statistic broadcast to every period row (see the "Deflated
+#' Sharpe" join comment in R/plan_leaderboard.R's \code{leaderboard} target),
+#' so checking every period row would just re-check the same value once per
+#' partition and produce misleading per-period "offenders" for what is
+#' actually a single per-strategy gap.
+#'
+#' Deliberately scoped to the \code{deflated_sharpe}/\code{dsr_pvalue}/
+#' \code{k_eff_leaderboard} family -- the columns #728 items 1+2 directly
+#' fix -- not the full set of "rigour columns" named in #728's issue text
+#' (\code{hac_sharpe}, \code{wf_corr}, \code{sharpe_ci_lo}/\code{_hi},
+#' \code{incremental_sharpe}, \code{ssr} each have their own, different
+#' coverage story and would need their own exemption audit; out of scope
+#' for this gate, flagged as follow-up work in the #728 PR report).
+#'
+#' @param leaderboard Tibble with at least \code{strategy}, \code{period},
+#'   \code{sharpe}, \code{deflated_sharpe}, \code{dsr_pvalue},
+#'   \code{k_eff_leaderboard} columns (the output of the \code{leaderboard}
+#'   target).
+#' @param exemptions Tibble with \code{strategy}/\code{reason} columns --
+#'   \code{DEFLATED_SHARPE_EXEMPTIONS} above.
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_deflated_sharpe_coverage <- function(leaderboard, exemptions = DEFLATED_SHARPE_EXEMPTIONS) {
+  required_cols <- c("strategy", "period", "sharpe", "deflated_sharpe", "dsr_pvalue", "k_eff_leaderboard")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_leaderboard_deflated_sharpe_coverage() (S21) requires strategy, ",
+        "period, sharpe, deflated_sharpe, dsr_pvalue, k_eff_leaderboard."
+      )
+    ))
+  }
+  if (!all(c("strategy", "reason") %in% names(exemptions))) {
+    cli::cli_abort(c(
+      "x" = "exemptions table is missing required column(s): strategy, reason.",
+      "i" = "check_leaderboard_deflated_sharpe_coverage() (S21) requires DEFLATED_SHARPE_EXEMPTIONS' strategy/reason columns."
+    ))
+  }
+
+  full_period <- leaderboard$period == "Full Period"
+  positive <- full_period & !is.na(leaderboard$sharpe) & leaderboard$sharpe > 0
+
+  missing_dsr <- positive &
+    (is.na(leaderboard$deflated_sharpe) | is.na(leaderboard$dsr_pvalue) | is.na(leaderboard$k_eff_leaderboard))
+
+  if (any(missing_dsr)) {
+    idx <- which(missing_dsr)
+    exempted <- leaderboard$strategy[idx] %in% exemptions$strategy
+    offender_idx <- idx[!exempted]
+
+    if (length(offender_idx) > 0L) {
+      offenders <- sprintf(
+        "  %s / %s -- sharpe = %s (no declared exemption in DEFLATED_SHARPE_EXEMPTIONS)",
+        leaderboard$strategy[offender_idx], leaderboard$period[offender_idx],
+        format(leaderboard$sharpe[offender_idx], digits = 3)
+      )
+      cli::cli_abort(c(
+        "x" = paste0(
+          "Leaderboard has ", length(offender_idx),
+          " Full Period row(s) with sharpe > 0 but no deflated_sharpe/",
+          "dsr_pvalue/k_eff_leaderboard verdict AND no declared exemption (#728 item 4):"
+        ),
+        setNames(offenders, rep("i", length(offenders))),
+        "i" = paste0(
+          "check_leaderboard_deflated_sharpe_coverage() (S21) requires every ",
+          "positive-Sharpe Full Period row to have a non-NA deflated_sharpe/",
+          "dsr_pvalue/k_eff_leaderboard verdict, or a written reason in ",
+          "DEFLATED_SHARPE_EXEMPTIONS (R/plan_qa_gates.R) -- fix the offending ",
+          "strategy's coverage in STRAT_RETURNS_WIDE_CODES ",
+          "(R/plan_strategy_correlation.R) or add a documented exemption. ",
+          "Per fail-loud-not-null.md, the absence of a reason is what fails, ",
+          "not the NA itself."
+        )
+      ))
+    }
   }
 
   invisible(TRUE)
@@ -1882,8 +2049,8 @@ plan_qa_gates <- function() {
     ),
 
     # QA gate: every positive-Sharpe leaderboard row has a non-NA
-    # detection-power verdict, both single-test and (where k_eff_strat is
-    # usable) multiple-testing-corrected (S20, #726 items 3+4). S19 above
+    # detection-power verdict, both single-test and (where k_eff_leaderboard
+    # is usable) multiple-testing-corrected (S20, #726 items 3+4). S19 above
     # only guards the diagnostic's INPUT (a declared periodicity); this gate
     # asserts the property actually wanted -- that the diagnostic produced a
     # value -- and names which of the diagnostic's three NA paths applies.
@@ -1895,6 +2062,27 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_detection_power_values(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_detection_power_values: S20 passed (every positive-Sharpe row has a detection-power verdict)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every positive-Sharpe Full Period leaderboard strategy has a
+    # non-NA deflated_sharpe/dsr_pvalue/k_eff_leaderboard verdict, or a
+    # written reason in DEFLATED_SHARPE_EXEMPTIONS (S21, #728 item 4).
+    # #728 found deflated_sharpe covered only 4 of 17 strategies -- and of
+    # the 8 strategies claiming a positive Full-Period Sharpe, only 1
+    # (Factor DRIF) had any multiple-testing correction. #728 items 1+2
+    # widened coverage to 11 of 17; this gate is what keeps that count from
+    # silently regressing. Expected to fail on the current, unrebuilt store
+    # until a fresh tar_make() picks up the widened strat_deflated_sharpe --
+    # see check_leaderboard_deflated_sharpe_coverage() roxygen for the full
+    # rationale and scoping notes.
+    targets::tar_target(
+      qa_leaderboard_deflated_sharpe_coverage,
+      command = {
+        check_leaderboard_deflated_sharpe_coverage(leaderboard, DEFLATED_SHARPE_EXEMPTIONS)
+        cli::cli_inform(c("v" = "qa_leaderboard_deflated_sharpe_coverage: S21 passed (every positive-Sharpe Full Period strategy has a deflated-Sharpe verdict or a declared exemption)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

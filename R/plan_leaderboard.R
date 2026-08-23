@@ -536,7 +536,9 @@ plan_leaderboard <- function() {
         all_metrics <- all_metrics |>
           left_join(
             strat_deflated_sharpe |>
-              select(strategy, deflated_sharpe, dsr_pvalue, k_eff_strat),
+              select(strategy, deflated_sharpe, dsr_pvalue,
+                     k_eff_leaderboard, k_raw_leaderboard,
+                     k_eff_family, k_raw_family),
             by = "strategy"
           )
       }
@@ -763,41 +765,45 @@ plan_leaderboard <- function() {
       # populated -- see .norm_rsc() and the STRATEGY_OBS_ANN_FACTOR comment
       # above) fails loudly instead of surviving silently forever.
       #
-      # detection_min_n_years_mt / detection_underpowered_mt (#726 item 4):
-      # the SAME calculation, but at alpha = 0.05 / k_eff_strat instead of the
-      # single-test alpha = 0.05 above -- the Bonferroni multiple-testing
-      # correction hd_detection_power()'s own roxygen "Assumptions and
-      # limits" section already suggests combining with
-      # hd_strat_keff_vertox(), and which #726's issue text argues nothing
-      # currently applies. k_eff_strat is joined from strat_deflated_sharpe
-      # earlier in this target (see "Deflated Sharpe" section above) and, as
-      # of this table, strat_deflated_sharpe only has one row per column in
-      # that section's `col_map` (Stock MAX, Stock DRIF, Factor MAX, Factor
-      # DRIF) -- every OTHER strategy's k_eff_strat is NA after the left_join,
-      # not because the multiple-testing correction doesn't apply to them
-      # (it does -- #726 names Value (HML) and Factor DRIF specifically) but
-      # because strat_keff_vertox()/strategy_correlation's correlation matrix
-      # is itself only computed over those four columns. Rather than guess a
-      # k_eff_strat for strategies outside that matrix, the `_mt` columns are
-      # deliberately NA wherever k_eff_strat is NA or < 1 (a k_eff_strat below
-      # 1 would WIDEN alpha, the opposite of a Bonferroni correction, and
-      # cannot be a valid effective-test count) -- an explicit, commented
-      # default per fail-loud-not-null.md's "Required Pattern" item 2, not a
-      # silent coercion, and S20 only asserts `_mt` coverage where k_eff_strat
-      # is actually non-NA (see check_leaderboard_detection_power_values()).
-      # Widening strat_corr_matrix's coverage to every strategy is out of
-      # scope here (#726 lists it as neither item 3 nor item 4) and is left
-      # as a follow-up.
+      # detection_min_n_years_mt / detection_underpowered_mt (#726 item 4,
+      # widened by #728 items 1+2): the SAME calculation, but at
+      # alpha = 0.05 / k_eff_leaderboard instead of the single-test
+      # alpha = 0.05 above -- the Bonferroni multiple-testing correction
+      # hd_detection_power()'s own roxygen "Assumptions and limits" section
+      # already suggests combining with hd_strat_keff_vertox(). Before #728
+      # this used k_eff_strat (now k_eff_family), the FAMILY-scoped count --
+      # #728's finding was that this made the correction "mostly cosmetic":
+      # Bonferroni-correcting alpha by a family-scoped K can only fire where
+      # that K exists, so 7 of the 8 positive-Sharpe rows never got a
+      # corrected verdict. k_eff_leaderboard is joined from
+      # strat_deflated_sharpe earlier in this target (see "Deflated Sharpe"
+      # section above) and is now populated for every strategy in
+      # STRAT_RETURNS_WIDE_CODES (plan_strategy_correlation.R) -- 11 of 17,
+      # up from 4. The remaining 6 (CMR, OLMAR-1, TOM, Risk State, Avoid
+      # Worst, PSO Optimal) are genuine, documented exclusions -- see that
+      # constant's comment -- not something this target guesses a value
+      # for. The `_mt` columns are deliberately NA wherever
+      # k_eff_leaderboard is NA or < 1 (a K below 1 would WIDEN alpha, the
+      # opposite of a Bonferroni correction, and cannot be a valid
+      # effective-test count) -- an explicit, commented default per
+      # fail-loud-not-null.md's "Required Pattern" item 2, not a silent
+      # coercion, and S20 only asserts `_mt` coverage where
+      # k_eff_leaderboard is actually non-NA (see
+      # check_leaderboard_detection_power_values()). S21 (#728 item 4,
+      # R/plan_qa_gates.R) separately asserts deflated_sharpe/dsr_pvalue/
+      # k_eff_leaderboard coverage for every positive-Sharpe strategy, with
+      # an explicit exemption table for the 6 genuine exclusions.
       all_metrics <- all_metrics |>
         dplyr::left_join(STRATEGY_OBS_ANN_FACTOR, by = "strategy")
 
       # Defensive: strat_deflated_sharpe's join above is itself guarded by
       # `!is.null(strat_deflated_sharpe) && nrow(strat_deflated_sharpe) > 0`,
-      # so k_eff_strat may not exist as a column at all (e.g. in a partial
-      # test harness that omits that upstream target) -- pmap_dfr below needs
-      # every element to be a real vector, not a NULL, so backfill NA here.
-      if (!"k_eff_strat" %in% names(all_metrics)) {
-        all_metrics$k_eff_strat <- NA_real_
+      # so k_eff_leaderboard may not exist as a column at all (e.g. in a
+      # partial test harness that omits that upstream target) -- pmap_dfr
+      # below needs every element to be a real vector, not a NULL, so
+      # backfill NA here.
+      if (!"k_eff_leaderboard" %in% names(all_metrics)) {
+        all_metrics$k_eff_leaderboard <- NA_real_
       }
 
       .detection_diag_row <- function(sr, n, af, keff) {
@@ -855,7 +861,7 @@ plan_leaderboard <- function() {
 
       detection_diag <- purrr::pmap_dfr(
         list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor,
-             all_metrics$k_eff_strat),
+             all_metrics$k_eff_leaderboard),
         .detection_diag_row
       )
 
@@ -887,32 +893,93 @@ plan_leaderboard <- function() {
     # ── Vertox K_eff_strat: correlation-aware effective strategy count ────────
     # Uses strat_corr_matrix from plan_strategy_correlation (available as dep).
     # seed = 160 for reproducibility (issue #160).
+    #
+    # FAMILY SCOPE (#728): this K_eff is computed over the 5-strategy family
+    # in strat_corr_matrix (stk_max, stk_drif, fac_max, fac_drif, ltr) --
+    # NOT the full leaderboard. Surfaced below as `k_eff_family`, distinct
+    # from `k_eff_leaderboard` (plan_strategy_correlation.R's
+    # strat_keff_vertox_leaderboard, scoped to the 11-strategy
+    # STRAT_RETURNS_WIDE_CODES) so no consumer can conflate "effective tests
+    # within one family" with "effective tests across the whole
+    # leaderboard" -- #728's core finding was that the two had been
+    # conflated under one ambiguous name, `k_eff_strat`. Published
+    # deflated_sharpe/dsr_pvalue below now use the leaderboard-wide scope;
+    # k_eff_family is kept only as informational context for the family
+    # subset.
     targets::tar_target(strat_keff_vertox, {
       historicaldata::hd_strat_keff_vertox(strat_corr_matrix, n_sim = 20000L, seed = 160L)
     }),
 
-    # ── Deflated Sharpe per strategy (#160) ───────────────────────────────────
-    # K_trials = K_eff_strat (Vertox correlation-aware count, rounded to integer),
-    # NOT raw M=4: correlated strategies → raw count over-penalises.
-    # ann_factor = 12 (monthly returns in port_returns).
-    # col_map keys match port_returns column names; values match leaderboard labels.
+    # ── Deflated Sharpe per strategy (#160, widened by #728 items 1+2) ────────
+    # K_trials = k_eff_leaderboard (strat_keff_vertox_leaderboard,
+    # plan_strategy_correlation.R) -- the LEADERBOARD-WIDE correlation-aware
+    # effective strategy count -- NOT the family-scoped strat_keff_vertox
+    # this target used before #728, and NOT a raw strategy count:
+    # correlated strategies over-penalise a raw count, and a family-scoped
+    # count understates the true multiplicity a reader faces when ranking
+    # all 17 strategies against each other on one leaderboard. See #728
+    # ("k_eff_strat = 4.847 is the effective number of tested strategies
+    # within the factor/stock MAX/DRIF family... The multiplicity that
+    # should deflate any individual Sharpe is the leaderboard-wide one").
+    #
+    # Source return series come from strat_returns_wide
+    # (plan_strategy_correlation.R), which already aligns every strategy in
+    # STRAT_RETURNS_WIDE_CODES onto a common ym spine via full_join (not
+    # inner_join -- see that target's comment, and fail-loud-not-null.md).
+    # col_map here mirrors that constant; every strategy NOT in col_map is a
+    # genuine, documented exclusion (daily frequency, or PSO Optimal's
+    # linear-combination circularity) -- see STRAT_RETURNS_WIDE_CODES's
+    # comment in plan_strategy_correlation.R, not an oversight. That leaves
+    # 11 of 17 leaderboard strategies covered here (#728 item 1), up from 4
+    # before this change: CMR, OLMAR-1, TOM, Risk State, Avoid Worst, and
+    # PSO Optimal remain NA on deflated_sharpe/dsr_pvalue/k_eff_leaderboard,
+    # each for the documented reason above -- not fabricated coverage.
+    #
+    # ann_factor = 12 for every row: every strategy in col_map is
+    # monthly-frequency (that is precisely why it qualifies for
+    # strat_returns_wide -- see STRAT_RETURNS_WIDE_CODES's comment).
+    #
+    # k_eff_family / k_raw_family are populated ONLY for the original
+    # 5-strategy family (NA elsewhere) -- informational context, no longer
+    # used to compute deflated_sharpe/dsr_pvalue (#728 item 2).
     targets::tar_target(strat_deflated_sharpe, {
       library(dplyr)
-      k_eff <- max(1L, round(strat_keff_vertox))
-      col_map <- c(stk_max = "Stock MAX", stk_drif = "Stock DRIF",
-                   fac_max = "Factor MAX", fac_drif = "Factor DRIF")
+
+      col_map <- c(
+        stk_max         = "Stock MAX",
+        stk_drif        = "Stock DRIF",
+        fac_max         = "Factor MAX",
+        fac_drif        = "Factor DRIF",
+        ltr             = "LTR",
+        xgb_drif        = "XGB DRIF",
+        mom_prepeak     = "Mom Pre-Peak",
+        mom_postpeak    = "Mom Post-Peak",
+        mom_combined    = "Mom 12-2",
+        value_hml       = "Value (HML)",
+        managed_futures = "Managed Futures"
+      )
+      family_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr")
+
+      k_eff_lb  <- max(1, round(strat_keff_vertox_leaderboard))
+      k_raw_lb  <- nrow(strat_corr_matrix_leaderboard)
+      k_eff_fam <- max(1L, round(strat_keff_vertox))
+      k_raw_fam <- nrow(strat_corr_matrix)
+
       bind_rows(lapply(names(col_map), function(col) {
-        r <- port_returns[[col]]
+        r <- strat_returns_wide[[col]]
         r <- r[!is.na(r)]
-        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff, ann_factor = 12L)
+        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = 12L)
+        is_family <- col %in% family_cols
         tibble::tibble(
-          strategy        = unname(col_map[[col]]),
-          naive_sharpe    = d$naive_sharpe,
-          deflated_sharpe = d$dsr,
-          dsr_pvalue      = d$dsr_pvalue,
-          dsr_haircut_pct = d$haircut_pct,
-          k_eff_strat     = strat_keff_vertox,
-          k_raw           = nrow(strat_corr_matrix)
+          strategy          = unname(col_map[[col]]),
+          naive_sharpe      = d$naive_sharpe,
+          deflated_sharpe   = d$dsr,
+          dsr_pvalue        = d$dsr_pvalue,
+          dsr_haircut_pct   = d$haircut_pct,
+          k_eff_leaderboard = strat_keff_vertox_leaderboard,
+          k_raw_leaderboard = k_raw_lb,
+          k_eff_family      = if (is_family) k_eff_fam else NA_real_,
+          k_raw_family      = if (is_family) k_raw_fam else NA_integer_
         )
       }))
     })
