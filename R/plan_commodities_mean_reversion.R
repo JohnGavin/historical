@@ -109,15 +109,15 @@ plan_commodities_mean_reversion <- function() {
     # Sharpe, MDD, max DD duration (hd_dd_duration from risk_metrics.R).
 
     targets::tar_target(cmr_metrics_1m, {
-      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", stk_rf = stk_rf, ann_factor = 252L)
+      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L)
     }),
 
     targets::tar_target(cmr_metrics_3m, {
-      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", stk_rf = stk_rf, ann_factor = 252L)
+      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", daily_rf = daily_rf, ann_factor = 252L)
     }),
 
     targets::tar_target(cmr_metrics_6m, {
-      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", stk_rf = stk_rf, ann_factor = 252L)
+      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", daily_rf = daily_rf, ann_factor = 252L)
     }),
 
 
@@ -190,28 +190,39 @@ plan_commodities_mean_reversion <- function() {
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Not exported; called only within this plan's targets.
 
-#' Join a monthly risk-free series onto a CMR portfolio (#677)
+#' Join a daily risk-free series onto a CMR portfolio (#722)
 #'
-#' Mirrors \code{.ltr_join_rf()} in R/plan_ltr_momentum.R: joins on \code{ym}
-#' derived from \code{date}. As of #677 slice 3b the coverage policy itself
-#' lives in the shared \code{.join_rf_series()} (R/utils_metrics.R), which
-#' distinguishes THREE cases (leading / trailing / interior) -- see that
-#' function's roxygen for the full policy. A missing risk-free series must
-#' never be treated as zero -- see fail-loud-not-null.md.
+#' Mirrors \code{.tom_join_rf_daily()} in R/plan_turn_of_month.R and
+#' \code{.olmar_join_rf()} in R/plan_olmar.R: joins on \code{date} at DAILY
+#' granularity, not \code{ym} at monthly granularity -- CMR's portfolios are
+#' themselves daily series (#717; see the frequency note at the top of this
+#' file), so the risk-free series annualised alongside them with
+#' \code{ann_factor = 252L} must be daily too. Before #722, this function
+#' joined the MONTHLY \code{stk_rf} on \code{ym}, which produced a
+#' physically-impossible ~41% annualised risk-free rate (mean monthly rf
+#' multiplied by 252, the daily annualisation factor).
 #'
-#' @param df Tibble with a `ym` column already derived, and `net_ret`.
-#' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
+#' As of #677 slice 3b the coverage policy itself lives in the shared
+#' \code{.join_rf_series()} (R/utils_metrics.R), which distinguishes THREE
+#' cases (leading / trailing / interior) -- see that function's roxygen for
+#' the full policy. A missing risk-free series must never be treated as zero
+#' -- see fail-loud-not-null.md.
+#'
+#' @param df Tibble with a `date` column (CMR's daily portfolio), and
+#'   `net_ret`.
+#' @param daily_rf Tibble with columns `date`, `rf_ret` (the `daily_rf`
+#'   target, R/plan_stock_backtest.R).
 #' @param lookback Character. Lookback label, used only for error/warning text.
-#' @return `df` with `rf_ret` joined, trailing uncovered months removed.
+#' @return `df` with `rf_ret` joined, trailing uncovered dates removed.
 #' @noRd
-.cmr_join_rf <- function(df, stk_rf, lookback) {
+.cmr_join_rf <- function(df, daily_rf, lookback) {
   .join_rf_series(
-    df = df, rf = stk_rf, key = "ym",
-    label = ".cmr_join_rf", rf_label = "stk_rf",
-    rf_source = "R/plan_stock_backtest.R",
+    df = df, rf = daily_rf, key = "date",
+    label = ".cmr_join_rf", rf_label = "daily_rf",
+    rf_source = "the daily_rf target, R/plan_stock_backtest.R",
     df_label = paste0("CMR ", lookback, " portfolio"),
     strategy_label = paste0("CMR ", lookback),
-    period_noun = "month", check_key_col = FALSE
+    period_noun = "date"
   )
 }
 
@@ -291,12 +302,12 @@ plan_commodities_mean_reversion <- function() {
   invisible(NULL)
 }
 
-.compute_cmr_metrics <- function(portfolio_tbl, lookback, stk_rf, ann_factor = 252L) {
+.compute_cmr_metrics <- function(portfolio_tbl, lookback, daily_rf, ann_factor = 252L) {
   library(dplyr)
 
   df <- portfolio_tbl |>
     dplyr::filter(!is.na(.data$net_ret)) |>
-    dplyr::mutate(ym = format(as.Date(.data$date), "%Y-%m"))
+    dplyr::mutate(date = as.Date(.data$date))
 
   # #717 guard: declared ann_factor must match the observed frequency of
   # this portfolio's own dates, checked at the point ann_factor is supplied.
@@ -312,9 +323,11 @@ plan_commodities_mean_reversion <- function() {
     ))
   }
 
-  # #677: real Fama-French monthly rf (stk_rf), replacing the hardcoded
-  # "MANUAL: no source" 2%/yr assumption previously baked into monthly_rf.
-  df <- .cmr_join_rf(df, stk_rf, lookback = lookback)
+  # #722: real Fama-French DAILY rf (daily_rf), replacing the monthly stk_rf
+  # that was previously joined against this daily portfolio (#677 introduced
+  # the real rf but on the wrong frequency; #717 fixed ann_factor without
+  # fixing the rf join that #722 catches).
+  df <- .cmr_join_rf(df, daily_rf, lookback = lookback)
   n  <- nrow(df)  # may shrink if a trailing rf gap was trimmed above
 
   r  <- df$net_ret

@@ -150,9 +150,12 @@ test_that("aborts when df has no key column and check_key_col is TRUE (default)"
 test_that("check_key_col = FALSE skips the key-column presence check", {
   # df already has ym present -- FALSE just skips the defensive check, so
   # behaviour is identical to the default when the column IS present (this
-  # is how CMR / mom_prepeak use it: they guarantee `ym` by construction
-  # before calling, mirroring their pre-#677-slice-3b behaviour of never
-  # checking for it at all).
+  # is how mom_prepeak uses it: it derives `ym` from `exec_date` immediately
+  # before calling, mirroring its pre-#677-slice-3b behaviour of never
+  # checking for it at all). CMR used check_key_col = FALSE here too before
+  # #722, when it derived `ym` the same way; #722 switched CMR to the daily
+  # `date` column that already exists on its portfolio by construction, so
+  # it now uses the default TRUE like .tom_join_rf_daily() / .olmar_join_rf().
   out <- .call_join(
     .mk_df_ym(c("2026-01", "2026-02")), .mk_rf_ym(c("2026-01", "2026-02")),
     .args_ym, check_key_col = FALSE
