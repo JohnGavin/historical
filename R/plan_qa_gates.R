@@ -1348,6 +1348,147 @@ check_leaderboard_detection_power_coverage <- function(leaderboard, obs_ann_fact
 }
 
 
+#' Assert every positive-Sharpe leaderboard row has a detection-power verdict
+#' (S20)
+#'
+#' Closes the NA hole #726 found in the detection-power diagnostic
+#' (\code{.detection_diag_row()}, R/plan_leaderboard.R, #711 Gap 1): that
+#' function returns NA for \code{detection_min_n_years}/
+#' \code{detection_underpowered} through THREE distinct paths -- (a)
+#' \code{sharpe} is NA or non-positive (the one-sided test has no positive
+#' effect to detect -- excluded from this gate by construction, since it
+#' only inspects rows with \code{sharpe > 0}), (b) \code{months} is NA or
+#' \code{< 2} (an unusable sample length), or (c)
+#' \code{historicaldata::hd_detection_power()} itself errors inside the
+#' \code{tryCatch}. \code{check_leaderboard_detection_power_coverage()} (S19,
+#' above) only guards the INPUT to this diagnostic -- that every strategy has
+#' a declared row in \code{STRATEGY_OBS_ANN_FACTOR} -- not that the
+#' diagnostic actually produced a value. Risk State passed S19 (it IS in
+#' \code{STRATEGY_OBS_ANN_FACTOR}, declared 252) while still landing on path
+#' (b) forever, because \code{rsc_metrics} never carried a \code{months}
+#' column at all until #726 item 3's fix to \code{calc_metrics()}
+#' (R/plan_risk_state.R) -- exactly the \code{fail-loud-not-null.md} pattern
+#' of a guard scoped to the input that failed last time rather than to the
+#' property actually wanted: "every positive-Sharpe row has a detection
+#' verdict."
+#'
+#' A second, independent assertion (per #726 item 4) covers the
+#' multiple-testing-corrected columns \code{detection_min_n_years_mt}/
+#' \code{detection_underpowered_mt} (alpha = 0.05 / \code{k_eff_strat}
+#' instead of the single-test alpha = 0.05): this is only checked for rows
+#' where \code{k_eff_strat} is itself usable (non-NA and >= 1) -- see the
+#' \code{.detection_diag_row()} comment in R/plan_leaderboard.R for why
+#' \code{k_eff_strat} is deliberately NA for most strategies today (it is
+#' only populated for the four columns \code{strat_deflated_sharpe} covers),
+#' which is an explicit, documented default per fail-loud-not-null.md's
+#' Required Pattern item 2, not something this gate treats as a defect.
+#'
+#' Both assertions name the offending \code{strategy}/\code{period} pairs and
+#' state which NA path applies, per fail-loud-not-null.md's requirement that
+#' an aborting message name the offending value and the field it came from --
+#' "some rows are NA" is not an acceptable message on its own.
+#'
+#' @param leaderboard Tibble with at least \code{strategy}, \code{period},
+#'   \code{sharpe}, \code{months}, \code{detection_min_n_years},
+#'   \code{detection_underpowered}, \code{detection_min_n_years_mt},
+#'   \code{detection_underpowered_mt}, \code{k_eff_strat} columns (the
+#'   output of the \code{leaderboard} target).
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_detection_power_values <- function(leaderboard) {
+  required_cols <- c(
+    "strategy", "period", "sharpe", "months",
+    "detection_min_n_years", "detection_underpowered",
+    "detection_min_n_years_mt", "detection_underpowered_mt", "k_eff_strat"
+  )
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_leaderboard_detection_power_values() (S20) requires strategy, ",
+        "period, sharpe, months, detection_min_n_years, detection_underpowered, ",
+        "detection_min_n_years_mt, detection_underpowered_mt, k_eff_strat."
+      )
+    ))
+  }
+
+  positive <- !is.na(leaderboard$sharpe) & leaderboard$sharpe > 0
+
+  # ── Assertion 1: single-test verdict must be non-NA for every positive-
+  # Sharpe row -- the property #726 actually wants, not merely the S19 input
+  # check. Names which of paths (b)/(c) is responsible for each offender.
+  single_missing <- positive &
+    (is.na(leaderboard$detection_min_n_years) | is.na(leaderboard$detection_underpowered))
+
+  if (any(single_missing)) {
+    idx <- which(single_missing)
+    months_bad <- is.na(leaderboard$months[idx]) | leaderboard$months[idx] < 2
+    reason <- ifelse(
+      months_bad,
+      "months is NA or < 2 (path b: unusable sample length)",
+      paste0(
+        "hd_detection_power() produced no value despite a usable months (path c: ",
+        "the tryCatch in R/plan_leaderboard.R's .detection_diag_row() caught an error)"
+      )
+    )
+    offenders <- sprintf(
+      "  %s / %s -- sharpe = %s, months = %s -- %s",
+      leaderboard$strategy[idx], leaderboard$period[idx],
+      format(leaderboard$sharpe[idx], digits = 3),
+      ifelse(is.na(leaderboard$months[idx]), "NA", format(leaderboard$months[idx], digits = 4)),
+      reason
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) with sharpe > 0 but no detection-power verdict (#726):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_detection_power_values() (S20) requires every ",
+        "positive-Sharpe row to have a non-NA detection_min_n_years/",
+        "detection_underpowered -- fix the offending strategy's source ",
+        "metrics target (path b: publish a real months/n_days/n_obs column) ",
+        "or investigate the hd_detection_power() error (path c)."
+      )
+    ))
+  }
+
+  # ── Assertion 2: multiple-testing-corrected verdict must be non-NA
+  # wherever k_eff_strat is itself usable (#726 item 4).
+  mt_applicable <- positive & !is.na(leaderboard$k_eff_strat) & leaderboard$k_eff_strat >= 1
+  mt_missing <- mt_applicable &
+    (is.na(leaderboard$detection_min_n_years_mt) | is.na(leaderboard$detection_underpowered_mt))
+
+  if (any(mt_missing)) {
+    idx <- which(mt_missing)
+    offenders <- sprintf(
+      "  %s / %s -- sharpe = %s, k_eff_strat = %s",
+      leaderboard$strategy[idx], leaderboard$period[idx],
+      format(leaderboard$sharpe[idx], digits = 3),
+      format(leaderboard$k_eff_strat[idx], digits = 4)
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) with sharpe > 0 and a usable k_eff_strat but no multiple-",
+        "testing-corrected detection-power verdict (#726 item 4):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_detection_power_values() (S20) requires ",
+        "detection_min_n_years_mt/detection_underpowered_mt to be non-NA ",
+        "whenever k_eff_strat is non-NA and >= 1 -- see the alpha = 0.05 / ",
+        "keff tryCatch in R/plan_leaderboard.R's .detection_diag_row()."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -1735,6 +1876,25 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_detection_power_coverage(leaderboard, STRATEGY_OBS_ANN_FACTOR)
         cli::cli_inform(c("v" = "qa_leaderboard_detection_power_coverage: S19 passed (all strategies have a declared periodicity)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every positive-Sharpe leaderboard row has a non-NA
+    # detection-power verdict, both single-test and (where k_eff_strat is
+    # usable) multiple-testing-corrected (S20, #726 items 3+4). S19 above
+    # only guards the diagnostic's INPUT (a declared periodicity); this gate
+    # asserts the property actually wanted -- that the diagnostic produced a
+    # value -- and names which of the diagnostic's three NA paths applies.
+    # See check_leaderboard_detection_power_values() roxygen for the full
+    # rationale, including why Risk State passed S19 while still landing on
+    # NA forever until #726 item 3's calc_metrics() fix.
+    targets::tar_target(
+      qa_leaderboard_detection_power_values,
+      command = {
+        check_leaderboard_detection_power_values(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_detection_power_values: S20 passed (every positive-Sharpe row has a detection-power verdict)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

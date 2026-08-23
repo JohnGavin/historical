@@ -348,7 +348,20 @@ plan_risk_state <- function() {
           hac_tstat = round(hac$hac_tstat, 3),
           hac_sharpe = round(hac$naive_sharpe, 3),
           window_start = min(date_vec),
-          window_end   = max(date_vec)
+          window_end   = max(date_vec),
+          # n_obs (#726 item 3): raw observation count backing this row --
+          # `years` above is derived from it but was never itself exposed,
+          # which is why R/plan_leaderboard.R's .norm_rsc() had nothing to
+          # rename into `months` and every SPY_overlay row's detection-power
+          # diagnostic (.detection_diag_row()) was silently NA regardless of
+          # sharpe. Same periodicity as periods_per_year (days for the
+          # SPY_overlay/SPY_buyhold rows this file's default 252L covers;
+          # months for the DRIF_raw/DRIF_overlay/FacMAX_raw/FacMAX_overlay
+          # rows called with periods_per_year = 12L below) -- consistent with
+          # how every other strategy's `months` column is actually a raw
+          # period count, not literally months (see the
+          # STRATEGY_OBS_ANN_FACTOR comment in R/plan_leaderboard.R).
+          n_obs     = length(ret_vec)
         )
       }
 
@@ -848,7 +861,11 @@ plan_risk_state <- function() {
   # risk-free-adjusted column added alongside the pre-existing `hac_sharpe`
   # -- both need a unit or hd_metric_record() aborts loud per #640). ann_rf
   # (#677 slice 4, #691) is PERCENT, same convention as cagr
-  # (round(sr_result$ann_rf * 100, 2) above).
+  # (round(sr_result$ann_rf * 100, 2) above). n_obs (#726 item 3) is a raw
+  # observation COUNT, not a ratio/percent -- hd_metric_record()'s wide-form
+  # path treats every numeric column as a candidate metric (see
+  # .normalise_metric_long()'s `is_num` filter), so it needs a unit here too
+  # or the same #640 abort fires for it.
   full_row <- rsc_metrics[
     rsc_metrics$strategy == "SPY_overlay" & rsc_metrics$period == "Full Period",
     , drop = FALSE
@@ -858,7 +875,7 @@ plan_risk_state <- function() {
     rsc_units <- c(
       cagr = "percent", vol = "percent", max_dd = "percent",
       sharpe = "ratio", hac_tstat = "ratio", hac_sharpe = "ratio",
-      ann_rf = "percent"
+      ann_rf = "percent", n_obs = "count"
     )
     historicaldata::hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = rsc_units
