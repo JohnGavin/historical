@@ -32,6 +32,13 @@
 #   own date column still mixes daily and monthly-stamped observations, so
 #   ann_factor = 252 over-annualises the vol/cagr contribution of every
 #   FRED-only month-start row. #724 fixes the crash; it does not fix that.
+# Mixed frequency (#738): MEASURED, not fixed. cmr_portfolio_1m/3m/6m run at
+#   12 obs/year before 2000-01 (13 FRED monthly indexes only -- Yahoo history
+#   starts 2000) and ~255/year after; ~1.4% of observations are monthly-spaced
+#   and the whole series is declared daily. .assert_cmr_ann_factor()'s
+#   consistency check (#738) now DETECTS this; choosing the remedy (truncate
+#   to 2000+, resample to monthly, or segment and report separately) is an
+#   open decision on #738 and is deliberately NOT made here.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -341,35 +348,132 @@ plan_commodities_mean_reversion <- function() {
   )
 }
 
+#' Per-periodicity gap tolerances for the CMR periodicity guard (#738)
+#'
+#' One row per recognised annualisation factor. \code{min_gap}/\code{max_gap}
+#' bound a SINGLE inter-observation gap that is still consistent with that
+#' declared periodicity. They are calendar-day bounds, and each is argued
+#' from a calendar fact rather than picked to make the current data pass:
+#'
+#' \describe{
+#'   \item{252 (daily), 1-10 days}{Nominal spacing is 365.25/252 = 1.45
+#'     calendar days. The upper bound must absorb the worst real gap a
+#'     genuine business-daily series produces. The longest US market closure
+#'     since 1990 is 9/11 (last print 2001-09-10, next 2001-09-17 -- a
+#'     7-calendar-day gap); Christmas/New-Year holidays adjacent to a weekend
+#'     reach 4-5; Hurricane Sandy (2012) gave 4. 10 clears the worst observed
+#'     with headroom and still sits a full 3 weeks below a monthly spacing
+#'     (28-31 days), so a monthly observation can never be mistaken for a
+#'     long holiday. Lower bound 1: a date-keyed series cannot be denser
+#'     than one observation per calendar day.}
+#'   \item{52 (weekly), 4-24 days}{Nominal 7.02. Upper bound tolerates two
+#'     consecutive missing weeks plus slack; lower bound rejects
+#'     sub-half-week spacing, which indicates daily data mislabelled weekly.}
+#'   \item{12 (monthly), 20-75 days}{Nominal 30.44. Lower bound 20 clears a
+#'     28-day February with margin while rejecting weekly-or-denser prints;
+#'     upper bound 75 tolerates one entirely missing month (2 x 31 = 62)
+#'     plus slack, while staying below a quarterly spacing.}
+#'   \item{4 (quarterly), 60-200 days}{Nominal 91.31. Same construction: one
+#'     missing quarter tolerated, monthly spacing rejected.}
+#' }
+#'
+#' @noRd
+CMR_PERIODICITY_TOLERANCE <- tibble::tibble(
+  ann_factor = c(252L, 52L, 12L, 4L),
+  label      = c("daily", "weekly", "monthly", "quarterly"),
+  min_gap    = c(1, 4, 20, 60),
+  max_gap    = c(10, 24, 75, 200)
+)
+
+#' Fraction of gaps allowed to fall outside the declared periodicity's band
+#'
+#' The smallest frequency REGIME CHANGE worth catching is a single year of a
+#' different periodicity embedded in a longer series -- 12 monthly
+#' observations inside a ~27-year daily series (~6800 gaps) is 0.18% of
+#' gaps. 0.1% therefore catches a one-year regime change with roughly 2x
+#' margin, while anything below it is an isolated vendor outage rather than
+#' a change of periodicity. Deliberately NOT zero: a single missing print in
+#' a decades-long series is a data hiccup, not a mis-declared frequency, and
+#' a guard that aborts the whole pipeline on one bad row would be turned off
+#' rather than fixed.
+#'
+#' @noRd
+CMR_PERIODICITY_MAX_OUT_OF_BAND_FRAC <- 0.001
+
+#' Minimum absolute number of out-of-band gaps tolerated, regardless of n
+#'
+#' On a short series the fraction above rounds down to zero, so one isolated
+#' outage would abort. This floor keeps the tolerance at "at least two
+#' isolated gaps" for any series length, so the guard fires on a PATTERN and
+#' never on a single print.
+#'
+#' @noRd
+CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
+
 #' Reconcile a declared `ann_factor` against the observed date frequency
 #'
-#' Guard from #717 (fail-loud-not-null.md Required Pattern 5): computes the
-#' median gap between the distinct, sorted dates in \code{dates} and aborts
-#' if that gap is inconsistent with \code{ann_factor}. This is deliberately
-#' placed at the point where \code{ann_factor} is SUPPLIED to
-#' \code{.compute_cmr_metrics()} -- not buried in the CAGR/vol arithmetic
-#' further down -- so a future caller that passes the wrong constant fails
-#' immediately, on the value it got wrong, rather than producing a
-#' plausible-looking but silently mis-annualised number (exactly what
-#' happened with \code{ann_factor = 12L} against CMR's actually-daily data).
+#' Guard from #717 (fail-loud-not-null.md Required Pattern 5), rewritten for
+#' #738. Deliberately placed at the point where \code{ann_factor} is
+#' SUPPLIED to \code{.compute_cmr_metrics()} -- not buried in the CAGR/vol
+#' arithmetic further down -- so a future caller that passes the wrong
+#' constant fails immediately, on the value it got wrong, rather than
+#' producing a plausible-looking but silently mis-annualised number (exactly
+#' what happened with \code{ann_factor = 12L} against CMR's actually-daily
+#' data).
 #'
-#' Uses the MEDIAN gap, not the mean or min: commodity data has real gaps
-#' (weekends, holidays, and -- because CMR's universe mixes 24 Yahoo daily
-#' futures/ETF series with 13 FRED monthly indexes, #717 -- occasional
-#' months where only the sparser monthly series print). The median is
-#' robust to that without a hand-tuned outlier filter. Bands are
-#' deliberately wide (e.g. daily tolerates gaps up to 3 days) to absorb long
-#' weekends/holiday clusters without false-positiving on a genuine daily
-#' series; they are not so wide that a real classification error (e.g.
-#' monthly data declared daily) would slip through undetected.
+#' Two checks, in order:
+#'
+#' \enumerate{
+#'   \item \strong{Classification} (unchanged from #720). The MEDIAN gap
+#'     between distinct sorted dates is mapped to an expected
+#'     \code{ann_factor} and compared against the declared one. The median is
+#'     the right statistic for this question -- "what is the typical
+#'     spacing" -- because it is robust to the weekend/holiday gaps every
+#'     real business-daily series carries.
+#'   \item \strong{Consistency} (new, #738). Counts the gaps falling OUTSIDE
+#'     \code{CMR_PERIODICITY_TOLERANCE}'s band for the declared periodicity,
+#'     and aborts when that count exceeds
+#'     \code{max(CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE,
+#'     ceiling(CMR_PERIODICITY_MAX_OUT_OF_BAND_FRAC * n_gaps))}.
+#' }
+#'
+#' Check 2 exists because check 1 alone cannot see a series that CHANGES
+#' frequency partway through. #738 measured \code{cmr_portfolio_1m} as 12
+#' observations/year before 2000 and ~255/year after: 94 of 6851 gaps are
+#' monthly, 6757 are daily, and the series is declared daily throughout.
+#' The overall median gap is 1 day, so 94 monthly gaps out of 6851 cannot
+#' move it and check 1 passes -- correctly by its own logic, on a series
+#' where 1.4% of observations sit at a twenty-one-fold different frequency.
+#' A median is precisely the statistic chosen to be insensitive to the
+#' minority that reveals the answer is "no". The property we want is "is the
+#' spacing CONSISTENT with one declared periodicity", which is a question
+#' about dispersion, and no measure of central tendency can answer it.
+#'
+#' The tolerance is a count of out-of-band gaps rather than a requirement
+#' that all gaps be identical, because holidays and short weeks mean a naive
+#' equality test false-positives on every genuine daily series. See
+#' \code{CMR_PERIODICITY_TOLERANCE} and
+#' \code{CMR_PERIODICITY_MAX_OUT_OF_BAND_FRAC} for how each bound is argued.
 #'
 #' @param dates A date vector (one entry per observation; duplicates and
 #'   unsorted input are handled).
 #' @param ann_factor Integer. The annualisation factor about to be used.
 #' @param lookback Character. Lookback label, used only for the abort message.
+#' @param on_violation One of `"abort"` (default) or `"warn"`. Governs the
+#'   CONSISTENCY check only -- the classification check always aborts.
+#'   `"warn"` exists solely as a staging lever: the consistency check fires
+#'   on CMR's production data as it stands today (that is the point -- see
+#'   #738), so landing it in abort mode turns the build red until CMR's
+#'   remedy is chosen. Setting the three `cmr_metrics_*` call sites to
+#'   `"warn"` for one release lets the finding be published without blocking
+#'   the pipeline. It is NOT a way to keep a mixed-frequency series in
+#'   production indefinitely.
 #' @return `NULL`, invisibly. Called for its abort side effect.
 #' @noRd
-.assert_cmr_ann_factor <- function(dates, ann_factor, lookback) {
+.assert_cmr_ann_factor <- function(dates, ann_factor, lookback,
+                                   on_violation = c("abort", "warn")) {
+  on_violation <- match.arg(on_violation)
+
   d <- sort(unique(as.Date(dates)))
   if (length(d) < 3L) {
     # Too few points for a frequency to be meaningfully observed.
@@ -378,6 +482,7 @@ plan_commodities_mean_reversion <- function() {
   gaps <- as.numeric(diff(d))
   median_gap <- stats::median(gaps)
 
+  # ── Check 1: classification (median gap -> expected ann_factor) ──────────
   expected_ann_factor <- dplyr::case_when(
     median_gap <= 3   ~ 252L,  # daily (business days; weekends widen some gaps)
     median_gap <= 10  ~ 52L,   # weekly
@@ -414,11 +519,83 @@ plan_commodities_mean_reversion <- function() {
     ))
   }
 
+  # ── Check 2: consistency (dispersion of gaps, not their centre) ──────────
+  tol <- CMR_PERIODICITY_TOLERANCE[
+    CMR_PERIODICITY_TOLERANCE$ann_factor == ann_factor, , drop = FALSE
+  ]
+  if (nrow(tol) != 1L) {
+    cli::cli_abort(c(
+      "x" = "CMR {lookback}: no periodicity tolerance defined for declared ann_factor {ann_factor}.",
+      "i" = "Known factors: {.val {CMR_PERIODICITY_TOLERANCE$ann_factor}}.",
+      "i" = "Add a row to CMR_PERIODICITY_TOLERANCE rather than skipping the consistency check."
+    ))
+  }
+
+  n_gaps    <- length(gaps)
+  too_short <- gaps < tol$min_gap
+  too_long  <- gaps > tol$max_gap
+  n_out     <- sum(too_short) + sum(too_long)
+  allowance <- max(
+    CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE,
+    ceiling(CMR_PERIODICITY_MAX_OUT_OF_BAND_FRAC * n_gaps)
+  )
+
+  if (n_out > allowance) {
+    # Name the observed bands and their counts, per fail-loud-not-null.md:
+    # the reader must be able to see WHICH minority frequency is present
+    # without re-deriving it.
+    obs_band <- vapply(
+      gaps,
+      function(g) {
+        hit <- which(g >= CMR_PERIODICITY_TOLERANCE$min_gap &
+                       g <= CMR_PERIODICITY_TOLERANCE$max_gap)
+        if (length(hit) == 0L) "unclassified" else CMR_PERIODICITY_TOLERANCE$label[hit[1]]
+      },
+      character(1)
+    )
+    band_counts <- sort(table(obs_band), decreasing = TRUE)
+    band_txt <- paste0(names(band_counts), ": ", as.integer(band_counts), collapse = "; ")
+
+    out_gaps  <- gaps[too_short | too_long]
+    where_out <- d[-1L][too_short | too_long]
+
+    msg <- c(
+      "x" = paste0(
+        "CMR {lookback}: the observation spacing is NOT consistent with a ",
+        "single declared periodicity (ann_factor {ann_factor}, {tol$label})."
+      ),
+      "i" = paste0(
+        "{n_out} of {n_gaps} gaps ({round(100 * n_out / n_gaps, 3)}%) fall outside the ",
+        "{tol$label} band [{tol$min_gap}, {tol$max_gap}] calendar days; ",
+        "allowance is {allowance}."
+      ),
+      "i" = "Observed gap bands: {band_txt}.",
+      "i" = paste0(
+        "Out-of-band gaps range {min(out_gaps)}-{max(out_gaps)} calendar days, ",
+        "spanning {format(min(where_out))}..{format(max(where_out))}."
+      ),
+      "i" = paste0(
+        "The median gap ({median_gap} calendar days) agrees with the declared ",
+        "factor, which is why the #720 median-gap check passes -- a median cannot ",
+        "see a minority at a different frequency. See #738."
+      ),
+      "i" = "See .claude/rules/fail-loud-not-null.md Required Pattern 5."
+    )
+
+    if (identical(on_violation, "warn")) {
+      cli::cli_warn(msg)
+    } else {
+      cli::cli_abort(msg)
+    }
+  }
+
   invisible(NULL)
 }
 
-.compute_cmr_metrics <- function(portfolio_tbl, lookback, daily_rf, ann_factor = 252L) {
+.compute_cmr_metrics <- function(portfolio_tbl, lookback, daily_rf, ann_factor = 252L,
+                                 periodicity_check = c("abort", "warn")) {
   library(dplyr)
+  periodicity_check <- match.arg(periodicity_check)
 
   df <- portfolio_tbl |>
     dplyr::filter(!is.na(.data$net_ret)) |>
@@ -426,7 +603,12 @@ plan_commodities_mean_reversion <- function() {
 
   # #717 guard: declared ann_factor must match the observed frequency of
   # this portfolio's own dates, checked at the point ann_factor is supplied.
-  .assert_cmr_ann_factor(df$date, ann_factor, lookback)
+  # #738 extends it from "is the TYPICAL spacing right" to "is the spacing
+  # CONSISTENT" -- see .assert_cmr_ann_factor()'s roxygen. `periodicity_check`
+  # is the staging lever documented there; production call sites use the
+  # abort default.
+  .assert_cmr_ann_factor(df$date, ann_factor, lookback,
+                         on_violation = periodicity_check)
 
   n <- nrow(df)
 
