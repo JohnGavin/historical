@@ -15,7 +15,7 @@
 | Dashboard | Objective | Primary visible outputs | Data source |
 |---|---|---|---|
 | `index.qmd` | Portal + dataset catalogue | Headline stat block (tickers/rows/datasets/years/functions); 4 dataset cards; card grid → downstream dashboards | `hd_datasets()`, `hd_tickers()`, `hd_factors()` |
-| `leaderboard.qmd` | Rank all strategies by risk-adjusted return; central output | Ranking table (Sharpe/CAGR/MaxDD/CVaR95/Vol/SSR/Top5%/Credible); partition table; equity-curve plotly (range slider); monthly-returns heatmap; bootstrap-CI table; deflated-Sharpe table; alpha-decay; regime-adjusted Sharpe; Kelly table; structural-breaks dot plot; correlation matrix | `tar_read(leaderboard)`, `boot_ci_summary`, `structural_breaks_summary`, `strategy_correlation` |
+| `leaderboard.qmd` | Rank all strategies by risk-adjusted return; central output | Ranking table (Sharpe/**Detection**/CAGR/MaxDD/CVaR95/Vol/SSR/**Rigour**/Top5%/Credible), with detection-power and rigour-coverage verdicts inline (#726/#728, badges + always-visible summary callout); partition table; equity-curve plotly (range slider); monthly-returns heatmap; bootstrap-CI table; alpha-decay; regime-adjusted Sharpe; Kelly table; structural-breaks dot plot; correlation matrix | `tar_read(leaderboard)`, `strat_deflated_sharpe` (Rigour tooltip only), `boot_ci_summary`, `structural_breaks_summary`, `strategy_correlation` |
 | `falsification.qmd` | Test causal integrity / robustness gauntlet + **Failed Strategies section (#514 merge 3/3)** | Scorecard (Verdict/HAC t/Sharpe/Alpha/R²); null-rejection heatmap (6 envs × strats); FF5+Mom alpha scatter; HAC t comparison; multiplicity K_eff table; WFC 2×2; **covariance regularisation table + conditioning/OOS dot plots (#498)**; causal DAG (Mermaid/D3, tabbed); implication tests; risk-architecture table; **failed-strategy filtered scorecard + pattern table + portfolio implications**; **Liquidity tab: ADV-cap on/off impact table (#625, discharges the standing `backtest-robustness.md` reporting requirement); dashboard-universe liquidity summary + volume stats, computed against `stk_universe` rather than the ingestion-side `consolidated_equity` (#625 Option A, wired but not yet `tar_make()`-verified)** | `fals_vig_*`, `wfc_all_summary`, `cov_diag_vig_table`, `cg_dag`, `cg_test_implications`, `fals_summary`, `fals_vig_names`, `stk_max_adv_cap_impact`, `equity_daily_liquidity_summary_tbl`, `equity_daily_volume_stats` |
 | `evidence.qmd` | Negative results + 155-yr pervasiveness | Failed-strategies scorecard; pattern-analysis table; negative-result cards; JST pervasiveness table (18 countries); equity-premium heatmap; crisis timeline; crisis-frequency table | `fals_summary`, `jst_equity_premium`, `jst_pervasiveness`, `jst_crises` |
 | ~~`factor-max.qmd`~~ | ~~MAX signal at factor level~~ | ~~Cumulative-return plotly (log); metrics table (IS/OOS/Full); factor-selection bar chart; MAX-signal heatmap; ETF comparison~~ | ~~`fm_cumret_plot`, `fm_metrics`, `fm_selection_freq`, `fm_heatmap`~~ **→ merged into `stock-backtest.qmd#factor-level-deep-dive` (#514 merge 2/3)** |
@@ -81,3 +81,21 @@ dashboard — this is the intended default per the `dashboard-output-first`
 rule (extend, don't spin up). The original ingestion-side targets
 (`liquidity_summary_tbl`, `volume_stats`, computed against `consolidated_equity`)
 remain root-pipeline-only and are not displayed on any dashboard.
+
+**Consolidation decision, #726/#728 (detection power + rigour coverage,
+Phase 0 build, #735 prototype):** no change to dashboard count (11). Within
+`leaderboard.qmd`, the Detection and Rigour verdicts are added as two new
+columns on the existing "Full Period" ranking table (Detection immediately
+right of Sharpe, per `detection-power-required` requirement 2), not a new
+tab or dashboard. The standalone "Deflated Sharpe" tab in the Robustness
+section is **removed** — its three numbers (deflated Sharpe, DSR p-value,
+haircut %) now render as the Rigour badge's hover tooltip on the same row as
+the Sharpe they qualify, with zero information loss (the tab's source data,
+`strat_deflated_sharpe`, is unchanged; only its second, separately-navigated
+rendering is retired). Net effect: `leaderboard.qmd` tab count within the
+Robustness tabset drops from 5 to 4 (Bootstrap CI, Alpha Decay, Regime,
+Kelly Sizing). The Mermaid relationship diagram from the #735 prototype
+(Sharpe → detection-power verdict → rigour-coverage verdict → leaderboard
+row) is **not** wired into `causal-diagrams.js` in this pass — that is a
+separate, larger change (migrating node→file:line links into
+`R/diagram_node_links.R`) tracked as a follow-up, not part of this build.

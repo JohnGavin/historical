@@ -37,6 +37,15 @@ source(utils_path)
 disc_path <- if (file.exists("../R/disclosures.R")) "../R/disclosures.R" else
   file.path(here::here(), "R/disclosures.R")
 source(disc_path)
+
+# DEFLATED_SHARPE_EXEMPTIONS is the single source of truth for which
+# strategies are documented exclusions from deflated-Sharpe/K_eff coverage
+# (S21 gate, #728 item 4) -- sourced from R/plan_qa_gates.R rather than
+# re-declared here, so the Rigour column below can never drift from the QA
+# gate that actually enforces coverage.
+qa_gates_path <- if (file.exists("../R/plan_qa_gates.R")) "../R/plan_qa_gates.R" else
+  file.path(here::here(), "R/plan_qa_gates.R")
+source(qa_gates_path)
 ```
 
 # Rankings
@@ -52,15 +61,189 @@ source(disc_path)
 #### Full Period
 
 ```{r}
+#| label: detection-rigour-summary
+#| include: false
+lb_dp <- safe_tar_read("leaderboard")
+if (!is.null(lb_dp)) {
+  full_dp <- lb_dp |> dplyr::filter(period == "Full Period")
+
+  n_pos          <- sum(full_dp$sharpe > 0, na.rm = TRUE)
+  n_under_single <- sum(full_dp$detection_underpowered, na.rm = TRUE)
+  n_under_mt     <- sum(full_dp$detection_underpowered_mt, na.rm = TRUE)
+  n_det_missing  <- sum(full_dp$sharpe > 0 & is.na(full_dp$detection_underpowered), na.rm = TRUE)
+  n_det_both     <- sum(
+    !is.na(full_dp$detection_underpowered) & !full_dp$detection_underpowered &
+      !is.na(full_dp$detection_underpowered_mt) & !full_dp$detection_underpowered_mt,
+    na.rm = TRUE
+  )
+  keff_nonNA <- full_dp$k_eff_leaderboard[!is.na(full_dp$k_eff_leaderboard)]
+  kraw_nonNA <- full_dp$k_raw_leaderboard[!is.na(full_dp$k_raw_leaderboard)]
+  keff <- if (length(keff_nonNA) > 0) round(keff_nonNA[1], 1) else NA_real_
+  kraw <- if (length(kraw_nonNA) > 0) kraw_nonNA[1] else NA_integer_
+
+  rig_cols      <- intersect(c("deflated_sharpe", "dsr_pvalue", "k_eff_leaderboard"), names(full_dp))
+  rig_present   <- if (length(rig_cols) == 3L) rowSums(!is.na(full_dp[, rig_cols])) else rep(0L, nrow(full_dp))
+  exempt_strats <- DEFLATED_SHARPE_EXEMPTIONS$strategy
+  n_rig_total   <- nrow(full_dp)
+  n_rig_full    <- sum(rig_present == 3L)
+  n_rig_exempt  <- sum(full_dp$strategy %in% exempt_strats)
+  n_rig_partial <- sum(rig_present > 0L & rig_present < 3L & !(full_dp$strategy %in% exempt_strats))
+  n_rig_none    <- sum(rig_present == 0L & !(full_dp$strategy %in% exempt_strats))
+
+  detection_summary_text <- paste0(
+    "Of **", n_pos, "** strategies with a positive Full-Period Sharpe, **", n_under_mt,
+    "** are underpowered once corrected for testing ", kraw, " strategies (K_eff = ", keff, ") — ",
+    if (n_under_single != n_under_mt) paste0(n_under_single, " already fail the uncorrected, single-test bar; ") else "",
+    "**", n_det_both, "** clear", if (n_det_both == 1L) "s" else "", " both bars",
+    if (n_det_missing > 0) paste0(" — **", n_det_missing, " have NO verdict at all, which is a defect**") else "",
+    ". See [#726](https://github.com/JohnGavin/historical/issues/726). ",
+    "Rigour-metric coverage (deflated Sharpe / DSR p-value / K_eff), across all ", n_rig_total,
+    " leaderboard strategies: **", n_rig_full, "** full, ", n_rig_partial, " partial, ",
+    n_rig_exempt, " documented exclusion", if (n_rig_exempt != 1L) "s" else "",
+    if (n_rig_none > 0) paste0(", **", n_rig_none, " with zero coverage and no exemption — a defect**") else ", 0 undetected gaps",
+    ". See [#728](https://github.com/JohnGavin/historical/issues/728)."
+  )
+} else {
+  detection_summary_text <- "*`leaderboard` target not available.*"
+  keff <- NA_real_
+  kraw <- NA_integer_
+}
+```
+
+::: {.callout-warning collapse="false" title="Statistical detection power and rigour, this build"}
+`r detection_summary_text`
+:::
+
+```{r}
 lb <- safe_tar_read("leaderboard")
 if (!is.null(lb)) {
   full <- lb |>
     filter(period == "Full Period") |>
     arrange(desc(sharpe))
 
+  # Deflated-Sharpe haircut % (dsr_haircut_pct) is not merged onto
+  # `leaderboard` itself -- only onto strat_deflated_sharpe (#728 item 2).
+  # Joined here so the Rigour badge tooltip below can show the full trio the
+  # now-removed "Deflated Sharpe" tab used to show, with zero information
+  # loss (Step 5 consolidation).
+  strat_ds <- safe_tar_read("strat_deflated_sharpe")
+  if (!is.null(strat_ds) && "dsr_haircut_pct" %in% names(strat_ds)) {
+    full <- full |> left_join(strat_ds |> select(strategy, dsr_haircut_pct), by = "strategy")
+  }
+  if (!"dsr_haircut_pct" %in% names(full)) full$dsr_haircut_pct <- NA_real_
+
+  detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
+    # 5-state verdict, symbol AND text on every state (never colour alone,
+    # `accessibility` rule). States 1/2 both come from a single-test
+    # "detectable" verdict but are split by the multiple-testing-corrected
+    # verdict so a strategy that flips under correction (OLMAR-1, #726/#728)
+    # is never rendered identically to one that clears both bars.
+    if (is.na(sr) || sr <= 0) {
+      return(list(
+        html = "<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a</span>",
+        rank = 4L
+      ))
+    }
+    if (is.na(under)) {
+      return(list(
+        html = "<span class='det-badge notcomputed' title='Positive Sharpe with NO detection verdict. This should never render live -- QA gate S20 (#726 item 3) is meant to block the build until it is fixed.'>&#10007; NOT COMPUTED</span>",
+        rank = 5L
+      ))
+    }
+    if (isTRUE(under)) {
+      mt_note <- if (!is.na(under_mt)) " Multiple-testing correction is academic here -- the single test already fails." else ""
+      return(list(
+        html = sprintf(
+          "<span class='det-badge underpowered' title='Needs %.0f years of data at alpha=0.05, one-sided.%s See #726.'>&#9888; Underpowered (needs %.0fyr)</span>",
+          dmin, mt_note, dmin
+        ),
+        rank = 3L
+      ))
+    }
+    # Single-test verdict is "detectable" from here on.
+    if (is.na(under_mt)) {
+      return(list(
+        html = sprintf(
+          "<span class='det-badge detectable' title='Needs %.1f years at alpha=0.05, one-sided. Multiple-testing-corrected verdict not computed (K_eff unavailable for this strategy). See #726.'>&#10003; Detectable (needs %.1fyr)</span>",
+          dmin, dmin
+        ),
+        rank = 1L
+      ))
+    }
+    if (isTRUE(under_mt)) {
+      return(list(
+        html = sprintf(
+          "<span class='det-badge mtfail' title='Passes the single test (needs %.1fyr) but FAILS once corrected for testing multiple strategies (needs %.0fyr corrected). See #726.'>&#9686; Detectable, fails MT-correction (needs %.0fyr corrected)</span>",
+          dmin, dmin_mt, dmin_mt
+        ),
+        rank = 2L
+      ))
+    }
+    list(
+      html = sprintf(
+        "<span class='det-badge detectable' title='Needs %.1f years at alpha=0.05, one-sided (%.1fyr corrected for multiple testing). See #726.'>&#10003; Detectable (needs %.1fyr; %.1fyr corrected)</span>",
+        dmin, dmin_mt, dmin, dmin_mt
+      ),
+      rank = 1L
+    )
+  }
+
+  rigour_badge <- function(strategy, deflated, dsr_p, keff, kraw, sr, haircut) {
+    # Rank: 1 = full coverage (best), 2 = partial (defect-in-progress),
+    # 3 = documented exclusion (legitimate, not a defect), 4 = zero
+    # coverage with no exemption (defect). Mirrors the .credible_rank /
+    # .redundant_rank hidden-sort-column pattern already used in this table
+    # so DT's default alphabetical string sort never scrambles verdict order.
+    exempt_reason <- DEFLATED_SHARPE_EXEMPTIONS$reason[DEFLATED_SHARPE_EXEMPTIONS$strategy == strategy]
+    if (length(exempt_reason) > 0) {
+      return(list(
+        html = sprintf(
+          "<span class='rig-badge excluded' title='%s'>&#9675; excluded</span>",
+          gsub("'", "&#39;", exempt_reason[[1]], fixed = TRUE)
+        ),
+        rank = 3L
+      ))
+    }
+    present <- sum(!is.na(c(deflated, dsr_p, keff)))
+    if (present == 3L) {
+      haircut_txt <- if (is.na(haircut)) "" else sprintf(" (%.1f%% haircut)", haircut)
+      return(list(
+        html = sprintf(
+          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f. K_eff = %.1f of %s raw.'>&#10003; 3/3</span>",
+          deflated, sr, haircut_txt, dsr_p, keff, kraw
+        ),
+        rank = 1L
+      ))
+    }
+    if (present > 0L) {
+      return(list(
+        html = sprintf(
+          "<span class='rig-badge partial' title='Missing %d of 3 rigour metrics (deflated Sharpe / DSR p-value / K_eff). Tracked by #728, QA gate S21.'>&#9686; %d/3</span>",
+          3L - present, present
+        ),
+        rank = 2L
+      ))
+    }
+    list(
+      html = "<span class='rig-badge notcomputed' title='ZERO rigour-metric coverage and no declared exemption. This should never render live -- QA gate S21 (#728 item 4) is meant to block the build until it is fixed.'>&#10007; 0/3 NOT COMPUTED</span>",
+      rank = 4L
+    )
+  }
+
+  det <- mapply(detection_badge, full$sharpe, full$detection_underpowered,
+                full$detection_min_n_years, full$detection_underpowered_mt,
+                full$detection_min_n_years_mt, SIMPLIFY = FALSE)
+  rig <- mapply(rigour_badge, full$strategy, full$deflated_sharpe, full$dsr_pvalue,
+                full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
+                full$dsr_haircut_pct, SIMPLIFY = FALSE)
+
   metrics_table <- full |>
     mutate(
       Sharpe     = ifelse(is.na(sharpe),       "—", as.character(round(sharpe, 2))),
+      Detection  = vapply(det, function(x) x$html, character(1)),
+      .det_rank  = vapply(det, function(x) x$rank, integer(1)),
+      Rigour     = vapply(rig, function(x) x$html, character(1)),
+      .rig_rank  = vapply(rig, function(x) x$rank, integer(1)),
       `Net CAGR` = ifelse(is.na(net_cagr),     "—", paste0(round(net_cagr * 100, 1), "%")),
       `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
       `CVaR 95%` = ifelse(is.na(cvar_95),      "—", paste0(round(cvar_95 * 100, 1), "%")),
@@ -126,8 +309,14 @@ if (!is.null(lb)) {
         ifelse(is.na(incremental_sharpe), "—", as.character(round(incremental_sharpe, 3)))
       } else "—"
     ) |>
-    select(Strategy = strategy, Credible, .credible_rank, Sharpe, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross,
-           `Cost (bps)`, SSR, `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
+    # Detection sits immediately right of Sharpe per requirement 2 of the
+    # `detection-power-required` rule ("beside its Sharpe, not in a distant
+    # column"). Rigour sits next to SSR -- both are "how much should you
+    # trust this Sharpe" columns, unlike Credible/Redundant which assess
+    # cost-plausibility and correlation-redundancy respectively.
+    select(Strategy = strategy, Credible, .credible_rank, Sharpe, Detection, .det_rank,
+           `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
+           `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
 
   # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
   # is NA, and indexing a character vector with a logical vector containing
@@ -245,6 +434,18 @@ if (!is.null(lb)) {
     "without it. Both feed the new-strategy value gate (#496)."
   )
 
+  # ── Detection-power / rigour disclosure note (#726, #728) — dynamically computed ──
+  detection_note <- paste0(
+    " Detection = 3-state verdict from `hd_detection_power()` (`detection-power-required` rule): ",
+    "whether this row's own sample has enough data to distinguish its Sharpe from zero at ",
+    "alpha=0.05 one-sided, 80% power. A strategy that passes the single test but fails once ",
+    "corrected for testing ", kraw, " strategies (K_eff = ", keff,
+    ") is marked distinctly (◆ “fails MT-correction”), not rendered identically to one ",
+    "that clears both bars — see #726. Rigour = coverage of deflated Sharpe / DSR p-value / K_eff ",
+    "(hover for the three numeric values); ○ excluded marks a documented exclusion from ",
+    "`DEFLATED_SHARPE_EXEMPTIONS` (R/plan_qa_gates.R), not a gap — see #728."
+  )
+
   full_caption <- paste0(
     "Strategies ranked by Sharpe (highest first). ",
     "Net CAGR after 0.20% round-trip/month cost where available. ",
@@ -253,21 +454,25 @@ if (!is.null(lb)) {
     "Credible = plausible CAGR (<20%) and cum P&L (<50x): \"NO\" marks a strategy that was ",
     "assessed and failed that check, \"not computed\" marks a strategy for which cost-adjusted ",
     "metrics were never assessed at all (not the same as failing the check).",
-    flag_note, bias_note, gross_note, cost_note, diversification_note
+    flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note
   )
 
-  # Bespoke DT call (not hd_dt()): the Credible and Redundant columns each
-  # need an explicit sort rank (.credible_rank / .redundant_rank, added
-  # above) instead of DT's default alphabetical string comparator --
-  # ascending on the display string gives NO / not computed / yes (Credible)
-  # or YES / no / not computed (Redundant), neither of which puts
-  # assessed-good first, then assessed-bad, then never-assessed. orderData
-  # points each column's sort at its hidden rank column instead (#637
-  # follow-up; Redundant added #643).
+  # Bespoke DT call (not hd_dt()): the Credible, Redundant, Detection, and
+  # Rigour columns each need an explicit sort rank (.credible_rank /
+  # .redundant_rank / .det_rank / .rig_rank, added above) instead of DT's
+  # default alphabetical string comparator -- ascending on the display
+  # string does not put assessed-good first, then assessed-bad, then
+  # never-assessed. orderData points each column's sort at its hidden rank
+  # column instead (#637 follow-up; Redundant added #643; Detection/Rigour
+  # added #726/#728).
   credible_col  <- which(names(metrics_table) == "Credible") - 1L
   cred_rank_col <- which(names(metrics_table) == ".credible_rank") - 1L
   redundant_col <- which(names(metrics_table) == "Redundant") - 1L
   red_rank_col  <- which(names(metrics_table) == ".redundant_rank") - 1L
+  det_col       <- which(names(metrics_table) == "Detection") - 1L
+  det_rank_col  <- which(names(metrics_table) == ".det_rank") - 1L
+  rig_col       <- which(names(metrics_table) == "Rigour") - 1L
+  rig_rank_col  <- which(names(metrics_table) == ".rig_rank") - 1L
   numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
@@ -278,6 +483,7 @@ if (!is.null(lb)) {
       class = "dt-caption",
       full_caption
     ),
+    escape = FALSE,
     rownames = FALSE,
     filter = "top",
     options = list(
@@ -288,9 +494,11 @@ if (!is.null(lb)) {
       search = list(regex = TRUE, caseInsensitive = TRUE),
       columnDefs = list(
         list(className = 'dt-right', targets = numeric_cols - 1),
-        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col)),
+        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col)),
         list(orderData = cred_rank_col, targets = credible_col),
-        list(orderData = red_rank_col, targets = redundant_col)
+        list(orderData = red_rank_col, targets = redundant_col),
+        list(orderData = det_rank_col, targets = det_col),
+        list(orderData = rig_rank_col, targets = rig_col)
       ),
       initComplete = DT::JS(
         "function(settings, json) {",
@@ -306,6 +514,36 @@ if (!is.null(lb)) {
     )
   )
 }
+```
+
+```{=html}
+<style>
+.det-badge, .rig-badge { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.det-badge.detectable   { color: #1a7f37; }
+.det-badge.mtfail       { color: #6f42c1; }
+.det-badge.underpowered { color: #9a5b00; }
+.det-badge.napp         { color: #6c757d; font-style: italic; font-weight: 400; }
+.det-badge.notcomputed  { color: #fff; background: #c0392b; }
+.rig-badge.computed     { color: #1a7f37; }
+.rig-badge.partial      { color: #9a5b00; }
+.rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
+.rig-badge.notcomputed  { color: #fff; background: #c0392b; }
+
+[data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
+[data-bs-theme="dark"] .det-badge.mtfail,       body.dark-mode .det-badge.mtfail       { color: #c084fc; }
+[data-bs-theme="dark"] .det-badge.underpowered, body.dark-mode .det-badge.underpowered { color: #fbbf24; }
+[data-bs-theme="dark"] .det-badge.napp,         body.dark-mode .det-badge.napp         { color: #9ca3af; }
+[data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
+[data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
+[data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
+@media (prefers-color-scheme: dark) {
+  .det-badge.detectable   { color: #4ade80; }
+  .det-badge.mtfail       { color: #c084fc; }
+  .det-badge.underpowered { color: #fbbf24; }
+  .rig-badge.computed     { color: #4ade80; }
+  .rig-badge.partial      { color: #fbbf24; }
+}
+</style>
 ```
 
 #### By Partition
@@ -748,35 +986,6 @@ if (!is.null(boot_ci)) {
       `CI Crosses Zero` = ifelse(ci_crosses_zero, "YES — may be noise", "No")
     )
   hd_dt(display, "Block bootstrap (1000 draws, block=3m). If Sharpe CI crosses zero, strategy may be indistinguishable from noise.")
-}
-```
-
-#### Deflated Sharpe
-
-The Deflated Sharpe Ratio (<abbr title="Deflated Sharpe Ratio: Sharpe adjusted for non-normality (skewness, kurtosis) and multiple testing across K trials — Lopez de Prado 2018">DSR</abbr>) adjusts the naive Sharpe for both non-normality of returns (skewness and kurtosis) and multiple testing, answering the question: given that we tested K strategies, is this Sharpe ratio statistically significant? The multiple-testing penalty uses the Vertox correlation-aware effective count K_eff_leaderboard, computed across every strategy in the leaderboard-wide correlation matrix (not the raw strategy count, and not the narrower per-family K_eff_family this table used before #728) — see [Lopez de Prado (2018)](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=2460551) for the DSR derivation and [Vertox — The Effective Number of Tested Strategies](https://www.vertoxquant.com/p/the-effective-number-of-tested-strategies) for the K_eff methodology. Coverage is 16 of 17 leaderboard strategies (#728 items 1+2 widened it to 11; #733 widened it further to 16 by monthly-resampling the five daily-frequency strategies onto the same correlation spine); the one remaining exclusion is PSO Optimal, a genuine, documented case (its linear-combination circularity — it is a weighted sum of four series already in the matrix) — see `STRAT_RETURNS_WIDE_CODES` in `R/plan_strategy_correlation.R`.
-
-```{r}
-#| label: deflated-sharpe
-x <- safe_tar_read("strat_deflated_sharpe")
-if (!is.null(x)) {
-  keff <- round(x$k_eff_leaderboard[1], 2)
-  kraw <- x$k_raw_leaderboard[1]
-  cap <- paste0(
-    "Deflated Sharpe (Lopez de Prado 2018). ",
-    "Multiple-testing penalty uses Vertox K_eff_leaderboard = ", keff,
-    " effective strategies vs ", kraw,
-    " raw — strategies are correlated, so the raw count over-penalises. ",
-    "DSR adjusts for skewness, kurtosis, and the effective number of trials."
-  )
-  display <- x |>
-    transmute(
-      Strategy        = strategy,
-      `Naive Sharpe`  = round(naive_sharpe, 2),
-      `Deflated Sharpe` = round(deflated_sharpe, 2),
-      `Haircut %`     = paste0(round(dsr_haircut_pct, 1), "%"),
-      `DSR p-value`   = round(dsr_pvalue, 3)
-    )
-  hd_dt(display, cap)
 }
 ```
 
