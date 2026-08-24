@@ -102,6 +102,24 @@
 # This script refuses to run from a linked worktree -- see the git-dir check
 # below.
 #
+# --render-all (#740): Step 4 as shipped only ever renders pages Step 3
+# flagged [STALE]/[DATA-STALE] -- so a page that is permanently up-to-date
+# but BROKEN is never exercised by any gate, which is exactly the class of
+# bug #699/#530 described. This flag forces Step 4 to render every
+# docs/*.qmd page regardless of staleness, reusing the same all-pages code
+# path that already existed as a fallback for when Step 3's completion
+# marker is missing (see the STALE_PAGES selection block in Step 4 below).
+# On success it also writes docs/_full_render_marker.txt (timestamp + pass/
+# fail counts) -- like every other file --render produces, this is left for
+# a human to review and commit, never committed automatically. A CI job
+# (.github/workflows/full-render-cadence.yml) reads that COMMITTED marker's
+# age on a schedule and opens an issue if nobody has run --render-all
+# recently -- CI itself never runs tar_make()/quarto render against real
+# data (see that workflow's header comment for why: it needs live data
+# fetches and would collide with the "MAIN CHECKOUT ONLY" constraint on this
+# very script; the same reasoning dashboard-freshness.yml already documents
+# for why ITS Check 3 reads a committed snapshot instead of building one).
+#
 # Usage:
 #   scripts/build.sh
 #   scripts/build.sh --render
@@ -112,6 +130,10 @@
 #     review and commit -- this flag never runs `git add`/`git commit`/
 #     `git push`. An unrecognised flag is rejected immediately, before
 #     entering the nix shell, with a usage message and exit 2.
+#   scripts/build.sh --render-all
+#     Same as --render, except Step 4 renders EVERY docs/*.qmd page,
+#     regardless of what Step 3 flagged as stale (#740). Also writes
+#     docs/_full_render_marker.txt on completion -- see above.
 #
 # Exit codes:
 #   0  tar_make() ran, scripts/check_pipeline_errors.R found no errored
@@ -161,16 +183,23 @@ set -euo pipefail
 # fail immediately and cheaply, not after a 10+ minute cold nix build.
 # ---------------------------------------------------------------------------
 RENDER=false
+RENDER_ALL=false
 for arg in "$@"; do
   case "$arg" in
     --render)
       RENDER=true
       ;;
+    --render-all)
+      RENDER=true
+      RENDER_ALL=true
+      ;;
     *)
       echo "!!! Unknown argument: $arg" >&2
-      echo "!!! Usage: scripts/build.sh [--render]" >&2
-      echo "!!!   --render  after a clean build, re-render docs/*.qmd pages Step 3" >&2
-      echo "!!!             flagged as stale (see this script's header comment)." >&2
+      echo "!!! Usage: scripts/build.sh [--render|--render-all]" >&2
+      echo "!!!   --render      after a clean build, re-render docs/*.qmd pages Step 3" >&2
+      echo "!!!                 flagged as stale (see this script's header comment)." >&2
+      echo "!!!   --render-all  same, but render EVERY docs/*.qmd page regardless of" >&2
+      echo "!!!                 staleness (#740)." >&2
       echo "!!! BUILD DID NOT RUN. This is NOT a pass.                              !!!" >&2
       exit 2
       ;;
@@ -520,7 +549,10 @@ if [[ "$RENDER" == "true" ]]; then
     echo ""
   else
     RENDER_RAN=true
-    if grep -q '::VERIFY:DASHBOARD_FRESHNESS_STATUS::' "$DASHBOARD_LOG" 2>/dev/null; then
+    if [[ "$RENDER_ALL" == "true" ]]; then
+      echo "--render-all requested (#740) -- rendering every docs/*.qmd page regardless of staleness."
+      STALE_PAGES="$(find "$REPO_ROOT/docs" -maxdepth 1 -name '*.qmd' -exec basename {} \; | sort -u)"
+    elif grep -q '::VERIFY:DASHBOARD_FRESHNESS_STATUS::' "$DASHBOARD_LOG" 2>/dev/null; then
       # Parse Step 3's own stdout for the page names it flagged -- both
       # "  [STALE] <page>.qmd -- ..." (Check 2) and
       # "  [DATA-STALE] <page>.qmd -- ..." (Check 3) lines, per that
@@ -566,22 +598,25 @@ if [[ "$RENDER" == "true" ]]; then
           N_RENDER_FAILED=$((N_RENDER_FAILED + 1))
           continue
         fi
-        # Same five patterns verification-before-completion.md's Post-Deploy
-        # Validation table checks against the deployed site -- a page can
-        # exit 0 from quarto render and still emit NULL/MISSING EVIDENCE
-        # where a number belongs.
-        N_HITS=0
-        for pattern in 'not available' 'not found in targets' 'MISSING EVIDENCE' 'Error in' '#&gt;'; do
-          HITS="$(grep -Fc "$pattern" "$REPO_ROOT/$html_path" 2>/dev/null || true)"
-          HITS="${HITS:-0}"
-          N_HITS=$((N_HITS + HITS))
-        done
-        if [[ "$N_HITS" -gt 0 ]]; then
-          echo "  [RENDER-FAIL] $page -- rendered, but $N_HITS error-pattern hit(s) found in $html_path"
+        # #740: delegate to scripts/check_html_errors.sh -- the one
+        # trustworthy implementation of this check now. It matches the same
+        # pattern family verification-before-completion.md's Post-Deploy
+        # Validation table checks against the deployed site, but
+        # case-sensitively and after stripping <script>/<style>/data: URI
+        # content -- the naive version this block used to run inline
+        # false-positived on vendored JS, base64 font blobs, and case-folded
+        # "NaN" (see that script's header for the full before/after counts).
+        set +e
+        HTML_ERR_OUT="$(bash "$REPO_ROOT/scripts/check_html_errors.sh" "$REPO_ROOT/$html_path" 2>&1)"
+        HTML_ERR_STATUS=$?
+        set -e
+        if [[ "$HTML_ERR_STATUS" -ne 0 ]]; then
+          echo "  [RENDER-FAIL] $page -- rendered, but check_html_errors.sh found error-pattern hit(s):"
+          echo "$HTML_ERR_OUT" | sed 's/^/    /'
           RENDER_STATUS=1
           N_RENDER_FAILED=$((N_RENDER_FAILED + 1))
         else
-          echo "  [OK] $page -- rendered clean (0 error-pattern hits)"
+          echo "  [OK] $page -- rendered clean (check_html_errors.sh: 0 error-pattern hits)"
           N_RENDER_OK=$((N_RENDER_OK + 1))
         fi
       done <<< "$STALE_PAGES"
@@ -590,6 +625,25 @@ if [[ "$RENDER" == "true" ]]; then
       echo "$N_STALE page(s) re-rendered; nothing was committed or pushed -- review the"
       echo "file(s) under docs/ and commit them yourself if they look right."
       echo ""
+
+      # --render-all marker (#740): written on EVERY --render-all completion,
+      # pass or fail -- this is a cadence signal ("did a human exercise every
+      # page recently"), not a pass/fail gate; RENDER_STATUS above already
+      # carries the pass/fail verdict for this specific invocation. Never
+      # committed here -- same "human reviews and commits" contract as every
+      # other file this script writes under docs/.
+      if [[ "$RENDER_ALL" == "true" ]]; then
+        MARKER_PATH="$REPO_ROOT/docs/_full_render_marker.txt"
+        {
+          echo "last_full_render_utc: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "pages_rendered: $N_STALE"
+          echo "pages_ok: $N_RENDER_OK"
+          echo "pages_failed: $N_RENDER_FAILED"
+        } > "$MARKER_PATH"
+        echo "Wrote $MARKER_PATH -- commit it so full-render-cadence.yml (#740) can"
+        echo "see a full render happened recently. Not committed automatically."
+        echo ""
+      fi
     fi
   fi
 fi
