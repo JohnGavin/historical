@@ -68,6 +68,67 @@
   sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)$sharpe
 }
 
+#' Rf-adjusted Sortino ratio for a dated monthly return vector (#608)
+#'
+#' Replaces the hardcoded 2%/yr `rf_annual` constant this file's Sortino
+#' computation used until #608 with the real Fama-French monthly
+#' risk-free series (`stk_rf`), joined via the canonical
+#' `.join_rf_series()` (R/utils_metrics.R) -- the same three-case
+#' (leading/trailing/interior) coverage policy `.ltr_join_rf()`
+#' (R/plan_ltr_momentum.R) and `.mom_prepeak_join_rf()`
+#' (R/plan_mom_prepeak.R) already use. `.bt_sharpe_rf()` above predates
+#' `.join_rf_series()`'s extraction and implements the same policy
+#' locally; this new helper uses the shared implementation directly
+#' rather than adding a third local copy.
+#'
+#' The Sortino formula itself is unchanged from the pre-#608 version
+#' except for the risk-free input: numerator is the annualised mean
+#' EXCESS return (`mean(ret) * ann_factor - mean(rf_ret) * ann_factor`,
+#' i.e. the real per-period rf averaged over the same window, instead of
+#' a flat 2%/yr); downside deviation is still `sd()` of raw negative
+#' returns (not excess returns), matching the original definition. As a
+#' side effect of routing through `.join_rf_series()`, a trailing month
+#' with no risk-free rate published yet (Fama-French publication lag) is
+#' now dropped from Sortino exactly as it already was from Sharpe via
+#' `.bt_sharpe_rf()`, rather than silently included with an implicit
+#' zero-ish rf.
+#'
+#' @param dates Date vector, position-aligned with `rets`.
+#' @param rets Numeric vector of monthly returns.
+#' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
+#' @param ann_factor Integer. Annualisation factor (12 for monthly).
+#' @return Numeric scalar Sortino (may be NA_real_ when fewer than 2
+#'   observations remain after coverage handling, or no downside
+#'   observations exist, or downside deviation is zero/non-finite).
+#' @noRd
+.bt_sortino_rf <- function(dates, rets, stk_rf, ann_factor = 12L) {
+  df <- tibble::tibble(date = as.Date(dates), ret = rets) |>
+    dplyr::filter(!is.na(.data$ret)) |>
+    dplyr::mutate(ym = format(.data$date, "%Y-%m"))
+
+  if (nrow(df) < 2L) return(NA_real_)
+
+  df <- .join_rf_series(
+    df = df, rf = stk_rf, key = "ym",
+    label = ".bt_sortino_rf", rf_label = "stk_rf",
+    rf_source = "R/plan_stock_backtest.R",
+    df_label = "bt returns", strategy_label = "Defense First / SPY",
+    period_noun = "month"
+  )
+
+  if (nrow(df) < 2L) return(NA_real_)
+
+  down <- df$ret[df$ret < 0]
+  if (length(down) == 0L) return(NA_real_)
+
+  ann_ret <- mean(df$ret) * ann_factor
+  ann_rf  <- mean(df$rf_ret) * ann_factor
+  downside_dev <- stats::sd(down) * sqrt(ann_factor)
+  if (!is.finite(downside_dev) || downside_dev <= 0) return(NA_real_)
+
+  (ann_ret - ann_rf) / downside_dev
+}
+
 plan_backtest <- function() {
   list(
     # ── Parameters ────────────────────────────────────────────────
@@ -244,10 +305,6 @@ plan_backtest <- function() {
       port <- bt_expanding$actual_return
       bench <- bt_expanding$benchmark_return
       n <- length(port)
-      # rf_annual retained ONLY for sortino, which is out of #677's scope
-      # (issue #677's inventory covers sharpe formulas only) -- sortino
-      # stays on the old arithmetic-mean + hardcoded-rf basis by design.
-      rf_annual <- 0.02  # approximate risk-free rate
 
       compute_metrics <- function(rets, label, rdts) {
         n <- length(rets)
@@ -258,9 +315,9 @@ plan_backtest <- function() {
         # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R),
         # replacing the arithmetic-mean numerator + hardcoded 2%/yr rf_annual.
         sharpe <- .bt_sharpe_rf(rdts, rets, stk_rf, ann_factor = 12L)
-        # Sortino: downside deviation (unchanged -- out of #677 scope)
-        down <- rets[rets < 0]
-        sortino <- if (length(down) > 0) (mean(rets) * 12 - rf_annual) / (sd(down) * sqrt(12)) else NA
+        # #608: real Fama-French monthly risk-free series (stk_rf), replacing
+        # the hardcoded 2%/yr rf_annual constant used here until now.
+        sortino <- .bt_sortino_rf(rdts, rets, stk_rf, ann_factor = 12L)
         # Max drawdown
         cum_series <- cumprod(1 + rets)
         peak <- cummax(cum_series)
