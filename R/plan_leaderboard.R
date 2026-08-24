@@ -78,18 +78,27 @@
 # the pipeline if a leaderboard strategy has no row here -- so a strategy
 # added later without updating this table fails loudly instead of silently
 # returning NA forever for the new diagnostic below.
-STRATEGY_OBS_ANN_FACTOR <- tibble::tibble(
-  strategy = c(
-    "Factor MAX", "Factor DRIF", "Stock MAX", "Stock DRIF", "XGB DRIF",
-    "LTR", "CMR", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2",
-    "Value (HML)", "Managed Futures", "PSO Optimal",
-    "OLMAR-1", "TOM", "Risk State", "Avoid Worst"
-  ),
-  obs_ann_factor = c(
-    12, 12, 12, 12, 12,
-    12, 252, 12, 12, 12,
-    12, 12, 12,
-    252, 252, 252, 252
+#
+# ── Derived from strategy_names, not hand-duplicated (#629) ────────────────
+# `strategy` (== strategy_names$short_name) and `obs_ann_factor` (==
+# strategy_names$ann_factor) used to be a SECOND, hand-maintained copy of
+# data that already lives in R/plan_strategy_names.R's strategy_names --
+# and the two silently disagreed: OLMAR-1 was declared here but absent from
+# strategy_names entirely (#629). They are now derived from
+# hd_strategy_names_tbl() (the plain, non-target constructor behind the
+# strategy_names tar_target -- callable at source() time, see that file) so
+# the two structurally cannot drift again. Only `obs_ann_factor_source` --
+# the human-readable provenance citation, verified against each strategy's
+# own calc_metrics()/compute_*() call -- remains hand-maintained here, keyed
+# by code_name, because that citation text is not part of strategy_names'
+# schema. `.build_strategy_obs_ann_factor()` aborts loudly (fail-loud-not-
+# null.md) if a strategy_names row has no matching citation, or vice versa.
+.strategy_obs_ann_factor_source <- tibble::tibble(
+  code_name = c(
+    "fac_max", "drif", "stk_max", "stk_drif", "xgb_drif",
+    "ltr", "cmr", "mom_prepeak", "mom_postpeak", "mom_combined",
+    "ev_ebit", "mf_tsm", "pso_optimal",
+    "olmar", "tom", "rsc", "avoid_worst"
   ),
   obs_ann_factor_source = c(
     "R/plan_factormax.R (ann_vol <- sd(...) * sqrt(12))",
@@ -110,6 +119,52 @@ STRATEGY_OBS_ANN_FACTOR <- tibble::tibble(
     "R/plan_risk_state.R calc_metrics(periods_per_year = 252L default); calc_metrics() now returns n_obs (#726 item 3), renamed to `months` by .norm_rsc() below -- previously this row's `months` was always NA because rsc_metrics had no months/n_days column at all",
     "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())"
   )
+)
+
+#' Build STRATEGY_OBS_ANN_FACTOR from strategy_names + its provenance table
+#'
+#' Exposed as a function (rather than inlined at source() time) so tests can
+#' exercise the mismatch-abort path directly (#629) without needing a real
+#' drift between the two tables.
+#'
+#' @param strategy_names_tbl Output of `hd_strategy_names_tbl()`
+#'   (R/plan_strategy_names.R) -- must have `code_name`, `short_name`,
+#'   `ann_factor` columns.
+#' @param source_tbl `.strategy_obs_ann_factor_source` -- must have
+#'   `code_name`, `obs_ann_factor_source` columns.
+#' @return Tibble with `strategy`, `obs_ann_factor`, `obs_ann_factor_source`.
+#' @noRd
+.build_strategy_obs_ann_factor <- function(strategy_names_tbl, source_tbl) {
+  joined <- strategy_names_tbl |>
+    dplyr::transmute(
+      code_name,
+      strategy = short_name,
+      obs_ann_factor = ann_factor
+    ) |>
+    dplyr::left_join(source_tbl, by = "code_name")
+
+  missing <- joined$strategy[is.na(joined$obs_ann_factor_source)]
+  if (length(missing) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(missing), " strategy/strategies in strategy_names have no ",
+        "obs_ann_factor_source citation:"
+      ),
+      setNames(sprintf("  %s", missing), rep("i", length(missing))),
+      "i" = paste0(
+        "Add a row to .strategy_obs_ann_factor_source (R/plan_leaderboard.R) ",
+        "keyed by code_name, citing the strategy's calc_metrics()/",
+        "compute_*() annualisation source."
+      )
+    ))
+  }
+
+  dplyr::select(joined, strategy, obs_ann_factor, obs_ann_factor_source)
+}
+
+STRATEGY_OBS_ANN_FACTOR <- .build_strategy_obs_ann_factor(
+  hd_strategy_names_tbl(),
+  .strategy_obs_ann_factor_source
 )
 
 plan_leaderboard <- function() {
