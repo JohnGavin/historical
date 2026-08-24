@@ -12,6 +12,10 @@ testthat::local_edition(3)
 # target silently produces NA for a new strategy forever. This gate catches
 # that gap at pipeline time instead.
 
+# plan_strategy_names.R must be sourced first -- STRATEGY_OBS_ANN_FACTOR is
+# now DERIVED from its hd_strategy_names_tbl() constructor (#629), not a
+# second hand-maintained copy.
+source(here::here("R/plan_strategy_names.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_qa_gates.R"))
 
