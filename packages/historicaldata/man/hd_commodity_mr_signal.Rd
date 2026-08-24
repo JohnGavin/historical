@@ -7,45 +7,71 @@
 hd_commodity_mr_signal(returns_tbl, lookback_months = 3L)
 }
 \arguments{
-\item{returns_tbl}{Tibble with columns \code{date} (Date, month-end),
-\code{series_id} (character), and \code{monthly_ret} (numeric monthly
-return).  Produced by \code{calculate_commodity_returns()}.}
+\item{returns_tbl}{Tibble with columns \code{date} (Date), \code{series_id}
+(character), and \code{monthly_ret} (numeric per-observation return;
+despite the name, this is a DAILY return for series that print daily --
+see the file header note). Produced by \code{calculate_commodity_returns()}.}
 
-\item{lookback_months}{Integer. Number of months used to compute the
-mean-reversion signal (default 3).  Typical values: 1, 3, 6.}
+\item{lookback_months}{Integer. Number of CALENDAR months the
+mean-reversion window spans (default 3), applied uniformly regardless
+of how often the underlying series is actually observed. Typical
+values: 1, 3, 6.}
 }
 \value{
 Tibble with columns:
 \describe{
-\item{date}{Month-end date.}
+\item{date}{Observation date.}
 \item{series_id}{Commodity identifier.}
 \item{mr_signal}{Mean-reversion signal = negative of cumulative
-return over the prior \code{lookback_months} months. Higher values
-(bigger recent losers) rank first for the long leg.}
+return over the prior \code{lookback_months} calendar months.
+Higher values (bigger recent losers) rank first for the long leg.}
 }
-Rows with \code{NA} signals (insufficient history) are dropped.
+Rows with \code{NA} signals (insufficient history, or too few actual
+observations inside an otherwise-complete window) are dropped.
 }
 \description{
-Compute a monthly mean-reversion signal for a commodity universe.
+Compute a mean-reversion signal for a commodity universe over a fixed
+CALENDAR window (elapsed days), not a fixed number of rows.
 The signal is the \emph{negative} of the lookback-period return: commodities
 that have fallen the most receive the highest (most positive) signal,
 while those that have risen the most receive the lowest (most negative)
 signal.
 }
 \details{
-Look-ahead safety: the signal at month \code{t} is constructed from
-cumulative returns over months \code{(t - lookback_months)} through
-\code{(t - 1)}.  The one-period lag is enforced via
-\code{dplyr::lag(cumret)} before the negation, so no return at or after
-month \code{t} ever enters signal formation.
+Look-ahead safety: the signal at date \code{t} is constructed from
+cumulative returns over the \code{lookback_months} calendar months
+immediately preceding \code{t}, ending at \code{t - 1}'s observation. The
+one-period lag is enforced via \code{dplyr::lag(cumret)} before the
+negation, so no return at or after date \code{t} ever enters signal
+formation.
 
-The cumulative return over a rolling window is computed as
-\eqn{\prod_{i=1}^{L}(1 + r_{t-i}) - 1}, where \eqn{L} is
-\code{lookback_months}.  This product is formed using
-\code{slider::slide_dbl} with \code{.complete = TRUE} so partial windows
-produce \code{NA}.  The result is then lagged by one period to guarantee
-look-ahead safety, and the signal is the negation of the lagged cumulative
-return.
+\strong{Window (#751):} the cumulative return is computed over a window
+spanning \code{round(lookback_months * 365.2425 / 12)} CALENDAR DAYS
+ending at \code{t} (inclusive), via \code{slider::slide_index_dbl()} keyed
+on \code{date} rather than row position. This means
+\code{lookback_months = 3} spans the same ~91-day economic horizon for
+every series in the universe, whether it is observed daily (~63
+observations in that window) or monthly (~3 observations). Previously the
+window was \code{lookback_months} PREVIOUS ROWS regardless of their
+dates, which silently gave a daily series a 3-\emph{trading-day} window under
+the same argument that gave a monthly series a genuine 3-month window
+(#751) -- see the file header for the full defect history.
+
+\strong{Completeness (fail-loud-not-null.md):} a window counts as complete
+only if BOTH (a) its start boundary falls within the series' own observed
+date range (\code{slider}'s \code{.complete = TRUE}), AND (b) it actually
+contains at least \code{max(.HD_MR_MIN_OBS_FLOOR,
+ceiling(.HD_MR_MIN_OBS_FRACTION * expected_obs))} observations, where
+\code{expected_obs} is \code{window_days / median_gap_days} for that
+series' own median inter-observation gap. Condition (a) alone would
+accept a window that nominally spans the right number of days but
+crosses a data outage and contains almost no real observations -- see
+\code{.HD_MR_MIN_OBS_FRACTION}'s roxygen for why a per-series relative
+floor is used rather than one fixed count (a fixed count could not serve
+both a ~63-observation daily window and a ~3-observation monthly one).
+Windows failing either condition produce \code{NA}, which propagates
+through the one-period lag and causes that row to be dropped from the
+returned tibble, exactly as an insufficient-history \code{NA} always has.
 }
 \seealso{
 Other commodities_mr: 
