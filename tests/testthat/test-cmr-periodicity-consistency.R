@@ -158,6 +158,73 @@ test_that("on_violation = 'warn' downgrades the consistency abort to a warning",
   expect_error(.assert_cmr_ann_factor(d, 252L, "1m", on_violation = "abort"))
 })
 
+# ── .compute_cmr_metrics()'s periodicity_check staging lever (#738) ────────
+# The two tests above exercise .assert_cmr_ann_factor() directly. The three
+# production call sites (cmr_metrics_1m/3m/6m, R/plan_commodities_mean_reversion.R)
+# don't call that helper themselves -- they pass periodicity_check through to
+# .compute_cmr_metrics(), which forwards it as on_violation. These tests
+# close that gap: they drive the guard through the ACTUAL parameter the
+# staged call sites use, so a future refactor that breaks the forwarding
+# (e.g. .compute_cmr_metrics() stops passing periodicity_check through, or
+# starts swallowing it) fails here rather than only in production output.
+
+test_that(".compute_cmr_metrics defaults periodicity_check to 'abort' -- never inherited by omission", {
+  # A caller that forgets the argument must get the STRICT behaviour. The
+  # lenient 'warn' path is opt-in only at the three staged call sites; every
+  # other/future call site is silently protected by this default.
+  d <- sort(unique(c(month_days("1992-03-01", 94L), biz_days("2000-01-03", 2000L))))
+  set.seed(738)
+  portfolio <- tibble::tibble(date = d, net_ret = stats::rnorm(length(d), 0, 0.01))
+  # daily_rf aligned 1:1 on date with the portfolio: no rf-join gap of its
+  # own, so only the periodicity guard is under test.
+  daily_rf <- tibble::tibble(date = d, rf_ret = rep(0.00005, length(d)))
+
+  expect_error(
+    .compute_cmr_metrics(portfolio, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L),
+    "NOT consistent with a single declared periodicity"
+  )
+})
+
+test_that(".compute_cmr_metrics(periodicity_check = 'warn') warns with the full diagnostic and still computes finite metrics", {
+  # The staging lever actually wired at cmr_metrics_1m/3m/6m. A staging flag
+  # that silently did nothing -- proceeded without warning, or aborted
+  # anyway, or returned the NA-row short-circuit instead of real metrics --
+  # would be exactly the class of defect fail-loud-not-null.md exists to
+  # catch, just inverted (silent success instead of silent failure).
+  d <- sort(unique(c(month_days("1992-03-01", 94L), biz_days("2000-01-03", 2000L))))
+  set.seed(738)
+  portfolio <- tibble::tibble(date = d, net_ret = stats::rnorm(length(d), 0, 0.01))
+  daily_rf <- tibble::tibble(date = d, rf_ret = rep(0.00005, length(d)))
+
+  w <- testthat::capture_warnings(
+    metrics <- .compute_cmr_metrics(
+      portfolio,
+      lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
+      periodicity_check = "warn"
+    )
+  )
+
+  # Full diagnostic, not a truncated summary: the strategy/lookback label,
+  # the declared factor, the out-of-band count/allowance, and the observed
+  # band breakdown all round-trip into the warning text a reader sees.
+  full_warning <- paste(w, collapse = " ")
+  expect_match(full_warning, "CMR 1m")
+  expect_match(full_warning, "ann_factor 252")
+  expect_match(full_warning, "NOT consistent with a single declared periodicity")
+  expect_match(full_warning, "\\d+ of \\d+ gaps")
+  expect_match(full_warning, "fall outside the")
+  expect_match(full_warning, "allowance is \\d+")
+  expect_match(full_warning, "Observed gap bands:")
+
+  # Not the n < 12 NA-row short-circuit, and not a silently-abandoned
+  # computation -- real, finite metrics from real data.
+  expect_equal(metrics$lookback, "1m")
+  expect_gt(metrics$n_days, 12L)
+  expect_true(is.finite(metrics$sharpe))
+  expect_true(is.finite(metrics$cagr))
+  expect_true(is.finite(metrics$vol))
+})
+
 test_that("each tolerance band contains its own nominal spacing and is monotone in ann_factor", {
   tol <- CMR_PERIODICITY_TOLERANCE
   expect_true(all(tol$min_gap < tol$max_gap))

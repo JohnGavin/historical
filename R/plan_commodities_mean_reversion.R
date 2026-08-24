@@ -122,17 +122,36 @@ plan_commodities_mean_reversion <- function() {
 
     # ── Performance metrics per lookback ──────────────────────────────────
     # Sharpe, MDD, max DD duration (hd_dd_duration from risk_metrics.R).
+    #
+    # periodicity_check = "warn" (TEMPORARY STAGING, #738): the #738
+    # consistency check fires on CMR's real production data (94/92/90
+    # out-of-band gaps against an allowance of 7 -- see the frequency note at
+    # the top of this file), so its documented default of "abort" would turn
+    # every `tar_make()` red until the mixed-frequency remedy (truncate to
+    # 2000+, resample to monthly, or segment and report separately) is chosen
+    # on #738. "warn" is the staging lever `.assert_cmr_ann_factor()`
+    # documents for exactly this situation: it publishes the finding loudly
+    # in every build log without blocking the pipeline. This is NOT a
+    # decision that the mixed frequency is acceptable -- it is a decision to
+    # keep `main` green while that separate decision is still open.
+    # Ends when: the #738 remedy lands and CMR's dates are no longer mixed
+    # frequency. At that point the guard passes on its own with the
+    # documented "abort" default, and this argument should be DELETED at all
+    # three call sites below, not left in place or flipped back manually.
 
     targets::tar_target(cmr_metrics_1m, {
-      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L)
+      .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
+                           periodicity_check = "warn")
     }),
 
     targets::tar_target(cmr_metrics_3m, {
-      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", daily_rf = daily_rf, ann_factor = 252L)
+      .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", daily_rf = daily_rf, ann_factor = 252L,
+                           periodicity_check = "warn")
     }),
 
     targets::tar_target(cmr_metrics_6m, {
-      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", daily_rf = daily_rf, ann_factor = 252L)
+      .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", daily_rf = daily_rf, ann_factor = 252L,
+                           periodicity_check = "warn")
     }),
 
 
