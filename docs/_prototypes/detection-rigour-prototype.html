@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.8.26">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>PROTOTYPE — Detection Power + Rigour Coverage (Phase 0, #726 / #728)</title>
+<style>
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+</style>
+
+
+<script src="detection-rigour-prototype_files/libs/clipboard/clipboard.min.js"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-html/axe/axe-check.js" type="module"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-html/popper.min.js"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-html/anchor.min.js"></script>
+<link href="detection-rigour-prototype_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="detection-rigour-prototype_files/libs/quarto-html/quarto-syntax-highlighting-587c61ba64f3a5504c4d52d930310e48.css" rel="stylesheet" class="quarto-color-scheme" id="quarto-text-highlighting-styles">
+<link href="detection-rigour-prototype_files/libs/quarto-html/quarto-syntax-highlighting-dark-b758ccaa5987ceb1b75504551e579abf.css" rel="stylesheet" class="quarto-color-scheme quarto-color-alternate" id="quarto-text-highlighting-styles">
+<script src="detection-rigour-prototype_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="detection-rigour-prototype_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="detection-rigour-prototype_files/libs/bootstrap/bootstrap-28163b1fbaa4d35fdae8b703aca03440.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
+<link href="detection-rigour-prototype_files/libs/bootstrap/bootstrap-dark-824d01da7c3efbad1b87ea45a7763824.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<script src="detection-rigour-prototype_files/libs/quarto-dashboard/quarto-dashboard.js"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-dashboard/stickythead.js"></script>
+
+
+
+<script src="detection-rigour-prototype_files/libs/quarto-dashboard/web-components.js" type="module"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-dashboard/components.js"></script>
+
+<script src="detection-rigour-prototype_files/libs/quarto-diagram/mermaid.min.js"></script>
+<script src="detection-rigour-prototype_files/libs/quarto-diagram/mermaid-init.js"></script>
+<link href="detection-rigour-prototype_files/libs/quarto-diagram/mermaid.css" rel="stylesheet">
+<link href="detection-rigour-prototype_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
+<script src="detection-rigour-prototype_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<link href="detection-rigour-prototype_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
+<script src="detection-rigour-prototype_files/libs/datatables-binding-0.34.0/datatables.js"></script>
+<script src="detection-rigour-prototype_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<link href="detection-rigour-prototype_files/libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+<link href="detection-rigour-prototype_files/libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet">
+<script src="detection-rigour-prototype_files/libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
+<link href="detection-rigour-prototype_files/libs/nouislider-7.0.10/jquery.nouislider.min.css" rel="stylesheet">
+<script src="detection-rigour-prototype_files/libs/nouislider-7.0.10/jquery.nouislider.min.js"></script>
+<link href="detection-rigour-prototype_files/libs/selectize-0.12.0/selectize.bootstrap3.css" rel="stylesheet">
+<script src="detection-rigour-prototype_files/libs/selectize-0.12.0/selectize.min.js"></script>
+<link href="detection-rigour-prototype_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
+<script src="detection-rigour-prototype_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
+<link rel="stylesheet" href="../vignette-shared.css">
+<script src="../vignette-shared.js"></script>
+
+
+</head>
+
+<body class="quarto-dashboard dashboard-fill fullcontent quarto-dark"><script id="quarto-html-before-body" type="application/javascript">
+    const toggleBodyColorMode = (bsSheetEl) => {
+      const mode = bsSheetEl.getAttribute("data-mode");
+      const bodyEl = window.document.querySelector("body");
+      if (mode === "dark") {
+        bodyEl.classList.add("quarto-dark");
+        bodyEl.classList.remove("quarto-light");
+      } else {
+        bodyEl.classList.add("quarto-light");
+        bodyEl.classList.remove("quarto-dark");
+      }
+    }
+    const toggleBodyColorPrimary = () => {
+      const bsSheetEl = window.document.querySelector("link#quarto-bootstrap:not([rel=disabled-stylesheet])");
+      if (bsSheetEl) {
+        toggleBodyColorMode(bsSheetEl);
+      }
+    }
+    const setColorSchemeToggle = (alternate) => {
+      const toggles = window.document.querySelectorAll('.quarto-color-scheme-toggle');
+      for (let i=0; i < toggles.length; i++) {
+        const toggle = toggles[i];
+        if (toggle) {
+          if (alternate) {
+            toggle.classList.add("alternate");
+          } else {
+            toggle.classList.remove("alternate");
+          }
+        }
+      }
+    };
+    const toggleColorMode = (alternate) => {
+      // Switch the stylesheets
+      const primaryStylesheets = window.document.querySelectorAll('link.quarto-color-scheme:not(.quarto-color-alternate)');
+      const alternateStylesheets = window.document.querySelectorAll('link.quarto-color-scheme.quarto-color-alternate');
+      manageTransitions('#quarto-margin-sidebar .nav-link', false);
+      if (alternate) {
+        // note: dark is layered on light, we don't disable primary!
+        enableStylesheet(alternateStylesheets);
+        for (const sheetNode of alternateStylesheets) {
+          if (sheetNode.id === "quarto-bootstrap") {
+            toggleBodyColorMode(sheetNode);
+          }
+        }
+      } else {
+        disableStylesheet(alternateStylesheets);
+        enableStylesheet(primaryStylesheets)
+        toggleBodyColorPrimary();
+      }
+      manageTransitions('#quarto-margin-sidebar .nav-link', true);
+      // Switch the toggles
+      setColorSchemeToggle(alternate)
+      // Hack to workaround the fact that safari doesn't
+      // properly recolor the scrollbar when toggling (#1455)
+      if (navigator.userAgent.indexOf('Safari') > 0 && navigator.userAgent.indexOf('Chrome') == -1) {
+        manageTransitions("body", false);
+        window.scrollTo(0, 1);
+        setTimeout(() => {
+          window.scrollTo(0, 0);
+          manageTransitions("body", true);
+        }, 40);
+      }
+    }
+    const disableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        stylesheet.rel = 'disabled-stylesheet';
+      }
+    }
+    const enableStylesheet = (stylesheets) => {
+      for (let i=0; i < stylesheets.length; i++) {
+        const stylesheet = stylesheets[i];
+        if(stylesheet.rel !== 'stylesheet') { // for Chrome, which will still FOUC without this check
+          stylesheet.rel = 'stylesheet';
+        }
+      }
+    }
+    const manageTransitions = (selector, allowTransitions) => {
+      const els = window.document.querySelectorAll(selector);
+      for (let i=0; i < els.length; i++) {
+        const el = els[i];
+        if (allowTransitions) {
+          el.classList.remove('notransition');
+        } else {
+          el.classList.add('notransition');
+        }
+      }
+    }
+    const isFileUrl = () => {
+      return window.location.protocol === 'file:';
+    }
+    const hasAlternateSentinel = () => {
+      let styleSentinel = getColorSchemeSentinel();
+      if (styleSentinel !== null) {
+        return styleSentinel === "alternate";
+      } else {
+        return false;
+      }
+    }
+    const setStyleSentinel = (alternate) => {
+      const value = alternate ? "alternate" : "default";
+      if (!isFileUrl()) {
+        window.localStorage.setItem("quarto-color-scheme", value);
+      } else {
+        localAlternateSentinel = value;
+      }
+    }
+    const getColorSchemeSentinel = () => {
+      if (!isFileUrl()) {
+        const storageValue = window.localStorage.getItem("quarto-color-scheme");
+        return storageValue != null ? storageValue : localAlternateSentinel;
+      } else {
+        return localAlternateSentinel;
+      }
+    }
+    const toggleGiscusIfUsed = (isAlternate, darkModeDefault) => {
+      const baseTheme = document.querySelector('#giscus-base-theme')?.value ?? 'light';
+      const alternateTheme = document.querySelector('#giscus-alt-theme')?.value ?? 'dark';
+      let newTheme = '';
+      if(authorPrefersDark) {
+        newTheme = isAlternate ? baseTheme : alternateTheme;
+      } else {
+        newTheme = isAlternate ? alternateTheme : baseTheme;
+      }
+      const changeGiscusTheme = () => {
+        // From: https://github.com/giscus/giscus/issues/336
+        const sendMessage = (message) => {
+          const iframe = document.querySelector('iframe.giscus-frame');
+          if (!iframe) return;
+          iframe.contentWindow.postMessage({ giscus: message }, 'https://giscus.app');
+        }
+        sendMessage({
+          setConfig: {
+            theme: newTheme
+          }
+        });
+      }
+      const isGiscussLoaded = window.document.querySelector('iframe.giscus-frame') !== null;
+      if (isGiscussLoaded) {
+        changeGiscusTheme();
+      }
+    };
+    const authorPrefersDark = true;
+    const darkModeDefault = authorPrefersDark;
+    let localAlternateSentinel = darkModeDefault ? 'alternate' : 'default';
+    // Dark / light mode switch
+    window.quartoToggleColorScheme = () => {
+      // Read the current dark / light value
+      let toAlternate = !hasAlternateSentinel();
+      toggleColorMode(toAlternate);
+      setStyleSentinel(toAlternate);
+      toggleGiscusIfUsed(toAlternate, darkModeDefault);
+      window.dispatchEvent(new Event('resize'));
+    };
+    // Switch to dark mode if need be
+    if (hasAlternateSentinel()) {
+      toggleColorMode(true);
+    } else {
+      toggleColorMode(false);
+    }
+  </script>
+
+<header id="quarto-dashboard-header">
+<nav class="navbar navbar-expand-md slim" data-bs-theme="dark">
+  <div class="navbar-container container-fluid">
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#dashboard-collapse" aria-controls="dashboard-collapse" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>    
+
+
+    <div class="navbar-brand-container">
+
+
+      <div class="navbar-title">
+        <div class="navbar-title-text"><a href="#">PROTOTYPE — Detection Power + Rigour Coverage (Phase 0, #726 / #728)</a></div>
+        
+        
+      </div>
+    </div>
+<a class="quarto-color-scheme-toggle" href="" onclick="window.quartoToggleColorScheme(); return false;"><i class="bi"></i></a><div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-step-1-relationship-diagram" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#step-1-relationship-diagram" data-scrolling="false" href="#step-1-relationship-diagram" aria-controls="step-1-relationship-diagram" aria-selected="true"><span class="nav-link-text">Step 1 – Relationship Diagram</span></a></li><li class="nav-item" role="presentation"><a id="tab-step-4-table-prototype" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#step-4-table-prototype" data-scrolling="false" href="#step-4-table-prototype" aria-controls="step-4-table-prototype" aria-selected="false"><span class="nav-link-text">Step 4 – Table Prototype</span></a></li><li class="nav-item" role="presentation"><a id="tab-design-notes" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#design-notes" data-scrolling="false" href="#design-notes" aria-controls="design-notes" aria-selected="false"><span class="nav-link-text">Design Notes</span></a></li></ul></div></div>
+</nav>
+</header>
+<div class="page-layout-custom quarto-dashboard-content bslib-gap-spacing html-fill-container bslib-page-fill quarto-dashboard-pages">  
+
+
+<div class="callout callout-style-default callout-important callout-titled bslib-grid-item" title="Phase 0 prototype -- NOT for merge">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Important</span>Phase 0 prototype – NOT for merge
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>This page is a throwaway design artifact for <a href="https://github.com/JohnGavin/historical/blob/main/.claude/rules/dashboard-output-first.md">dashboard-output-first</a> Phase 0, steps 1 and 4. It clones the <code>leaderboard.qmd</code> Full Period ranking table and adds two new columns (<code>Detection</code>, <code>Rigour</code>) proposed to close <a href="https://github.com/JohnGavin/historical/issues/726">#726</a> item 1 and <a href="https://github.com/JohnGavin/historical/issues/728">#728</a> item 3. It is not wired into <code>_quarto.yml</code>, does not run <code>tar_make()</code>, and reads the live store read-only. Production implementation waits for explicit approval (Class C gate per <code>human-in-the-loop-decision-points</code>) and, once approved, belongs in <code>leaderboard.qmd</code> itself – see “Step 2 – home” below.</p>
+</div>
+</div>
+<div class="bslib-grid-item html-fill-item tab-content bslib-grid" data-layout="fill" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div id="step-1-relationship-diagram" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-step-1-relationship-diagram">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>Extends the existing causal-DAG surface in <code>falsification.qmd</code> (the “Strategy &amp; Dashboard Relationship Map” tab, itself a #481/#514 seed diagram) rather than starting a new standalone diagram. This is the missing branch: where does a Sharpe’s <em>credibility</em> come from, before it ever reaches a dashboard row.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div id="fig-detection-rigour-dag" class="quarto-float quarto-figure quarto-figure-center html-fill-item html-fill-container">
+<figure class="quarto-float quarto-float-fig figure html-fill-item html-fill-container">
+<div aria-describedby="fig-detection-rigour-dag-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca" class="html-fill-item html-fill-container">
+<div class="html-fill-item html-fill-container">
+<pre class="mermaid mermaid-js" data-label="fig-detection-rigour-dag">graph LR
+  SR["Sharpe&lt;br/&gt;(leaderboard row)"]
+  OBS["STRATEGY_OBS_ANN_FACTOR&lt;br/&gt;declared periodicity"]
+  ROW[".detection_diag_row()&lt;br/&gt;per-row diagnostic"]
+  DP["hd_detection_power()"]
+  S19{{"S19 gate&lt;br/&gt;periodicity coverage"}}
+  S20{{"S20 gate&lt;br/&gt;verdict coverage"}}
+  DET{{"3-state&lt;br/&gt;detection verdict"}}
+  DETOK["detectable"]
+  UNDER["underpowered"]
+  NAPP["not applicable&lt;br/&gt;(Sharpe &amp;le; 0)"]
+  NACOMP["not computed&lt;br/&gt;DEFECT -- S20 blocks this"]
+  RIG["Rigour metrics&lt;br/&gt;deflated Sharpe / DSR / K_eff"]
+  S21{{"S21 gate&lt;br/&gt;rigour coverage or exemption"}}
+  LB["leaderboard.qmd&lt;br/&gt;Full Period table"]
+
+  OBS --&gt; ROW
+  SR --&gt; ROW
+  ROW --&gt; DP
+  DP --&gt; DET
+  DET --&gt; DETOK
+  DET --&gt; UNDER
+  DET --&gt; NAPP
+  DET --&gt; NACOMP
+  S19 -. guards input .-&gt; ROW
+  S20 -. guards output .-&gt; DET
+  SR --&gt; RIG
+  S21 -. guards coverage .-&gt; RIG
+  DETOK --&gt; LB
+  UNDER --&gt; LB
+  NAPP --&gt; LB
+  NACOMP --&gt; LB
+  RIG --&gt; LB
+
+  click SR "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/docs/leaderboard.qmd#L55" _blank
+  click ROW "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_leaderboard.R#L809" _blank
+  click DP "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/packages/historicaldata/R/hd_detection_power.R#L154" _blank
+  click S19 "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1314" _blank
+  click S20 "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1408" _blank
+  click S21 "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1598" _blank
+  click RIG "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_leaderboard.R#L945" _blank
+  click LB "https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/docs/leaderboard.qmd#L52" _blank
+</pre>
+</div>
+</div>
+<figcaption class="quarto-float-caption-bottom quarto-float-caption quarto-float-fig" id="fig-detection-rigour-dag-caption-0ceaefa1-69ba-4598-a22c-09a6ac19f8ca">
+Figure&nbsp;1: Sharpe to leaderboard row: detection-power verdict and rigour-coverage verdict as the two gates between a raw statistic and a published row.
+</figcaption>
+</figure>
+</div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div><div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>Every node link is pinned to commit <code>4713e67</code> with a <code>#L&lt;n&gt;</code> line anchor per <a href="https://github.com/JohnGavin/llm/blob/main/.claude/rules/mermaid-click-anchors.md"><code>mermaid-click-anchors</code></a>. <strong>Known limitation of this prototype:</strong> Quarto’s native <code>{mermaid}</code> fenced block runs mermaid.js in an iframe whose click-through behaviour is less reliable than the project’s own <code>causal-diagrams.js</code> mount system – <code>docs/MERMAID_LESSONS.md</code> documents exactly why <code>falsification.qmd</code> moved off native fenced blocks. Production wiring should add this as a new tab (or new nodes) inside <code>dag-portcons-mount</code> / the existing tabbed causal-graph component in <code>causal-diagrams.js</code>, not as a standalone native block. <code>R/</code> files are out of scope for this dispatch (another agent is active in <code>plan_leaderboard.R</code> / <code>plan_qa_gates.R</code>), so <code>R/diagram_node_links.R</code> is not extended here – the node -&gt; file:line pairs above are hand-anchored for the prototype and should be migrated into that helper when this ships for real.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="step-4-table-prototype" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-step-4-table-prototype">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 20fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="callout callout-style-default callout-warning callout-titled" style="border-left:4px solid #b35900;padding:0.6em 1em;margin-bottom:0.5em;">
+<div class="callout-header d-flex align-content-center html-fill-item html-fill-container">
+<div class="callout-icon-container html-fill-item html-fill-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill html-fill-item html-fill-container">
+Warning
+</div>
+</div>
+<div class="callout-body-container callout-body html-fill-item html-fill-container">
+<strong>Statistical rigour, this build:</strong> of 8 strategies with a positive Full-Period Sharpe, <strong>6</strong> are underpowered (cannot be distinguished from zero by their own sample) and 2 are detectable. See <a href="https://github.com/JohnGavin/historical/issues/726" target="_blank">#726</a>. Rigour-metric coverage (deflated Sharpe / DSR / K_eff): <strong>5</strong> full, 0 partial, 3 documented exclusions, 0 undefected gaps. See <a href="https://github.com/JohnGavin/historical/issues/728" target="_blank">#728</a>.
+</div>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-a99f9fa2b69d9268f16d" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-a99f9fa2b69d9268f16d">{"x":{"filter":"top","vertical":false,"filterHTML":"<tr>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"number\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n    <div style=\"display: none;position: absolute;width: 200px;opacity: 1\">\n      <div data-min=\"-999\" data-max=\"1337.14541672471\" data-scale=\"14\"><\/div>\n      <span style=\"float: left;\"><\/span>\n      <span style=\"float: right;\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n  <td data-type=\"character\" style=\"vertical-align: top;\">\n    <div class=\"form-group has-feedback\" style=\"margin-bottom: auto;\">\n      <input type=\"search\" placeholder=\"All\" class=\"form-control\" style=\"width: 100%;\"/>\n      <span class=\"glyphicon glyphicon-remove-circle form-control-feedback\"><\/span>\n    <\/div>\n  <\/td>\n<\/tr>","caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold;\" class=\"dt-caption\">PROTOTYPE ranking table -- Full Period, 17 strategies. Detection = 3-state verdict from `hd_detection_power()`, placed immediately right of Sharpe per the `detection-power-required` rule requirement 2. Rigour = coverage of deflated Sharpe / DSR / K_eff (3 metrics). Hover any badge for the full reasoning; click column header to sort by verdict severity. All other columns unchanged from the live `leaderboard.qmd` Full Period table.<\/caption>","data":[["OLMAR-1","Avoid Worst","Managed Futures","LTR","Risk State","Mom Pre-Peak","Factor DRIF","Value (HML)","TOM","PSO Optimal","Factor MAX","Mom 12-2","Mom Post-Peak","CMR","Stock MAX","XGB DRIF","Stock DRIF"],["0.78","0.62","0.477","0.33","0.252","0.226","0.076","0.068","-0.039","-0.084","-0.098","-0.151","-0.685","-0.747","-0.899","-1.261","-1.332"],["<span class='det-badge detectable' title='Needs 10.2 years at alpha=0.05, one-sided. See #726.'>&#10003; Detectable<\/span>","<span class='det-badge detectable' title='Needs 16.1 years at alpha=0.05, one-sided. See #726.'>&#10003; Detectable<\/span>","<span class='det-badge underpowered' title='Needs 27 years of data at alpha=0.05, one-sided | multiple-testing-corrected: still underpowered (51yr). See #726.'>&#9888; Underpowered (needs 27yr)<\/span>","<span class='det-badge underpowered' title='Needs 57 years of data at alpha=0.05, one-sided | multiple-testing-corrected: still underpowered (107yr). See #726.'>&#9888; Underpowered (needs 57yr)<\/span>","<span class='det-badge underpowered' title='Needs 97 years of data at alpha=0.05, one-sided | multiple-testing-corrected: not computed (k_eff unavailable for this strategy). See #726.'>&#9888; Underpowered (needs 97yr)<\/span>","<span class='det-badge underpowered' title='Needs 121 years of data at alpha=0.05, one-sided | multiple-testing-corrected: still underpowered (229yr). See #726.'>&#9888; Underpowered (needs 121yr)<\/span>","<span class='det-badge underpowered' title='Needs 1067 years of data at alpha=0.05, one-sided | multiple-testing-corrected: still underpowered (2015yr). See #726.'>&#9888; Underpowered (needs 1067yr)<\/span>","<span class='det-badge underpowered' title='Needs 1337 years of data at alpha=0.05, one-sided | multiple-testing-corrected: still underpowered (2525yr). See #726.'>&#9888; Underpowered (needs 1337yr)<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>","<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a<\/span>"],[-10.16614543014463,-16.08780724998067,27.25967050344946,56.85992298358914,97.36112532991007,121.1333937045197,1067.169690354919,1337.145416724709,-999,-999,-999,-999,-999,-999,-999,-999,-999],["—","—","—","—","—","—","5.1%","—","—","0.9%","3.5%","—","—","—","-14%","-20.1%","-18.2%"],["-33.8%","-47.5%","-15.3%","-36.3%","-53.6%","-68.6%","-25%","-65.9%","-19.3%","-21.2%","-40.5%","-93.3%","-99.8%","-99.6%","-97.4%","-98.3%","-97%"],["—","—","—","—","—","—","-6.4%","—","—","-4.5%","-6%","—","—","—","-11.8%","-12.8%","-10.3%"],["—","—","—","5.96","—","9.66","10.16","—","—","—","8.07","4.01","-10.97","—","-13.3","-15.97","-12.21"],["<span class='rig-badge excluded' title='Daily-frequency series (ann_factor=252) -- OLMAR rebalances daily.'>&#9675; excluded<\/span>","<span class='rig-badge excluded' title='Daily-frequency series (ann_factor=252).'>&#9675; excluded<\/span>","<span class='rig-badge computed'>&#10003; 3/3<\/span>","<span class='rig-badge computed'>&#10003; 3/3<\/span>","<span class='rig-badge excluded' title='Daily-frequency series (ann_factor=252).'>&#9675; excluded<\/span>","<span class='rig-badge computed'>&#10003; 3/3<\/span>","<span class='rig-badge computed'>&#10003; 3/3<\/span>","<span class='rig-badge computed'>&#10003; 3/3<\/span>","<span class='rig-badge neutral'>0/3<\/span>","<span class='rig-badge neutral'>0/3<\/span>","<span class='rig-badge neutral'>3/3<\/span>","<span class='rig-badge neutral'>3/3<\/span>","<span class='rig-badge neutral'>3/3<\/span>","<span class='rig-badge neutral'>0/3<\/span>","<span class='rig-badge neutral'>3/3<\/span>","<span class='rig-badge neutral'>3/3<\/span>","<span class='rig-badge neutral'>3/3<\/span>"],["not computed","not computed","not computed","not computed","not computed","not computed","yes","not computed","not computed","yes","yes","not computed","not computed","not computed","yes","NO","yes"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Strategy<\/th>\n      <th>Sharpe<\/th>\n      <th>Detection<\/th>\n      <th>.det_rank<\/th>\n      <th>Net CAGR<\/th>\n      <th>Max DD<\/th>\n      <th>CVaR 95%<\/th>\n      <th>SSR<\/th>\n      <th>Rigour<\/th>\n      <th>Credible<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"frtip","language":{"info":"Showing _TOTAL_ entries"},"pageLength":20,"scrollX":true,"autoWidth":false,"search":{"regex":true,"caseInsensitive":true},"columnDefs":[{"visible":false,"targets":3},{"orderData":3,"targets":2},{"className":"dt-right","targets":3},{"name":"Strategy","targets":0},{"name":"Sharpe","targets":1},{"name":"Detection","targets":2},{"name":".det_rank","targets":3},{"name":"Net CAGR","targets":4},{"name":"Max DD","targets":5},{"name":"CVaR 95%","targets":6},{"name":"SSR","targets":7},{"name":"Rigour","targets":8},{"name":"Credible","targets":9}],"initComplete":"function(settings, json) {\n  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'\n    || document.body.classList.contains('dark-mode');\n  if (isDark) {\n    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});\n    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});\n    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});\n  }\n}","order":[],"orderClasses":false,"orderCellsTop":true,"lengthMenu":[10,20,25,50,100]}},"evals":["options.initComplete"],"jsHooks":[]}</script>
+<style>
+.det-badge, .rig-badge { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.det-badge.detectable   { color: #1a7f37; }
+.det-badge.underpowered { color: #9a5b00; }
+.det-badge.napp         { color: #6c757d; font-style: italic; font-weight: 400; }
+.det-badge.notcomputed  { color: #fff; background: #c0392b; }
+.rig-badge.computed     { color: #1a7f37; }
+.rig-badge.partial      { color: #9a5b00; }
+.rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
+.rig-badge.notcomputed  { color: #fff; background: #c0392b; }
+.rig-badge.neutral      { color: #6c757d; font-weight: 400; }
+
+[data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
+[data-bs-theme="dark"] .det-badge.underpowered, body.dark-mode .det-badge.underpowered { color: #fbbf24; }
+[data-bs-theme="dark"] .det-badge.napp,         body.dark-mode .det-badge.napp         { color: #9ca3af; }
+[data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
+[data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
+[data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
+@media (prefers-color-scheme: dark) {
+  .det-badge.detectable   { color: #4ade80; }
+  .det-badge.underpowered { color: #fbbf24; }
+  .rig-badge.computed     { color: #4ade80; }
+  .rig-badge.partial      { color: #fbbf24; }
+}
+</style>
+</div>
+</div>
+</div>
+<div id="design-notes" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-design-notes">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr) minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p><strong>Target: <code>docs/leaderboard.qmd</code>, “Full Period” tab, the existing metrics table (chunk starting <a href="https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/docs/leaderboard.qmd#L52"><code>docs/leaderboard.qmd#L52</code></a>).</strong> Not a new dashboard. Grep confirms zero references to <code>detection</code> anywhere under <code>docs/*.qmd</code> today – the columns exist on the <code>leaderboard</code> target (<code>detection_min_n_years</code>, <code>detection_underpowered</code>, and their <code>_mt</code> variants) but have never been rendered on any dashboard. This is exactly column-60-of-61 as #726 describes it, except currently it is column <em>none-of-61</em> – the table this prototype clones does not select the detection columns at all. <code>leaderboard.qmd</code> is also where <code>SSR</code>, <code>Credible</code>, and <code>Redundant</code> already live using the identical hidden-sort-rank badge pattern this prototype reuses (see Step 3).</p>
+<p>A NEW dashboard is not justified: the rule’s default is to extend, and this output belongs beside the Sharpe it qualifies – moving it anywhere else recreates the “column 60 of 61” problem in a different location.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>This table sits beside, and must stay consistent with:</p>
+<ul>
+<li><strong><code>Credible</code> / <code>Redundant</code></strong> (same table, <code>docs/leaderboard.qmd</code> lines ~86-125) – both already use the exact pattern this prototype copies: a <code>dplyr::case_when()</code> producing a <strong>display string</strong> plus a hidden <code>.xxx_rank</code> integer column so DT’s default alphabetical sort doesn’t scramble assessed-good / assessed-bad / never-assessed ordering. <code>Detection</code> follows the same shape (<code>.det_rank</code>); <code>Rigour</code> intentionally does not need a separate rank column because its four states already sort in a sensible default order for this prototype’s purposes.</li>
+<li><strong>Strategy naming</strong> (<a href="https://github.com/JohnGavin/historical/blob/main/.claude/rules/strategy-name-consistency.md"><code>strategy-name-consistency</code></a>): the <code>strategy</code> column values (“OLMAR-1”, “Avoid Worst”, “Value (HML)”, …) are used unchanged – no new naming is introduced.</li>
+<li><strong>Captions</strong> (<a href="https://github.com/JohnGavin/historical/blob/main/.claude/rules/"><code>visualization-standards</code></a> family): the caption is assembled dynamically from the live data (counts, not hardcoded numbers) exactly like the real table’s <code>flag_note</code> / <code>bias_note</code> / <code>gross_note</code> / <code>cost_note</code> / <code>diversification_note</code> blocks.</li>
+<li><strong>Table styling</strong> (<a href="https://github.com/JohnGavin/llm/blob/main/.claude/rules/dashboard-table-styling.md"><code>dashboard-table-styling</code></a>): no inline <code>width:100%</code>; badges are inline <code>&lt;span&gt;</code> elements inside a cell, which keeps the table shrink-to-content and right-justified per the existing global CSS.</li>
+<li><strong>Deflated Sharpe tab</strong> (<code>docs/leaderboard.qmd</code>, “Deflated Sharpe” tab, <code>strat_deflated_sharpe</code> target): the <code>Rigour</code> badge summarises exactly the three columns (<code>deflated_sharpe</code>, <code>dsr_pvalue</code>, <code>k_eff_leaderboard</code>) that tab already renders in full for the strategies it covers – see Step 5 for the resulting consolidation proposal.</li>
+</ul>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>Four defences, none of them relying on the reader noticing a colour:</p>
+<ol type="1">
+<li><strong>Structural adjacency.</strong> <code>Detection</code> is the column immediately right of <code>Sharpe</code> – not reachable only by scrolling past 50 other columns, which is documented as the actual mechanism of the original failure (#726: “the metric had existed as leaderboard column 60 of 61 and had never been read”).</li>
+<li><strong>Every state carries a distinct symbol AND a text label</strong>, not colour alone (✓/⚠/–/✗ plus “Detectable” / “Underpowered” / “n/a” / “NOT COMPUTED”) – satisfies colour-blind accessibility and dark/light contrast simultaneously.</li>
+<li><strong>A always-visible summary callout above the table</strong>, in the same visual register as the existing <code>::: {.callout-warning}</code> survivorship-bias block at the top of <code>leaderboard.qmd</code> – the project’s own established pattern for “this caveat is load-bearing, not decoration.” It states the counts in prose, dynamically computed, every render – a reader who never hovers a badge still reads “6 of 8 strategies are underpowered.”</li>
+<li><strong>Every amber/red badge links to the tracking issue</strong> (#726 or #728) in its tooltip – “acknowledge” has a concrete next action (read the issue, or close it once the underlying gap is fixed), not just a colour a reader learns to filter out.</li>
+</ol>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<strong>Proposal: fold “Deflated Sharpe” from a standalone tab into a <code>Rigour</code> detail expansion on the main ranking table, once this Phase 0 design is built for real.</strong>
+<p>Today <code>docs/leaderboard.qmd</code> has a “Deflated Sharpe” tab (<code>strat_deflated_sharpe</code> target) that exists solely to show the same three numbers (<code>deflated_sharpe</code>, <code>dsr_pvalue</code>, <code>k_eff_leaderboard</code>) this prototype’s <code>Rigour</code> badge already summarises inline, for the same set of strategies. With coverage now at 11 of 17 (up from 4, per #728 items 1-2, landed concurrently with this dispatch) the standalone tab is close to covering the same footprint as the main table anyway. Once <code>Rigour</code> ships with a working tooltip/expand-row showing the three numeric values on demand (DT’s <code>render = "expand"</code> column pattern, no new tab needed), the “Deflated Sharpe” tab’s unique remaining value is near zero and it should be retired, folding its content into a badge hover/expand on the ranking table. This is a genuine simplification, not a relabeling: one fewer tab, zero lost information (the exemption reasons and numeric values both survive as tooltip content), and the information moves from a separately-navigated tab to the same row as the Sharpe it qualifies – consistent with the requirement 2 in the <code>detection-power-required</code> rule (“beside its Sharpe, not in a distant column”), which applies equally to rigour metrics per #728 item 3’s framing of the same defect one layer up.</p>
+<p><strong>Net effect on <code>docs/DASHBOARDS.md</code> inventory: dashboard count unchanged (11), tab count within <code>leaderboard.qmd</code> reduced by one</strong> once implemented. This is a smaller consolidation than a dashboard merge, but it is concrete, and “no change” was not available as an honest answer – the Deflated Sharpe tab’s argument for existing separately gets weaker every time rigour coverage widens, which is exactly what is happening in this repo this week.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div><div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<ul>
+<li><code>tar_read("leaderboard")</code> – <a href="https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_leaderboard.R#L120"><code>R/plan_leaderboard.R#L120</code></a></li>
+<li><a href="https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/packages/historicaldata/R/hd_detection_power.R#L154"><code>historicaldata::hd_detection_power()</code></a></li>
+<li><a href="https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1314"><code>check_leaderboard_detection_power_coverage()</code> (S19)</a></li>
+<li><a href="https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1408"><code>check_leaderboard_detection_power_values()</code> (S20)</a></li>
+<li><a href="https://github.com/JohnGavin/historical/blob/4713e679c6d693cb745024c48306f06b335b196e/R/plan_qa_gates.R#L1519"><code>check_leaderboard_deflated_sharpe_coverage()</code> / <code>DEFLATED_SHARPE_EXEMPTIONS</code> (S21)</a></li>
+<li><a href="https://github.com/JohnGavin/historical/issues/726">#726</a>, <a href="https://github.com/JohnGavin/historical/issues/728">#728</a>, <a href="https://github.com/JohnGavin/historical/blob/main/.claude/rules/detection-power-required.md"><code>detection-power-required</code></a></li>
+</ul>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+<div id="3ade8a4a-fb1d-4a6c-8409-ac45482d5fc9" class="hidden html-fill-item html-fill-container">
+
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+
+
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    // Ensure there is a toggle, if there isn't float one in the top right
+    if (window.document.querySelector('.quarto-color-scheme-toggle') === null) {
+      const a = window.document.createElement('a');
+      a.classList.add('top-right');
+      a.classList.add('quarto-color-scheme-toggle');
+      a.href = "";
+      a.onclick = function() { try { window.quartoToggleColorScheme(); } catch {} return false; };
+      const i = window.document.createElement("i");
+      i.classList.add('bi');
+      a.appendChild(i);
+      window.document.body.appendChild(a);
+    }
+    setColorSchemeToggle(hasAlternateSentinel())
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /container fluid -->
+
+<script type="application/javascript">
+window.document.addEventListener("DOMContentLoaded", function (_event) {
+  if (window.bslib.Card) {
+    window.bslib.Card.initializeAllCards();
+  }
+}); 
+</script>
+  
+
+
+
+</body></html>
