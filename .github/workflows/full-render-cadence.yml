@@ -1,0 +1,111 @@
+name: Full render cadence (weekly)
+
+# #740: scripts/build.sh --render (no flag) only ever renders pages Step 3
+# flags [STALE]/[DATA-STALE] -- a page that is PERMANENTLY up-to-date but
+# broken is therefore never exercised by any gate. `scripts/build.sh
+# --render-all` closes that gap by rendering every docs/*.qmd page
+# unconditionally, but it is a manual, ~20-minute human act (same cost
+# dashboard-freshness.yml's header comment already documents for an ordinary
+# --render) -- nothing enforces that anyone actually runs it periodically.
+#
+# WHY THIS WORKFLOW NEVER RUNS quarto render ITSELF: doing the real thing in
+# CI would mean running tar_make() against docs/_targets.R on a fresh
+# runner -- live external data fetches (equity/macro/crypto APIs, credentials
+# this workflow does not have), a 10+ minute cold nix build, and a store that
+# is NOT the main checkout's (see .claude/CLAUDE.md and the
+# worktree-location rule for why a second, unofficial store must never race
+# the canonical one -- scripts/build.sh itself refuses to run anywhere except
+# the main checkout for exactly this reason). dashboard-freshness.yml's own
+# header comment already rejected this same approach for its Check 3 and
+# instead reads a small COMMITTED snapshot; this workflow follows the same
+# pattern for the same reason.
+#
+# So this workflow reads ONE committed file, docs/_full_render_marker.txt --
+# written by `scripts/build.sh --render-all` (never committed automatically;
+# a human reviews and commits it exactly like any other file that script
+# writes under docs/) -- and fails if it is older than
+# FULL_RENDER_MAX_AGE_DAYS, or missing entirely. A green run here means
+# "someone ran --render-all recently enough that every dashboard page has
+# been exercised, not just the ones Step 3 happened to flag as stale."
+#
+# WEEKLY, NOT DAILY: mirrors dashboard-freshness.yml's own cadence
+# reasoning -- the fix is a deliberate ~20-minute human act, and a threshold
+# measured in weeks gives a full working week to act before this goes red.
+
+on:
+  schedule:
+    - cron: '30 8 * * 1'      # weekly, Monday 08:30 UTC (after dashboard-freshness.yml's 08:00 run)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write               # to auto-file an issue on failure
+
+env:
+  # How old docs/_full_render_marker.txt may be before this workflow fails.
+  # 30 days: roughly monthly, consistent with the ~20-minute human cost of a
+  # full render and this repo's other staleness thresholds being measured in
+  # weeks, not days (see dashboard-freshness.yml's own cadence comment).
+  FULL_RENDER_MAX_AGE_DAYS: 30
+
+jobs:
+  full-render-cadence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check docs/_full_render_marker.txt age
+        id: check
+        run: |
+          REPORT="./full-render-cadence-report.md"
+          MARKER="docs/_full_render_marker.txt"
+          if [[ ! -f "$MARKER" ]]; then
+            {
+              echo "\`$MARKER\` not found -- no \`scripts/build.sh --render-all\` has ever"
+              echo "been committed."
+              echo ""
+              echo "Run \`scripts/build.sh --render-all\` in the main checkout, review the"
+              echo "output, and commit the resulting \`$MARKER\` (and any refreshed"
+              echo "\`docs/*.html\`) to establish a baseline (#740)."
+            } > "$REPORT"
+            cat "$REPORT"
+            exit 1
+          fi
+          LAST_RENDER="$(grep '^last_full_render_utc:' "$MARKER" | cut -d' ' -f2)"
+          if [[ -z "$LAST_RENDER" ]]; then
+            {
+              echo "\`$MARKER\` exists but has no \`last_full_render_utc:\` line -- malformed."
+              echo ""
+              echo "Contents:"
+              echo '```'
+              cat "$MARKER"
+              echo '```'
+            } > "$REPORT"
+            cat "$REPORT"
+            exit 1
+          fi
+          LAST_EPOCH="$(date -u -d "$LAST_RENDER" +%s)"
+          NOW_EPOCH="$(date -u +%s)"
+          AGE_DAYS=$(( (NOW_EPOCH - LAST_EPOCH) / 86400 ))
+          echo "age_days=$AGE_DAYS" >> "$GITHUB_OUTPUT"
+          if [[ "$AGE_DAYS" -gt "$FULL_RENDER_MAX_AGE_DAYS" ]]; then
+            {
+              echo "Last full render was **$AGE_DAYS day(s) ago** ($LAST_RENDER) --"
+              echo "exceeds the ${FULL_RENDER_MAX_AGE_DAYS}-day threshold."
+              echo ""
+              echo "Run \`scripts/build.sh --render-all\` in the main checkout, review the"
+              echo "output, and commit the refreshed \`docs/*.html\` + \`$MARKER\` (#740)."
+            } > "$REPORT"
+            cat "$REPORT"
+            exit 1
+          fi
+          echo "PASS: last full render was $LAST_RENDER ($AGE_DAYS day(s) ago) -- within the ${FULL_RENDER_MAX_AGE_DAYS}-day threshold."
+
+      - name: Create issue on schedule failure
+        if: failure() && github.event_name == 'schedule'
+        uses: peter-evans/create-issue-from-file@v5
+        with:
+          title: "full-render-cadence: docs/_full_render_marker.txt is stale or missing"
+          content-filepath: ./full-render-cadence-report.md
+          labels: bug, theme:infra, dashboard-freshness

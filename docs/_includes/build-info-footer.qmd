@@ -2,5 +2,10 @@
 #| label: build-info
 #| echo: false
 #| results: asis
+if (!exists("build_info", mode = "function")) {
+  utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+    file.path(here::here(), "docs/vignette_utils.R")
+  source(utils_path)
+}
 build_info()
 ```
