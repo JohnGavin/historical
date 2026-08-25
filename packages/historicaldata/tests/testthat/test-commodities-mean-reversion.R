@@ -149,7 +149,7 @@ test_that("hd_commodity_mr_signal: sign matches expected reversal direction", {
 })
 
 
-test_that("hd_commodity_mr_portfolio: long weights sum to 1 per period", {
+test_that("hd_commodity_mr_portfolio: long/short weights sized by fraction, not headcount (#751 items C/D)", {
   set.seed(42)
   n_months <- 36
   n_assets <- 15
@@ -160,15 +160,17 @@ test_that("hd_commodity_mr_portfolio: long weights sum to 1 per period", {
     dplyr::mutate(monthly_ret = rnorm(dplyr::n(), 0, 0.04))
 
   sig  <- hd_commodity_mr_signal(tbl, lookback_months = 3L)
-  port <- hd_commodity_mr_portfolio(sig, tbl, n_long = 5L, n_short = 5L)
+  # Default frac = 1/3 (terciles): floor(15 * 1/3) = 5 per leg, matching the
+  # old n_long = n_short = 5L headcount exactly for this fixed-breadth
+  # fixture -- the two sizing mechanisms agree when breadth never changes.
+  port <- hd_commodity_mr_portfolio(sig, tbl)
 
-  # For every month: n_long weights sum = 1 / n_long * n_long = 1
-  # We verify via the weighted portfolio directly at the signal level.
-  # Because the function returns aggregate returns, we just check n_long/n_short.
   expect_true(all(port$n_long <= 5L),
-              info = "n_long positions never exceeds n_long parameter")
+              info = "n_long positions never exceeds floor(n_avail * frac)")
   expect_true(all(port$n_short <= 5L),
-              info = "n_short positions never exceeds n_short parameter")
+              info = "n_short positions never exceeds floor(n_avail * frac)")
+  # Breadth diagnostics (#751 item C / step toward item F) are reported.
+  expect_true(all(c("n_avail", "held_frac") %in% names(port)))
 })
 
 
@@ -180,7 +182,7 @@ test_that("hd_commodity_mr_portfolio: net_ret = gross_ret - cost", {
     dplyr::mutate(monthly_ret = rnorm(dplyr::n(), 0, 0.03))
 
   sig  <- hd_commodity_mr_signal(tbl, lookback_months = 3L)
-  port <- hd_commodity_mr_portfolio(sig, tbl, n_long = 3L, n_short = 3L, cost_bps = 20)
+  port <- hd_commodity_mr_portfolio(sig, tbl, cost_bps = 20)
 
   expect_equal(port$net_ret, port$gross_ret - port$cost, tolerance = 1e-12)
 })
@@ -194,9 +196,86 @@ test_that("hd_commodity_mr_portfolio: turnover is non-negative", {
     dplyr::mutate(monthly_ret = rnorm(dplyr::n(), 0, 0.05))
 
   sig  <- hd_commodity_mr_signal(tbl, lookback_months = 3L)
-  port <- hd_commodity_mr_portfolio(sig, tbl, n_long = 3L, n_short = 3L)
+  port <- hd_commodity_mr_portfolio(sig, tbl)
 
   expect_true(all(port$turnover >= 0))
+})
+
+
+test_that("hd_commodity_mr_portfolio: long/short legs never overlap across varying breadth (#751 items C/D)", {
+  # The exact concern #751 raised against fixed-count sizing: universe
+  # breadth changes dramatically over time (6 tradeable names in 2000, 24 by
+  # 2015). Sweep n_avail across a wide range at several fractions and verify
+  # the invariant hd_commodity_mr_portfolio() asserts internally (2 * n_leg
+  # <= n_avail) by checking its OBSERVABLE consequence: n_long + n_short
+  # never exceeds n_avail.
+  make_universe <- function(n_assets, n_months = 12L) {
+    dates <- seq.Date(as.Date("2010-01-31"), by = "month", length.out = n_months)
+    ids   <- paste0("U", seq_len(n_assets))
+    tidyr::expand_grid(date = dates, series_id = ids) |>
+      dplyr::mutate(monthly_ret = rnorm(dplyr::n(), 0, 0.03))
+  }
+
+  set.seed(99)
+  for (frac in c(1 / 3, 1 / 5)) {
+    for (n_assets in c(3L, 6L, 7L, 9L, 20L, 24L, 37L)) {
+      tbl  <- make_universe(n_assets)
+      sig  <- hd_commodity_mr_signal(tbl, lookback_months = 1L)
+      port <- hd_commodity_mr_portfolio(sig, tbl, frac = frac)
+      expect_true(
+        all(port$n_long + port$n_short <= n_assets),
+        info = paste("frac =", frac, "n_assets =", n_assets)
+      )
+    }
+  }
+})
+
+
+test_that("hd_commodity_mr_portfolio: below the minimum-breadth floor, no position is held (#751 item C)", {
+  # Hand-built signal/returns so breadth is exactly controlled: one date
+  # with only 4 ranked names (below the default tercile floor of
+  # ceiling(2 / (1/3)) = 6), one date with 9 (>= floor), one date with 24.
+  # Every series needs (signal date, next date) rows for the t+1 execution
+  # join.
+  build_cohort <- function(prefix, n, signal_date, next_date) {
+    ids <- paste0(prefix, seq_len(n))
+    dplyr::bind_rows(
+      tibble::tibble(date = signal_date, series_id = ids, monthly_ret = 0.01),
+      tibble::tibble(date = next_date,   series_id = ids, monthly_ret = 0.02)
+    )
+  }
+  returns_tbl <- dplyr::bind_rows(
+    build_cohort("L", 4L,  as.Date("2020-01-31"), as.Date("2020-02-29")),
+    build_cohort("M", 9L,  as.Date("2020-03-31"), as.Date("2020-04-30")),
+    build_cohort("H", 24L, as.Date("2020-05-31"), as.Date("2020-06-30"))
+  )
+  signal_tbl <- returns_tbl |>
+    dplyr::distinct(date, series_id) |>
+    dplyr::filter(date %in% as.Date(c("2020-01-31", "2020-03-31", "2020-05-31"))) |>
+    dplyr::mutate(mr_signal = stats::rnorm(dplyr::n()))
+
+  port <- hd_commodity_mr_portfolio(signal_tbl, returns_tbl, frac = 1 / 3)
+
+  low  <- port[port$date == as.Date("2020-01-31"), ]
+  mid  <- port[port$date == as.Date("2020-03-31"), ]
+  high <- port[port$date == as.Date("2020-05-31"), ]
+
+  # n_avail = 4 < min_total_names = ceiling(2 / (1/3)) = 6 -> no position.
+  expect_equal(low$n_long, 0L)
+  expect_equal(low$n_short, 0L)
+  expect_equal(low$gross_ret, 0)
+  expect_equal(low$held_frac, 0)
+  expect_equal(low$n_avail, 4L)
+
+  # n_avail = 9 >= 6 -> floor(9 / 3) = 3 per leg.
+  expect_equal(mid$n_long, 3L)
+  expect_equal(mid$n_short, 3L)
+  expect_equal(mid$n_avail, 9L)
+
+  # n_avail = 24 -> floor(24 / 3) = 8 per leg.
+  expect_equal(high$n_long, 8L)
+  expect_equal(high$n_short, 8L)
+  expect_equal(high$n_avail, 24L)
 })
 
 
@@ -261,11 +340,25 @@ test_that("hd_commodity_mr_signal: input validation — invalid lookback", {
 })
 
 
-test_that("hd_commodity_mr_portfolio: input validation — invalid n_long", {
+test_that("hd_commodity_mr_portfolio: input validation — invalid frac (#751 items C/D)", {
   sig <- tibble::tibble(date = Sys.Date(), series_id = "A", mr_signal = 0.1)
   ret <- tibble::tibble(date = Sys.Date(), series_id = "A", monthly_ret = 0.02)
+  # frac <= 0
   expect_error(
-    hd_commodity_mr_portfolio(sig, ret, n_long = 0L, n_short = 5L),
+    hd_commodity_mr_portfolio(sig, ret, frac = 0),
+    class = "rlang_error"
+  )
+  expect_error(
+    hd_commodity_mr_portfolio(sig, ret, frac = -0.1),
+    class = "rlang_error"
+  )
+  # frac >= 0.5 would let the legs overlap or exhaust the ranked universe.
+  expect_error(
+    hd_commodity_mr_portfolio(sig, ret, frac = 0.5),
+    class = "rlang_error"
+  )
+  expect_error(
+    hd_commodity_mr_portfolio(sig, ret, frac = 0.6),
     class = "rlang_error"
   )
 })

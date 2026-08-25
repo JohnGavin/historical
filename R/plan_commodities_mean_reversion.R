@@ -58,13 +58,23 @@
 #   universe -- they keep printing monthly through the present (#751 finding
 #   3) and remain part of the post-cutoff cross-section. Whether they should
 #   be positions, conditioning data, or dropped post-cutoff is a SEPARATE,
-#   still-open decision on #751 -- this truncation does not resolve it, and
-#   in particular does NOT by itself make a 10-long/10-short (20-slot)
-#   portfolio constructible from tradeable names alone until the tradeable
-#   universe reaches 20: measured against the live store, only 6 tradeable
-#   (non-FRED/IMF) series exist as of mid-2000, and the count does not reach
-#   20 until 2006. Every month before then still fills some slots with
-#   IMF/FRED names even after this truncation.
+#   still-open decision on #751 -- this truncation does not resolve it.
+# Fixed-fraction sizing (#751 item C, decided 2026-08-25): the fixed
+#   n_long = n_short = 10L headcount is replaced by hd_commodity_mr_portfolio()'s
+#   own frac parameter (default 1/3, terciles) -- see that function's roxygen
+#   and .HD_CMR_DEFAULT_FRAC's roxygen (packages/historicaldata/R/
+#   commodities_mean_reversion.R) for the citation. The old fixed count was
+#   infeasible against the tradeable universe alone until 2006 (only 6
+#   tradeable series existed as of mid-2000, 16-17 through 2005 -- 20 slots
+#   could not be filled without reaching into the untradeable IMF/FRED
+#   names) and held ~10/24 = ~42% of the universe PER LEG (roughly 83% total)
+#   by 2015-2026 once 24 tradeable names existed -- the same parameter
+#   meaning two structurally different strategies at the two ends of the
+#   sample. A fixed fraction is feasible at every breadth automatically, with
+#   no cutoff to choose. Item D (rank-weighting the whole cross-section
+#   instead of a discrete long/short split) remains open -- see the #751
+#   comment thread for the recommendation on which is the better structural
+#   fit; this change implements C only.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -103,7 +113,16 @@ plan_commodities_mean_reversion <- function() {
 
     # ── Portfolios: long-losers / short-winners ───────────────────────────
     # t+1 execution: signal at t -> trade executes at t+1 closing prices.
-    # 10 long + 10 short, equal weight within each leg.
+    # #751 items C/D (decided 2026-08-25): FIXED FRACTION per leg, not a
+    # fixed headcount. hd_commodity_mr_portfolio()'s own default (frac = 1/3,
+    # terciles) is used here rather than overridden -- see that function's
+    # roxygen and .HD_CMR_DEFAULT_FRAC's roxygen (packages/historicaldata/R/
+    # commodities_mean_reversion.R) for the Asness-Moskowitz-Pedersen /
+    # Miffre-Rallis citation and the tercile-vs-quintile reasoning. This
+    # replaces the previous n_long = n_short = 10L, which was infeasible
+    # against the tradeable universe alone until 2006 and held ~87% of the
+    # universe long-short by 2015-2026 -- see the file header above and #751
+    # for the full record.
     # 0.2% one-way transaction cost.
     # returns_tbl is cmr_tradeable_returns (#751 item 1), matching the
     # signal targets above -- both legs of the t -> t+1 join must be drawn
@@ -113,8 +132,6 @@ plan_commodities_mean_reversion <- function() {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_1m,
         returns_tbl = cmr_tradeable_returns,
-        n_long      = 10L,
-        n_short     = 10L,
         cost_bps    = 20
       )
     }),
@@ -123,8 +140,6 @@ plan_commodities_mean_reversion <- function() {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_3m,
         returns_tbl = cmr_tradeable_returns,
-        n_long      = 10L,
-        n_short     = 10L,
         cost_bps    = 20
       )
     }),
@@ -133,8 +148,6 @@ plan_commodities_mean_reversion <- function() {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_6m,
         returns_tbl = cmr_tradeable_returns,
-        n_long      = 10L,
-        n_short     = 10L,
         cost_bps    = 20
       )
     }),

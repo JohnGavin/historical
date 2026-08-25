@@ -7,8 +7,7 @@
 hd_commodity_mr_portfolio(
   signal_tbl,
   returns_tbl,
-  n_long = 10L,
-  n_short = 10L,
+  frac = .HD_CMR_DEFAULT_FRAC,
   cost_bps = 20
 )
 }
@@ -19,29 +18,38 @@ with columns \code{date}, \code{series_id}, \code{mr_signal}.}
 \item{returns_tbl}{Tibble with columns \code{date}, \code{series_id},
 \code{monthly_ret}.  Must overlap in date range with \code{signal_tbl}.}
 
-\item{n_long}{Integer. Number of top-ranked (biggest losers) commodities
-to hold long (default 10).}
-
-\item{n_short}{Integer. Number of bottom-ranked (biggest winners) commodities
-to sell short (default 10).}
+\item{frac}{Numeric fraction in \verb{(0, 0.5)}. Share of the ranked
+cross-section held on EACH leg (long and short) -- \code{1/3} =
+terciles (default), \code{1/5} = quintiles. Replaces the previous fixed
+\code{n_long}/\code{n_short} headcount parameters (#751 items C/D): one
+sizing mechanism, not two.}
 
 \item{cost_bps}{Numeric. One-way transaction cost in basis points
 (default 20 = 0.2\\%).  The same 0.2\\% used in commodity momentum (#134).}
 }
 \value{
-Tibble with one row per month and columns:
+Tibble with one row per date present in the signal/return join
+and columns:
 \describe{
-\item{date}{Month-end date (the execution month, i.e. t+1).}
-\item{gross_ret}{Gross portfolio return for the month.}
+\item{date}{Execution date (t+1).}
+\item{gross_ret}{Gross portfolio return for the date.}
 \item{turnover}{One-way turnover fraction.}
 \item{cost}{Transaction cost deducted (= turnover * cost_bps/10000).}
 \item{net_ret}{Net return after transaction costs.}
-\item{n_long}{Number of long positions held.}
-\item{n_short}{Number of short positions held.}
+\item{n_long}{Number of long positions actually held.}
+\item{n_short}{Number of short positions actually held.}
+\item{n_avail}{Number of ranked names available that date (breadth
+diagnostic, #751 item C).}
+\item{held_frac}{\code{(n_long + n_short) / n_avail}: the fraction of
+that date's ranked universe actually held (breadth diagnostic,
+#751 item C). 0 when \code{n_avail} is below the minimum-breadth
+floor.}
 }
-Months where fewer than \code{n_long + n_short} commodities have valid
-signals are silently included with actual position counts; months with
-zero valid signals produce \code{gross_ret = 0}.
+Dates below \code{.HD_CMR_MIN_LEG_NAMES}'s minimum-breadth floor
+hold no position at all: \code{n_long = n_short = 0},
+\code{gross_ret = 0}. Such dates are still returned as rows (not
+dropped) so the return series stays date-complete for downstream
+periodicity checks (#738).
 }
 \description{
 Convert a mean-reversion signal tibble into monthly long/short portfolio
@@ -52,6 +60,18 @@ Execution discipline: the signal from month \code{t} (formed from returns
 through \code{t-1}) drives trades that are executed at month \code{t+1}
 closing prices.  This is enforced by joining the signal at date \code{t}
 to the return realised at date \code{t+1} via \code{dplyr::lead()}.
+
+\strong{Fixed fraction, not fixed headcount (#751 items C/D):} each leg
+holds \code{floor(n_avail * frac)} names, where \code{n_avail} is the
+number of ranked names available on that date -- NOT a fixed count. See
+\code{.HD_CMR_DEFAULT_FRAC}'s roxygen for the tercile-vs-quintile
+citation and reasoning, and \code{.HD_CMR_MIN_LEG_NAMES}'s roxygen
+for the minimum-breadth floor below which a date holds no position.
+\code{floor()} together with \code{frac < 0.5} (enforced by input
+validation) guarantees \code{2 * n_leg <= 2 * frac * n_avail < n_avail},
+so the long and short legs can never overlap by construction; this is
+also verified explicitly at runtime (fail-loud-not-null.md) rather than
+trusted silently.
 }
 \seealso{
 Other commodities_mr: 
