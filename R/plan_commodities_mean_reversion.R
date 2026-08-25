@@ -75,6 +75,25 @@
 #   instead of a discrete long/short split) remains open -- see the #751
 #   comment thread for the recommendation on which is the better structural
 #   fit; this change implements C only.
+# Universe deduplication (#751 item B, implemented after C): the ranked
+#   universe held multiple representations of the SAME underlying commodity
+#   (WTI crude three times -- POILWTIUSDM IMF index, CL=F futures, USO ETF;
+#   gold and silver each twice; four ETF baskets -- DBA, DBB, DBC, PDBC --
+#   whose constituents were already held individually). A cross-sectional
+#   sort ranks the ranked universe against ITSELF whenever two rows track the
+#   same exposure, manufacturing a spurious long/short pair rather than
+#   measuring one commodity against another. cmr_deduplicated_returns (below)
+#   filters cmr_tradeable_returns down to one instrument per underlying
+#   exposure via hd_commodity_mr_dedupe_universe() -- futures preferred over
+#   ETF/index twins, per the literature (Miffre-Rallis 2007;
+#   Asness-Moskowitz-Pedersen 2013 both rank futures). Every signal/portfolio
+#   target below is rewired from cmr_tradeable_returns to
+#   cmr_deduplicated_returns. See .HD_CMR_EXPOSURE_MAP's roxygen
+#   (packages/historicaldata/R/commodities_mean_reversion.R) for the full
+#   MANUAL-mapping rationale and #751 item B for the record. This changes the
+#   ranked breadth that item C's fixed FRACTION sizes against (a smaller
+#   n_avail on every date), which is expected and intended -- the fraction
+#   itself is unchanged.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -92,22 +111,35 @@ plan_commodities_mean_reversion <- function() {
     }),
 
 
+    # ── Universe deduplication (#751 item B): one instrument per exposure ──
+    # Built on cmr_tradeable_returns (#751 item 1) -- date truncation and
+    # instrument deduplication are independent decisions, applied in
+    # sequence. See the file header above and hd_commodity_mr_dedupe_universe()'s
+    # roxygen (packages/historicaldata/R/commodities_mean_reversion.R) for
+    # the full rationale. This target does instrument filtering ONLY -- it
+    # does not change the date range cmr_tradeable_returns already set.
+
+    targets::tar_target(cmr_deduplicated_returns, {
+      hd_commodity_mr_dedupe_universe(cmr_tradeable_returns)
+    }),
+
+
     # ── Signals: three lookback windows ──────────────────────────────────
-    # Built on cmr_tradeable_returns (#751 item 1), not the raw
-    # commodities_returns -- see the target above.
+    # Built on cmr_deduplicated_returns (#751 items 1 + B), not the raw
+    # commodities_returns -- see the targets above.
     # Each signal: mr_signal = -(cumulative return over prior L months).
     # Higher signal -> bigger recent loser -> long candidate.
 
     targets::tar_target(cmr_signals_1m, {
-      hd_commodity_mr_signal(cmr_tradeable_returns, lookback_months = 1L)
+      hd_commodity_mr_signal(cmr_deduplicated_returns, lookback_months = 1L)
     }),
 
     targets::tar_target(cmr_signals_3m, {
-      hd_commodity_mr_signal(cmr_tradeable_returns, lookback_months = 3L)
+      hd_commodity_mr_signal(cmr_deduplicated_returns, lookback_months = 3L)
     }),
 
     targets::tar_target(cmr_signals_6m, {
-      hd_commodity_mr_signal(cmr_tradeable_returns, lookback_months = 6L)
+      hd_commodity_mr_signal(cmr_deduplicated_returns, lookback_months = 6L)
     }),
 
 
@@ -124,14 +156,14 @@ plan_commodities_mean_reversion <- function() {
     # universe long-short by 2015-2026 -- see the file header above and #751
     # for the full record.
     # 0.2% one-way transaction cost.
-    # returns_tbl is cmr_tradeable_returns (#751 item 1), matching the
-    # signal targets above -- both legs of the t -> t+1 join must be drawn
-    # from the same truncated universe.
+    # returns_tbl is cmr_deduplicated_returns (#751 items 1 + B), matching
+    # the signal targets above -- both legs of the t -> t+1 join must be
+    # drawn from the same truncated, deduplicated universe.
 
     targets::tar_target(cmr_portfolio_1m, {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_1m,
-        returns_tbl = cmr_tradeable_returns,
+        returns_tbl = cmr_deduplicated_returns,
         cost_bps    = 20
       )
     }),
@@ -139,7 +171,7 @@ plan_commodities_mean_reversion <- function() {
     targets::tar_target(cmr_portfolio_3m, {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_3m,
-        returns_tbl = cmr_tradeable_returns,
+        returns_tbl = cmr_deduplicated_returns,
         cost_bps    = 20
       )
     }),
@@ -147,7 +179,7 @@ plan_commodities_mean_reversion <- function() {
     targets::tar_target(cmr_portfolio_6m, {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_6m,
-        returns_tbl = cmr_tradeable_returns,
+        returns_tbl = cmr_deduplicated_returns,
         cost_bps    = 20
       )
     }),
