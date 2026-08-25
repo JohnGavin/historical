@@ -246,7 +246,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Tail-risk predictivity by predictor. Spread = P(top-decile hourly move | high tercile) - P(… | low tercile). SOL/USD spreads computed here: R = 7.63 pp, Amihud = 3.99 pp, Kyle = 3.99 pp.&nbsp;Varma (2026) BTC benchmarks, shown for reference only: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp.&nbsp;Kyle’s lambda is estimated as the OLS price-impact slope of log-returns on signed order flow within each rolling window (cov/var; see <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46"><code>bdbb_fit()</code></a>), not a per-bar ratio. Prior to <a href="https://github.com/JohnGavin/historical/issues/624">#624</a>, the <code>kyle_mean</code> column was numerically identical to <code>amihud_mean</code>, so any earlier apparent agreement with the Varma Kyle benchmark was spurious and the corrected figures above should not be assumed to reproduce it.</caption>
+<caption>Tail-risk predictivity by predictor. Spread = P(top-decile hourly move | high tercile) - P(… | low tercile). SOL/USD spreads computed here: R = 7.63 pp, Amihud = 3.99 pp, Kyle = 4.37 pp.&nbsp;Varma (2026) BTC benchmarks, shown for reference only: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp.&nbsp;Kyle’s lambda is estimated as the OLS price-impact slope of log-returns on signed order flow within each rolling window (cov/var; see <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46"><code>bdbb_fit()</code></a>), not a per-bar ratio. Prior to <a href="https://github.com/JohnGavin/historical/issues/624">#624</a>, the <code>kyle_mean</code> column was numerically identical to <code>amihud_mean</code>, so any earlier apparent agreement with the Varma Kyle benchmark was spurious and the corrected figures above should not be assumed to reproduce it.</caption>
 <thead>
 <tr class="header">
 <th style="text-align: left;">predictor</th>
@@ -278,7 +278,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td style="text-align: left;">kyle_mean</td>
 <td style="text-align: right;">0.13</td>
 <td style="text-align: right;">0.09</td>
-<td style="text-align: right;">3.99</td>
+<td style="text-align: right;">4.37</td>
 <td style="text-align: right;">13008</td>
 <td style="text-align: right;">13008</td>
 </tr>
@@ -297,7 +297,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </section>
 <section id="build-info" class="level2">
 <h2 class="anchored" data-anchor-id="build-info">Build Info</h2>
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/9015a803510224c9b132b86fca7c2d95f5c0c923"><code>9015a80</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-25 14:02:26”</p>
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/f5dd37b06a15d16c5c85c11638014afe419d1b21"><code>f5dd37b</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-25 20:17:30”</p>
 </section>
 
 </main>
