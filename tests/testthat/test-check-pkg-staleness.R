@@ -97,6 +97,122 @@ test_that(".cps_discover_consuming_targets returns an empty tibble when no file 
   expect_equal(nrow(reg), 0L)
 })
 
+# ── #757 review regression: target-level, not file-level, attribution ──────
+#
+# The earlier version of .cps_discover_consuming_targets() flagged EVERY
+# tar_target() in a file that mentioned `historicaldata::` ANYWHERE -- caught
+# against the real store flagging `xgb_vs_enet` (R/plan_xgb_signal.R), whose
+# own body calls no package function at all, solely because 8 OTHER targets
+# in the same file do. This block reproduces that exact shape directly.
+
+test_that("a target with no package call is NOT flagged even when a sibling in the SAME file calls historicaldata:: directly (xgb_vs_enet reproduction, #757 review)", {
+  dir <- withr::local_tempdir()
+  r_dir <- file.path(dir, "R")
+  dir.create(r_dir)
+  writeLines(c(
+    "plan_xgb_signal_like <- function() {",
+    "  list(",
+    "    targets::tar_target(xgb_drif_register_runs, {",
+    "      historicaldata::hd_registry_upsert(1)",
+    "    }),",
+    "    targets::tar_target(xgb_vs_enet, {",
+    "      library(dplyr)",
+    "      xgb  <- xgb_drif_portfolio  |> select(ym, xgb_ret  = port_ret)",
+    "      enet <- stk_drif_portfolio |> select(ym, enet_ret = port_ret)",
+    "      inner_join(xgb, enet, by = \"ym\") |> arrange(ym)",
+    "    })",
+    "  )",
+    "}"
+  ), file.path(r_dir, "plan_xgb_signal_like.R"))
+
+  reg <- .cps_discover_consuming_targets(r_dir)
+  expect_true("xgb_drif_register_runs" %in% reg$target_name)
+  expect_false("xgb_vs_enet" %in% reg$target_name)
+})
+
+test_that("a target IS flagged when it calls a LOCAL helper that directly touches historicaldata:: (conservative ambiguous case, review point 1)", {
+  dir <- withr::local_tempdir()
+  r_dir <- file.path(dir, "R")
+  dir.create(r_dir)
+  writeLines(c(
+    "helper_touches_pkg <- function(x) historicaldata::fn(x)",
+    "plan_helper <- function() {",
+    "  list(targets::tar_target(via_helper, helper_touches_pkg(1)))",
+    "}"
+  ), file.path(r_dir, "plan_helper.R"))
+
+  reg <- .cps_discover_consuming_targets(r_dir)
+  expect_true("via_helper" %in% reg$target_name)
+})
+
+test_that("a target IS flagged when it calls a local helper that TRANSITIVELY touches historicaldata:: via a second local helper (chain A -> B -> pkg)", {
+  dir <- withr::local_tempdir()
+  r_dir <- file.path(dir, "R")
+  dir.create(r_dir)
+  writeLines(c(
+    "helper_b <- function(x) historicaldata::fn(x)",
+    "helper_a <- function(x) helper_b(x)",
+    "plan_chain <- function() {",
+    "  list(targets::tar_target(via_chain, helper_a(1)))",
+    "}"
+  ), file.path(r_dir, "plan_chain.R"))
+
+  reg <- .cps_discover_consuming_targets(r_dir)
+  expect_true("via_chain" %in% reg$target_name)
+})
+
+test_that("a target calling a local helper that does NOT touch historicaldata:: is NOT flagged", {
+  dir <- withr::local_tempdir()
+  r_dir <- file.path(dir, "R")
+  dir.create(r_dir)
+  writeLines(c(
+    "helper_clean <- function(x) x + 1",
+    "plan_clean_helper <- function() {",
+    "  list(",
+    "    targets::tar_target(uses_pkg_directly, historicaldata::fn(1)),",
+    "    targets::tar_target(uses_clean_helper, helper_clean(1))",
+    "  )",
+    "}"
+  ), file.path(r_dir, "plan_clean_helper.R"))
+
+  reg <- .cps_discover_consuming_targets(r_dir)
+  expect_true("uses_pkg_directly" %in% reg$target_name)
+  expect_false("uses_clean_helper" %in% reg$target_name)
+})
+
+test_that("a bare-name package call (imports= territory) is NOT flagged by this registry, even in a file that also has namespaced calls", {
+  dir <- withr::local_tempdir()
+  r_dir <- file.path(dir, "R")
+  dir.create(r_dir)
+  writeLines(c(
+    "plan_mixed <- function() {",
+    "  list(",
+    "    targets::tar_target(bare_call_target, hd_commodity_mr_signal(1)),",
+    "    targets::tar_target(namespaced_call_target, historicaldata::hd_registry_upsert(1))",
+    "  )",
+    "}"
+  ), file.path(r_dir, "plan_mixed.R"))
+
+  reg <- .cps_discover_consuming_targets(r_dir)
+  expect_false("bare_call_target" %in% reg$target_name)
+  expect_true("namespaced_call_target" %in% reg$target_name)
+})
+
+test_that(".cps_discover_consuming_targets does not crash on a file with functions that have arguments without defaults (regression: missing-arg symbol crash found while writing this fix)", {
+  dir <- withr::local_tempdir()
+  r_dir <- file.path(dir, "R")
+  dir.create(r_dir)
+  writeLines(c(
+    "helper_no_default <- function(x, y) historicaldata::fn(x, y)",
+    "plan_no_default <- function() {",
+    "  list(targets::tar_target(uses_helper, helper_no_default(1, 2)))",
+    "}"
+  ), file.path(r_dir, "plan_no_default.R"))
+
+  expect_no_error(reg <- .cps_discover_consuming_targets(r_dir))
+  expect_true("uses_helper" %in% reg$target_name)
+})
+
 # ── .cps_main() -- store-existence / missing-digest / pass / fail paths ────
 
 test_that(".cps_main returns 2 and reports when no store directory exists", {
@@ -186,4 +302,33 @@ test_that(".cps_main returns 1 and names the stale target when a skipped consume
 test_that("key .cps_* function signatures are stable", {
   expect_snapshot(args(.cps_discover_consuming_targets))
   expect_snapshot(args(.cps_main))
+  expect_snapshot(args(.cps_contains_pkg_call))
+  expect_snapshot(args(.cps_target_touches_pkg))
+  expect_snapshot(args(.cps_helper_touches_pkg))
+})
+
+# ── Direct unit tests for the lowest-level AST primitives ──────────────────
+
+test_that(".cps_call_head_name resolves bare and namespaced call heads", {
+  expect_equal(.cps_call_head_name(quote(tar_target(x, 1))), "tar_target")
+  expect_equal(.cps_call_head_name(quote(targets::tar_target(x, 1))), "tar_target")
+  expect_true(is.na(.cps_call_head_name(quote(x))))
+  expect_true(is.na(.cps_call_head_name(1)))
+})
+
+test_that(".cps_is_pkg_call / .cps_contains_pkg_call distinguish direct vs nested vs absent package calls", {
+  expect_true(.cps_is_pkg_call(quote(historicaldata::fn()), "historicaldata"))
+  expect_false(.cps_is_pkg_call(quote(fn()), "historicaldata"))
+  expect_false(.cps_is_pkg_call(quote(otherpkg::fn()), "historicaldata"))
+
+  expect_true(.cps_contains_pkg_call(quote({
+    a <- 1
+    historicaldata::fn(a)
+  }), "historicaldata"))
+  expect_false(.cps_contains_pkg_call(quote({
+    a <- 1
+    dplyr::select(a, x)
+  }), "historicaldata"))
+  # triple-colon internal-function access also counts
+  expect_true(.cps_contains_pkg_call(quote(historicaldata:::internal_fn()), "historicaldata"))
 })

@@ -36,6 +36,31 @@ tar_option_set(
   # with zero per-target edits, but does NOT close the namespaced-call
   # share on its own. See `pkg_source_files`/`pkg_source_digest` below and
   # scripts/check_pkg_staleness.R for the mechanism that covers the rest.
+  #
+  # STEADY-STATE BUILD COST (#753 / PR #757 review): a first build against
+  # the REAL store after adding this option showed a mass reinvalidation
+  # (89+ targets dispatched against a normal ~50) -- expected, since every
+  # target `imports` newly tracks was, from `targets`' point of view,
+  # previously undeclared and is now seeing its first-ever dependency edge.
+  # The open question was whether a SECOND consecutive build (no source
+  # changes) returns to the pre-#753 baseline or keeps re-invalidating
+  # every time. OBSERVED (2026-08-25, throwaway store, NOT the real one --
+  # `pkgload::load_all()` of this SAME real packages/historicaldata
+  # directory, `imports = "historicaldata"`, 3 targets exercising a bare
+  # call, a namespaced call, and a plain-R target): build 1 completed all 3
+  # targets; builds 2 and 3, run back to back with zero source changes,
+  # BOTH reported "skipped pipeline ... 3 skipped" -- 0 targets rebuilt,
+  # internal tar_make() timing stable across all three runs (593ms / 547ms
+  # / 557ms). This confirms the mechanism: `imports` hashes are a pure
+  # function of the (unchanged) source text, so build-to-build comparison
+  # against the stored hash finds no difference and correctly skips.
+  # PREDICTED, not directly observed (this repo's worktree-isolation rule
+  # forbids building the real 778-target docs/_targets store from a
+  # worktree): applying this same mechanism to the real store predicts a
+  # SECOND real build returns to something close to the pre-#753 baseline
+  # (~30s, per the PR #757 review) -- the mass reinvalidation was a
+  # one-time consequence of `imports` newly attaching real dependency
+  # edges that did not previously exist, not a recurring per-build cost.
   imports = "historicaldata",
   memory = "transient",
   garbage_collection = TRUE,
