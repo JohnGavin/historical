@@ -37,27 +37,67 @@
 #   starts 2000) and ~255/year after; ~1.4% of observations are monthly-spaced
 #   and the whole series is declared daily. .assert_cmr_ann_factor()'s
 #   consistency check (#738) now DETECTS this; choosing the remedy (truncate
-#   to 2000+, resample to monthly, or segment and report separately) is an
-#   open decision on #738 and is deliberately NOT made here.
+#   to 2000+, resample to monthly, or segment and report separately) was an
+#   open decision on #738 -- item 1 below is the truncation half of that
+#   answer, decided on #751 (see next paragraph). The remaining half --
+#   resample vs segment vs leave as-is for the POST-cutoff mix of daily and
+#   monthly-printing names -- is still open (#751 finding 3).
+# Tradeable-era truncation (#751 item 1, decided 2026-08-24): CMR now drops
+#   every observation before the earliest TRADEABLE (non-FRED/IMF) date via
+#   cmr_tradeable_returns (below), replacing commodities_returns as the input
+#   to every signal/portfolio target in this file. This is an INVESTABILITY
+#   decision, not a frequency-repair one: the 13 pre-cutoff-only names are
+#   IMF Primary Commodity Price System indexes served via FRED
+#   (scripts/fetch_commodities.R) -- statistical price indexes, not
+#   securities, that cannot be bought or shorted. A backtest era in which
+#   every position is untradeable is not a track record, independent of any
+#   resampling. See .cmr_truncate_to_tradeable_era() below for the cutoff
+#   derivation (computed from the data every run, never a pasted date) and
+#   #751 for the full record.
+#   NOT done by this change: the 13 IMF/FRED series are NOT removed from the
+#   universe -- they keep printing monthly through the present (#751 finding
+#   3) and remain part of the post-cutoff cross-section. Whether they should
+#   be positions, conditioning data, or dropped post-cutoff is a SEPARATE,
+#   still-open decision on #751 -- this truncation does not resolve it, and
+#   in particular does NOT by itself make a 10-long/10-short (20-slot)
+#   portfolio constructible from tradeable names alone until the tradeable
+#   universe reaches 20: measured against the live store, only 6 tradeable
+#   (non-FRED/IMF) series exist as of mid-2000, and the count does not reach
+#   20 until 2006. Every month before then still fills some slots with
+#   IMF/FRED names even after this truncation.
 
 plan_commodities_mean_reversion <- function() {
   list(
 
+    # ── Tradeable universe (#751 item 1): truncate to the investable era ──
+    # commodities_returns (from plan_commodities_momentum.R) is NOT modified
+    # -- that target is shared with commodity momentum, which is out of
+    # scope for this decision. CMR gets its own truncated copy here. See the
+    # file header above and .cmr_truncate_to_tradeable_era()'s roxygen for
+    # the full rationale; this target does date filtering ONLY -- it does
+    # not remove any series from the universe.
+
+    targets::tar_target(cmr_tradeable_returns, {
+      .cmr_truncate_to_tradeable_era(commodities_returns)
+    }),
+
+
     # ── Signals: three lookback windows ──────────────────────────────────
-    # Re-uses commodities_returns from plan_commodities_momentum.R.
+    # Built on cmr_tradeable_returns (#751 item 1), not the raw
+    # commodities_returns -- see the target above.
     # Each signal: mr_signal = -(cumulative return over prior L months).
     # Higher signal -> bigger recent loser -> long candidate.
 
     targets::tar_target(cmr_signals_1m, {
-      hd_commodity_mr_signal(commodities_returns, lookback_months = 1L)
+      hd_commodity_mr_signal(cmr_tradeable_returns, lookback_months = 1L)
     }),
 
     targets::tar_target(cmr_signals_3m, {
-      hd_commodity_mr_signal(commodities_returns, lookback_months = 3L)
+      hd_commodity_mr_signal(cmr_tradeable_returns, lookback_months = 3L)
     }),
 
     targets::tar_target(cmr_signals_6m, {
-      hd_commodity_mr_signal(commodities_returns, lookback_months = 6L)
+      hd_commodity_mr_signal(cmr_tradeable_returns, lookback_months = 6L)
     }),
 
 
@@ -65,11 +105,14 @@ plan_commodities_mean_reversion <- function() {
     # t+1 execution: signal at t -> trade executes at t+1 closing prices.
     # 10 long + 10 short, equal weight within each leg.
     # 0.2% one-way transaction cost.
+    # returns_tbl is cmr_tradeable_returns (#751 item 1), matching the
+    # signal targets above -- both legs of the t -> t+1 join must be drawn
+    # from the same truncated universe.
 
     targets::tar_target(cmr_portfolio_1m, {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_1m,
-        returns_tbl = commodities_returns,
+        returns_tbl = cmr_tradeable_returns,
         n_long      = 10L,
         n_short     = 10L,
         cost_bps    = 20
@@ -79,7 +122,7 @@ plan_commodities_mean_reversion <- function() {
     targets::tar_target(cmr_portfolio_3m, {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_3m,
-        returns_tbl = commodities_returns,
+        returns_tbl = cmr_tradeable_returns,
         n_long      = 10L,
         n_short     = 10L,
         cost_bps    = 20
@@ -89,7 +132,7 @@ plan_commodities_mean_reversion <- function() {
     targets::tar_target(cmr_portfolio_6m, {
       hd_commodity_mr_portfolio(
         signal_tbl  = cmr_signals_6m,
-        returns_tbl = commodities_returns,
+        returns_tbl = cmr_tradeable_returns,
         n_long      = 10L,
         n_short     = 10L,
         cost_bps    = 20
@@ -223,6 +266,98 @@ plan_commodities_mean_reversion <- function() {
 
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Not exported; called only within this plan's targets.
+
+#' Derive the CMR tradeable-era cutoff date (#751 item 1)
+#'
+#' The tradeable era begins at the EARLIEST date any tradeable (non-FRED/IMF,
+#' i.e. \code{source != "fred_imf"}) observation exists in the supplied
+#' returns tibble. Computed from the live data on every call -- never a
+#' pasted literal date -- per \code{.claude/rules/fail-loud-not-null.md}'s
+#' hand-entered-constant prohibition: the natural definition of "the
+#' tradeable era begins" is exactly this quantity, so it is derived rather
+#' than typed in, and the cutoff moves automatically if the fetch history
+#' changes.
+#'
+#' Series are classified programmatically by their \code{source} tag, not by
+#' a hand-typed list of tickers. \code{scripts/fetch_commodities.R} stamps
+#' every row \code{source = "fred_imf"} (the 13 IMF Primary Commodity Price
+#' System indexes) or \code{source = "yahoo"} (the tradeable futures/ETF
+#' series) at fetch time, and \code{calculate_commodity_returns()}
+#' (R/commodities_momentum.R) passes that column through unchanged -- it is
+#' never selected away. A hand-typed vector of the 13 IMF tickers would drift
+#' the moment the fetch universe changes; reading \code{source} does not.
+#'
+#' @param returns_tbl Tibble with columns \code{date} and \code{source}
+#'   (produced by \code{calculate_commodity_returns()} from
+#'   \code{commodities_raw}).
+#' @return A single \code{Date}: the earliest date with a tradeable
+#'   (non-FRED/IMF) observation.
+#' @noRd
+.cmr_tradeable_cutoff_date <- function(returns_tbl) {
+  if (!"source" %in% names(returns_tbl)) {
+    cli::cli_abort(c(
+      "x" = "{.arg returns_tbl} has no {.field source} column.",
+      "i" = paste0(
+        "Cannot distinguish tradeable (Yahoo futures/ETF) series from ",
+        "untradeable (FRED/IMF index) series without it."
+      ),
+      "i" = paste0(
+        "See #751 item 1 and scripts/fetch_commodities.R for the ",
+        "source-tagging contract that calculate_commodity_returns() relies on."
+      )
+    ))
+  }
+  tradeable_dates <- returns_tbl$date[returns_tbl$source != "fred_imf"]
+  if (length(tradeable_dates) == 0L) {
+    cli::cli_abort(c(
+      "x" = "No tradeable (non-FRED/IMF) commodity observations found in {.arg returns_tbl}.",
+      "i" = "Cannot derive the CMR tradeable-era cutoff -- see #751 item 1."
+    ))
+  }
+  min(tradeable_dates)
+}
+
+#' Truncate a commodities returns tibble to the tradeable era (#751 item 1)
+#'
+#' Decision (#751, 2026-08-24): exclude the pre-2000 era from CMR on
+#' INVESTABILITY grounds. The pre-cutoff-only names are IMF Primary
+#' Commodity Price System indexes served via FRED
+#' (\code{scripts/fetch_commodities.R}) -- statistical price indexes, not
+#' securities: they cannot be bought and cannot be shorted. A backtest era
+#' in which every position is untradeable is not a track record, and no
+#' amount of resampling changes that. This is explicitly the
+#' INVESTABILITY argument, not a frequency-merge-repair argument -- the
+#' mixed-frequency problem (#738) is separate and is NOT resolved by this
+#' truncation, because the 13 IMF/FRED series keep printing monthly through
+#' the present and remain part of the post-cutoff universe (#751 finding 3).
+#'
+#' This function ONLY truncates dates. It does NOT remove the FRED/IMF
+#' series from the universe -- they remain present (and rankable) after the
+#' cutoff. Whether they should be positions, conditioning data, or dropped
+#' post-cutoff is a SEPARATE, still-open decision on #751 and is not made
+#' here.
+#'
+#' @param returns_tbl Tibble with columns \code{date}, \code{source} (plus
+#'   whatever else \code{calculate_commodity_returns()} produces).
+#' @return \code{returns_tbl} filtered to \code{date >= cutoff}, where
+#'   \code{cutoff} is derived by \code{\link{.cmr_tradeable_cutoff_date}}.
+#' @noRd
+.cmr_truncate_to_tradeable_era <- function(returns_tbl) {
+  cutoff  <- .cmr_tradeable_cutoff_date(returns_tbl)
+  dropped <- sum(returns_tbl$date < cutoff)
+
+  cli::cli_inform(c(
+    "v" = paste0(
+      "CMR (#751 item 1): truncated to the tradeable era, {format(cutoff)} onward."
+    ),
+    "i" = paste0(
+      "Dropped {dropped} pre-cutoff observation{?s} (untradeable IMF/FRED-only era). ",
+      "FRED/IMF series that continue printing after the cutoff are NOT removed."
+    )
+  ))
+
+  returns_tbl |> dplyr::filter(.data$date >= cutoff)
+}
 
 #' Carry `daily_rf` forward across short non-trading gaps CMR's universe needs (#724)
 #'
