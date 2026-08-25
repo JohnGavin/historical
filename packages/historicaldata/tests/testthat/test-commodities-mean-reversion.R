@@ -362,3 +362,125 @@ test_that("hd_commodity_mr_portfolio: input validation — invalid frac (#751 it
     class = "rlang_error"
   )
 })
+
+
+# ── hd_commodity_mr_dedupe_universe (#751 item B) ──────────────────────────
+
+test_that(".HD_CMR_EXPOSURE_MAP: no underlying_exposure has more than one kept instrument", {
+  # Pure data invariant on the map itself -- the same check the function
+  # runs at every call, verified directly here so a hand-edit that breaks it
+  # is caught by the test suite even before hd_commodity_mr_dedupe_universe()
+  # is ever invoked with live data.
+  over_kept <- .HD_CMR_EXPOSURE_MAP |>
+    dplyr::filter(.data$keep) |>
+    dplyr::count(.data$underlying_exposure, name = "n_kept") |>
+    dplyr::filter(.data$n_kept > 1L)
+  expect_equal(nrow(over_kept), 0L)
+})
+
+
+test_that(".HD_CMR_EXPOSURE_MAP: every series_id appears exactly once", {
+  dupes <- .HD_CMR_EXPOSURE_MAP$series_id[duplicated(.HD_CMR_EXPOSURE_MAP$series_id)]
+  expect_equal(dupes, character(0))
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: keeps the futures contract and drops the FRED/ETF twins for a known duplicated exposure (WTI)", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = c("POILWTIUSDM", "CL=F", "USO"),
+    monthly_ret = c(0.01, 0.02, 0.03)
+  )
+  out <- hd_commodity_mr_dedupe_universe(tbl)
+  expect_equal(out$series_id, "CL=F")
+  expect_equal(out$monthly_ret, 0.02)
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: ETF baskets are always dropped, even alone", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = c("DBA", "DBB", "DBC", "PDBC"),
+    monthly_ret = c(0.01, 0.02, 0.03, 0.04)
+  )
+  out <- hd_commodity_mr_dedupe_universe(tbl)
+  expect_equal(nrow(out), 0L)
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: an exposure with no tradeable twin is kept as its sole IMF/FRED representative", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = c("PNGASEUUSDM", "PCOALAUUSDM", "PNICKUSDM"),
+    monthly_ret = c(0.01, 0.02, 0.03)
+  )
+  out <- hd_commodity_mr_dedupe_universe(tbl)
+  expect_setequal(out$series_id, c("PNGASEUUSDM", "PCOALAUUSDM", "PNICKUSDM"))
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: other columns pass through unchanged for kept rows", {
+  tbl <- tibble::tibble(
+    date        = as.Date(c("2020-01-31", "2020-02-29")),
+    series_id   = "CL=F",
+    value       = c(50, 52),
+    source      = "yahoo",
+    monthly_ret = c(0.01, 0.04)
+  )
+  out <- hd_commodity_mr_dedupe_universe(tbl)
+  expect_equal(nrow(out), 2L)
+  expect_equal(out$value, c(50, 52))
+  expect_equal(out$source, c("yahoo", "yahoo"))
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: reduces the exact live-store 37-series universe to the expected 20 kept series (#751 item B regression)", {
+  # Hardcoded against the live commodities_returns store measured 2026-08-25
+  # (37 distinct series_id values; see the #751 item B PR for the exact
+  # count). This is a golden-value regression test, not a live-data read --
+  # it locks the CURRENT behaviour of the map, so an accidental edit that
+  # changes which instrument is kept for an exposure is caught here.
+  live_series_ids <- c(
+    "BZ=F", "CC=F", "CL=F", "CT=F", "DBA", "DBB", "DBC", "GC=F", "GLD",
+    "HE=F", "HG=F", "KC=F", "LE=F", "NG=F", "PA=F", "PCOALAUUSDM",
+    "PCOCOUSDM", "PCOFFOTMUSDM", "PCOPPUSDM", "PCOTTINDUSDM", "PDBC",
+    "PL=F", "PNGASEUUSDM", "PNGASUSUSDM", "PNICKUSDM", "POILBREUSDM",
+    "POILWTIUSDM", "PSOYBUSDM", "PSUGAISAUSDM", "PWHEAMTUSDM", "SB=F",
+    "SI=F", "SLV", "USO", "ZC=F", "ZS=F", "ZW=F"
+  )
+  expect_equal(length(live_series_ids), 37L)
+
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = live_series_ids,
+    monthly_ret = 0.01
+  )
+  out <- hd_commodity_mr_dedupe_universe(tbl)
+
+  expected_kept <- c(
+    "BZ=F", "CL=F", "PNGASEUUSDM", "NG=F", "PCOALAUUSDM", "GC=F", "SI=F",
+    "HG=F", "PNICKUSDM", "PL=F", "PA=F", "ZW=F", "ZC=F", "ZS=F", "KC=F",
+    "SB=F", "CC=F", "CT=F", "LE=F", "HE=F"
+  )
+  expect_equal(nrow(out), 20L)
+  expect_setequal(out$series_id, expected_kept)
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: unmapped series_id aborts loudly, naming the offending id (fail-loud-not-null)", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = c("CL=F", "NOT_A_REAL_TICKER"),
+    monthly_ret = c(0.01, 0.02)
+  )
+  expect_snapshot(error = TRUE, hd_commodity_mr_dedupe_universe(tbl))
+})
+
+
+test_that("hd_commodity_mr_dedupe_universe: input validation — not a data frame / missing series_id", {
+  expect_snapshot(error = TRUE, hd_commodity_mr_dedupe_universe(list(a = 1)))
+  expect_snapshot(
+    error = TRUE,
+    hd_commodity_mr_dedupe_universe(tibble::tibble(date = Sys.Date()))
+  )
+})

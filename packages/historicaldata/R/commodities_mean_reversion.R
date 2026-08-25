@@ -318,6 +318,201 @@ hd_commodity_mr_signal <- function(returns_tbl, lookback_months = 3L) {
 #' @noRd
 .HD_CMR_MIN_LEG_NAMES <- 2L
 
+#' Manual series_id -> underlying-exposure map for CMR universe deduplication
+#' (#751 item B)
+#'
+#' \strong{# MANUAL: no source.} A ticker-to-underlying-exposure mapping
+#' cannot be derived from price data -- the fact that \code{USO} and
+#' \code{CL=F} both track WTI crude is a fact about the world, not a
+#' computable property of either series. No machine-readable route exists in
+#' this project: \code{scripts/fetch_commodities.R} stamps every row with
+#' only \code{series_id} and \code{source} (\code{"fred_imf"} or
+#' \code{"yahoo"}); neither carries a category/underlying field. Per
+#' \code{.claude/rules/fail-loud-not-null.md}'s reproducible-ingestion
+#' exception, this table is therefore hand-entered, carries this marker, and
+#' is the SINGLE place the mapping is declared -- every consumer reads it
+#' rather than re-deriving or duplicating it.
+#'
+#' \strong{The defect this corrects (#751 item B):} the CMR universe holds
+#' multiple representations of the same underlying commodity (WTI crude
+#' three times: \code{POILWTIUSDM} IMF index, \code{CL=F} futures,
+#' \code{USO} ETF; gold and silver each twice; four ETF baskets --
+#' \code{DBA}, \code{DBB}, \code{DBC}, \code{PDBC} -- that are linear
+#' combinations of names already held individually). A cross-sectional
+#' mean-reversion sort ranks the ranked universe against itself on any date
+#' both twins print, manufacturing a spurious long/short pair out of one
+#' exposure rather than measuring one commodity against another.
+#'
+#' \strong{Instrument-selection principle:} where a futures contract exists
+#' for an exposure, it is preferred over an ETF/ETP twin and over an
+#' IMF/FRED price index -- the literature standard for commodity
+#' cross-sections (Miffre & Rallis 2007; Asness, Moskowitz & Pedersen 2013
+#' both rank futures, not ETFs or price indexes). \code{keep = TRUE} marks
+#' exactly one row per \code{underlying_exposure}. Three categories of
+#' \code{keep = FALSE} row exist: (1) the ETF/index twin of a futures
+#' contract already held (e.g. \code{GLD} when \code{GC=F} is held); (2) an
+#' ETF basket whose constituents are already held individually (\code{DBA},
+#' \code{DBB}, \code{DBC}, \code{PDBC} -- each given its own
+#' \code{underlying_exposure} since they are not interchangeable with each
+#' other, but none is ever kept); (3) none currently -- every
+#' \code{underlying_exposure} with no tradeable twin (EU natural gas,
+#' Australian coal, nickel) is KEPT as its sole IMF/FRED representative,
+#' per #751's explicit decision that those series are not removed from the
+#' universe, only deduplicated against a twin when one exists.
+#'
+#' This table lists every \code{series_id} that has EVER appeared in
+#' \code{scripts/fetch_commodities.R}'s FRED/Yahoo fetch lists, not only
+#' those in the current live store, so a data refresh that momentarily loses
+#' and regains a series does not silently drop out of the map. Validated
+#' against the live store on 2026-08-25 (37 distinct \code{series_id}
+#' values; see #751 item B PR for the exact counts).
+#'
+#' @noRd
+.HD_CMR_EXPOSURE_MAP <- tibble::tribble(
+  ~series_id,      ~underlying_exposure,   ~instrument_type,   ~keep,
+  # -- Energy --
+  "POILBREUSDM",   "brent_crude",          "fred_imf_index",   FALSE,
+  "BZ=F",          "brent_crude",          "futures",          TRUE,
+  "POILWTIUSDM",   "wti_crude",            "fred_imf_index",   FALSE,
+  "CL=F",          "wti_crude",            "futures",          TRUE,
+  "USO",           "wti_crude",            "etf",              FALSE,
+  "PNGASEUUSDM",   "natgas_eu",            "fred_imf_index",   TRUE,  # no tradeable twin
+  "PNGASUSUSDM",   "natgas_us",            "fred_imf_index",   FALSE,
+  "NG=F",          "natgas_us",            "futures",          TRUE,
+  "PCOALAUUSDM",   "coal_au",              "fred_imf_index",   TRUE,  # no tradeable twin
+  # -- Metals --
+  "PGOLDUSDM",     "gold",                 "fred_imf_index",   FALSE,
+  "GC=F",          "gold",                 "futures",          TRUE,
+  "GLD",           "gold",                 "etf",              FALSE,
+  "PSILVERUSDM",   "silver",               "fred_imf_index",   FALSE,
+  "SI=F",          "silver",               "futures",          TRUE,
+  "SLV",           "silver",               "etf",              FALSE,
+  "PCOPPUSDM",     "copper",               "fred_imf_index",   FALSE,
+  "HG=F",          "copper",               "futures",          TRUE,
+  "PAABORUSDM",    "aluminium",            "fred_imf_index",   TRUE,  # no tradeable twin
+  "PNICKUSDM",     "nickel",               "fred_imf_index",   TRUE,  # no tradeable twin
+  "PIRONUSDM",     "iron_ore",             "fred_imf_index",   TRUE,  # no tradeable twin
+  "PL=F",          "platinum",             "futures",          TRUE,  # no FRED twin fetched
+  "PA=F",          "palladium",            "futures",          TRUE,  # no FRED twin fetched
+  # -- Grains --
+  "PWHEAMTUSDM",   "wheat",                "fred_imf_index",   FALSE,
+  "ZW=F",          "wheat",                "futures",          TRUE,
+  "PCORNGLUSDM",   "corn",                 "fred_imf_index",   FALSE,
+  "ZC=F",          "corn",                 "futures",          TRUE,
+  "PSOYBUSDM",     "soybeans",             "fred_imf_index",   FALSE,
+  "ZS=F",          "soybeans",             "futures",          TRUE,
+  "PRICEUSDM",     "rice",                 "fred_imf_index",   TRUE,  # no tradeable twin
+  # -- Softs --
+  "PCOFFOTMUSDM",  "coffee",               "fred_imf_index",   FALSE,
+  "KC=F",          "coffee",               "futures",          TRUE,
+  "PSUGAISAUSDM",  "sugar",                "fred_imf_index",   FALSE,
+  "SB=F",          "sugar",                "futures",          TRUE,
+  "PCOCOUSDM",     "cocoa",                "fred_imf_index",   FALSE,
+  "CC=F",          "cocoa",                "futures",          TRUE,
+  "PCOTTINDUSDM",  "cotton",               "fred_imf_index",   FALSE,
+  "CT=F",          "cotton",               "futures",          TRUE,
+  # -- Livestock --
+  "PBEEFINDUSDM",  "beef",                 "fred_imf_index",   TRUE,  # no tradeable twin
+  "PPABORUSDM",    "pork",                 "fred_imf_index",   TRUE,  # no tradeable twin
+  "LE=F",          "live_cattle",          "futures",          TRUE,  # no FRED twin fetched
+  "HE=F",          "lean_hogs",            "futures",          TRUE,  # no FRED twin fetched
+  # -- Baskets: constituents already held individually above; never kept --
+  "DBA",           "basket_agriculture",   "etf_basket",       FALSE,
+  "DBB",           "basket_base_metals",   "etf_basket",       FALSE,
+  "DBC",           "basket_broad_dbc",     "etf_basket",       FALSE,
+  "PDBC",          "basket_broad_pdbc",    "etf_basket",       FALSE
+)
+
+#' Deduplicate the CMR ranked universe to one instrument per underlying
+#' exposure (#751 item B)
+#'
+#' Filters \code{returns_tbl} down to the \code{series_id} values marked
+#' \code{keep = TRUE} in \code{\link{.HD_CMR_EXPOSURE_MAP}}. This removes
+#' ETF/index twins of a held futures contract and ETF baskets whose
+#' constituents are already held individually, so a cross-sectional
+#' mean-reversion rank never compares one underlying commodity's exposure
+#' against itself under two different tickers.
+#'
+#' Fails loudly (fail-loud-not-null.md) rather than silently on any
+#' \code{series_id} present in \code{returns_tbl} but absent from the map --
+#' an unmapped ticker must be classified before it can be ranked, never fall
+#' through as though it were its own independent exposure.
+#'
+#' @param returns_tbl Tibble with a \code{series_id} column (any of
+#'   \code{commodities_returns}, \code{cmr_tradeable_returns}, or a
+#'   compatible universe).
+#'
+#' @return \code{returns_tbl} filtered to the kept \code{series_id} values.
+#'   All other columns pass through unchanged.
+#'
+#' @family commodities_mr
+#' @export
+hd_commodity_mr_dedupe_universe <- function(returns_tbl) {
+  if (!is.data.frame(returns_tbl)) {
+    cli::cli_abort(c("x" = "{.arg returns_tbl} must be a data frame, not {.cls {class(returns_tbl)}}."))
+  }
+  if (!"series_id" %in% names(returns_tbl)) {
+    cli::cli_abort(c(
+      "x" = "{.arg returns_tbl} has no {.field series_id} column.",
+      "i" = "Cannot deduplicate the CMR universe without it -- see #751 item B."
+    ))
+  }
+
+  # Invariant on the map itself: exactly zero or one kept instrument per
+  # underlying exposure. Checked every call (36 rows, negligible cost) so a
+  # future hand-edit that accidentally keeps two instruments for one
+  # exposure aborts immediately rather than silently re-introducing the
+  # defect this function exists to fix.
+  over_kept <- .HD_CMR_EXPOSURE_MAP |>
+    dplyr::filter(.data$keep) |>
+    dplyr::count(.data$underlying_exposure, name = "n_kept") |>
+    dplyr::filter(.data$n_kept > 1L)
+  if (nrow(over_kept) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        ".HD_CMR_EXPOSURE_MAP keeps more than one instrument for ",
+        "{nrow(over_kept)} underlying exposure{?s}."
+      ),
+      "i" = "Exposure{?s}: {.val {over_kept$underlying_exposure}}.",
+      "i" = "Exactly one row per underlying_exposure may have keep = TRUE."
+    ))
+  }
+
+  present_ids <- unique(returns_tbl$series_id)
+  mapped_ids  <- .HD_CMR_EXPOSURE_MAP$series_id
+  unmapped    <- setdiff(present_ids, mapped_ids)
+  if (length(unmapped) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "{length(unmapped)} series_id{?s} in {.arg returns_tbl} {?is/are} ",
+        "not in the CMR exposure map."
+      ),
+      "i" = "Unmapped: {.val {unmapped}}.",
+      "i" = paste0(
+        "Add {.val {unmapped}} to .HD_CMR_EXPOSURE_MAP ",
+        "(packages/historicaldata/R/commodities_mean_reversion.R) with its ",
+        "underlying_exposure and keep decision before it can be ranked -- ",
+        "see #751 item B."
+      )
+    ))
+  }
+
+  keep_ids <- .HD_CMR_EXPOSURE_MAP$series_id[.HD_CMR_EXPOSURE_MAP$keep]
+  dropped  <- intersect(present_ids, setdiff(mapped_ids, keep_ids))
+
+  cli::cli_inform(c(
+    "v" = paste0(
+      "CMR (#751 item B): deduplicated the universe to one instrument per ",
+      "underlying exposure -- {length(intersect(present_ids, keep_ids))} of ",
+      "{length(present_ids)} series kept."
+    ),
+    "i" = "Dropped ({length(dropped)}): {.val {sort(dropped)}}."
+  ))
+
+  returns_tbl |> dplyr::filter(.data$series_id %in% keep_ids)
+}
+
+
 #' Commodity Mean Reversion Portfolio
 #'
 #' Convert a mean-reversion signal tibble into monthly long/short portfolio

@@ -75,6 +75,7 @@ trusted silently.
 }
 \seealso{
 Other commodities_mr: 
+\code{\link{hd_commodity_mr_dedupe_universe}()},
 \code{\link{hd_commodity_mr_signal}()}
 }
 \concept{commodities_mr}
