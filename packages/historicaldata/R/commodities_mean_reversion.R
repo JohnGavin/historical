@@ -14,50 +14,149 @@
 #   is daily-dominated (ann_factor=252), not monthly (ann_factor=12) despite
 #   this file's "monthly"/lookback_months naming throughout -- see
 #   R/plan_commodities_mean_reversion.R's file header for the source
-#   evidence. `lookback_months` here counts unique dates in the merged
-#   universe (one row per date), not calendar months; cosmetic-only fix,
-#   left un-renamed per #720's note (shared with commodities_momentum.R).
+#   evidence. The `monthly_ret`/`lookback_months` naming is left un-renamed
+#   per #720's note (shared with commodities_momentum.R); `monthly_ret` holds
+#   a per-observation return whose actual period is daily for 96% of the
+#   merged universe's rows (Yahoo futures/ETF series) and monthly for the
+#   rest (FRED/IMF indexes) -- the name is a historical label, not a
+#   guarantee about the row's cadence.
+# #751: `lookback_months` was PREVIOUSLY a row-count window (the `lb`-th
+#   previous ROW, regardless of its date) -- correctly "cosmetic-only" per
+#   #720 only for a single-frequency series, but WRONG for this mixed-cadence
+#   universe: `lookback_months = 3` gave a FRED monthly series a genuine
+#   3-month window and a Yahoo daily series a 3-*trading-day* window, and
+#   both were then ranked in the same cross-sectional sort. A 3-month return
+#   has ~sqrt(21) times the dispersion of a 3-day return, so the monthly
+#   names occupied the extreme ranks near-mechanically whenever they printed.
+#   Verified still live through 2026-03-01 (13 IMF series still print
+#   monthly), not just a pre-2000 artifact. hd_commodity_mr_signal() now
+#   uses a CALENDAR window (elapsed days), so `lookback_months = 3` means the
+#   same economic horizon for every series regardless of how often it prints
+#   -- see that function's roxygen for the window/floor design.
 # Universe re-uses commodities_returns from plan_commodities_momentum.R.
 
 
+#' Average Gregorian calendar month length, in days (365.2425 / 12)
+#'
+#' Used to convert \code{lookback_months} into a fixed number of CALENDAR
+#' DAYS for \code{\link{hd_commodity_mr_signal}}'s sliding window, rather
+#' than using \code{lubridate::months()} period arithmetic directly.
+#' \code{months()} subtraction produces \code{NA} whenever the anchor date
+#' has no equivalent day N months prior (e.g. day 31 minus 3 months, when
+#' the target month has fewer than 31 days) -- see
+#' \code{strategy_mom_prepeak.R}'s \code{lubridate::`%m-%`} workaround for
+#' the same underlying gotcha. A fixed-day window sidesteps this entirely:
+#' \code{date - lubridate::days(n)} is always defined. 30.436875 (=
+#' 365.2425 / 12) is the standard Gregorian mean month length; using it
+#' rather than a round number (30) keeps a 12-month window close to 365
+#' days rather than drifting short by ~4 days a year.
+#'
+#' @noRd
+.HD_MR_MEAN_DAYS_PER_MONTH <- 365.2425 / 12
+
+#' Minimum window-fill fraction required for a calendar window to be treated
+#' as complete
+#'
+#' A calendar window can span the right number of days while containing
+#' almost no observations, if it happens to cross a data gap (a stale/thin
+#' patch of a series, or -- for this mixed-cadence universe -- a series that
+#' is far sparser than a typical window expects). \code{slider}'s own
+#' \code{.complete = TRUE} only checks that the window's start boundary
+#' falls inside the series' observed date RANGE; it does not check how many
+#' observations actually fall inside the window.
+#'
+#' This fraction is applied against \code{window_days / median_gap_days} --
+#' the observation count a window of this length would contain if the
+#' series kept up its own typical (median) spacing. 0.5 tolerates normal
+#' weekend/holiday sparsity in a daily series and the +/-1 rounding a
+#' ~30.44-day-average month produces against real (non-uniform) monthly
+#' print dates, while still rejecting a window degraded by an outage/gap
+#' materially larger than the series' own norm. It is deliberately not
+#' closer to 1: a strict 90-100% fill would reject completely ordinary daily
+#' windows that happen to contain an extra holiday cluster.
+#'
+#' @noRd
+.HD_MR_MIN_OBS_FRACTION <- 0.5
+
+#' Absolute floor on observations inside a calendar window, regardless of
+#' cadence
+#'
+#' A "cumulative return over a lookback window" is a product over multiple
+#' observations; a window containing only the observation at \code{t} itself
+#' is not a lookback return at all, it is that single observation's own
+#' return relabelled as a longer-horizon one. 2 is the smallest count for
+#' which the product spans more than one observation. This floor matters
+#' when a series' own cadence cannot be estimated (fewer than 2 dated
+#' observations) or is so sparse that \code{.HD_MR_MIN_OBS_FRACTION} of the
+#' cadence-implied count would round below it.
+#'
+#' @noRd
+.HD_MR_MIN_OBS_FLOOR <- 2L
+
 #' Commodity Mean Reversion Signal
 #'
-#' Compute a monthly mean-reversion signal for a commodity universe.
+#' Compute a mean-reversion signal for a commodity universe over a fixed
+#' CALENDAR window (elapsed days), not a fixed number of rows.
 #' The signal is the *negative* of the lookback-period return: commodities
 #' that have fallen the most receive the highest (most positive) signal,
 #' while those that have risen the most receive the lowest (most negative)
 #' signal.
 #'
-#' Look-ahead safety: the signal at month \code{t} is constructed from
-#' cumulative returns over months \code{(t - lookback_months)} through
-#' \code{(t - 1)}.  The one-period lag is enforced via
-#' \code{dplyr::lag(cumret)} before the negation, so no return at or after
-#' month \code{t} ever enters signal formation.
+#' Look-ahead safety: the signal at date \code{t} is constructed from
+#' cumulative returns over the \code{lookback_months} calendar months
+#' immediately preceding \code{t}, ending at \code{t - 1}'s observation. The
+#' one-period lag is enforced via \code{dplyr::lag(cumret)} before the
+#' negation, so no return at or after date \code{t} ever enters signal
+#' formation.
 #'
-#' @param returns_tbl Tibble with columns \code{date} (Date, month-end),
-#'   \code{series_id} (character), and \code{monthly_ret} (numeric monthly
-#'   return).  Produced by \code{calculate_commodity_returns()}.
-#' @param lookback_months Integer. Number of months used to compute the
-#'   mean-reversion signal (default 3).  Typical values: 1, 3, 6.
+#' @param returns_tbl Tibble with columns \code{date} (Date), \code{series_id}
+#'   (character), and \code{monthly_ret} (numeric per-observation return;
+#'   despite the name, this is a DAILY return for series that print daily --
+#'   see the file header note). Produced by \code{calculate_commodity_returns()}.
+#' @param lookback_months Integer. Number of CALENDAR months the
+#'   mean-reversion window spans (default 3), applied uniformly regardless
+#'   of how often the underlying series is actually observed. Typical
+#'   values: 1, 3, 6.
 #'
 #' @return Tibble with columns:
 #'   \describe{
-#'     \item{date}{Month-end date.}
+#'     \item{date}{Observation date.}
 #'     \item{series_id}{Commodity identifier.}
 #'     \item{mr_signal}{Mean-reversion signal = negative of cumulative
-#'       return over the prior \code{lookback_months} months. Higher values
-#'       (bigger recent losers) rank first for the long leg.}
+#'       return over the prior \code{lookback_months} calendar months.
+#'       Higher values (bigger recent losers) rank first for the long leg.}
 #'   }
-#'   Rows with \code{NA} signals (insufficient history) are dropped.
+#'   Rows with \code{NA} signals (insufficient history, or too few actual
+#'   observations inside an otherwise-complete window) are dropped.
 #'
 #' @details
-#' The cumulative return over a rolling window is computed as
-#' \eqn{\prod_{i=1}^{L}(1 + r_{t-i}) - 1}, where \eqn{L} is
-#' \code{lookback_months}.  This product is formed using
-#' \code{slider::slide_dbl} with \code{.complete = TRUE} so partial windows
-#' produce \code{NA}.  The result is then lagged by one period to guarantee
-#' look-ahead safety, and the signal is the negation of the lagged cumulative
-#' return.
+#' \strong{Window (#751):} the cumulative return is computed over a window
+#' spanning \code{round(lookback_months * 365.2425 / 12)} CALENDAR DAYS
+#' ending at \code{t} (inclusive), via \code{slider::slide_index_dbl()} keyed
+#' on \code{date} rather than row position. This means
+#' \code{lookback_months = 3} spans the same ~91-day economic horizon for
+#' every series in the universe, whether it is observed daily (~63
+#' observations in that window) or monthly (~3 observations). Previously the
+#' window was \code{lookback_months} PREVIOUS ROWS regardless of their
+#' dates, which silently gave a daily series a 3-*trading-day* window under
+#' the same argument that gave a monthly series a genuine 3-month window
+#' (#751) -- see the file header for the full defect history.
+#'
+#' \strong{Completeness (fail-loud-not-null.md):} a window counts as complete
+#' only if BOTH (a) its start boundary falls within the series' own observed
+#' date range (\code{slider}'s \code{.complete = TRUE}), AND (b) it actually
+#' contains at least \code{max(.HD_MR_MIN_OBS_FLOOR,
+#' ceiling(.HD_MR_MIN_OBS_FRACTION * expected_obs))} observations, where
+#' \code{expected_obs} is \code{window_days / median_gap_days} for that
+#' series' own median inter-observation gap. Condition (a) alone would
+#' accept a window that nominally spans the right number of days but
+#' crosses a data outage and contains almost no real observations -- see
+#' \code{.HD_MR_MIN_OBS_FRACTION}'s roxygen for why a per-series relative
+#' floor is used rather than one fixed count (a fixed count could not serve
+#' both a ~63-observation daily window and a ~3-observation monthly one).
+#' Windows failing either condition produce \code{NA}, which propagates
+#' through the one-period lag and causes that row to be dropped from the
+#' returned tibble, exactly as an insufficient-history \code{NA} always has.
 #'
 #' @family commodities_mr
 #' @export
@@ -82,19 +181,64 @@ hd_commodity_mr_signal <- function(returns_tbl, lookback_months = 3L) {
   }
   lookback_months <- as.integer(lookback_months)
 
+  # #751: fixed CALENDAR days, not a row count and not lubridate::months()
+  # period arithmetic -- see .HD_MR_MEAN_DAYS_PER_MONTH's roxygen for why.
+  window_days <- .HD_MR_MEAN_DAYS_PER_MONTH * lookback_months
+
   returns_tbl |>
     dplyr::arrange(series_id, date) |>
     dplyr::group_by(series_id) |>
     dplyr::mutate(
-      # Cumulative return over the lookback window ending at t (inclusive of t).
-      # .complete = TRUE ensures NA for partial windows.
-      cumret_raw = slider::slide_dbl(
-        monthly_ret,
+      # This series' own typical observation cadence (median calendar-day
+      # gap between its consecutive dates). Mirrors the "median gap defines
+      # periodicity" logic in .assert_cmr_ann_factor()
+      # (R/plan_commodities_mean_reversion.R), applied per-series here
+      # rather than to the whole merged universe. NA when fewer than 2
+      # dated observations exist for this series.
+      .median_gap_days = {
+        d <- sort(unique(date))
+        if (length(d) < 2L) NA_real_ else stats::median(as.numeric(diff(d)))
+      },
+      # Observation count a `window_days`-wide window would hold if this
+      # series kept up its own median cadence. 0 (not NA) when the cadence
+      # is unknown/degenerate, so the fraction-of-expected floor collapses
+      # to .HD_MR_MIN_OBS_FLOOR below rather than propagating NA into the
+      # comparison.
+      .expected_obs = dplyr::if_else(
+        is.na(.median_gap_days) | .median_gap_days <= 0,
+        0,
+        window_days / .median_gap_days
+      ),
+      # Minimum observations required inside the window for it to count as
+      # complete -- see .HD_MR_MIN_OBS_FRACTION / .HD_MR_MIN_OBS_FLOOR.
+      .min_obs = pmax(
+        .HD_MR_MIN_OBS_FLOOR,
+        ceiling(.HD_MR_MIN_OBS_FRACTION * .expected_obs)
+      ),
+      # Cumulative return over the CALENDAR window ending at t (inclusive).
+      # Keyed on `date` (slide_index_dbl), not row position (slide_dbl) --
+      # this is the #751 fix. .complete = TRUE requires the window's start
+      # boundary to fall within this series' own observed date range.
+      cumret_raw = slider::slide_index_dbl(
+        monthly_ret, date,
         .f = function(r) prod(1 + r) - 1,
-        .before = lookback_months - 1L,
+        .before = lubridate::days(round(window_days)),
         .after  = 0L,
         .complete = TRUE
       ),
+      # How many observations actually fell inside that same window --
+      # .complete = TRUE alone cannot see a window that spans the right
+      # number of days but crosses a data gap and contains almost none.
+      .n_obs_window = slider::slide_index_dbl(
+        monthly_ret, date,
+        .f = function(r) as.double(length(r)),
+        .before = lubridate::days(round(window_days)),
+        .after  = 0L,
+        .complete = TRUE
+      ),
+      # Enforce the fill-fraction floor: too few actual observations ->
+      # treat the window as incomplete (NA), same as slider's own guard.
+      cumret_raw = dplyr::if_else(.n_obs_window < .min_obs, NA_real_, cumret_raw),
       # Lag by 1: cumret at position t becomes the lookback return through t-1.
       # Signal = negation so recent losers have high (positive) signal.
       mr_signal = -dplyr::lag(cumret_raw, n = 1L)
