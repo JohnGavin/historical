@@ -11,6 +11,57 @@ library(targets)
 
 tar_option_set(
   packages = c("dplyr", "duckplyr", "ggplot2", "tidyr", "scales", "DT", "rlang", "cli", "RcppRoll"),
+  # `imports` (#753): tell `targets` to treat every object in the
+  # historicaldata namespace as trackable, the same way it already tracks
+  # functions defined via the source() calls below. Do NOT add
+  # "historicaldata" to `packages` above -- that makes targets call
+  # library(historicaldata) in every target's subprocess, which fails
+  # because the package is only load_all()'d, never installed (see the
+  # comment on pkgload::load_all() just below). `imports` needs no such
+  # install: it inspects the namespace already attached by load_all() in
+  # THIS session, at pipeline-parse time, and hashes every function body it
+  # finds there.
+  #
+  # Empirically confirmed (scratch pipeline, 2026-08-25, mirroring #753's
+  # exact defect): with `imports = "historicaldata"` set, a target calling
+  # a package function by BARE name (e.g. `hd_commodity_mr_signal(...)`,
+  # the actual #752 call site) correctly rebuilds when that function's body
+  # changes. A target calling the SAME kind of function via an explicit
+  # `historicaldata::fn()` namespaced call does NOT -- `targets`' own
+  # documentation for `imports` states this limitation outright:
+  # "Namespaced calls ... are ignored because of limitations in
+  # codetools::findGlobals()". 22 files / ~135 lines in this repo's R/
+  # currently call `historicaldata::` this way (confirmed via grep), so
+  # this option closes the BARE-call share of #753's defect automatically,
+  # with zero per-target edits, but does NOT close the namespaced-call
+  # share on its own. See `pkg_source_files`/`pkg_source_digest` below and
+  # scripts/check_pkg_staleness.R for the mechanism that covers the rest.
+  #
+  # STEADY-STATE BUILD COST (#753 / PR #757 review): a first build against
+  # the REAL store after adding this option showed a mass reinvalidation
+  # (89+ targets dispatched against a normal ~50) -- expected, since every
+  # target `imports` newly tracks was, from `targets`' point of view,
+  # previously undeclared and is now seeing its first-ever dependency edge.
+  # The open question was whether a SECOND consecutive build (no source
+  # changes) returns to the pre-#753 baseline or keeps re-invalidating
+  # every time. OBSERVED (2026-08-25, throwaway store, NOT the real one --
+  # `pkgload::load_all()` of this SAME real packages/historicaldata
+  # directory, `imports = "historicaldata"`, 3 targets exercising a bare
+  # call, a namespaced call, and a plain-R target): build 1 completed all 3
+  # targets; builds 2 and 3, run back to back with zero source changes,
+  # BOTH reported "skipped pipeline ... 3 skipped" -- 0 targets rebuilt,
+  # internal tar_make() timing stable across all three runs (593ms / 547ms
+  # / 557ms). This confirms the mechanism: `imports` hashes are a pure
+  # function of the (unchanged) source text, so build-to-build comparison
+  # against the stored hash finds no difference and correctly skips.
+  # PREDICTED, not directly observed (this repo's worktree-isolation rule
+  # forbids building the real 778-target docs/_targets store from a
+  # worktree): applying this same mechanism to the real store predicts a
+  # SECOND real build returns to something close to the pre-#753 baseline
+  # (~30s, per the PR #757 review) -- the mass reinvalidation was a
+  # one-time consequence of `imports` newly attaching real dependency
+  # edges that did not previously exist, not a recurring per-build cost.
+  imports = "historicaldata",
   memory = "transient",
   garbage_collection = TRUE,
   error = "continue",  # Don't let one broken target block all others
@@ -235,6 +286,46 @@ c(plan_strategy_names(),
   plan_wf_correlation(),
   plan_structural_breaks(),
   plan_artefact_registry(),
+
+  # #753 mechanism (2): track packages/historicaldata/R source content as a
+  # normal `targets` dependency, using the file-hash cue `targets` already
+  # trusts for `format = "file"` targets -- NOT via pkgload::load_all(),
+  # which is exactly what the defect this issue is about slips past (see the
+  # tar_option_set(imports = ...) comment above for the bare-call half of
+  # the fix; this pair of targets is the digest half, and the ONLY reliable
+  # foundation for scripts/check_pkg_staleness.R's cross-run check, since
+  # calling tar_meta()/tar_progress() from WITHIN a target of the pipeline
+  # they belong to is unsupported -- confirmed empirically, see that
+  # script's header comment).
+  #
+  # `pkg_source_files` also includes DESCRIPTION and NAMESPACE: DESCRIPTION's
+  # Imports/Depends and Collate order affect what pkgload::load_all() puts
+  # in the namespace, and NAMESPACE's export list affects what
+  # `historicaldata::fn()` call sites can even resolve to (a function moved
+  # out of NAMESPACE without touching its own .R file would otherwise be
+  # invisible to this digest). No compiled code exists under
+  # packages/historicaldata (no src/), so nothing else load_all() reads is
+  # missing from this list.
+  targets::tar_target(
+    pkg_source_files,
+    sort(c(
+      list.files(
+        here::here("packages/historicaldata/R"),
+        pattern = "\\.R$", full.names = TRUE, recursive = TRUE
+      ),
+      here::here("packages/historicaldata/DESCRIPTION"),
+      here::here("packages/historicaldata/NAMESPACE")
+    )),
+    format = "file"
+  ),
+  targets::tar_target(
+    pkg_source_digest,
+    {
+      hashes <- tools::md5sum(pkg_source_files)
+      digest::digest(paste(names(hashes), unname(hashes), sep = "=", collapse = "|"))
+    }
+  ),
+
   plan_qa_gates(),
   # Phase B of #389: covariance targets + fixed cross-asset correlation plan
   plan_returns(),

@@ -1645,6 +1645,77 @@ check_leaderboard_deflated_sharpe_coverage <- function(leaderboard, exemptions =
 }
 
 
+#' Assert the package-source digest mechanism is actually tracking something
+#' (S22, #753)
+#'
+#' `pkg_source_files`/`pkg_source_digest` (docs/_targets.R) are the tracked
+#' foundation the #753 fix rests on: `pkg_source_files` is a
+#' \code{format = "file"} target, so `targets` invalidates it on real
+#' content changes under `packages/historicaldata/R` -- independent of
+#' `pkgload::load_all()`, which is exactly the mechanism the original defect
+#' slipped past. This gate does NOT (cannot -- see below) detect cross-run
+#' staleness in OTHER targets; it only guards against the digest mechanism
+#' itself going quietly vacuous, e.g. a future refactor renames or moves
+#' `packages/historicaldata/R` and `pkg_source_files` silently returns
+#' `character(0)` -- a digest of nothing is still "a digest", and every
+#' target that references it would keep passing without ever being told the
+#' floor moved.
+#'
+#' The REAL cross-run staleness check -- "did a known package-consuming
+#' target get skipped in a run where the package source actually changed" --
+#' cannot be expressed as a `targets` pipeline gate at all: `tar_meta()` and
+#' `tar_progress()` are BOTH documented (and confirmed empirically, 2026-08-25
+#' scratch pipeline) as unsupported when called on the store belonging to
+#' the pipeline currently running --
+#' \verb{Error: target <name> attempted to run targets::tar_meta() to during
+#' a pipeline, which is unsupported...}. A gate in THIS file physically
+#' cannot read "was some other target skipped this run" about its own
+#' store. That check lives in scripts/check_pkg_staleness.R instead (run as
+#' a build.sh step, after tar_make() has exited and the store is no longer
+#' "the pipeline currently running") -- see that script's header comment for
+#' the full design and the same empirical finding, with the exact error text.
+#'
+#' @param pkg_source_files Character vector -- the `pkg_source_files` target
+#'   value (paths to every tracked package source file).
+#' @param pkg_source_digest Character scalar -- the `pkg_source_digest`
+#'   target value (a single hash string).
+#' @param min_files Integer, minimum number of files expected. Default 10L
+#'   is well under this package's actual R/ file count (62 at the time this
+#'   gate was written) but well above zero -- catches "the file list came
+#'   back empty or nearly so" without being brittle to normal file-count
+#'   drift as the package grows.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_pkg_source_tracked <- function(pkg_source_files, pkg_source_digest, min_files = 10L) {
+  if (!is.character(pkg_source_files) || length(pkg_source_files) < min_files) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "pkg_source_files returned only ", length(pkg_source_files),
+        " file(s) -- expected at least ", min_files, "."
+      ),
+      "i" = paste0(
+        "check_pkg_source_tracked() (S22) guards the #753 staleness-detection ",
+        "mechanism itself: if pkg_source_files ever silently returns few/no ",
+        "files (e.g. packages/historicaldata/R was renamed or moved), ",
+        "pkg_source_digest keeps producing A digest, just not one that ",
+        "means anything -- and every downstream check built on it would ",
+        "keep passing for the wrong reason. Confirm the ",
+        "packages/historicaldata/R path in docs/_targets.R's pkg_source_files ",
+        "target still points at the real package source directory."
+      )
+    ))
+  }
+  if (!is.character(pkg_source_digest) || length(pkg_source_digest) != 1L ||
+      is.na(pkg_source_digest) || !nzchar(pkg_source_digest)) {
+    cli::cli_abort(c(
+      "x" = "pkg_source_digest is not a single non-empty string.",
+      "i" = "check_pkg_source_tracked() (S22) requires a well-formed digest -- see R/plan_qa_gates.R for what this guards against."
+    ))
+  }
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -2074,6 +2145,26 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_deflated_sharpe_coverage(leaderboard, DEFLATED_SHARPE_EXEMPTIONS)
         cli::cli_inform(c("v" = "qa_leaderboard_deflated_sharpe_coverage: S21 passed (every positive-Sharpe Full Period strategy has a deflated-Sharpe verdict or a declared exemption)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: the #753 package-source digest mechanism itself is tracking
+    # real files (S22). This is a "guard the guard" sanity check, NOT the
+    # cross-run staleness detector -- see check_pkg_source_tracked()
+    # roxygen above for why that detector cannot live in this pipeline at
+    # all (tar_meta()/tar_progress() are unsupported against the store of
+    # the pipeline currently running) and instead lives in
+    # scripts/check_pkg_staleness.R, run as a scripts/build.sh step.
+    targets::tar_target(
+      qa_pkg_source_tracked,
+      command = {
+        check_pkg_source_tracked(pkg_source_files, pkg_source_digest)
+        cli::cli_inform(c("v" = sprintf(
+          "qa_pkg_source_tracked: S22 passed (%d package source file(s) tracked, digest %s)",
+          length(pkg_source_files), substr(pkg_source_digest, 1, 12)
+        )))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
