@@ -8,6 +8,7 @@ format:
       light: cosmo
     embed-resources: false
     include-in-header:
+      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
@@ -350,13 +351,13 @@ if (!is.null(lb)) {
   git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
   gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
     "https://github.com/JohnGavin/historical"
-  hd_exposure_link <- sprintf(
-    "[`hd_exposure_metrics()`](%s/blob/%s/packages/historicaldata/R/exposure.R#L67)",
-    gh_base, git_sha
+  hd_exposure_link <- hd_link(
+    htmltools::tags$code("hd_exposure_metrics()"),
+    sprintf("%s/blob/%s/packages/historicaldata/R/exposure.R#L67", gh_base, git_sha)
   )
-  gross_registry_link <- sprintf(
-    "[`strategy_gross_convention`](%s/blob/%s/R/plan_exposure.R#L27)",
-    gh_base, git_sha
+  gross_registry_link <- hd_link(
+    htmltools::tags$code("strategy_gross_convention"),
+    sprintf("%s/blob/%s/R/plan_exposure.R#L27", gh_base, git_sha)
   )
 
   n_2x <- if ("gross_convention" %in% names(full)) {
@@ -365,23 +366,28 @@ if (!is.null(lb)) {
   n_capped <- if ("is_cap" %in% names(full)) sum(full$is_cap, na.rm = TRUE) else 0L
   n_na_gross <- if ("gross_convention" %in% names(full)) sum(is.na(full$gross_convention)) else nrow(full)
 
-  gross_note <- paste0(
-    " Gross exposure (`sum(abs(w))`, computed by ", hd_exposure_link,
+  # tagList, not paste0: hd_exposure_link/gross_registry_link are real
+  # htmltools <a> tags (see hd_link() in vignette_utils.R), not markdown
+  # strings -- DT hands the caption straight to the browser with no
+  # markdown pass, so `[text](url)` syntax previously rendered as literal
+  # brackets and a bare URL instead of a clickable link.
+  gross_note <- htmltools::tagList(
+    " Gross exposure (", htmltools::tags$code("sum(abs(w))"), ", computed by ", hd_exposure_link,
     " and recorded per strategy in ", gross_registry_link,
     ") is not uniform across this table: ", n_2x,
     " strategies are built dollar-neutral long-short at 2.0x gross while others run long-only at 1.0x, ",
     "so Vol, Net CAGR, and Max DD are not directly comparable across rows even when Sharpe is similar ",
     "(Sharpe is leverage-invariant under proportional scaling; the other three columns are not). ",
     "A trailing `*` on the Gross column (", n_capped,
-    " strategies) marks a construction **ceiling** the strategy can reach but does not realise every period ",
+    " strategies) marks a construction ceiling the strategy can reach but does not realise every period ",
     "(e.g. Managed Futures targets volatility and only hits its 3.0x cap in low-vol regimes) — treat those as upper bounds, not realised averages. ",
     if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross: either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
   )
 
   # ── Transaction-cost disclosure note (#624) — dynamically computed, never hardcoded ──
-  cost_registry_link <- sprintf(
-    "[`strategy_cost_convention`](%s/blob/%s/R/plan_cost_convention.R#L44)",
-    gh_base, git_sha
+  cost_registry_link <- hd_link(
+    htmltools::tags$code("strategy_cost_convention"),
+    sprintf("%s/blob/%s/R/plan_cost_convention.R#L44", gh_base, git_sha)
   )
   n_zero_cost <- if ("cost_per_trade_bps" %in% names(full)) {
     sum(full$cost_per_trade_bps == 0, na.rm = TRUE)
@@ -396,16 +402,16 @@ if (!is.null(lb)) {
     paste0(rng[1], "–", rng[2], " bps")
   } else "not available"
 
-  cost_note <- paste0(
+  cost_note <- htmltools::tagList(
     " Per-strategy transaction-cost assumptions (recorded in ", cost_registry_link,
-    ") are **not uniform** across this table, in both magnitude (", cost_bps_range,
+    ") are not uniform across this table, in both magnitude (", cost_bps_range,
     ") and unit: most rows charge ",
     "a per-trade bps figure on realised turnover, but Value (HML) and Managed Futures charge a flat ",
     "per-calendar-month bps figure regardless of turnover, and TOM/Risk State charge only on discrete ",
-    "switch days — see `cost_convention` in the registry for each row's exact timing. ",
+    "switch days — see cost_convention in the registry for each row's exact timing. ",
     if (n_zero_cost > 0) {
       paste0("A trailing `*` on the Cost (bps) column (", paste(zero_cost_strategies, collapse = ", "),
-             ") marks a **verified zero** — no transaction-cost deduction exists in that strategy's code, ",
+             ") marks a verified zero — no transaction-cost deduction exists in that strategy's code, ",
              "not a plausible default; it is not net-of-cost comparable to the cost-charging rows above and below it. ")
     } else "",
     if (n_na_cost > 0) paste0(n_na_cost, " strategy row(s) show — for Cost (bps): a meta-portfolio blend inherits its constituents' already-net returns with no separate cost applied at the blend level. ") else "",
@@ -415,19 +421,19 @@ if (!is.null(lb)) {
   )
 
   # ── Diversification-value disclosure note (Pillar 7, #268; surfaced #624) ──
-  corr_registry_link <- sprintf(
-    "[`plan_strategy_correlation.R`](%s/blob/%s/R/plan_strategy_correlation.R#L31)",
-    gh_base, git_sha
+  corr_registry_link <- hd_link(
+    htmltools::tags$code("plan_strategy_correlation.R"),
+    sprintf("%s/blob/%s/R/plan_strategy_correlation.R#L31", gh_base, git_sha)
   )
   n_redundant <- if ("redundant" %in% names(full)) sum(full$redundant, na.rm = TRUE) else 0L
   n_redundant_na <- if ("redundant" %in% names(full)) sum(is.na(full$redundant)) else nrow(full)
-  diversification_note <- paste0(
+  diversification_note <- htmltools::tagList(
     " Redundant = \"YES\" when a strategy's Full-Period monthly-return correlation with another, ",
     "higher-Sharpe strategy exceeds the threshold fixed in ", corr_registry_link,
     " (", n_redundant, " of ", nrow(full),
     " strategies currently flagged); \"not computed\" (", n_redundant_na,
     " strategies) marks a strategy outside the 5-strategy correlation universe ",
-    "(Stock MAX, Stock DRIF, Factor MAX, Factor DRIF, LTR) that R/plan_strategy_correlation.R ",
+    "(Stock MAX, Stock DRIF, Factor MAX, Factor DRIF, LTR) that plan_strategy_correlation.R ",
     "currently covers — that is unassessed, not assessed-and-passed. Incremental Sharpe = the ",
     "change in equal-weight-portfolio Sharpe from including this strategy vs excluding it — ",
     "positive means it adds diversification value, negative means the portfolio is better off ",
@@ -446,15 +452,32 @@ if (!is.null(lb)) {
     "`DEFLATED_SHARPE_EXEMPTIONS` (R/plan_qa_gates.R), not a gap — see #728."
   )
 
-  full_caption <- paste0(
-    "Strategies ranked by Sharpe (highest first). ",
-    "Net CAGR after 0.20% round-trip/month cost where available. ",
+  # Short caption (#1 in the caption-length audit, historical#0b412a9c): the
+  # unconditional text states only what the table ranks and the single most
+  # important comparability warning. Everything else (column definitions,
+  # per-strategy caveats) is real but was drowning that one sentence -- it
+  # moves into a collapsed <details> block via hd_caption() (vignette_utils.R)
+  # instead of being deleted.
+  short_caption <- paste0(
+    "Strategies ranked by Sharpe (highest first); Net CAGR is net of a 0.20%/month round-trip ",
+    "cost where available. Values are not directly comparable across rows — gross exposure, ",
+    "cost basis, and the Credible/Redundant/Detection/Rigour flags vary by strategy; expand ",
+    "below for full column definitions."
+  )
+
+  full_notes <- htmltools::tagList(
     "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
     "Top5% Share = fraction of total return from best 5% of months. ",
     "Credible = plausible CAGR (<20%) and cum P&L (<50x): \"NO\" marks a strategy that was ",
     "assessed and failed that check, \"not computed\" marks a strategy for which cost-adjusted ",
     "metrics were never assessed at all (not the same as failing the check).",
     flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note
+  )
+
+  full_caption <- hd_caption(
+    full_notes,
+    short = short_caption,
+    summary_label = "Column definitions and comparability caveats"
   )
 
   # Bespoke DT call (not hd_dt()): the Credible, Redundant, Detection, and
@@ -478,11 +501,12 @@ if (!is.null(lb)) {
 
   DT::datatable(
     metrics_table,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      class = "dt-caption",
-      full_caption
-    ),
+    # full_caption is already a complete htmltools::tags$caption() object
+    # (built by hd_caption() above) -- do NOT re-wrap it in another
+    # tags$caption() here. <caption> has no descendant table elements
+    # allowed in its content model (caption is itself one), so nesting two
+    # would have produced malformed markup and an unpredictable DOM.
+    caption = full_caption,
     escape = FALSE,
     rownames = FALSE,
     filter = "top",
@@ -676,13 +700,13 @@ if (!is.null(bss)) {
   git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
   gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
     "https://github.com/JohnGavin/historical"
-  sweep_link <- sprintf(
-    "[`borrow_sensitivity_sweep`](%s/blob/%s/R/plan_cost_convention.R#L601)",
-    gh_base, git_sha
+  sweep_link <- hd_link(
+    htmltools::tags$code("borrow_sensitivity_sweep"),
+    sprintf("%s/blob/%s/R/plan_cost_convention.R#L601", gh_base, git_sha)
   )
-  fn_link <- sprintf(
-    "[`compute_borrow_sensitivity()`](%s/blob/%s/R/plan_cost_convention.R#L322)",
-    gh_base, git_sha
+  fn_link <- hd_link(
+    htmltools::tags$code("compute_borrow_sensitivity()"),
+    sprintf("%s/blob/%s/R/plan_cost_convention.R#L322", gh_base, git_sha)
   )
 
   rates_sorted <- sort(unique(bss$borrow_rate_annual))
@@ -736,7 +760,14 @@ if (!is.null(bss)) {
     } else ""
   } else ""
 
-  sens_caption <- paste0(
+  sens_short <- paste0(
+    "Sharpe sensitivity to the assumed borrow rate for the ", n_swept,
+    " strategies with a real short leg — ordered by ", delta_col,
+    " (most sensitive first); read that delta column, not raw Sharpe levels ",
+    "(see below for why). Expand for the full methodology note."
+  )
+
+  sens_notes <- htmltools::tagList(
     "Sharpe at borrow rate ", paste0(round(rates_sorted * 100), "%", collapse = " / "),
     " (annualised), holding trade cost, signal, and weights fixed, for the ", n_swept,
     " strategies with a real short leg, computed by ", fn_link, " and assembled in ", sweep_link,
@@ -751,16 +782,20 @@ if (!is.null(bss)) {
     cmr_note
   )
 
+  sens_caption <- hd_caption(
+    sens_notes,
+    short = sens_short,
+    summary_label = "Full methodology note"
+  )
+
   numeric_cols <- which(sapply(sens_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
   DT::datatable(
     sens_table,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      class = "dt-caption",
-      sens_caption
-    ),
+    # sens_caption is already a complete tags$caption() object (hd_caption()) --
+    # do not re-wrap it (see the Rankings table above for why that matters).
+    caption = sens_caption,
     rownames = FALSE,
     filter = "top",
     options = list(

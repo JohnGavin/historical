@@ -45,16 +45,16 @@ ul.task-list li input[type="checkbox"] {
 <script src="european-overlay_files/libs/quarto-dashboard/web-components.js" type="module"></script>
 <script src="european-overlay_files/libs/quarto-dashboard/components.js"></script>
 
-<link href="european-overlay_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
-<script src="european-overlay_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
-<link href="european-overlay_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
-<script src="european-overlay_files/libs/datatables-binding-0.34.0/datatables.js"></script>
-<script src="european-overlay_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
-<link href="european-overlay_files/libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
-<link href="european-overlay_files/libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet">
-<script src="european-overlay_files/libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
-<link href="european-overlay_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
-<script src="european-overlay_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
+<!-- Shared color-scheme signal (accessibility rule Part 2 Clause 0, historical#0b412a9c).
+     Static value is always "dark" -- that is what
+     ~/.claude/scripts/check_dashboard_color_scheme.sh greps for in the
+     docs/_quarto.yml post-render gate. Pages with a light theme keep this
+     in sync with the ACTUAL active theme at runtime via a MutationObserver
+     in vignette-shared.js; ANY color-scheme declaration suppresses
+     Chrome's Auto Dark Mode heuristic regardless of its value, so this
+     static default never causes Chrome to invert the page. -->
+<meta name="color-scheme" content="dark">
+<style>:root, html, body { color-scheme: dark; }</style>
 <link rel="stylesheet" href="vignette-shared.css">
 <script src="vignette-shared.js"></script>
 <script>
@@ -340,8 +340,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-b18a190b06256c0d296f" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-b18a190b06256c0d296f">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left;\">Spearman rank correlations between CISS sub-indices and VIX. N = 6,607 overlapping daily observations. CISS equity is the strongest VIX proxy (r = 0.75). Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_ecb.R' target='_blank'>plan_ecb.R<\/a> + FRED VIXCLS.<\/caption>","data":[["CISS equity vs VIX","CISS composite vs VIX","CISS equity vs CISS composite"],[0.753,0.652,0.869],[6607,6607,6607],["2000-01-03","2000-01-03","2000-01-03"],["2026-04-10","2026-04-10","2026-04-10"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Pair<\/th>\n      <th>Spearman r<\/th>\n      <th>N<\/th>\n      <th>From<\/th>\n      <th>To<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"columnDefs":[{"targets":1,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 3, 3, \",\", \".\", null);\n  }"},{"className":"dt-right","targets":[1,2]},{"name":"Pair","targets":0},{"name":"Spearman r","targets":1},{"name":"N","targets":2},{"name":"From","targets":3},{"name":"To","targets":4}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.columnDefs.0.render"],"jsHooks":[]}</script>
+<p class="text-muted">Data not available. Run tar_make() to build ecb_raw and aw_vix_daily targets.</p>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -356,8 +355,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-d9e2e2130abd6ece8e53" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-d9e2e2130abd6ece8e53">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left;\">CISS sub-market components. All daily, 2000-2026. Cross-correlation is negative in calm markets (independence) and flips positive in crises (contagion). Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()<\/a>.<\/caption>","data":[["Bond","Cross-correlation","Equity","Financial intermediary","FX","Money market","Sovereign"],[6951,6951,6951,6951,6951,6951,6945],["2000-01-03","2000-01-03","2000-01-03","2000-01-03","2000-01-03","2000-01-03","2000-01-05"],["2026-08-24","2026-08-24","2026-08-24","2026-08-24","2026-08-24","2026-08-24","2026-08-18"],[0.0067,-0.4104,0.0032,0.0055,0.0005,0.0024,0.0003],[0.2569,-0.001,0.1775,0.1942,0.1933,0.127,0.7795],[0.0934,-0.1554,0.0585,0.0732,0.0527,0.0369,0.1064]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Sub-market<\/th>\n      <th>N<\/th>\n      <th>From<\/th>\n      <th>To<\/th>\n      <th>Min<\/th>\n      <th>Max<\/th>\n      <th>Mean<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"columnDefs":[{"targets":4,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 4, 3, \",\", \".\", null);\n  }"},{"targets":5,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 4, 3, \",\", \".\", null);\n  }"},{"targets":6,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 4, 3, \",\", \".\", null);\n  }"},{"className":"dt-right","targets":[1,4,5,6]},{"name":"Sub-market","targets":0},{"name":"N","targets":1},{"name":"From","targets":2},{"name":"To","targets":3},{"name":"Min","targets":4},{"name":"Max","targets":5},{"name":"Mean","targets":6}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.columnDefs.0.render","options.columnDefs.1.render","options.columnDefs.2.render"],"jsHooks":[]}</script>
+<p class="text-muted">Data not available. Run tar_make() to build ecb_raw target.</p>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -383,45 +381,17 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header dashboard-card-no-title bslib-navs-card-title">
 
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-5"><li class="nav-item" role="presentation"><a href="#card-tabset-5-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="OOS Performance" aria-selected="true" class="nav-link active">OOS Performance</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="VIX vs CISS Comparison" aria-selected="false" class="nav-link">VIX vs CISS Comparison</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Attribution" aria-selected="false" class="nav-link">Attribution</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Country CISS" aria-selected="false" class="nav-link">Country CISS</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Related Vignettes" aria-selected="false" class="nav-link">Related Vignettes</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-6" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Build Info" aria-selected="false" class="nav-link">Build Info</a></li></ul></div>
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-5"><li class="nav-item" role="presentation"><a href="#card-tabset-5-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Tab 1" aria-selected="true" class="nav-link active">Tab 1</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Tab 2" aria-selected="false" class="nav-link">Tab 2</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Attribution" aria-selected="false" class="nav-link">Attribution</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Tab 4" aria-selected="false" class="nav-link">Tab 4</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-5" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Related Vignettes" aria-selected="false" class="nav-link">Related Vignettes</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-5-6" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Build Info" aria-selected="false" class="nav-link">Build Info</a></li></ul></div>
 
 
 
 
 
 
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-5"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-1"><div class="card-body html-fill-item html-fill-container" data-title="OOS Performance">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-84207898b3483d338609" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-84207898b3483d338609">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left;\">CISS equity overlay vs Buy & Hold for 5 European ETFs (OOS, 2020-present). CISS regime: benign (100% equity), cautious (50%), hostile (10%). Thresholds: 33rd/67th percentile of CISS equity stress history. 4 of 5 ETFs improve on Sharpe ratio. Max drawdown halved across all ETFs. Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R' target='_blank'>plan_european_overlay.R<\/a>.<\/caption>","data":[["STOXX Europe 600","STOXX Europe 600","Euro Stoxx 50","Euro Stoxx 50","FTSE Europe","FTSE Europe","Germany","Germany","France","France"],["Buy &amp; Hold","CISS Overlay","Buy &amp; Hold","CISS Overlay","Buy &amp; Hold","CISS Overlay","Buy &amp; Hold","CISS Overlay","Buy &amp; Hold","CISS Overlay"],[6.66,1.97,7.05,7.31,5.8,7.62,2.93,6.11,7.55,8.68],[19.35,8.449999999999999,26.15,9.27,23.65,8.32,26.24,9.1,25.97,9.130000000000001],[-35.93,-13.6,-38.95,-9.470000000000001,-37.13,-8.06,-43.44,-10.75,-39.23,-9.01],[0.431,0.274,0.392,0.8070000000000001,0.358,0.924,0.242,0.697,0.411,0.957]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>ETF<\/th>\n      <th>Strategy<\/th>\n      <th>CAGR (%)<\/th>\n      <th>Vol (%)<\/th>\n      <th>Max DD (%)<\/th>\n      <th>Sharpe<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"pageLength":15,"columnDefs":[{"targets":2,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":3,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":4,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":5,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"className":"dt-right","targets":[2,3,4,5]},{"name":"ETF","targets":0},{"name":"Strategy","targets":1},{"name":"CAGR (%)","targets":2},{"name":"Vol (%)","targets":3},{"name":"Max DD (%)","targets":4},{"name":"Sharpe","targets":5}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":["options.columnDefs.0.render","options.columnDefs.1.render","options.columnDefs.2.render","options.columnDefs.3.render"],"jsHooks":[]}</script>
-</div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-2"><div class="card-body html-fill-item html-fill-container" data-title="VIX vs CISS Comparison">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-aef8b55920103d3a7ca6" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-aef8b55920103d3a7ca6">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left;\">Three-way comparison: Buy & Hold vs US VIX overlay vs ECB CISS overlay. CISS overlay uses European-native stress signal; VIX uses US vol. Both reduce drawdowns dramatically. CISS outperforms VIX overlay on Sharpe for 3 of 5 ETFs. Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R' target='_blank'>plan_european_overlay.R<\/a>.<\/caption>","data":[["STOXX Europe 600","Euro Stoxx 50","FTSE Europe","Germany","France"],[0.431,0.392,0.358,0.242,0.411],[0.489,0.39,0.354,0.242,0.377],[0.274,0.8070000000000001,0.924,0.697,0.957],[-35.93,-38.95,-37.13,-43.44,-39.23],[-14.09,-21.35,-21.75,-28.29,-19.01],[-13.6,-9.470000000000001,-8.06,-10.75,-9.01]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>ETF<\/th>\n      <th>BH Sharpe<\/th>\n      <th>VIX Sharpe<\/th>\n      <th>CISS Sharpe<\/th>\n      <th>BH DD (%)<\/th>\n      <th>VIX DD (%)<\/th>\n      <th>CISS DD (%)<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"columnDefs":[{"targets":1,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":2,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":3,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":4,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":5,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"targets":6,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 2, 3, \",\", \".\", null);\n  }"},{"className":"dt-right","targets":[1,2,3,4,5,6]},{"name":"ETF","targets":0},{"name":"BH Sharpe","targets":1},{"name":"VIX Sharpe","targets":2},{"name":"CISS Sharpe","targets":3},{"name":"BH DD (%)","targets":4},{"name":"VIX DD (%)","targets":5},{"name":"CISS DD (%)","targets":6}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.columnDefs.0.render","options.columnDefs.1.render","options.columnDefs.2.render","options.columnDefs.3.render","options.columnDefs.4.render","options.columnDefs.5.render"],"jsHooks":[]}</script>
-</div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-5"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-1"><div class="card-body html-fill-item html-fill-container flow">
+
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-2"><div class="card-body html-fill-item html-fill-container flow">
+
 </div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-3"><div class="card-body html-fill-item html-fill-container" data-title="Attribution">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
@@ -484,22 +454,8 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-4"><div class="card-body html-fill-item html-fill-container" data-title="Country CISS">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<div class="cell-output-display html-fill-item html-fill-container">
-<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-d120961bf10b1a7cff2d" style="width:100%;height:auto;"></div>
-<script type="application/json" data-for="htmlwidget-d120961bf10b1a7cff2d">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left;\">Country-level CISS: systemic stress per country (daily, 2000-2026). Peak dates per country are shown in the Max date column. The ECB also computes a <strong>US CISS<\/strong> for cross-Atlantic comparison — a potential overlay signal for US equities too. Source: <a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/ecb.R' target='_blank'>hd_ecb_registry()<\/a>. Reference: <a href='https://data.ecb.europa.eu/data/datasets/CISS' target='_blank'>ECB CISS data portal<\/a>.<\/caption>","data":[["US (ECB-computed)","Germany","France","UK","Italy"],[6959,6960,6959,6959,6959],[0.1003,0.1414,0.1034,0.1102,0.114],[0.8964,0.8791,0.7756,0.7709,0.7382],["2008-11-20","2008-12-17","2008-12-23","2008-12-03","2008-12-22"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Country<\/th>\n      <th>N<\/th>\n      <th>Mean<\/th>\n      <th>Max<\/th>\n      <th>Max date<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"columnDefs":[{"targets":2,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 4, 3, \",\", \".\", null);\n  }"},{"targets":3,"render":"function(data, type, row, meta) {\n    return type !== 'display' ? data : DTWidget.formatRound(data, 4, 3, \",\", \".\", null);\n  }"},{"className":"dt-right","targets":[1,2,3]},{"name":"Country","targets":0},{"name":"N","targets":1},{"name":"Mean","targets":2},{"name":"Max","targets":3},{"name":"Max date","targets":4}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":["options.columnDefs.0.render","options.columnDefs.1.render"],"jsHooks":[]}</script>
-</div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-4"><div class="card-body html-fill-item html-fill-container flow">
+
 </div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-5-5"><div class="card-body html-fill-item html-fill-container" data-title="Related Vignettes">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
@@ -521,7 +477,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/f5dd37b06a15d16c5c85c11638014afe419d1b21"><code>f5dd37b</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-25 20:17:50</p>
+<p><strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/3bbf1ff288e4f4f4be476f83abed99feea98361a"><code>3bbf1ff</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-26 10:42:53</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>

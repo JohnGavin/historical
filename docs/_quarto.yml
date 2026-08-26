@@ -2,3 +2,31 @@ project:
   type: default
   post-render:
     - /Users/johngavin/docs_gh/llm/.claude/scripts/quarto_post_render_contrast.sh
+    - /Users/johngavin/docs_gh/llm/.claude/scripts/check_dashboard_color_scheme.sh .
+
+# Project-wide color-scheme signal (accessibility rule Part 2 Clause 0,
+# historical#0b412a9c): applied here rather than per-document so every page
+# -- dashboard or plain html -- carries it, and so check_dashboard_color_scheme.sh
+# above always finds it. The STATIC value below is always literally "dark"
+# because that is what the post-render check greps for; the dashboards also
+# support a light theme (see each qmd's `theme: {dark: darkly, light:
+# cosmo}` and the toggle in vignette-shared.js), so vignette-shared.js keeps
+# this declaration in sync with the actual live theme at runtime (a
+# MutationObserver on data-bs-theme) -- ANY color-scheme declaration
+# suppresses Chrome's Auto Dark Mode heuristic regardless of its value, so
+# this static "dark" default never causes Chrome to invert the page while
+# the JS override is what actually matches the currently-rendered theme.
+# Per-document include-in-header lists (e.g. leaderboard.qmd's
+# vignette-shared.css/js links) are merged with this project-level list by
+# Quarto, not replaced by it.
+format:
+  html:
+    include-in-header:
+      - text: |
+          <meta name="color-scheme" content="dark" />
+          <style>:root, html, body { color-scheme: dark; }</style>
+  dashboard:
+    include-in-header:
+      - text: |
+          <meta name="color-scheme" content="dark" />
+          <style>:root, html, body { color-scheme: dark; }</style>

@@ -7,6 +7,11 @@ format:
       dark: darkly
       light: cosmo
     embed-resources: false
+    include-in-header:
+      - _includes/color-scheme-meta.html
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
 execute:
   echo: false
 ---
