@@ -59,22 +59,17 @@
 #   3) and remain part of the post-cutoff cross-section. Whether they should
 #   be positions, conditioning data, or dropped post-cutoff is a SEPARATE,
 #   still-open decision on #751 -- this truncation does not resolve it.
-# Fixed-fraction sizing (#751 item C, decided 2026-08-25): the fixed
-#   n_long = n_short = 10L headcount is replaced by hd_commodity_mr_portfolio()'s
-#   own frac parameter (default 1/3, terciles) -- see that function's roxygen
-#   and .HD_CMR_DEFAULT_FRAC's roxygen (packages/historicaldata/R/
-#   commodities_mean_reversion.R) for the citation. The old fixed count was
-#   infeasible against the tradeable universe alone until 2006 (only 6
-#   tradeable series existed as of mid-2000, 16-17 through 2005 -- 20 slots
-#   could not be filled without reaching into the untradeable IMF/FRED
-#   names) and held ~10/24 = ~42% of the universe PER LEG (roughly 83% total)
-#   by 2015-2026 once 24 tradeable names existed -- the same parameter
-#   meaning two structurally different strategies at the two ends of the
-#   sample. A fixed fraction is feasible at every breadth automatically, with
-#   no cutoff to choose. Item D (rank-weighting the whole cross-section
-#   instead of a discrete long/short split) remains open -- see the #751
-#   comment thread for the recommendation on which is the better structural
-#   fit; this change implements C only.
+# Fixed-fraction sizing (#751 item C, decided 2026-08-25, SUPERSEDED below):
+#   the fixed n_long = n_short = 10L headcount was replaced by
+#   hd_commodity_mr_portfolio()'s frac parameter (1/3, terciles). The old
+#   fixed count was infeasible against the tradeable universe alone until
+#   2006 (only 6 tradeable series existed as of mid-2000, 16-17 through 2005
+#   -- 20 slots could not be filled without reaching into the untradeable
+#   IMF/FRED names) and held ~10/24 = ~42% of the universe PER LEG (roughly
+#   83% total) by 2015-2026 once 24 tradeable names existed -- the same
+#   parameter meaning two structurally different strategies at the two ends
+#   of the sample. A fixed fraction was feasible at every breadth
+#   automatically, with no cutoff to choose. Superseded by item D below.
 # Universe deduplication (#751 item B, implemented after C): the ranked
 #   universe held multiple representations of the SAME underlying commodity
 #   (WTI crude three times -- POILWTIUSDM IMF index, CL=F futures, USO ETF;
@@ -90,10 +85,29 @@
 #   target below is rewired from cmr_tradeable_returns to
 #   cmr_deduplicated_returns. See .HD_CMR_EXPOSURE_MAP's roxygen
 #   (packages/historicaldata/R/commodities_mean_reversion.R) for the full
-#   MANUAL-mapping rationale and #751 item B for the record. This changes the
-#   ranked breadth that item C's fixed FRACTION sizes against (a smaller
-#   n_avail on every date), which is expected and intended -- the fraction
-#   itself is unchanged.
+#   MANUAL-mapping rationale and #751 item B for the record.
+# Rank-weighting (#751 item D, decided 2026-08-26, REPLACES item C): with
+#   item B's deduplication in place, n_avail's median fell to 17, giving a
+#   tercile leg of only 5 names -- a thin bucket where the boundary between
+#   name 5 (in, full weight) and name 6 (out, zero weight) does a lot of
+#   work. hd_commodity_mr_portfolio() no longer buckets into quantiles at
+#   all: every ranked name gets a weight proportional to its rank distance
+#   from the cross-section's mean rank (Asness-Moskowitz-Pedersen 2013's
+#   construction), scaled to the strategy's declared gross exposure
+#   (target_gross, default 2.0, matching strategy_gross_convention's
+#   existing CMR entry in R/plan_exposure.R). This is scale-free in
+#   n_avail (no fraction/headcount parameter to choose), has no bucket-edge
+#   discontinuity, and is dollar-neutral / unit-gross BY CONSTRUCTION -- see
+#   that function's roxygen for the full derivation, the tie-handling rule,
+#   and the minimum-breadth floor (.HD_CMR_MIN_BREADTH_RANK) that replaces
+#   item C's ceiling(.HD_CMR_MIN_LEG_NAMES / frac). REPLACES item C's `frac`
+#   parameter outright rather than offering both as options -- two live
+#   sizing mechanisms would invite silent divergence with no forcing
+#   function to revisit either. The `held_frac` breadth diagnostic from item
+#   C is retained (now closer to 1.0 by construction) and a new `n_eff`
+#   diagnostic (effective breadth, inverse Herfindahl of normalised
+#   |weight|) is added as the more meaningful signal under this scheme -- a
+#   step toward item F.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -145,16 +159,13 @@ plan_commodities_mean_reversion <- function() {
 
     # ── Portfolios: long-losers / short-winners ───────────────────────────
     # t+1 execution: signal at t -> trade executes at t+1 closing prices.
-    # #751 items C/D (decided 2026-08-25): FIXED FRACTION per leg, not a
-    # fixed headcount. hd_commodity_mr_portfolio()'s own default (frac = 1/3,
-    # terciles) is used here rather than overridden -- see that function's
-    # roxygen and .HD_CMR_DEFAULT_FRAC's roxygen (packages/historicaldata/R/
-    # commodities_mean_reversion.R) for the Asness-Moskowitz-Pedersen /
-    # Miffre-Rallis citation and the tercile-vs-quintile reasoning. This
-    # replaces the previous n_long = n_short = 10L, which was infeasible
-    # against the tradeable universe alone until 2006 and held ~87% of the
-    # universe long-short by 2015-2026 -- see the file header above and #751
-    # for the full record.
+    # #751 item D (decided 2026-08-26): rank-weighted, not quantile-bucketed.
+    # hd_commodity_mr_portfolio()'s own default (target_gross = 2.0) is used
+    # here rather than overridden -- see that function's roxygen for the
+    # Asness-Moskowitz-Pedersen citation and the full construction. This
+    # replaces item C's fixed fraction (terciles), which in turn replaced the
+    # original n_long = n_short = 10L -- see the file header above and #751
+    # for the full record of all three constructions.
     # 0.2% one-way transaction cost.
     # returns_tbl is cmr_deduplicated_returns (#751 items 1 + B), matching
     # the signal targets above -- both legs of the t -> t+1 join must be

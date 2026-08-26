@@ -7,7 +7,7 @@
 hd_commodity_mr_portfolio(
   signal_tbl,
   returns_tbl,
-  frac = .HD_CMR_DEFAULT_FRAC,
+  target_gross = 2,
   cost_bps = 20
 )
 }
@@ -18,11 +18,13 @@ with columns \code{date}, \code{series_id}, \code{mr_signal}.}
 \item{returns_tbl}{Tibble with columns \code{date}, \code{series_id},
 \code{monthly_ret}.  Must overlap in date range with \code{signal_tbl}.}
 
-\item{frac}{Numeric fraction in \verb{(0, 0.5)}. Share of the ranked
-cross-section held on EACH leg (long and short) -- \code{1/3} =
-terciles (default), \code{1/5} = quintiles. Replaces the previous fixed
-\code{n_long}/\code{n_short} headcount parameters (#751 items C/D): one
-sizing mechanism, not two.}
+\item{target_gross}{Numeric, single positive value. Target gross exposure
+(\code{sum(abs(weight))}) on every date that clears the minimum-breadth
+floor. Default 2.0, matching \code{strategy_gross_convention}'s
+existing CMR entry (R/plan_exposure.R) -- the long side sums to
+\code{target_gross / 2}, the short side to \code{-target_gross / 2}, so
+the default reproduces the same 1.0-long / 1.0-short exposure LEVEL the
+tercile construction implemented, on a different weighting SHAPE.}
 
 \item{cost_bps}{Numeric. One-way transaction cost in basis points
 (default 20 = 0.2\\%).  The same 0.2\\% used in commodity momentum (#134).}
@@ -36,42 +38,111 @@ and columns:
 \item{turnover}{One-way turnover fraction.}
 \item{cost}{Transaction cost deducted (= turnover * cost_bps/10000).}
 \item{net_ret}{Net return after transaction costs.}
-\item{n_long}{Number of long positions actually held.}
-\item{n_short}{Number of short positions actually held.}
+\item{n_long}{Number of names receiving strictly positive weight.}
+\item{n_short}{Number of names receiving strictly negative weight.}
 \item{n_avail}{Number of ranked names available that date (breadth
 diagnostic, #751 item C).}
-\item{held_frac}{\code{(n_long + n_short) / n_avail}: the fraction of
-that date's ranked universe actually held (breadth diagnostic,
-#751 item C). 0 when \code{n_avail} is below the minimum-breadth
-floor.}
+\item{held_frac}{\code{(n_long + n_short) / n_avail}. Retained for
+continuity with the tercile construction, but no longer the
+headline breadth diagnostic -- see \code{n_eff}. Under
+rank-weighting this is ~1.0 by construction (every ranked name
+gets a nonzero weight, except an exact median tie possible only for
+odd \code{n_avail}), so it is now mostly a sanity check that the
+minimum-breadth floor is firing where expected, not a measure of
+participation.}
+\item{n_eff}{Effective breadth (#751 item D; a step toward item F):
+the inverse Herfindahl index of the NORMALISED absolute weights,
+\code{1 / sum(p_i^2)} where \code{p_i = abs(weight_i) /
+      sum(abs(weight_i))}. This answers the question \code{held_frac}
+answered under the tercile scheme -- "how many independent bets is
+this portfolio effectively making" -- because rank-weighting no
+longer has a discrete leg size to report: every ranked name
+receives SOME weight, but a portfolio dominated by its two most
+extreme names has \code{n_eff} near 2 regardless of how large
+\code{n_avail} is. Bounded \verb{[1, n_long + n_short]}; only
+approaches \code{n_long + n_short} in the limit of near-equal
+weight magnitudes, which a LINEAR rank scheme never quite reaches
+(the most extreme ranks always carry more weight than near-median
+ones). 0 on dates holding no position.}
 }
-Dates below \code{.HD_CMR_MIN_LEG_NAMES}'s minimum-breadth floor
-hold no position at all: \code{n_long = n_short = 0},
+Dates below \code{.HD_CMR_MIN_BREADTH_RANK}'s minimum-breadth floor
+hold no position at all: \code{n_long = n_short = 0}, \code{n_eff = 0},
 \code{gross_ret = 0}. Such dates are still returned as rows (not
 dropped) so the return series stays date-complete for downstream
 periodicity checks (#738).
 }
 \description{
-Convert a mean-reversion signal tibble into monthly long/short portfolio
-weights with t+1 execution.
+Convert a mean-reversion signal tibble into rank-weighted long/short
+portfolio weights with t+1 execution.
 }
 \details{
-Execution discipline: the signal from month \code{t} (formed from returns
-through \code{t-1}) drives trades that are executed at month \code{t+1}
-closing prices.  This is enforced by joining the signal at date \code{t}
-to the return realised at date \code{t+1} via \code{dplyr::lead()}.
+\strong{Rank-weighting, not quantile buckets (#751 item D -- replaces
+item C's tercile construction):} every ranked name on a date receives a
+weight proportional to its cross-sectional rank distance from the mean
+rank -- the construction Asness, Moskowitz & Pedersen (2013, "Value and
+Momentum Everywhere", J. Finance) use for cross-sectional value/momentum
+portfolios. For \code{n_avail} ranked names on a date: rank each by
+\code{mr_signal} (ties broken by AVERAGING the tied positions' ranks --
+see "Ties" below), subtract the mean rank \code{(n_avail + 1) / 2}, and
+scale the whole cross-section by a single constant so gross exposure
+(\code{sum(abs(weight))}) equals \code{target_gross}. This:
+\itemize{
+\item needs no fraction or headcount parameter at all, unlike the
+tercile construction it replaces -- it is scale-free in
+\code{n_avail}, which #751 measured moving 6 -> 37 across the sample;
+\item concentrates weight at the extremes (biggest losers / winners),
+where a mean-reversion signal is strongest, instead of giving every
+name inside a bucket the same weight regardless of how extreme its
+rank is;
+\item has no discontinuity at a bucket boundary -- under the tercile
+scheme, with \code{n_avail} down to a median of 17 (#751 item B), name
+5 of 17 was in at full weight and name 6 was out entirely; here
+weight varies continuously with rank;
+\item is dollar-neutral and unit-gross BY CONSTRUCTION: ranks minus the
+mean rank always sum to exactly zero, irrespective of ties (see
+"Ties"), so ONE scaling constant applied to the whole cross-section
+produces \code{sum(weight) = 0} and \code{sum(abs(weight)) =
+    target_gross} simultaneously -- the long side and short side
+automatically sum to \code{target_gross / 2} and
+\code{-target_gross / 2} respectively, with no separate per-leg
+scaling needed. Verified explicitly at runtime below rather than
+trusted silently (fail-loud-not-null.md).
+}
 
-\strong{Fixed fraction, not fixed headcount (#751 items C/D):} each leg
-holds \code{floor(n_avail * frac)} names, where \code{n_avail} is the
-number of ranked names available on that date -- NOT a fixed count. See
-\code{.HD_CMR_DEFAULT_FRAC}'s roxygen for the tercile-vs-quintile
-citation and reasoning, and \code{.HD_CMR_MIN_LEG_NAMES}'s roxygen
-for the minimum-breadth floor below which a date holds no position.
-\code{floor()} together with \code{frac < 0.5} (enforced by input
-validation) guarantees \code{2 * n_leg <= 2 * frac * n_avail < n_avail},
-so the long and short legs can never overlap by construction; this is
-also verified explicitly at runtime (fail-loud-not-null.md) rather than
-trusted silently.
+\strong{Replaces, rather than sits alongside, the tercile construction
+(#751 items C/D):} the previous \code{frac} parameter is removed, not
+kept as an option. Two live sizing mechanisms invite silent divergence --
+a caller who does not set \code{frac} deliberately gets whichever default
+happens to be wired in, and nothing forces the choice to be revisited.
+Rank-weighting is the better structural fit at every breadth this
+universe has shown (#751; recommended in #758's own body), so it replaces
+the tercile scheme outright. The tercile construction remains available
+in git history at the commit immediately before this change if it is ever
+needed again.
+
+\strong{Ties:} \code{rank(mr_signal, ties.method = "average")} is used,
+not \code{"first"}/\code{"min"}/\code{"random"}. Averaging is the only
+rule under which tied names receive IDENTICAL weight -- any rule that
+assigns tied names different ranks would give economically identical
+signals different weights, which is exactly the "silently produces
+asymmetric weights" failure this construction must avoid
+(fail-loud-not-null.md). Averaging also preserves the sum of ranks
+exactly (\code{n_avail * (n_avail + 1) / 2}), which is what guarantees
+the dollar-neutral property above holds even in the presence of ties.
+
+\strong{Minimum-breadth floor:} dates with fewer than
+\code{\link{.HD_CMR_MIN_BREADTH_RANK}} ranked names hold no position at
+all -- see that constant's roxygen for the derivation (a house rule, not
+a literature threshold; #751 items C/D found none). A date where every
+\code{mr_signal} happens to be exactly tied (no cross-sectional
+distinction to weight) is treated the same way, since averaged ranks
+collapse to the mean rank and every raw weight is zero.
+
+Execution discipline is unchanged from the tercile construction: the
+signal from date \code{t} (formed from returns through \code{t-1}) drives
+trades executed at date \code{t+1} closing prices, enforced by joining
+the signal at date \code{t} to the return realised at date \code{t+1} via
+\code{dplyr::lead()}.
 }
 \seealso{
 Other commodities_mr: 

@@ -249,51 +249,11 @@ hd_commodity_mr_signal <- function(returns_tbl, lookback_months = 3L) {
 }
 
 
-#' Default fraction of the ranked cross-section held on each leg (#751 items C/D)
-#'
-#' Long-standing cross-sectional-sort convention is a FIXED FRACTION
-#' (quantile breakpoint) of the ranked universe, not a fixed headcount --
-#' Fama & French (1993) rank the whole equity universe into
-#' deciles/quintiles precisely because the universe's size varies by orders
-#' of magnitude over the sample. \code{hd_commodity_mr_portfolio()}
-#' previously held a fixed \code{n_long = n_short = 10}, which (#751) was
-#' infeasible against our own tradeable universe for its first six years
-#' (6-17 tradeable names 2000-2005, so 20 slots could not be filled from
-#' tradeable names alone) and held ~10/24 = ~42\% of the universe PER LEG
-#' (roughly 83\% total) by 2015-2026 (24 tradeable names) -- the same
-#' parameter meaning two structurally different strategies at the two ends
-#' of the sample.
-#'
-#' Two commodity-specific precedents exist at comparable breadth to ours (24
-#' tradeable names as of 2015-2026, per #751):
-#' \itemize{
-#'   \item Asness, Moskowitz & Pedersen (2013, "Value and Momentum
-#'     Everywhere", J. Finance) sort 27 commodity futures into TERCILES
-#'     (1/3 per leg).
-#'   \item Miffre & Rallis (2007, "Momentum Strategies in Commodity Futures
-#'     Markets", J. Banking & Finance) sort 31 commodity futures into
-#'     QUINTILES (1/5 per leg).
-#' }
-#' TERCILES is chosen as the default here: AMP's 27-future universe is
-#' within 3 names of our own 24-name tradeable universe -- the closer
-#' structural match of the two -- and a tercile (8 of 24 names per leg,
-#' currently) keeps meaningfully more cross-sectional discrimination than
-#' the old fixed count of 10 (~42\% per leg) without over-thinning the legs
-#' the way a quintile would in years where our tradeable universe is
-#' smaller (e.g. 2006-2007's 20 tradeable names -> a quintile gives 4 per
-#' leg, close to the \code{.HD_CMR_MIN_LEG_NAMES} floor below; a tercile
-#' gives 6). Quintiles remain a reasonable, better-precedented-by-breadth
-#' alternative (Miffre-Rallis' 31 futures is the larger universe) and can be
-#' requested via \code{frac = 1/5}.
-#'
-#' @noRd
-.HD_CMR_DEFAULT_FRAC <- 1 / 3
-
 #' Minimum number of names required on ONE side (long or short) for a
-#' cross-sectional quantile split to be treated as meaningful
+#' cross-sectional split to be treated as meaningful
 #'
 #' No formal minimum-breadth threshold for a commodity cross-sectional sort
-#' was found in the literature consulted for #751 item C -- Fama-French,
+#' was found in the literature consulted for #751 items C/D -- Fama-French,
 #' Asness-Moskowitz-Pedersen, and Miffre-Rallis all state their quantile
 #' FRACTION but none states a floor on N before applying it. This constant
 #' is therefore a HOUSE RULE, not an adopted standard, documented as such
@@ -301,22 +261,46 @@ hd_commodity_mr_signal <- function(returns_tbl, lookback_months = 3L) {
 #' \code{.HD_MR_MIN_OBS_FLOOR} above is framed for the signal window: a leg
 #' of 1 name is not a diversified basket, it is that single name's own
 #' return relabelled as a "leg return" -- 2 is the smallest count for which
-#' a leg is actually more than one bet. Combined with \code{frac} this
-#' implies a minimum TOTAL ranked-name requirement of
-#' \code{ceiling(.HD_CMR_MIN_LEG_NAMES / frac)} (6 names, at the default
-#' tercile \code{frac}) before either leg is populated on a given date;
-#' below that, the date holds NO position (both legs empty, contributing
-#' \code{gross_ret = 0} for that date) rather than forcing a 1-name leg or
-#' risking an overlapping split -- see
-#' \code{\link{hd_commodity_mr_portfolio}}'s implementation. This is
-#' equivalent to capping the MAXIMUM held fraction implicitly (never more
-#' than \code{2 * frac} of the ranked universe is held, and never less than
-#' zero when breadth is too thin), which the fraction-vs-headcount
-#' literature above does support, even though it does not state a breadth
-#' floor as such.
+#' a leg is actually more than one bet.
+#'
+#' Originally combined with a \code{frac} parameter (item C's tercile
+#' construction) to derive a minimum TOTAL ranked-name requirement of
+#' \code{ceiling(.HD_CMR_MIN_LEG_NAMES / frac)}. Item D's rank-weighting
+#' scheme (\code{\link{hd_commodity_mr_portfolio}}) has no \code{frac}
+#' parameter to combine it with, so \code{\link{.HD_CMR_MIN_BREADTH_RANK}}
+#' below derives the analogous floor directly from this constant instead.
 #'
 #' @noRd
 .HD_CMR_MIN_LEG_NAMES <- 2L
+
+#' Minimum number of ranked names required for rank-weighting to be
+#' meaningful (#751 item D)
+#'
+#' Under \code{\link{hd_commodity_mr_portfolio}}'s rank-weighting scheme,
+#' names are ranked 1..\code{n_avail} by \code{mr_signal} (ties averaged)
+#' and weighted by their distance from the mean rank
+#' \code{(n_avail + 1) / 2}. For \code{n_avail} names with no ties, exactly
+#' \code{floor(n_avail / 2)} receive a strictly positive (long) weight and
+#' \code{floor(n_avail / 2)} receive a strictly negative (short) weight --
+#' the remaining name, only possible when \code{n_avail} is odd, sits
+#' exactly at the mean rank and receives zero weight. \code{floor(n_avail /
+#' 2) >= .HD_CMR_MIN_LEG_NAMES} holds for every \code{n_avail >= 2 *
+#' .HD_CMR_MIN_LEG_NAMES} and fails below it, so \code{2 *
+#' .HD_CMR_MIN_LEG_NAMES} is the exact rank-weighting analogue of the
+#' tercile construction's old \code{ceiling(.HD_CMR_MIN_LEG_NAMES / frac)}
+#' floor: "at least \code{.HD_CMR_MIN_LEG_NAMES} names get a meaningful bet
+#' on each side" is the same guarantee both floors give, derived the way
+#' that best fits each scheme's own parameterisation. Like
+#' \code{.HD_CMR_MIN_LEG_NAMES} itself, this is a HOUSE RULE with no
+#' literature precedent -- see that constant's roxygen.
+#'
+#' Below this floor, \code{hd_commodity_mr_portfolio()} holds no position at
+#' all for the date (both \code{n_long} and \code{n_short} are 0,
+#' contributing \code{gross_ret = 0}) rather than forcing a thin,
+#' near-degenerate rank spread.
+#'
+#' @noRd
+.HD_CMR_MIN_BREADTH_RANK <- 2L * .HD_CMR_MIN_LEG_NAMES
 
 #' Manual series_id -> underlying-exposure map for CMR universe deduplication
 #' (#751 item B)
@@ -515,35 +499,88 @@ hd_commodity_mr_dedupe_universe <- function(returns_tbl) {
 
 #' Commodity Mean Reversion Portfolio
 #'
-#' Convert a mean-reversion signal tibble into monthly long/short portfolio
-#' weights with t+1 execution.
+#' Convert a mean-reversion signal tibble into rank-weighted long/short
+#' portfolio weights with t+1 execution.
 #'
-#' Execution discipline: the signal from month \code{t} (formed from returns
-#' through \code{t-1}) drives trades that are executed at month \code{t+1}
-#' closing prices.  This is enforced by joining the signal at date \code{t}
-#' to the return realised at date \code{t+1} via \code{dplyr::lead()}.
+#' \strong{Rank-weighting, not quantile buckets (#751 item D -- replaces
+#' item C's tercile construction):} every ranked name on a date receives a
+#' weight proportional to its cross-sectional rank distance from the mean
+#' rank -- the construction Asness, Moskowitz & Pedersen (2013, "Value and
+#' Momentum Everywhere", J. Finance) use for cross-sectional value/momentum
+#' portfolios. For \code{n_avail} ranked names on a date: rank each by
+#' \code{mr_signal} (ties broken by AVERAGING the tied positions' ranks --
+#' see "Ties" below), subtract the mean rank \code{(n_avail + 1) / 2}, and
+#' scale the whole cross-section by a single constant so gross exposure
+#' (\code{sum(abs(weight))}) equals \code{target_gross}. This:
+#' \itemize{
+#'   \item needs no fraction or headcount parameter at all, unlike the
+#'     tercile construction it replaces -- it is scale-free in
+#'     \code{n_avail}, which #751 measured moving 6 -> 37 across the sample;
+#'   \item concentrates weight at the extremes (biggest losers / winners),
+#'     where a mean-reversion signal is strongest, instead of giving every
+#'     name inside a bucket the same weight regardless of how extreme its
+#'     rank is;
+#'   \item has no discontinuity at a bucket boundary -- under the tercile
+#'     scheme, with \code{n_avail} down to a median of 17 (#751 item B), name
+#'     5 of 17 was in at full weight and name 6 was out entirely; here
+#'     weight varies continuously with rank;
+#'   \item is dollar-neutral and unit-gross BY CONSTRUCTION: ranks minus the
+#'     mean rank always sum to exactly zero, irrespective of ties (see
+#'     "Ties"), so ONE scaling constant applied to the whole cross-section
+#'     produces \code{sum(weight) = 0} and \code{sum(abs(weight)) =
+#'     target_gross} simultaneously -- the long side and short side
+#'     automatically sum to \code{target_gross / 2} and
+#'     \code{-target_gross / 2} respectively, with no separate per-leg
+#'     scaling needed. Verified explicitly at runtime below rather than
+#'     trusted silently (fail-loud-not-null.md).
+#' }
 #'
-#' \strong{Fixed fraction, not fixed headcount (#751 items C/D):} each leg
-#' holds \code{floor(n_avail * frac)} names, where \code{n_avail} is the
-#' number of ranked names available on that date -- NOT a fixed count. See
-#' \code{.HD_CMR_DEFAULT_FRAC}'s roxygen for the tercile-vs-quintile
-#' citation and reasoning, and \code{.HD_CMR_MIN_LEG_NAMES}'s roxygen
-#' for the minimum-breadth floor below which a date holds no position.
-#' \code{floor()} together with \code{frac < 0.5} (enforced by input
-#' validation) guarantees \code{2 * n_leg <= 2 * frac * n_avail < n_avail},
-#' so the long and short legs can never overlap by construction; this is
-#' also verified explicitly at runtime (fail-loud-not-null.md) rather than
-#' trusted silently.
+#' \strong{Replaces, rather than sits alongside, the tercile construction
+#' (#751 items C/D):} the previous \code{frac} parameter is removed, not
+#' kept as an option. Two live sizing mechanisms invite silent divergence --
+#' a caller who does not set \code{frac} deliberately gets whichever default
+#' happens to be wired in, and nothing forces the choice to be revisited.
+#' Rank-weighting is the better structural fit at every breadth this
+#' universe has shown (#751; recommended in #758's own body), so it replaces
+#' the tercile scheme outright. The tercile construction remains available
+#' in git history at the commit immediately before this change if it is ever
+#' needed again.
+#'
+#' \strong{Ties:} \code{rank(mr_signal, ties.method = "average")} is used,
+#' not \code{"first"}/\code{"min"}/\code{"random"}. Averaging is the only
+#' rule under which tied names receive IDENTICAL weight -- any rule that
+#' assigns tied names different ranks would give economically identical
+#' signals different weights, which is exactly the "silently produces
+#' asymmetric weights" failure this construction must avoid
+#' (fail-loud-not-null.md). Averaging also preserves the sum of ranks
+#' exactly (\code{n_avail * (n_avail + 1) / 2}), which is what guarantees
+#' the dollar-neutral property above holds even in the presence of ties.
+#'
+#' \strong{Minimum-breadth floor:} dates with fewer than
+#' \code{\link{.HD_CMR_MIN_BREADTH_RANK}} ranked names hold no position at
+#' all -- see that constant's roxygen for the derivation (a house rule, not
+#' a literature threshold; #751 items C/D found none). A date where every
+#' \code{mr_signal} happens to be exactly tied (no cross-sectional
+#' distinction to weight) is treated the same way, since averaged ranks
+#' collapse to the mean rank and every raw weight is zero.
+#'
+#' Execution discipline is unchanged from the tercile construction: the
+#' signal from date \code{t} (formed from returns through \code{t-1}) drives
+#' trades executed at date \code{t+1} closing prices, enforced by joining
+#' the signal at date \code{t} to the return realised at date \code{t+1} via
+#' \code{dplyr::lead()}.
 #'
 #' @param signal_tbl Tibble returned by \code{\link{hd_commodity_mr_signal}},
 #'   with columns \code{date}, \code{series_id}, \code{mr_signal}.
 #' @param returns_tbl Tibble with columns \code{date}, \code{series_id},
 #'   \code{monthly_ret}.  Must overlap in date range with \code{signal_tbl}.
-#' @param frac Numeric fraction in \verb{(0, 0.5)}. Share of the ranked
-#'   cross-section held on EACH leg (long and short) -- \code{1/3} =
-#'   terciles (default), \code{1/5} = quintiles. Replaces the previous fixed
-#'   \code{n_long}/\code{n_short} headcount parameters (#751 items C/D): one
-#'   sizing mechanism, not two.
+#' @param target_gross Numeric, single positive value. Target gross exposure
+#'   (\code{sum(abs(weight))}) on every date that clears the minimum-breadth
+#'   floor. Default 2.0, matching \code{strategy_gross_convention}'s
+#'   existing CMR entry (R/plan_exposure.R) -- the long side sums to
+#'   \code{target_gross / 2}, the short side to \code{-target_gross / 2}, so
+#'   the default reproduces the same 1.0-long / 1.0-short exposure LEVEL the
+#'   tercile construction implemented, on a different weighting SHAPE.
 #' @param cost_bps Numeric. One-way transaction cost in basis points
 #'   (default 20 = 0.2\%).  The same 0.2\% used in commodity momentum (#134).
 #'
@@ -555,17 +592,35 @@ hd_commodity_mr_dedupe_universe <- function(returns_tbl) {
 #'     \item{turnover}{One-way turnover fraction.}
 #'     \item{cost}{Transaction cost deducted (= turnover * cost_bps/10000).}
 #'     \item{net_ret}{Net return after transaction costs.}
-#'     \item{n_long}{Number of long positions actually held.}
-#'     \item{n_short}{Number of short positions actually held.}
+#'     \item{n_long}{Number of names receiving strictly positive weight.}
+#'     \item{n_short}{Number of names receiving strictly negative weight.}
 #'     \item{n_avail}{Number of ranked names available that date (breadth
 #'       diagnostic, #751 item C).}
-#'     \item{held_frac}{\code{(n_long + n_short) / n_avail}: the fraction of
-#'       that date's ranked universe actually held (breadth diagnostic,
-#'       #751 item C). 0 when \code{n_avail} is below the minimum-breadth
-#'       floor.}
+#'     \item{held_frac}{\code{(n_long + n_short) / n_avail}. Retained for
+#'       continuity with the tercile construction, but no longer the
+#'       headline breadth diagnostic -- see \code{n_eff}. Under
+#'       rank-weighting this is ~1.0 by construction (every ranked name
+#'       gets a nonzero weight, except an exact median tie possible only for
+#'       odd \code{n_avail}), so it is now mostly a sanity check that the
+#'       minimum-breadth floor is firing where expected, not a measure of
+#'       participation.}
+#'     \item{n_eff}{Effective breadth (#751 item D; a step toward item F):
+#'       the inverse Herfindahl index of the NORMALISED absolute weights,
+#'       \code{1 / sum(p_i^2)} where \code{p_i = abs(weight_i) /
+#'       sum(abs(weight_i))}. This answers the question \code{held_frac}
+#'       answered under the tercile scheme -- "how many independent bets is
+#'       this portfolio effectively making" -- because rank-weighting no
+#'       longer has a discrete leg size to report: every ranked name
+#'       receives SOME weight, but a portfolio dominated by its two most
+#'       extreme names has \code{n_eff} near 2 regardless of how large
+#'       \code{n_avail} is. Bounded \verb{[1, n_long + n_short]}; only
+#'       approaches \code{n_long + n_short} in the limit of near-equal
+#'       weight magnitudes, which a LINEAR rank scheme never quite reaches
+#'       (the most extreme ranks always carry more weight than near-median
+#'       ones). 0 on dates holding no position.}
 #'   }
-#'   Dates below \code{.HD_CMR_MIN_LEG_NAMES}'s minimum-breadth floor
-#'   hold no position at all: \code{n_long = n_short = 0},
+#'   Dates below \code{.HD_CMR_MIN_BREADTH_RANK}'s minimum-breadth floor
+#'   hold no position at all: \code{n_long = n_short = 0}, \code{n_eff = 0},
 #'   \code{gross_ret = 0}. Such dates are still returned as rows (not
 #'   dropped) so the return series stays date-complete for downstream
 #'   periodicity checks (#738).
@@ -574,7 +629,7 @@ hd_commodity_mr_dedupe_universe <- function(returns_tbl) {
 #' @export
 hd_commodity_mr_portfolio <- function(signal_tbl,
                                        returns_tbl,
-                                       frac = .HD_CMR_DEFAULT_FRAC,
+                                       target_gross = 2.0,
                                        cost_bps = 20) {
   if (!is.data.frame(signal_tbl)) {
     cli::cli_abort(c("x" = "{.arg signal_tbl} must be a data frame."))
@@ -582,17 +637,13 @@ hd_commodity_mr_portfolio <- function(signal_tbl,
   if (!is.data.frame(returns_tbl)) {
     cli::cli_abort(c("x" = "{.arg returns_tbl} must be a data frame."))
   }
-  if (!is.numeric(frac) || length(frac) != 1L || is.na(frac) ||
-      frac <= 0 || frac >= 0.5) {
+  if (!is.numeric(target_gross) || length(target_gross) != 1L ||
+      is.na(target_gross) || target_gross <= 0) {
     cli::cli_abort(c(
-      "x" = "{.arg frac} must be a single fraction in (0, 0.5), got {frac}.",
+      "x" = "{.arg target_gross} must be a single positive number, got {target_gross}.",
       "i" = paste0(
-        "{.arg frac} is the share of the ranked cross-section held on EACH ",
-        "leg (long and short) -- 1/3 = terciles (default), 1/5 = quintiles."
-      ),
-      "i" = paste0(
-        "A value >= 0.5 would let the two legs overlap, or consume the ",
-        "entire ranked universe leaving nothing held out; see #751 items C/D."
+        "{.arg target_gross} is the target sum(abs(weight)) on every date ",
+        "that clears the minimum-breadth floor -- see #751 item D."
       )
     ))
   }
@@ -619,76 +670,94 @@ hd_commodity_mr_portfolio <- function(signal_tbl,
   breadth_by_date <- combined |>
     dplyr::count(date, name = "n_avail")
 
-  min_total_names <- ceiling(.HD_CMR_MIN_LEG_NAMES / frac)
-
-  # Rank within each signal date; assign long/short weights by FRACTION of
-  # that date's own ranked breadth, not a fixed headcount (#751 items C/D).
+  # Rank-weight within each signal date (#751 item D). rank(..., "average")
+  # breaks ties symmetrically -- see roxygen "Ties". raw_weight always sums
+  # to exactly zero within a date (by construction of rank minus mean rank),
+  # which is what makes a SINGLE per-date scaling constant (gross_raw)
+  # sufficient to hit both the dollar-neutral and unit-gross targets at once.
   ranked <- combined |>
     dplyr::group_by(date) |>
     dplyr::mutate(
-      rk      = dplyr::row_number(dplyr::desc(mr_signal)),  # rank 1 = highest signal = biggest loser
-      n_avail = dplyr::n(),
-      # Dates below the minimum-breadth floor hold no position (n_leg = 0)
-      # rather than a house-rule-forced 1-name leg or an overlapping split
-      # -- see .HD_CMR_MIN_LEG_NAMES's roxygen.
-      n_leg   = dplyr::if_else(
-        n_avail >= min_total_names,
-        as.integer(floor(n_avail * frac)),
-        0L
-      )
+      n_avail    = dplyr::n(),
+      rk         = rank(mr_signal, ties.method = "average"),
+      rank_bar   = (n_avail + 1) / 2,
+      raw_weight = rk - rank_bar
     ) |>
-    dplyr::filter(n_leg > 0L, rk <= n_leg | rk > (n_avail - n_leg)) |>
-    dplyr::mutate(
-      leg    = dplyr::if_else(rk <= n_leg, "long", "short"),
-      weight = dplyr::if_else(leg == "long", 1 / n_leg, -1 / n_leg)
-    ) |>
+    # Minimum-breadth floor -- see .HD_CMR_MIN_BREADTH_RANK's roxygen.
+    dplyr::filter(n_avail >= .HD_CMR_MIN_BREADTH_RANK) |>
+    dplyr::mutate(gross_raw = sum(abs(raw_weight))) |>
+    # A date where every mr_signal is exactly tied has gross_raw == 0 (every
+    # name shares the same averaged rank_bar rank) -- there is no
+    # cross-sectional distinction to weight. Treated the same as a
+    # below-floor date: no position. This also guards the division below.
+    dplyr::filter(gross_raw > 1e-12) |>
+    dplyr::mutate(weight = raw_weight / gross_raw * target_gross) |>
+    # The one name that can land exactly at the mean rank (only possible for
+    # odd n_avail with no other ties) receives weight == 0 and holds no
+    # position -- it is neither long nor short.
+    dplyr::filter(weight != 0) |>
+    dplyr::mutate(leg = dplyr::if_else(weight > 0, "long", "short")) |>
     dplyr::ungroup()
 
-  # fail-loud-not-null.md: verify the no-overlap invariant explicitly rather
-  # than trusting the floor()/frac<0.5 arithmetic silently -- a future
+  # fail-loud-not-null.md: verify the dollar-neutral / unit-gross invariants
+  # explicitly rather than trusting the rank arithmetic silently -- a future
   # refactor that breaks it must abort loudly, not produce a
   # plausible-looking but wrong portfolio.
-  overlap_dates <- ranked |>
-    dplyr::distinct(date, n_avail, n_leg) |>
-    dplyr::filter(2L * n_leg > n_avail)
-  if (nrow(overlap_dates) > 0L) {
+  invariant_check <- ranked |>
+    dplyr::group_by(date) |>
+    dplyr::summarise(
+      net_w   = sum(weight),
+      gross_w = sum(abs(weight)),
+      .groups = "drop"
+    ) |>
+    dplyr::filter(abs(net_w) > 1e-6 | abs(gross_w - target_gross) > 1e-6)
+  if (nrow(invariant_check) > 0L) {
     cli::cli_abort(c(
       "x" = paste0(
-        "CMR portfolio construction would OVERLAP the long/short legs on ",
-        "{nrow(overlap_dates)} date{?s}."
+        "CMR rank-weighted portfolio violates the dollar-neutral / ",
+        "unit-gross invariant on {nrow(invariant_check)} date{?s}."
       ),
       "i" = paste0(
-        "2 * n_leg > n_avail should be impossible once {.arg frac} < 0.5 is ",
-        "enforced at input validation -- investigate the rank/n_leg ",
-        "arithmetic before trusting this portfolio."
+        "Expected sum(weight) ~ 0 and sum(abs(weight)) ~ {target_gross} on ",
+        "every date holding a position -- see #751 item D."
       ),
-      "i" = "First offending date: {format(overlap_dates$date[1])} (n_avail={overlap_dates$n_avail[1]}, n_leg={overlap_dates$n_leg[1]})."
+      "i" = paste0(
+        "First offending date: {format(invariant_check$date[1])} ",
+        "(sum(weight)={round(invariant_check$net_w[1], 6)}, ",
+        "sum(abs(weight))={round(invariant_check$gross_w[1], 6)})."
+      )
     ))
   }
 
-  # Monthly gross returns and position counts, for dates that hold a
-  # position at all.
+  # Gross returns, position counts, and effective breadth (n_eff, #751 item
+  # D), for dates that hold a position at all.
   monthly_traded <- ranked |>
     dplyr::group_by(date) |>
     dplyr::summarise(
       gross_ret   = sum(weight * next_ret, na.rm = TRUE),
       n_long_pos  = sum(leg == "long",  na.rm = TRUE),
       n_short_pos = sum(leg == "short", na.rm = TRUE),
+      # Inverse Herfindahl of the normalised absolute weights -- see @return
+      # n_eff above. sum(abs(weight)) > 0 is guaranteed here (gross_raw >
+      # 1e-12 was enforced above), so this division is safe.
+      n_eff       = 1 / sum((abs(weight) / sum(abs(weight)))^2),
       .groups = "drop"
     )
 
   # Every date the signal/return join produced (breadth_by_date) gets a row
   # in the output, INCLUDING dates below the minimum-breadth floor -- those
-  # hold gross_ret = 0 / n_long = n_short = 0 (flat, no position), matching
-  # the pre-existing "zero valid signals -> gross_ret = 0" convention rather
-  # than silently vanishing from the return series (fail-loud-not-null.md:
-  # a dropped date is a dropped observation, not a neutral one).
+  # hold gross_ret = 0 / n_long = n_short = 0 / n_eff = 0 (flat, no
+  # position), matching the pre-existing "zero valid signals -> gross_ret =
+  # 0" convention rather than silently vanishing from the return series
+  # (fail-loud-not-null.md: a dropped date is a dropped observation, not a
+  # neutral one).
   monthly <- breadth_by_date |>
     dplyr::left_join(monthly_traded, by = "date") |>
     dplyr::mutate(
       gross_ret   = dplyr::if_else(is.na(gross_ret), 0, gross_ret),
       n_long_pos  = dplyr::if_else(is.na(n_long_pos), 0L, n_long_pos),
-      n_short_pos = dplyr::if_else(is.na(n_short_pos), 0L, n_short_pos)
+      n_short_pos = dplyr::if_else(is.na(n_short_pos), 0L, n_short_pos),
+      n_eff       = dplyr::if_else(is.na(n_eff), 0, n_eff)
     )
 
   # Turnover: sum of absolute weight changes relative to prior traded date.
@@ -717,5 +786,5 @@ hd_commodity_mr_portfolio <- function(signal_tbl,
       n_short   = n_short_pos,
       held_frac = dplyr::if_else(n_avail > 0L, (n_long + n_short) / n_avail, 0)
     ) |>
-    dplyr::select(date, gross_ret, turnover, cost, net_ret, n_long, n_short, n_avail, held_frac)
+    dplyr::select(date, gross_ret, turnover, cost, net_ret, n_long, n_short, n_avail, held_frac, n_eff)
 }
