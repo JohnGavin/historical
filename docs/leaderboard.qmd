@@ -645,13 +645,24 @@ if (!is.null(lb)) {
   numeric_cols <- which(sapply(by_part, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
-  DT::datatable(
-    by_part,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      class = "dt-caption",
+  # 511 chars (> hd_caption()'s 300-char threshold) but was a raw
+  # tags$caption() with no collapse -- audited and fixed alongside the
+  # Rankings/financing-sensitivity captions (dispatch 2d451d09, follow-up to
+  # 0b412a9c which fixed those two but missed this one and Structural Breaks
+  # below).
+  by_part_caption <- hd_caption(
+    paste0(
       "All strategies × Training, Testing, and Holdout partitions, ordered Testing / Holdout / Full Period / Training then by Sharpe (descending). Years column shows date ranges. Holdout (2024-2026) is observed, not sealed -- treat it with a discount relative to a genuinely untouched sample (#660). Validation partition is sealed and genuinely untouched (2026-05-01 onwards) — not shown until production deployment."
     ),
+    short = "All strategies across Training, Testing, and Holdout partitions, sorted by Sharpe within each. Holdout is observed, not sealed — expand for caveats.",
+    summary_label = "Partition caveats"
+  )
+
+  DT::datatable(
+    by_part,
+    # by_part_caption is already a complete tags$caption() object -- do not
+    # re-wrap it (see the Rankings table above for why that matters).
+    caption = by_part_caption,
     rownames = FALSE,
     filter = "top",
     options = list(
@@ -1196,6 +1207,18 @@ if (!is.null(sb_sum) && !is.null(snames)) {
   cap_text <- if (!is.null(sb_cap)) sb_cap else
     "Structural break analysis — run tar_make() to populate."
 
+  # cap_text (structural_breaks_caption target, R/plan_structural_breaks.R)
+  # is a single plain string, ~1170 chars (> hd_caption()'s 300-char
+  # threshold) -- was a raw tags$caption() with no collapse. No `short` is
+  # supplied here: cap_text is dynamically built per-run (strategy counts,
+  # significance level), so hd_caption()'s documented auto-split (first
+  # sentence break after position 20) is used rather than hand-summarising a
+  # string this function doesn't have the underlying numbers to re-derive.
+  # Audited and fixed alongside the Rankings/financing-sensitivity captions
+  # (dispatch 2d451d09, follow-up to 0b412a9c which fixed those two but
+  # missed this one and By Partition above).
+  sb_caption <- hd_caption(cap_text, summary_label = "Full methodology note")
+
   # Explicit sort rank for Material -- same rationale as .credible_rank /
   # .redundant_rank above: DT's default string comparator sorts the display
   # string alphabetically, not assessed-good, assessed-bad, never-assessed.
@@ -1204,11 +1227,9 @@ if (!is.null(sb_sum) && !is.null(snames)) {
 
   DT::datatable(
     sb_disp,
-    caption  = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      class = "dt-caption",
-      cap_text
-    ),
+    # sb_caption is already a complete tags$caption() object -- do not
+    # re-wrap it (see the Rankings table above for why that matters).
+    caption  = sb_caption,
     rownames = FALSE,
     filter   = "top",
     options  = list(
