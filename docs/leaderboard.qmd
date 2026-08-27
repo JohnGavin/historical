@@ -902,12 +902,14 @@ Rejection rates across 6 null environments (M = 100 simulations each). A low rat
 safe_tar_read("fals_vig_null_heatmap")
 ```
 
+::: {.fig-caption}
 ```{r}
 #| label: fals-heatmap-caption
 #| results: asis
 cap <- safe_tar_read("fals_vig_null_heatmap_caption")
 if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 ```
+:::
 
 #### Alpha vs Factor Exposure
 
@@ -920,12 +922,14 @@ Scatter plot of annualised alpha (%) against R² (%) from the Fama-French 5-Fact
 safe_tar_read("fals_vig_ff_alpha_plot")
 ```
 
+::: {.fig-caption}
 ```{r}
 #| label: fals-alpha-caption
 #| results: asis
 cap <- safe_tar_read("fals_vig_ff_caption")
 if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
 ```
+:::
 
 #### See Also
 
@@ -1339,6 +1343,7 @@ if (!is.null(sb_sum) && !is.null(snames)) {
 }
 ```
 
+::: {.fig-caption}
 ```{r}
 #| label: sb-dotplot-caption
 #| results: asis
@@ -1363,6 +1368,7 @@ fig_cap <- paste0(
 )
 cat(paste0("\n*", fig_cap, "*\n"))
 ```
+:::
 
 # Details
 
