@@ -1,7 +1,11 @@
 /* Shared CSS for all historicaldata vignettes */
 
-/* Base font: consistent across all tabs, pages, tables, captions */
-body { font-size: 1.1em; }
+/* Base font size, as a custom property so the font +/- controls in
+   vignette-shared.js can step it at runtime without rewriting every rule
+   that derives from it (navbar, nav-link, captions all use `em`, which is
+   relative to this). Default raised two steps (1.1em -> 1.3em, #0b412a9c). */
+:root { --base-font-size: 1.3em; }
+body { font-size: var(--base-font-size, 1.3em); }
 
 /* Page titles smaller to match tab labels */
 .navbar .navbar-title, h1.title { font-size: 1.2em !important; }
@@ -111,3 +115,17 @@ details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
 
 /* Right-justify numeric columns in tables */
 .dt-right { text-align: right !important; }
+
+/* Font size +/- controls, next to the built-in dark/light toggle (#0b412a9c) */
+.hd-font-controls {
+  display: inline-flex; align-items: center; gap: 2px;
+  margin: 0 0.4em; font-size: 0.85em;
+}
+.hd-font-btn {
+  display: inline-block; padding: 0 0.4em; line-height: 1.8;
+  border-radius: 3px; cursor: pointer; text-decoration: none !important;
+  color: inherit; opacity: 0.85;
+}
+.hd-font-btn:hover, .hd-font-btn:focus-visible {
+  opacity: 1; background: rgba(128, 128, 128, 0.25);
+}

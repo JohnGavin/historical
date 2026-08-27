@@ -118,6 +118,78 @@ clean_dates <- function(x) {
   x
 }
 
+#' Build a real HTML anchor for use inside DT captions/notes
+#'
+#' Captions built via hd_caption()/htmltools::tags$caption(text) auto-escape
+#' any embedded `<`/`>`/`&` when `text` is a plain string -- that protects
+#' prose like "CAGR < 20%" from being mis-parsed as a tag, but it also means
+#' markdown-style `[text](url)` link syntax passed as plain text is never
+#' rendered as a clickable link: DT hands the caption straight to the
+#' browser as HTML, with no pandoc/markdown pass, so it just shows up as
+#' literal brackets and a bare URL. Build real links with this helper and
+#' combine them with plain-text fragments via htmltools::tagList() -- see
+#' the leaderboard "Rankings" caption for a worked example.
+#'
+#' @param label Link text (character or an htmltools tag, e.g. tags$code(...))
+#' @param href URL
+hd_link <- function(label, href) {
+  htmltools::tags$a(href = href, target = "_blank", rel = "noopener noreferrer", label)
+}
+
+#' Build a DT/HTML table caption with automatic progressive disclosure
+#'
+#' A `<caption>` that grows past a few sentences dominates the table it is
+#' meant to introduce -- readers cannot tell "what does this table rank" from
+#' "here are eleven comparability caveats" at a glance. Captions longer than
+#' `threshold` characters are split: the caption shows only a short summary
+#' unconditionally, with the remaining text pushed into a collapsed
+#' `<details>` block.
+#'
+#' @param text Full caption content. Either a single plain character string
+#'   (auto-escaped, exactly like a bare `htmltools::tags$caption()` child),
+#'   or an htmltools tagList mixing plain text with real links (see
+#'   `hd_link()`) -- in which case `short` MUST be supplied explicitly,
+#'   since there is no single string to summarise automatically.
+#' @param short Optional short summary shown unconditionally. If `text` is a
+#'   single plain string longer than `threshold` and `short` is NULL, the
+#'   first sentence of `text` is used (falls back to a hard truncation if no
+#'   sentence break is found early enough).
+#' @param threshold Character count above which the `<details>` wrapper is
+#'   used (ignored when `short` is supplied explicitly).
+#' @param summary_label Text shown on the collapsed `<summary>` toggle.
+#' @param style_extra Additional inline CSS appended to the caption's style
+#'   (e.g. a colour override some dashboards apply).
+hd_caption <- function(text, short = NULL, threshold = 300,
+                        summary_label = "Show full details", style_extra = "") {
+  style <- paste0("caption-side: top; text-align: left; font-weight: bold;", style_extra)
+  is_plain <- is.character(text) && length(text) == 1L
+
+  if (is_plain && nchar(text) <= threshold) {
+    return(htmltools::tags$caption(style = style, class = "dt-caption", text))
+  }
+
+  if (is.null(short)) {
+    if (!is_plain) {
+      stop("hd_caption(): `short` is required when `text` is not a single plain string.",
+           call. = FALSE)
+    }
+    # First sentence break after position 20 (avoids splitting on early
+    # abbreviations like "e.g."); falls back to a hard truncation.
+    m <- regexpr("(?<=[a-zA-Z0-9)%])\\. (?=[A-Z])", text, perl = TRUE)
+    short <- if (m[1] > 20) substr(text, 1, m[1]) else
+      paste0(substr(text, 1, threshold), "…")
+  }
+
+  htmltools::tags$caption(
+    style = style, class = "dt-caption",
+    htmltools::tags$span(short), " ",
+    htmltools::tags$details(
+      htmltools::tags$summary(summary_label),
+      text
+    )
+  )
+}
+
 #' DT table with caption, sortable, human-readable formatting
 hd_dt <- function(df, caption_text) {
   if (is.null(df)) return(invisible(NULL))
@@ -146,11 +218,7 @@ hd_dt <- function(df, caption_text) {
 
   DT::datatable(
     df,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      class = "dt-caption",
-      caption_text
-    ),
+    caption = hd_caption(caption_text),
     rownames = FALSE,
     filter = "top",
     options = list(
