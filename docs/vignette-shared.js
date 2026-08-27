@@ -155,3 +155,28 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+
+// Cross-page content links (e.g. "[Biases and Caveats](#biases-and-caveats)"
+// inside a callout or table caption, historical#dashboard-output-first
+// consolidation). A dashboard PAGE is really a Bootstrap tab pane with
+// display:none while inactive, so a plain in-content <a href="#some-id">
+// pointing at one does NOT make it visible -- only clicking its nav-link (or
+// calling the Bootstrap Tab API, as the handler above does) does. This finds
+// the nav-link whose data-bs-target matches the clicked link's href and
+// activates it the same way, then scrolls to the target. Links that don't
+// target a dashboard page (e.g. a footnote anchor within the current page)
+// fall through to normal browser anchor behaviour untouched.
+document.addEventListener('click', function (e) {
+  var link = e.target.closest('a[href^="#"]');
+  if (!link || link.matches('.nav-link[data-bs-toggle="tab"]')) return;
+  var targetSel = link.getAttribute('href');
+  if (!targetSel || targetSel.length < 2) return;
+  var navLink = document.querySelector(
+    '.nav-link[data-bs-toggle="tab"][data-bs-target="' + targetSel + '"]'
+  );
+  if (!navLink) return; // not a dashboard-page link; let default anchor behaviour happen
+  e.preventDefault();
+  new bootstrap.Tab(navLink).show();
+  var target = document.querySelector(targetSel);
+  if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+});

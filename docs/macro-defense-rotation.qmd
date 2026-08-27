@@ -128,7 +128,7 @@ hd_dt <- function(df, caption_text) {
 }
 ```
 
-::: {.callout-warning}
+::: {.callout-warning .small}
 **EXPLORATORY BACKTEST — IN-SAMPLE.** Tabs 2-6 show in-sample results (2008-2022). Tab 7 shows out-of-sample (2023+). This is not investment advice — it is an educational exercise in quantitative backtesting methodology using the `historicaldata` R package.
 :::
 

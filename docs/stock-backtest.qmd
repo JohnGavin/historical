@@ -39,11 +39,12 @@ disc_path <- if (file.exists("../R/disclosures.R")) "../R/disclosures.R" else
 source(disc_path)
 ```
 
-::: {.callout-warning collapse="false" title="Survivorship bias"}
-`r disclosure_survivorship()`
-:::
-
 # Comparison
+
+::: {.callout-note .small collapse="false"}
+⚠ Stock MAX, Stock DRIF, and XGBoost DRIF below carry known survivorship
+bias in the stock universe. Full detail: [Biases and Caveats](#biases-and-caveats).
+:::
 
 ## Row
 
@@ -669,3 +670,34 @@ if (!is.null(params)) {
 #| results: asis
 build_info()
 ```
+
+# Biases and Caveats
+
+## Row
+
+### {.tabset}
+
+#### Survivorship Bias
+
+::: {.callout-warning collapse="false" title="Survivorship bias"}
+`r disclosure_survivorship()`
+:::
+
+Affected on this dashboard: [Stock MAX](#stock-max), [Stock DRIF](#stock-drif),
+and [XGBoost DRIF](#xgboost-drif) — all draw on the same `stk_universe`. See
+the [Comparison](#comparison) page for the strategy overview these results
+feed into.
+
+#### About This Page
+
+This dashboard-wide caveat used to sit at the very top of the [Comparison](#comparison)
+page, ahead of any content. It moved here so a first-time reader sees the
+strategy comparison before the caveat, while a compact pointer at the top of
+[Comparison](#comparison) keeps it one click away rather than hidden.
+
+The **[Strategy Leaderboard](leaderboard.html#biases-and-caveats)** dashboard
+collects the same caveat, plus a second one (statistical detection power and
+rigour), in its own equivalent page — the leaderboard ranks the strategies
+built on this same `stk_universe` alongside every other strategy in the
+project. See [issue #150](https://github.com/JohnGavin/historical/issues/150)
+for the underlying data-availability constraint and remediation status.

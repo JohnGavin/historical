@@ -7,6 +7,50 @@
 :root { --base-font-size: 1.3em; }
 body { font-size: var(--base-font-size, 1.3em); }
 
+/* Keep the dashboard header's colour strip covering the full visible width
+   at every horizontal scroll position, WITHOUT disabling horizontal
+   scrolling anywhere on the page.
+
+   Diagnosis: Quarto's dashboard header (#quarto-dashboard-header .navbar)
+   is a normal block element sized to the viewport's width -- it does not
+   itself have overflowing content, so it never grows past the viewport. If
+   some other element on the page (a wide, no-wrap DT table is the common
+   case here) escapes its own local scroll container and overflows the
+   document, the ROOT element's scrollable area grows to include that
+   overflow (this is a special rule for the root/viewport scrollbar, not
+   something that also widens ordinary sibling boxes -- see CSS Overflow
+   Module ยง Overflow Propagation). Every other element, including the
+   header, keeps its own width (== viewport width). Scrolling the page right
+   then shifts the header's normal-flow box left along with everything
+   else, leaving a gap at the right edge -- where the header's blue/dark
+   background (`.navbar { background-color: ... }`, verified in the
+   compiled bootstrap bundle) no longer reaches -- exactly the size of the
+   overflow.
+
+   `overflow-x: hidden` on html/body "fixes" the gap by removing the
+   document's ability to overflow at all -- but that is also the ONLY path
+   to any element wider than the viewport that is not already inside its
+   own `overflow-x: auto` container (mermaid diagrams, plotly/htmlwidget
+   output, `<pre>` code blocks, non-DT tables): those become permanently
+   unreachable, clipped with no scrollbar to reach them. Setting overflow-x
+   on html/body also turns them into scroll containers, which is a
+   well-known way to silently break `position: sticky` on descendants.
+
+   Fix: pin the header to the left edge of the nearest scrolling ancestor
+   instead of suppressing scrolling. `position: sticky; left: 0` keeps the
+   navbar's existing viewport-width box flush against x=0 of the visible
+   area at every scroll offset -- covering the full visible width the same
+   way a `position: fixed` header would, but without leaving normal
+   document flow (no vertical-position or stacking side effects). No width
+   change is needed: the navbar is already viewport-width by default (see
+   diagnosis above), so a fixed `width: 100vw` is deliberately avoided --
+   that would introduce its own overflow when a vertical scrollbar is
+   present. Wide DT tables keep their own contained horizontal scrollbar via
+   `.dataTables_wrapper { overflow-x: auto }` below; this rule does not
+   change how they scroll, and every other element on the page remains
+   reachable via the document's own horizontal scrollbar. */
+#quarto-dashboard-header .navbar { position: sticky; left: 0; }
+
 /* Page titles smaller to match tab labels */
 .navbar .navbar-title, h1.title { font-size: 1.2em !important; }
 .nav-link { font-size: 0.95em !important; }
@@ -116,10 +160,23 @@ details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
 /* Right-justify numeric columns in tables */
 .dt-right { text-align: right !important; }
 
-/* Font size +/- controls, next to the built-in dark/light toggle (#0b412a9c) */
+/* Font size +/- controls, next to the built-in dark/light toggle (#0b412a9c).
+   vignette-shared.js inserts this span via insertAdjacentElement('afterend', ...)
+   on .quarto-color-scheme-toggle, which places it right after the toggle in
+   DOM/source order. That is NOT enough here: Quarto's dashboard header
+   (#quarto-dashboard-header .navbar-container) is a flex container where
+   Quarto's own CSS assigns explicit `order` values to lay siblings out
+   (.quarto-color-scheme-toggle -> order:9, .navbar-toggler -> order:10,
+   .navbar-collapse (the tab links) -> order:8 at >=768px / order:1000 below
+   that). A sibling with no `order` defaults to order:0 -- lower than all of
+   those -- so it renders BEFORE the tabs and the toggle regardless of its
+   DOM position, i.e. visually to the LEFT of the toggle. Setting an order
+   higher than every other navbar item (toggle=9, hamburger=10) forces it to
+   the rightmost position at every breakpoint. */
 .hd-font-controls {
   display: inline-flex; align-items: center; gap: 2px;
   margin: 0 0.4em; font-size: 0.85em;
+  order: 20;
 }
 .hd-font-btn {
   display: inline-block; padding: 0 0.4em; line-height: 1.8;
