@@ -80,18 +80,6 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="index_files/libs/quarto-dashboard/web-components.js" type="module"></script>
 <script src="index_files/libs/quarto-dashboard/components.js"></script>
 
-<!-- Shared color-scheme signal (accessibility rule Part 2 Clause 0, historical#0b412a9c).
-     Static value is always "dark" -- that is what
-     ~/.claude/scripts/check_dashboard_color_scheme.sh greps for in the
-     docs/_quarto.yml post-render gate. Pages with a light theme keep this
-     in sync with the ACTUAL active theme at runtime via a MutationObserver
-     in vignette-shared.js; ANY color-scheme declaration suppresses
-     Chrome's Auto Dark Mode heuristic regardless of its value, so this
-     static default never causes Chrome to invert the page. -->
-<meta name="color-scheme" content="dark">
-<style>:root, html, body { color-scheme: dark; }</style>
-<link rel="stylesheet" href="vignette-shared.css">
-<script src="vignette-shared.js"></script>
 <style>
 body { font-size: 1.2em; }
 /* Kill dashboard fill layout */
@@ -708,7 +696,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
 <pre><code># &gt; nix flake metadata
 description:    historical_data — a T data analysis project
-last_modified:  2026-08-25 20:21 BST
+last_modified:  2026-08-25 20:00 BST
 locked_rev:     
 inputs (7):  flake-utils, flake-utils_2, nixpkgs, nixpkgs_2, systems, systems_2, t-lang</code></pre>
 </div>
@@ -744,7 +732,7 @@ inputs (7):  flake-utils, flake-utils_2, nixpkgs, nixpkgs_2, systems, systems_2,
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
 <pre><code>Warning message:
 In normalizePath(path) :
-  path[1]="/Users/johngavin/docs_gh/proj/finance/data/historical/.claude/worktrees/agent-a4cccac445d4f2e00/docs/packages/historicaldata": No such file or directory</code></pre>
+  path[1]="/Users/johngavin/docs_gh/proj/finance/data/historical/docs/packages/historicaldata": No such file or directory</code></pre>
 </div>
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
 <pre><code># &gt; scripts/fetch_*.{R,py}  (not run at render time — too expensive)</code></pre>
@@ -787,7 +775,7 @@ In normalizePath(path) :
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/3bbf1ff288e4f4f4be476f83abed99feea98361a"><code>3bbf1ff</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-26 10:42:18”</p>
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases/tag/v0.1.0">0.1.0</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/f5dd37b06a15d16c5c85c11638014afe419d1b21"><code>f5dd37b</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-25 20:19:07”</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
