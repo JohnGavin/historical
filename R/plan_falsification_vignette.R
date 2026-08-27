@@ -114,7 +114,7 @@ plan_falsification_vignette <- function() {
           pct = rejection_rate * 100
         )
 
-      # #(followup): the previous scale used fixed limits = c(0, 100) with
+      # #774: the previous scale used fixed limits = c(0, 100) with
       # midpoint = 8, but observed rejection rates cluster in a narrow band
       # (typically 1-10%, see fals_vig_null_heatmap_caption's Range: text).
       # Squeezing that band into a 0-100 domain collapsed every cell to a
