@@ -1645,6 +1645,94 @@ check_leaderboard_deflated_sharpe_coverage <- function(leaderboard, exemptions =
 }
 
 
+#' Assert leaderboard `net_cagr`, `cvar_95`, and `credible` are jointly NA or
+#' jointly non-NA per row (S23, fail-loud-not-null.md)
+#'
+#' \code{net_cagr}, \code{cvar_95}, and \code{credible} are all produced in a
+#' single pass by \code{calc_cost_metrics()} (R/plan_leaderboard.R) from the
+#' SAME \code{cost_rows} join -- one matching \code{cost_rows} row (built by
+#' \code{slice_portfolio()} for the 5 core strategies plus PSO Optimal)
+#' produces all three columns at once; a strategy/period \code{cost_rows}
+#' never covers leaves all three NA together via the
+#' \code{all_metrics |> left_join(cost_rows, by = c("strategy", "period"))}
+#' join. \code{docs/leaderboard.qmd}'s Rankings table renders exactly this
+#' shared NA-ness as a single "not computed" verdict across all three
+#' columns (the "#637 follow-up" comment there) -- this gate is what keeps
+#' that assumption from silently going stale.
+#'
+#' Guards the \code{.claude/rules/fail-loud-not-null.md} defect class
+#' (#637/#640/#641/#643): a future change that extends \code{cost_rows} (or
+#' adds a second source) to populate ONE of these three columns for a new
+#' strategy/period without the other two would let
+#' \code{docs/leaderboard.qmd} render an internally inconsistent row -- e.g.
+#' a "Credible: yes" verdict with no Net CAGR value to have been judged
+#' credible about, or a Net CAGR figure with no CVaR 95% alongside it. The
+#' rule's Required Pattern item 5 ("Add a QA gate, not just a test") is what
+#' this target answers; the joint-presence check itself is exercised
+#' directly against synthetic fixtures in
+#' tests/testthat/test-leaderboard-cost-metrics-coverage.R, mirroring
+#' check_leaderboard_sharpe_coherence() (S17)'s shape.
+#'
+#' Unlike S17/S20/S21, this check is deliberately NOT scoped to
+#' \code{period == "Full Period"}: \code{cost_rows} produces a row per
+#' Training/Testing/Holdout/Full Period slice for every strategy it covers
+#' (\code{slice_portfolio()}), so the joint-presence property must hold on
+#' every period row, not just the full-sample one.
+#'
+#' @param leaderboard Tibble with at least \code{strategy}, \code{period},
+#'   \code{net_cagr}, \code{cvar_95}, \code{credible} columns (the output of
+#'   the \code{leaderboard} target).
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_cost_metrics_joint_presence <- function(leaderboard) {
+  required_cols <- c("strategy", "period", "net_cagr", "cvar_95", "credible")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_leaderboard_cost_metrics_joint_presence() (S23) requires strategy, period, net_cagr, cvar_95, credible."
+    ))
+  }
+
+  has_net_cagr <- !is.na(leaderboard$net_cagr)
+  has_cvar_95  <- !is.na(leaderboard$cvar_95)
+  has_credible <- !is.na(leaderboard$credible)
+
+  disagree <- !(has_net_cagr == has_cvar_95 & has_cvar_95 == has_credible)
+
+  if (any(disagree)) {
+    idx <- which(disagree)
+    offenders <- sprintf(
+      "  %s / %s -- net_cagr %s, cvar_95 %s, credible %s",
+      leaderboard$strategy[idx], leaderboard$period[idx],
+      ifelse(has_net_cagr[idx], "present", "NA"),
+      ifelse(has_cvar_95[idx],  "present", "NA"),
+      ifelse(has_credible[idx], "present", "NA")
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) where net_cagr/cvar_95/credible disagree on presence -- ",
+        "these three columns come from the SAME cost_rows join and must be ",
+        "jointly NA or jointly non-NA:"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_cost_metrics_joint_presence() (S23) guards the ",
+        "fail-loud-not-null.md defect class (#637/#640/#641/#643): if one of ",
+        "these three columns is populated for a strategy/period without the ",
+        "other two, docs/leaderboard.qmd's single 'not computed' verdict for ",
+        "Credible/Net CAGR/CVaR 95% no longer matches the underlying data. ",
+        "Check calc_cost_metrics() and the cost_rows join in ",
+        "R/plan_leaderboard.R's leaderboard target."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Assert the package-source digest mechanism is actually tracking something
 #' (S22, #753)
 #'
@@ -2165,6 +2253,20 @@ plan_qa_gates <- function() {
           "qa_pkg_source_tracked: S22 passed (%d package source file(s) tracked, digest %s)",
           length(pkg_source_files), substr(pkg_source_digest, 1, 12)
         )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: net_cagr/cvar_95/credible are jointly present or jointly NA
+    # per row (S23, fail-loud-not-null.md) -- see
+    # check_leaderboard_cost_metrics_joint_presence() roxygen above for the
+    # #637/#640/#641/#643 defect class this closes.
+    targets::tar_target(
+      qa_leaderboard_cost_metrics_coverage,
+      command = {
+        check_leaderboard_cost_metrics_joint_presence(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_cost_metrics_coverage: S23 passed (net_cagr/cvar_95/credible jointly present or jointly NA on every row)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

@@ -345,24 +345,81 @@ plan_strategy_correlation <- function() {
     # ── Augmentation: correlation_max, redundant flag, incremental Sharpe ─────
     # Returns a tibble keyed by the leaderboard strategy label (short_name) so
     # plan_leaderboard can left_join by "strategy" (which uses short/display names).
+    #
+    # Widened from the original 5-strategy family (stk_max/stk_drif/fac_max/
+    # fac_drif/ltr, via strat_corr_matrix/strat_returns_aligned) to the same
+    # 16-strategy STRAT_RETURNS_WIDE_CODES scope as strat_corr_matrix_leaderboard
+    # (#728 items 1+2, #733) -- see docs/leaderboard.qmd's Rankings table,
+    # Redundant/Incremental Sharpe columns. Before this widening, 12 of 17
+    # leaderboard strategies showed "not computed" for both columns purely
+    # because plan_strategy_correlation.R had not yet been pointed at the
+    # wider matrix, even though that matrix (and the k_eff_leaderboard/
+    # deflated_sharpe it feeds via strat_keff_vertox_leaderboard,
+    # R/plan_leaderboard.R's strat_deflated_sharpe) already covers 16 of 17.
+    #
+    # Verified suitable before widening (not assumed): strat_returns_wide is
+    # entirely a MONTHLY `ym` spine (the five daily-frequency strategies are
+    # already resampled onto it by .resample_daily_to_monthly() -- see that
+    # target's own comment), so periods_per_year = 12L below is correct for
+    # every one of the 16 columns, unlike a naive mix of native frequencies.
+    # A live-store check (2026, docs/_targets) found 193 rows with non-NA
+    # data across all 16 STRAT_RETURNS_WIDE_CODES columns simultaneously --
+    # NOT a further-shrunk window: 193 equals Factor MAX/Factor DRIF's own
+    # individual non-NA count (193), i.e. the complete-case window is bounded
+    # by the tightest-history strategy already on the leaderboard, not by
+    # requiring 16-way agreement beyond what that strategy's own "Full
+    # Period" Sharpe is already computed over. A shared common window (not
+    # each strategy's own full individual history, unlike
+    # strat_deflated_sharpe's naive_sharpe) is deliberate here: comparing two
+    # strategies' Sharpe to decide which is "better" for the redundancy flag
+    # is only valid if both are measured over the SAME dates.
     targets::tar_target(strat_corr_augment, {
       library(dplyr)
 
-      # Map from code_name to the leaderboard display label
-      # (leaderboard uses "Factor MAX", "Factor DRIF", etc.)
+      # Map from code_name to the leaderboard display label. Matches the
+      # SAME code_name -> label vocabulary as col_map_monthly/col_map_daily
+      # in R/plan_leaderboard.R's strat_deflated_sharpe target, so a
+      # strategy's Redundant/Incremental Sharpe badge and its Rigour badge
+      # never disagree about which strategy a code_name refers to. (Not
+      # reused from plan_strategy_names.R's strategy_names target: that
+      # table's code_name vocabulary -- "drif", "rsc", "ev_ebit", "mf_tsm",
+      # "olmar" -- is a DIFFERENT, pre-existing convention from
+      # STRAT_RETURNS_WIDE_CODES's, an inconsistency out of scope to unify
+      # here.)
       name_map <- tibble::tibble(
-        code_name     = c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr"),
-        strategy_label = c("Stock MAX", "Stock DRIF", "Factor MAX",
-                            "Factor DRIF", "LTR")
+        code_name      = c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr",
+                            "xgb_drif", "mom_prepeak", "mom_postpeak", "mom_combined",
+                            "value_hml", "managed_futures",
+                            "cmr", "olmar_1", "tom", "risk_state", "avoid_worst"),
+        strategy_label = c("Stock MAX", "Stock DRIF", "Factor MAX", "Factor DRIF", "LTR",
+                            "XGB DRIF", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2",
+                            "Value (HML)", "Managed Futures",
+                            "CMR", "OLMAR-1", "TOM", "Risk State", "Avoid Worst")
       )
 
-      strat_cols <- rownames(strat_corr_matrix)
+      strat_cols <- rownames(strat_corr_matrix_leaderboard)
       n_strat <- length(strat_cols)
 
-      # ── Full-period Sharpe per strategy (recompute for alignment) ─────────
-      full_rets <- strat_returns_aligned |>
+      # ── Full-period Sharpe per strategy, on a SHARED complete-case window ──
+      full_rets <- strat_returns_wide |>
         select(all_of(strat_cols)) |>
         filter(if_all(everything(), ~ !is.na(.x)))
+
+      # fail-loud-not-null.md: a row that cannot be checked must abort, not
+      # silently produce all-NA sharpe_full/incremental_sharpe values.
+      if (nrow(full_rets) < 2L) {
+        cli::cli_abort(c(
+          "x" = paste0(
+            "Only ", nrow(full_rets), " row(s) of strat_returns_wide have ",
+            "non-NA data for all ", n_strat, " widened correlation strategies."
+          ),
+          "i" = paste0(
+            "strat_corr_augment (Redundant/Incremental Sharpe) needs a shared ",
+            "common window across: ", paste(strat_cols, collapse = ", "), "."
+          ),
+          "i" = "Check strat_returns_wide (R/plan_strategy_correlation.R) for a strategy whose history no longer overlaps the others."
+        ))
+      }
 
       sharpe_full <- vapply(strat_cols, function(col) {
         r <- full_rets[[col]]
@@ -376,7 +433,7 @@ plan_strategy_correlation <- function() {
       # ── correlation_max: max |r| with any OTHER strategy ─────────────────
       corr_max <- vapply(strat_cols, function(s) {
         others <- setdiff(strat_cols, s)
-        max(abs(strat_corr_matrix[s, others]))
+        max(abs(strat_corr_matrix_leaderboard[s, others]))
       }, numeric(1L))
       names(corr_max) <- strat_cols
 
@@ -384,7 +441,7 @@ plan_strategy_correlation <- function() {
       redundant <- vapply(strat_cols, function(s) {
         peers <- setdiff(strat_cols, s)
         any(vapply(peers, function(p) {
-          high_corr <- abs(strat_corr_matrix[s, p]) >= REDUNDANCY_THRESH
+          high_corr <- abs(strat_corr_matrix_leaderboard[s, p]) >= REDUNDANCY_THRESH
           better    <- !is.na(sharpe_full[[p]]) && !is.na(sharpe_full[[s]]) &&
                        sharpe_full[[p]] > sharpe_full[[s]]
           high_corr && better
@@ -436,6 +493,25 @@ plan_strategy_correlation <- function() {
         # Expose by both code_name (for programmatic use) and strategy_label (for
         # leaderboard join)
         select(code_name, strategy_label, correlation_max, redundant, incremental_sharpe)
+
+      # fail-loud-not-null.md: an un-mapped code_name must abort, not
+      # silently produce an NA strategy_label that then fails to join onto
+      # the leaderboard by "strategy" (indistinguishable from "outside the
+      # correlation universe").
+      if (anyNA(result$strategy_label)) {
+        unmapped <- result$code_name[is.na(result$strategy_label)]
+        cli::cli_abort(c(
+          "x" = paste0(
+            length(unmapped), " strategy code_name(s) in strat_corr_matrix_leaderboard ",
+            "have no entry in strat_corr_augment's name_map: ", paste(unmapped, collapse = ", "), "."
+          ),
+          "i" = paste0(
+            "Add the missing code_name -> display label mapping to name_map above -- it ",
+            "must match col_map_monthly/col_map_daily in R/plan_leaderboard.R's ",
+            "strat_deflated_sharpe target."
+          )
+        ))
+      }
 
       result
     }),
