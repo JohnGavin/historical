@@ -95,6 +95,7 @@ plan_falsification_vignette <- function() {
 
       nms <- fals_vig_names
       summary <- fals_summary
+      alpha_pct <- fals_params$alpha_level * 100
 
       rej_long <- summary |>
         dplyr::select(strategy, starts_with("rej_rate_")) |>
@@ -113,25 +114,44 @@ plan_falsification_vignette <- function() {
           pct = rejection_rate * 100
         )
 
-      # Text colour: black on light fills, white on dark fills
-      rej_long$text_col <- ifelse(rej_long$pct > 4 & rej_long$pct < 15,
-                                   "#000000", "#ffffff")
+      # #774: the previous scale used fixed limits = c(0, 100) with
+      # midpoint = 8, but observed rejection rates cluster in a narrow band
+      # (typically 1-10%, see fals_vig_null_heatmap_caption's Range: text).
+      # Squeezing that band into a 0-100 domain collapsed every cell to a
+      # near-identical colour near the midpoint hue, and the legend still
+      # advertised a red maximum at 100 that no cell could ever reach.
+      # Fix: let the fill scale's limits follow the observed data (ggplot's
+      # default when `limits` is omitted), and anchor the midpoint at alpha
+      # — the rate a well-calibrated test rejects at by chance under the
+      # null — so cells near alpha read as "as expected", and departure in
+      # either direction is visually distinct.
+      half_range <- max(abs(range(rej_long$pct) - alpha_pct))
+      half_range <- max(half_range, 1e-6)  # guard: all-identical-to-alpha edge case
+      rej_long$text_col <- ifelse(
+        abs(rej_long$pct - alpha_pct) / half_range > 0.5, "#ffffff", "#000000"
+      )
 
       ggplot(rej_long, aes(x = null_env, y = strategy, fill = pct)) +
         geom_tile(color = "#333") +
         geom_text(aes(label = round(pct, 0), colour = text_col),
                   size = 4.5, fontface = "bold", show.legend = FALSE) +
         scale_colour_identity() +
-        # #350: mid 'pale yellow' #ffffbf was near-white in the legend —
-        # use a saturated amber so the green→yellow→red gradient is visible
+        # Colour-blind-safe diverging palette (ColorBrewer PuOr — safe under
+        # deuteranopia/protanopia/tritanopia; a red/green pair, used here
+        # previously, is not — see the accessibility rule). Midpoint = alpha
+        # (dynamic, not hardcoded) so the neutral colour marks "as expected
+        # under the null" rather than an arbitrary fixed percentage.
         scale_fill_gradient2(
-          low = "#1a9850", mid = "#fee08b", high = "#d73027",
-          midpoint = 8, limits = c(0, 100),
+          low = "#998ec3", mid = "#f7f7f7", high = "#f1a340",
+          midpoint = alpha_pct,
           name = "Rejection (%)"
         ) +
         labs(
           title = "Null Environment Rejection Rates",
-          subtitle = "Green (low) = replicable under null. Red (high) = genuine signal.",
+          subtitle = paste0(
+            "Purple (low) = replicable under null. Orange (high) = genuine signal. ",
+            "Midpoint = alpha (", round(alpha_pct, 1), "%)."
+          ),
           x = "Null Environment", y = NULL
         ) +
         theme_minimal(base_size = 14) +
@@ -152,6 +172,10 @@ plan_falsification_vignette <- function() {
       summary <- fals_summary
       max_rej <- max(unlist(summary[, grep("rej_rate_", names(summary))]))
       min_rej <- min(unlist(summary[, grep("rej_rate_", names(summary))]))
+      # hd_null_rejection_rate()'s `passes` flag is rej_rate <= alpha_level * 1.5;
+      # reuse that threshold here instead of a hardcoded "<8%" so the caption
+      # cannot drift from the code if alpha_level ever changes.
+      pass_threshold_pct <- round(fals_params$alpha_level * 1.5 * 100, 1)
 
       gh <- "https://github.com/JohnGavin/historical/blob/main"
       a_ <- function(text, url) paste0('<a href="', url, '" target="_blank" rel="noopener noreferrer">', text, '</a>')
@@ -159,9 +183,11 @@ plan_falsification_vignette <- function() {
       paste0(
         "Rejection rates across 6 null environments (M = ",
         fals_params$M, " simulations each). ",
-        "Values show rejection rate (%). ",
-        "A low rate (<8%) means the strategy's t-statistic is easily replicated under ",
-        "the null. A high rate means the null cannot explain the returns. ",
+        "Values show rejection rate (%), coloured on a scale centred on alpha ",
+        "(", round(fals_params$alpha_level * 100, 1), "%): purple = below alpha ",
+        "(replicable under null), orange = above alpha (null cannot explain the returns). ",
+        "A rate below ", pass_threshold_pct, "% means the strategy's t-statistic is easily ",
+        "replicated under the null. ",
         "Range: ", round(min_rej * 100, 0), "%-", round(max_rej * 100, 0), "%. ",
         "Null environments: White Noise (iid), Regime Vol (high/low vol switching), ",
         "MA(1) (autocorrelation friction), Factor Null (random factor exposure), ",
