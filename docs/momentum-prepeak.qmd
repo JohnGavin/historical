@@ -47,13 +47,13 @@ format:
             overflow: visible !important; margin-bottom: 1em; }
           .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
           .fig-caption { display: block; position: relative; clear: both;
-            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #e0e0e0; }
+            margin-top: 0.5em; margin-bottom: 1em; }
           .datatables, .dataTables_wrapper { display: block !important;
             position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
           table.dataTable { white-space: nowrap; }
           table caption { caption-side: top !important; }
           details { margin-bottom: 0.5em; }
-          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+          details summary { cursor: pointer; color: #6c9bd2; }
           .bankrupt-row { background-color: rgba(240, 128, 128, 0.25) !important; }
           </style>
           <script>
@@ -365,7 +365,7 @@ if (!is.null(summary_tbl)) {
   DT::datatable(
     display_df,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      style = "caption-side: top; text-align: left; font-weight: bold;",
       paste0(
         "Pre-peak / post-peak 12-2 momentum decomposition summary. ",
         "Annualised metrics from ", if (!is.na(pre_nmonths)) pre_nmonths else "N/A",
@@ -538,7 +538,7 @@ if (!is.null(ret_pre)) {
   DT::datatable(
     display_ret,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      style = "caption-side: top; text-align: left; font-weight: bold;",
       "Monthly long-short returns for all three decomposition strategies. ret_ls = ret_long - ret_short - 2 × 10 bps transaction cost. Negative ret_ls in the same month caused the bankruptcy in post-peak and combined strategies."
     ),
     rownames = FALSE,
@@ -653,7 +653,7 @@ skew_tbl <- tibble::tibble(
 DT::datatable(
   skew_tbl,
   caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+    style = "caption-side: top; text-align: left; font-weight: bold;",
     paste0(
       "Skewness of monthly L/S returns for each decomposition strategy. ",
       "Positive skewness implies fewer large-magnitude negative months, ",
@@ -756,7 +756,7 @@ if (p8_available) {
   DT::datatable(
     p8_display,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      style = "caption-side: top; text-align: left; font-weight: bold;",
       paste0(
         "Pillar-8 risk metrics for all three momentum decomposition strategies. ",
         "Avg/Max DD duration is measured in months (index positions, no date column). ",
@@ -817,7 +817,7 @@ if (wfc_available) {
   DT::datatable(
     wfc_display,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      style = "caption-side: top; text-align: left; font-weight: bold;",
       paste0(
         "Walk-Forward Correlation grid for mom_prepeak over n_quantiles ∈ {5, 10, 20}. ",
         "IS = annualised Sharpe on the first half of the sample (~1973–mid). ",
@@ -926,7 +926,7 @@ if (rand_available) {
   DT::datatable(
     null_display,
     caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+      style = "caption-side: top; text-align: left; font-weight: bold;",
       paste0(
         "Random-day-as-peak null test. The null strategy uses the same ",
         "formation window, portfolio construction, and transaction costs, ",
@@ -1016,7 +1016,7 @@ stat_display <- tibble::tibble(
 DT::datatable(
   stat_display,
   caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+    style = "caption-side: top; text-align: left; font-weight: bold;",
     paste0(
       "Statistical hardening metrics for mom_prepeak. ",
       "HAC inference uses Newey-West bandwidth (floor(4*(T/100)^(2/9))). ",
@@ -1092,7 +1092,7 @@ ssr_display <- tibble::tibble(
 DT::datatable(
   ssr_display,
   caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold; color: #e0e0e0;",
+    style = "caption-side: top; text-align: left; font-weight: bold;",
     paste0(
       "Sharpe Stability Ratio (SSR) for mom_prepeak — 36-month rolling windows, ann_factor = 12. ",
       "Calibration anchors: S\\u00B950 500 daily since 1995: SSR \\u224 5.3; macro FX cross-asset: SSR \\u224 4.4. ",

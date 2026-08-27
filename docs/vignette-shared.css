@@ -230,9 +230,13 @@ table caption, .dataTables_wrapper caption, .dt-caption {
   font-size: inherit !important;
 }
 
-/* Code details toggle */
+/* Code details toggle. Accent colour (#6c9bd2) marks it as an
+   interactive toggle, same as inline links; font-size intentionally NOT
+   overridden -- a <details> summary is body prose (uniform-typography
+   rule, "details summary { font-size: 0.9em }" forbidden pattern) and
+   must render at the inherited body size. */
 details { margin-bottom: 0.5em; }
-details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+details summary { cursor: pointer; color: #6c9bd2; }
 
 /* Prevent tab click from scrolling to top */
 .nav-link[data-bs-toggle="tab"] { scroll-behavior: auto; }

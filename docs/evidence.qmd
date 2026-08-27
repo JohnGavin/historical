@@ -18,10 +18,9 @@ format:
       - text: |
           <style>
           body { font-size: 1.3em; line-height: 1.6; }
-          caption, figcaption, .figure-caption { color: #fff !important; }
           .cell-output-display { margin: 1.5em 0; }
           figure { margin: 2em 0; }
-          figcaption { font-size: 0.9em; opacity: 0.8; margin-top: 0.5em; }
+          figcaption { margin-top: 0.5em; }
           table { margin: 1.5em auto; }
           .negative-card {
             background: #1a1a2e; border: 1px solid #d73027; border-radius: 8px;
