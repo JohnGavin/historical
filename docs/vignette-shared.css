@@ -7,25 +7,49 @@
 :root { --base-font-size: 1.3em; }
 body { font-size: var(--base-font-size, 1.3em); }
 
-/* Prevent the whole PAGE from becoming horizontally scrollable. Quarto's
-   dashboard header (#quarto-dashboard-header .navbar) is a normal block
-   element sized to the viewport's width -- it does not itself have
-   overflowing content, so it never grows past the viewport. If some other
-   element on the page (a wide, no-wrap DT table is the common case here)
-   escapes its own local scroll container and overflows the document, the
-   ROOT element's scrollable area grows to include that overflow (this is a
-   special rule for the root/viewport scrollbar, not something that also
-   widens ordinary sibling boxes -- see CSS Overflow Module ยง Overflow
-   Propagation). Every other element, including the header, keeps its own
-   width (== viewport width). Scrolling the page right then shifts the
-   header's fixed-width box left along with everything else, leaving a gap
-   at the right edge -- where the header's blue/dark background no longer
-   reaches -- exactly the size of the overflow. Wide tables already get
-   their own contained horizontal scrollbar via `.dataTables_wrapper {
-   overflow-x: auto }` below; this rule makes that the ONLY way to scroll
-   horizontally, so the document itself can never overflow and the header
-   always covers the full visible width. */
-html, body { overflow-x: hidden; }
+/* Keep the dashboard header's colour strip covering the full visible width
+   at every horizontal scroll position, WITHOUT disabling horizontal
+   scrolling anywhere on the page.
+
+   Diagnosis: Quarto's dashboard header (#quarto-dashboard-header .navbar)
+   is a normal block element sized to the viewport's width -- it does not
+   itself have overflowing content, so it never grows past the viewport. If
+   some other element on the page (a wide, no-wrap DT table is the common
+   case here) escapes its own local scroll container and overflows the
+   document, the ROOT element's scrollable area grows to include that
+   overflow (this is a special rule for the root/viewport scrollbar, not
+   something that also widens ordinary sibling boxes -- see CSS Overflow
+   Module ยง Overflow Propagation). Every other element, including the
+   header, keeps its own width (== viewport width). Scrolling the page right
+   then shifts the header's normal-flow box left along with everything
+   else, leaving a gap at the right edge -- where the header's blue/dark
+   background (`.navbar { background-color: ... }`, verified in the
+   compiled bootstrap bundle) no longer reaches -- exactly the size of the
+   overflow.
+
+   `overflow-x: hidden` on html/body "fixes" the gap by removing the
+   document's ability to overflow at all -- but that is also the ONLY path
+   to any element wider than the viewport that is not already inside its
+   own `overflow-x: auto` container (mermaid diagrams, plotly/htmlwidget
+   output, `<pre>` code blocks, non-DT tables): those become permanently
+   unreachable, clipped with no scrollbar to reach them. Setting overflow-x
+   on html/body also turns them into scroll containers, which is a
+   well-known way to silently break `position: sticky` on descendants.
+
+   Fix: pin the header to the left edge of the nearest scrolling ancestor
+   instead of suppressing scrolling. `position: sticky; left: 0` keeps the
+   navbar's existing viewport-width box flush against x=0 of the visible
+   area at every scroll offset -- covering the full visible width the same
+   way a `position: fixed` header would, but without leaving normal
+   document flow (no vertical-position or stacking side effects). No width
+   change is needed: the navbar is already viewport-width by default (see
+   diagnosis above), so a fixed `width: 100vw` is deliberately avoided --
+   that would introduce its own overflow when a vertical scrollbar is
+   present. Wide DT tables keep their own contained horizontal scrollbar via
+   `.dataTables_wrapper { overflow-x: auto }` below; this rule does not
+   change how they scroll, and every other element on the page remains
+   reachable via the document's own horizontal scrollbar. */
+#quarto-dashboard-header .navbar { position: sticky; left: 0; }
 
 /* Page titles smaller to match tab labels */
 .navbar .navbar-title, h1.title { font-size: 1.2em !important; }
