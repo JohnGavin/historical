@@ -254,9 +254,25 @@ if (!is.null(lb)) {
       .det_rank  = vapply(det, function(x) x$rank, integer(1)),
       Rigour     = vapply(rig, function(x) x$html, character(1)),
       .rig_rank  = vapply(rig, function(x) x$rank, integer(1)),
-      `Net CAGR` = ifelse(is.na(net_cagr),     "—", paste0(round(net_cagr * 100, 1), "%")),
+      # CAGR (gross, unadjusted) is a base metric every strategy's own
+      # metrics target computes -- 17/17 non-NA in the live store, unlike
+      # Net CAGR below (#637 follow-up: a reader seeing only "Net CAGR"
+      # populated for 6/17 strategies could reasonably conclude the other
+      # 11 have no CAGR at all, when in fact only the COST-ADJUSTED figure
+      # is out of scope for them).
+      CAGR       = ifelse(is.na(cagr),         "—", paste0(round(cagr * 100, 1), "%")),
+      # NA net_cagr/cvar_95 means cost-adjusted metrics were never computed
+      # for this strategy/period (cost_rows in R/plan_leaderboard.R only
+      # covers 5 core strategies + PSO Optimal; QA gate S23,
+      # check_leaderboard_cost_metrics_joint_presence(), asserts this NA-ness
+      # is always joint across Net CAGR/CVaR 95%/Credible) -- rendered as
+      # "not computed", the same out-of-scope state as Credible/Redundant
+      # below, not the bare "—" reserved for genuinely not-applicable cells
+      # (e.g. Gross/Cost (bps) below, where a meta-portfolio blend has no
+      # separate figure to measure) (#637 follow-up).
+      `Net CAGR` = ifelse(is.na(net_cagr),     "not computed", paste0(round(net_cagr * 100, 1), "%")),
       `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
-      `CVaR 95%` = ifelse(is.na(cvar_95),      "—", paste0(round(cvar_95 * 100, 1), "%")),
+      `CVaR 95%` = ifelse(is.na(cvar_95),      "not computed", paste0(round(cvar_95 * 100, 1), "%")),
       Vol        = paste0(round(vol * 100, 1), "%"),
       Gross      = dplyr::case_when(
         !("gross_convention" %in% names(full)) | is.na(gross_convention) ~ "—",
@@ -268,8 +284,14 @@ if (!is.null(lb)) {
         cost_per_trade_bps == 0 ~ "0*",
         TRUE ~ as.character(round(cost_per_trade_bps))
       ),
-      SSR        = ifelse(is.na(ssr),           "—", as.character(round(ssr, 2))),
-      `Top5% Share` = ifelse(is.na(top5pct_share), "—", paste0(round(top5pct_share * 100, 1), "%")),
+      # NA ssr/top5pct_share means this strategy is outside the fixed list of
+      # strategies R/plan_leaderboard.R's ssr_map covers (9 of 17) -- same
+      # "never assessed" state as Net CAGR/Credible above, rendered
+      # identically as "not computed" rather than the bare "—" that used to
+      # make this indistinguishable from a genuinely not-applicable cell
+      # (#637 follow-up).
+      SSR        = ifelse(is.na(ssr),           "not computed", as.character(round(ssr, 2))),
+      `Top5% Share` = ifelse(is.na(top5pct_share), "not computed", paste0(round(top5pct_share * 100, 1), "%")),
       # NA credible means cost metrics were never computed for this strategy
       # (cost_rows in R/plan_leaderboard.R only covers 5 core strategies +
       # PSO Optimal) -- that is "unknown", not "explicitly failed". Conflating
@@ -291,12 +313,13 @@ if (!is.null(lb)) {
         !credible        ~ 2L,
         TRUE              ~ 1L
       ),
-      # NA redundant means this strategy is outside the 5-strategy correlation
-      # universe computed by R/plan_strategy_correlation.R (Stock MAX, Stock
-      # DRIF, Factor MAX, Factor DRIF, LTR only) -- that is "unassessed", not
-      # "assessed and found not redundant". Previously both NA and a computed
-      # FALSE fell through to the same ambiguous "—" (#643, same conflation
-      # class as Credible, #637 follow-up).
+      # NA redundant means this strategy is outside the correlation universe
+      # computed by R/plan_strategy_correlation.R's strat_corr_augment --
+      # widened from 5 to 16 of 17 strategies (STRAT_RETURNS_WIDE_CODES,
+      # #728/#733) -- that is "unassessed", not "assessed and found not
+      # redundant". Previously both NA and a computed FALSE fell through to
+      # the same ambiguous "—" (#643, same conflation class as Credible,
+      # #637 follow-up).
       Redundant  = if ("redundant" %in% names(full)) {
         dplyr::case_when(
           is.na(redundant) ~ "not computed",
@@ -315,17 +338,22 @@ if (!is.null(lb)) {
           TRUE              ~ 1L
         )
       } else 3L,
+      # Same "not computed" out-of-scope state as Redundant above -- both
+      # columns come from the SAME strat_corr_augment join, so their NA-ness
+      # is always identical (never one populated without the other).
       `Incremental Sharpe` = if ("incremental_sharpe" %in% names(full)) {
-        ifelse(is.na(incremental_sharpe), "—", as.character(round(incremental_sharpe, 3)))
-      } else "—"
+        ifelse(is.na(incremental_sharpe), "not computed", as.character(round(incremental_sharpe, 3)))
+      } else "not computed"
     ) |>
     # Detection sits immediately right of Sharpe per requirement 2 of the
     # `detection-power-required` rule ("beside its Sharpe, not in a distant
     # column"). Rigour sits next to SSR -- both are "how much should you
     # trust this Sharpe" columns, unlike Credible/Redundant which assess
-    # cost-plausibility and correlation-redundancy respectively.
+    # cost-plausibility and correlation-redundancy respectively. CAGR sits
+    # immediately left of Net CAGR (gross, then net of cost) per item B of
+    # the presentation-fix pass this column set belongs to.
     select(Strategy = strategy, Credible, .credible_rank, Sharpe, Detection, .det_rank,
-           `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
+           CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
            `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
 
   # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
@@ -436,17 +464,30 @@ if (!is.null(lb)) {
   )
   n_redundant <- if ("redundant" %in% names(full)) sum(full$redundant, na.rm = TRUE) else 0L
   n_redundant_na <- if ("redundant" %in% names(full)) sum(is.na(full$redundant)) else nrow(full)
+  # Dynamically computed, never hardcoded (#728/#733 widened
+  # strat_corr_augment's coverage from 5 to 16 of 17 strategies -- a
+  # hardcoded strategy list here would have gone stale the moment that
+  # widening shipped, exactly the failure mode this note exists to avoid).
+  corr_covered_n <- if ("redundant" %in% names(full)) sum(!is.na(full$redundant)) else 0L
+  corr_excluded_strats <- if ("redundant" %in% names(full)) {
+    full$strategy[is.na(full$redundant)]
+  } else full$strategy
   diversification_note <- htmltools::tagList(
     " Redundant = \"YES\" when a strategy's Full-Period monthly-return correlation with another, ",
     "higher-Sharpe strategy exceeds the threshold fixed in ", corr_registry_link,
     " (", n_redundant, " of ", nrow(full),
     " strategies currently flagged); \"not computed\" (", n_redundant_na,
-    " strategies) marks a strategy outside the 5-strategy correlation universe ",
-    "(Stock MAX, Stock DRIF, Factor MAX, Factor DRIF, LTR) that plan_strategy_correlation.R ",
-    "currently covers — that is unassessed, not assessed-and-passed. Incremental Sharpe = the ",
+    " strateg", if (n_redundant_na == 1L) "y" else "ies",
+    ") marks a strategy outside the ", corr_covered_n,
+    "-strategy correlation universe that plan_strategy_correlation.R currently covers",
+    if (length(corr_excluded_strats) > 0L) {
+      paste0(" (excluded: ", paste(corr_excluded_strats, collapse = ", "), ")")
+    } else "",
+    " — that is unassessed, not assessed-and-passed. Incremental Sharpe = the ",
     "change in equal-weight-portfolio Sharpe from including this strategy vs excluding it — ",
     "positive means it adds diversification value, negative means the portfolio is better off ",
-    "without it. Both feed the new-strategy value gate (#496)."
+    "without it; it shares the same \"not computed\" scope as Redundant above (both come from ",
+    "the same join). Both feed the new-strategy value gate (#496)."
   )
 
   # ── Detection-power / rigour disclosure note (#726, #728) — dynamically computed ──
@@ -468,18 +509,31 @@ if (!is.null(lb)) {
   # moves into a collapsed <details> block via hd_caption() (vignette_utils.R)
   # instead of being deleted.
   short_caption <- paste0(
-    "Strategies ranked by Sharpe (highest first); Net CAGR is net of a 0.20%/month round-trip ",
-    "cost where available. Values are not directly comparable across rows — gross exposure, ",
-    "cost basis, and the Credible/Redundant/Detection/Rigour flags vary by strategy; expand ",
-    "below for full column definitions."
+    "Strategies ranked by Sharpe (highest first); CAGR is unadjusted (gross), Net CAGR is net ",
+    "of a 0.20%/month round-trip cost where available. Values are not directly comparable ",
+    "across rows — gross exposure, cost basis, and the Credible/Redundant/Detection/Rigour ",
+    "flags vary by strategy; expand below for full column definitions."
   )
 
+  # ── Out-of-scope-column coverage counts (#637 follow-up, "not computed"
+  # uniformity pass) — dynamically computed, never hardcoded.
+  n_ssr_covered <- sum(!is.na(full$ssr))
+  n_ssr_na      <- sum(is.na(full$ssr))
+  n_net_covered <- sum(!is.na(full$net_cagr))
+
   full_notes <- htmltools::tagList(
+    "CAGR = unadjusted (gross) compound annual growth rate, computed for every strategy. ",
     "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
-    "Top5% Share = fraction of total return from best 5% of months. ",
+    "Top5% Share = fraction of total return from best 5% of months. Both SSR and Top5% Share ",
+    "are computed for a fixed subset of strategies (", n_ssr_covered, " of ", nrow(full),
+    "); the remaining ", n_ssr_na, " show \"not computed\" — never assessed, not a computed ",
+    "absence of stability. ",
     "Credible = plausible CAGR (<20%) and cum P&L (<50x): \"NO\" marks a strategy that was ",
     "assessed and failed that check, \"not computed\" marks a strategy for which cost-adjusted ",
-    "metrics were never assessed at all (not the same as failing the check).",
+    "metrics were never assessed at all (not the same as failing the check). The Net CAGR and ",
+    "CVaR 95% columns share this exact same \"not computed\" scope (", n_net_covered, " of ",
+    nrow(full), " strategies covered) — all three come from the same cost_rows join and are ",
+    "jointly present or jointly absent per row (QA gate S23, R/plan_qa_gates.R).",
     flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note
   )
 
