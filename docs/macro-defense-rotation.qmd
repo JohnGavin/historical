@@ -49,13 +49,13 @@ format:
             overflow: visible !important; margin-bottom: 1em; }
           .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
           .fig-caption { display: block; position: relative; clear: both;
-            margin-top: 0.5em; margin-bottom: 1em; font-size: 0.85em; color: #888; }
+            margin-top: 0.5em; margin-bottom: 1em; }
           .datatables, .dataTables_wrapper { display: block !important;
             position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
           table.dataTable { white-space: nowrap; }
           table caption { caption-side: top !important; }
           details { margin-bottom: 0.5em; }
-          details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
+          details summary { cursor: pointer; color: #6c9bd2; }
           .fullscreen-overlay {
             position: fixed !important; top: 0 !important; left: 0 !important;
             width: 100vw !important; height: 100vh !important;
@@ -123,7 +123,7 @@ hd_dt <- function(df, caption_text) {
       df[[col]] <- round(df[[col]], 2)
   }
   DT::datatable(df, caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold; color: #ddd;",
+    style = "caption-side: top; text-align: left; font-weight: bold;",
     caption_text), rownames = FALSE, options = list(pageLength = 15, scrollX = TRUE, dom = "frtip"))
 }
 ```
