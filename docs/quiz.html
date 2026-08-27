@@ -37,6 +37,18 @@ ul.task-list li input[type="checkbox"] {
 <link href="quiz_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
 <link href="quiz_files/libs/bootstrap/bootstrap-5aeb795fb1f1a222a51c230a0084b391.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme" id="quarto-bootstrap" data-mode="light">
 <link href="quiz_files/libs/bootstrap/bootstrap-dark-fa40cdb917baf4fa3d1e593fe915e727.min.css" rel="stylesheet" append-hash="true" class="quarto-color-scheme quarto-color-alternate" id="quarto-bootstrap" data-mode="dark">
+<!-- Shared color-scheme signal (accessibility rule Part 2 Clause 0, historical#0b412a9c).
+     Static value is always "dark" -- that is what
+     ~/.claude/scripts/check_dashboard_color_scheme.sh greps for in the
+     docs/_quarto.yml post-render gate. Pages with a light theme keep this
+     in sync with the ACTUAL active theme at runtime via a MutationObserver
+     in vignette-shared.js; ANY color-scheme declaration suppresses
+     Chrome's Auto Dark Mode heuristic regardless of its value, so this
+     static default never causes Chrome to invert the page. -->
+<meta name="color-scheme" content="dark">
+<style>:root, html, body { color-scheme: dark; }</style>
+<meta name="color-scheme" content="dark">
+<style>:root, html, body { color-scheme: dark; }</style>
 <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
 <style>
@@ -290,7 +302,7 @@ if(!localStorage.getItem('quarto-color-scheme'))document.documentElement.setAttr
 <ul>
 <li><strong><a href="leaderboard.html">Strategy Leaderboard</a></strong> — see how your calibration compares to actual strategy risk-adjusted return rankings</li>
 </ul>
-<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/f5dd37b06a15d16c5c85c11638014afe419d1b21"><code>f5dd37b</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-25 20:20:19”</p>
+<p>[1] “<strong>historicaldata</strong> <a href="https://github.com/JohnGavin/historical/releases">dev</a> | <strong>Git</strong> <a href="https://github.com/JohnGavin/historical/commit/cd8803e10bbf1663ca591ae1f5e097389df53076"><code>cd8803e</code></a> | <strong>R</strong> <a href="https://cran.r-project.org/doc/manuals/r-release/NEWS.html">4.5.3</a> | <strong>Built</strong> 2026-08-27 10:48:49”</p>
 </section>
 
 </main>
