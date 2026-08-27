@@ -116,10 +116,23 @@ details summary { cursor: pointer; color: #6c9bd2; font-size: 0.9em; }
 /* Right-justify numeric columns in tables */
 .dt-right { text-align: right !important; }
 
-/* Font size +/- controls, next to the built-in dark/light toggle (#0b412a9c) */
+/* Font size +/- controls, next to the built-in dark/light toggle (#0b412a9c).
+   vignette-shared.js inserts this span via insertAdjacentElement('afterend', ...)
+   on .quarto-color-scheme-toggle, which places it right after the toggle in
+   DOM/source order. That is NOT enough here: Quarto's dashboard header
+   (#quarto-dashboard-header .navbar-container) is a flex container where
+   Quarto's own CSS assigns explicit `order` values to lay siblings out
+   (.quarto-color-scheme-toggle -> order:9, .navbar-toggler -> order:10,
+   .navbar-collapse (the tab links) -> order:8 at >=768px / order:1000 below
+   that). A sibling with no `order` defaults to order:0 -- lower than all of
+   those -- so it renders BEFORE the tabs and the toggle regardless of its
+   DOM position, i.e. visually to the LEFT of the toggle. Setting an order
+   higher than every other navbar item (toggle=9, hamburger=10) forces it to
+   the rightmost position at every breakpoint. */
 .hd-font-controls {
   display: inline-flex; align-items: center; gap: 2px;
   margin: 0 0.4em; font-size: 0.85em;
+  order: 20;
 }
 .hd-font-btn {
   display: inline-block; padding: 0 0.4em; line-height: 1.8;
