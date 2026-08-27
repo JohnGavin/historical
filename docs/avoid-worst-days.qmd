@@ -109,7 +109,7 @@ utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
 source(utils_path)
 ```
 
-::: {.callout-warning}
+::: {.callout-warning .small}
 **THEORETICAL EXERCISE.** This vignette examines the asymmetry of daily returns -- removing the worst days improves performance more than removing the best days hurts it. You cannot know which days to avoid in advance. This is not investment advice.
 :::
 

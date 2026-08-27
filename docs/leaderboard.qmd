@@ -51,8 +51,11 @@ source(qa_gates_path)
 
 # Rankings
 
-::: {.callout-warning collapse="false" title="Survivorship bias"}
-`r disclosure_survivorship()`
+::: {.callout-note .small collapse="false"}
+⚠ This leaderboard carries known caveats — survivorship bias in the stock
+universe, and per-strategy statistical detection power/rigour limits (see the
+**Detection** and **Rigour** columns below). Full detail, collected in one
+place: [Biases and Caveats](#biases-and-caveats).
 :::
 
 ## Row
@@ -111,9 +114,15 @@ if (!is.null(lb_dp)) {
 }
 ```
 
-::: {.callout-warning collapse="false" title="Statistical detection power and rigour, this build"}
-`r detection_summary_text`
-:::
+<!-- The "Statistical detection power and rigour, this build" callout that
+     used to render here (a dense paragraph in front of the metrics table)
+     moved to the "Biases and Caveats" page (#biases-and-caveats, end of this
+     document) as part of the top-of-page decluttering requested directly by
+     the user. `detection_summary_text` is computed above and reused
+     unchanged on that page -- nothing here recomputes or duplicates it. The
+     Detection/Rigour table columns immediately below remain the per-row,
+     hover-for-detail discoverability mechanism; the callout was a summary of
+     what those columns already show. -->
 
 ```{r}
 lb <- safe_tar_read("leaderboard")
@@ -1402,6 +1411,7 @@ if (!is.null(params)) {
 - **[Strategy Falsification](falsification.html)** — provides the statistical survival verdict (HAC t-stat, null rejection rate, FF5 alpha) underlying the leaderboard scorecard
 - **[Stock Backtest](stock-backtest.html)** — per-asset equity-level view of Factor MAX and DRIF strategies ranked here
 - **[Factor MAX](stock-backtest.html#factor-level-deep-dive)** — detailed breakdown of the top-ranked factor rotation strategy
+- **[Biases and Caveats](#biases-and-caveats)** — every dashboard-wide caveat (survivorship bias, detection power/rigour) collected in one place, cross-referenced back to the affected rows
 
 #### Build Info
 
@@ -1411,3 +1421,63 @@ if (!is.null(params)) {
 #| results: asis
 build_info()
 ```
+
+# Biases and Caveats
+
+## Row
+
+### {.tabset}
+
+#### Survivorship Bias
+
+::: {.callout-warning collapse="false" title="Survivorship bias"}
+`r disclosure_survivorship()`
+:::
+
+```{r}
+#| label: caveats-survivorship-affected
+#| results: asis
+if (exists("full") && "survivorship_biased" %in% names(full)) {
+  biased_now <- full$strategy[!is.na(full$survivorship_biased) & full$survivorship_biased]
+  if (length(biased_now) > 0) {
+    cat(
+      "Currently flagged on the [Rankings](#rankings) table (`survivorship_biased = TRUE`): **",
+      paste(biased_now, collapse = ", "),
+      "**. Each of those rows also carries this note in the table's own caption ",
+      "(expand \"Column definitions and comparability caveats\" there).\n",
+      sep = ""
+    )
+  } else {
+    cat("No strategy is currently flagged `survivorship_biased = TRUE` on the [Rankings](#rankings) table.\n")
+  }
+} else {
+  cat("*`leaderboard` target not available -- per-strategy flag list cannot be computed.*\n")
+}
+```
+
+#### Statistical Detection Power and Rigour
+
+::: {.callout-warning collapse="false" title="Statistical detection power and rigour, this build"}
+`r detection_summary_text`
+:::
+
+See the **Detection** and **Rigour** columns on the [Rankings](#rankings) table for the
+per-strategy verdict — hover any badge for the full numeric detail (Sharpe threshold,
+years of data needed, K_eff, deflated Sharpe, DSR p-value).
+
+#### About This Page
+
+All dashboard-wide caveats that would otherwise sit at the top of a page,
+interrupting the first thing a reader sees, are collected here instead. Each
+caveat still carries a compact, discoverable marker at its original
+location — a one-line pointer callout on [Rankings](#rankings), or the
+Detection/Rigour table columns themselves — that links back here, and every
+tab on this page links back to where the affected rows live. Nothing here
+replaces the underlying data or its per-row flags; this page is a navigation
+aid, not a new source of truth.
+
+The [Stock-Level Backtests](stock-backtest.html#biases-and-caveats) dashboard
+carries the same survivorship-bias caveat at its own equivalent page — Stock
+MAX, Stock DRIF, and XGBoost DRIF there are all drawn from the same
+`stk_universe`. See [issue #150](https://github.com/JohnGavin/historical/issues/150)
+for the underlying data-availability constraint and remediation status.

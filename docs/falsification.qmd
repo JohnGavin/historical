@@ -186,7 +186,7 @@ fals_dt <- function(df, caption_text) {
 }
 ```
 
-::: {.callout-note}
+::: {.callout-note .small}
 **Falsification framework.** Every strategy must survive multiple statistical tests before being considered genuine. A strategy that looks profitable may simply be disguised factor exposure (beta) rather than true alpha. This dashboard applies Harvey, Liu & Zhu (2016) and Lopez de Prado (2018) methodology.
 :::
 
