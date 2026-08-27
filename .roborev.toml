@@ -33,3 +33,50 @@ exclude_patterns = [
 #    `docs/` as a code-review concern — it is the deployed artifact.
 #    Internal-only HTML (e.g. examples.html, dashboard.html dev builds) IS
 #    gitignored via docs/.gitignore where appropriate.
+
+# ── Review agent: claude-code, not the global gemini default (llm#1035) ──────
+#
+# WHY (correctness): gemini refuses to read roborev's own snapshot diff. roborev
+# writes it to <repo>/.roborev/roborev-snapshot-*/roborev-snapshot-content.diff
+# and `.roborev` is gitignored here, so gemini answers "I am unable to access
+# the diff file ... because it is ignored by configured ignore patterns" and
+# produces no review — while the job records status=done and verdict=0, so the
+# commit looks reviewed-and-clean when it was never reviewed at all.
+#
+# Measured 2026-08-27 on ~/.roborev/reviews.db (open reviews), THIS repo:
+#   gemini        25 reviews,  6 could-not-read
+#   claude-code    6 reviews,  0 could-not-read
+# Same repo, same gitignored path — so the gitignore is necessary but not
+# sufficient; the refusal is agent behaviour. Across all repos it is 20/129
+# (15.5%) for gemini and 0/36 for claude-code.
+#
+# WHY (privacy — the stronger reason for THIS repo): this repo holds personal
+# financial data. Per the public-private-repo-boundary rule, "money" is one of
+# the four triggers that makes content private. llm/.roborev.toml states the
+# intended policy explicitly: "GLOBAL default_agent stays 'claude-code' so
+# private repos (no per-repo config) never route to gemini — public-only
+# opt-in", and justifies gemini for llm only because "llm is PUBLIC so
+# free-tier 'trains on prompts' is moot". That reasoning does not transfer
+# here. The global default has since drifted to gemini
+# (~/.roborev/config.toml: default_agent = 'gemini'), so this repo was
+# inheriting exactly the routing that policy was written to prevent. Setting it
+# explicitly per-repo restores the documented intent regardless of what the
+# global default does next.
+agent = 'claude-code'
+
+# MUST accompany the agent change: global config pins review_model and
+# review_model_thorough to 'gemini-2.5-flash-lite'. Those are MODEL pins, not
+# agent pins, so claude-code would inherit a gemini model name and fail — the
+# llm#746 "poison". Pin every review model key this repo can reach.
+model = 'sonnet'
+review_model = 'sonnet'
+review_model_standard = 'sonnet'
+review_model_thorough = 'sonnet'
+
+# NO gemini backup here, deliberately — unlike llmtelemetry (public). Falling
+# back to gemini would send private financial diffs to the agent this config
+# exists to keep them away from. If claude-code is unavailable, the correct
+# outcome is a failed review that someone notices, not a completed review by
+# the wrong agent.
+review_backup_agent = 'claude-code'
+review_backup_model = 'sonnet'
