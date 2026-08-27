@@ -2,13 +2,24 @@ project:
   type: default
   post-render:
     - /Users/johngavin/docs_gh/llm/.claude/scripts/quarto_post_render_contrast.sh
-    - /Users/johngavin/docs_gh/llm/.claude/scripts/check_dashboard_color_scheme.sh .
+  # check_dashboard_color_scheme.sh is deliberately NOT listed here (historical
+  # #0b412a9c follow-up). It takes a DIRECTORY and scans every *.html under
+  # it -- correct for a whole-project `quarto render`, where post-render fires
+  # once, but scripts/build.sh's --render/--render-all renders pages ONE AT A
+  # TIME (`quarto render docs/X.qmd` per page), so `post-render:` would fire
+  # once per page and re-scan the WHOLE directory each time, failing every
+  # page on siblings that simply had not been re-rendered yet in this run.
+  # Observed: all 15 pages failed in a single --render-all invocation, in
+  # rendering order, for exactly this reason. scripts/build.sh instead runs
+  # this check ONCE, after its per-page render loop completes (Step 4b) --
+  # see that script's comment above the call for the ordering argument.
 
 # Project-wide color-scheme signal (accessibility rule Part 2 Clause 0,
 # historical#0b412a9c): applied here rather than per-document so every page
 # -- dashboard or plain html -- carries it, and so check_dashboard_color_scheme.sh
-# above always finds it. The STATIC value below is always literally "dark"
-# because that is what the post-render check greps for; the dashboards also
+# (run by scripts/build.sh Step 4b, not from post-render: above -- see that
+# block's comment) always finds it. The STATIC value below is always literally "dark"
+# because that is what the color-scheme check greps for; the dashboards also
 # support a light theme (see each qmd's `theme: {dark: darkly, light:
 # cosmo}` and the toggle in vignette-shared.js), so vignette-shared.js keeps
 # this declaration in sync with the actual live theme at runtime (a
