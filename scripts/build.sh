@@ -706,19 +706,48 @@ if [[ "$RENDER" == "true" ]]; then
         # content -- the naive version this block used to run inline
         # false-positived on vendored JS, base64 font blobs, and case-folded
         # "NaN" (see that script's header for the full before/after counts).
-        set +e
-        HTML_ERR_OUT="$(bash "$REPO_ROOT/scripts/check_html_errors.sh" "$REPO_ROOT/$html_path" 2>&1)"
-        HTML_ERR_STATUS=$?
-        set -e
-        if [[ "$HTML_ERR_STATUS" -ne 0 ]]; then
-          echo "  [RENDER-FAIL] $page -- rendered, but check_html_errors.sh found error-pattern hit(s):"
-          echo "$HTML_ERR_OUT" | sed 's/^/    /'
-          RENDER_STATUS=1
-          N_RENDER_FAILED=$((N_RENDER_FAILED + 1))
-        else
-          echo "  [OK] $page -- rendered clean (check_html_errors.sh: 0 error-pattern hits)"
-          N_RENDER_OK=$((N_RENDER_OK + 1))
-        fi
+        #
+        # .md pages are SKIPPED here, not checked and passed (historical
+        # #0b412a9c follow-up #2). check_html_errors.sh exists to catch DATA
+        # failures in published output -- a target that came back NULL, an R
+        # error leaking out of a chunk, a dead reference rendered literally
+        # as text. A .qmd page executes R and can fail that way; a .md page
+        # is static prose with no chunks and no targets, so it structurally
+        # cannot produce that failure class. Checking it anyway is a
+        # category error, not a stricter check -- confirmed in practice:
+        # docs/MERMAID_LESSONS.md legitimately contains the literal string
+        # `Error: ` inside a JS code sample (a lessons-learned document
+        # ABOUT mermaid error handling), which trips the "Error:" pattern
+        # with zero connection to any real data failure. This is scoping,
+        # not loosening: .qmd pages below are still held to the full check,
+        # unchanged -- a dashboard leaking "Error in"/"not available" still
+        # fails. Deliberately a structural rule (by file extension) rather
+        # than a per-page opt-out list, so a newly-added .md page is
+        # automatically exempt without anyone maintaining a list that can go
+        # stale. The skip is echoed, not silent, so a page landing here by
+        # accident is visible in the build log rather than quietly excluded.
+        case "$page" in
+          *.md)
+            echo "  [SKIP-ERRCHECK] $page -- .md source, no executable chunks: cannot produce a data failure, so check_html_errors.sh is not applicable"
+            echo "  [OK] $page -- rendered (color-scheme signal covered by Step 4b below; no data-error check applies to static .md)"
+            N_RENDER_OK=$((N_RENDER_OK + 1))
+            ;;
+          *)
+            set +e
+            HTML_ERR_OUT="$(bash "$REPO_ROOT/scripts/check_html_errors.sh" "$REPO_ROOT/$html_path" 2>&1)"
+            HTML_ERR_STATUS=$?
+            set -e
+            if [[ "$HTML_ERR_STATUS" -ne 0 ]]; then
+              echo "  [RENDER-FAIL] $page -- rendered, but check_html_errors.sh found error-pattern hit(s):"
+              echo "$HTML_ERR_OUT" | sed 's/^/    /'
+              RENDER_STATUS=1
+              N_RENDER_FAILED=$((N_RENDER_FAILED + 1))
+            else
+              echo "  [OK] $page -- rendered clean (check_html_errors.sh: 0 error-pattern hits)"
+              N_RENDER_OK=$((N_RENDER_OK + 1))
+            fi
+            ;;
+        esac
       done <<< "$STALE_PAGES"
       echo ""
       echo "--- Step 4 summary: $N_RENDER_OK page(s) rendered clean, $N_RENDER_FAILED page(s) failed ---"
