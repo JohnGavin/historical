@@ -77,6 +77,34 @@ body { font-size: var(--base-font-size, 1.3em); }
   max-height: none !important; overflow: visible !important;
 }
 
+/* Table/caption rendering ON TOP OF the plot above it (reported on
+   #robustness Bootstrap CI/Regime/Kelly Sizing, #structural-breaks Sharpe
+   Comparison, and the falsification null-rejection heatmap -- confirmed by
+   fetching the deployed HTML: every one of these tabs is a `.bslib-grid`
+   with `display: grid; grid-template-rows: minmax(3em, 1fr) minmax(3em,
+   1fr)` or a max-content/1fr mix, e.g. plot in row 1, table in row 2).
+   `1fr` splits the grid's height into equal FRACTIONS regardless of how
+   tall each row's actual content is -- unlike normal block flow, a CSS
+   Grid row's track size does not grow to accommodate an oversized sibling.
+   Combined with `overflow: visible !important` above (kept deliberately so
+   nothing gets CLIPPED), content taller than its 1fr share does not get
+   clipped either -- it visually spills into the next row's box, which is
+   exactly "table on top of plot". Implicit (auto-placed) rows have the
+   same problem via `grid-auto-rows: minmax(0, 1fr)`, so both properties
+   need overriding.
+   This project has no side-by-side (multi-column) dashboard layout to
+   protect: every `grid-template-columns`/`grid-auto-columns` value on
+   every rendered page is a single track (no `## Column` anywhere in
+   docs/*.qmd, verified against the deployed HTML), so every `.bslib-grid`
+   here exists only to STACK items vertically. Forcing rows to size to
+   their own content is therefore safe everywhere and fixes every reported
+   tab in one place -- grid-template-columns/grid-auto-columns are
+   untouched so a future side-by-side layout still works. */
+.bslib-grid {
+  grid-template-rows: none !important;
+  grid-auto-rows: auto !important;
+}
+
 /* Cell outputs: block layout, no overlap */
 .cell-output-display {
   display: block !important; position: relative !important;
@@ -109,6 +137,46 @@ body { font-size: var(--base-font-size, 1.3em); }
 table.dataTable { white-space: nowrap; }
 table caption, .dataTables_wrapper caption { caption-side: top !important; }
 
+/* Table CELL text invisible on Chrome, fine on Edge (reported on
+   #rankings AND #sp-500-analysis -- confirmed the same mechanism on both
+   by fetching the deployed page and its CSS bundle for each: both load
+   the identical dt-core-1.13.6 bundle, and BOTH pages' plain (unstyled)
+   cells -- Strategy/Credible/Sharpe on the leaderboard, every column on
+   avoid-worst-days' Asymmetry/Metrics tables, since neither page's
+   R code applies DT::formatStyle color -- are governed by this one rule).
+   `jquery.dataTables.extra.css` (bundled with DT, loaded on every
+   dashboard) ships `div.datatables { color: #333; }` unconditionally, as
+   a fix for an unrelated RStudio/Cobalt-theme issue (see that file's own
+   comment, https://github.com/rstudio/DT/issues/447) -- it has no
+   awareness of our dark-by-default theme. #333 near-black text on this
+   site's near-black dashboard background is ~1.3:1 contrast (WCAG
+   minimum is 4.5:1), i.e. genuinely near-invisible, not just "hard to
+   read" -- consistent with rendering differences between browsers/
+   monitors making it look flatly invisible in one and faintly legible in
+   another. Columns with their OWN explicit color (the Detection/Rigour
+   `.det-badge`/`.rig-badge` spans, 2 classes = higher specificity) already
+   win against this and were never affected -- exactly the "some but not
+   all other columns" pattern reported. Only 2 of 9 DT-table dashboards
+   (leaderboard, falsification) carry a per-table `initComplete` JS patch
+   for this at all, and even there it only fires ONCE at first table draw
+   and only touches the outer wrapper, not a live/reactive per-cell rule --
+   the other 7 (avoid-worst-days, evidence, european-overlay,
+   macro-defense-rotation, stock-backtest, momentum-prepeak, bdbb-sol) have
+   no patch whatsoever. Fixing it here, once, in the shared stylesheet
+   that already loads after dt-core's CSS on every dashboard, replaces
+   every one of those per-table JS patches with a single rule that also
+   responds live to a light/dark toggle (the JS one-shot does not). */
+div.datatables, .dataTables_wrapper,
+div.datatables table.dataTable td, .dataTables_wrapper table.dataTable td {
+  color: #ddd;
+}
+[data-bs-theme="light"] div.datatables,
+[data-bs-theme="light"] .dataTables_wrapper,
+[data-bs-theme="light"] div.datatables table.dataTable td,
+[data-bs-theme="light"] .dataTables_wrapper table.dataTable td {
+  color: #1a1a1a;
+}
+
 /* Captions: wrap text to window width; font-size matches body (#348); margin-top avoids overlap with plot (#349) */
 .fig-caption {
   display: block; font-size: 1em; color: #ffffff;
@@ -117,9 +185,21 @@ table caption, .dataTables_wrapper caption { caption-side: top !important; }
   max-width: 100%;
   clear: both;
 }
+/* Caption font too small (reported on #rankings, "repeat throughout the
+   document"): Bootstrap's own bundled CSS ships `caption { font-size:
+   0.875em; ... }` (confirmed in the deployed bootstrap-dark bundle) --
+   87.5% of whatever the surrounding context is, applied to EVERY <caption>
+   element site-wide since it is a bare type selector. hd_caption()
+   (vignette_utils.R) never set an explicit font-size, so this always won.
+   font-size: 1em here matches the same fix already applied to .fig-caption
+   above (#348) -- both become "whatever the ancestor's computed size is",
+   i.e. the body text size -- and `table caption` (2 type selectors) beats
+   Bootstrap's plain `caption` (1 type selector) on specificity alone, so
+   no !important is needed to win the cascade. */
 table caption, .dataTables_wrapper caption, .dt-caption {
   word-wrap: break-word; overflow-wrap: break-word;
   white-space: normal !important; max-width: 100%;
+  font-size: 1em;
   color: #ffffff !important;
 }
 [data-bs-theme="light"] table caption,
