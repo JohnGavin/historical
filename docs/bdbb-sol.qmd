@@ -4,6 +4,10 @@ description: |
   M/G/infinity queueing model (Varma 2026) applied to SOL/USD Kraken hourly data.
   Replicates resilience half-life estimation and tail-risk predictivity test.
 date: "`r Sys.Date()`"
+# page-layout: full so this page matches the window-width layout of the
+# dashboard-format vignettes (e.g. european-overlay.qmd) instead of Quarto's
+# default constrained article column.
+page-layout: full
 format:
   html:
     theme:

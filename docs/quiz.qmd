@@ -1,5 +1,11 @@
 ---
 title: "Which is Real?"
+# page-layout: full so this page matches the window-width layout of the
+# dashboard-format vignettes (e.g. european-overlay.qmd) instead of Quarto's
+# default constrained article column. The quiz UI itself
+# (#quiz-app{max-width:900px}) already self-constrains, so this only removes
+# the outer article column that was clipping it below its own intended width.
+page-layout: full
 format:
   html:
     embed-resources: false
@@ -10,6 +16,7 @@ format:
     include-in-header:
       - _includes/color-scheme-meta.html
       - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
           <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
           <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
           <style>

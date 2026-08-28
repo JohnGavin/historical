@@ -270,3 +270,30 @@ details summary { cursor: pointer; color: #6c9bd2; }
 .hd-font-btn:hover, .hd-font-btn:focus-visible {
   opacity: 1; background: rgba(128, 128, 128, 0.25);
 }
+
+/* Full window width for html-format (non-dashboard) vignette pages, matching
+   dashboard-format vignettes such as european-overlay.qmd (layout/style
+   report, 2026-08). Each affected page's YAML also sets `page-layout: full`
+   (Quarto's own documented mechanism for this), but that alone assigns the
+   `column-page` class to `<main>`, which shares the SAME CSS specificity as
+   the default `.page-columns .content { grid-column: body-content-start /
+   body-content-end }` rule (confirmed by reading the compiled bootstrap
+   bundle: .page-columns{grid-template-columns:[screen-start] 1.5em
+   [screen-start-inset] 5fr [page-start...] ... minmax(500px, calc(850px -
+   3em)) ...[page-end] 5fr [screen-end-inset] 1.5em [screen-end]}) -- so
+   which one wins depends on cascade order, not something verifiable without
+   a render. This rule forces the outcome directly and unconditionally
+   (grid-column: screen-start/screen-end, not just page-start/page-end,
+   because page-start/page-end still leaves the two flexible 5fr side
+   gutters that create the empty margins being reported). Scoped to
+   `.page-columns` so it can only ever match html-format article pages --
+   dashboard pages render `page-layout-custom` and never carry the
+   `page-columns` class at all (verified against the deployed HTML for both
+   european-overlay.html and evidence.html), so this rule cannot affect
+   them. */
+.page-columns .content,
+.page-columns #quarto-document-content {
+  grid-column: screen-start / screen-end !important;
+  padding-left: 1.5em;
+  padding-right: 1.5em;
+}

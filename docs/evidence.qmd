@@ -1,14 +1,18 @@
 ---
 title: "Evidence & Context"
 subtitle: "Strategy Verdicts and Long-Run Historical Evidence"
+# page-layout: full + no TOC so this page matches the window-width layout of
+# the dashboard-format vignettes (e.g. european-overlay.qmd) instead of
+# Quarto's default constrained article column (issue: layout/style report,
+# 2026-08). toc: true removed -- was the only vignette in the project with a
+# TOC sidebar, which reserved horizontal space this page does not need.
+page-layout: full
 format:
   html:
     embed-resources: false
     theme:
       dark: darkly
       light: cosmo
-    toc: true
-    toc-depth: 2
     code-fold: true
     include-in-header:
       - _includes/color-scheme-meta.html
