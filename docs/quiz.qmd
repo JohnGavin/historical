@@ -101,5 +101,5 @@ if (!is.null(quiz_json)) {
 ```{r}
 #| label: build-info
 #| results: asis
-build_info()
+build_info_tabset()
 ```

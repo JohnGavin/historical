@@ -1160,5 +1160,5 @@ This vignette was developed with assistance from Anthropic's Claude (model: Opus
 #| label: build-info
 #| echo: false
 #| results: asis
-build_info()
+build_info_tabset()
 ```

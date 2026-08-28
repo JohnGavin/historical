@@ -446,7 +446,7 @@ All target computations are defined in [`R/plan_jst.R`](https://github.com/JohnG
 ```{r build-info}
 #| label: build-info
 #| results: asis
-build_info()
+build_info_tabset()
 ```
 
 ## Related vignettes

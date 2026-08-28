@@ -793,7 +793,7 @@ Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode
 ```{r}
 #| label: build-info
 #| results: asis
-build_info()
+build_info_tabset()
 ```
 
 # Causal Graph {#causal}
