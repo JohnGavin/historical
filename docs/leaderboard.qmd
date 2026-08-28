@@ -1500,7 +1500,7 @@ if (!is.null(params)) {
 #| label: build-info
 #| echo: false
 #| results: asis
-build_info()
+build_info_tabset()
 ```
 
 # Biases and Caveats
@@ -1531,8 +1531,40 @@ if (exists("full") && "survivorship_biased" %in% names(full)) {
   } else {
     cat("No strategy is currently flagged `survivorship_biased = TRUE` on the [Rankings](#rankings) table.\n")
   }
+}
+```
+
+```{r}
+#| label: caveats-survivorship-table
+# A single sentence naming the flagged strategies reads as thin -- expand it
+# into the actual table so this tab carries data, not just prose (owner
+# feedback: a tab holding one paragraph looks broken, not explanatory).
+# Pulled from the SAME `full$survivorship_biased` column the Rankings table
+# itself renders (computed at R/plan_leaderboard.R:552) -- never a
+# hand-typed strategy list, which would silently drift the moment the flag
+# changes (`reproducible-ingestion`/`fail-loud-not-null` rules).
+if (exists("full") && "survivorship_biased" %in% names(full)) {
+  sb_tbl <- full |>
+    mutate(
+      Flagged = ifelse(is.na(survivorship_biased), "not computed",
+                        ifelse(survivorship_biased, "YES", "no")),
+      Universe = ifelse(is.na(survivorship_biased) | !survivorship_biased, "—", "`stk_universe`"),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2)))
+    ) |>
+    filter(!is.na(survivorship_biased) & survivorship_biased) |>
+    select(Strategy = strategy, Flagged, Universe, Sharpe)
+
+  if (nrow(sb_tbl) > 0) {
+    hd_dt(sb_tbl, paste0(
+      "Strategies currently flagged `survivorship_biased = TRUE` -- see the [Rankings](#rankings) ",
+      "table for the full metrics row and its own caption note. `stk_universe` restricts to the ",
+      "top-N tickers by current market cap (#150 Option C); delisted firms are absent from history."
+    ))
+  } else {
+    cat("*No strategy is currently flagged `survivorship_biased = TRUE` on the [Rankings](#rankings) table.*\n")
+  }
 } else {
-  cat("*`leaderboard` target not available -- per-strategy flag list cannot be computed.*\n")
+  cat("*`leaderboard` target not available -- per-strategy flag table cannot be computed.*\n")
 }
 ```
 
@@ -1544,7 +1576,61 @@ if (exists("full") && "survivorship_biased" %in% names(full)) {
 
 See the **Detection** and **Rigour** columns on the [Rankings](#rankings) table for the
 per-strategy verdict — hover any badge for the full numeric detail (Sharpe threshold,
-years of data needed, K_eff, deflated Sharpe, DSR p-value).
+years of data needed, K_eff, deflated Sharpe, DSR p-value). The same numbers, as plain
+columns rather than hover-only badges, are below.
+
+```{r}
+#| label: caveats-detection-rigour-table
+# Surfaces the numbers behind the Detection/Rigour badges as a real table --
+# previously the ONLY way to see a strategy's threshold Sharpe, years-of-data
+# requirement, K_eff, deflated Sharpe, or DSR p-value was to hover a badge on
+# the Rankings table (owner feedback: this tab showed nothing useful on its
+# own). Built from the SAME `full` data frame and the SAME
+# DEFLATED_SHARPE_EXEMPTIONS source (R/plan_qa_gates.R) the badges use --
+# never a re-derived or hand-typed verdict.
+det_rig_cols <- c("sharpe", "detection_underpowered", "detection_min_n_years",
+                   "detection_underpowered_mt", "detection_min_n_years_mt",
+                   "deflated_sharpe", "dsr_pvalue", "k_eff_leaderboard")
+if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHARPE_EXEMPTIONS")) {
+  det_rig_tbl <- full |>
+    mutate(
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
+      Verdict = dplyr::case_when(
+        is.na(sharpe) | sharpe <= 0        ~ "N/A (Sharpe ≤ 0)",
+        is.na(detection_underpowered)      ~ "NOT COMPUTED",
+        isTRUE(detection_underpowered)     ~ "Underpowered",
+        is.na(detection_underpowered_mt)   ~ "Detectable (MT-corrected verdict not computed)",
+        isTRUE(detection_underpowered_mt)  ~ "Detectable, fails MT-correction",
+        TRUE                                ~ "Detectable"
+      ),
+      `Years Needed` = ifelse(is.na(detection_min_n_years), "—", as.character(round(detection_min_n_years, 1))),
+      `Years Needed (MT-corrected)` = ifelse(is.na(detection_min_n_years_mt), "—", as.character(round(detection_min_n_years_mt, 1))),
+      K_eff = ifelse(is.na(k_eff_leaderboard), "—", as.character(round(k_eff_leaderboard, 1))),
+      `Deflated Sharpe` = ifelse(is.na(deflated_sharpe), "—", as.character(round(deflated_sharpe, 2))),
+      `DSR p-value` = ifelse(is.na(dsr_pvalue), "—", as.character(round(dsr_pvalue, 3))),
+      .rig_present = rowSums(!is.na(cbind(deflated_sharpe, dsr_pvalue, k_eff_leaderboard))),
+      .rig_exempt = strategy %in% DEFLATED_SHARPE_EXEMPTIONS$strategy,
+      `Rigour Coverage` = dplyr::case_when(
+        .rig_exempt              ~ "Excluded (documented)",
+        .rig_present == 3L       ~ "Full (3/3)",
+        .rig_present > 0L        ~ paste0("Partial (", .rig_present, "/3)"),
+        TRUE                     ~ "NOT COMPUTED (0/3)"
+      )
+    ) |>
+    select(Strategy = strategy, Sharpe, Verdict, `Years Needed`, `Years Needed (MT-corrected)`,
+           K_eff, `Deflated Sharpe`, `DSR p-value`, `Rigour Coverage`)
+
+  hd_dt(det_rig_tbl, paste0(
+    "Per-strategy statistical detection power and rigour, this build. Verdict/Years Needed follow ",
+    "`hd_detection_power()` (`detection-power-required` rule); K_eff/Deflated Sharpe/DSR p-value are ",
+    "the deflated-Sharpe correction for testing multiple strategies. See ",
+    "[#726](https://github.com/JohnGavin/historical/issues/726) (detection power) and ",
+    "[#728](https://github.com/JohnGavin/historical/issues/728) (rigour coverage)."
+  ))
+} else {
+  cat("*`leaderboard` target not available -- per-strategy detection/rigour table cannot be computed.*\n")
+}
+```
 
 #### About This Page
 
@@ -1552,10 +1638,20 @@ All dashboard-wide caveats that would otherwise sit at the top of a page,
 interrupting the first thing a reader sees, are collected here instead. Each
 caveat still carries a compact, discoverable marker at its original
 location — a one-line pointer callout on [Rankings](#rankings), or the
-Detection/Rigour table columns themselves — that links back here, and every
-tab on this page links back to where the affected rows live. Nothing here
+Detection/Rigour table columns themselves — that links back here. Nothing here
 replaces the underlying data or its per-row flags; this page is a navigation
 aid, not a new source of truth.
+
+**Caveats collected on this page:**
+
+- **[Survivorship Bias](#biases-and-caveats)** — `stk_universe` (used by Stock MAX,
+  Stock DRIF, XGB DRIF) restricts to top-N tickers by current market cap; delisted
+  firms are absent from history. See [issue #150](https://github.com/JohnGavin/historical/issues/150).
+- **[Statistical Detection Power and Rigour](#biases-and-caveats)** — whether each
+  strategy's sample has enough data to distinguish its Sharpe from zero, before and
+  after correcting for testing multiple strategies. See
+  [issue #726](https://github.com/JohnGavin/historical/issues/726) (detection power) and
+  [issue #728](https://github.com/JohnGavin/historical/issues/728) (rigour coverage).
 
 The [Stock-Level Backtests](stock-backtest.html#biases-and-caveats) dashboard
 carries the same survivorship-bias caveat at its own equivalent page — Stock

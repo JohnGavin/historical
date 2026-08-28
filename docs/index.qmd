@@ -475,5 +475,5 @@ cat(if (is.na(n_targets)) "(could not parse)"
 utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
   file.path(here::here(), "docs/vignette_utils.R")
 source(utils_path)
-build_info()
+build_info_tabset()
 ```

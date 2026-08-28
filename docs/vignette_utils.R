@@ -312,3 +312,327 @@ build_info <- function(pkg_name = "historicaldata") {
     pkg_name, ver_link, sha_link, r_link, build_time
   )
 }
+
+#' Inline hover span — same mechanism the Detection/Rigour badges on
+#' Rankings already use (`<span title="...">`), reused here rather than
+#' inventing a second tooltip convention (issue request, #build-info-tabset).
+.hd_ttl <- function(label, title) {
+  sprintf('<span title="%s">%s</span>', gsub('"', "&quot;", title, fixed = TRUE), label)
+}
+
+#' Resolve the repo root, working around the here::here() cwd-trap
+#'
+#' `here::here()` returns `docs/` itself under Quarto render, because
+#' `docs/_quarto.yml` is picked up as a project-root marker before the
+#' search climbs to the actual repo root -- the same trap documented at
+#' every other `here::here()` call site in this project (see e.g.
+#' `index.qmd`'s `flake_dir`/`root` variables, `european-overlay.qmd`,
+#' `avoid-worst-days.qmd`). Reuses that project's exact self-correcting
+#' idiom: if `here()` already points at a directory containing `flake.nix`
+#' (i.e. cwd was the repo root, no trap), use it as-is; otherwise assume
+#' the trap fired and take `dirname()`.
+.hd_repo_root <- function() {
+  root_guess <- here::here()
+  if (file.exists(file.path(root_guess, "flake.nix"))) root_guess else dirname(root_guess)
+}
+
+#' Read the Imports field of a DESCRIPTION file, stripping version constraints
+#'
+#' Base-R only (`read.dcf`) — deliberately avoids a dependency on `desc`,
+#' which is not declared anywhere in this project (DESCRIPTION Imports/Suggests,
+#' flake.nix). Returns character(0) on any failure rather than erroring, so a
+#' caller can render "unknown" instead of aborting the whole page.
+.hd_pkg_imports <- function(desc_path) {
+  if (!file.exists(desc_path)) return(character(0))
+  dcf <- tryCatch(read.dcf(desc_path, fields = "Imports"), error = function(e) NULL)
+  if (is.null(dcf) || is.na(dcf[1, "Imports"])) return(character(0))
+  parts <- strsplit(dcf[1, "Imports"], ",\\s*\\n?\\s*")[[1]]
+  parts <- trimws(sub("\\s*\\(.*\\)$", "", parts))
+  parts[nzchar(parts)]
+}
+
+#' External data sources referenced in this project's R/ code, computed by
+#' scanning the actual source tree at render time (never hand-typed — the
+#' `reproducible-ingestion` rule treats a hand-typed provider list as
+#' technical debt: it silently drifts the moment a source is added or
+#' dropped and nobody remembers to update the list here).
+#'
+#' @return Character vector of provider display names found (possibly empty)
+hd_data_sources_used <- function() {
+  providers <- tibble::tribble(
+    ~pattern,                                     ~label,
+    "hf://|[Hh]ugging[- ]?[Ff]ace",                "HuggingFace (parquet via hf://)",
+    "\\bFRED\\b",                                  "FRED (Federal Reserve Economic Data)",
+    "Ken French|French Data Library",              "Ken French Data Library",
+    "\\bECB\\b|European Central Bank",             "ECB (European Central Bank, CISS)",
+    "\\bJST\\b|Jord.-Schularick-Taylor",           "JST Macrohistory Database",
+    "\\bCBOE\\b",                                  "CBOE (VIX/VVIX)",
+    "Yahoo Finance",                               "Yahoo Finance",
+    "[Aa]lpha ?[Vv]antage",                        "Alpha Vantage"
+  )
+  root <- .hd_repo_root()
+  dirs <- c(file.path(root, "R"), file.path(root, "packages/historicaldata/R"))
+  dirs <- dirs[dir.exists(dirs)]
+  if (length(dirs) == 0) return(character(0))
+  files <- unlist(lapply(dirs, list.files, pattern = "\\.R$", full.names = TRUE))
+  if (length(files) == 0) return(character(0))
+  text <- vapply(files, function(f) paste(readLines(f, warn = FALSE), collapse = "\n"), character(1))
+  found <- vapply(providers$pattern, function(p) any(grepl(p, text, perl = TRUE)), logical(1))
+  providers$label[found]
+}
+
+#' Read this page's own YAML front matter without a hard dependency on the
+#' `rmarkdown`/`yaml` packages (neither is declared in DESCRIPTION or
+#' flake.nix) -- base-R line scan of the fenced `---` block bounded by the
+#' first two `---` lines, same file `knitr::current_input()` names.
+#'
+#' @return list(dark=, light=) or NULL if the page/theme cannot be located
+.hd_page_theme <- function(page_lines) {
+  dashes <- which(page_lines == "---")
+  if (length(dashes) < 2) return(NULL)
+  yaml_lines <- page_lines[(dashes[1] + 1):(dashes[2] - 1)]
+  dark  <- sub(".*dark:\\s*", "", grep("^\\s*dark:", yaml_lines, value = TRUE)[1])
+  light <- sub(".*light:\\s*", "", grep("^\\s*light:", yaml_lines, value = TRUE)[1])
+  if (is.na(dark) && is.na(light)) return(NULL)
+  list(
+    dark  = if (is.na(dark)) "unknown" else trimws(dark),
+    light = if (is.na(light)) "unknown" else trimws(light)
+  )
+}
+
+#' Format `git status --porcelain` lines into a human display string
+#'
+#' Pure function (no git calls, no filesystem access) so the display logic
+#' is unit-testable independent of a real git repo or a Quarto render
+#' context. `NA` (git unavailable / not a repo / command failed) is an
+#' indeterminate result and must render as `"unknown"`, never silently as
+#' `"clean"` -- a false "clean" is the worst of the three outcomes because
+#' it asserts something reassuring that was never actually checked
+#' (`checks-must-distinguish-unknown` rule).
+#'
+#' @param status_lines character vector of porcelain lines (already
+#'   filtered to whatever pathspec the caller used), or `NA` to signal the
+#'   underlying `git status` call could not be run at all
+#' @param max_shown maximum number of file paths to list before truncating
+#' @return a single display string: `"unknown"`, `"clean"`, or
+#'   `"dirty (N source file(s) modified: a, b, c (+K more))"`
+.hd_tree_status_display <- function(status_lines, max_shown = 10L) {
+  if (length(status_lines) == 1L && identical(status_lines, NA)) {
+    return("unknown")
+  }
+  if (length(status_lines) == 0L) {
+    return("clean")
+  }
+  # Porcelain v1 format: two status chars + one space + path.
+  dirty_paths <- trimws(substring(status_lines, 4L))
+  n_dirty <- length(dirty_paths)
+  shown <- utils::head(dirty_paths, max_shown)
+  more_txt <- if (n_dirty > length(shown)) sprintf(", +%d more", n_dirty - length(shown)) else ""
+  sprintf(
+    "dirty (%d source file%s modified: %s%s)",
+    n_dirty, if (n_dirty != 1L) "s" else "", paste(shown, collapse = ", "), more_txt
+  )
+}
+
+#' Build the `git status --porcelain` command for the "Source tree" field
+#'
+#' Extracted from `build_info_tabset()` so the untracked-files scope
+#' decision is unit-testable without a live git repo (pure string-building,
+#' no git call). Two exclusions compose here, both required:
+#'
+#' - `--untracked-files=no` restricts the report to the *committed* source
+#'   tree. The field answers "was the committed source that produced this
+#'   page clean?" -- an untracked local file (scratch output, a stray
+#'   fixture, a local clone dir) was never part of that committed source, so
+#'   it cannot change the answer. Without this flag, arbitrary local
+#'   clutter both misreports the field's meaning and can publish local
+#'   machine paths -- some PII-adjacent -- to a public site.
+#' - The exclude pathspecs drop this render's own output
+#'   (`docs/*.html`, `docs/*_files/**`, `docs/_targets_meta_snapshot.csv`):
+#'   our publish flow is render, then commit the rendered output, so those
+#'   are always dirty at render time and would otherwise swamp this field.
+#'
+#' `-C <repo_root>` anchors both git's cwd and the (repo-root-relative)
+#' exclude pathspecs, regardless of R's own working directory at render
+#' time (docs/ under Quarto, repo root under a plain script).
+#'
+#' @param repo_root path to the repo root (`.hd_repo_root()` at the call site)
+#' @return a single shell command string, ready for `system(cmd, intern = TRUE)`
+.hd_tree_status_cmd <- function(repo_root) {
+  exclude_pathspecs <- c(
+    ".",
+    ":(exclude)docs/*.html",
+    ":(exclude,glob)docs/*_files/**",
+    ":(exclude)docs/_targets_meta_snapshot.csv"
+  )
+  paste(
+    "git", "-C", shQuote(repo_root), "status", "--porcelain",
+    "--untracked-files=no", "--",
+    paste(shQuote(exclude_pathspecs), collapse = " "),
+    "2>/dev/null"
+  )
+}
+
+#' Resolve a display string for the current git branch, handling detached HEAD
+#'
+#' `git rev-parse --abbrev-ref HEAD` returns the literal string `"HEAD"`
+#' when the checkout is detached (common in CI checkouts, or after
+#' `git checkout <sha>`) -- printing that literally answers nothing ("branch:
+#' HEAD"). Pure function so this is unit-testable without a real git repo.
+#'
+#' @param raw_branch the raw `git rev-parse --abbrev-ref HEAD` output, or
+#'   `"unknown"` if that call already failed upstream
+#' @param sha_short the short commit SHA, or `"unknown"`
+#' @return a display string: the branch name, `"HEAD (detached at <sha>)"`,
+#'   or `"unknown"`
+.hd_branch_display <- function(raw_branch, sha_short) {
+  if (identical(raw_branch, "unknown")) return("unknown")
+  if (identical(raw_branch, "HEAD")) {
+    if (identical(sha_short, "unknown")) return("unknown")
+    return(sprintf("HEAD (detached at %s)", sha_short))
+  }
+  raw_branch
+}
+
+#' Rich "Built with" tabset: Data / R environment / This page
+#'
+#' `build_info()` above stays as a one-line footer for any caller that only
+#' wants the compact form. This is the richer replacement requested directly
+#' by the project owner (#build-info-tabset): a "Built with" callout,
+#' hover-for-detail via the same `<span title=>` mechanism the Detection/
+#' Rigour badges on Rankings already use, split into three tabs.
+#'
+#' Every value is computed at render time (`dynamic-prose-values` rule) --
+#' nothing here is a hardcoded version, date, count, or SHA. Where a value
+#' genuinely cannot be derived (no git remote, no targets store yet built,
+#' page source unreadable), the cell prints an explicit "unknown" rather
+#' than being silently omitted or backfilled with a plausible-looking
+#' constant (`checks-must-distinguish-unknown` rule).
+#'
+#' @param pkg_name Package name (default: "historicaldata")
+build_info_tabset <- function(pkg_name = "historicaldata") {
+  # ---- git ----
+  gh_url <- tryCatch({
+    remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+    if (length(remote) == 0 || !nzchar(remote)) NULL else
+      sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+  }, error = function(e) NULL)
+
+  git_sha_short <- tryCatch(system("git rev-parse --short HEAD 2>/dev/null", intern = TRUE), error = function(e) character(0))
+  git_sha_short <- if (length(git_sha_short) == 0 || !nzchar(git_sha_short)) "unknown" else git_sha_short
+  git_sha_full  <- tryCatch(system("git rev-parse HEAD 2>/dev/null", intern = TRUE), error = function(e) git_sha_short)
+
+  git_branch <- tryCatch(system("git rev-parse --abbrev-ref HEAD 2>/dev/null", intern = TRUE), error = function(e) character(0))
+  git_branch <- if (length(git_branch) == 0 || !nzchar(git_branch)) "unknown" else git_branch
+  git_branch <- .hd_branch_display(git_branch, git_sha_short)
+
+  # See .hd_tree_status_cmd() for why both the untracked-files exclusion and
+  # the render-output pathspec exclusions are required -- a raw
+  # `git status --porcelain` always reported "dirty" regardless of whether
+  # the actual committed source was clean, which conveys no information
+  # (the failure mode `checks-must-distinguish-unknown` describes).
+  git_status <- tryCatch(
+    system(.hd_tree_status_cmd(.hd_repo_root()), intern = TRUE),
+    error = function(e) NA
+  )
+  tree_clean <- .hd_tree_status_display(git_status)
+
+  sha_display <- if (!is.null(gh_url) && git_sha_short != "unknown") {
+    sprintf("[`%s`](%s/commit/%s)", git_sha_short, gh_url, git_sha_full)
+  } else if (git_sha_short != "unknown") {
+    sprintf("`%s` (local HEAD, no remote)", git_sha_short)
+  } else {
+    "unknown"
+  }
+
+  issues_link <- if (!is.null(gh_url)) sprintf("[Open issues](%s/issues)", gh_url) else "unknown (no remote configured)"
+
+  # ---- targets store ----
+  # dir.exists() is checked explicitly BEFORE calling tar_meta(): tar_meta()
+  # on a missing store does not error, it warns and returns a 0-row tibble --
+  # indistinguishable from "the store exists and genuinely has 0 targets"
+  # unless the missing-store case is ruled out first
+  # (`checks-must-distinguish-unknown` rule; an unknown must never render
+  # identically to a computed zero).
+  store_path <- if (dir.exists("_targets")) "_targets" else
+    file.path(.hd_repo_root(), "docs/_targets")
+  store_meta <- if (dir.exists(store_path)) {
+    tryCatch(targets::tar_meta(store = store_path), error = function(e) NULL)
+  } else {
+    NULL
+  }
+  n_targets  <- if (is.null(store_meta)) "unknown (store unavailable)" else as.character(nrow(store_meta))
+  last_built <- if (is.null(store_meta) || !("time" %in% names(store_meta)) || all(is.na(store_meta$time))) {
+    "unknown (store unavailable)"
+  } else {
+    format(max(store_meta$time, na.rm = TRUE), "%Y-%m-%d %H:%M %Z")
+  }
+
+  # ---- data sources (project-wide; this page draws on a subset) ----
+  sources <- tryCatch(hd_data_sources_used(), error = function(e) character(0))
+  sources_txt <- if (length(sources) == 0) "unknown (no provider references found)" else paste(sources, collapse = ", ")
+
+  # ---- R environment ----
+  r_ver <- as.character(getRversion())
+  desc_path <- file.path(.hd_repo_root(), "packages/historicaldata/DESCRIPTION")
+  imports <- tryCatch(.hd_pkg_imports(desc_path), error = function(e) character(0))
+  pkg_versions <- vapply(imports, function(p) {
+    v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) "not installed")
+    sprintf("`%s %s`", p, v)
+  }, character(1))
+  pkg_versions_txt <- if (length(pkg_versions) == 0) "unknown" else paste(pkg_versions, collapse = ", ")
+
+  # ---- this page: read its own source, not a hand-typed description ----
+  page_path  <- tryCatch(knitr::current_input(dir = TRUE), error = function(e) NULL)
+  page_lines <- if (!is.null(page_path) && file.exists(page_path)) readLines(page_path, warn = FALSE) else character(0)
+
+  theme <- if (length(page_lines) > 0) .hd_page_theme(page_lines) else NULL
+  theme_txt <- if (is.null(theme)) "unknown" else
+    sprintf("dark = `%s`, light = `%s` (Bootswatch)", theme$dark, theme$light)
+
+  page_text <- paste(page_lines, collapse = "\n")
+  table_engine <- if (length(page_lines) == 0) {
+    "unknown"
+  } else if (grepl("DT::datatable\\(|hd_dt\\(|hd_dt_wide\\(", page_text)) {
+    sprintf("DT `%s`", tryCatch(as.character(utils::packageVersion("DT")), error = function(e) "not installed"))
+  } else if (grepl("knitr::kable\\(", page_text)) {
+    "knitr::kable() (base HTML table, no DT)"
+  } else {
+    "no tables detected on this page"
+  }
+  chart_engine <- if (length(page_lines) == 0) {
+    "unknown"
+  } else if (grepl("plotly::|library\\(plotly\\)|ggplotly\\(", page_text)) {
+    sprintf("plotly `%s` (interactive)", tryCatch(as.character(utils::packageVersion("plotly")), error = function(e) "not installed"))
+  } else if (grepl("ggplot\\(|library\\(ggplot2\\)", page_text)) {
+    "ggplot2 (static PNG/SVG via knitr)"
+  } else {
+    "no charts detected on this page"
+  }
+  font_txt <- "no custom `font-family` override in vignette-shared.css — inherits the Bootswatch theme's default stack"
+
+  knitr::asis_output(paste0(
+    "::: {.panel-tabset}\n\n",
+    "##### Data\n\n",
+    "*Hover any item for its exact provenance. This is a static snapshot — it does not refresh itself.*\n\n",
+    "| Item | Value |\n|---|---|\n",
+    "| ", .hd_ttl("Commit", "git rev-parse HEAD, resolved at render time"), " | ", sha_display, " |\n",
+    "| ", .hd_ttl("Branch", "git rev-parse --abbrev-ref HEAD (detached HEAD resolves to the commit SHA instead)"), " | `", git_branch, "` |\n",
+    "| ", .hd_ttl("Source tree", "git status --porcelain --untracked-files=no at render time -- reports the COMMITTED source only. Excludes this render's own output (docs/*.html, docs/*_files/**, docs/_targets_meta_snapshot.csv), since our publish flow is render then commit the rendered output, and excludes ALL untracked files/directories, since those were never part of the committed source this page was built from. 'clean' means no tracked source file differs from HEAD -- it says nothing about untracked local clutter on the machine that rendered it"), " | ", tree_clean, " |\n",
+    "| ", .hd_ttl("Data sources referenced", "scanned from R/ and packages/historicaldata/R/ at render time"), " | ", sources_txt, " |\n",
+    "| ", .hd_ttl("Targets in store", "nrow(targets::tar_meta(store = ...))"), " | ", n_targets, " |\n",
+    "| ", .hd_ttl("Store last built", "max(targets::tar_meta()$time)"), " | ", last_built, " |\n",
+    "| ", .hd_ttl("Open issues", "GitHub issue tracker for this repo"), " | ", issues_link, " |\n",
+    "\n##### R environment\n\n",
+    "| Item | Value |\n|---|---|\n",
+    "| ", .hd_ttl("R", "getRversion() at render time"), " | `", r_ver, "` |\n",
+    "| ", .hd_ttl(paste0(pkg_name, " package Imports"), "versions via utils::packageVersion(), read from packages/historicaldata/DESCRIPTION"), " | ", pkg_versions_txt, " |\n",
+    "\n##### This page\n\n",
+    "| Item | Value |\n|---|---|\n",
+    "| ", .hd_ttl("Theme", "this page's own YAML front matter, read at render time"), " | ", theme_txt, " |\n",
+    "| ", .hd_ttl("Fonts", "docs/vignette-shared.css, scanned for font-family at render time"), " | ", font_txt, " |\n",
+    "| ", .hd_ttl("Chart engine", "this page's own source, scanned for plotly:: vs ggplot() at render time"), " | ", chart_engine, " |\n",
+    "| ", .hd_ttl("Table engine", "this page's own source, scanned for DT::datatable()/hd_dt() vs knitr::kable() at render time"), " | ", table_engine, " |\n",
+    "\n:::\n"
+  ))
+}

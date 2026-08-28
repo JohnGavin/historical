@@ -318,4 +318,9 @@ if (!is.null(ecb_raw)) {
 
 #### Build Info
 
-`r build_info()`
+```{r}
+#| label: build-info
+#| echo: false
+#| results: asis
+build_info_tabset()
+```

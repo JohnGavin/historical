@@ -258,6 +258,134 @@ test_that(".parse_vignette_strict: typo warning fires AT MOST ONCE across N call
 })
 
 # ---------------------------------------------------------------------------
+# .hd_tree_status_display — build_info_tabset "Source tree" field
+#
+# Pure function so the display logic is testable without a real git repo or
+# a Quarto render. The caller (build_info_tabset()) supplies already-filtered
+# `git status --porcelain` output (render byproducts like docs/*.html
+# excluded via pathspec) or NA when the git call itself failed.
+# ---------------------------------------------------------------------------
+
+test_that(".hd_tree_status_display: NA (git unavailable) returns 'unknown', not 'clean'", {
+  # An indeterminate result must never collapse into the negative-result
+  # value — checks-must-distinguish-unknown.
+  expect_equal(.hd_tree_status_display(NA), "unknown")
+})
+
+test_that(".hd_tree_status_display: empty character(0) returns 'clean'", {
+  expect_equal(.hd_tree_status_display(character(0)), "clean")
+})
+
+test_that(".hd_tree_status_display: single modified file is singular ('file', not 'files')", {
+  expect_equal(
+    .hd_tree_status_display(" M docs/vignette_utils.R"),
+    "dirty (1 source file modified: docs/vignette_utils.R)"
+  )
+})
+
+test_that(".hd_tree_status_display: multiple files are plural and listed", {
+  expect_equal(
+    .hd_tree_status_display(c(" M R/a.R", " M R/b.R", "?? R/c.R")),
+    "dirty (3 source files modified: R/a.R, R/b.R, R/c.R)"
+  )
+})
+
+test_that(".hd_tree_status_display: truncates the file list past max_shown and reports the remainder", {
+  lines <- sprintf(" M R/file%02d.R", seq_len(12))
+  result <- .hd_tree_status_display(lines, max_shown = 10L)
+  expect_match(result, "^dirty \\(12 source files modified: ")
+  expect_match(result, ", \\+2 more\\)$")
+  expect_false(grepl("file11", result))
+  expect_true(grepl("file10", result))
+  # No doubled closing paren -- the "more" marker must not nest a second
+  # "(...)" inside the outer "dirty (...)" wrapper.
+  expect_false(grepl("\\)\\)$", result))
+})
+
+# ---------------------------------------------------------------------------
+# .hd_tree_status_cmd — the "Source tree" field's untracked-files scope
+#
+# `.hd_tree_status_display()` above is a pure formatter: it treats every
+# porcelain line it is handed identically, whether that line came from a
+# tracked modification (` M`) or an untracked file (`??`). The scope
+# decision -- untracked files must never reach that formatter at all --
+# lives in the `git status` invocation itself, via `--untracked-files=no`.
+# These tests cover that command-building in isolation (pure string
+# assembly, no git call needed) and then, below, against a real scratch git
+# repo to prove the untracked case end-to-end.
+# ---------------------------------------------------------------------------
+
+test_that(".hd_tree_status_cmd excludes untracked files via --untracked-files=no", {
+  cmd <- .hd_tree_status_cmd("/fake/repo/root")
+  expect_match(cmd, "--untracked-files=no", fixed = TRUE)
+})
+
+test_that(".hd_tree_status_cmd still excludes this render's own output pathspecs", {
+  cmd <- .hd_tree_status_cmd("/fake/repo/root")
+  expect_match(cmd, "exclude.*docs/\\*\\.html")
+  expect_match(cmd, "exclude.*docs/_targets_meta_snapshot\\.csv")
+})
+
+test_that(".hd_tree_status_cmd anchors git's cwd at the given repo_root via -C", {
+  cmd <- .hd_tree_status_cmd("/fake/repo/root")
+  expect_match(cmd, "-C '?/fake/repo/root'?")
+})
+
+test_that(".hd_tree_status_cmd end-to-end: untracked junk is excluded, tracked mods are not", {
+  # Reproduces the observed defect directly: an untracked file/dir (scratch
+  # output, a stray fixture, a local clone dir) must never appear in the
+  # "Source tree" status, while a genuinely modified TRACKED file must
+  # still flip the field to dirty.
+  repo <- withr::local_tempdir()
+  system2("git", c("-C", repo, "init", "-q"))
+  system2("git", c("-C", repo, "config", "user.email", "test@example.com"))
+  system2("git", c("-C", repo, "config", "user.name", "Test"))
+  writeLines("content", file.path(repo, "tracked.R"))
+  system2("git", c("-C", repo, "add", "tracked.R"))
+  system2("git", c("-C", repo, "commit", "-q", "-m", "add tracked.R"))
+
+  # Untracked junk: a stray directory and a stray file, the same shape as
+  # the observed .clone/, archive/<name>-dir/, docs/_full_render_marker.txt.
+  dir.create(file.path(repo, "scratch_junk"))
+  writeLines("junk", file.path(repo, "scratch_junk", "stray.parquet"))
+  writeLines("marker", file.path(repo, "render_marker.txt"))
+
+  status_untracked_only <- system(.hd_tree_status_cmd(repo), intern = TRUE)
+  expect_equal(.hd_tree_status_display(status_untracked_only), "clean")
+
+  # Now modify the tracked file -- this MUST still show as dirty.
+  writeLines("modified content", file.path(repo, "tracked.R"))
+  status_with_tracked_mod <- system(.hd_tree_status_cmd(repo), intern = TRUE)
+  expect_equal(
+    .hd_tree_status_display(status_with_tracked_mod),
+    "dirty (1 source file modified: tracked.R)"
+  )
+})
+
+# ---------------------------------------------------------------------------
+# .hd_branch_display — build_info_tabset "Branch" field, detached HEAD case
+# ---------------------------------------------------------------------------
+
+test_that(".hd_branch_display: normal branch name passes through unchanged", {
+  expect_equal(.hd_branch_display("main", "abc1234"), "main")
+})
+
+test_that(".hd_branch_display: detached HEAD resolves to the commit SHA, not the literal 'HEAD'", {
+  expect_equal(
+    .hd_branch_display("HEAD", "abc1234"),
+    "HEAD (detached at abc1234)"
+  )
+})
+
+test_that(".hd_branch_display: detached HEAD with no resolvable SHA is 'unknown', not a bare 'HEAD'", {
+  expect_equal(.hd_branch_display("HEAD", "unknown"), "unknown")
+})
+
+test_that(".hd_branch_display: upstream 'unknown' (git call already failed) passes through", {
+  expect_equal(.hd_branch_display("unknown", "abc1234"), "unknown")
+})
+
+# ---------------------------------------------------------------------------
 # Function signature stability (catches API drift) — Tier A snapshots
 # ---------------------------------------------------------------------------
 
@@ -266,4 +394,7 @@ test_that("function signatures are stable (catches API drift)", {
   expect_snapshot(args(safe_tar_read))
   expect_snapshot(args(is_stale_marker))
   expect_snapshot(args(show_code))
+  expect_snapshot(args(.hd_tree_status_display))
+  expect_snapshot(args(.hd_tree_status_cmd))
+  expect_snapshot(args(.hd_branch_display))
 })

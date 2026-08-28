@@ -668,7 +668,7 @@ if (!is.null(params)) {
 #| label: build-info
 #| echo: false
 #| results: asis
-build_info()
+build_info_tabset()
 ```
 
 # Biases and Caveats
@@ -688,12 +688,52 @@ and [XGBoost DRIF](#xgboost-drif) — all draw on the same `stk_universe`. See
 the [Comparison](#comparison) page for the strategy overview these results
 feed into.
 
+```{r}
+#| label: caveats-survivorship-table
+# A prose sentence naming the three affected strategies reads as thin on its
+# own -- expand it into a table (owner feedback: a tab with one paragraph
+# looks broken). Pulled from the same `leaderboard` target and the same
+# `survivorship_biased` flag the Strategy Leaderboard dashboard renders
+# (R/plan_leaderboard.R:552) -- never a hand-typed strategy list, which
+# would silently drift the moment the flag changes
+# (`reproducible-ingestion`/`fail-loud-not-null` rules).
+sb_lb <- safe_tar_read("leaderboard")
+if (!is.null(sb_lb) && "survivorship_biased" %in% names(sb_lb)) {
+  sb_tbl <- sb_lb |>
+    filter(period == "Full Period", !is.na(survivorship_biased), survivorship_biased) |>
+    mutate(
+      Universe = "`stk_universe`",
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2)))
+    ) |>
+    select(Strategy = strategy, Universe, Sharpe)
+
+  if (nrow(sb_tbl) > 0) {
+    hd_dt(sb_tbl, paste0(
+      "Strategies on this dashboard flagged `survivorship_biased = TRUE` in the ",
+      "[Strategy Leaderboard](leaderboard.html#rankings) target -- see issue #150 for the ",
+      "data-availability constraint. `stk_universe` restricts to the top-N tickers by ",
+      "current market cap; delisted firms are absent from history."
+    ))
+  } else {
+    cat("*No strategy on this dashboard is currently flagged `survivorship_biased = TRUE`.*\n")
+  }
+} else {
+  cat("*`leaderboard` target not available -- per-strategy flag table cannot be computed.*\n")
+}
+```
+
 #### About This Page
 
 This dashboard-wide caveat used to sit at the very top of the [Comparison](#comparison)
 page, ahead of any content. It moved here so a first-time reader sees the
 strategy comparison before the caveat, while a compact pointer at the top of
 [Comparison](#comparison) keeps it one click away rather than hidden.
+
+**Caveats collected on this page:**
+
+- **[Survivorship Bias](#biases-and-caveats)** — `stk_universe` (used by Stock MAX,
+  Stock DRIF, XGB DRIF above) restricts to top-N tickers by current market cap;
+  delisted firms are absent from history. See [issue #150](https://github.com/JohnGavin/historical/issues/150).
 
 The **[Strategy Leaderboard](leaderboard.html#biases-and-caveats)** dashboard
 collects the same caveat, plus a second one (statistical detection power and

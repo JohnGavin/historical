@@ -78,3 +78,27 @@
       function (target_name) 
       NULL
 
+---
+
+    Code
+      args(.hd_tree_status_display)
+    Output
+      function (status_lines, max_shown = 10L) 
+      NULL
+
+---
+
+    Code
+      args(.hd_tree_status_cmd)
+    Output
+      function (repo_root) 
+      NULL
+
+---
+
+    Code
+      args(.hd_branch_display)
+    Output
+      function (raw_branch, sha_short) 
+      NULL
+
