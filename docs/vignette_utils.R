@@ -434,6 +434,45 @@ hd_data_sources_used <- function() {
   )
 }
 
+#' Build the `git status --porcelain` command for the "Source tree" field
+#'
+#' Extracted from `build_info_tabset()` so the untracked-files scope
+#' decision is unit-testable without a live git repo (pure string-building,
+#' no git call). Two exclusions compose here, both required:
+#'
+#' - `--untracked-files=no` restricts the report to the *committed* source
+#'   tree. The field answers "was the committed source that produced this
+#'   page clean?" -- an untracked local file (scratch output, a stray
+#'   fixture, a local clone dir) was never part of that committed source, so
+#'   it cannot change the answer. Without this flag, arbitrary local
+#'   clutter both misreports the field's meaning and can publish local
+#'   machine paths -- some PII-adjacent -- to a public site.
+#' - The exclude pathspecs drop this render's own output
+#'   (`docs/*.html`, `docs/*_files/**`, `docs/_targets_meta_snapshot.csv`):
+#'   our publish flow is render, then commit the rendered output, so those
+#'   are always dirty at render time and would otherwise swamp this field.
+#'
+#' `-C <repo_root>` anchors both git's cwd and the (repo-root-relative)
+#' exclude pathspecs, regardless of R's own working directory at render
+#' time (docs/ under Quarto, repo root under a plain script).
+#'
+#' @param repo_root path to the repo root (`.hd_repo_root()` at the call site)
+#' @return a single shell command string, ready for `system(cmd, intern = TRUE)`
+.hd_tree_status_cmd <- function(repo_root) {
+  exclude_pathspecs <- c(
+    ".",
+    ":(exclude)docs/*.html",
+    ":(exclude,glob)docs/*_files/**",
+    ":(exclude)docs/_targets_meta_snapshot.csv"
+  )
+  paste(
+    "git", "-C", shQuote(repo_root), "status", "--porcelain",
+    "--untracked-files=no", "--",
+    paste(shQuote(exclude_pathspecs), collapse = " "),
+    "2>/dev/null"
+  )
+}
+
 #' Resolve a display string for the current git branch, handling detached HEAD
 #'
 #' `git rev-parse --abbrev-ref HEAD` returns the literal string `"HEAD"`
@@ -487,32 +526,15 @@ build_info_tabset <- function(pkg_name = "historicaldata") {
   git_branch <- if (length(git_branch) == 0 || !nzchar(git_branch)) "unknown" else git_branch
   git_branch <- .hd_branch_display(git_branch, git_sha_short)
 
-  # Our publish flow is always render -> inspect -> commit the rendered
-  # output, so `docs/*.html`/`docs/*_files/**` (committed for GitHub Pages,
-  # per .gitignore) and the per-build `docs/_targets_meta_snapshot.csv` are
-  # *necessarily* dirty at render time -- they are this very render's own
-  # output, not uncommitted source. A raw `git status --porcelain` therefore
-  # always reported "dirty" regardless of whether the actual source was
-  # clean, which conveys no information (the failure mode
-  # `checks-must-distinguish-unknown` describes). Exclude those render
-  # byproducts via pathspec so the field reflects the *source* tree instead.
-  # `-C <repo_root>` anchors both git's cwd and the (repo-root-relative)
-  # exclude pathspecs, regardless of R's own working directory at render
-  # time (docs/ under Quarto, repo root under a plain script).
-  git_status <- tryCatch({
-    exclude_pathspecs <- c(
-      ".",
-      ":(exclude)docs/*.html",
-      ":(exclude,glob)docs/*_files/**",
-      ":(exclude)docs/_targets_meta_snapshot.csv"
-    )
-    cmd <- paste(
-      "git", "-C", shQuote(.hd_repo_root()), "status", "--porcelain", "--",
-      paste(shQuote(exclude_pathspecs), collapse = " "),
-      "2>/dev/null"
-    )
-    system(cmd, intern = TRUE)
-  }, error = function(e) NA)
+  # See .hd_tree_status_cmd() for why both the untracked-files exclusion and
+  # the render-output pathspec exclusions are required -- a raw
+  # `git status --porcelain` always reported "dirty" regardless of whether
+  # the actual committed source was clean, which conveys no information
+  # (the failure mode `checks-must-distinguish-unknown` describes).
+  git_status <- tryCatch(
+    system(.hd_tree_status_cmd(.hd_repo_root()), intern = TRUE),
+    error = function(e) NA
+  )
   tree_clean <- .hd_tree_status_display(git_status)
 
   sha_display <- if (!is.null(gh_url) && git_sha_short != "unknown") {
@@ -596,7 +618,7 @@ build_info_tabset <- function(pkg_name = "historicaldata") {
     "| Item | Value |\n|---|---|\n",
     "| ", .hd_ttl("Commit", "git rev-parse HEAD, resolved at render time"), " | ", sha_display, " |\n",
     "| ", .hd_ttl("Branch", "git rev-parse --abbrev-ref HEAD (detached HEAD resolves to the commit SHA instead)"), " | `", git_branch, "` |\n",
-    "| ", .hd_ttl("Source tree", "git status --porcelain at render time, excluding this render's own output (docs/*.html, docs/*_files/**, docs/_targets_meta_snapshot.csv) -- our publish flow is render, then commit the rendered output, so those are always dirty at render time and would otherwise swamp this field"), " | ", tree_clean, " |\n",
+    "| ", .hd_ttl("Source tree", "git status --porcelain --untracked-files=no at render time -- reports the COMMITTED source only. Excludes this render's own output (docs/*.html, docs/*_files/**, docs/_targets_meta_snapshot.csv), since our publish flow is render then commit the rendered output, and excludes ALL untracked files/directories, since those were never part of the committed source this page was built from. 'clean' means no tracked source file differs from HEAD -- it says nothing about untracked local clutter on the machine that rendered it"), " | ", tree_clean, " |\n",
     "| ", .hd_ttl("Data sources referenced", "scanned from R/ and packages/historicaldata/R/ at render time"), " | ", sources_txt, " |\n",
     "| ", .hd_ttl("Targets in store", "nrow(targets::tar_meta(store = ...))"), " | ", n_targets, " |\n",
     "| ", .hd_ttl("Store last built", "max(targets::tar_meta()$time)"), " | ", last_built, " |\n",
