@@ -150,10 +150,18 @@ if (!is.null(summary) && !is.null(nms)) {
 }
 ```
 
-### Avoid Worst Days (VIX Protection) {#avoid-worst}
+### Strategy Verdicts
+
+Three per-strategy verdicts, each the same shape (what it does, why it
+fails or is borderline, the key lesson) — grouped into tabs so the page
+does not force a long scroll through three near-identical card layouts.
+
+::: {.panel-tabset}
+
+#### Avoid Worst Days (VIX Protection) {#avoid-worst}
 
 ::: {.negative-card}
-#### Verdict: Pure market beta (R² = 41%)
+##### Verdict: Pure market beta (R² = 41%)
 
 **What it does:** Exit to cash when yesterday's <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> > 30 or yesterday's absolute return > 3%. Re-enter when VIX < 25 and 5-day cooloff expires. All signals use t-1 (previous day) values.
 
@@ -172,10 +180,10 @@ if (!is.null(summary) && !is.null(nms)) {
 **What we learned:** Any strategy that triggers on elevated VIX is timing exits AFTER the crash, not before it. The worst days and best days cluster together (median 5 calendar days apart). You cannot avoid one without missing the other. See the [temporal clustering analysis](avoid-worst-days.html).
 :::
 
-### Risk State Classification (VIX Overlay) {#risk-state}
+#### Risk State Classification (VIX Overlay) {#risk-state}
 
 ::: {.negative-card}
-#### Verdict: Pure market beta (R² = 88%)
+##### Verdict: Pure market beta (R² = 88%)
 
 **What it does:** Three-signal design: VVIX (vol-of-vol) as early warning, VIX term structure 5-day change, VIX term structure level. Market-specific percentile thresholds from training data only. Overlay on SPY: reduce exposure when signals are elevated.
 
@@ -194,10 +202,10 @@ if (!is.null(summary) && !is.null(nms)) {
 **What we learned:** Implied volatility signals (VIX, VVIX, term structure) are priced in. The market already incorporates this information. A strategy based on these signals is, by construction, replicating what the market already does — hence the 88% R² with the market factor.
 :::
 
-### LTR Cross-Sectional Momentum (Borderline) {#ltr}
+#### LTR Cross-Sectional Momentum (Borderline) {#ltr}
 
 ::: {.negative-card}
-#### Verdict: Borderline (Alpha t = 1.99, R² = 7%)
+##### Verdict: Borderline (Alpha t = 1.99, R² = 7%)
 
 **What it does:** XGBoost LambdaMART ranks ~500 US stocks monthly using 21 momentum/volatility features. Long top decile, short bottom decile.
 
@@ -214,6 +222,8 @@ if (!is.null(summary) && !is.null(nms)) {
 
 ::: {.lesson}
 **What we learned:** Cross-sectional momentum is well-documented academically. Our implementation is a proof-of-concept, not a production signal. The 166% annual alpha is an artifact of the small universe, not evidence of a genuine edge.
+:::
+
 :::
 
 ### Pattern: What Predicts Failure?
@@ -318,7 +328,18 @@ jst_pervasiveness |>
 
 ---
 
-### Equity Premium Heatmap
+### Visualisations
+
+The two static figures below (heatmap, crisis timeline) are grouped into
+tabs to shorten the page. The two data tables in this section stay
+outside any tab deliberately: a DT table measuring zero height when its
+tab starts inactive is a known defect class in this project, and this
+edit does not attempt to re-verify whether that class still applies here
+— static images carry no equivalent risk, so only they are nested.
+
+::: {.panel-tabset}
+
+#### Equity Premium Heatmap
 
 The heatmap below shows mean equity premium by decade and country. Darker green indicates higher premium; red indicates negative premium. Missing cells represent periods with insufficient data.
 
@@ -356,9 +377,7 @@ ggplot(jst_equity_premium, aes(x = decade, y = iso, fill = mean_premium)) +
   )
 ```
 
----
-
-### Financial Crisis Timeline
+#### Financial Crisis Timeline
 
 Financial crises (identified by the JST `crisisJST` indicator) are shown below as segments spanning crisis years for each country.
 
@@ -397,6 +416,8 @@ ggplot(crises_long, aes(x = year, y = iso)) +
     plot.subtitle = element_text(size = 12, color = "grey60")
   )
 ```
+
+:::
 
 ---
 
