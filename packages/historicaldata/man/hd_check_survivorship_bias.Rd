@@ -35,6 +35,7 @@ hd_check_survivorship_bias("factors")       # silent
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},
 \code{\link{hd_guardian}()},
@@ -49,6 +50,7 @@ Other data-access:
 
 Other quality-audit: 
 \code{\link{hd_amendments}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_jumps}()},
 \code{\link{hd_metadata_amendments}()},
 \code{\link{hd_quality}()},

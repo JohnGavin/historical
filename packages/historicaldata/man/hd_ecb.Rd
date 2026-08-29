@@ -29,6 +29,7 @@ hd_ecb("FM/M.U2.EUR.RT.MM.EURIBOR3MD_.HSTA")
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_factors}()},
 \code{\link{hd_guardian}()},
