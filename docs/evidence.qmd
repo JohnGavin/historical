@@ -108,6 +108,8 @@ jst_summary        <- safe_tar_read("jst_summary")
 
 ## Negative Results
 
+::: {.panel-tabset}
+
 ### Why Document Negative Results?
 
 Negative results are as valuable as positive ones. A strategy that fails the falsification framework teaches us:
@@ -150,18 +152,10 @@ if (!is.null(summary) && !is.null(nms)) {
 }
 ```
 
-### Strategy Verdicts
-
-Three per-strategy verdicts, each the same shape (what it does, why it
-fails or is borderline, the key lesson) — grouped into tabs so the page
-does not force a long scroll through three near-identical card layouts.
-
-::: {.panel-tabset}
-
-#### Avoid Worst Days (VIX Protection) {#avoid-worst}
+### Avoid Worst Days (VIX Protection) {#avoid-worst}
 
 ::: {.negative-card}
-##### Verdict: Pure market beta (R² = 41%)
+#### Verdict: Pure market beta (R² = 41%)
 
 **What it does:** Exit to cash when yesterday's <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> > 30 or yesterday's absolute return > 3%. Re-enter when VIX < 25 and 5-day cooloff expires. All signals use t-1 (previous day) values.
 
@@ -180,10 +174,10 @@ does not force a long scroll through three near-identical card layouts.
 **What we learned:** Any strategy that triggers on elevated VIX is timing exits AFTER the crash, not before it. The worst days and best days cluster together (median 5 calendar days apart). You cannot avoid one without missing the other. See the [temporal clustering analysis](avoid-worst-days.html).
 :::
 
-#### Risk State Classification (VIX Overlay) {#risk-state}
+### Risk State Classification (VIX Overlay) {#risk-state}
 
 ::: {.negative-card}
-##### Verdict: Pure market beta (R² = 88%)
+#### Verdict: Pure market beta (R² = 88%)
 
 **What it does:** Three-signal design: VVIX (vol-of-vol) as early warning, VIX term structure 5-day change, VIX term structure level. Market-specific percentile thresholds from training data only. Overlay on SPY: reduce exposure when signals are elevated.
 
@@ -202,10 +196,10 @@ does not force a long scroll through three near-identical card layouts.
 **What we learned:** Implied volatility signals (VIX, VVIX, term structure) are priced in. The market already incorporates this information. A strategy based on these signals is, by construction, replicating what the market already does — hence the 88% R² with the market factor.
 :::
 
-#### LTR Cross-Sectional Momentum (Borderline) {#ltr}
+### LTR Cross-Sectional Momentum (Borderline) {#ltr}
 
 ::: {.negative-card}
-##### Verdict: Borderline (Alpha t = 1.99, R² = 7%)
+#### Verdict: Borderline (Alpha t = 1.99, R² = 7%)
 
 **What it does:** XGBoost LambdaMART ranks ~500 US stocks monthly using 21 momentum/volatility features. Long top decile, short bottom decile.
 
@@ -222,8 +216,6 @@ does not force a long scroll through three near-identical card layouts.
 
 ::: {.lesson}
 **What we learned:** Cross-sectional momentum is well-documented academically. Our implementation is a proof-of-concept, not a production signal. The 166% annual alpha is an artifact of the small universe, not evidence of a genuine edge.
-:::
-
 :::
 
 ### Pattern: What Predicts Failure?
@@ -252,21 +244,25 @@ if (!is.null(summary) && !is.null(nms)) {
 }
 ```
 
-### Implications for Portfolio Construction
+### Implications & References
 
 1. **Do not include** Avoid Worst Days or Risk State in the multi-strategy portfolio (#52)
 2. **VIX-based overlays** add cost and complexity without alpha — use passive SPY instead
 3. **Factor rotation** (<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>, Factor MAX) is where the genuine alpha lives
 4. **Cross-sectional momentum** (LTR) needs scaling before inclusion — promising but unconfirmed at production scale
 
-### References
+**Further reading:**
 
 - Full falsification methodology: [Strategy Falsification](falsification.html)
 - Avoid Worst Days analysis: [avoid-worst-days.html](avoid-worst-days.html)
 - Strategy leaderboard: [leaderboard.html](leaderboard.html)
 - Harvey, Liu & Zhu (2016). "...and the Cross-Section of Expected Returns"
 
+:::
+
 ## Historical Evidence {#historical-evidence}
+
+::: {.panel-tabset}
 
 ### Overview
 
@@ -279,8 +275,6 @@ The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.ne
 - Financial crises occurred in `r nrow(jst_crises)` countries, with total crisis-years ranging from `r min(jst_crises$n_crises)` to `r max(jst_crises$n_crises)` per country
 
 **Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241){target="_blank" rel="noopener noreferrer"}
-
----
 
 ### Cross-Geography Pervasiveness
 
@@ -326,16 +320,9 @@ jst_pervasiveness |>
   )
 ```
 
----
-
 ### Visualisations
 
-The two static figures below (heatmap, crisis timeline) are grouped into
-tabs to shorten the page. The two data tables in this section stay
-outside any tab deliberately: a DT table measuring zero height when its
-tab starts inactive is a known defect class in this project, and this
-edit does not attempt to re-verify whether that class still applies here
-— static images carry no equivalent risk, so only they are nested.
+The two static figures below (heatmap, crisis timeline) are grouped into tabs to shorten this section further. Earlier revisions of this page kept the JST data tables outside any tab, citing a known defect class where a `DT::datatable()` table can measure zero height if its tab starts inactive. That risk has since been checked directly against this page's rendered HTML: the JST pervasiveness and crisis-frequency tables both carry their full row counts while sitting in an inactive tab, so the tables in this section are now nested in tabs like everything else.
 
 ::: {.panel-tabset}
 
@@ -419,8 +406,6 @@ ggplot(crises_long, aes(x = year, y = iso)) +
 
 :::
 
----
-
 ### Crisis Frequency Table
 
 The table below shows the number of crisis years per country, sorted by total crisis-years.
@@ -454,8 +439,6 @@ jst_crises |>
   )
 ```
 
----
-
 ### Data Notes
 
 - **Equity premium** = equity total return (`eq_tr`) - short-term government bill rate (`bill_rate`)
@@ -465,6 +448,8 @@ jst_crises |>
 - **Data period**: `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]` (`r format(jst_summary$n_obs, big.mark = ",")` country-year observations)
 
 All target computations are defined in [`R/plan_jst.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_jst.R).
+
+:::
 
 :::
 
