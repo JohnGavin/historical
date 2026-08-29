@@ -195,6 +195,17 @@ check_anchor_in_range <- function(html_dir,
 #' running `tar_make()`.  The `qa_leaderboard_coverage` target calls this
 #' function directly.
 #'
+#' Deliberately one-directional: every declared `strategy_names` row must
+#' appear on the leaderboard, but the leaderboard MAY carry extra rows with
+#' no `strategy_names` entry (e.g. benchmark rows) -- see
+#' `packages/historicaldata/tests/testthat/test-leaderboard-coverage.R::
+#' "returns TRUE when leaderboard has extra strategies"`, which documents
+#' this as intentional. A stricter, bidirectional (reverse-setdiff) version
+#' was tried while closing out #629 (OLMAR-1 was ranked on the leaderboard
+#' with no `strategy_names` row) and reverted after it broke that documented
+#' contract -- the missing-`olmar` bug itself is closed by #747's added row,
+#' not by tightening this gate.
+#'
 #' Also asserts that the `ssr` and `top5pct_share` columns are present in the
 #' leaderboard tibble and that at least one row has a non-NA value for each
 #' (i.e. the stability metrics were computed for at least one strategy).
