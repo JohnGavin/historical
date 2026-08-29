@@ -1598,9 +1598,9 @@ if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHA
       Verdict = dplyr::case_when(
         is.na(sharpe) | sharpe <= 0        ~ "N/A (Sharpe ≤ 0)",
         is.na(detection_underpowered)      ~ "NOT COMPUTED",
-        isTRUE(detection_underpowered)     ~ "Underpowered",
+        detection_underpowered             ~ "Underpowered",
         is.na(detection_underpowered_mt)   ~ "Detectable (MT-corrected verdict not computed)",
-        isTRUE(detection_underpowered_mt)  ~ "Detectable, fails MT-correction",
+        detection_underpowered_mt          ~ "Detectable, fails MT-correction",
         TRUE                                ~ "Detectable"
       ),
       `Years Needed` = ifelse(is.na(detection_min_n_years), "—", as.character(round(detection_min_n_years, 1))),

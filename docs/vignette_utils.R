@@ -521,6 +521,7 @@ build_info_tabset <- function(pkg_name = "historicaldata") {
   git_sha_short <- tryCatch(system("git rev-parse --short HEAD 2>/dev/null", intern = TRUE), error = function(e) character(0))
   git_sha_short <- if (length(git_sha_short) == 0 || !nzchar(git_sha_short)) "unknown" else git_sha_short
   git_sha_full  <- tryCatch(system("git rev-parse HEAD 2>/dev/null", intern = TRUE), error = function(e) git_sha_short)
+  git_sha_full  <- if (length(git_sha_full) == 0 || !nzchar(git_sha_full)) git_sha_short else git_sha_full
 
   git_branch <- tryCatch(system("git rev-parse --abbrev-ref HEAD 2>/dev/null", intern = TRUE), error = function(e) character(0))
   git_branch <- if (length(git_branch) == 0 || !nzchar(git_branch)) "unknown" else git_branch
@@ -574,7 +575,7 @@ build_info_tabset <- function(pkg_name = "historicaldata") {
 
   # ---- R environment ----
   r_ver <- as.character(getRversion())
-  desc_path <- file.path(.hd_repo_root(), "packages/historicaldata/DESCRIPTION")
+  desc_path <- file.path(.hd_repo_root(), "packages", pkg_name, "DESCRIPTION")
   imports <- tryCatch(.hd_pkg_imports(desc_path), error = function(e) character(0))
   pkg_versions <- vapply(imports, function(p) {
     v <- tryCatch(as.character(utils::packageVersion(p)), error = function(e) "not installed")
