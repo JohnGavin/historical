@@ -1,5 +1,152 @@
 # Changelog
 
+## 2026-08-27 → 2026-08-29 (session 25 — the instrument was the bug)
+
+### Completed
+
+- **Dashboard UX, reported by the owner and fixed across the site.** Font
+  controls moved right of the theme toggle (root cause: Quarto assigns explicit
+  flex `order` to navbar items — the injected span defaulted to `order: 0`, so
+  DOM position was never going to help). Navbar strip sticky-pinned so its
+  colour spans the full scrollable width. Top-of-page bias callouts consolidated
+  into cross-referenced "Biases and Caveats" pages on leaderboard and
+  stock-backtest, with three more dashboards de-emphasised consistently
+  (PR #769, #776).
+
+- **Table text invisible in Chrome, fine in Edge (#776).** Root cause was
+  **vendored CSS**: DataTables' own `jquery.dataTables.extra.css` ships
+  `div.datatables { color: #333 }` unconditionally — an RStudio Cobalt-theme
+  workaround, ~1.3:1 against this site's dark background. Confirmed by fetching
+  the deployed stylesheet, not inferred. Explains "some but not all columns"
+  exactly: the Detection/Rigour columns set their own colour via badge classes.
+  Fixed theme-aware in both directions.
+
+- **Caption font size — a rule that already existed and lost anyway (#776,
+  #786, llm@54cbbbe).** Bootstrap ships a bare `caption { font-size: 0.875em }`.
+  `uniform-typography` had forbidden this for months; it was violated because
+  the rule's *selector list* never named `details summary` or DT's injected
+  `.dt-caption`. Every listed selector was compliant; the drift lived in the gap
+  between them. Rule updated globally with the recurrence and the generalisable
+  lesson.
+
+- **Plot/table overlap (#776).** Affected tabs are `.bslib-grid` with
+  `grid-template-rows: minmax(3em, 1fr)` — `1fr` allocates equal fractions
+  regardless of content, so oversized content spilled into the next row.
+  Constrained rows only; columns untouched after verifying no side-by-side
+  layout exists anywhere.
+
+- **Leaderboard blank columns explained and fixed (#780, #778, #779).** Owner
+  asked how every strategy has a Sharpe but few have a CAGR. Answer: **every
+  strategy does have a `cagr` (17/17)** — the table displayed only `net_cagr`
+  (6/17), a separate cost pass fed by a hardcoded 5-strategy `slice_portfolio()`
+  list. Not a join bug: the gap shape matched the hardcoded lists exactly.
+  Fixed by showing plain CAGR alongside net, rendering out-of-scope blanks as a
+  uniform `not computed`, repointing `strat_corr_augment` at the existing
+  16-strategy matrix (**Redundant 5/17 → 16/17**), and adding QA gate **S23**
+  asserting `net_cagr`/`cvar_95`/`credible` are jointly NA or jointly non-NA.
+
+- **Null-rejection heatmap (#774, #775).** `scale_fill_gradient2(limits =
+  c(0,100), midpoint = 8)` against data spanning 1–10% — every cell compressed
+  into one amber band, legend advertising a red maximum no cell could reach.
+  Limits now follow the data, midpoint anchored at α, palette swapped to a
+  colour-blind-safe diverging scale, caption threshold derived from
+  `alpha_level` so it cannot drift from the figure it describes.
+
+- **Build-info tabset (#789).** Replaced a one-line footer with Data / R
+  environment / This page, every value computed at render time — commit,
+  branch, source-tree state, 8 named data sources, 1276 targets, store build
+  time, R version, 14 package versions from DESCRIPTION, theme, chart and table
+  engines. Indeterminate values print `unknown`, never a plausible constant.
+
+- **Vignette layout conformance (#790, #792).** `evidence.html` used
+  `format: html` (Quarto's 850px article column, `.page-columns` grid) while
+  the other vignettes use `format: dashboard` — a format difference, not a CSS
+  bug. Set `page-layout: full` on the three real html vignettes, removed the
+  project's only `toc: true`, and restructured evidence from 2 tabs holding 14
+  stacked sections into **19 tabs**.
+
+- **Issues filed:** #771 (caption class on 4 more dashboards), #774, #778
+  (extend cost metrics past 6 strategies), #779 (XGB DRIF SSR indeterminate),
+  #782 (SSR vs reference treatment), #783 (bootstrapping comparison), #784
+  (block length unjustified), #785 (SOFR−EFFR as regime conditioner), #788
+  (hover column help, enforced by gate), #793/#794/#795 (kill switches,
+  capacity, proxy measurement error).
+
+### Failed Approaches
+
+- **Measuring a DT caption in the DOM.** DT injects captions from widget JSON;
+  the DOM shows the collapsed form. Measuring the *total* JSON field counts the
+  hidden `<details>` text and reads a working collapse as a failure — which is
+  what happened: "701 words" was reported as a defect when `hd_caption()` was
+  working correctly and only two captions had never been migrated to it. Correct
+  instrument: the text **before the first `<details>`**.
+
+- **`scripts/build.sh` renders.** It does not — rendering is behind `--render`.
+  A plain run passed cleanly having changed zero bytes of HTML. The
+  data-staleness check separately caught `falsification` needing a re-render its
+  `.qmd` timestamp said it did not.
+
+- **Trusting deploy status.** GitHub Pages `errored` at **0 ms** means
+  *superseded*, not failed; five of six "failures" chased were the workflow
+  cancelling an older queued build (two caused by our own merges). Worse,
+  `built` in **1253 ms** reported success for a build that published nothing —
+  the real one took 26.9 s. Only comparing served bytes to the local file
+  distinguishes published from claimed-published.
+
+- **`overflow-x: hidden` to fix the navbar strip.** Fixes the colour gap by
+  clipping: any wide element without its own scroll container becomes
+  permanently unreachable, and it can silently break `position: sticky` on
+  descendants. Replaced with a sticky-pinned header before merge.
+
+- **`git add -A docs/`** swept in previously-untracked vendored library files.
+  `git add -u` is correct for publishing a render.
+
+- **Three `until` loops that could not fail** — one polled a `gh` command that
+  errored (so "broken" and "not finished" were identical), one accepted
+  `status: completed` on a *cancelled* deploy, one compared the API response
+  against a string built from that same response.
+
+- **`grep -c` for occurrence counts.** Counts lines. 19 tabs on 5 lines read as
+  "5" and briefly looked like a regression — the exact error this project's own
+  verification rules warn about.
+
+### Accuracy / Metrics
+
+- Redundant coverage **5/17 → 16/17**; CAGR now shown for **17/17**
+- QA gate **S23** added (joint presence of cost-derived metrics)
+- Captions over 45 visible words: **0 of 11** on the leaderboard
+- `Source tree` field reads **clean** on all 11 real dashboards
+- evidence.html: **2 → 19** tabs
+- Root suite baseline unchanged (3 known failures); package suite 1; skips 15
+
+### Known Limitations
+
+- **Every visual outcome this session is unverified by a human.** Table
+  contrast in Chrome, caption sizes, tab bars, and whether evidence reads well
+  at full width all still need a viewer.
+- **#779 is now less visible, not more** — XGB DRIF's unexplained NA SSR renders
+  identically to the 8 strategies out of scope by design. Known cost of making
+  the labels uniform.
+- **`quiz.qmd` was not loading `vignette-shared.css` at all** until #790. Every
+  shared fix landed this session had never reached it, and it passed each audit
+  because those checked what the stylesheet *contained*, never whether a page
+  *loaded* it.
+- Untracked vendored `docs/*_files/libs/**` remain uncommitted; some pages may
+  reference libraries that were never committed.
+- roborev: 39 verdict failures, 21 addressed — **18 unaddressed**, 0 crashes,
+  0 quota.
+
+### Lesson
+
+Almost every wrong conclusion this session came from a **check that could not
+distinguish the states it was meant to separate** — a caption measurement
+counting hidden text, a deploy status conflating cancelled with complete, a
+provenance field asserting a constant, three waiters that could not fail, a
+line count standing in for a match count. The code defects hunted were the same
+shape, which is presumably why they were hard to see: the instruments shared the
+blind spot of the bugs. `checks-must-distinguish-unknown` applies to throwaway
+shell one-liners, not only to production gates.
+
 ## 2026-08-05 → 2026-08-08 (session 24 — the sealed partition, and five gates that did not exist)
 
 ### Completed
