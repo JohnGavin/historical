@@ -39,9 +39,14 @@ plan_regime_momentum <- function() {
         library(dplyr)
         source(here::here("R/regime_momentum.R"))
 
+        # #608 sweep: derive rf from the shared FF3 stk_rf series (annualised
+        # arithmetic mean, same convention as sharpe_ratio_rf()'s ann_rf,
+        # R/utils_metrics.R) instead of the hardcoded 2%/yr default this
+        # function still carries for standalone/test callers.
         regime_conditional_performance(
           momentum_by_regime |> filter(scheme == "baseline"),
-          regime_filter = "all"
+          regime_filter = "all",
+          annual_rf = mean(stk_rf$rf_ret) * 12
         )
       }
     ),
@@ -53,9 +58,12 @@ plan_regime_momentum <- function() {
         library(dplyr)
         source(here::here("R/regime_momentum.R"))
 
+        # #608 sweep: derive rf from the shared FF3 stk_rf series -- see
+        # baseline_regime_performance above for the full rationale.
         regime_conditional_performance(
           momentum_by_regime |> filter(scheme != "baseline"),
-          regime_filter = "all"
+          regime_filter = "all",
+          annual_rf = mean(stk_rf$rf_ret) * 12
         )
       }
     ),
@@ -68,9 +76,12 @@ plan_regime_momentum <- function() {
         source(here::here("R/regime_momentum.R"))
 
         # Compute performance for all strategies across all regimes
+        # #608 sweep: derive rf from the shared FF3 stk_rf series -- see
+        # baseline_regime_performance above for the full rationale.
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
-          regime_filter = "all"
+          regime_filter = "all",
+          annual_rf = mean(stk_rf$rf_ret) * 12
         )
 
         # Format for display
@@ -157,9 +168,12 @@ plan_regime_momentum <- function() {
         source(here::here("R/regime_momentum.R"))
 
         # Get all performance metrics
+        # #608 sweep: derive rf from the shared FF3 stk_rf series -- see
+        # baseline_regime_performance above for the full rationale.
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
-          regime_filter = "all"
+          regime_filter = "all",
+          annual_rf = mean(stk_rf$rf_ret) * 12
         )
 
         plot_regime_sharpe(all_performance)
@@ -209,9 +223,12 @@ plan_regime_momentum <- function() {
         library(dplyr)
         source(here::here("R/regime_momentum.R"))
 
+        # #608 sweep: derive rf from the shared FF3 stk_rf series -- see
+        # baseline_regime_performance above for the full rationale.
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
-          regime_filter = "all"
+          regime_filter = "all",
+          annual_rf = mean(stk_rf$rf_ret) * 12
         )
 
         # For each strategy, find best and worst regime
@@ -252,9 +269,12 @@ plan_regime_momentum <- function() {
         library(dplyr)
         source(here::here("R/regime_momentum.R"))
 
+        # #608 sweep: derive rf from the shared FF3 stk_rf series -- see
+        # baseline_regime_performance above for the full rationale.
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
-          regime_filter = "all"
+          regime_filter = "all",
+          annual_rf = mean(stk_rf$rf_ret) * 12
         )
 
         # Test: Are there any positive Sharpes in decomposed strategies?
