@@ -980,6 +980,192 @@ check_portfolio_join_coverage <- function(port_returns) {
 }
 
 
+#' Assert stk_all_comparison has no calendar-month gaps and flag
+#' thin-coverage months (S24)
+#'
+#' Guards against the #656 defect class: `stk_all_comparison`
+#' (R/plan_stock_backtest.R) used to chain four `inner_join()`s across its
+#' constituent strategies (`stk_max`, `stk_drif`, `fac_max`, `fac_drif`) --
+#' the SAME four constituents and the SAME hazard as the #641 `port_returns`
+#' defect (S13) -- so any month missing from ONE constituent silently
+#' deleted that month for ALL FOUR. Unlike `port_returns`, this target had
+#' ZERO instrumentation before #656 and feeds `stk_all_comparison_plot`,
+#' published on BOTH `leaderboard.qmd` and `stock-backtest.qmd`.
+#' `stk_all_comparison` is now built from a calendar-complete monthly spine
+#' (bounded to the stock-level overlap window) with everything LEFT-joined
+#' onto it -- a missing constituent surfaces as an explicit NA in its own
+#' column, never a deleted row.
+#'
+#' Two assertions, mirroring `check_portfolio_join_coverage()` (S13):
+#'   1. `cli_abort()` if the `ym` column has ANY calendar-month gap between
+#'      its min and max -- structurally this should be impossible given the
+#'      spine-based join described above, so a gap here means the spine
+#'      construction was changed back to using literal `ym` values, or
+#'      `stk_max_portfolio`/`stk_drif_portfolio` no longer overlap at all.
+#'   2. `cli_warn()` (deliberately NOT abort) for any row where fewer than
+#'      all 4 constituents report a value -- the equity-growth columns hold
+#'      flat (no compounding) across such a gap rather than propagating NA
+#'      forward (see `cumgrowth_na_safe()` in the `stk_all_comparison`
+#'      target), so a gap here degrades one curve's fidelity rather than
+#'      breaking the pipeline; still worth surfacing if it grows.
+#'
+#' @param stk_all_comparison Tibble from the `stk_all_comparison` target;
+#'   must have `ym`, `stk_max`, `stk_drif`, `fac_max`, `fac_drif`.
+#' @return `TRUE` invisibly (assertion 1 always holds on return; assertion 2
+#'   may have warned).
+#' @noRd
+check_stk_all_comparison_coverage <- function(stk_all_comparison) {
+  required_cols <- c("ym", "stk_max", "stk_drif", "fac_max", "fac_drif")
+  missing_cols <- setdiff(required_cols, names(stk_all_comparison))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "stk_all_comparison is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_stk_all_comparison_coverage() (S24) requires ym, stk_max, stk_drif, fac_max, fac_drif."
+    ))
+  }
+
+  # ── Assertion 1: no calendar-month gap in the ym sequence ───────────────
+  yms <- sort(unique(stk_all_comparison$ym))
+  expected_ym <- format(
+    seq(as.Date(paste0(min(yms), "-01")), as.Date(paste0(max(yms), "-01")), by = "month"),
+    "%Y-%m"
+  )
+  missing_months <- setdiff(expected_ym, yms)
+
+  if (length(missing_months) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "stk_all_comparison has ", length(missing_months),
+        " calendar-month gap(s) in its ym sequence:"
+      ),
+      setNames(sprintf("  %s", missing_months), rep("i", length(missing_months))),
+      "i" = paste0(
+        "stk_all_comparison builds a calendar-complete spine specifically ",
+        "so this cannot happen (#656) -- check for a changed spine/join in ",
+        "R/plan_stock_backtest.R or a new gap in stk_max_portfolio / ",
+        "stk_drif_portfolio."
+      )
+    ))
+  }
+
+  # ── Assertion 2: flag (warn, don't abort) thin-coverage months ──────────
+  strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+  avail <- rowSums(!is.na(as.matrix(stk_all_comparison[, strat_cols])))
+  thin <- stk_all_comparison[avail < length(strat_cols), , drop = FALSE]
+
+  if (nrow(thin) > 0L) {
+    thin_msgs <- vapply(seq_len(nrow(thin)), function(i) {
+      row <- thin[i, ]
+      missing_strats <- strat_cols[is.na(row[strat_cols])]
+      sprintf("  %s -- missing: %s", row$ym, paste(missing_strats, collapse = ", "))
+    }, character(1L))
+    cli::cli_warn(c(
+      "!" = paste0(
+        length(thin_msgs), " month(s) in stk_all_comparison have at least ",
+        "one missing constituent strategy (#656):"
+      ),
+      setNames(thin_msgs, rep("i", length(thin_msgs))),
+      "i" = "Usually the benign live-edge lag between stock-level and factor-level data feeds."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Assert boot_monthly_returns has no calendar-month gaps and flag
+#' thin-coverage months (S25)
+#'
+#' Guards against the #603 defect class: `boot_monthly_returns`
+#' (R/plan_bootstrap_ci.R) used to chain four `inner_join()`s across the
+#' same four constituent strategies as S13/S24 (`stk_max`, `stk_drif`,
+#' `fac_max`, `fac_drif`), silently deleting ~128 of an expected ~190+
+#' months. Worse than S13/S24: the block bootstrap in `boot_draws` resamples
+#' CONTIGUOUS row-index blocks to preserve serial dependence, so a
+#' non-contiguous join let a "3-month block" splice non-adjacent calendar
+#' months together, defeating the point of block resampling. These
+#' intervals feed `boot_ci_summary`'s `ci_crosses_zero` flag, joined onto
+#' the published leaderboard. `boot_monthly_returns` is now built from a
+#' calendar-complete monthly spine (bounded to the stock-level overlap
+#' window) with everything LEFT-joined onto it.
+#'
+#' Two assertions, mirroring `check_portfolio_join_coverage()` (S13) and
+#' `check_stk_all_comparison_coverage()` (S24):
+#'   1. `cli_abort()` if the `ym` column has ANY calendar-month gap --
+#'      structurally impossible given the spine-based join.
+#'   2. `cli_warn()` (deliberately NOT abort) for any row where fewer than
+#'      all 4 constituents report a value -- `calc_boot_metrics()` (the
+#'      `boot_metrics` target) drops NA pairwise per strategy/rf pair, so
+#'      this degrades that strategy's effective bootstrap sample size for
+#'      that block rather than breaking the pipeline.
+#'
+#' @param boot_monthly_returns Tibble from the `boot_monthly_returns`
+#'   target; must have `ym`, `stk_max`, `stk_drif`, `fac_max`, `fac_drif`
+#'   (the `_rf` columns are not required for this check).
+#' @return `TRUE` invisibly (assertion 1 always holds on return; assertion 2
+#'   may have warned).
+#' @noRd
+check_boot_monthly_returns_coverage <- function(boot_monthly_returns) {
+  required_cols <- c("ym", "stk_max", "stk_drif", "fac_max", "fac_drif")
+  missing_cols <- setdiff(required_cols, names(boot_monthly_returns))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "boot_monthly_returns is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_boot_monthly_returns_coverage() (S25) requires ym, stk_max, stk_drif, fac_max, fac_drif."
+    ))
+  }
+
+  # ── Assertion 1: no calendar-month gap in the ym sequence ───────────────
+  yms <- sort(unique(boot_monthly_returns$ym))
+  expected_ym <- format(
+    seq(as.Date(paste0(min(yms), "-01")), as.Date(paste0(max(yms), "-01")), by = "month"),
+    "%Y-%m"
+  )
+  missing_months <- setdiff(expected_ym, yms)
+
+  if (length(missing_months) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "boot_monthly_returns has ", length(missing_months),
+        " calendar-month gap(s) in its ym sequence:"
+      ),
+      setNames(sprintf("  %s", missing_months), rep("i", length(missing_months))),
+      "i" = paste0(
+        "boot_monthly_returns builds a calendar-complete spine specifically ",
+        "so this cannot happen (#603/#656) -- check for a changed spine/join ",
+        "in R/plan_bootstrap_ci.R or a new gap in stk_max_portfolio / ",
+        "stk_drif_portfolio. A gap here also means the block bootstrap in ",
+        "boot_draws would splice non-adjacent calendar months (the original ",
+        "#603 defect)."
+      )
+    ))
+  }
+
+  # ── Assertion 2: flag (warn, don't abort) thin-coverage months ──────────
+  strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+  avail <- rowSums(!is.na(as.matrix(boot_monthly_returns[, strat_cols])))
+  thin <- boot_monthly_returns[avail < length(strat_cols), , drop = FALSE]
+
+  if (nrow(thin) > 0L) {
+    thin_msgs <- vapply(seq_len(nrow(thin)), function(i) {
+      row <- thin[i, ]
+      missing_strats <- strat_cols[is.na(row[strat_cols])]
+      sprintf("  %s -- missing: %s", row$ym, paste(missing_strats, collapse = ", "))
+    }, character(1L))
+    cli::cli_warn(c(
+      "!" = paste0(
+        length(thin_msgs), " month(s) in boot_monthly_returns have at ",
+        "least one missing constituent strategy (#603/#656):"
+      ),
+      setNames(thin_msgs, rep("i", length(thin_msgs))),
+      "i" = "calc_boot_metrics() drops NA pairwise per strategy, so this cannot poison another strategy's bootstrap draws."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Assert every strategy's borrow_status is derivable, in the allowed
 #' vocabulary, and consistent with borrow_rate_annual (S16)
 #'
@@ -2278,6 +2464,40 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_cost_metrics_joint_presence(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_cost_metrics_coverage: S23 passed (net_cagr/cvar_95/credible jointly present or jointly NA on every row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: stk_all_comparison has no calendar-month gaps, thin-coverage
+    # months are flagged (S24, #656) -- guards against the #656 defect class
+    # where a 4-way inner_join chain (the SAME constituents as the #641
+    # port_returns defect, S13) silently deleted any month missing from ONE
+    # constituent strategy for ALL FOUR. stk_all_comparison feeds
+    # stk_all_comparison_plot, published on BOTH leaderboard.qmd and
+    # stock-backtest.qmd, and previously had zero instrumentation.
+    targets::tar_target(
+      qa_stk_all_comparison_coverage,
+      command = {
+        check_stk_all_comparison_coverage(stk_all_comparison)
+        cli::cli_inform(c("v" = "qa_stk_all_comparison_coverage: S24 passed (no calendar-month gaps in stk_all_comparison)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: boot_monthly_returns has no calendar-month gaps, thin-coverage
+    # months are flagged (S25, #603/#656) -- guards against the #603 defect
+    # class where a 4-way inner_join chain dropped ~1/3 of months AND let
+    # the block bootstrap in boot_draws splice non-adjacent calendar months
+    # together, defeating serial-dependence-preserving resampling. These
+    # intervals feed boot_ci_summary's ci_crosses_zero flag, published on
+    # the leaderboard.
+    targets::tar_target(
+      qa_boot_monthly_returns_coverage,
+      command = {
+        check_boot_monthly_returns_coverage(boot_monthly_returns)
+        cli::cli_inform(c("v" = "qa_boot_monthly_returns_coverage: S25 passed (no calendar-month gaps in boot_monthly_returns)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
