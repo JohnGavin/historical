@@ -633,12 +633,26 @@ plan_leaderboard <- function() {
         # Each return vector must be numeric, already NA-stripped by the helpers.
         ssr_map <- list()
 
-        safe_ssr <- function(r) {
+        # #779: label identifies which strategy failed so a real
+        # computational error is never indistinguishable from either
+        # "not enough data" (< 38 obs) or a legitimate zero-variance NA
+        # returned by hd_sharpe_stability_ratio() itself (see its own
+        # documented contract: constant/near-constant return series yield
+        # NA because every rolling window has zero variance). Per
+        # fail-loud-not-null, an unexpected error must never be silently
+        # coerced into the same NA as those two legitimate cases.
+        safe_ssr <- function(r, label) {
           r <- r[!is.na(r)]
           if (length(r) < 38L) return(NA_real_)
           tryCatch(
             historicaldata::hd_sharpe_stability_ratio(r, w = 36L, ann_factor = 12L)$ssr,
-            error = function(e) NA_real_
+            error = function(e) {
+              cli::cli_warn(c(
+                "!" = "SSR computation errored for {.val {label}} -- returning NA.",
+                "i" = "Underlying error: {conditionMessage(e)}"
+              ))
+              NA_real_
+            }
           )
         }
 
@@ -654,45 +668,45 @@ plan_leaderboard <- function() {
         # Factor MAX and Factor DRIF: monthly portfolio_ret
         if (!is.null(fm_portfolio) && "portfolio_ret" %in% names(fm_portfolio)) {
           r <- fm_portfolio$portfolio_ret
-          ssr_map[["Factor MAX"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Factor MAX"]] <- list(ssr = safe_ssr(r, "Factor MAX"), top5 = safe_top5(r))
         }
         if (!is.null(drif_portfolio) && "portfolio_ret" %in% names(drif_portfolio)) {
           r <- drif_portfolio$portfolio_ret
-          ssr_map[["Factor DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Factor DRIF"]] <- list(ssr = safe_ssr(r, "Factor DRIF"), top5 = safe_top5(r))
         }
 
         # Stock MAX, Stock DRIF, XGB DRIF: monthly port_ret
         if (!is.null(stk_max_portfolio) && "port_ret" %in% names(stk_max_portfolio)) {
           r <- stk_max_portfolio$port_ret
-          ssr_map[["Stock MAX"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Stock MAX"]] <- list(ssr = safe_ssr(r, "Stock MAX"), top5 = safe_top5(r))
         }
         if (!is.null(stk_drif_portfolio) && "port_ret" %in% names(stk_drif_portfolio)) {
           r <- stk_drif_portfolio$port_ret
-          ssr_map[["Stock DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Stock DRIF"]] <- list(ssr = safe_ssr(r, "Stock DRIF"), top5 = safe_top5(r))
         }
         if (!is.null(xgb_drif_portfolio) && "port_ret" %in% names(xgb_drif_portfolio)) {
           r <- xgb_drif_portfolio$port_ret
-          ssr_map[["XGB DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["XGB DRIF"]] <- list(ssr = safe_ssr(r, "XGB DRIF"), top5 = safe_top5(r))
         }
 
         # Mom Pre-Peak, Post-Peak, Combined: monthly ret_ls
         if (!is.null(mom_prepeak_returns) && "ret_ls" %in% names(mom_prepeak_returns)) {
           r <- mom_prepeak_returns$ret_ls
-          ssr_map[["Mom Pre-Peak"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Mom Pre-Peak"]] <- list(ssr = safe_ssr(r, "Mom Pre-Peak"), top5 = safe_top5(r))
         }
         if (!is.null(mom_postpeak_returns) && "ret_ls" %in% names(mom_postpeak_returns)) {
           r <- mom_postpeak_returns$ret_ls
-          ssr_map[["Mom Post-Peak"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Mom Post-Peak"]] <- list(ssr = safe_ssr(r, "Mom Post-Peak"), top5 = safe_top5(r))
         }
         if (!is.null(mom_combined_returns) && "ret_ls" %in% names(mom_combined_returns)) {
           r <- mom_combined_returns$ret_ls
-          ssr_map[["Mom 12-2"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Mom 12-2"]] <- list(ssr = safe_ssr(r, "Mom 12-2"), top5 = safe_top5(r))
         }
 
         # LTR: monthly port_ret
         if (!is.null(ltr_portfolio) && "port_ret" %in% names(ltr_portfolio)) {
           r <- ltr_portfolio$port_ret
-          ssr_map[["LTR"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["LTR"]] <- list(ssr = safe_ssr(r, "LTR"), top5 = safe_top5(r))
         }
 
         # Build lookup tibble for joining
