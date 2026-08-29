@@ -108,6 +108,8 @@ jst_summary        <- safe_tar_read("jst_summary")
 
 ## Negative Results
 
+::: {.panel-tabset}
+
 ### Why Document Negative Results?
 
 Negative results are as valuable as positive ones. A strategy that fails the falsification framework teaches us:
@@ -242,21 +244,25 @@ if (!is.null(summary) && !is.null(nms)) {
 }
 ```
 
-### Implications for Portfolio Construction
+### Implications & References
 
 1. **Do not include** Avoid Worst Days or Risk State in the multi-strategy portfolio (#52)
 2. **VIX-based overlays** add cost and complexity without alpha — use passive SPY instead
 3. **Factor rotation** (<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>, Factor MAX) is where the genuine alpha lives
 4. **Cross-sectional momentum** (LTR) needs scaling before inclusion — promising but unconfirmed at production scale
 
-### References
+**Further reading:**
 
 - Full falsification methodology: [Strategy Falsification](falsification.html)
 - Avoid Worst Days analysis: [avoid-worst-days.html](avoid-worst-days.html)
 - Strategy leaderboard: [leaderboard.html](leaderboard.html)
 - Harvey, Liu & Zhu (2016). "...and the Cross-Section of Expected Returns"
 
+:::
+
 ## Historical Evidence {#historical-evidence}
+
+::: {.panel-tabset}
 
 ### Overview
 
@@ -269,8 +275,6 @@ The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.ne
 - Financial crises occurred in `r nrow(jst_crises)` countries, with total crisis-years ranging from `r min(jst_crises$n_crises)` to `r max(jst_crises$n_crises)` per country
 
 **Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241){target="_blank" rel="noopener noreferrer"}
-
----
 
 ### Cross-Geography Pervasiveness
 
@@ -316,9 +320,13 @@ jst_pervasiveness |>
   )
 ```
 
----
+### Visualisations
 
-### Equity Premium Heatmap
+The two static figures below (heatmap, crisis timeline) are grouped into tabs to shorten this section further. Earlier revisions of this page kept the JST data tables outside any tab, citing a known defect class where a `DT::datatable()` table can measure zero height if its tab starts inactive. That risk has since been checked directly against this page's rendered HTML: the JST pervasiveness and crisis-frequency tables both carry their full row counts while sitting in an inactive tab, so the tables in this section are now nested in tabs like everything else.
+
+::: {.panel-tabset}
+
+#### Equity Premium Heatmap
 
 The heatmap below shows mean equity premium by decade and country. Darker green indicates higher premium; red indicates negative premium. Missing cells represent periods with insufficient data.
 
@@ -356,9 +364,7 @@ ggplot(jst_equity_premium, aes(x = decade, y = iso, fill = mean_premium)) +
   )
 ```
 
----
-
-### Financial Crisis Timeline
+#### Financial Crisis Timeline
 
 Financial crises (identified by the JST `crisisJST` indicator) are shown below as segments spanning crisis years for each country.
 
@@ -398,7 +404,7 @@ ggplot(crises_long, aes(x = year, y = iso)) +
   )
 ```
 
----
+:::
 
 ### Crisis Frequency Table
 
@@ -433,8 +439,6 @@ jst_crises |>
   )
 ```
 
----
-
 ### Data Notes
 
 - **Equity premium** = equity total return (`eq_tr`) - short-term government bill rate (`bill_rate`)
@@ -444,6 +448,8 @@ jst_crises |>
 - **Data period**: `r jst_summary$year_range[1]` to `r jst_summary$year_range[2]` (`r format(jst_summary$n_obs, big.mark = ",")` country-year observations)
 
 All target computations are defined in [`R/plan_jst.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_jst.R).
+
+:::
 
 :::
 
