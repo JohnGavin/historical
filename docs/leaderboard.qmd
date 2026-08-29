@@ -47,6 +47,16 @@ source(disc_path)
 qa_gates_path <- if (file.exists("../R/plan_qa_gates.R")) "../R/plan_qa_gates.R" else
   file.path(here::here(), "R/plan_qa_gates.R")
 source(qa_gates_path)
+
+# PERIOD_LABELS_ALLOWED is the single source of truth for every value the
+# `period` column may hold (#643/#644). Sourced here so the By Partition
+# table below can build its display-order factor levels from the same
+# vocabulary the S10 gate (check_leaderboard_period_vocab) enforces on the
+# target -- rather than hardcoding a levels vector that silently drops any
+# label the target legitimately emits (#646).
+partitions_path <- if (file.exists("../R/plan_partitions.R")) "../R/plan_partitions.R" else
+  file.path(here::here(), "R/plan_partitions.R")
+source(partitions_path)
 ```
 
 # Rankings
@@ -672,23 +682,68 @@ if (!is.null(lb)) {
   )
 
   # Explicit period display order (NOT alphabetical, per rule): Testing,
-  # Holdout, Full Period, Training. Testing and Holdout are adjacent because
-  # Holdout is the more recent, more-informative-but-unsealed evaluation
-  # window that directly follows Testing chronologically; Full Period and
-  # Training close out the table the same way they always have (#660).
+  # Holdout, Full Period, OOS, Training. Testing and Holdout are adjacent
+  # because Holdout is the more recent, more-informative-but-unsealed
+  # evaluation window that directly follows Testing chronologically; Full
+  # Period and Training close out the table the same way they always have
+  # (#660). "OOS" sits after Full Period and before Training -- a deliberate
+  # choice, not an incidental one (#646): OOS spans a wider, strategy-defined
+  # window than the canonical Testing partition (see PERIOD_LABELS_ALLOWED's
+  # comment in R/plan_partitions.R and #645), so it is placed among the
+  # wider/aggregate partitions rather than next to Testing.
   # Implemented via factor levels so dplyr::arrange() sorts by this order
-  # rather than alphabetically ("Full Period" < "Holdout" < "Testing" <
-  # "Training").
-  period_order <- c("Testing", "Holdout", "Full Period", "Training")
+  # rather than alphabetically ("Full Period" < "Holdout" < "OOS" <
+  # "Testing" < "Training").
+  #
+  # Built from PERIOD_LABELS_ALLOWED (R/plan_partitions.R) rather than a
+  # hand-rolled vector so a label the target legitimately emits can never be
+  # silently dropped by factor() again (#646) -- "Validation" is excluded
+  # here because it is already removed by the `filter()` below (sealed
+  # envelope, never displayed).
+  period_order <- PERIOD_LABELS_ALLOWED[
+    match(
+      c("Testing", "Holdout", "Full Period", "OOS", "Training"),
+      PERIOD_LABELS_ALLOWED
+    )
+  ]
+  if (anyNA(period_order)) {
+    cli::cli_abort(c(
+      "x" = "period_order references a label not in PERIOD_LABELS_ALLOWED.",
+      "i" = "PERIOD_LABELS_ALLOWED: {.val {PERIOD_LABELS_ALLOWED}}"
+    ))
+  }
 
   by_part <- lb |>
     filter(period != "Validation") |>
     left_join(years_map, by = "period") |>
-    mutate(period = factor(period, levels = period_order)) |>
+    # period_raw preserves the pre-coercion label so the NA guard below can
+    # name exactly which offending value slipped past period_order, without
+    # relying on a strategy-based re-lookup that would be ambiguous for
+    # strategies with more than one period row.
+    mutate(period_raw = period, period = factor(period, levels = period_order)) |>
     # Sort on the NUMERIC sharpe column before it is formatted to character
     # below -- sorting the formatted string ("9.5" vs "10.2") would sort
     # lexicographically and put "9.5" above "10.2".
-    arrange(period, desc(sharpe)) |>
+    arrange(period, desc(sharpe))
+
+  # Fail loud, never null (project rule): factor() maps any period value
+  # outside `period_order` to NA silently. #646 was exactly this -- "OOS"
+  # fell outside the (then-incomplete) levels vector and rendered as a blank
+  # Period cell on the published page. Assert here, at the coercion site,
+  # rather than trusting the upstream S10 target-level gate to have caught
+  # every value that could reach this presentation-layer table.
+  na_period_rows <- by_part |> filter(is.na(period))
+  if (nrow(na_period_rows) > 0) {
+    cli::cli_abort(c(
+      "x" = "{nrow(na_period_rows)} row{?s} in the By Partition table has a `period` value outside period_order.",
+      "i" = "Offending strategy/period pairs: {.val {paste(na_period_rows$strategy, na_period_rows$period_raw, sep = '/')}}",
+      "i" = "period_order: {.val {as.character(period_order)}}",
+      "i" = "Add the missing label to period_order (and PERIOD_LABELS_ALLOWED if new) -- see #646."
+    ))
+  }
+
+  by_part <- by_part |>
+    select(-period_raw) |>
     mutate(
       CAGR = paste0(round(cagr * 100, 1), "%"),
       Vol = paste0(round(vol * 100, 1), "%"),
@@ -700,7 +755,7 @@ if (!is.null(lb)) {
     select(Strategy = strategy, Period, Sharpe, Years, CAGR, Vol, `Max DD`, `CVaR 95%`)
 
   # Bespoke DT call (not hd_dt()): rows above are already sorted by Period
-  # (Testing / Holdout / Full Period / Training) then Sharpe descending. hd_dt()'s
+  # (Testing / Holdout / Full Period / OOS / Training) then Sharpe descending. hd_dt()'s
   # fixed options list has no `order` entry, so DT would apply its default
   # initial sort (column 0 ascending = Strategy) and silently undo the sort
   # above -- `order = list()` (empty array) disables DT's initial sort and
@@ -715,9 +770,9 @@ if (!is.null(lb)) {
   # below).
   by_part_caption <- hd_caption(
     paste0(
-      "All strategies × Training, Testing, and Holdout partitions, ordered Testing / Holdout / Full Period / Training then by Sharpe (descending). Years column shows date ranges. Holdout (2024-2026) is observed, not sealed -- treat it with a discount relative to a genuinely untouched sample (#660). Validation partition is sealed and genuinely untouched (2026-05-01 onwards) — not shown until production deployment."
+      "All strategies × Training, Testing, and Holdout partitions, ordered Testing / Holdout / Full Period / OOS / Training then by Sharpe (descending). Years column shows date ranges. Holdout (2024-2026) is observed, not sealed -- treat it with a discount relative to a genuinely untouched sample (#660). Validation partition is sealed and genuinely untouched (2026-05-01 onwards) — not shown until production deployment. OOS rows are a strategy-defined out-of-sample window (dates >= 2010-01-01, unbounded above at the current test_end) -- wider than, and not directly comparable to, the canonical Testing partition (#645, #646)."
     ),
-    short = "All strategies across Training, Testing, and Holdout partitions, sorted by Sharpe within each. Holdout is observed, not sealed — expand for caveats.",
+    short = "All strategies across Training, Testing, and Holdout partitions, sorted by Sharpe within each. Holdout is observed, not sealed; OOS is a wider, strategy-defined window, not the canonical Testing partition — expand for caveats.",
     summary_label = "Partition caveats"
   )
 
