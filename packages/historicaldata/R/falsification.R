@@ -796,11 +796,45 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #' (2) the best of K strategies has an inflated expected Sharpe
 #' even under pure noise (the "haircut").
 #'
+#' @section Variance-aware hurdle (#558):
+#' The expected-maximum-Sharpe hurdle E[max SR] that the "haircut" subtracts
+#' depends on TWO things, not one: the trial COUNT \code{K_trials} (the
+#' "logarithmic blessing" -- adding trials raises the hurdle only slowly) and
+#' the trial-population VARIANCE \code{trial_sharpe_var} (V) -- how dispersed
+#' the Sharpe ratios of the \code{K_trials} candidates were. A pool containing
+#' low-trade, erratic "junk" strategies has a wide Sharpe dispersion and
+#' therefore a much higher honest hurdle than a clean pool of the same size,
+#' even though \code{K_trials} is identical. Bailey, Borwein, Lopez de Prado &
+#' Zhu (2014) write this as
+#' \eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where \eqn{E[\max Z]} is
+#' the expected maximum of \code{K_trials} unit-variance (V = 1) trial
+#' Z-scores. This implementation keeps the asymptotic Euler-Mascheroni
+#' approximation to \eqn{E[\max Z]} already used here (a form of the same
+#' extreme-value-theory result the LdP papers derive) and multiplies it by
+#' \eqn{\sqrt{V}}. \code{trial_sharpe_var = 1} (the default) reproduces the
+#' pre-#558 output for every \code{K_trials} exactly, so existing callers are
+#' unaffected unless they opt in.
+#'
+#' When the caller has (or can estimate) the population of trial Sharpe
+#' ratios that produced \code{K_trials}, pass
+#' \code{var(trial_sharpes, na.rm = TRUE)} as \code{trial_sharpe_var} rather
+#' than leaving it at 1 -- omitting it silently assumes the trial pool has
+#' the tightest possible Sharpe dispersion, understating the hurdle whenever
+#' the pool contains noisy, low-trade strategies (the "junk-variance trap").
+#'
 #' @param r Numeric vector of returns (daily or monthly).
 #' @param K_trials Integer. Number of strategies tested (default 1 = no
 #'   multiple-testing adjustment).
 #' @param ann_factor Integer. Annualisation factor (252 for daily, 12 for
 #'   monthly). Default 252.
+#' @param trial_sharpe_var Numeric scalar > 0. Variance of the Sharpe ratios
+#'   across the \code{K_trials} trial population (V in the Details section).
+#'   Default \code{1}, i.e. a unit-variance trial pool -- the implicit
+#'   assumption of every call before #558. A wider trial-Sharpe dispersion
+#'   (e.g. a pool containing low-trade "junk" strategies) should be passed
+#'   here as \code{var(trial_sharpes)}; this widens the hurdle and therefore
+#'   lowers \code{dsr} / raises \code{dsr_pvalue} for the SAME underlying
+#'   returns, all else equal.
 #'
 #' @return Named list:
 #'   \describe{
@@ -811,6 +845,7 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #'     \item{skewness}{Sample skewness of returns.}
 #'     \item{kurtosis}{Sample excess kurtosis of returns.}
 #'     \item{K_trials}{Number of strategies tested.}
+#'     \item{trial_sharpe_var}{Echoed input V (see Details).}
 #'     \item{T}{Number of observations.}
 #'   }
 #'
@@ -819,16 +854,32 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #' Selection Bias, Backtest Overfitting, and Non-Normality."
 #' \emph{Journal of Portfolio Management}, 40(5), 94-107.
 #'
+#' Bailey, D. H., Borwein, J. M., Lopez de Prado, M., & Zhu, Q. J. (2014).
+#' "Pseudo-Mathematics and Financial Charlatanism: The Effects of Backtest
+#' Overfitting on Out-of-Sample Performance." \emph{Notices of the AMS},
+#' 61(5), 458-471. (Trial-population-variance form of E[max SR].)
+#'
 #' @family falsification
 #' @export
-hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
+hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L,
+                                trial_sharpe_var = 1) {
+  if (!is.numeric(trial_sharpe_var) || length(trial_sharpe_var) != 1L ||
+      is.na(trial_sharpe_var) || !is.finite(trial_sharpe_var) ||
+      trial_sharpe_var <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg trial_sharpe_var} must be a single positive finite number.",
+      "i" = "Got {.val {trial_sharpe_var}}.",
+      "i" = "It is the variance of the Sharpe ratios across the {.arg K_trials} trial population (V); see {.fn hd_deflated_sharpe} Details."
+    ))
+  }
   r <- r[!is.na(r)]
   T_obs <- length(r)
   if (T_obs < 10L) {
     return(list(dsr = NA_real_, dsr_pvalue = NA_real_,
                 naive_sharpe = NA_real_, haircut_pct = NA_real_,
                 skewness = NA_real_, kurtosis = NA_real_,
-                K_trials = K_trials, T = T_obs))
+                K_trials = K_trials, trial_sharpe_var = trial_sharpe_var,
+                T = T_obs))
   }
 
   mu    <- mean(r)
@@ -848,13 +899,16 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
   # Var(SR) ≈ (1 - m3*SR + (m4-1)/4 * SR^2) / T
   var_sr <- (1 - m3 * sr + (m4 - 1) / 4 * sr^2) / T_obs
 
-  # Expected maximum Sharpe under K independent trials (Euler-Mascheroni):
-  # E[max(SR)] ≈ sqrt(2*log(K)) - (gamma + log(pi/2)) / (2*sqrt(2*log(K)))
-  # For K=1: E[max] = 0
+  # Expected maximum Sharpe under K independent trials (Euler-Mascheroni),
+  # scaled by sqrt(trial_sharpe_var) for a trial population that is not
+  # unit-variance (#558 -- see the "Variance-aware hurdle" roxygen section):
+  # E[max(SR)] ≈ sqrt(V) * [sqrt(2*log(K)) - (gamma + log(pi/2)) / (2*sqrt(2*log(K)))]
+  # For K=1: E[max] = 0 regardless of V (no multiple-testing hurdle to widen)
   if (K_trials > 1L) {
     z <- sqrt(2 * log(K_trials))
     euler_mascheroni <- 0.5772156649
     e_max_sr <- z - (euler_mascheroni + log(pi / 2)) / (2 * z)
+    e_max_sr <- e_max_sr * sqrt(trial_sharpe_var)
     # Scale to per-period SR (not annualised)
     e_max_sr <- e_max_sr / sqrt(T_obs)
   } else {
@@ -885,6 +939,7 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
     skewness      = m3,
     kurtosis      = ek,
     K_trials      = K_trials,
+    trial_sharpe_var = trial_sharpe_var,
     T             = T_obs
   )
 }
