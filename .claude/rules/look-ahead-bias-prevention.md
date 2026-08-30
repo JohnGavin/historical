@@ -133,6 +133,85 @@ See `R/plan_qa_fundamentals.R` for the check functions
 (`check_fundamentals_lag_shift()`, `check_fundamentals_join_dates()`) and
 GitHub issues #553 (schema), #554 (CHECK 6), #555 (join-date audit).
 
+### Diagnostic-stratum leakage (5th leakage type, #600)
+
+The four leakage types above (same-match, cross-period, within-fold
+bet-time, availability lag) all describe leakage into a **feature**: the
+model itself sees data it should not have at decision time. Diagnostic-
+stratum leakage is different -- the **model can be perfectly clean and
+pass all four checks above**, and the leakage is instead in the report
+*about* the model: the conditioning variable used to define strata for a
+calibration or performance diagnostic.
+
+| Type | What leaks | Detection |
+|---|---|---|
+| **Diagnostic-stratum** | Outcome used to define the evaluation stratum | Stratum variable must be computed from data strictly prior to the evaluation window open |
+
+Concretely: stratifying a calibration or performance check on a
+volatility regime (or any regime/risk proxy) computed at the **close**
+of the evaluation window silently conditions on the outcome -- the
+regime label and the outcome being evaluated are both functions of the
+same realised volatility. The strata are contaminated and the
+diagnostic reports a flattering number, even though nothing about the
+model's training or feature set is wrong.
+
+**Wrong** -- regime computed from the same window being evaluated:
+
+```r
+# rolling_vol here is realised vol over the SAME period as net (the
+# P&L being evaluated) -- the stratum is a function of the outcome.
+bets |>
+  dplyr::mutate(
+    regime = dplyr::if_else(
+      rolling_vol > median(rolling_vol, na.rm = TRUE),
+      "high_vol", "low_vol"
+    )
+  ) |>
+  dplyr::group_by(regime) |>
+  dplyr::summarise(sharpe = mean(net) / sd(net), .groups = "drop")
+```
+
+**Right** -- regime measured strictly before the window it stratifies,
+using only information available at the window's open:
+
+```r
+# regime_open is the vol regime as of the START of each evaluation
+# window (e.g. a trailing 21-day realised vol computed through t-1,
+# then dplyr::lag()'d onto the window it will be used to stratify).
+bets |>
+  dplyr::mutate(
+    regime = dplyr::if_else(
+      regime_open > median(regime_open, na.rm = TRUE),
+      "high_vol", "low_vol"
+    )
+  ) |>
+  dplyr::group_by(regime) |>
+  dplyr::summarise(sharpe = mean(net) / sd(net), .groups = "drop")
+```
+
+**Origin:** [Gelman blog, 2026-07-29](https://statmodeling.stat.columbia.edu/2026/07/29/over-coverage-caught-by-pre-registration-47-of-56-inside-a-stated-50-interval/).
+Malinowski caught a 47/56-inside-a-stated-50% over-coverage bug by hand,
+by conditioning on regime measured at each window's open (not its
+close, which leaks the outcome). Gelman's reply generalises it:
+
+> it's indeed a good idea to look at conditional calibration, but you
+> have to be careful only to condition on things in the forecast, not
+> on the outcome
+
+**Required for any regime-conditional or stratified diagnostic:**
+
+1. The stratum/regime variable must be a dplyr::lag()-based or
+   as-of-cutoff quantity, computed from data strictly prior to the
+   window it stratifies -- never from data drawn from the window itself.
+2. If the diagnostic's regime column and the outcome column share any
+   date range, treat it as leaked until proven otherwise (same burden
+   of proof as the four feature-leakage types above).
+3. See backtest-robustness Section 2 (Regime-Conditional Evaluation) --
+   the qa_regime_robustness example there computes regime from the
+   full backtest window's median; a project claiming diagnostic-stratum
+   cleanliness must instead compute it from a shifted/as-of quantity as
+   shown above.
+
 ## In Commit Messages (experiment format)
 
 Every experiment commit MUST include the OOS metric alongside in-sample:
