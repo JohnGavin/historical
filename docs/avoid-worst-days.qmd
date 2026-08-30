@@ -334,7 +334,7 @@ Mkt-RF is not identical to the S&P 500 — it is the value-weighted CRSP market 
 
 A tradeable approximation: after a large daily move (shock) or when the <abbr title="CBOE Volatility Index — implied volatility of S&P 500 options">VIX</abbr> exceeds a threshold (forward-looking implied volatility), go to cash. Re-enter when VIX subsides below a re-entry threshold, with a minimum cooling-off period.
 
-The VIX is forward-looking — it prices the market's expectation of 30-day volatility from S&P 500 options. Unlike realized volatility (backward-looking), VIX rises *before* the worst days cluster, making it a practical trigger.
+The VIX is forward-looking by construction — it prices the market's expectation of 30-day volatility from S&P 500 options — but that does not by itself mean it forecasts tomorrow's SPX return. A direct SPX↔VIX lead-lag test ([#611](https://github.com/JohnGavin/historical/issues/611)) found the relationship is overwhelmingly same-day (contemporaneous correlation −0.79); VIX's level carries a small, statistically significant edge over next-day SPX returns (t = 3.15, p = 0.0016) but the effect is weak (model R² = 0.008) — consistent with the Alpha Decay finding below that honest (t+1) execution shows no exploitable speed advantage.
 
 ```{r}
 #| fig-height: 6
@@ -374,7 +374,7 @@ if (!is.null(sens)) {
 | 2 | Minimum 5 trading days in cash | Stay out (cooling-off) |
 | 3 | VIX drops below 25 **and** cooloff expired | Re-enter market |
 
-**Why VIX, not realized vol?** Realized volatility is backward-looking — by the time it spikes, the worst days have already happened. VIX is forward-looking (implied from options prices) and rises *in anticipation* of volatility, giving earlier exit signals.
+**Why VIX, not realized vol?** Realized volatility is backward-looking — by the time it spikes, the worst days have already happened. VIX is forward-looking by construction (implied from options prices), but [#611](https://github.com/JohnGavin/historical/issues/611)'s direct lead-lag test found only a small, statistically significant edge of VIX over next-day SPX (R² = 0.008) rather than the meaningful early-warning this framing implies — see Alpha Decay below, which shows no exploitable speed advantage in practice.
 
 **Why both shock AND VIX triggers?** Flash crashes (Aug 2015, Feb 2018) cause single-day shocks without sustained VIX elevation. The shock trigger catches these. Slow-building crises (2008, 2022) elevate VIX gradually — the VIX trigger catches these.
 
