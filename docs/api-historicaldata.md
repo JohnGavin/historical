@@ -1050,6 +1050,23 @@ arguments:
 returns: returns_tbl filtered to the kept series_id values.
 ---
 kind: function
+name: hd_commodity_mr_conditioning_universe
+exported: true
+signature: hd_commodity_mr_conditioning_universe(returns_tbl)
+arguments:
+  returns_tbl: Tibble with a series_id column (any of commodities_returns, cmr_tradeable_returns, or a compatible universe).
+returns: returns_tbl filtered to the conditioning == TRUE series_id values.
+---
+kind: function
+name: hd_commodity_mr_conditioning_signal
+exported: true
+signature: hd_commodity_mr_conditioning_signal(cond_returns_tbl,lookback_months = .HD_CMR_COND_LOOKBACK_MONTHS)
+arguments:
+  cond_returns_tbl: 'Tibble as returned by \link{hd_commodity_mr_conditioning_universe}: columns date, series_id, monthly_ret.'
+  lookback_months: Integer.
+returns: 'Tibble with one row per date any conditioning series prints, columns: Observation date.'
+---
+kind: function
 name: hd_commodity_mr_portfolio
 exported: true
 signature: hd_commodity_mr_portfolio(signal_tbl,returns_tbl,frac = .HD_CMR_DEFAULT_FRAC,cost_bps = 20)

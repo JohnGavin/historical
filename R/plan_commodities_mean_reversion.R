@@ -94,6 +94,31 @@
 #   ranked breadth that item C's fixed FRACTION sizes against (a smaller
 #   n_avail on every date), which is expected and intended -- the fraction
 #   itself is unchanged.
+# Untradeable-twin conditioning data (#751 item 1, decided 2026-08-29 --
+#   SUPERSEDES item B's decision for 8 of the 20 dedup-kept series): the 8
+#   exposures with no futures/ETF twin (natgas_eu, coal_au, aluminium,
+#   nickel, iron_ore, rice, beef, pork) were kept as POSITIONS by item B
+#   because each is the sole representative of its exposure. #751's own
+#   record argues that is the same investability defect item 1's pre-2000
+#   truncation corrected: an IMF Primary Commodity Price System index is a
+#   statistical time-average, not a security. These 8 are now
+#   `conditioning = TRUE` / `keep = FALSE` in .HD_CMR_EXPOSURE_MAP --
+#   cmr_deduplicated_returns (the POSITION pool hd_commodity_mr_signal/
+#   hd_commodity_mr_portfolio rank) shrinks from 20 to 12 series as a DIRECT,
+#   EXPECTED consequence. Separately, cmr_conditioning_returns/_signal/_regime
+#   (below) expose these 8 series as a MIDAS-style macro covariate -- median
+#   calendar-window momentum across the 8, never ranked against anything --
+#   and cmr_portfolio_*_conditioned applies it as an exposure-scaling overlay
+#   to the (now 12-series) tercile portfolios, following the SAME
+#   train-then-classify shape as R/plan_risk_state.R's regime overlay
+#   (rsc_thresholds -> rsc_regime -> exposure), reduced to one signal instead
+#   of three. The conditioned targets are DIAGNOSTIC ONLY as of this change:
+#   cmr_returns_1m/3m/6m (which feed cmr_metrics_* and the leaderboard) still
+#   read the UNCONDITIONED cmr_portfolio_1m/3m/6m -- wiring the overlay into
+#   the published CMR numbers is a separate, still-open decision requiring
+#   its own single-change verification pass against the live store (per
+#   verification-before-completion's one-change-per-run discipline), not
+#   bundled into the position-pool change here.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -121,6 +146,57 @@ plan_commodities_mean_reversion <- function() {
 
     targets::tar_target(cmr_deduplicated_returns, {
       hd_commodity_mr_dedupe_universe(cmr_tradeable_returns)
+    }),
+
+
+    # ── Conditioning data (#751 item 1, decided 2026-08-29) ────────────────
+    # The 8 untradeable-twin IMF/FRED series (natgas_eu, coal_au, aluminium,
+    # nickel, iron_ore, rice, beef, pork) -- see the file header above and
+    # .HD_CMR_EXPOSURE_MAP's roxygen (packages/historicaldata/R/
+    # commodities_mean_reversion.R) for the full rationale. Built on
+    # cmr_tradeable_returns (#751 item 1), NOT cmr_deduplicated_returns --
+    # these 8 series are `keep = FALSE` and therefore absent from the latter.
+
+    targets::tar_target(cmr_conditioning_returns, {
+      hd_commodity_mr_conditioning_universe(cmr_tradeable_returns)
+    }),
+
+    targets::tar_target(cmr_conditioning_signal, {
+      hd_commodity_mr_conditioning_signal(cmr_conditioning_returns)
+    }),
+
+    # ── Conditioning regime (#751 item 1 follow-up) ─────────────────────────
+    # Percentile-threshold regime classification, mirroring
+    # R/plan_risk_state.R's rsc_thresholds -> rsc_regime shape but reduced to
+    # ONE signal and an EXPANDING, STRICTLY-PRIOR threshold window (rather
+    # than a fixed train/test split) -- see .cmr_conditioning_regime()'s
+    # roxygen below for why the expanding window was chosen
+    # (look-ahead-bias-prevention).
+
+    targets::tar_target(cmr_conditioning_regime, {
+      .cmr_conditioning_regime(cmr_conditioning_signal)
+    }),
+
+    # ── Conditioned portfolios (#751 item 1 follow-up; DIAGNOSTIC ONLY) ─────
+    # Applies the conditioning regime as an exposure-scaling overlay to each
+    # tercile portfolio, mirroring R/plan_risk_state.R's rsc_portfolio
+    # exposure-blend-with-cash construction. NOT wired into cmr_returns_*/
+    # cmr_metrics_*/the leaderboard -- see the file header above for why that
+    # remains a separate, still-open decision.
+
+    targets::tar_target(cmr_portfolio_1m_conditioned, {
+      .cmr_apply_conditioning_overlay(cmr_portfolio_1m, cmr_conditioning_regime,
+                                       daily_rf = daily_rf, lookback = "1m")
+    }),
+
+    targets::tar_target(cmr_portfolio_3m_conditioned, {
+      .cmr_apply_conditioning_overlay(cmr_portfolio_3m, cmr_conditioning_regime,
+                                       daily_rf = daily_rf, lookback = "3m")
+    }),
+
+    targets::tar_target(cmr_portfolio_6m_conditioned, {
+      .cmr_apply_conditioning_overlay(cmr_portfolio_6m, cmr_conditioning_regime,
+                                       daily_rf = daily_rf, lookback = "6m")
     }),
 
 
@@ -545,6 +621,196 @@ plan_commodities_mean_reversion <- function() {
     strategy_label = paste0("CMR ", lookback),
     period_noun = "date"
   )
+}
+
+#' Percentile threshold on |cond_signal| separating "benign" from "cautious"
+#' regime (#751 item 1 follow-up)
+#'
+#' Analogous to R/plan_risk_state.R's rsc_params$vvix_cautious_pct, reduced
+#' to ONE signal and its ABSOLUTE MAGNITUDE (not sign): a large-magnitude
+#' composite reading in EITHER direction means the untradeable
+#' macro-commodity basket is trending or reversing sharply -- read as a
+#' period of elevated macro co-movement across the complex, in which an
+#' idiosyncratic cross-sectional reversion signal (CMR's own edge) is least
+#' differentiated from broad market direction. A calm |cond_signal| (near
+#' zero) is read as the opposite: no dominant macro driver, the environment
+#' CMR's construction assumes. This is a HOUSE RULE (no literature
+#' precedent was sought for this exact construction, unlike #751's earlier
+#' items), documented as such per fail-loud-not-null.md's "MANUAL: no
+#' source" spirit applied to a threshold rather than a hand-entered value.
+#'
+#' @noRd
+.HD_CMR_COND_CAUTIOUS_PCT <- 0.75
+
+#' Percentile threshold on |cond_signal| separating "cautious" from
+#' "hostile" regime (#751 item 1 follow-up)
+#'
+#' See \code{.HD_CMR_COND_CAUTIOUS_PCT}'s roxygen for the construction this
+#' pairs with.
+#'
+#' @noRd
+.HD_CMR_COND_HOSTILE_PCT <- 0.90
+
+#' Minimum prior conditioning-signal observations required before a regime
+#' is classified, rather than defaulting to benign (#751 item 1 follow-up)
+#'
+#' Below this many PRIOR (strictly before the date being classified)
+#' observations, a percentile threshold is not a meaningful estimate.
+#' 24 (two years of the ~monthly-cadence composite) mirrors the rough
+#' order of magnitude R/plan_risk_state.R's own TRAINING window uses before
+#' its quantile thresholds are trusted, without wiring this CMR-only overlay
+#' to bt_partitions (kept small and scoped to CMR only, per the #751
+#' decision thread).
+#'
+#' @noRd
+.HD_CMR_COND_MIN_PRIOR_OBS <- 24L
+
+#' Classify the CMR conditioning composite into a benign/cautious/hostile
+#' regime with an exposure multiplier (#751 item 1 follow-up)
+#'
+#' Mirrors R/plan_risk_state.R's rsc_thresholds -> rsc_regime shape
+#' (percentile-threshold regime classification, then an exposure
+#' multiplier per regime) but reduced to ONE signal
+#' (\code{cmr_conditioning_signal}, packages/historicaldata/R/
+#' commodities_mean_reversion.R) instead of three VIX-derived ones, and
+#' uses an EXPANDING, STRICTLY-PRIOR threshold window rather than a fixed
+#' training/test split: the threshold used to classify date \code{t} is
+#' estimated ONLY from conditioning prints strictly BEFORE \code{t}
+#' (\code{dplyr::lag()} before the rolling quantile), never including
+#' \code{t} itself -- see \code{.claude/rules/look-ahead-bias-prevention}
+#' (mandatory skill) and the sibling
+#' \code{plan_risk_state.R}'s own train-data-only threshold derivation,
+#' which this generalises from a single fixed cutoff to every date.
+#'
+#' Dates with fewer than \code{\link{.HD_CMR_COND_MIN_PRIOR_OBS}} prior
+#' observations, or an \code{NA} composite (not yet computable), are
+#' classified \code{"insufficient_history"} and given the BENIGN (1.0,
+#' full) exposure multiplier -- an explicit, documented default per
+#' fail-loud-not-null.md, not a silent \code{NA} propagation.
+#'
+#' @param cond_signal_tbl Tibble as returned by
+#'   \code{hd_commodity_mr_conditioning_signal()}: columns \code{date},
+#'   \code{cond_signal}.
+#' @return \code{cond_signal_tbl} with columns \code{date},
+#'   \code{cond_signal}, \code{regime}
+#'   (\code{"benign"}/\code{"cautious"}/\code{"hostile"}/
+#'   \code{"insufficient_history"}), \code{exposure_mult}.
+#' @noRd
+.cmr_conditioning_regime <- function(cond_signal_tbl) {
+  cond_signal_tbl |>
+    dplyr::arrange(.data$date) |>
+    dplyr::mutate(
+      .abs_signal = abs(.data$cond_signal),
+      # Strictly PRIOR: the threshold classifying row i must never see
+      # .abs_signal[i] itself.
+      .lagged_abs = dplyr::lag(.abs_signal),
+      .n_prior    = dplyr::row_number() - 1L,
+      .cautious_thresh = slider::slide_dbl(
+        .lagged_abs,
+        ~ stats::quantile(.x, .HD_CMR_COND_CAUTIOUS_PCT, na.rm = TRUE),
+        .before = Inf, .complete = FALSE
+      ),
+      .hostile_thresh = slider::slide_dbl(
+        .lagged_abs,
+        ~ stats::quantile(.x, .HD_CMR_COND_HOSTILE_PCT, na.rm = TRUE),
+        .before = Inf, .complete = FALSE
+      ),
+      regime = dplyr::case_when(
+        .n_prior < .HD_CMR_COND_MIN_PRIOR_OBS ~ "insufficient_history",
+        is.na(.abs_signal)                    ~ "insufficient_history",
+        .abs_signal >= .hostile_thresh        ~ "hostile",
+        .abs_signal >= .cautious_thresh       ~ "cautious",
+        TRUE                                  ~ "benign"
+      ),
+      exposure_mult = dplyr::case_when(
+        regime == "hostile"  ~ 0.1,
+        regime == "cautious" ~ 0.5,
+        TRUE                 ~ 1.0  # benign OR insufficient_history -> full (neutral) exposure
+      )
+    ) |>
+    dplyr::select(date, cond_signal, regime, exposure_mult)
+}
+
+#' Cost per unit exposure switched under the CMR conditioning overlay
+#' (#751 item 1 follow-up)
+#'
+#' Same order of magnitude as R/plan_risk_state.R's
+#' \code{rsc_params$cost_per_trade} (5 bps) -- a regime switch on the SAME
+#' underlying CMR portfolio is a re-weighting, not a full instrument
+#' turnover, so a small explicit cost is charged rather than treating
+#' regime switches as free (an unrealistic zero-cost assumption).
+#'
+#' @noRd
+.HD_CMR_COND_SWITCH_COST <- 0.0005
+
+#' Apply the CMR conditioning regime as an exposure-scaling overlay to a
+#' tercile portfolio (#751 item 1 follow-up)
+#'
+#' Mirrors R/plan_risk_state.R's rsc_portfolio construction: blend the
+#' strategy's own net return with cash (the risk-free rate) at
+#' \code{1 - exposure_mult}, deduct a small cost on regime-switch days.
+#' \strong{DIAGNOSTIC ONLY as of #751 item 1's decision} -- see the file
+#' header for why this is not (yet) wired into cmr_returns_*/cmr_metrics_*/
+#' the leaderboard.
+#'
+#' \code{cond_regime_tbl} is sparse (one row per date any of the 8
+#' conditioning series prints, roughly monthly) while \code{portfolio_tbl}
+#' is daily. The regime is carried forward (LOCF, \code{tidyr::fill()})
+#' onto every date in \code{portfolio_tbl} -- it persists between
+#' conditioning prints, exactly the "constant until superseded" convention
+#' every signal in this pipeline already uses, and is NOT the mixed-cadence
+#' ranking defect #751 identified, because these values are never ranked
+#' against anything; they are simply held constant, a standard covariate
+#' carry-forward. Dates before the first conditioning print (no regime yet
+#' known) default to \code{exposure_mult = 1.0} (full, neutral exposure) --
+#' an explicit, documented default per fail-loud-not-null.md.
+#'
+#' @param portfolio_tbl Tibble as returned by
+#'   \code{hd_commodity_mr_portfolio()} (packages/historicaldata/R/
+#'   commodities_mean_reversion.R): needs \code{date}, \code{net_ret}.
+#' @param cond_regime_tbl Tibble as returned by
+#'   \code{.cmr_conditioning_regime()}: columns \code{date},
+#'   \code{cond_signal}, \code{regime}, \code{exposure_mult}.
+#' @param daily_rf Tibble with columns \code{date}, \code{rf_ret} (the
+#'   \code{daily_rf} target, R/plan_stock_backtest.R).
+#' @param lookback Character. Lookback label, used only for the rf-join's
+#'   error/warning text (passed through to \code{.cmr_fill_non_trading_rf_gaps()}).
+#' @param cost_per_switch Numeric. Default
+#'   \code{\link{.HD_CMR_COND_SWITCH_COST}}.
+#' @return Tibble with columns \code{date}, \code{net_ret} (unconditioned,
+#'   passed through), \code{regime}, \code{exposure_mult},
+#'   \code{switch_cost}, \code{net_ret_conditioned}.
+#' @noRd
+.cmr_apply_conditioning_overlay <- function(portfolio_tbl, cond_regime_tbl, daily_rf,
+                                             lookback, cost_per_switch = .HD_CMR_COND_SWITCH_COST) {
+  all_dates <- portfolio_tbl |>
+    dplyr::distinct(.data$date) |>
+    dplyr::arrange(.data$date)
+
+  joined <- all_dates |>
+    dplyr::left_join(cond_regime_tbl, by = "date") |>
+    tidyr::fill(cond_signal, regime, exposure_mult, .direction = "down") |>
+    dplyr::mutate(
+      exposure_mult = dplyr::if_else(is.na(exposure_mult), 1.0, exposure_mult),
+      regime        = dplyr::if_else(is.na(regime), "insufficient_history", regime)
+    )
+
+  daily_rf_filled <- .cmr_fill_non_trading_rf_gaps(portfolio_tbl, daily_rf, lookback = lookback)
+  rf_lookup <- daily_rf_filled |> dplyr::select(date, rf_ret)
+
+  portfolio_tbl |>
+    dplyr::select(date, net_ret) |>
+    dplyr::left_join(joined, by = "date") |>
+    dplyr::left_join(rf_lookup, by = "date") |>
+    dplyr::arrange(.data$date) |>
+    dplyr::mutate(
+      .rf_filled      = dplyr::if_else(is.na(rf_ret), 0, rf_ret),
+      .exposure_delta = abs(exposure_mult - dplyr::lag(exposure_mult, default = exposure_mult[1])),
+      switch_cost     = cost_per_switch * .exposure_delta * 2.0,
+      net_ret_conditioned = exposure_mult * net_ret +
+        (1 - exposure_mult) * .rf_filled - switch_cost
+    ) |>
+    dplyr::select(date, net_ret, regime, exposure_mult, switch_cost, net_ret_conditioned)
 }
 
 #' Per-periodicity gap tolerances for the CMR periodicity guard (#738)
