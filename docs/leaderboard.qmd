@@ -257,9 +257,44 @@ if (!is.null(lb)) {
                 full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
                 full$dsr_haircut_pct, SIMPLIFY = FALSE)
 
+  # ── Sharpe confidence interval (#585 G2) — computed by boot_ci_summary
+  # (R/plan_bootstrap_ci.R, 90% block bootstrap: 1000 draws, 3-month
+  # blocks) and joined onto `leaderboard` (R/plan_leaderboard.R:687-699) as
+  # sharpe_ci_lo/sharpe_ci_hi/ci_crosses_zero, but until now only displayed
+  # in the "Robustness > Bootstrap CI" tab far below -- a bare point Sharpe
+  # in THIS table is exactly the over-precision the `Radical Uncertainty`
+  # review (#585) objects to, when the honest interval was one join away.
+  # A strategy whose CI crosses zero is flagged with a warning glyph rather
+  # than silently ranked between two strategies whose CIs don't.
+  has_sharpe_ci <- all(c("sharpe_ci_lo", "sharpe_ci_hi") %in% names(full))
+  n_ci_crosses_zero <- if ("ci_crosses_zero" %in% names(full)) {
+    sum(full$ci_crosses_zero, na.rm = TRUE)
+  } else 0L
+
   metrics_table <- full |>
     mutate(
-      Sharpe     = ifelse(is.na(sharpe),       "—", as.character(round(sharpe, 2))),
+      Sharpe = if (has_sharpe_ci) {
+        crosses <- if ("ci_crosses_zero" %in% names(full)) ci_crosses_zero else NA
+        flag_html <- ifelse(
+          !is.na(crosses) & crosses,
+          " <span class='sharpe-ci-flag' title='90% block-bootstrap CI for Sharpe crosses zero -- cannot reject that the true Sharpe is zero, even though the point estimate is positive. See Robustness > Bootstrap CI below.'>&#9888;</span>",
+          ""
+        )
+        dplyr::case_when(
+          is.na(sharpe) ~ "—",
+          is.na(sharpe_ci_lo) | is.na(sharpe_ci_hi) ~ as.character(round(sharpe, 2)),
+          TRUE ~ paste0(sprintf("%.2f [%.2f, %.2f]", sharpe, sharpe_ci_lo, sharpe_ci_hi), flag_html)
+        )
+      } else {
+        ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2)))
+      },
+      # Hidden numeric sort key: once Sharpe carries the CI text it is no
+      # longer a plain number, so DT's default column sort would compare it
+      # lexicographically ("0.62 [...]" before "1.24 [...]") -- same
+      # orderData pattern as .credible_rank/.det_rank/.rig_rank below. NA
+      # sharpe is mapped to -Inf so an unranked strategy sorts to the
+      # bottom on the default descending sort this table opens with.
+      .sharpe_rank = ifelse(is.na(sharpe), -Inf, sharpe),
       Detection  = vapply(det, function(x) x$html, character(1)),
       .det_rank  = vapply(det, function(x) x$rank, integer(1)),
       Rigour     = vapply(rig, function(x) x$html, character(1)),
@@ -362,7 +397,7 @@ if (!is.null(lb)) {
     # cost-plausibility and correlation-redundancy respectively. CAGR sits
     # immediately left of Net CAGR (gross, then net of cost) per item B of
     # the presentation-fix pass this column set belongs to.
-    select(Strategy = strategy, Credible, .credible_rank, Sharpe, Detection, .det_rank,
+    select(Strategy = strategy, Credible, .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
            CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
            `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
 
@@ -512,6 +547,20 @@ if (!is.null(lb)) {
     "`DEFLATED_SHARPE_EXEMPTIONS` (R/plan_qa_gates.R), not a gap — see #728."
   )
 
+  # ── Sharpe confidence-interval disclosure note (#585 G2) — dynamically
+  # computed, never hardcoded. n_ci_crosses_zero/has_sharpe_ci come from the
+  # mutate() block above (same values used to render the flag).
+  sharpe_ci_note <- if (has_sharpe_ci) {
+    paste0(
+      " Sharpe is shown as point [90% block-bootstrap CI lo, hi] (1000 draws, ",
+      "3-month blocks — R/plan_bootstrap_ci.R); &#9888; marks the ", n_ci_crosses_zero,
+      " of ", nrow(full),
+      " strateg", if (n_ci_crosses_zero == 1L) "y" else "ies",
+      " whose CI spans zero — a positive point estimate there is not evidence the true ",
+      "Sharpe differs from zero (see Robustness > Bootstrap CI below for CAGR/Max DD CIs too)."
+    )
+  } else ""
+
   # Short caption (#1 in the caption-length audit, historical#0b412a9c): the
   # unconditional text states only what the table ranks and the single most
   # important comparability warning. Everything else (column definitions,
@@ -544,7 +593,8 @@ if (!is.null(lb)) {
     "CVaR 95% columns share this exact same \"not computed\" scope (", n_net_covered, " of ",
     nrow(full), " strategies covered) — all three come from the same cost_rows join and are ",
     "jointly present or jointly absent per row (QA gate S23, R/plan_qa_gates.R).",
-    flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note
+    flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note,
+    sharpe_ci_note
   )
 
   full_caption <- hd_caption(
@@ -553,14 +603,16 @@ if (!is.null(lb)) {
     summary_label = "Column definitions and comparability caveats"
   )
 
-  # Bespoke DT call (not hd_dt()): the Credible, Redundant, Detection, and
-  # Rigour columns each need an explicit sort rank (.credible_rank /
-  # .redundant_rank / .det_rank / .rig_rank, added above) instead of DT's
-  # default alphabetical string comparator -- ascending on the display
-  # string does not put assessed-good first, then assessed-bad, then
-  # never-assessed. orderData points each column's sort at its hidden rank
-  # column instead (#637 follow-up; Redundant added #643; Detection/Rigour
-  # added #726/#728).
+  # Bespoke DT call (not hd_dt()): the Credible, Redundant, Detection,
+  # Rigour, and (since #585 G2) Sharpe columns each need an explicit sort
+  # rank (.credible_rank / .redundant_rank / .det_rank / .rig_rank /
+  # .sharpe_rank, added above) instead of DT's default alphabetical string
+  # comparator -- ascending on the display string does not put
+  # assessed-good first, then assessed-bad, then never-assessed (and for
+  # Sharpe, once it carries "[lo, hi]" CI text, no longer sorts numerically
+  # at all). orderData points each column's sort at its hidden rank column
+  # instead (#637 follow-up; Redundant added #643; Detection/Rigour added
+  # #726/#728; Sharpe added #585).
   credible_col  <- which(names(metrics_table) == "Credible") - 1L
   cred_rank_col <- which(names(metrics_table) == ".credible_rank") - 1L
   redundant_col <- which(names(metrics_table) == "Redundant") - 1L
@@ -569,6 +621,8 @@ if (!is.null(lb)) {
   det_rank_col  <- which(names(metrics_table) == ".det_rank") - 1L
   rig_col       <- which(names(metrics_table) == "Rigour") - 1L
   rig_rank_col  <- which(names(metrics_table) == ".rig_rank") - 1L
+  sharpe_col    <- which(names(metrics_table) == "Sharpe") - 1L
+  sharpe_rank_col <- which(names(metrics_table) == ".sharpe_rank") - 1L
   numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
@@ -591,11 +645,12 @@ if (!is.null(lb)) {
       search = list(regex = TRUE, caseInsensitive = TRUE),
       columnDefs = list(
         list(className = 'dt-right', targets = numeric_cols - 1),
-        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col)),
+        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col, sharpe_rank_col)),
         list(orderData = cred_rank_col, targets = credible_col),
         list(orderData = red_rank_col, targets = redundant_col),
         list(orderData = det_rank_col, targets = det_col),
-        list(orderData = rig_rank_col, targets = rig_col)
+        list(orderData = rig_rank_col, targets = rig_col),
+        list(orderData = sharpe_rank_col, targets = sharpe_col)
       ),
       initComplete = DT::JS(
         "function(settings, json) {",
@@ -625,6 +680,7 @@ if (!is.null(lb)) {
 .rig-badge.partial      { color: #9a5b00; }
 .rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
 .rig-badge.notcomputed  { color: #fff; background: #c0392b; }
+.sharpe-ci-flag         { color: #c0392b; font-weight: 700; }
 
 [data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
 [data-bs-theme="dark"] .det-badge.mtfail,       body.dark-mode .det-badge.mtfail       { color: #c084fc; }
@@ -633,12 +689,14 @@ if (!is.null(lb)) {
 [data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
 [data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
 [data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
+[data-bs-theme="dark"] .sharpe-ci-flag,         body.dark-mode .sharpe-ci-flag         { color: #ff6b6b; }
 @media (prefers-color-scheme: dark) {
   .det-badge.detectable   { color: #4ade80; }
   .det-badge.mtfail       { color: #c084fc; }
   .det-badge.underpowered { color: #fbbf24; }
   .rig-badge.computed     { color: #4ade80; }
   .rig-badge.partial      { color: #fbbf24; }
+  .sharpe-ci-flag         { color: #ff6b6b; }
 }
 </style>
 ```
@@ -1076,6 +1134,99 @@ safe_tar_read("port_comparison_plot")
 ::: {.fig-caption}
 **PSO optimal vs equal-weight portfolio.** Combines all 4 strategies with weights optimised on training partition Sharpe. The PSO optimal tilts toward strategies with better risk-adjusted returns (Factor DRIF + Stock MAX).
 :::
+
+#### PSO vs 1/N (Out-of-Sample)
+
+```{r}
+# #585 G3 -- direct empirical test of Radical Uncertainty's central practical
+# claim (naive 1/N robustness vs optimisation fragility under model
+# uncertainty; DeMiguel/Garlappi/Uppal 2009) on this repo's own PSO-vs-
+# equal-weight 4-strategy combined portfolio (Factor MAX/DRIF + Stock
+# MAX/DRIF -- port_metrics, R/plan_portfolio_opt.R). Training is IN-SAMPLE
+# for the PSO weights (port_optimal_weights is fit ONLY on
+# `port_returns |> filter(date <= stk_params$is_end)`) -- PSO wins there by
+# construction, not evidence of anything. Testing/Holdout are the honest
+# out-of-sample comparison. Validation is EXCLUDED even though port_metrics
+# computes it -- sealed envelope, see `backtest-partitions` rule and the "By
+# Partition" tab above ("NEVER show Validation data").
+pm <- safe_tar_read("port_metrics")
+params_oos <- safe_tar_read("stk_params")
+if (!is.null(pm)) {
+  period_order <- c("Training", "Testing", "Holdout", "Full Period")
+  oos <- pm |>
+    filter(period %in% period_order) |>
+    mutate(
+      period = factor(period, levels = period_order),
+      delta_sharpe = opt_sharpe - eq_sharpe,
+      sample = dplyr::case_when(
+        period == "Training"    ~ "in-sample (PSO fit here)",
+        period == "Testing"     ~ "out-of-sample",
+        period == "Holdout"     ~ "out-of-sample (observed, not sealed -- #660)",
+        period == "Full Period" ~ "mixed (includes in-sample)",
+        TRUE                     ~ "—"
+      ),
+      verdict = dplyr::case_when(
+        is.na(opt_sharpe) | is.na(eq_sharpe) ~ "not computed",
+        period == "Training"                  ~ "n/a — in-sample",
+        period == "Full Period"                ~ "n/a — mixed",
+        delta_sharpe > 0                       ~ "PSO Optimal wins",
+        delta_sharpe < 0                       ~ "1/N wins",
+        TRUE                                    ~ "tie"
+      )
+    ) |>
+    arrange(period) |>
+    transmute(
+      Period = as.character(period),
+      Sample = sample,
+      `PSO Sharpe` = ifelse(is.na(opt_sharpe), "—", as.character(round(opt_sharpe, 2))),
+      `1/N Sharpe` = ifelse(is.na(eq_sharpe), "—", as.character(round(eq_sharpe, 2))),
+      `Delta (PSO − 1/N)` = ifelse(is.na(delta_sharpe), "—", as.character(round(delta_sharpe, 2))),
+      Verdict = verdict
+    )
+
+  oos_periods <- c("Testing", "Holdout")
+  n_oos <- sum(oos$Period %in% oos_periods & oos$Verdict != "not computed")
+  n_oos_pso_wins <- sum(oos$Period %in% oos_periods & oos$Verdict == "PSO Optimal wins")
+  n_oos_1n_wins  <- sum(oos$Period %in% oos_periods & oos$Verdict == "1/N wins")
+
+  holdout_years <- if (!is.null(params_oos)) {
+    paste0(format(as.Date(params_oos$holdout_start), "%Y"), "-",
+           format(as.Date(params_oos$holdout_end), "%Y"))
+  } else "not available"
+
+  hd_dt(
+    oos,
+    paste0(
+      "Out-of-sample test of the DeMiguel/Garlappi/Uppal 1/N result (`Radical Uncertainty` review, #585 G3). ",
+      "PSO Optimal is fit on Training only, so its Training-row Sharpe is in-sample and excluded from the ",
+      "verdict; Testing and Holdout (", holdout_years, ", observed not sealed -- #660) are genuine ",
+      "out-of-sample. Of ", n_oos, " out-of-sample period(s) with data, PSO Optimal beats naive 1/N on ",
+      "Sharpe in ", n_oos_pso_wins, " and naive 1/N beats PSO Optimal in ", n_oos_1n_wins, ". ",
+      "Full Period mixes in-sample and out-of-sample months so its verdict is marked n/a, not scored. ",
+      "Validation is excluded entirely -- sealed envelope, `backtest-partitions` rule."
+    )
+  )
+
+  # A clearly negative result for the optimised approach (1/N beats PSO on
+  # every out-of-sample period, with none tied or reversed) is exactly the
+  # book's central practical claim reproduced on our own data -- surfaced
+  # immediately here per #585, with a pointer to where the formal
+  # falsification write-up belongs.
+  if (n_oos > 0L && n_oos_pso_wins == 0L && n_oos_1n_wins == n_oos) {
+    cat(
+      "\n::: callout-warning\n",
+      "**Negative result: naive 1/N beats PSO Optimal on every out-of-sample period measured here.** ",
+      "Across all ", n_oos, " out-of-sample period(s) evaluated (Testing, Holdout), equal-weight Sharpe ",
+      "exceeds the PSO-optimised Sharpe. This is the direct empirical signature the *Radical Uncertainty* ",
+      "review predicts for optimisation under model uncertainty (#585 G3) -- worth a formal writeup on the ",
+      "[Strategy Falsification dashboard](falsification.html), not just this callout.\n",
+      ":::\n", sep = ""
+    )
+  }
+} else {
+  cat("*Portfolio metrics not available — run `tar_make(\"port_metrics\")` to populate this tab.*")
+}
+```
 
 #### Monthly Returns
 
