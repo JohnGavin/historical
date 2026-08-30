@@ -943,3 +943,111 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L,
     T             = T_obs
   )
 }
+
+
+# ── 14. Signal-null rank (generalised placebo test, #718) ────────────────────
+
+#' Rank a strategy's real metric within a distribution of signal-null metrics
+#'
+#' Generic statistical layer for signal-null falsification tests (#718,
+#' generalising the strategy-specific placebo test that previously existed
+#' only for \code{mom_prepeak} -- see \code{.mom_prepeak_random_peak_signal()}
+#' in \code{R/plan_mom_prepeak_gauntlet.R}, the reference implementation).
+#'
+#' A DATA null (\code{hd_null_env_*} in this file) asks whether performance is
+#' distinguishable from the same strategy run on a synthetic series with no
+#' edge. A SIGNAL null asks a narrower, complementary question: on REAL data,
+#' holding every other piece of machinery fixed (costs, sizing, execution),
+#' is performance distinguishable from the same machinery with the claimed
+#' edge-carrying signal corrupted or randomised? A strategy can pass every
+#' data null while harvesting a structural property of real markets rather
+#' than its stated signal -- the signal null is designed to catch that case.
+#'
+#' This function performs only the comparison: given the real strategy's
+#' metric and a vector of the same metric computed on N signal-corrupted
+#' variants, it returns a rank statistic ("k of N corrupted variants beat the
+#' real strategy"), mirroring Heger (2026)'s "0 of 80" construction without
+#' any distributional assumption. HOW to corrupt a given strategy's signal is
+#' declared per strategy -- see \code{.mom_prepeak_random_peak_signal()}
+#' (mom_prepeak), \code{olmar_backtest(signal_null = TRUE)} (OLMAR-1,
+#' cross-sectional shuffle of the predicted price relative), and
+#' \code{.mf_signal_null_signs()} (managed futures, random trend sign) --
+#' and is intentionally NOT automated here.
+#'
+#' @param actual_metric Numeric scalar. The real strategy's metric (e.g.
+#'   annualised Sharpe) computed with its real, uncorrupted signal.
+#' @param null_metrics Numeric vector. The same metric computed on each of
+#'   N signal-corrupted variants. May contain `NA` (e.g. a variant with too
+#'   few observations to compute a Sharpe); these are excluded before
+#'   ranking. Length 1 is a valid degenerate case (a single corrupted
+#'   replicate, as the pre-#718 mom_prepeak test used).
+#' @param dominance_threshold Numeric scalar in `[0, 1]`. Fraction of valid
+#'   null variants that must perform at least as well as `actual_metric` for
+#'   `null_dominates` to be `TRUE`. Default `0.5` (a majority).
+#'
+#' @return Named list:
+#'   \describe{
+#'     \item{actual_metric}{The input `actual_metric`, unchanged.}
+#'     \item{n_beat}{Count of valid null variants with metric `>= actual_metric`.
+#'       `NA_integer_` when indeterminate (see below).}
+#'     \item{n_valid}{Count of null variants with a non-`NA` metric.}
+#'     \item{n_total}{`length(null_metrics)`, including any `NA`s.}
+#'     \item{rank_pct}{`n_beat / n_valid`. `NA_real_` when indeterminate.}
+#'     \item{null_dominates}{Logical: is `rank_pct >= dominance_threshold`?
+#'       `NA` -- never coerced to `FALSE` -- when `actual_metric` is `NA` or
+#'       `n_valid == 0`, per \code{checks-must-distinguish-unknown}: an
+#'       unmeasurable verdict must not look like a passing one.}
+#'   }
+#'
+#' @family falsification
+#' @export
+hd_signal_null_rank <- function(actual_metric, null_metrics,
+                                 dominance_threshold = 0.5) {
+  if (!is.numeric(actual_metric) || length(actual_metric) != 1L) {
+    cli::cli_abort(c(
+      "x" = "{.arg actual_metric} must be a numeric scalar.",
+      "i" = "Got {.cls {class(actual_metric)}} of length {length(actual_metric)}."
+    ))
+  }
+  if (!is.numeric(null_metrics)) {
+    cli::cli_abort(c(
+      "x" = "{.arg null_metrics} must be a numeric vector.",
+      "i" = "Got {.cls {class(null_metrics)}}."
+    ))
+  }
+  if (!is.numeric(dominance_threshold) || length(dominance_threshold) != 1L ||
+      is.na(dominance_threshold) ||
+      dominance_threshold < 0 || dominance_threshold > 1) {
+    cli::cli_abort(c(
+      "x" = "{.arg dominance_threshold} must be a single numeric in [0, 1].",
+      "i" = "Got {.val {dominance_threshold}}."
+    ))
+  }
+
+  n_total <- length(null_metrics)
+  valid   <- null_metrics[!is.na(null_metrics)]
+  n_valid <- length(valid)
+
+  if (is.na(actual_metric) || n_valid == 0L) {
+    return(list(
+      actual_metric  = actual_metric,
+      n_beat         = NA_integer_,
+      n_valid        = n_valid,
+      n_total        = n_total,
+      rank_pct       = NA_real_,
+      null_dominates = NA
+    ))
+  }
+
+  n_beat   <- sum(valid >= actual_metric)
+  rank_pct <- n_beat / n_valid
+
+  list(
+    actual_metric  = actual_metric,
+    n_beat         = n_beat,
+    n_valid        = n_valid,
+    n_total        = n_total,
+    rank_pct       = rank_pct,
+    null_dominates = rank_pct >= dominance_threshold
+  )
+}

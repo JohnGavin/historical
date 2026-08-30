@@ -187,6 +187,57 @@ test_that("olmar_backtest: handles data.frame with date column", {
   expect_equal(nrow(result), 50L)
 })
 
+# ── olmar_backtest: signal_null (#718) ──────────────────────────────────────
+
+test_that("signal_null = FALSE (default) is unaffected by seed", {
+  prices <- make_mr_prices(n_days = 60L, n_assets = 4L)
+  # Real backtest ignores `seed` entirely when signal_null is FALSE.
+  r1 <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2, seed = 1L)
+  r2 <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2, seed = 999L)
+  expect_equal(r1, r2)
+})
+
+test_that("signal_null = TRUE with a seed is reproducible", {
+  prices <- make_mr_prices(n_days = 60L, n_assets = 4L)
+  r1 <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2,
+                        signal_null = TRUE, seed = 42L)
+  r2 <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2,
+                        signal_null = TRUE, seed = 42L)
+  expect_equal(r1, r2)
+})
+
+test_that("signal_null = TRUE with different seeds gives different returns", {
+  prices <- make_mr_prices(n_days = 60L, n_assets = 4L)
+  r1 <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2,
+                        signal_null = TRUE, seed = 1L)
+  r2 <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2,
+                        signal_null = TRUE, seed = 2L)
+  expect_false(identical(r1$net_ret, r2$net_ret))
+})
+
+test_that("signal_null = TRUE keeps the same schema and row count as the real backtest", {
+  prices <- make_mr_prices(n_days = 60L, n_assets = 4L)
+  real <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2)
+  null <- olmar_backtest(prices, window = 10L, epsilon = 5, leverage = 0.2,
+                          signal_null = TRUE, seed = 42L)
+  expect_named(null, names(real))
+  expect_equal(nrow(null), nrow(real))
+})
+
+test_that("signal_null must be a single non-NA logical", {
+  prices <- make_mr_prices(n_days = 30L, n_assets = 3L)
+  expect_snapshot(error = TRUE,
+    olmar_backtest(prices, window = 10L, signal_null = "yes"))
+  expect_snapshot(error = TRUE,
+    olmar_backtest(prices, window = 10L, signal_null = NA))
+})
+
+test_that("seed must be NULL or a single numeric", {
+  prices <- make_mr_prices(n_days = 30L, n_assets = 3L)
+  expect_snapshot(error = TRUE,
+    olmar_backtest(prices, window = 10L, signal_null = TRUE, seed = "42"))
+})
+
 # ── hd_rlog_uuid export ───────────────────────────────────────────────────
 # Step 0 requirement: hd_rlog_uuid() is now exported.
 

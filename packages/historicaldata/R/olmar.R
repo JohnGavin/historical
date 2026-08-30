@@ -119,6 +119,18 @@ olmar_update <- function(b_prev, x_pred, epsilon = 10) {
 #'   Default \code{0.2}.
 #' @param cost_bps Numeric; one-way turnover transaction cost in basis points.
 #'   Default \code{10}.
+#' @param signal_null Logical; if \code{TRUE}, the predicted price relative
+#'   \eqn{x_{pred}} is randomly permuted across the active assets on each day
+#'   before the passive-aggressive update runs (#718 signal-null
+#'   falsification). Every other piece of machinery — universe, active-asset
+#'   handling, leverage tilt, turnover costs, t+1 execution — is left
+#'   identical to the real backtest; only the correspondence between an
+#'   asset's SMA/price ratio and that asset is destroyed. Default
+#'   \code{FALSE}.
+#' @param seed Integer or \code{NULL}; random seed for the \code{signal_null}
+#'   permutation, set once via \code{set.seed()} before the daily loop so the
+#'   run is reproducible. Ignored when \code{signal_null = FALSE}. Default
+#'   \code{NULL}.
 #' @return A \link[tibble]{tibble} with columns:
 #'   \describe{
 #'     \item{date}{Date or integer row index (if no date column supplied).}
@@ -129,10 +141,12 @@ olmar_update <- function(b_prev, x_pred, epsilon = 10) {
 #' @family olmar
 #' @export
 olmar_backtest <- function(prices,
-                            window   = 25L,
-                            epsilon  = 10,
-                            leverage = 0.2,
-                            cost_bps = 10) {
+                            window      = 25L,
+                            epsilon     = 10,
+                            leverage    = 0.2,
+                            cost_bps    = 10,
+                            signal_null = FALSE,
+                            seed        = NULL) {
   # ── Input validation ──────────────────────────────────────────────────────
   if (!is.numeric(window) || length(window) != 1L || window < 2L) {
     cli::cli_abort(c(
@@ -158,6 +172,19 @@ olmar_backtest <- function(prices,
       "i" = "Got {.val {cost_bps}}."
     ))
   }
+  if (!is.logical(signal_null) || length(signal_null) != 1L || is.na(signal_null)) {
+    cli::cli_abort(c(
+      "x" = "{.arg signal_null} must be a single non-NA logical.",
+      "i" = "Got {.val {signal_null}}."
+    ))
+  }
+  if (!is.null(seed) && (!is.numeric(seed) || length(seed) != 1L)) {
+    cli::cli_abort(c(
+      "x" = "{.arg seed} must be NULL or a single numeric.",
+      "i" = "Got {.cls {class(seed)}} of length {length(seed)}."
+    ))
+  }
+  if (isTRUE(signal_null) && !is.null(seed)) set.seed(seed)
 
   # ── Extract date column if present ───────────────────────────────────────
   dates <- NULL
@@ -238,6 +265,15 @@ olmar_backtest <- function(prices,
     # Predicted price relatives (avoid division by zero)
     p_t_safe <- ifelse(abs(p_t) < 1e-12, 1e-12, p_t)
     x_pred   <- sma / p_t_safe
+
+    # #718 signal null: destroy the asset <-> predicted-price-relative
+    # correspondence by permuting x_pred across the active assets. Everything
+    # downstream (PA update, simplex projection, leverage tilt, turnover
+    # cost, t+1 realisation) runs unchanged on the shuffled vector -- only
+    # the claimed edge (SMA/price is informative FOR THAT ASSET) is removed.
+    if (isTRUE(signal_null) && n_active > 1L) {
+      x_pred <- x_pred[sample.int(n_active)]
+    }
 
     # Restrict previous weights to current active set
     b_prev_active <- b_lev[active]
