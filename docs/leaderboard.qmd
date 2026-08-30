@@ -146,11 +146,20 @@ if (!is.null(lb)) {
   # Joined here so the Rigour badge tooltip below can show the full trio the
   # now-removed "Deflated Sharpe" tab used to show, with zero information
   # loss (Step 5 consolidation).
+  #
+  # sharpe_haircut_pct (#490 Gap 1) is the complementary Harvey-Liu
+  # multiple-testing haircut (hd_sharpe_haircut(), method = "bhy") --
+  # joined the same way, alongside dsr_haircut_pct, so the tooltip shows
+  # both the DSR view and the named-correction view side by side.
   strat_ds <- safe_tar_read("strat_deflated_sharpe")
   if (!is.null(strat_ds) && "dsr_haircut_pct" %in% names(strat_ds)) {
     full <- full |> left_join(strat_ds |> select(strategy, dsr_haircut_pct), by = "strategy")
   }
   if (!"dsr_haircut_pct" %in% names(full)) full$dsr_haircut_pct <- NA_real_
+  if (!is.null(strat_ds) && "sharpe_haircut_pct" %in% names(strat_ds)) {
+    full <- full |> left_join(strat_ds |> select(strategy, sharpe_haircut_pct), by = "strategy")
+  }
+  if (!"sharpe_haircut_pct" %in% names(full)) full$sharpe_haircut_pct <- NA_real_
 
   detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
     # 5-state verdict, symbol AND text on every state (never colour alone,
@@ -208,12 +217,19 @@ if (!is.null(lb)) {
     )
   }
 
-  rigour_badge <- function(strategy, deflated, dsr_p, keff, kraw, sr, haircut) {
+  rigour_badge <- function(strategy, deflated, dsr_p, keff, kraw, sr, haircut,
+                            mt_haircut = NA_real_) {
     # Rank: 1 = full coverage (best), 2 = partial (defect-in-progress),
     # 3 = documented exclusion (legitimate, not a defect), 4 = zero
     # coverage with no exemption (defect). Mirrors the .credible_rank /
     # .redundant_rank hidden-sort-column pattern already used in this table
     # so DT's default alphabetical string sort never scrambles verdict order.
+    #
+    # mt_haircut (#490 Gap 1) is the complementary Harvey-Liu BHY
+    # multiple-testing haircut (hd_sharpe_haircut()) -- informational only,
+    # appended to the tooltip alongside the DSR haircut. It does NOT
+    # participate in the 3/3 coverage count above (that stays scoped to
+    # deflated Sharpe / DSR p-value / K_eff, per QA gate S21, #728 item 4).
     exempt_reason <- DEFLATED_SHARPE_EXEMPTIONS$reason[DEFLATED_SHARPE_EXEMPTIONS$strategy == strategy]
     if (length(exempt_reason) > 0) {
       return(list(
@@ -227,10 +243,11 @@ if (!is.null(lb)) {
     present <- sum(!is.na(c(deflated, dsr_p, keff)))
     if (present == 3L) {
       haircut_txt <- if (is.na(haircut)) "" else sprintf(" (%.1f%% haircut)", haircut)
+      mt_txt <- if (is.na(mt_haircut)) "" else sprintf(" Harvey-Liu BHY haircut: %.1f%%.", mt_haircut)
       return(list(
         html = sprintf(
-          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f. K_eff = %.1f of %s raw.'>&#10003; 3/3</span>",
-          deflated, sr, haircut_txt, dsr_p, keff, kraw
+          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f. K_eff = %.1f of %s raw.%s'>&#10003; 3/3</span>",
+          deflated, sr, haircut_txt, dsr_p, keff, kraw, mt_txt
         ),
         rank = 1L
       ))
@@ -255,7 +272,7 @@ if (!is.null(lb)) {
                 full$detection_min_n_years_mt, SIMPLIFY = FALSE)
   rig <- mapply(rigour_badge, full$strategy, full$deflated_sharpe, full$dsr_pvalue,
                 full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
-                full$dsr_haircut_pct, SIMPLIFY = FALSE)
+                full$dsr_haircut_pct, full$sharpe_haircut_pct, SIMPLIFY = FALSE)
 
   # ── Sharpe confidence interval (#585 G2) — computed by boot_ci_summary
   # (R/plan_bootstrap_ci.R, 90% block bootstrap: 1000 draws, 3-month

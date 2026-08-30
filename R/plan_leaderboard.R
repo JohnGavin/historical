@@ -1231,16 +1231,41 @@ plan_leaderboard <- function() {
       .dsr_row <- function(strategy_label, r, ann_factor, is_family = FALSE) {
         r <- r[!is.na(r)]
         d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
+
+        # ── Harvey-Liu Sharpe haircut (#490 Gap 1) ─────────────────────────
+        # n_tests = k_eff_lb (the SAME correlation-aware K_eff used for DSR
+        # above) and rho = 0 -- the correlation adjustment is already folded
+        # into k_eff_lb by hd_strat_keff_vertox(), so applying it a second
+        # time via rho here would double-count it; see
+        # hd_sharpe_haircut()'s "Relationship to deflated Sharpe and K_eff"
+        # roxygen section. method = "bhy" (Benjamini-Hochberg-Yekutieli) is
+        # the headline figure surfaced on the leaderboard alongside the
+        # existing deflated Sharpe -- the underlying function also supports
+        # "bonferroni"/"holm" for callers wanting the more conservative
+        # variants. Guarded (not called) when there is no naive_sharpe or
+        # too few observations to form a t-statistic -- those are legitimate
+        # "not enough data" states, not caller errors (fail-loud-not-null).
+        hc <- if (!is.na(d$naive_sharpe) && length(r) >= 2L) {
+          historicaldata::hd_sharpe_haircut(
+            sharpe = d$naive_sharpe, n_tests = k_eff_lb, rho = 0,
+            T_obs = length(r), ann_factor = ann_factor, method = "bhy"
+          )
+        } else {
+          list(haircut_sharpe = NA_real_, haircut_pct = NA_real_)
+        }
+
         tibble::tibble(
-          strategy          = strategy_label,
-          naive_sharpe      = d$naive_sharpe,
-          deflated_sharpe   = d$dsr,
-          dsr_pvalue        = d$dsr_pvalue,
-          dsr_haircut_pct   = d$haircut_pct,
-          k_eff_leaderboard = strat_keff_vertox_leaderboard,
-          k_raw_leaderboard = k_raw_lb,
-          k_eff_family      = if (is_family) k_eff_fam else NA_real_,
-          k_raw_family      = if (is_family) k_raw_fam else NA_integer_
+          strategy           = strategy_label,
+          naive_sharpe       = d$naive_sharpe,
+          deflated_sharpe    = d$dsr,
+          dsr_pvalue         = d$dsr_pvalue,
+          dsr_haircut_pct    = d$haircut_pct,
+          sharpe_haircut     = hc$haircut_sharpe,
+          sharpe_haircut_pct = hc$haircut_pct,
+          k_eff_leaderboard  = strat_keff_vertox_leaderboard,
+          k_raw_leaderboard  = k_raw_lb,
+          k_eff_family       = if (is_family) k_eff_fam else NA_real_,
+          k_raw_family       = if (is_family) k_raw_fam else NA_integer_
         )
       }
 
