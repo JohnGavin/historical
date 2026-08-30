@@ -1,7 +1,9 @@
 # Risk architecture metrics (Tinsley Pillar 8)
 #
-# hd_dd_duration()    — drawdown duration statistics (avg, max, count)
+# hd_dd_duration()     — drawdown duration statistics (avg, max, count)
 # hd_loss_clustering() — Wald-Wolfowitz runs test + lag-1 ACF clustering signal
+# hd_cdap()            — Coherent Drawdown-Adjusted Performance (fixes Calmar
+#                         sign-inversion for negative returns, issue #588)
 
 # ── 1. Drawdown duration ─────────────────────────────────────────────────────
 
@@ -209,5 +211,96 @@ hd_loss_clustering <- function(returns) {
     runs_test_p = runs_test_p,
     acf_lag1    = acf_lag1,
     clustered   = clustered
+  )
+}
+
+
+# ── 3. Coherent Drawdown-Adjusted Performance (CDAP) ────────────────────────
+
+#' Coherent Drawdown-Adjusted Performance -- a sign-coherent Calmar ratio
+#'
+#' The conventional Calmar ratio (\code{cagr / abs(max_dd)}) is
+#' mathematically incoherent when \code{cagr} is negative: dividing a
+#' negative return by a LARGER drawdown magnitude yields a LESS negative
+#' (better-ranked) ratio. Two strategies with identical CAGR but twice the
+#' drawdown then rank the RISKIER one higher -- the metric inverts exactly
+#' where risk assessment matters most. See issue #588 for the worked example
+#' (\code{r = -0.10}: \code{d = -0.20} gives \code{-0.50}; \code{d = -0.40}
+#' gives \code{-0.25}, ranking the deeper drawdown "better").
+#'
+#' CDAP resolves this by flipping the exponent on the drawdown term
+#' according to the sign of the return:
+#' \deqn{CDAP = r \times |d|^{-\mathrm{sign}(r)}}
+#' For \code{r > 0} this is \code{r / |d|} -- identical to the conventional
+#' Calmar ratio, so no existing positive-return ranking changes. For
+#' \code{r < 0} this is \code{r \times |d|}, so a LARGER drawdown magnitude
+#' now produces a MORE negative (worse-ranked) score -- the coherent
+#' direction. For \code{r == 0}, \code{sign(r) == 0} in R, so the exponent
+#' is 0 and \code{CDAP = r = 0} (no special-casing needed).
+#'
+#' @source Samir Varma, "The Stop-Loss That Stops Gains" (2026), summarising
+#'   a Nov 2025 \emph{Journal of Portfolio Management} paper.
+#'   \url{https://samirvarma.substack.com/p/the-stop-loss-that-stops-gains}
+#'
+#' @param r Numeric vector. Return (e.g. CAGR), any sign. \code{r} and
+#'   \code{d} must use the SAME scale (both fractions, e.g. \code{-0.10}, or
+#'   both percent, e.g. \code{-10}) -- CDAP is scale-consistent with its
+#'   inputs, matching whatever convention the caller's \code{cagr}/\code{max_dd}
+#'   already use (see \code{R/utils_metrics.R} unit-convention comment).
+#' @param d Numeric vector. Maximum drawdown, same length as \code{r} (or
+#'   length 1, recycled). May be signed (the conventional negative
+#'   representation, e.g. \code{-0.20}) or already a non-negative magnitude
+#'   -- \code{abs(d)} is taken internally either way.
+#'
+#' @return Numeric vector of CDAP values, same length as
+#'   \code{max(length(r), length(d))}. \code{NA_real_} where \code{r} or
+#'   \code{d} is \code{NA}, or where \code{d == 0} (no drawdown to divide
+#'   by or multiply against) -- matching the prior Calmar convention of
+#'   returning \code{NA} when \code{max_dd} is zero.
+#'
+#' @examples
+#' # Positive return: identical to conventional Calmar
+#' hd_cdap(0.10, -0.05)   # 0.10 / 0.05 = 2
+#'
+#' # Negative return: larger drawdown now ranks WORSE (more negative),
+#' # unlike the conventional Calmar ratio it replaces (issue #588).
+#' hd_cdap(-0.10, -0.20)  # -0.10 * 0.20 = -0.02
+#' hd_cdap(-0.10, -0.40)  # -0.10 * 0.40 = -0.04 (worse, correctly)
+#'
+#' @family risk_metrics
+#' @export
+hd_cdap <- function(r, d) {
+  if (!is.numeric(r)) {
+    cli::cli_abort(c(
+      "x" = "{.arg r} must be a numeric vector.",
+      "i" = "Got {.cls {class(r)}}."
+    ))
+  }
+  if (!is.numeric(d)) {
+    cli::cli_abort(c(
+      "x" = "{.arg d} must be a numeric vector.",
+      "i" = "Got {.cls {class(d)}}."
+    ))
+  }
+
+  n <- max(length(r), length(d))
+  if (length(r) != n && length(r) != 1L) {
+    cli::cli_abort(c(
+      "x" = "{.arg r} and {.arg d} must be the same length (or length 1).",
+      "i" = "Got length {length(r)} and {length(d)}."
+    ))
+  }
+  if (length(d) != n && length(d) != 1L) {
+    cli::cli_abort(c(
+      "x" = "{.arg r} and {.arg d} must be the same length (or length 1).",
+      "i" = "Got length {length(r)} and {length(d)}."
+    ))
+  }
+
+  ad <- abs(d)
+  ifelse(
+    is.na(r) | is.na(d) | ad == 0,
+    NA_real_,
+    r * ad^(-sign(r))
   )
 }

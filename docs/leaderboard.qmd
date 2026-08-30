@@ -64,8 +64,10 @@ source(partitions_path)
 ::: {.callout-note .small collapse="false"}
 ⚠ This leaderboard carries known caveats — survivorship bias in the stock
 universe, and per-strategy statistical detection power/rigour limits (see the
-**Detection** and **Rigour** columns below). Full detail, collected in one
-place: [Biases and Caveats](#biases-and-caveats).
+**Detection** and **Rigour** columns below). The **Breach Risk (±20% DD)**
+column is a secondary, informational diagnostic (issue #586) — it does NOT
+affect this table's ranking. Full detail, collected in one place:
+[Biases and Caveats](#biases-and-caveats).
 :::
 
 ## Row
@@ -267,12 +269,44 @@ if (!is.null(lb)) {
     )
   }
 
+  # ── Breach-risk badge (#586 G1, historicaldata::hd_first_passage()) ───────
+  # SECONDARY, DE-EMPHASISED diagnostic: "what is the probability this
+  # strategy's return path hits a -20% drawdown floor before a +20% profit
+  # target" -- infinite-horizon, drifted-Brownian-motion approximation, see
+  # the plan_leaderboard.R comment above `fp_breach_prob_20pct` for the full
+  # derivation and its documented scope limits. This column INFORMS; it does
+  # NOT rank -- deliberately no hidden `.rank` sort column and a single
+  # neutral, muted style regardless of value (per #586's "Proposed shape":
+  # "flagged, never removed" from the primary board, and never averaged into
+  # the primary ordering).
+  fp_badge <- function(prob) {
+    if (is.na(prob)) {
+      return("<span class='fp-badge' title='Not computed -- see plan_leaderboard.R fp_breach_prob_20pct comment for the NA paths (missing cagr/vol/obs_ann_factor, or hd_first_passage() itself failing).'>not computed</span>")
+    }
+    sprintf(
+      paste0(
+        "<span class='fp-badge' title='Probability of hitting a -20%% drawdown ",
+        "floor before a +20%% profit target, from a drifted-Brownian-motion ",
+        "approximation (historicaldata::hd_first_passage()). Infinite horizon ",
+        "(no time limit) and assumes Gaussian iid returns -- real fat-tailed ",
+        "paths breach MORE often than this implies. Informational only: does ",
+        "NOT affect this table&#39;s ranking. See issue #586.'>%.0f%%</span>"
+      ),
+      prob * 100
+    )
+  }
+
   det <- mapply(detection_badge, full$sharpe, full$detection_underpowered,
                 full$detection_min_n_years, full$detection_underpowered_mt,
                 full$detection_min_n_years_mt, SIMPLIFY = FALSE)
   rig <- mapply(rigour_badge, full$strategy, full$deflated_sharpe, full$dsr_pvalue,
                 full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
                 full$dsr_haircut_pct, full$sharpe_haircut_pct, SIMPLIFY = FALSE)
+  fp_html <- if ("fp_breach_prob_20pct" %in% names(full)) {
+    vapply(full$fp_breach_prob_20pct, fp_badge, character(1))
+  } else {
+    rep(fp_badge(NA_real_), nrow(full))
+  }
 
   # ── Sharpe confidence interval (#585 G2) — computed by boot_ci_summary
   # (R/plan_bootstrap_ci.R, 90% block bootstrap: 1000 draws, 3-month
@@ -405,7 +439,11 @@ if (!is.null(lb)) {
       # is always identical (never one populated without the other).
       `Incremental Sharpe` = if ("incremental_sharpe" %in% names(full)) {
         ifelse(is.na(incremental_sharpe), "not computed", as.character(round(incremental_sharpe, 3)))
-      } else "not computed"
+      } else "not computed",
+      # SECONDARY, de-emphasised column (#586 G1) -- see fp_badge() above.
+      # Deliberately placed LAST: it informs, it never ranks (no hidden
+      # `.rank` sort column, unlike every badge column before it).
+      `Breach Risk (±20% DD)` = fp_html
     ) |>
     # Detection sits immediately right of Sharpe per requirement 2 of the
     # `detection-power-required` rule ("beside its Sharpe, not in a distant
@@ -416,7 +454,8 @@ if (!is.null(lb)) {
     # the presentation-fix pass this column set belongs to.
     select(Strategy = strategy, Credible, .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
            CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
-           `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
+           `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`,
+           `Breach Risk (±20% DD)`)
 
   # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
   # is NA, and indexing a character vector with a logical vector containing
@@ -697,6 +736,10 @@ if (!is.null(lb)) {
 .rig-badge.partial      { color: #9a5b00; }
 .rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
 .rig-badge.notcomputed  { color: #fff; background: #c0392b; }
+/* fp-badge (#586 G1): deliberately a SINGLE, neutral, muted style
+   regardless of value -- this column informs, it never ranks, so unlike
+   det-badge/rig-badge it carries no severity-coded colour variants. */
+.fp-badge { color: #6c757d; font-style: italic; font-weight: 400; white-space: nowrap; }
 .sharpe-ci-flag         { color: #c0392b; font-weight: 700; }
 
 [data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
@@ -706,6 +749,7 @@ if (!is.null(lb)) {
 [data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
 [data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
 [data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
+[data-bs-theme="dark"] .fp-badge,               body.dark-mode .fp-badge               { color: #9ca3af; }
 [data-bs-theme="dark"] .sharpe-ci-flag,         body.dark-mode .sharpe-ci-flag         { color: #ff6b6b; }
 @media (prefers-color-scheme: dark) {
   .det-badge.detectable   { color: #4ade80; }
@@ -713,6 +757,7 @@ if (!is.null(lb)) {
   .det-badge.underpowered { color: #fbbf24; }
   .rig-badge.computed     { color: #4ade80; }
   .rig-badge.partial      { color: #fbbf24; }
+  .fp-badge                { color: #9ca3af; }
   .sharpe-ci-flag         { color: #ff6b6b; }
 }
 </style>

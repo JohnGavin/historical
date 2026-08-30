@@ -1105,7 +1105,74 @@ plan_leaderboard <- function() {
       )
 
       all_metrics <- all_metrics |>
-        dplyr::bind_cols(detection_diag) |>
+        dplyr::bind_cols(detection_diag)
+
+      # ── First-passage breach-probability diagnostic (#586 G1) ─────────────
+      # "What is the probability this strategy's cumulative return path
+      # hits a -20% drawdown floor before a +20% profit target?" -- computed
+      # PER ROW from a drifted-Brownian-motion approximation
+      # (historicaldata::hd_first_passage()), using per-period mu/sigma
+      # implied by this row's own cagr/vol/obs_ann_factor (the SAME
+      # STRATEGY_OBS_ANN_FACTOR periodicity the detection-power diagnostic
+      # above uses).
+      #
+      # SECONDARY, DE-EMPHASISED column per #586's "Proposed shape" comment:
+      # this INFORMS the leaderboard, it does NOT rank -- primary ordering
+      # is unchanged by this column. A strategy with a high breach
+      # probability is flagged, never removed, from the primary board (see
+      # docs/leaderboard.qmd for the display treatment).
+      #
+      # The +/-20% symmetric barrier is a DOCUMENTED CONVENTION (matching
+      # the source article's own reported Sharpe-vs-pass-rate range, which
+      # spans roughly 10-20% floors), not a per-strategy parameter. The
+      # fuller, separately-scoped "prop-constrained view" -- floor,
+      # daily_limit, horizon, and target as caller-supplied INPUTS,
+      # re-ranking the same targets by survivability -- is #586's larger
+      # deliverable and is deliberately NOT built here; see that issue's
+      # second comment ("Proposed shape") for the full spec, and
+      # hd_first_passage()'s own "Assumptions and limits" roxygen section
+      # for what else is deferred (finite-horizon conditioning, a
+      # fat-tail-aware simulation fallback for empirical return paths).
+      #
+      # mu_period is the geometric per-period drift implied by this row's
+      # ANNUALISED cagr: (1+cagr)^(1/ann_factor) - 1 -- not cagr/ann_factor,
+      # which understates compounding. sigma_period = vol / sqrt(ann_factor),
+      # inverting the sqrt(ann_factor) annualisation convention used
+      # throughout this file (see the STRATEGY_OBS_ANN_FACTOR comment
+      # above). NA wherever cagr/vol/obs_ann_factor are unavailable, or
+      # where hd_first_passage() itself fails inside the tryCatch below.
+      FIRST_PASSAGE_BARRIER <- 0.20
+
+      .fp_breach_row <- function(cagr, vol, af) {
+        if (is.na(cagr) || is.na(vol) || is.na(af) || af <= 0 || vol <= 0) {
+          return(tibble::tibble(fp_breach_prob_20pct = NA_real_))
+        }
+        mu_period    <- (1 + cagr)^(1 / af) - 1
+        sigma_period <- vol / sqrt(af)
+        fp <- tryCatch(
+          historicaldata::hd_first_passage(
+            mu = mu_period, sigma = sigma_period,
+            upper = FIRST_PASSAGE_BARRIER, lower = FIRST_PASSAGE_BARRIER
+          ),
+          error = function(e) NULL
+        )
+        if (is.null(fp) || is.na(fp$pass_prob)) {
+          tibble::tibble(fp_breach_prob_20pct = NA_real_)
+        } else {
+          # hd_first_passage()'s pass_prob is P(hit UPPER first). Its exact
+          # complement, P(hit LOWER first) -- the breach probability this
+          # column reports -- holds because the barriers are symmetric.
+          tibble::tibble(fp_breach_prob_20pct = 1 - fp$pass_prob)
+        }
+      }
+
+      fp_diag <- purrr::pmap_dfr(
+        list(all_metrics$cagr, all_metrics$vol, all_metrics$obs_ann_factor),
+        .fp_breach_row
+      )
+
+      all_metrics <- all_metrics |>
+        dplyr::bind_cols(fp_diag) |>
         dplyr::select(-obs_ann_factor, -obs_ann_factor_source)
 
       all_metrics

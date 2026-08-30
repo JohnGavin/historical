@@ -69,7 +69,9 @@ hd_exposure_metrics(c(0.5, 0.5, -0.5, -0.5))
 }
 \seealso{
 Other risk_metrics: 
+\code{\link{hd_cdap}()},
 \code{\link{hd_dd_duration}()},
+\code{\link{hd_first_passage}()},
 \code{\link{hd_loss_clustering}()},
 \code{\link{hd_risk_contribution}()}
 }
