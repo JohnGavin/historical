@@ -339,6 +339,70 @@ plan_olmar <- function() {
           "i" = conditionMessage(e)
         ))
       })
+    }),
+
+    # ── Signal null (#718) ───────────────────────────────────────
+    # OLMAR-1's edge-carrying signal is the predicted price relative
+    # x_pred = SMA(window)/price. olmar_backtest(signal_null = TRUE)
+    # permutes x_pred across the active assets each day, holding the
+    # universe, active-asset handling, leverage tilt, turnover cost, and
+    # t+1 execution identical to the real backtest -- everything except the
+    # asset<->x_pred correspondence. OLMAR-1 is one of the two strategies
+    # (#726) whose current sample clears detection_power::hd_detection_power()
+    # (i.e. NOT detection_underpowered) -- see detection-power-required.md --
+    # so its signal-null rank is informative, not just a formality.
+    targets::tar_target(olmar_signal_null_params, {
+      list(n_reps = 20L, seed_base = 42L)
+    }),
+
+    targets::tar_target(olmar_signal_null_sharpes, {
+      library(dplyr)
+      params <- olmar_signal_null_params
+
+      vapply(seq_len(params$n_reps), function(i) {
+        seed_i <- params$seed_base + i
+        port <- historicaldata::olmar_backtest(
+          prices      = olmar_prices,
+          window      = olmar_params$window,
+          epsilon     = olmar_params$epsilon,
+          leverage    = olmar_params$leverage,
+          cost_bps    = olmar_params$cost_bps,
+          signal_null = TRUE,
+          seed        = seed_i
+        ) |>
+          dplyr::mutate(date = as.Date(date)) |>
+          .olmar_join_rf(daily_rf)
+
+        keep <- !is.na(port$net_ret) & !is.na(port$rf_ret)
+        ret  <- port$net_ret[keep]
+        rf   <- port$rf_ret[keep]
+        if (length(ret) < 20L) return(NA_real_)
+
+        sr <- sharpe_ratio_rf(ret, rf, periods_per_year = 252L, na.rm = TRUE)
+        sr$sharpe
+      }, numeric(1L))
+    }),
+
+    targets::tar_target(olmar_signal_null_test, {
+      actual_sharpe <- olmar_metrics |>
+        dplyr::filter(.data$period == "Full Period") |>
+        dplyr::pull(.data$sharpe)
+
+      rank <- historicaldata::hd_signal_null_rank(
+        actual_metric = actual_sharpe,
+        null_metrics  = olmar_signal_null_sharpes
+      )
+
+      tibble::tibble(
+        strategy       = "OLMAR-1",
+        actual_sharpe  = actual_sharpe,
+        null_sharpes   = list(olmar_signal_null_sharpes),
+        n_beat         = rank$n_beat,
+        n_valid        = rank$n_valid,
+        n_total        = rank$n_total,
+        rank_pct       = rank$rank_pct,
+        null_dominates = rank$null_dominates
+      )
     })
 
   )
