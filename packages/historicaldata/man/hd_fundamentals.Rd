@@ -87,6 +87,7 @@ hd_fundamentals("AAPL", include_latest = TRUE)  # screening only, NOT PIT-safe
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},
