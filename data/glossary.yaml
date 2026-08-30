@@ -1,0 +1,71 @@
+# Canonical entity glossary (#668)
+#
+# Single source of truth for every controlled vocabulary and unit-bearing
+# column published anywhere in this pipeline. Loaded via
+# R/glossary.R::load_glossary(); consumers derive their allowed-value
+# constants from this file rather than hand-typing a second copy of the
+# same list -- the shape behind #637, #640, #641, #643, #645, #661, #663,
+# #664, #667, and #677 defect B.
+#
+# Each entity:
+#   canonical    -- the entity's canonical name (matches its own key below)
+#   description  -- what the entity means and where it is consumed
+#   values       -- allowed value set, for a controlled vocabulary
+#   canonical_value / canonical_full_sample_value -- the default/expected
+#                    value, where one exists
+#   source       -- where this entity's REAL single source of truth lives,
+#                    for an entity whose canonical list already exists as
+#                    working R code elsewhere. This file then documents and
+#                    mirrors that source rather than replacing it, kept in
+#                    sync by a test (tests/testthat/test-glossary.R) rather
+#                    than by this file alone -- see the metric_unit entity.
+
+entities:
+  period_label:
+    canonical: period_label
+    description: >-
+      The controlled vocabulary for a strategy metrics target's `period`
+      column, and for the `leaderboard` target's aggregated `period` column
+      (R/plan_leaderboard.R). Guards the #643 defect class where a
+      non-canonical label ("Full" instead of "Full Period") silently
+      dropped a strategy from every `period == "Full Period"` filter, and
+      the #648/#660 seal-breach class where an unbounded window silently
+      widened past its intended partition.
+    values:
+      - Training
+      - Testing
+      - Holdout
+      - Validation
+      - "Full Period"
+      - OOS
+    canonical_full_sample_value: "Full Period"
+    source: >-
+      R/plan_partitions.R PERIOD_LABELS_ALLOWED -- DERIVED from this file
+      (#668), not a second source of truth.
+
+  metric_unit:
+    canonical: metric_unit
+    description: >-
+      The unit convention for a metric written to the backtest registry
+      (`bt.metric.metric_unit`, packages/historicaldata/R/registry_metrics.R)
+      -- guards the #640 defect class where a missing or unvalidated unit
+      made a recorded number's scale unrecoverable downstream. This is
+      distinct from the leaderboard's own narrower fraction/percent
+      cagr/vol/max_dd convention, which QA gate S9
+      (check_leaderboard_metric_ranges(), R/plan_qa_gates.R) checks
+      directly by plausible range rather than by an explicit unit column.
+    values:
+      - fraction
+      - percent
+      - ratio
+      - count
+      - days
+      - years
+    canonical_value: fraction
+    source: >-
+      historicaldata::hd_metric_units()
+      (packages/historicaldata/R/registry_metrics.R) -- the REAL single
+      source of truth, already validated at every write via
+      .hd_validate_metric_units() (#640/#691). This entity MIRRORS that
+      function for documentation; it does not replace it. Kept in sync by
+      tests/testthat/test-glossary.R.

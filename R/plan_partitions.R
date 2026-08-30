@@ -124,9 +124,15 @@
 # `scripts/fetch_equity.py` + an upload step, none of which currently run on
 # a schedule) -- not the mere passage of time, and not another duplication of
 # the same dead upstream.
-PERIOD_LABELS_ALLOWED <- c(
-  "Training", "Testing", "Holdout", "Validation", "Full Period", "OOS"
-)
+#
+# ── #668: derived from the glossary, not a second source of truth ──────────
+# This constant used to hand-type the same six values that now live in
+# data/glossary.yaml's `period_label` entity. Deriving it here (rather than
+# maintaining both) is exactly the fix #668 asked for: "PERIOD_LABELS_ALLOWED
+# becomes a *consumer* of the registry rather than a second source of
+# truth." R/glossary.R is sourced immediately before this file in
+# docs/_targets.R for exactly this reason -- see that file's module comment.
+PERIOD_LABELS_ALLOWED <- load_glossary()$period_label$values
 
 plan_partitions <- function() {
   list(

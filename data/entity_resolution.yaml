@@ -1,0 +1,20 @@
+# Alias -> canonical mapping for controlled vocabularies registered in
+# data/glossary.yaml (#668).
+#
+# One top-level key per entity name (must match a key under `entities:` in
+# data/glossary.yaml). Each value is a list of {alias, canonical} pairs.
+# R/glossary.R::resolve_entity() is the sole consumer.
+#
+# period_label's "Full" -> "Full Period" alias mirrors the rename already
+# applied inline by R/plan_leaderboard.R's .norm_mf() and .norm_value()
+# helpers (#643) -- registered here as the documented, testable version of
+# that rename (tests/testthat/test-glossary.R). Migrating .norm_mf()/
+# .norm_value() themselves onto resolve_entity() is a follow-up (#668 PR
+# report): both are private closures inside the `leaderboard` tar_target
+# body, and changing them cannot be verified against real data from a
+# worktree (no targets store, tar_make() is a 40+ minute main-checkout-only
+# build per scripts/build.sh) -- see the PR report for the full rationale.
+
+period_label:
+  - alias: "Full"
+    canonical: "Full Period"

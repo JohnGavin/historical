@@ -18,6 +18,7 @@ testthat::local_edition(3)
 # way, but evaluating the real expression also catches a regression in the
 # *shape* (e.g. a renamed field) that a hand-copied fixture would miss.
 
+source(here::here("R/glossary.R"))  # #668: PERIOD_LABELS_ALLOWED derives from this
 source(here::here("R/plan_partitions.R"))
 
 .eval_bt_partitions <- function() {

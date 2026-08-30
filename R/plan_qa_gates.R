@@ -206,10 +206,11 @@ check_anchor_in_range <- function(html_dir,
 #' contract -- the missing-`olmar` bug itself is closed by #747's added row,
 #' not by tightening this gate.
 #'
-#' Also asserts that the `ssr` and `top5pct_share` columns are present in the
-#' leaderboard tibble and that at least one row has a non-NA value for each
-#' (i.e. the stability metrics were computed for at least one strategy).
-#' Added in #400 (PR 4/6).
+#' Also asserts that the `ssr` and `top5pct_share` columns are PRESENT in the
+#' leaderboard tibble (added in #400, PR 4/6). Whether they hold at least one
+#' non-NA value is no longer checked HERE -- that assertion generalised into
+#' QA gate S26 (`check_leaderboard_no_all_na_metric()` below, #668), which
+#' checks every numeric leaderboard column, not just these two by name.
 #'
 #' @param strategy_names Tibble with at least `short_name` and `code_name`
 #'   columns (the output of the `strategy_names` targets pipeline target).
@@ -235,31 +236,19 @@ check_leaderboard_coverage <- function(strategy_names, leaderboard) {
     ))
   }
 
-  # Assert SSR column present and populated (#400)
+  # Assert SSR column present (#400). All-NA is checked by S26, not here.
   if (!"ssr" %in% names(leaderboard)) {
     cli::cli_abort(c(
       "x" = "Leaderboard is missing required column {.field ssr}.",
       "i" = "Add the SSR computation block to R/plan_leaderboard.R (#400)."
     ))
   }
-  if (all(is.na(leaderboard$ssr))) {
-    cli::cli_abort(c(
-      "x" = "Leaderboard column {.field ssr} is entirely NA — no stability metrics were computed.",
-      "i" = "Check that portfolio return targets are available and have >= 38 months (#400)."
-    ))
-  }
 
-  # Assert top5pct_share column present and populated (#400)
+  # Assert top5pct_share column present (#400). All-NA is checked by S26.
   if (!"top5pct_share" %in% names(leaderboard)) {
     cli::cli_abort(c(
       "x" = "Leaderboard is missing required column {.field top5pct_share}.",
       "i" = "Add the top5pct computation block to R/plan_leaderboard.R (#400)."
-    ))
-  }
-  if (all(is.na(leaderboard$top5pct_share))) {
-    cli::cli_abort(c(
-      "x" = "Leaderboard column {.field top5pct_share} is entirely NA — no top-5% shares were computed.",
-      "i" = "Check that portfolio return targets are available (#400)."
     ))
   }
 
@@ -2001,8 +1990,108 @@ check_pkg_source_tracked <- function(pkg_source_files, pkg_source_digest, min_fi
 }
 
 
+#' Assert no numeric column in a published metrics tibble is entirely NA
+#' (S26, #668)
+#'
+#' The property-based generalisation of the two hardcoded all-NA checks that
+#' used to live in `check_leaderboard_coverage()` (`ssr`, `top5pct_share`,
+#' #400) -- see #668 for the running tally of why per-instance gates keep
+#' missing the NEXT column with the same defect: `ltr_subperiod$sharpe` was
+#' `NA, NA, NA` since the target's inception (#677 defect B) because
+#' `compute_sp_metrics()` referenced a `rf_ret` column `ltr_portfolio` never
+#' had -- `df$missing` returns `NULL` in R, and `mean(NULL, na.rm = TRUE)`
+#' returns `NA`, so the whole column silently became `NA`. The check that
+#' would have caught it already existed (the two hardcoded blocks this
+#' function replaces); it was scoped to two column NAMES rather than to the
+#' PROPERTY "no published metric column has zero non-NA values", so it
+#' could not see the third column on a target it had never heard of.
+#'
+#' Checks every column for which `is.numeric()` is `TRUE`. Character,
+#' logical, and Date/POSIXct columns are excluded -- they carry
+#' vocabularies, flags, and calendar values, not metrics, and "entirely NA"
+#' is not a meaningful defect signal for a column that is allowed to be
+#' entirely `FALSE`, entirely one label, or entirely absent by design (a
+#' logical flag column being all-`FALSE` is a legitimate state; an all-NA
+#' NUMERIC column, by contrast, means its source computation never actually
+#' ran for any row).
+#'
+#' A column present in `exempt` is skipped entirely -- see the caller's own
+#' exemption constant (e.g. `LEADERBOARD_ALL_NA_EXEMPT` below) for the
+#' documented, narrow set of columns known to be legitimately all-NA under
+#' some pipeline states. An empty or `NULL` `tbl` returns `TRUE` without
+#' checking anything -- this mirrors the other S* gates' treatment of an
+#' unpopulated upstream target as "nothing to check yet" rather than a
+#' defect in its own right (that is a separate property, guarded elsewhere
+#' e.g. by S7's strategy-coverage assertion).
+#'
+#' @param tbl A tibble; the published target being checked.
+#' @param target_label Character scalar; the target's name, used verbatim
+#'   in the abort message.
+#' @param exempt Character vector of column names to skip. Default: none.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_no_all_na_numeric_columns <- function(tbl, target_label, exempt = character(0)) {
+  if (is.null(tbl) || nrow(tbl) == 0L) {
+    return(invisible(TRUE))
+  }
+
+  numeric_cols <- names(tbl)[vapply(tbl, is.numeric, logical(1L))]
+  numeric_cols <- setdiff(numeric_cols, exempt)
+
+  offenders <- Filter(function(col) all(is.na(tbl[[col]])), numeric_cols)
+
+  if (length(offenders) > 0L) {
+    msgs <- sprintf("  %s", offenders)
+    cli::cli_abort(c(
+      "x" = paste0(
+        target_label, " has ", length(offenders),
+        " numeric column(s) that are entirely NA:"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "A column with zero non-NA values across the whole ", target_label,
+        " usually means its source computation never ran, or its output ",
+        "was never actually wired into this target (#668 -- the ",
+        "ltr_subperiod$sharpe all-NA-since-inception class, #677 defect B)."
+      ),
+      "i" = paste0(
+        "If a column is legitimately expected to be all-NA under some ",
+        "pipeline states, add it to this gate's exemption constant in ",
+        "R/plan_qa_gates.R, with a documented reason -- do not silence the ",
+        "gate by removing the check."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+#' Columns exempt from the leaderboard's S26 all-NA check
+#'
+#' Empty by design: every current leaderboard column that reaches
+#' `is.numeric()` should have a real, non-NA value for at least one row once
+#' the pipeline has actually run (a column that is genuinely 100% NA today
+#' is exactly the defect class #668 targets). Add an entry here ONLY with a
+#' documented, specific reason -- an undocumented addition defeats the
+#' point of the gate the same way a per-instance check did.
+#' @noRd
+LEADERBOARD_ALL_NA_EXEMPT <- character(0)
+
+#' Assert no numeric column in `leaderboard` is entirely NA (S26, #668)
+#'
+#' Thin wrapper around `check_no_all_na_numeric_columns()` -- see that
+#' function's roxygen for the full rationale this gate replaces.
+#'
+#' @param leaderboard Tibble; the `leaderboard` target.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_no_all_na_metric <- function(leaderboard) {
+  check_no_all_na_numeric_columns(leaderboard, "leaderboard", LEADERBOARD_ALL_NA_EXEMPT)
+}
+
+
 #' Minimum effective breadth (n_eff) tolerated on any CMR date holding a
-#' position (S26, #751 item F)
+#' position (S27, #751 item F)
 #'
 #' Derived the same way \code{.HD_CMR_MIN_LEG_NAMES} (2, packages/
 #' historicaldata/R/commodities_mean_reversion.R) already bounds the
@@ -2023,15 +2112,19 @@ check_pkg_source_tracked <- function(pkg_source_files, pkg_source_digest, min_fi
 #' this gate would be doing real, non-redundant work without any call-site
 #' change.
 #'
-#' Numbered S26, not S24: #806/#668 landed \code{check_stk_all_comparison_coverage}
-#' (S24) and \code{check_boot_monthly_returns_coverage} (S25) on \code{main}
-#' first, so this gate was renumbered on merge rather than overwriting either.
+#' Numbered S27, not S24 or S26: this gate was originally added as S24, then
+#' renumbered to S26 when #806/#668 landed S24 (check_stk_all_comparison_coverage)
+#' and S25 (check_boot_monthly_returns_coverage) on \code{main} first. A
+#' SECOND main-branch commit (#806/#668's own final landing, after a
+#' concurrent renumber against #798) then independently took S26 for
+#' \code{check_leaderboard_no_all_na_metric()} above -- so this gate is
+#' renumbered again, to S27, rather than overwriting that one.
 #'
 #' @noRd
 CMR_MIN_EFFECTIVE_BREADTH <- 4
 
 #' Assert CMR effective breadth (n_eff) never falls below the minimum floor
-#' on any date holding a position (S26, #751 item F)
+#' on any date holding a position (S27, #751 item F)
 #'
 #' \code{n_eff} (the inverse Herfindahl index of normalised absolute
 #' weight, \code{hd_commodity_mr_portfolio()}, packages/historicaldata/R/
@@ -2067,7 +2160,7 @@ check_cmr_effective_breadth <- function(cmr_portfolios) {
             "CMR portfolio {.val {lookback}} is missing ",
             "{length(missing_cols)} required column(s): {missing_cols}."
           ),
-          "i" = "check_cmr_effective_breadth() (S26) requires date, n_long, n_short, n_eff."
+          "i" = "check_cmr_effective_breadth() (S27) requires date, n_long, n_short, n_eff."
         ))
       }
       dplyr::mutate(port[, required_cols], lookback = lookback)
@@ -2092,7 +2185,7 @@ check_cmr_effective_breadth <- function(cmr_portfolios) {
         ", n_long=", worst$n_long, ", n_short=", worst$n_short, "."
       ),
       "i" = paste0(
-        "check_cmr_effective_breadth() (S26, #751 item F) guards the ",
+        "check_cmr_effective_breadth() (S27, #751 item F) guards the ",
         "fundamental-law breadth floor -- see CMR_MIN_EFFECTIVE_BREADTH's ",
         "roxygen (R/plan_qa_gates.R) for the derivation."
       )
@@ -2605,14 +2698,41 @@ plan_qa_gates <- function() {
       cue = targets::tar_cue(mode = "always")
     ),
 
+    # QA gate: no numeric leaderboard column is entirely NA (S26, #668) --
+    # renumbered from S24 to S26 when merging with #798's independently
+    # added S24 (qa_stk_all_comparison_coverage) / S25
+    # (qa_boot_monthly_returns_coverage) -- the property-based
+    # generalisation of the two hardcoded all-NA checks that used to live
+    # inside check_leaderboard_coverage() (S7): `ssr` and `top5pct_share` by
+    # name (#400). #668 found that scoping the check to two column NAMES
+    # rather than the PROPERTY "no published metric column has zero non-NA
+    # values" left every OTHER numeric column, and every OTHER target,
+    # uncovered -- exactly how `ltr_subperiod$sharpe` sat all-NA since
+    # inception (#677 defect B) without any gate ever firing. See
+    # check_leaderboard_no_all_na_metric() / check_no_all_na_numeric_
+    # columns() roxygen above for the full rationale, and
+    # LEADERBOARD_ALL_NA_EXEMPT for the (currently empty, documented-only-
+    # on-addition) exemption mechanism.
+    targets::tar_target(
+      qa_leaderboard_no_all_na_metric,
+      command = {
+        check_leaderboard_no_all_na_metric(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_no_all_na_metric: S26 passed (no numeric leaderboard column is entirely NA)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
     # QA gate: CMR effective breadth (n_eff) never falls below the minimum
-    # floor on any date holding a position (S26, #751 item F; renumbered
-    # from S24 -- #806/#668 landed S24/S25 on main first, taking those
-    # numbers). n_eff is salvaged from the closed #765 branch (see
-    # hd_commodity_mr_portfolio() roxygen, packages/historicaldata/R/
-    # commodities_mean_reversion.R) and wired here against the LIVE tercile
-    # construction, not the rank-weighted one #765 proposed (that item was
-    # decided against on #765 -- see the #751 comment thread).
+    # floor on any date holding a position (S27, #751 item F; renumbered
+    # twice -- originally S24, then S26 when #806/#668 first landed S24/S25
+    # on main, then S27 once #806/#668's OWN final landing independently
+    # took S26 for qa_leaderboard_no_all_na_metric above). n_eff is
+    # salvaged from the closed #765 branch (see hd_commodity_mr_portfolio()
+    # roxygen, packages/historicaldata/R/commodities_mean_reversion.R) and
+    # wired here against the LIVE tercile construction, not the
+    # rank-weighted one #765 proposed (that item was decided against on
+    # #765 -- see the #751 comment thread).
     targets::tar_target(
       qa_cmr_effective_breadth,
       command = {
@@ -2621,7 +2741,7 @@ plan_qa_gates <- function() {
           `3m` = cmr_portfolio_3m,
           `6m` = cmr_portfolio_6m
         ))
-        cli::cli_inform(c("v" = "qa_cmr_effective_breadth: S26 passed (n_eff >= floor on every date holding a position, all 3 CMR lookback partitions)"))
+        cli::cli_inform(c("v" = "qa_cmr_effective_breadth: S27 passed (n_eff >= floor on every date holding a position, all 3 CMR lookback partitions)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
