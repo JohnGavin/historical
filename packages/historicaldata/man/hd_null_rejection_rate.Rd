@@ -49,6 +49,7 @@ Other falsification:
 \code{\link{hd_null_env_regime_vol}()},
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_rolling_sharpe}()},
+\code{\link{hd_sharpe_haircut}()},
 \code{\link{hd_sharpe_stability_ratio}()},
 \code{\link{hd_signal_null_rank}()},
 \code{\link{hd_structural_breaks}()},
