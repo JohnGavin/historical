@@ -15,6 +15,7 @@ testthat::local_edition(3)
 # body, catching a regression in the real plan file, not a hand-copied
 # re-implementation of it.
 
+source(here::here("R/glossary.R"))  # #668: PERIOD_LABELS_ALLOWED derives from this
 source(here::here("R/plan_partitions.R"))
 source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_drif.R"))

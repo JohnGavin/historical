@@ -17,12 +17,3 @@
       x Leaderboard is missing required column ssr.
       i Add the SSR computation block to R/plan_leaderboard.R (#400).
 
-# check_leaderboard_coverage throws when ssr column is entirely NA
-
-    Code
-      check_leaderboard_coverage(minimal_strategy_names, all_na_ssr_leaderboard)
-    Condition
-      Error in `check_leaderboard_coverage()`:
-      x Leaderboard column ssr is entirely NA — no stability metrics were computed.
-      i Check that portfolio return targets are available and have >= 38 months (#400).
-
