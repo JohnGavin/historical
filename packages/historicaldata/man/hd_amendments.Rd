@@ -20,6 +20,7 @@ Each row records: what was changed, when, why, and the original value.
 }
 \seealso{
 Other quality-audit: 
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_jumps}()},
 \code{\link{hd_metadata_amendments}()},

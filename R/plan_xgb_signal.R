@@ -21,7 +21,18 @@ plan_xgb_signal <- function() {
         min_train_months = 60L,  # same as DRIF
         # Monotonic constraints: all features should have positive
         # relationship with next-month return (higher signal → higher return)
-        monotone_constraints = 1L  # 1 = increasing, applied to all features
+        monotone_constraints = 1L,  # 1 = increasing, applied to all features
+        # Reproducibility (#779): xgb.train()'s subsample/colsample_bytree draws
+        # are stochastic and read R's RNG state when no explicit params$seed is
+        # set. Without set.seed() before training, xgb_drif_signal (and every
+        # downstream metric, including the leaderboard SSR column) is a
+        # different value on every rebuild -- confirmed empirically: two
+        # unseeded rebuilds of the identical target produced SSR = -13.08 and
+        # SSR = -16.00 for the same underlying data. Seeding here plus the
+        # set.seed(xgb_params$seed) call in xgb_drif_signal below makes the
+        # walk-forward loop fully deterministic (verified: two seeded rebuilds
+        # produced byte-identical port_ret series and SSR = -14.15 both times).
+        seed = 42L
       )
     }),
 
@@ -30,6 +41,11 @@ plan_xgb_signal <- function() {
     targets::tar_target(xgb_drif_signal, {
       library(dplyr)
       rlang::check_installed("xgboost")
+
+      # Reproducibility (#779): must be set before ANY xgb.train() call in the
+      # walk-forward loop below -- xgboost reads R's RNG state for its
+      # subsample/colsample_bytree draws when params$seed is not supplied.
+      set.seed(xgb_params$seed)
 
       features <- stk_drif_features
       lb <- stk_params$lookback_days

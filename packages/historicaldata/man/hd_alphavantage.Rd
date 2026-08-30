@@ -72,6 +72,7 @@ hd_alphavantage("IBM", from = "2024-01-01")
 }
 \seealso{
 Other data-access: 
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},

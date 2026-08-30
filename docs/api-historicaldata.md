@@ -1433,6 +1433,52 @@ arguments:
 returns: Tibble of all results rows, or an empty schema tibble if no files are found.
 ---
 kind: function
+name: hd_ohlcv
+exported: true
+signature: hd_ohlcv()
+arguments:
+  collect: If TRUE, materialise immediately (backward compatible).
+  dataset: Dataset name from registry.
+  from: Start date (character or Date).
+  local: If TRUE, query local cache instead of remote.
+  ticker: Ticker symbol(s).
+  to: End date (character or Date).
+returns: Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
+---
+kind: function
+name: hd_macro
+exported: true
+signature: hd_macro()
+arguments:
+  collect: If TRUE (default), materialise.
+  from: Start date (character or Date).
+  local: If TRUE, query local cache instead of remote.
+  series_id: FRED series ID(s).
+  to: End date (character or Date).
+returns: Lazy duckplyr frame or tibble
+---
+kind: function
+name: hd_factors
+exported: true
+signature: hd_factors()
+arguments:
+  collect: If TRUE (default), materialise.
+  dataset: 'Factor dataset: "FF3", "FF5", or "Mom"'
+  frequency: '"daily" or "monthly"'
+  from: Start date.
+  local: If TRUE, query local cache.
+  to: End date.
+returns: Lazy duckplyr frame or tibble
+---
+kind: function
+name: hd_check_accessor_date_types
+exported: true
+signature: hd_check_accessor_date_types(accessors = hd_accessor_date_probes())
+arguments:
+  accessors: Named list of zero-argument thunks, each returning a data frame with a date column.
+returns: 'Tibble: accessor, status ("ok", "skipped", "no-date-column"), date_class.'
+---
+kind: function
 name: hd_ticker_groups
 exported: true
 signature: hd_ticker_groups()
