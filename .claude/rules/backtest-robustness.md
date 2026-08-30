@@ -80,6 +80,12 @@ tar_target(qa_regime_robustness, {
 })
 ```
 
+**Diagnostic-stratum leakage (#600):** the `regime` column above must be computed from data strictly prior to the
+window it stratifies -- never from `rolling_vol` drawn from the same window as the P&L
+being evaluated, as the illustrative snippet above does. See
+`look-ahead-bias-prevention`'s Diagnostic-stratum leakage section for the wrong/right
+worked example and the required as-of-open construction.
+
 ### 3. Multi-Frequency Evaluation (where applicable)
 
 For strategies that could be evaluated at different frequencies, test
