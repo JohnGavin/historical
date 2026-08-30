@@ -216,6 +216,9 @@ source(here::here("R/plan_wf_correlation.R"))
 source(here::here("R/plan_structural_breaks.R"))
 source(here::here("R/plan_artefact_registry.R"))
 source(here::here("R/plan_qa_gates.R"))
+# #553/#554/#555: fundamentals revision-triangle QA gates (guarded no-op
+# until a fundamentals-consuming strategy exists -- see file header)
+source(here::here("R/plan_qa_fundamentals.R"))
 # Phase B of #389: covariance infrastructure + fixed cross-asset correlation plan
 source(here::here("R/plan_returns.R"))
 source(here::here("R/plan_cross_asset_corr.R"))
@@ -327,6 +330,7 @@ c(plan_strategy_names(),
   ),
 
   plan_qa_gates(),
+  plan_qa_fundamentals(),
   # Phase B of #389: covariance targets + fixed cross-asset correlation plan
   plan_returns(),
   plan_cross_asset_corr(),
