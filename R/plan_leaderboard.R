@@ -167,6 +167,53 @@ STRATEGY_OBS_ANN_FACTOR <- .build_strategy_obs_ann_factor(
   .strategy_obs_ann_factor_source
 )
 
+# ── #778: turnover-aware cost basis, per strategy code_name ────────────────
+# Feeds the `leaderboard` target's cost_rows-extension block (see the "#778:
+# extend cost_rows" comment inside that target below) -- the flat
+# COST_PER_MONTH constant used by the ORIGINAL 6 cost_rows strategies
+# (Factor MAX/DRIF, Stock MAX/DRIF, XGB DRIF, PSO Optimal) is left unchanged
+# there (#778 scope: extend coverage, not revise those 6's published
+# numbers); every strategy NEWLY added by the extension gets its OWN
+# monthly cost derived here instead.
+#
+# Formula matches the codebase's EXISTING cost-model convention, not a new
+# invention:
+#   - R/plan_stock_backtest.R's portfolio_longshort()/portfolio_longshort_hrp()
+#     (trade_cost <- turnover * cost_per_trade * 2 * 2; both legs, buy+sell
+#     each; borrow_cost <- borrow_rate_annual / 12)
+#   - .claude/rules/backtesting-assumptions.md "Cost Model Detail" (same
+#     turnover x cost_per_trade x 2 (buy+sell) x 2 (both legs) formula, same
+#     0.50%/trade and 3%/yr borrow-rate defaults)
+#
+#   monthly_txn_cost    = (turnover_pct_per_period_avg / 100) * COST_PER_TRADE * leg_multiplier
+#   leg_multiplier      = 4 for directionality == "long_short" (both legs)
+#                        = 2 otherwise (long_only / overlay -- single leg, buy+sell)
+#   monthly_borrow_cost = BORROW_RATE_ANNUAL / 12, ONLY for directionality == "long_short"
+#   monthly_cost        = monthly_txn_cost + monthly_borrow_cost
+#
+# turnover_pct_per_period_avg and directionality both come from
+# R/plan_strategy_names.R's hd_strategy_names_tbl() (the single source of
+# truth per strategy-name-consistency.md) -- so a future change to a
+# strategy's declared turnover automatically updates its leaderboard cost
+# basis without touching this file again.
+.STRATEGY_COST_PER_TRADE     <- 0.005  # 0.50%/trade (backtesting-assumptions.md)
+.STRATEGY_BORROW_RATE_ANNUAL <- 0.03   # 3%/yr (backtesting-assumptions.md)
+
+.strategy_turnover_cost_basis <- function(strategy_names_tbl) {
+  strategy_names_tbl |>
+    dplyr::transmute(
+      code_name = code_name,
+      short_name = short_name,
+      leg_multiplier = ifelse(directionality == "long_short", 4, 2),
+      monthly_cost = (turnover_pct_per_period_avg / 100) *
+        .STRATEGY_COST_PER_TRADE * leg_multiplier +
+        ifelse(directionality == "long_short",
+               .STRATEGY_BORROW_RATE_ANNUAL / 12, 0)
+    )
+}
+
+STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(hd_strategy_names_tbl())
+
 plan_leaderboard <- function() {
   list(
     # Explicit deps — targets must be named as function args
@@ -454,17 +501,28 @@ plan_leaderboard <- function() {
 
       # ── Cost metrics (net_cagr, cum_pnl, cvar_95) ─────────────────
       # Compute per strategy per period from raw portfolio returns.
-      # cost: 0.20% round-trip per month (full turnover assumed).
+      # cost: 0.20% round-trip per month (full turnover assumed) -- the
+      # HISTORICAL default for the original 6 strategies below
+      # (slice_portfolio() calls + PSO Optimal). Left UNCHANGED here
+      # (#778 scope: extend coverage, not revise these 6's published
+      # numbers) even though it is flat, not turnover-aware -- see the
+      # "#778 turnover-aware cost basis" block below, which supplies a
+      # per-strategy rate for every NEWLY added strategy instead of reusing
+      # this constant.
       COST_PER_MONTH <- 0.002
 
-      calc_cost_metrics <- function(ret) {
+      calc_cost_metrics <- function(ret, cost_per_month = COST_PER_MONTH) {
         # ret: numeric vector of monthly returns
+        # cost_per_month: fraction deducted from EVERY period's return before
+        #   compounding (e.g. 0.002 == 0.20%/month). Defaults to the flat
+        #   historical rate above; #778's extension block passes a
+        #   turnover-aware rate instead (see .strategy_cost_basis() below).
         ret <- ret[!is.na(ret)]
         n <- length(ret)
         if (n == 0L) {
           return(tibble(net_cagr = NA_real_, cum_pnl = NA_real_, cvar_95 = NA_real_))
         }
-        net_ret <- ret * (1 - COST_PER_MONTH)
+        net_ret <- ret * (1 - cost_per_month)
         net_cagr <- prod(1 + net_ret)^(12 / n) - 1
         cum_pnl_net <- prod(1 + net_ret) - 1  # net of costs, not gross
         q05      <- quantile(ret, 0.05)
@@ -543,6 +601,81 @@ plan_leaderboard <- function() {
           stk_params
         ) |> mutate(strategy = "PSO Optimal")
         cost_rows <- bind_rows(cost_rows, pso_cost)
+      }
+
+      # ── #778: extend cost_rows to the 11 strategies with zero coverage ──
+      # cost_rows above only ever covered 6 strategies (Factor MAX/DRIF,
+      # Stock MAX/DRIF, XGB DRIF, PSO Optimal) via slice_portfolio(), which
+      # needs each strategy's own portfolio object + partition params. The
+      # 11 strategies below have no such wiring, but their FULL-PERIOD
+      # return series already exist: strat_returns_wide
+      # (R/plan_strategy_correlation.R) aligns every monthly-frequency
+      # strategy, PLUS the five daily-frequency strategies MONTHLY-RESAMPLED
+      # (compounded within each calendar month, see .resample_daily_to_
+      # monthly() there), onto one common `ym` spine.
+      #
+      # Only "Full Period" rows are added -- #778's own "Verified state"
+      # counts are themselves Full-Period-only (see the issue), and
+      # Training/Testing/Holdout cost cells would need each strategy's own
+      # partition-slicing params (is_end/test_start/.../holdout_end), which
+      # is a wider wiring task out of this issue's scope. Those sub-period
+      # cost cells stay NA -- same treatment every OTHER Full-Period-only
+      # leaderboard column already gets (correlation_max, incremental_sharpe,
+      # wf_corr, add_corr, deflated_sharpe, ...) above/below.
+      #
+      # cost_per_month for each strategy comes from STRATEGY_COST_BASIS
+      # (module level, top of file) -- turnover-aware (per-strategy
+      # turnover_pct_per_period_avg x directionality), NOT the flat
+      # COST_PER_MONTH the original 6 strategies use. See #778 scope item 1
+      # ("a cost basis per strategy family, turnover-aware, not a single
+      # blanket rate") and STRATEGY_COST_BASIS's own comment for the formula
+      # and its precedent (R/plan_stock_backtest.R's
+      # portfolio_longshort()/portfolio_longshort_hrp() cost formula;
+      # .claude/rules/backtesting-assumptions.md "Cost Model Detail").
+      #
+      # NOTE: several of these strategies already deduct their OWN internal
+      # transaction cost before this leaderboard-level pass runs (e.g. CMR:
+      # R/plan_commodities_mean_reversion.R:740; OLMAR-1: R/plan_olmar.R
+      # cost_bps=10/day). This layers an ADDITIONAL round-trip cost on top,
+      # the SAME "leaderboard applies its own cost pass atop the strategy's
+      # own model" pattern the original 6 already use (Factor MAX/DRIF:
+      # R/plan_factormax.R:141-142 / R/plan_drif.R:242-243 compute
+      # `port_ret <- gross_ret - cost` BEFORE calc_cost_metrics() deducts
+      # COST_PER_MONTH again) -- not a new defect introduced here. Whether
+      # that double layering is itself the right model is a question that
+      # applies equally to the original 6 and is out of #778's scope.
+      .cost_ext_map <- list(
+        list(code = "ltr",          wide_col = "ltr",             label = "LTR"),
+        list(code = "mom_prepeak",  wide_col = "mom_prepeak",     label = "Mom Pre-Peak"),
+        list(code = "mom_postpeak", wide_col = "mom_postpeak",    label = "Mom Post-Peak"),
+        list(code = "mom_combined", wide_col = "mom_combined",    label = "Mom 12-2"),
+        list(code = "ev_ebit",      wide_col = "value_hml",       label = "Value (HML)"),
+        list(code = "mf_tsm",       wide_col = "managed_futures", label = "Managed Futures"),
+        list(code = "cmr",          wide_col = "cmr",             label = "CMR"),
+        list(code = "olmar",        wide_col = "olmar_1",         label = "OLMAR-1"),
+        list(code = "tom",          wide_col = "tom",             label = "TOM"),
+        list(code = "rsc",          wide_col = "risk_state",      label = "Risk State"),
+        list(code = "avoid_worst",  wide_col = "avoid_worst",     label = "Avoid Worst")
+      )
+
+      if (!is.null(strat_returns_wide) && nrow(strat_returns_wide) > 0) {
+        cost_ext_rows <- bind_rows(lapply(.cost_ext_map, function(m) {
+          if (!m$wide_col %in% names(strat_returns_wide)) return(NULL)
+          basis_row <- STRATEGY_COST_BASIS[STRATEGY_COST_BASIS$code_name == m$code, ]
+          if (nrow(basis_row) != 1L) {
+            cli::cli_abort(c(
+              "x" = "No turnover-aware cost basis found for strategy code {.val {m$code}}.",
+              "i" = paste0(
+                "check R/plan_strategy_names.R hd_strategy_names_tbl() and ",
+                "STRATEGY_COST_BASIS (R/plan_leaderboard.R) for a mismatch."
+              )
+            ))
+          }
+          r <- strat_returns_wide[[m$wide_col]]
+          calc_cost_metrics(r, cost_per_month = basis_row$monthly_cost) |>
+            mutate(period = "Full Period", strategy = m$label)
+        }))
+        cost_rows <- bind_rows(cost_rows, cost_ext_rows)
       }
 
       # Join cost metrics onto all_metrics
@@ -707,6 +840,42 @@ plan_leaderboard <- function() {
         if (!is.null(ltr_portfolio) && "port_ret" %in% names(ltr_portfolio)) {
           r <- ltr_portfolio$port_ret
           ssr_map[["LTR"]] <- list(ssr = safe_ssr(r, "LTR"), top5 = safe_top5(r))
+        }
+
+        # ── #778: extend SSR/top5pct coverage to the remaining strategies ──
+        # 7 of the 8 previously-uncovered strategies already have a full-period
+        # return series aligned in strat_returns_wide (the SAME target used by
+        # the cost_rows extension below and by strat_deflated_sharpe further
+        # down this file) -- reuse it rather than hunting each strategy's own
+        # portfolio object. PSO Optimal (the 8th) is handled separately below
+        # because it is a linear combination computed inline in THIS target
+        # (opt_returns_df, in the "PSO Optimal" cost_rows block above), not a
+        # standalone pipeline target.
+        if (!is.null(strat_returns_wide) && nrow(strat_returns_wide) > 0) {
+          .ssr_ext_map <- list(
+            olmar_1     = "OLMAR-1",
+            tom         = "TOM",
+            cmr         = "CMR",
+            risk_state  = "Risk State",
+            avoid_worst = "Avoid Worst",
+            value_hml   = "Value (HML)",
+            managed_futures = "Managed Futures"
+          )
+          for (col in names(.ssr_ext_map)) {
+            if (col %in% names(strat_returns_wide)) {
+              label <- .ssr_ext_map[[col]]
+              r <- strat_returns_wide[[col]]
+              ssr_map[[label]] <- list(ssr = safe_ssr(r, label), top5 = safe_top5(r))
+            }
+          }
+        }
+
+        # PSO Optimal: opt_returns_df is built earlier in this target (the
+        # "PSO Optimal" cost_rows block above) ONLY when port_metrics and
+        # port_optimal_weights are both available -- guard the same way.
+        if (exists("opt_returns_df") && "opt_ret" %in% names(opt_returns_df)) {
+          r <- opt_returns_df$opt_ret
+          ssr_map[["PSO Optimal"]] <- list(ssr = safe_ssr(r, "PSO Optimal"), top5 = safe_top5(r))
         }
 
         # Build lookup tibble for joining
