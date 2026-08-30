@@ -1804,6 +1804,104 @@ check_pkg_source_tracked <- function(pkg_source_files, pkg_source_digest, min_fi
 }
 
 
+#' Minimum effective breadth (n_eff) tolerated on any CMR date holding a
+#' position (S24, #751 item F)
+#'
+#' Derived the same way \code{.HD_CMR_MIN_LEG_NAMES} (2, packages/
+#' historicaldata/R/commodities_mean_reversion.R) already bounds the
+#' TERCILE construction's leg size: a leg of fewer than 2 names is not a
+#' diversified bet, it is a single name's return relabelled as a leg
+#' return. Under \code{hd_commodity_mr_portfolio()}'s equal-weight tercile
+#' legs, \code{n_eff == n_long + n_short} exactly whenever a position is
+#' held (every held name carries identical \code{|weight|}, so the inverse
+#' Herfindahl index collapses to a plain count) -- so the floor here is
+#' \code{2 * .HD_CMR_MIN_LEG_NAMES = 4}, the same "2 names per side"
+#' guarantee \code{hd_commodity_mr_portfolio()}'s own \code{min_total_names}
+#' check already enforces via the position-count path. This gate checks the
+#' SAME property independently, through the \code{n_eff} DIAGNOSTIC column
+#' rather than the \code{n_long}/\code{n_short} construction path -- a
+#' future change to the weighting scheme (e.g. a return to rank-weighting,
+#' #751 item D, closed unmerged on #765 but not permanently foreclosed)
+#' would make \code{n_eff} diverge from a plain headcount, at which point
+#' this gate would be doing real, non-redundant work without any call-site
+#' change.
+#'
+#' @noRd
+CMR_MIN_EFFECTIVE_BREADTH <- 4
+
+#' Assert CMR effective breadth (n_eff) never falls below the minimum floor
+#' on any date holding a position (S24, #751 item F)
+#'
+#' \code{n_eff} (the inverse Herfindahl index of normalised absolute
+#' weight, \code{hd_commodity_mr_portfolio()}, packages/historicaldata/R/
+#' commodities_mean_reversion.R) answers "how many independent bets is this
+#' portfolio effectively making" -- the fundamental-law quantity #751's
+#' body argues is closer to what matters than \code{held_frac} or a raw
+#' position count (Grinold & Kahn; Ding & Martin 2017, cited in #751). This
+#' gate salvages the diagnostic that was built (and its rank-weighted
+#' rationale) on the now-closed #765 branch, wired here against the LIVE
+#' tercile construction -- #751 item D (rank-weighting) was decided AGAINST
+#' on #765; terciles remain the production construction.
+#'
+#' Checked on every date any of the three CMR lookback partitions
+#' (\code{cmr_portfolio_1m}/\code{_3m}/\code{_6m}) holds a position
+#' (\code{n_long + n_short > 0}): \code{n_eff} must be at least
+#' \code{\link{CMR_MIN_EFFECTIVE_BREADTH}}. See that constant's roxygen for
+#' the floor's derivation.
+#'
+#' @param cmr_portfolios Named list of CMR portfolio tibbles (one per
+#'   lookback partition), each with columns \code{date}, \code{n_long},
+#'   \code{n_short}, \code{n_eff}.
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_cmr_effective_breadth <- function(cmr_portfolios) {
+  required_cols <- c("date", "n_long", "n_short", "n_eff")
+  combined <- purrr::map2(
+    cmr_portfolios, names(cmr_portfolios),
+    function(port, lookback) {
+      missing_cols <- setdiff(required_cols, names(port))
+      if (length(missing_cols) > 0L) {
+        cli::cli_abort(c(
+          "x" = paste0(
+            "CMR portfolio {.val {lookback}} is missing ",
+            "{length(missing_cols)} required column(s): {missing_cols}."
+          ),
+          "i" = "check_cmr_effective_breadth() (S24) requires date, n_long, n_short, n_eff."
+        ))
+      }
+      dplyr::mutate(port[, required_cols], lookback = lookback)
+    }
+  ) |>
+    dplyr::bind_rows()
+
+  held      <- combined |> dplyr::filter(.data$n_long + .data$n_short > 0L)
+  offenders <- held |> dplyr::filter(.data$n_eff < CMR_MIN_EFFECTIVE_BREADTH)
+
+  if (nrow(offenders) > 0L) {
+    worst <- offenders[order(offenders$n_eff), , drop = FALSE][1L, ]
+    cli::cli_abort(c(
+      "x" = paste0(
+        "CMR effective breadth (n_eff) fell below the minimum floor (",
+        CMR_MIN_EFFECTIVE_BREADTH, ") on ", nrow(offenders),
+        " date(s) holding a position."
+      ),
+      "i" = paste0(
+        "Worst offender: ", worst$lookback, " ", format(worst$date),
+        " -- n_eff=", round(worst$n_eff, 3),
+        ", n_long=", worst$n_long, ", n_short=", worst$n_short, "."
+      ),
+      "i" = paste0(
+        "check_cmr_effective_breadth() (S24, #751 item F) guards the ",
+        "fundamental-law breadth floor -- see CMR_MIN_EFFECTIVE_BREADTH's ",
+        "roxygen (R/plan_qa_gates.R) for the derivation."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -2267,6 +2365,27 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_cost_metrics_joint_presence(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_cost_metrics_coverage: S23 passed (net_cagr/cvar_95/credible jointly present or jointly NA on every row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: CMR effective breadth (n_eff) never falls below the minimum
+    # floor on any date holding a position (S24, #751 item F). n_eff is
+    # salvaged from the closed #765 branch (see hd_commodity_mr_portfolio()
+    # roxygen, packages/historicaldata/R/commodities_mean_reversion.R) and
+    # wired here against the LIVE tercile construction, not the
+    # rank-weighted one #765 proposed (that item was decided against on
+    # #765 -- see the #751 comment thread).
+    targets::tar_target(
+      qa_cmr_effective_breadth,
+      command = {
+        check_cmr_effective_breadth(list(
+          `1m` = cmr_portfolio_1m,
+          `3m` = cmr_portfolio_3m,
+          `6m` = cmr_portfolio_6m
+        ))
+        cli::cli_inform(c("v" = "qa_cmr_effective_breadth: S24 passed (n_eff >= floor on every date holding a position, all 3 CMR lookback partitions)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
