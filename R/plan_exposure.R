@@ -9,12 +9,13 @@
 #
 # `strategy` values below match the display labels used by the `leaderboard`
 # target's own `strategy` column (see R/plan_leaderboard.R, `add_meta()`
-# calls) -- NOT `strategy_names$code_name`, because one leaderboard row
-# ("OLMAR-1") has no corresponding row in `strategy_names` (audited 2026-08,
-# #626: `strategy_names` currently lists 16 code_names and is missing
-# `olmar`). Joins onto `leaderboard` therefore use `by = "strategy"`,
-# matching the existing pattern used for `strat_corr_augment`,
-# `wfc_all_summary`, and `add_crowding` in R/plan_leaderboard.R.
+# calls) -- NOT `strategy_names$code_name`. Joins onto `leaderboard` use
+# `by = "strategy"`, matching the existing pattern used for
+# `strat_corr_augment`, `wfc_all_summary`, and `add_crowding` in
+# R/plan_leaderboard.R. (`strategy_names` was missing an `olmar` row when
+# this file was authored -- #626/#629 -- but that gap was closed in #747;
+# the `by = "strategy"` choice here is retained for consistency with the
+# rest of R/plan_leaderboard.R's joins, not because of any remaining gap.)
 #
 # `gross_convention`: the gross exposure (`sum(abs(w))`) implemented by the
 #   strategy's own weight-construction code, verified against source at the

@@ -56,6 +56,7 @@ hd_kraken_ohlcvt(c("EURUSD", "GBPUSD"), interval_min = 1440L)
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},

@@ -45,6 +45,16 @@ are filled with \code{NA} for rows from the other dataset. When the batch
 spans multiple datasets, the result is always materialised — \code{collect = FALSE} cannot be honoured because lazy frames from distinct parquet
 sources cannot be bound.
 }
+\section{Date type guarantee (#615)}{
+
+The \code{date} column is always returned as \code{Date}, regardless of the
+underlying parquet's storage type (some sources are TIMESTAMP/POSIXct).
+This holds for both \code{collect = TRUE} and \code{collect = FALSE}. Every other
+exported daily-frequency accessor (\code{\link[=hd_macro]{hd_macro()}}, \code{\link[=hd_factors]{hd_factors()}}) makes
+the same guarantee, so joining their outputs on \code{date} never silently
+produces zero matching rows from a type mismatch.
+}
+
 \section{Point-in-time guard}{
 
 Passing \code{to > Sys.Date()} raises a classed error (\code{"hd_future_date"}).
@@ -72,6 +82,7 @@ hd_ohlcv(c("AAPL", "BTC"), from = "2024-01-01")  # mixed equity + crypto
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},

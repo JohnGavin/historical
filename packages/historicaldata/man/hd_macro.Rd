@@ -23,6 +23,11 @@ Lazy duckplyr frame or tibble
 \description{
 Query FRED macro series
 }
+\section{Date type guarantee (#615)}{
+
+The \code{date} column is always returned as \code{Date} (see \code{\link[=hd_ohlcv]{hd_ohlcv()}}).
+}
+
 \section{Point-in-time guard}{
 
 Passing \code{to > Sys.Date()} raises a classed error (\code{"hd_future_date"}).
@@ -38,6 +43,7 @@ hd_macro("SP500", from = "2024-01-01") |> head()
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},

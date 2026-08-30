@@ -215,6 +215,13 @@ source(here::here("R/plan_turn_of_month.R"))
 source(here::here("R/plan_wf_correlation.R"))
 source(here::here("R/plan_structural_breaks.R"))
 source(here::here("R/plan_artefact_registry.R"))
+# #617: dv_pairwise_alignment_matrix — previously written but never sourced
+# here, so plan_data_validation() was unreachable and the target unwired.
+# Wired now rather than deleted: tests/testthat/test-pairwise-alignment.R
+# already asserts plan_data_validation() returns a list containing this
+# target, and its two probed dimensions (date_class, freq) are a genuine
+# pairwise cross-check distinct from dv_join_key_types' n-way comparison.
+source(here::here("R/plan_data_validation.R"))
 source(here::here("R/plan_qa_gates.R"))
 # #553/#554/#555: fundamentals revision-triangle QA gates (guarded no-op
 # until a fundamentals-consuming strategy exists -- see file header)
@@ -382,5 +389,37 @@ c(plan_strategy_names(),
     command = quote(check_frequency_alignment(dataset_registry())),
     deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
     cue = targets::tar_cue(mode = "always")
-  )
+  ),
+
+  # #617: two of the nine data-validation-timeseries rule's mandated targets.
+  # The other 7 stay explicitly backlogged (see the rule + issue #617) until
+  # these two prove their keep — building all nine at once was rejected in
+  # the issue in favour of the pair that pays for itself on data we hold.
+  #
+  # dv_temporal_coverage — expected-vs-actual trading-day observations per
+  # daily-freq target (Mon-Fri, no holiday calendar). Aborts < 30% coverage,
+  # warns < 80% (rule #1 thresholds). This is what would have caught the
+  # VIXCLS 302-NA gap named in #617 had it existed at the time.
+  # tar_target_raw + explicit deps, matching the #152 scheduling fix used by
+  # dv_join_key_types/dv_frequency_alignment above. cb_data/cb_regime
+  # excluded pending #145.
+  targets::tar_target_raw(
+    "dv_temporal_coverage",
+    command = quote(check_temporal_coverage(dataset_registry())),
+    deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
+    cue = targets::tar_cue(mode = "always")
+  ),
+
+  # dv_freshness — latest observation vs today, threshold scaled by the
+  # registry's declared freq. Warns (does not abort): a stale upstream fetch
+  # (#613 was exactly this) is a signal to investigate, not a hard pipeline
+  # failure, since a warning alone should not block unrelated targets.
+  targets::tar_target_raw(
+    "dv_freshness",
+    command = quote(check_freshness(dataset_registry())),
+    deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
+    cue = targets::tar_cue(mode = "always")
+  ),
+
+  plan_data_validation()
 )

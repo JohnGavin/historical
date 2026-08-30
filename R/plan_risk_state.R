@@ -710,12 +710,25 @@ plan_risk_state <- function() {
     # the slice held no sealed data at that moment. It held none only because
     # equity_daily has NO SCHEDULED REFRESH (#673): the boundary is stationary
     # because the fetcher is unscheduled, not because it has yet to catch up.
-    # The first run of scripts/fetch_equity.py would have carried it past
-    # val_start and pulled sealed Validation returns in here, unlabelled, on
-    # the next tar_make() -- and that fetch is the PREREQUISITE for the
-    # one-shot evaluation in scripts/evaluate_validation.R. The protection
-    # would have vanished in the same action that needed it. Now bounded at
-    # holdout_end so the refresh is safe whenever it happens.
+    # A future run of scripts/fetch_equity.py would carry it past val_start
+    # and pull sealed Validation returns in here, unlabelled, on the next
+    # tar_make() -- and that fetch is the PREREQUISITE for the one-shot
+    # evaluation in scripts/evaluate_validation.R. The protection would
+    # vanish in the same action that needed it. Now bounded at holdout_end so
+    # a refresh is safe IF one ever happens.
+    #
+    # Whether one ever happens is now a settled question, not an open one:
+    # #619's follow-up investigation found `dsfefvx/finance-historical-data`
+    # (the upstream `equity_daily`/`macro_daily` were duplicated from) went
+    # inactive on 2026-04-23, before the 2026-05-06 duplication that seeded
+    # our copy -- there is no live upstream to re-sync from, and per the
+    # project decision recorded in #619/#655/#673 and
+    # docs/DATA_SOURCING_LESSONS.md, no replacement source is currently being
+    # sourced. Treat `equity_daily` as ARCHIVED (permanently frozen at
+    # 2026-04-13 absent a deliberate future decision to build a new producer),
+    # not as an outage that will resolve on its own. The bound at holdout_end
+    # stays regardless -- it is what makes ANY future refresh (scheduled or
+    # manual, from this source or a replacement) safe by construction.
     #
     # Bound is holdout_end (2026-04-30), NOT test_end (2023-12-31): this is a
     # descriptive breakdown that spans Testing and Holdout on purpose, and

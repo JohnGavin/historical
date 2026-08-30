@@ -4,7 +4,7 @@
       str(result)
     Output
       tibble [5 x 11] (S3: tbl_df/tbl/data.frame)
-       $ date          : POSIXct[1:5], format: "2024-01-15" "2024-01-16" ...
+       $ date          : Date[1:5], format: "2024-01-15" "2024-01-16" ...
        $ open          : num [1:5] 185 186 187 188 178
        $ high          : num [1:5] 186 188 187 188 179
        $ low           : num [1:5] 185 186 186 177 173

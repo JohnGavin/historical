@@ -22,3 +22,23 @@
     Output
       [1] "ok"
 
+# check_temporal_coverage: below-abort-floor coverage aborts, names target + pct
+
+    Code
+      check_temporal_coverage(reg, read_fn = reader)
+    Condition
+      Error in `check_temporal_coverage()`:
+      x 1 target below the 30% temporal-coverage floor.
+      i sparse_tgt: 25.8%
+      i Coverage = distinct trading days present / expected weekdays in the target's date range.
+
+# check_freshness: stale message names target, days stale, and threshold
+
+    Code
+      . <- check_freshness(reg, read_fn = reader, as_of = as_of)
+    Condition
+      Warning:
+      ! 1 target exceeds their freshness threshold.
+      i stale_named: 15d stale (threshold 7d)
+      i A weekly data poll can fail silently (#613) -- check the upstream fetch.
+

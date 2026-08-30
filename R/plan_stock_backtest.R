@@ -1223,6 +1223,21 @@ plan_stock_backtest <- function() {
     }),
 
     # ── All strategies comparison ─────────────────────────────────
+    #
+    # #656: this used to be a 4-way inner_join chain identical to the #641
+    # port_returns defect and the #603 boot_monthly_returns defect -- any
+    # month missing from ONE constituent silently deleted that month for ALL
+    # FOUR. Unlike those two, stk_all_comparison had ZERO instrumentation
+    # (no contiguity diagnostic, no QA gate) and feeds
+    # stk_all_comparison_plot, published on BOTH leaderboard.qmd and
+    # stock-backtest.qmd.
+    #
+    # Fix mirrors #651/#603: a calendar-complete monthly spine bounded to
+    # the stock-level overlap window (see the identical comment on
+    # port_returns, R/plan_portfolio_opt.R, and boot_monthly_returns,
+    # R/plan_bootstrap_ci.R -- all three draw on these same four
+    # constituents), LEFT-joined so a missing constituent is an explicit NA
+    # in its own column rather than a deleted row.
     targets::tar_target(stk_all_comparison, {
       library(dplyr)
 
@@ -1231,16 +1246,69 @@ plan_stock_backtest <- function() {
       fac_max <- fm_portfolio |> select(ym, fac_max = portfolio_ret)
       fac_drif <- drif_portfolio |> select(ym, fac_drif = portfolio_ret)
 
-      stk_max |>
-        inner_join(stk_drif, by = "ym") |>
-        inner_join(fac_max, by = "ym") |>
-        inner_join(fac_drif, by = "ym") |>
+      spine_start <- max(min(stk_max$ym), min(stk_drif$ym))
+      spine_end   <- min(max(stk_max$ym), max(stk_drif$ym))
+      spine <- tibble::tibble(
+        ym = format(
+          seq(as.Date(paste0(spine_start, "-01")),
+              as.Date(paste0(spine_end, "-01")),
+              by = "month"),
+          "%Y-%m"
+        )
+      )
+
+      combined <- spine |>
+        left_join(stk_max, by = "ym") |>
+        left_join(stk_drif, by = "ym") |>
+        left_join(fac_max, by = "ym") |>
+        left_join(fac_drif, by = "ym")
+
+      # Fail loud, not null (fail-loud-not-null.md #4): report which months
+      # and strategies are missing rather than letting the gap pass
+      # silently. Expected to be empty in the current data -- this exists as
+      # a regression guard, not a live-defect report.
+      strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+      avail <- rowSums(!is.na(as.matrix(combined[, strat_cols])))
+      thin <- combined[avail < length(strat_cols), , drop = FALSE]
+      if (nrow(thin) > 0L) {
+        thin_msgs <- vapply(seq_len(nrow(thin)), function(i) {
+          row <- thin[i, ]
+          missing_strats <- strat_cols[is.na(row[strat_cols])]
+          sprintf("  %s -- missing: %s", row$ym, paste(missing_strats, collapse = ", "))
+        }, character(1L))
+        cli::cli_warn(c(
+          "!" = paste0(
+            length(thin_msgs), " month(s) in stk_all_comparison have at ",
+            "least one missing constituent strategy (#656):"
+          ),
+          setNames(thin_msgs, rep("i", length(thin_msgs))),
+          "i" = paste0(
+            "Cumulative growth columns hold flat (no compounding) across a ",
+            "gap month instead of propagating NA forward -- see the ",
+            "cumgrowth_na_safe() comment below."
+          )
+        ))
+      }
+
+      # NA-safe cumulative growth: a missing month means "no observation",
+      # not "zero return", but cumprod(1 + NA) propagates NA forward to
+      # EVERY subsequent element (fail-loud-not-null.md's forward-
+      # propagation trap) -- which would permanently poison the equity
+      # curve and stk_all_caption's use of the LAST cum value
+      # (fmt_growth(last$stk_max_cum)) from that gap onward. Hold the
+      # cumulative value flat across a gap month instead; the underlying
+      # return column (stk_max/stk_drif/fac_max/fac_drif) keeps its real NA
+      # for NA-aware stats (stk_all_caption's fmt_vol() already uses
+      # sd(..., na.rm = TRUE)).
+      cumgrowth_na_safe <- function(ret) cumprod(1 + tidyr::replace_na(ret, 0))
+
+      combined |>
         mutate(
           date = as.Date(paste0(ym, "-15")),
-          stk_max_cum = cumprod(1 + stk_max),
-          stk_drif_cum = cumprod(1 + stk_drif),
-          fac_max_cum = cumprod(1 + fac_max),
-          fac_drif_cum = cumprod(1 + fac_drif)
+          stk_max_cum = cumgrowth_na_safe(stk_max),
+          stk_drif_cum = cumgrowth_na_safe(stk_drif),
+          fac_max_cum = cumgrowth_na_safe(fac_max),
+          fac_drif_cum = cumgrowth_na_safe(fac_drif)
         )
     }),
 

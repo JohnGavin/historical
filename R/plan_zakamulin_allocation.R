@@ -210,7 +210,14 @@ plan_zakamulin_allocation <- function() {
       {
         source(here::here("R/zakamulin_allocation.R"))
 
-        summarize_regime_allocation(zak_all_backtests) |>
+        # #608 sweep: derive rf from the shared FF3 stk_rf series (annualised
+        # arithmetic mean, same convention as sharpe_ratio_rf()'s ann_rf,
+        # R/utils_metrics.R) instead of the hardcoded 2%/yr default this
+        # function still carries for standalone/test callers.
+        summarize_regime_allocation(
+          zak_all_backtests,
+          annual_rf = mean(stk_rf$rf_ret) * 12
+        ) |>
           mutate(
             allocation_label = recode(
               allocation_fn,
@@ -463,7 +470,12 @@ plan_zakamulin_allocation <- function() {
       {
         library(dplyr)
 
-        perf <- summarize_regime_allocation(zak_all_backtests)
+        # #608 sweep: derive rf from the shared FF3 stk_rf series -- see
+        # zak_performance_table above for the full rationale.
+        perf <- summarize_regime_allocation(
+          zak_all_backtests,
+          annual_rf = mean(stk_rf$rf_ret) * 12
+        )
 
         best <- perf |>
           arrange(desc(sharpe_allocated)) |>
