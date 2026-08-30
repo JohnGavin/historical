@@ -47,8 +47,10 @@ hd_loss_clustering(rnorm(100))        # iid noise -> clustered = FALSE
 }
 \seealso{
 Other risk_metrics: 
+\code{\link{hd_cdap}()},
 \code{\link{hd_dd_duration}()},
 \code{\link{hd_exposure_metrics}()},
+\code{\link{hd_first_passage}()},
 \code{\link{hd_risk_contribution}()}
 }
 \concept{risk_metrics}
