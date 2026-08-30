@@ -21,7 +21,7 @@
     Code
       str(hd_datasets())
     Output
-      List of 10
+      List of 11
        $ equity_daily       :List of 6
         ..$ url                : chr "hf://datasets/JohnGavin/finance-data/equity_daily.parquet"
         ..$ schema             : chr [1:11] "date" "open" "high" "low" ...
@@ -69,6 +69,11 @@
         ..$ schema     : chr [1:8] "date" "open" "high" "low" ...
         ..$ frequency  : chr "daily"
         ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
+       $ fundamentals       :List of 4
+        ..$ url        : chr "hf://datasets/JohnGavin/finance-data/fundamentals.parquet"
+        ..$ schema     : chr [1:9] "ticker" "fiscal_period" "period_end" "first_filed" ...
+        ..$ frequency  : chr "filing"
+        ..$ description: chr "SEC EDGAR XBRL company-fundamentals revision triangle: one row per (ticker, xbrl_tag, fiscal_period), carrying "| __truncated__
        $ kraken_ohlcvt      :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/kraken_ohlcvt.parquet"
         ..$ schema     : chr [1:10] "ticker" "pair" "interval_min" "time" ...
