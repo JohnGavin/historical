@@ -176,6 +176,9 @@ source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
 source(here::here("R/plan_falsification.R"))
 source(here::here("R/plan_falsification_vignette.R"))
+# #588 G2/G3: retrospective drawdown stop-rule test (reuses fals_*_input
+# bridge targets above and regime_classification, R/plan_regime.R)
+source(here::here("R/plan_stop_rule_test.R"))
 source(here::here("R/plan_ltr_momentum.R"))
 source(here::here("R/plan_quiz.R"))
 source(here::here("R/plan_mean_reversion.R"))
@@ -271,6 +274,7 @@ c(plan_strategy_names(),
   plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
   plan_falsification(),
   plan_falsification_vignette(),
+  plan_stop_rule_test(),
   plan_ltr_momentum(),
   plan_quiz(),
   plan_kalshi(),
