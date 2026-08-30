@@ -1,5 +1,6 @@
 testthat::local_edition(3)
-# Tests for the S24 all-NA gate (#668):
+# Tests for the S26 all-NA gate (#668) -- renumbered from S24 to S26 when
+# merging with #798's independently added S24/S25 gates:
 #   1. check_no_all_na_numeric_columns() — the general, property-based helper
 #   2. check_leaderboard_no_all_na_metric() — its leaderboard-specific wrapper
 #

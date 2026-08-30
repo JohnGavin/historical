@@ -167,7 +167,7 @@ no_top5_leaderboard <- tibble::tibble(
 
 # NOTE (#668): fixtures/tests for an all-NA `ssr`/`top5pct_share` column used
 # to live here (check_leaderboard_coverage() aborted directly on them). That
-# assertion generalised into QA gate S24 -- see
+# assertion generalised into QA gate S26 -- see
 # check_no_all_na_numeric_columns()/check_leaderboard_no_all_na_metric() in
 # R/plan_qa_gates.R and the regression tests in
 # tests/testthat/test-leaderboard-no-all-na-metric.R, which prove the new
