@@ -158,14 +158,6 @@ no_ssr_leaderboard <- tibble::tibble(
   top5pct_share = c(0.32, 0.28)
 )
 
-# Leaderboard with ssr column present but entirely NA
-all_na_ssr_leaderboard <- tibble::tibble(
-  strategy      = c("Factor MAX", "Factor DRIF"),
-  period        = c("Full Period", "Full Period"),
-  ssr           = c(NA_real_, NA_real_),
-  top5pct_share = c(0.32, 0.28)
-)
-
 # Leaderboard missing top5pct_share column
 no_top5_leaderboard <- tibble::tibble(
   strategy = c("Factor MAX", "Factor DRIF"),
@@ -173,13 +165,13 @@ no_top5_leaderboard <- tibble::tibble(
   ssr      = c(2.1, 1.8)
 )
 
-# Leaderboard with top5pct_share entirely NA
-all_na_top5_leaderboard <- tibble::tibble(
-  strategy      = c("Factor MAX", "Factor DRIF"),
-  period        = c("Full Period", "Full Period"),
-  ssr           = c(2.1, 1.8),
-  top5pct_share = c(NA_real_, NA_real_)
-)
+# NOTE (#668): fixtures/tests for an all-NA `ssr`/`top5pct_share` column used
+# to live here (check_leaderboard_coverage() aborted directly on them). That
+# assertion generalised into QA gate S24 -- see
+# check_no_all_na_numeric_columns()/check_leaderboard_no_all_na_metric() in
+# R/plan_qa_gates.R and the regression tests in
+# tests/testthat/test-leaderboard-no-all-na-metric.R, which prove the new
+# general gate still catches both original cases.
 
 # ── Tests: strategy coverage ─────────────────────────────────────────────────
 
@@ -211,29 +203,11 @@ test_that("check_leaderboard_coverage throws when ssr column absent", {
   )
 })
 
-test_that("check_leaderboard_coverage throws when ssr column is entirely NA", {
-  expect_error(
-    check_leaderboard_coverage(minimal_strategy_names, all_na_ssr_leaderboard),
-    regexp = "entirely NA"
-  )
-  expect_snapshot(
-    error = TRUE,
-    check_leaderboard_coverage(minimal_strategy_names, all_na_ssr_leaderboard)
-  )
-})
-
 # ── Tests: top5pct_share column (#400) ───────────────────────────────────────
 
 test_that("check_leaderboard_coverage throws when top5pct_share column absent", {
   expect_error(
     check_leaderboard_coverage(minimal_strategy_names, no_top5_leaderboard),
     regexp = "top5pct_share"
-  )
-})
-
-test_that("check_leaderboard_coverage throws when top5pct_share is entirely NA", {
-  expect_error(
-    check_leaderboard_coverage(minimal_strategy_names, all_na_top5_leaderboard),
-    regexp = "entirely NA"
   )
 })

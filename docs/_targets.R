@@ -139,6 +139,9 @@ source(here::here("R/cov_config.R"))
 
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
+# Entity glossary + alias resolution (#668) — MUST precede plan_partitions.R:
+# PERIOD_LABELS_ALLOWED there is derived from load_glossary() at source time.
+source(here::here("R/glossary.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
 source(here::here("R/plan_partitions.R"))
 source(here::here("R/plan_vignette.R"))

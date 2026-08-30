@@ -195,10 +195,11 @@ check_anchor_in_range <- function(html_dir,
 #' running `tar_make()`.  The `qa_leaderboard_coverage` target calls this
 #' function directly.
 #'
-#' Also asserts that the `ssr` and `top5pct_share` columns are present in the
-#' leaderboard tibble and that at least one row has a non-NA value for each
-#' (i.e. the stability metrics were computed for at least one strategy).
-#' Added in #400 (PR 4/6).
+#' Also asserts that the `ssr` and `top5pct_share` columns are PRESENT in the
+#' leaderboard tibble (added in #400, PR 4/6). Whether they hold at least one
+#' non-NA value is no longer checked HERE -- that assertion generalised into
+#' QA gate S24 (`check_leaderboard_no_all_na_metric()` below, #668), which
+#' checks every numeric leaderboard column, not just these two by name.
 #'
 #' @param strategy_names Tibble with at least `short_name` and `code_name`
 #'   columns (the output of the `strategy_names` targets pipeline target).
@@ -224,31 +225,19 @@ check_leaderboard_coverage <- function(strategy_names, leaderboard) {
     ))
   }
 
-  # Assert SSR column present and populated (#400)
+  # Assert SSR column present (#400). All-NA is checked by S24, not here.
   if (!"ssr" %in% names(leaderboard)) {
     cli::cli_abort(c(
       "x" = "Leaderboard is missing required column {.field ssr}.",
       "i" = "Add the SSR computation block to R/plan_leaderboard.R (#400)."
     ))
   }
-  if (all(is.na(leaderboard$ssr))) {
-    cli::cli_abort(c(
-      "x" = "Leaderboard column {.field ssr} is entirely NA — no stability metrics were computed.",
-      "i" = "Check that portfolio return targets are available and have >= 38 months (#400)."
-    ))
-  }
 
-  # Assert top5pct_share column present and populated (#400)
+  # Assert top5pct_share column present (#400). All-NA is checked by S24.
   if (!"top5pct_share" %in% names(leaderboard)) {
     cli::cli_abort(c(
       "x" = "Leaderboard is missing required column {.field top5pct_share}.",
       "i" = "Add the top5pct computation block to R/plan_leaderboard.R (#400)."
-    ))
-  }
-  if (all(is.na(leaderboard$top5pct_share))) {
-    cli::cli_abort(c(
-      "x" = "Leaderboard column {.field top5pct_share} is entirely NA — no top-5% shares were computed.",
-      "i" = "Check that portfolio return targets are available (#400)."
     ))
   }
 
@@ -1804,6 +1793,106 @@ check_pkg_source_tracked <- function(pkg_source_files, pkg_source_digest, min_fi
 }
 
 
+#' Assert no numeric column in a published metrics tibble is entirely NA
+#' (S24, #668)
+#'
+#' The property-based generalisation of the two hardcoded all-NA checks that
+#' used to live in `check_leaderboard_coverage()` (`ssr`, `top5pct_share`,
+#' #400) -- see #668 for the running tally of why per-instance gates keep
+#' missing the NEXT column with the same defect: `ltr_subperiod$sharpe` was
+#' `NA, NA, NA` since the target's inception (#677 defect B) because
+#' `compute_sp_metrics()` referenced a `rf_ret` column `ltr_portfolio` never
+#' had -- `df$missing` returns `NULL` in R, and `mean(NULL, na.rm = TRUE)`
+#' returns `NA`, so the whole column silently became `NA`. The check that
+#' would have caught it already existed (the two hardcoded blocks this
+#' function replaces); it was scoped to two column NAMES rather than to the
+#' PROPERTY "no published metric column has zero non-NA values", so it
+#' could not see the third column on a target it had never heard of.
+#'
+#' Checks every column for which `is.numeric()` is `TRUE`. Character,
+#' logical, and Date/POSIXct columns are excluded -- they carry
+#' vocabularies, flags, and calendar values, not metrics, and "entirely NA"
+#' is not a meaningful defect signal for a column that is allowed to be
+#' entirely `FALSE`, entirely one label, or entirely absent by design (a
+#' logical flag column being all-`FALSE` is a legitimate state; an all-NA
+#' NUMERIC column, by contrast, means its source computation never actually
+#' ran for any row).
+#'
+#' A column present in `exempt` is skipped entirely -- see the caller's own
+#' exemption constant (e.g. `LEADERBOARD_ALL_NA_EXEMPT` below) for the
+#' documented, narrow set of columns known to be legitimately all-NA under
+#' some pipeline states. An empty or `NULL` `tbl` returns `TRUE` without
+#' checking anything -- this mirrors the other S* gates' treatment of an
+#' unpopulated upstream target as "nothing to check yet" rather than a
+#' defect in its own right (that is a separate property, guarded elsewhere
+#' e.g. by S7's strategy-coverage assertion).
+#'
+#' @param tbl A tibble; the published target being checked.
+#' @param target_label Character scalar; the target's name, used verbatim
+#'   in the abort message.
+#' @param exempt Character vector of column names to skip. Default: none.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_no_all_na_numeric_columns <- function(tbl, target_label, exempt = character(0)) {
+  if (is.null(tbl) || nrow(tbl) == 0L) {
+    return(invisible(TRUE))
+  }
+
+  numeric_cols <- names(tbl)[vapply(tbl, is.numeric, logical(1L))]
+  numeric_cols <- setdiff(numeric_cols, exempt)
+
+  offenders <- Filter(function(col) all(is.na(tbl[[col]])), numeric_cols)
+
+  if (length(offenders) > 0L) {
+    msgs <- sprintf("  %s", offenders)
+    cli::cli_abort(c(
+      "x" = paste0(
+        target_label, " has ", length(offenders),
+        " numeric column(s) that are entirely NA:"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "A column with zero non-NA values across the whole ", target_label,
+        " usually means its source computation never ran, or its output ",
+        "was never actually wired into this target (#668 -- the ",
+        "ltr_subperiod$sharpe all-NA-since-inception class, #677 defect B)."
+      ),
+      "i" = paste0(
+        "If a column is legitimately expected to be all-NA under some ",
+        "pipeline states, add it to this gate's exemption constant in ",
+        "R/plan_qa_gates.R, with a documented reason -- do not silence the ",
+        "gate by removing the check."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+#' Columns exempt from the leaderboard's S24 all-NA check
+#'
+#' Empty by design: every current leaderboard column that reaches
+#' `is.numeric()` should have a real, non-NA value for at least one row once
+#' the pipeline has actually run (a column that is genuinely 100% NA today
+#' is exactly the defect class #668 targets). Add an entry here ONLY with a
+#' documented, specific reason -- an undocumented addition defeats the
+#' point of the gate the same way a per-instance check did.
+#' @noRd
+LEADERBOARD_ALL_NA_EXEMPT <- character(0)
+
+#' Assert no numeric column in `leaderboard` is entirely NA (S24, #668)
+#'
+#' Thin wrapper around `check_no_all_na_numeric_columns()` -- see that
+#' function's roxygen for the full rationale this gate replaces.
+#'
+#' @param leaderboard Tibble; the `leaderboard` target.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_no_all_na_metric <- function(leaderboard) {
+  check_no_all_na_numeric_columns(leaderboard, "leaderboard", LEADERBOARD_ALL_NA_EXEMPT)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -2267,6 +2356,28 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_cost_metrics_joint_presence(leaderboard)
         cli::cli_inform(c("v" = "qa_leaderboard_cost_metrics_coverage: S23 passed (net_cagr/cvar_95/credible jointly present or jointly NA on every row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: no numeric leaderboard column is entirely NA (S24, #668) --
+    # the property-based generalisation of the two hardcoded all-NA checks
+    # that used to live inside check_leaderboard_coverage() (S7): `ssr` and
+    # `top5pct_share` by name (#400). #668 found that scoping the check to
+    # two column NAMES rather than the PROPERTY "no published metric column
+    # has zero non-NA values" left every OTHER numeric column, and every
+    # OTHER target, uncovered -- exactly how `ltr_subperiod$sharpe` sat
+    # all-NA since inception (#677 defect B) without any gate ever firing.
+    # See check_leaderboard_no_all_na_metric() / check_no_all_na_numeric_
+    # columns() roxygen above for the full rationale, and
+    # LEADERBOARD_ALL_NA_EXEMPT for the (currently empty, documented-only-
+    # on-addition) exemption mechanism.
+    targets::tar_target(
+      qa_leaderboard_no_all_na_metric,
+      command = {
+        check_leaderboard_no_all_na_metric(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_no_all_na_metric: S24 passed (no numeric leaderboard column is entirely NA)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
