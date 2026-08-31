@@ -252,6 +252,78 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
   list(capped_w = w_capped, hit_cap = hit_cap)
 }
 
+#' Market-impact cost, square-root law (local helper; #490 Gap 4)
+#' @param order_usd,adv_usd,sigma,eta See historicaldata::hd_market_impact.
+#' @return Numeric fraction of order_usd.
+#' @noRd
+market_impact_cost <- function(order_usd, adv_usd, sigma, eta = 1) {
+  if (!is.numeric(order_usd) || anyNA(order_usd) || any(order_usd < 0)) {
+    cli::cli_abort(c(
+      "x" = "{.arg order_usd} must be numeric, non-NA, and >= 0.",
+      "i" = "Got {.val {order_usd}}."
+    ))
+  }
+  if (!is.numeric(adv_usd) || anyNA(adv_usd) || any(adv_usd <= 0)) {
+    cli::cli_abort(c(
+      "x" = "{.arg adv_usd} must be numeric, non-NA, and > 0.",
+      "i" = "Got {.val {adv_usd}}."
+    ))
+  }
+  if (!is.numeric(sigma) || anyNA(sigma) || any(sigma < 0)) {
+    cli::cli_abort(c(
+      "x" = "{.arg sigma} must be numeric, non-NA, and >= 0.",
+      "i" = "Got {.val {sigma}}."
+    ))
+  }
+  if (!is.numeric(eta) || length(eta) != 1L || is.na(eta) || eta <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg eta} must be a single positive number.",
+      "i" = "Got {.val {eta}}."
+    ))
+  }
+  eta * sigma * sqrt(order_usd / adv_usd)
+}
+
+#' Validate impact_eta/impact_aum/impact_sigma args (#490 Gap 4)
+#' @noRd
+validate_impact_args <- function(adv_monthly, impact_aum, impact_sigma, impact_eta) {
+  bad_num <- function(x) !is.numeric(x) || length(x) != 1L || is.na(x)
+  if (is.null(adv_monthly)) {
+    cli::cli_abort("impact_eta requires adv_monthly to be supplied.")
+  }
+  if (bad_num(impact_aum) || impact_aum <= 0) {
+    cli::cli_abort(c("x" = "impact_aum must be a single positive number.", "i" = "Got {.val {impact_aum}}."))
+  }
+  if (bad_num(impact_sigma) || impact_sigma < 0) {
+    cli::cli_abort(c("x" = "impact_sigma must be a single non-negative number.", "i" = "Got {.val {impact_sigma}}."))
+  }
+  if (bad_num(impact_eta) || impact_eta <= 0) {
+    cli::cli_abort(c("x" = "impact_eta must be a single positive number, or NULL to disable.", "i" = "Got {.val {impact_eta}}."))
+  }
+  invisible(TRUE)
+}
+
+#' Market-impact cost for one rebalance, both legs (#490 Gap 4)
+#' @noRd
+compute_impact_cost_frac <- function(use_impact, w_long, w_short, adv_vec,
+                                      turnover_long, turnover_short,
+                                      impact_aum, impact_sigma, impact_eta) {
+  if (!use_impact) return(0)
+  adv_long_total  <- sum(adv_vec[intersect(names(w_long),  names(adv_vec))], na.rm = TRUE)
+  adv_short_total <- sum(adv_vec[intersect(names(w_short), names(adv_vec))], na.rm = TRUE)
+  order_long_usd  <- impact_aum * turnover_long
+  order_short_usd <- impact_aum * turnover_short
+  impact_long_frac <- 0
+  if (adv_long_total > 0 && order_long_usd > 0) {
+    impact_long_frac <- market_impact_cost(order_long_usd, adv_long_total, impact_sigma, eta = impact_eta) * turnover_long
+  }
+  impact_short_frac <- 0
+  if (adv_short_total > 0 && order_short_usd > 0) {
+    impact_short_frac <- market_impact_cost(order_short_usd, adv_short_total, impact_sigma, eta = impact_eta) * turnover_short
+  }
+  2 * (impact_long_frac + impact_short_frac)
+}
+
 #' Long-short portfolio with HRP weighting per leg (Lopez de Prado 2016)
 #' @param df Data frame with ym, ticker, decile, monthly_ret (signal-to-return merged)
 #' @param returns_wide Wide tibble: rows = ym, cols = ticker, values = monthly_ret
@@ -263,7 +335,16 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
 #' @param max_monthly_ret Winsorise monthly returns at ±this (default 0.20 = 20%)
 #' @param adv_monthly Monthly ADV data: tibble(ym, ticker, adv_dollars). NULL = no cap.
 #' @param adv_pct_cap Maximum participation per stock as multiple of ADV-weight share × n (default 0.10)
-#' @return Tibble with same shape as portfolio_longshort, plus adv_cap columns when adv_monthly supplied
+#' @param impact_eta NULL (default) or a positive number: square-root-law
+#'   market-impact eta (#490 Gap 4), opt-in cost term on top of
+#'   cost_per_trade. Requires adv_monthly, impact_aum, impact_sigma.
+#' @param impact_aum Assumed AUM (single positive number) used to size
+#'   orders for the impact-cost term. Required when impact_eta is set.
+#' @param impact_sigma Return volatility (single non-negative number) used
+#'   in the impact-cost formula. Required when impact_eta is set.
+#' @return Tibble with same shape as portfolio_longshort, plus adv_cap
+#'   columns when adv_monthly supplied, plus impact_cost_frac (0 when
+#'   impact_eta is NULL).
 portfolio_longshort_hrp <- function(df, returns_wide,
                                     long_decile = 1L, short_decile = 10L,
                                     lookback_months = 36L,
@@ -271,11 +352,18 @@ portfolio_longshort_hrp <- function(df, returns_wide,
                                     borrow_rate_annual = 0.03,
                                     max_monthly_ret = 0.20,
                                     adv_monthly = NULL,
-                                    adv_pct_cap = 0.10) {
+                                    adv_pct_cap = 0.10,
+                                    impact_eta = NULL,
+                                    impact_aum = NULL,
+                                    impact_sigma = NULL) {
   if (!requireNamespace("HierPortfolios", quietly = TRUE)) {
     cli::cli_abort("HierPortfolios package required for HRP weighting")
   }
   use_adv_cap <- !is.null(adv_monthly)
+  use_impact  <- !is.null(impact_eta)
+  if (use_impact) {
+    validate_impact_args(adv_monthly, impact_aum, impact_sigma, impact_eta)
+  }
   # Winsorise returns
   df <- df |>
     dplyr::mutate(monthly_ret = pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret))
@@ -338,10 +426,12 @@ portfolio_longshort_hrp <- function(df, returns_wide,
     # ADV participation cap (applied AFTER HRP, BEFORE return computation)
     n_cap_long  <- 0L
     n_cap_short <- 0L
-    if (use_adv_cap) {
-      adv_t <- adv_monthly[adv_monthly$ym == ym_t, c("ticker", "adv_dollars")]
+    adv_vec <- NULL
+    if (use_adv_cap || use_impact) {
+      adv_t   <- adv_monthly[adv_monthly$ym == ym_t, c("ticker", "adv_dollars")]
       adv_vec <- setNames(adv_t$adv_dollars, adv_t$ticker)
-
+    }
+    if (use_adv_cap) {
       cap_long  <- apply_adv_cap(w_long,  adv_vec, adv_pct_cap)
       cap_short <- apply_adv_cap(w_short, adv_vec, adv_pct_cap)
 
@@ -396,7 +486,11 @@ portfolio_longshort_hrp <- function(df, returns_wide,
 
     trade_cost  <- turnover * cost_per_trade * 2 * 2   # both legs, buy + sell
     borrow_cost <- borrow_rate_annual / 12
-    total_cost  <- trade_cost + borrow_cost
+    impact_cost_frac <- compute_impact_cost_frac(
+      use_impact, w_long, w_short, adv_vec, turnover_long, turnover_short,
+      impact_aum, impact_sigma, impact_eta
+    )
+    total_cost  <- trade_cost + borrow_cost + impact_cost_frac
     port_ret    <- long_ret - short_ret - total_cost
 
     out[[i]] <- dplyr::tibble(
@@ -409,7 +503,8 @@ portfolio_longshort_hrp <- function(df, returns_wide,
       turnover   = turnover,
       total_cost = total_cost,
       n_cap_long  = n_cap_long,
-      n_cap_short = n_cap_short
+      n_cap_short = n_cap_short,
+      impact_cost_frac = impact_cost_frac
     )
 
     prev_w_long  <- w_long
@@ -425,6 +520,81 @@ portfolio_longshort_hrp <- function(df, returns_wide,
     )
   }
   dplyr::bind_rows(out)
+}
+
+#' Validate eta_grid for market_impact_sensitivity (#490 Gap 4)
+#' @noRd
+validate_eta_grid <- function(eta_grid, adv_monthly) {
+  bad <- !is.numeric(eta_grid) || length(eta_grid) == 0L || anyNA(eta_grid) || any(eta_grid <= 0)
+  if (bad) {
+    cli::cli_abort(c(
+      "x" = "eta_grid must be a non-empty numeric vector of positive values.",
+      "i" = "Got {.val {eta_grid}}."
+    ))
+  }
+  if (is.null(adv_monthly)) {
+    cli::cli_abort("adv_monthly is required to sweep market-impact cost.")
+  }
+  invisible(TRUE)
+}
+
+#' One row of the impact sensitivity panel, for one eta (#490 Gap 4)
+#' @noRd
+sensitivity_panel_row <- function(eta, df, returns_wide, long_decile, short_decile,
+                                   lookback_months, cost_per_trade, borrow_rate_annual,
+                                   max_monthly_ret, adv_monthly, adv_pct_cap,
+                                   impact_aum, impact_sigma, rf, rf_col) {
+  port <- portfolio_longshort_hrp(
+    df, returns_wide, long_decile = long_decile, short_decile = short_decile,
+    lookback_months = lookback_months, cost_per_trade = cost_per_trade,
+    borrow_rate_annual = borrow_rate_annual, max_monthly_ret = max_monthly_ret,
+    adv_monthly = adv_monthly, adv_pct_cap = adv_pct_cap,
+    impact_eta = eta, impact_aum = impact_aum, impact_sigma = impact_sigma
+  )
+  if (!is.null(rf)) port <- dplyr::left_join(port, rf, by = "ym")
+
+  n <- nrow(port)
+  if (n < 2L) {
+    return(tibble::tibble(eta = eta, months = n, sharpe = NA_real_,
+                           cagr = NA_real_, vol = NA_real_,
+                           avg_impact_cost_frac = NA_real_))
+  }
+  ann_ret <- prod(1 + port$port_ret)^(12 / n) - 1
+  ann_vol <- stats::sd(port$port_ret) * sqrt(12)
+  have_rf <- !is.null(rf) && rf_col %in% names(port)
+  rf_ann  <- if (have_rf) mean(port[[rf_col]], na.rm = TRUE) * 12 else 0
+  sharpe  <- if (ann_vol > 0) (ann_ret - rf_ann) / ann_vol else NA_real_
+
+  tibble::tibble(
+    eta = eta, months = n, sharpe = sharpe, cagr = ann_ret, vol = ann_vol,
+    avg_impact_cost_frac = mean(port$impact_cost_frac, na.rm = TRUE)
+  )
+}
+
+#' Sharpe-vs-impact-coefficient sensitivity panel (#490 Gap 4)
+#' @inheritParams portfolio_longshort_hrp
+#' @param eta_grid Numeric vector of eta values to sweep (each > 0).
+#' @param rf Optional tibble(ym, rf_col), joined before computing Sharpe.
+#' @return Tibble: eta, months, sharpe, cagr, vol, avg_impact_cost_frac.
+#' @noRd
+market_impact_sensitivity <- function(df, returns_wide, eta_grid,
+                                       long_decile = 1L, short_decile = 10L,
+                                       lookback_months = 36L,
+                                       cost_per_trade = 0.005,
+                                       borrow_rate_annual = 0.03,
+                                       max_monthly_ret = 0.20,
+                                       adv_monthly, adv_pct_cap = 0.10,
+                                       impact_aum, impact_sigma,
+                                       rf = NULL, rf_col = "rf_ret") {
+  validate_eta_grid(eta_grid, adv_monthly)
+  rows <- lapply(eta_grid, function(eta) {
+    sensitivity_panel_row(
+      eta, df, returns_wide, long_decile, short_decile, lookback_months,
+      cost_per_trade, borrow_rate_annual, max_monthly_ret,
+      adv_monthly, adv_pct_cap, impact_aum, impact_sigma, rf, rf_col
+    )
+  })
+  dplyr::bind_rows(rows)
 }
 
 #' Standard backtest metrics
