@@ -66,8 +66,9 @@ source(partitions_path)
 universe, and per-strategy statistical detection power/rigour limits (see the
 **Detection** and **Rigour** columns below). The **Breach Risk (±20% DD)**
 column is a secondary, informational diagnostic (issue #586) — it does NOT
-affect this table's ranking. Full detail, collected in one place:
-[Biases and Caveats](#biases-and-caveats).
+affect this table's ranking. For a separate re-ranking by survivability under
+a drawdown mandate, see the **Prop-Constrained View** tab. Full detail,
+collected in one place: [Biases and Caveats](#biases-and-caveats).
 :::
 
 ## Row
@@ -759,6 +760,168 @@ if (!is.null(lb)) {
   .rig-badge.partial      { color: #fbbf24; }
   .fp-badge                { color: #9ca3af; }
   .sharpe-ci-flag         { color: #ff6b6b; }
+}
+</style>
+```
+
+#### Prop-Constrained View
+
+This is the separately agreed second half of [#586](https://github.com/JohnGavin/historical/issues/586)'s two-portfolio design. The Full Period tab above answers *is the edge real* — Sharpe, deflated Sharpe, detection power, rigour. This tab answers a different question — *would this strategy survive a drawdown mandate*, such as a redemption trigger, a risk-committee drawdown limit, or an evaluation window — as a **separate ranking**, never folded into the primary one. The per-row Breach Risk (±20% DD) badge on the Full Period tab is a single fixed-barrier diagnostic; this tab is the fuller, parameterised view the issue asked for: three drawdown-floor scenarios (profit target held fixed at 10%), re-ranking the same strategies by survival probability. A strategy scoring poorly here is **flagged, never removed**, from the primary board above.
+
+```{r}
+#| label: prop-constrained-view
+pc <- safe_tar_read("leaderboard_prop_constrained")
+if (!is.null(pc)) {
+  gh_url <- tryCatch({
+    remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+    sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+  }, error = function(e) NULL)
+  git_sha <- tryCatch(
+    system("git rev-parse HEAD 2>/dev/null", intern = TRUE),
+    error = function(e) "main"
+  )
+  git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
+  gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
+    "https://github.com/JohnGavin/historical"
+
+  fp_fn_link <- hd_link(
+    htmltools::tags$code("hd_first_passage()"),
+    sprintf("%s/blob/%s/packages/historicaldata/R/first_passage.R#L117", gh_base, git_sha)
+  )
+  pc_tgt_link <- hd_link(
+    htmltools::tags$code("leaderboard_prop_constrained"),
+    sprintf("%s/blob/%s/R/plan_leaderboard.R#L1250", gh_base, git_sha)
+  )
+
+  # Scenario column order == PROP_CONSTRAINED_SCENARIOS row order (R/plan_
+  # leaderboard.R), preserved by purrr::map_dfr appending one scenario's
+  # rows for ALL strategies before moving to the next.
+  scenario_order <- unique(pc$scenario)
+  standard_scenario <- scenario_order[grepl("^Standard", scenario_order)]
+  if (length(standard_scenario) == 0) standard_scenario <- scenario_order[1]
+
+  base_cols <- pc |>
+    dplyr::distinct(strategy, sharpe, cagr, max_dd)
+
+  pct_wide <- pc |>
+    dplyr::mutate(
+      pct_label = ifelse(is.na(pass_prob), "not computed", paste0(round(pass_prob * 100), "%"))
+    ) |>
+    dplyr::select(strategy, scenario, pct_label) |>
+    tidyr::pivot_wider(names_from = scenario, values_from = pct_label)
+
+  rank_key <- pc |>
+    dplyr::filter(scenario == standard_scenario) |>
+    dplyr::select(strategy, .rank_key = pass_prob)
+
+  n_strats  <- dplyr::n_distinct(pc$strategy)
+  n_flagged <- sum(rank_key$.rank_key < 0.5, na.rm = TRUE)
+  n_na      <- sum(is.na(rank_key$.rank_key))
+
+  flag_badge <- function(p) {
+    if (is.na(p)) {
+      return("<span class='fp-badge' title='Not computed -- see leaderboard_prop_constrained target comment for the NA paths.'>not computed</span>")
+    }
+    if (p < 0.5) {
+      return(sprintf(
+        "<span class='pc-flag warn' title='Survival probability under the %s scenario is below 50%%. Flagged here only -- NOT removed from the primary Full Period leaderboard above.'>&#9888; flagged</span>",
+        gsub("'", "&#39;", standard_scenario, fixed = TRUE)
+      ))
+    }
+    "<span class='pc-flag ok'>&#10003;</span>"
+  }
+
+  view_table <- base_cols |>
+    dplyr::left_join(pct_wide, by = "strategy") |>
+    dplyr::left_join(rank_key, by = "strategy") |>
+    dplyr::mutate(
+      Flag   = vapply(.rank_key, flag_badge, character(1)),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
+      CAGR   = ifelse(is.na(cagr),   "—", paste0(round(cagr * 100, 1), "%")),
+      `Max DD` = paste0(round(max_dd * 100, 1), "%")
+    ) |>
+    dplyr::arrange(dplyr::desc(.rank_key)) |>
+    dplyr::select(strategy, Sharpe, CAGR, `Max DD`, dplyr::all_of(scenario_order), Flag, .rank_key) |>
+    dplyr::rename(Strategy = strategy) |>
+    dplyr::rename_with(~ paste0("Survival: ", .x), .cols = dplyr::all_of(scenario_order))
+
+  pc_short <- paste0(
+    "Re-ranked view of the same ", n_strats, " Full Period strategies by survivability under a ",
+    "drawdown-mandate constraint — profit target fixed at 10%, drawdown floor tightening from 20% ",
+    "(Lenient) to 5% (Strict). Ordered by Survival: ", standard_scenario, " (descending). ",
+    n_flagged, " of ", n_strats, " strategies fall below 50% survival under that scenario",
+    if (n_na > 0) paste0(" (", n_na, " not computed)") else "", " — those are flagged here only, ",
+    "never removed from the primary Full Period ranking above. Expand for the full methodology note."
+  )
+
+  pc_notes <- htmltools::tagList(
+    "Infinite-horizon, drifted-Brownian-motion approximation, computed per strategy by ", fp_fn_link,
+    " and assembled in ", pc_tgt_link, " — issue #586's agreed two-portfolio design: this view answers ",
+    "\"would this strategy survive a drawdown mandate\", separately from the primary leaderboard's ",
+    "\"is the edge real\". Each scenario holds the profit target fixed at 10% and varies only the ",
+    "drawdown floor (5% / 10% / 20%): decreasing the floor distance while the target stays fixed ",
+    "monotonically decreases survival probability for any strategy, regardless of its own drift/vol — ",
+    "which is why this ordering reads as \"tightening a mandate\" the way a naive symmetric floor/",
+    "target sweep would not (see the PROP_CONSTRAINED_SCENARIOS comment in R/plan_leaderboard.R for the ",
+    "full reasoning). This is deliberately NOT a new dashboard and NOT a new set of strategies — the ",
+    "same Full Period rows shown above, re-ranked. Two parameters this view does NOT yet support: a ",
+    "per-day loss limit, and a finite evaluation horizon (\"within N months\", as opposed to \"ever\") — ",
+    "both remain deferred, same as ", fp_fn_link, "'s own documented scope limits. Every probability ",
+    "here is therefore an infinite-horizon, Gaussian-iid approximation: real fat-tailed paths and any ",
+    "time-boxed evaluation window make breaches MORE likely than these numbers imply, so treat the ",
+    "Survival columns as an optimistic ceiling on survivability, not a point estimate of it."
+  )
+
+  pc_caption <- hd_caption(pc_notes, short = pc_short, summary_label = "Full methodology note")
+
+  pc_display <- view_table |> dplyr::select(-.rank_key)
+  numeric_cols <- which(sapply(pc_display, function(x) is.numeric(x) ||
+                                  grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
+  DT::datatable(
+    pc_display,
+    caption = pc_caption,
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      order = list(),
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
+} else {
+  cat("*`leaderboard_prop_constrained` target not available.*")
+}
+```
+
+```{=html}
+<style>
+.pc-flag { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.pc-flag.warn { color: #9a5b00; }
+.pc-flag.ok   { color: #1a7f37; }
+[data-bs-theme="dark"] .pc-flag.warn, body.dark-mode .pc-flag.warn { color: #fbbf24; }
+[data-bs-theme="dark"] .pc-flag.ok,   body.dark-mode .pc-flag.ok   { color: #4ade80; }
+@media (prefers-color-scheme: dark) {
+  .pc-flag.warn { color: #fbbf24; }
+  .pc-flag.ok   { color: #4ade80; }
 }
 </style>
 ```

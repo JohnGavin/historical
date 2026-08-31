@@ -214,6 +214,44 @@ STRATEGY_OBS_ANN_FACTOR <- .build_strategy_obs_ann_factor(
 
 STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(hd_strategy_names_tbl())
 
+# ── Prop-constrained view scenarios (#586 second comment, "Proposed shape") ──
+# The per-row "Breach Risk (+/-20% DD)" column above (fp_breach_prob_20pct)
+# is a single fixed-barrier diagnostic that INFORMS the primary leaderboard
+# without re-ranking it. `leaderboard_prop_constrained` below builds the
+# separately agreed second half of the two-portfolio design: a re-ranked
+# VIEW of the same Full Period targets, parameterised by (floor, target)
+# pairs -- "would this strategy survive a drawdown mandate", answered
+# separately from "is the edge real" (the unconstrained leaderboard).
+#
+# These three rows are NOT any specific prop-trading firm's rules (#586:
+# "We are not going to trade prop-firm challenges") -- floor/target are the
+# caller-supplied INPUTS the source article's maths generalises to any
+# capital with a redemption trigger, a risk-committee drawdown limit, or a
+# review period. `target` is held FIXED at 10% across all three rows and
+# only `floor` (the drawdown mandate) tightens -- this is deliberate, not an
+# oversight: for the two-barrier gambler's-ruin formula, decreasing the
+# distance to ONE barrier while holding the other fixed monotonically
+# decreases the probability of hitting the FIXED barrier first, for any
+# drift/vol (Karlin & Taylor, see packages/historicaldata/R/first_passage.R).
+# A design that scaled floor and target together (e.g. symmetric 10/10,
+# 15/15, 20/20) would NOT have this monotone property -- wider symmetric
+# barriers give MORE room for genuine drift to dominate noise, which moves
+# pass_prob further from 50% in the direction of the strategy's own edge
+# sign, not predictably up or down -- so it would not read as "tightening a
+# mandate" the way this ordering does.
+#
+# `daily_limit` and finite `horizon` are deliberately NOT parameterised
+# here -- see `leaderboard_prop_constrained`'s own comment for why
+# (`hd_first_passage()` does not implement either; both remain documented,
+# deferred follow-up work, same as that function's own scope note).
+PROP_CONSTRAINED_SCENARIOS <- tibble::tibble(
+  label  = c("Strict (5% floor / 10% target)",
+             "Standard (10% floor / 10% target)",
+             "Lenient (20% floor / 10% target)"),
+  floor  = c(0.05, 0.10, 0.20),
+  target = c(0.10, 0.10, 0.10)
+)
+
 plan_leaderboard <- function() {
   list(
     # Explicit deps — targets must be named as function args
@@ -1176,6 +1214,77 @@ plan_leaderboard <- function() {
         dplyr::select(-obs_ann_factor, -obs_ann_factor_source)
 
       all_metrics
+    }),
+
+    # ── Prop-constrained re-ranking view (#586 second comment) ────────────
+    # Long-format: one row per (strategy x PROP_CONSTRAINED_SCENARIOS row),
+    # for the Full Period rows of `leaderboard` only -- this is a VIEW of
+    # the same targets, not a new set of strategies (dashboard-output-first,
+    # subtractive-first). A strategy failing every scenario here is
+    # FLAGGED on the "Prop-Constrained View" tab only; it is never removed
+    # from the primary leaderboard (#586's "Proposed shape": "flagged,
+    # never removed").
+    #
+    # PARAMETERISATION -- what is and is not implemented:
+    #   floor / target (hd_first_passage()'s lower/upper barriers) ARE the
+    #     caller-supplied inputs swept below, via PROP_CONSTRAINED_SCENARIOS
+    #     (module-level constant above plan_leaderboard()). Any (floor,
+    #     target) pair can be added as a new scenario row without touching
+    #     this target's logic.
+    #   daily_limit and horizon are NOT implemented. hd_first_passage()
+    #     itself documents both as deferred (see the file-level scope note
+    #     at the top of packages/historicaldata/R/first_passage.R: "finite-
+    #     horizon conditioning... requires the inverse-Gaussian first-
+    #     passage-TIME distribution... neither of which is implemented
+    #     here"). Every pass_prob/breach_prob below is therefore
+    #     INFINITE-HORIZON (no evaluation window) and has NO per-day loss
+    #     cap -- an honest CEILING on survivability under a real time-boxed
+    #     mandate, not a point estimate of it (docs/leaderboard.qmd's tab
+    #     prose carries the matching caveat). Closing this gap is
+    #     separately scoped, deferred follow-up; it is not attempted here.
+    #
+    # mu_period/sigma_period use the IDENTICAL derivation as the per-row
+    # fp_breach_prob_20pct diagnostic above -- (1+cagr)^(1/af)-1 and
+    # vol/sqrt(af) -- so the two views can never silently disagree on the
+    # underlying drift/vol estimate, only on the barrier distances.
+    targets::tar_target(leaderboard_prop_constrained, {
+      library(dplyr)
+
+      full <- leaderboard |>
+        filter(period == "Full Period") |>
+        left_join(STRATEGY_OBS_ANN_FACTOR, by = "strategy")
+
+      .pc_pass_prob <- function(cagr, vol, af, floor, target) {
+        if (is.na(cagr) || is.na(vol) || is.na(af) || af <= 0 || vol <= 0) {
+          return(NA_real_)
+        }
+        mu_period    <- (1 + cagr)^(1 / af) - 1
+        sigma_period <- vol / sqrt(af)
+        fp <- tryCatch(
+          historicaldata::hd_first_passage(
+            mu = mu_period, sigma = sigma_period, upper = target, lower = floor
+          ),
+          error = function(e) NULL
+        )
+        if (is.null(fp) || is.na(fp$pass_prob)) NA_real_ else fp$pass_prob
+      }
+
+      purrr::map_dfr(seq_len(nrow(PROP_CONSTRAINED_SCENARIOS)), function(i) {
+        scen <- PROP_CONSTRAINED_SCENARIOS[i, ]
+        full |>
+          transmute(
+            strategy,
+            sharpe, cagr, vol, max_dd,
+            scenario  = scen$label,
+            floor     = scen$floor,
+            target    = scen$target,
+            pass_prob = purrr::pmap_dbl(
+              list(cagr, vol, obs_ann_factor),
+              function(c, v, a) .pc_pass_prob(c, v, a, scen$floor, scen$target)
+            ),
+            breach_prob = ifelse(is.na(pass_prob), NA_real_, 1 - pass_prob)
+          )
+      })
     }),
 
     # ── Correlation matrix of monthly returns across strategies ───────
