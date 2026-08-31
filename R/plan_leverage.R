@@ -173,6 +173,136 @@ compute_regime_stress_ratio <- function(vpug_df) {
     dplyr::arrange(dplyr::desc(stress_ratio))
 }
 
+# ── Allocator gross-exposure target (#626 production implementation) ───────
+#
+# #626's own 2026-08-03 comment adopted a LAYERED construction, confirmed
+# again in the #626 comment thread the day this landed: a vol-normalised
+# allocator sets each strategy's RELATIVE sizing; a gross-exposure cap is the
+# backstop that binds the TOTAL. Net-exposure and cash-borrowing
+# formulations were explicitly rejected. This section implements that layer
+# pair as live targets, replacing the throwaway prototype in
+# docs/_prototypes/leverage-allocator-prototype.qmd (#827) with the real
+# thing, approved via that PR's Phase 0 sign-off.
+#
+#   G_implied = sigma_target / vol_per_unit_gross_i        (relative sizing)
+#   G_capped  = min(G_implied, backstop)                   (the cap/backstop)
+#
+# The backstop LEVEL is explicitly PROVISIONAL (#626 decision D1 is still
+# open at the time this lands) -- see LEVERAGE_GROSS_BACKSTOP_DEFAULT below.
+# The #827 prototype's live read of the leaderboard found a p90-based
+# candidate near 1.8x-2.0x (materially below the stale 3.5x #626's
+# 2026-08-05 hand-derivation used, before the #717/#722 CMR
+# vol-annualisation fixes) -- 2.0x is adopted here as a clearly-labelled,
+# overridable default, not a decision this file makes on D1's behalf.
+
+#' PROVISIONAL default gross-exposure backstop (#626 decision D1 -- NOT
+#' finalized)
+#'
+#' See the header comment above `plan_leverage()`'s allocator section for the
+#' derivation. Override via the `HD_LEVERAGE_GROSS_BACKSTOP` environment
+#' variable for sensitivity testing -- read and validated eagerly by
+#' `.leverage_gross_backstop()` below, per
+#' `.claude/rules/fail-loud-not-null.md`'s requirement that a malformed
+#' config value abort rather than silently fall back to the default.
+#' @noRd
+LEVERAGE_GROSS_BACKSTOP_DEFAULT <- 2.0
+
+#' Resolve the gross-exposure backstop, validating any override eagerly
+#'
+#' `as.numeric()` on a non-numeric string returns `NA` with a coercion
+#' warning that `tar_make()` output can easily bury -- this function
+#' `cli_abort()`s instead, naming the offending value, rather than letting a
+#' typo'd env var silently fall back to the default (or worse, silently
+#' produce an `NA` backstop that `compute_allocator_gross()` would then
+#' reject one layer downstream with a less specific message).
+#'
+#' @param env_var Character. Defaults to reading
+#'   `Sys.getenv("HD_LEVERAGE_GROSS_BACKSTOP", "")`.
+#' @return Numeric scalar: the validated override if set, else
+#'   `LEVERAGE_GROSS_BACKSTOP_DEFAULT`.
+#' @noRd
+.leverage_gross_backstop <- function(env_var = Sys.getenv("HD_LEVERAGE_GROSS_BACKSTOP", "")) {
+  if (!nzchar(env_var)) {
+    return(LEVERAGE_GROSS_BACKSTOP_DEFAULT)
+  }
+  val <- suppressWarnings(as.numeric(env_var))
+  if (is.na(val) || val <= 0) {
+    cli::cli_abort(c(
+      "x" = "HD_LEVERAGE_GROSS_BACKSTOP = {.val {env_var}} is not a positive number.",
+      "i" = paste0(
+        "Unset it to use the default ", LEVERAGE_GROSS_BACKSTOP_DEFAULT,
+        "x (PROVISIONAL, #626 D1), or set a positive numeric override."
+      )
+    ))
+  }
+  val
+}
+
+#' Per-strategy allocator gross exposure under the vol-normalised allocator,
+#' capped by a gross-exposure backstop (#626)
+#'
+#' Restricted to Full Period rows -- the allocator sizes against the whole
+#' available sample, matching every #635 hand-derivation and the #827
+#' prototype this replaces. `is_cap` is carried through unchanged (same
+#' meaning as `compute_vol_per_unit_gross()`'s own `is_cap`: a strategy whose
+#' OWN construction gross is itself a ceiling, e.g. Managed Futures'
+#' vol-targeting 3.0x cap -- independent of whether the ALLOCATOR's backstop
+#' also binds for that strategy).
+#'
+#' @param vpug_df Tibble -- the output of `compute_vol_per_unit_gross()`
+#'   (needs `strategy`, `period`, `vol_per_unit_gross`, `is_cap`).
+#' @param sigma_target Numeric scalar > 0 -- the Full Period budget-neutral
+#'   sigma_target (`compute_budget_neutral_sigma()`'s `is_headline` row).
+#' @param backstop Numeric scalar > 0 -- the gross-exposure ceiling. Defaults
+#'   to `.leverage_gross_backstop()` (PROVISIONAL, #626 D1).
+#' @return Tibble: `strategy`, `is_cap`, `vol_per_unit_gross`, `G_implied`,
+#'   `G_capped`, `backstop_binds`, `backstop_used`, `sigma_target_used` --
+#'   one row per strategy with a measurable `vol_per_unit_gross`, sorted
+#'   descending by `G_implied`.
+#' @noRd
+compute_allocator_gross <- function(vpug_df, sigma_target,
+                                     backstop = .leverage_gross_backstop()) {
+  required_cols <- c("strategy", "period", "vol_per_unit_gross", "is_cap")
+  missing_cols <- setdiff(required_cols, names(vpug_df))
+  if (length(missing_cols) > 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg vpug_df} is missing required column{?s}: {.field {missing_cols}}.",
+      "i" = "compute_allocator_gross() needs {.field {required_cols}} (see compute_vol_per_unit_gross())."
+    ))
+  }
+  if (!is.numeric(sigma_target) || length(sigma_target) != 1L || is.na(sigma_target) || sigma_target <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg sigma_target} must be a single positive number, not {.val {sigma_target}}.",
+      "i" = "compute_allocator_gross() expects the Full Period sigma_target_budget_neutral from compute_budget_neutral_sigma()."
+    ))
+  }
+  if (!is.numeric(backstop) || length(backstop) != 1L || is.na(backstop) || backstop <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg backstop} must be a single positive number, not {.val {backstop}}.",
+      "i" = "compute_allocator_gross() expects a positive gross-exposure ceiling -- see LEVERAGE_GROSS_BACKSTOP_DEFAULT (PROVISIONAL, #626 D1)."
+    ))
+  }
+
+  full <- vpug_df[vpug_df$period == "Full Period", , drop = FALSE]
+  if (nrow(full) == 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg vpug_df} has no Full Period rows.",
+      "i" = "compute_allocator_gross() sizes against the whole available sample, not a sub-partition."
+    ))
+  }
+
+  full |>
+    dplyr::transmute(
+      strategy, is_cap, vol_per_unit_gross,
+      G_implied = sigma_target / vol_per_unit_gross,
+      G_capped = pmin(G_implied, backstop),
+      backstop_binds = G_implied > backstop,
+      backstop_used = backstop,
+      sigma_target_used = sigma_target
+    ) |>
+    dplyr::arrange(dplyr::desc(G_implied))
+}
+
 plan_leverage <- function() {
   list(
     # Per-(strategy, period) vol_per_unit_gross -- the intermediate #635's
@@ -192,6 +322,22 @@ plan_leverage <- function() {
     # the live replacement for #635's hand-run regime check.
     targets::tar_target(leverage_regime_stress_ratio, {
       compute_regime_stress_ratio(leverage_vol_per_unit_gross)
+    }),
+
+    # PROVISIONAL gross-exposure backstop actually used this build (#626 D1
+    # not finalized) -- a target (not a bare constant) so it is visible in
+    # `tar_meta()`/`tar_read()` and any change to HD_LEVERAGE_GROSS_BACKSTOP
+    # correctly invalidates leverage_allocator_gross downstream.
+    targets::tar_target(leverage_gross_backstop, {
+      .leverage_gross_backstop()
+    }),
+
+    # Per-strategy allocator gross exposure (#626 production implementation,
+    # replacing the #827 prototype). Reads the Full Period headline
+    # sigma_target from leverage_sigma_target.
+    targets::tar_target(leverage_allocator_gross, {
+      sigma_headline <- leverage_sigma_target$sigma_target_budget_neutral[leverage_sigma_target$is_headline]
+      compute_allocator_gross(leverage_vol_per_unit_gross, sigma_headline, leverage_gross_backstop)
     })
   )
 }

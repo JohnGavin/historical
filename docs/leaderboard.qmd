@@ -163,6 +163,24 @@ if (!is.null(lb)) {
   }
   if (!"sharpe_haircut_pct" %in% names(full)) full$sharpe_haircut_pct <- NA_real_
 
+  # ── Leverage allocator gross-exposure target (#626 production
+  # implementation, replacing the #827 prototype) -- the vol-normalised
+  # allocator's per-strategy gross target, capped at a PROVISIONAL
+  # backstop (#626 D1 not finalized). NA for strategies with no measurable
+  # gross_convention (Value (HML), PSO Optimal), same exclusion as
+  # Gross (now) below.
+  lev_gross <- safe_tar_read("leverage_allocator_gross")
+  if (!is.null(lev_gross) && "G_capped" %in% names(lev_gross)) {
+    full <- full |> left_join(
+      lev_gross |> select(strategy, G_capped, backstop_binds, backstop_used, sigma_target_used),
+      by = "strategy"
+    )
+  }
+  for (.col in c("G_capped", "backstop_binds", "backstop_used", "sigma_target_used")) {
+    if (!.col %in% names(full)) full[[.col]] <- NA
+  }
+  rm(.col)
+
   detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
     # 5-state verdict, symbol AND text on every state (never colour alone,
     # `accessibility` rule). States 1/2 both come from a single-test
@@ -269,6 +287,63 @@ if (!is.null(lb)) {
     )
   }
 
+  # ── Gross (target) badge (#626, R/plan_leverage.R) ─────────────────────
+  # The vol-normalised allocator's per-strategy gross target, distinct from
+  # the "Gross (now)" column below: that column reports what a strategy's
+  # OWN construction implements today; this one reports what the allocator
+  # WOULD assign -- the gap the whole allocator design (#626) exists to
+  # close. G_capped is the backstop-capped figure actually shown; a
+  # `backstop_binds = TRUE` strategy had a higher uncapped implied leverage.
+  # The backstop LEVEL is PROVISIONAL (#626 D1 not finalized) -- always
+  # disclosed in the tooltip and in gross_target_note below, never presented
+  # as settled. A strategy whose detection verdict is underpowered or
+  # unverified (NA) is additionally flagged as BLOCKED by QA gate S31
+  # (detection-power-required.md) when its G_capped exceeds 1.0x -- the
+  # badge still shows the allocator's raw figure for transparency, but the
+  # tooltip states plainly that gate S31 forbids actually granting it.
+  gross_target_badge <- function(g_capped, binds, backstop, underpowered) {
+    if (is.na(g_capped)) {
+      return(list(
+        html = paste0(
+          "<span class='gross-target-badge napp' title='No measurable ",
+          "gross_convention for this strategy -- same exclusion as Gross ",
+          "(now) (Value (HML), PSO Optimal: pre-computed factor series or ",
+          "meta-portfolio blend, no explicit weight vector to measure).",
+          "'>&ndash; n/a</span>"
+        ),
+        rank = -Inf
+      ))
+    }
+    blocked <- is.na(underpowered) || isTRUE(underpowered)
+    block_txt <- if (blocked && g_capped > 1.0) {
+      paste0(
+        " BLOCKED at 1.0x by QA gate S31 (#626/#719 Layer 2, detection-",
+        "power-required.md) -- this strategy is detection-underpowered or ",
+        "has no detection verdict; the figure shown is the allocator&#39;s ",
+        "unblocked value for transparency, not what would actually be ",
+        "granted."
+      )
+    } else ""
+    binds_txt <- if (isTRUE(binds)) {
+      sprintf(
+        " Gross backstop (%.1fx, PROVISIONAL -- #626 D1 not finalized) binds: uncapped implied leverage was higher.",
+        backstop
+      )
+    } else ""
+    cls <- if (blocked && g_capped > 1.0) "blocked" else if (isTRUE(binds)) "capped" else "ok"
+    list(
+      html = sprintf(
+        paste0(
+          "<span class='gross-target-badge %s' title='Vol-normalised ",
+          "allocator target (sigma_target / vol_per_unit_gross, capped at ",
+          "a PROVISIONAL %.1fx backstop).%s%s'>%.2fx%s</span>"
+        ),
+        cls, backstop, binds_txt, block_txt, g_capped, if (isTRUE(binds)) "*" else ""
+      ),
+      rank = g_capped
+    )
+  }
+
   # ── Breach-risk badge (#586 G1, historicaldata::hd_first_passage()) ───────
   # SECONDARY, DE-EMPHASISED diagnostic: "what is the probability this
   # strategy's return path hits a -20% drawdown floor before a +20% profit
@@ -302,6 +377,8 @@ if (!is.null(lb)) {
   rig <- mapply(rigour_badge, full$strategy, full$deflated_sharpe, full$dsr_pvalue,
                 full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
                 full$dsr_haircut_pct, full$sharpe_haircut_pct, SIMPLIFY = FALSE)
+  gt <- mapply(gross_target_badge, full$G_capped, full$backstop_binds, full$backstop_used,
+               full$detection_underpowered, SIMPLIFY = FALSE)
   fp_html <- if ("fp_breach_prob_20pct" %in% names(full)) {
     vapply(full$fp_breach_prob_20pct, fp_badge, character(1))
   } else {
@@ -370,11 +447,22 @@ if (!is.null(lb)) {
       `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
       `CVaR 95%` = ifelse(is.na(cvar_95),      "not computed", paste0(round(cvar_95 * 100, 1), "%")),
       Vol        = paste0(round(vol * 100, 1), "%"),
-      Gross      = dplyr::case_when(
+      # Renamed from "Gross" to "Gross (now)" (#626): what a strategy's own
+      # construction implements TODAY, as distinct from the new
+      # "Gross (target)" column below (what the vol-normalised allocator
+      # would assign). Same case_when logic, unchanged.
+      `Gross (now)` = dplyr::case_when(
         !("gross_convention" %in% names(full)) | is.na(gross_convention) ~ "—",
         is_cap ~ paste0(format(gross_convention, nsmall = 1), "x*"),
         TRUE   ~ paste0(format(gross_convention, nsmall = 1), "x")
       ),
+      # Allocator target under the vol-normalised leverage design (#626,
+      # R/plan_leverage.R) -- see gross_target_badge() above. Placed
+      # immediately beside Gross (now) per the #827 prototype's Step 3
+      # comparable-output audit and Step 5 consolidation review (one badge
+      # column, not three raw ones).
+      `Gross (target)` = vapply(gt, function(x) x$html, character(1)),
+      .grosstgt_rank    = vapply(gt, function(x) x$rank, double(1)),
       `Cost (bps)` = dplyr::case_when(
         !("cost_per_trade_bps" %in% names(full)) | is.na(cost_per_trade_bps) ~ "—",
         cost_per_trade_bps == 0 ~ "0*",
@@ -453,7 +541,8 @@ if (!is.null(lb)) {
     # immediately left of Net CAGR (gross, then net of cost) per item B of
     # the presentation-fix pass this column set belongs to.
     select(Strategy = strategy, Credible, .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
-           CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
+           CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, `Gross (now)`, `Gross (target)`, .grosstgt_rank,
+           `Cost (bps)`, SSR, Rigour, .rig_rank,
            `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`,
            `Breach Risk (±20% DD)`)
 
@@ -516,11 +605,58 @@ if (!is.null(lb)) {
     " strategies are built dollar-neutral long-short at 2.0x gross while others run long-only at 1.0x, ",
     "so Vol, Net CAGR, and Max DD are not directly comparable across rows even when Sharpe is similar ",
     "(Sharpe is leverage-invariant under proportional scaling; the other three columns are not). ",
-    "A trailing `*` on the Gross column (", n_capped,
+    "A trailing `*` on the Gross (now) column (", n_capped,
     " strategies) marks a construction ceiling the strategy can reach but does not realise every period ",
     "(e.g. Managed Futures targets volatility and only hits its 3.0x cap in low-vol regimes) — treat those as upper bounds, not realised averages. ",
-    if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross: either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
+    if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross (now): either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
   )
+
+  # ── Leverage allocator gross-target disclosure note (#626) — dynamically
+  # computed, never hardcoded. Distinct from gross_note above: that note
+  # describes Gross (now) (what a strategy's own construction implements
+  # today); this one describes Gross (target) (what the vol-normalised
+  # allocator would assign) and explicitly flags the backstop level as
+  # PROVISIONAL, per #626 decision D1.
+  leverage_plan_link <- hd_link(
+    htmltools::tags$code("compute_allocator_gross()"),
+    sprintf("%s/blob/%s/R/plan_leverage.R", gh_base, git_sha)
+  )
+  issue_626_link <- htmltools::tags$a(
+    href = "https://github.com/JohnGavin/historical/issues/626",
+    target = "_blank", rel = "noopener noreferrer", "#626"
+  )
+  n_gross_target <- sum(!is.na(full$G_capped))
+  n_binds <- sum(full$backstop_binds, na.rm = TRUE)
+  n_blocked_s31 <- sum(
+    !is.na(full$G_capped) & full$G_capped > 1.0 &
+      (is.na(full$detection_underpowered) | full$detection_underpowered),
+    na.rm = TRUE
+  )
+  sigma_used_vals <- full$sigma_target_used[!is.na(full$sigma_target_used)]
+  backstop_used_vals <- full$backstop_used[!is.na(full$backstop_used)]
+
+  gross_target_note <- if (n_gross_target > 0) {
+    htmltools::tagList(
+      " Gross (target) (", leverage_plan_link, ", ", issue_626_link,
+      ") is the leverage the vol-normalised allocator would assign this build: sigma_target = ",
+      sprintf("%.4f", sigma_used_vals[1]),
+      " divided by each strategy's own vol-per-unit-gross, capped at a PROVISIONAL gross-exposure ",
+      "backstop of ", sprintf("%.1f", backstop_used_vals[1]),
+      "x (issue #626 decision D1 — this LEVEL is not yet finalized; override with HD_LEVERAGE_GROSS_BACKSTOP). ",
+      "The backstop binds for ", n_binds, " strateg", if (n_binds == 1) "y" else "ies", " (", n_gross_target,
+      " strategies have a measurable target). ",
+      if (n_blocked_s31 > 0) {
+        paste0(
+          n_blocked_s31, " strategy row(s) show a BLOCKED badge — QA gate S31 (R/plan_qa_gates.R) forbids ",
+          "actually granting more than 1.0x gross to a detection-underpowered or unverified strategy ",
+          "(detection-power-required.md); the figure displayed is the allocator's raw, unblocked output, ",
+          "shown for transparency only."
+        )
+      } else {
+        "No strategy is currently blocked by the detection-power gate (S31)."
+      }
+    )
+  } else ""
 
   # ── Transaction-cost disclosure note (#624) — dynamically computed, never hardcoded ──
   cost_registry_link <- hd_link(
@@ -649,7 +785,7 @@ if (!is.null(lb)) {
     "CVaR 95% columns share this exact same \"not computed\" scope (", n_net_covered, " of ",
     nrow(full), " strategies covered) — all three come from the same cost_rows join and are ",
     "jointly present or jointly absent per row (QA gate S23, R/plan_qa_gates.R).",
-    flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note,
+    flag_note, bias_note, gross_note, gross_target_note, cost_note, diversification_note, detection_note,
     sharpe_ci_note
   )
 
@@ -679,6 +815,8 @@ if (!is.null(lb)) {
   rig_rank_col  <- which(names(metrics_table) == ".rig_rank") - 1L
   sharpe_col    <- which(names(metrics_table) == "Sharpe") - 1L
   sharpe_rank_col <- which(names(metrics_table) == ".sharpe_rank") - 1L
+  grosstgt_col      <- which(names(metrics_table) == "Gross (target)") - 1L
+  grosstgt_rank_col <- which(names(metrics_table) == ".grosstgt_rank") - 1L
   numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
@@ -701,12 +839,13 @@ if (!is.null(lb)) {
       search = list(regex = TRUE, caseInsensitive = TRUE),
       columnDefs = list(
         list(className = 'dt-right', targets = numeric_cols - 1),
-        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col, sharpe_rank_col)),
+        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col, sharpe_rank_col, grosstgt_rank_col)),
         list(orderData = cred_rank_col, targets = credible_col),
         list(orderData = red_rank_col, targets = redundant_col),
         list(orderData = det_rank_col, targets = det_col),
         list(orderData = rig_rank_col, targets = rig_col),
-        list(orderData = sharpe_rank_col, targets = sharpe_col)
+        list(orderData = sharpe_rank_col, targets = sharpe_col),
+        list(orderData = grosstgt_rank_col, targets = grosstgt_col)
       ),
       initComplete = DT::JS(
         "function(settings, json) {",
@@ -741,6 +880,15 @@ if (!is.null(lb)) {
    det-badge/rig-badge it carries no severity-coded colour variants. */
 .fp-badge { color: #6c757d; font-style: italic; font-weight: 400; white-space: nowrap; }
 .sharpe-ci-flag         { color: #c0392b; font-weight: 700; }
+/* gross-target-badge (#626): mirrors det-badge/rig-badge's severity-coded
+   shape -- ok (below backstop), capped (backstop binds, informational),
+   blocked (QA gate S31 would forbid actually granting this), napp (no
+   measurable allocator input, same population as Gross (now)'s "—"). */
+.gross-target-badge     { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.gross-target-badge.ok      { color: #1a7f37; }
+.gross-target-badge.capped  { color: #9a5b00; }
+.gross-target-badge.blocked { color: #fff; background: #c0392b; }
+.gross-target-badge.napp    { color: #6c757d; font-style: italic; font-weight: 400; }
 
 [data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
 [data-bs-theme="dark"] .det-badge.mtfail,       body.dark-mode .det-badge.mtfail       { color: #c084fc; }
@@ -751,6 +899,9 @@ if (!is.null(lb)) {
 [data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
 [data-bs-theme="dark"] .fp-badge,               body.dark-mode .fp-badge               { color: #9ca3af; }
 [data-bs-theme="dark"] .sharpe-ci-flag,         body.dark-mode .sharpe-ci-flag         { color: #ff6b6b; }
+[data-bs-theme="dark"] .gross-target-badge.ok,     body.dark-mode .gross-target-badge.ok     { color: #4ade80; }
+[data-bs-theme="dark"] .gross-target-badge.capped, body.dark-mode .gross-target-badge.capped { color: #fbbf24; }
+[data-bs-theme="dark"] .gross-target-badge.napp,   body.dark-mode .gross-target-badge.napp   { color: #9ca3af; }
 @media (prefers-color-scheme: dark) {
   .det-badge.detectable   { color: #4ade80; }
   .det-badge.mtfail       { color: #c084fc; }
@@ -759,6 +910,8 @@ if (!is.null(lb)) {
   .rig-badge.partial      { color: #fbbf24; }
   .fp-badge                { color: #9ca3af; }
   .sharpe-ci-flag         { color: #ff6b6b; }
+  .gross-target-badge.ok      { color: #4ade80; }
+  .gross-target-badge.capped  { color: #fbbf24; }
 }
 </style>
 ```

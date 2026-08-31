@@ -2700,6 +2700,118 @@ check_leaderboard_plausibility_amber <- function(
 }
 
 
+#' Declared overrides for the leverage-allocator detection-power gate (S31,
+#' #626/#719 Layer 2 narrow slice)
+#'
+#' Per `.claude/rules/detection-power-required.md`'s allocation-gating rule:
+#' "A strategy may not receive gross above 1.0x while
+#' `detection_underpowered` is TRUE or NA." This is Layer 2's core rule from
+#' #719 -- NOT the full provenance checklist (the remaining Layer 2 items
+#' stay separately scoped). Empty by design at this gate's introduction: the
+#' backstop LEVEL itself is provisional (#626 D1) and no override has been
+#' reviewed against real leaderboard data yet. Schema: `strategy`, `reason`.
+#' @noRd
+LEVERAGE_GROSS_DETECTION_OVERRIDE <- tibble::tibble(
+  strategy = character(0),
+  reason   = character(0)
+)
+
+#' Assert no strategy receives allocator gross above 1.0x while its
+#' detection-power verdict is underpowered or missing (S31, #626/#719 Layer
+#' 2 narrow slice, detection-power-required.md)
+#'
+#' A strategy whose own sample cannot distinguish its Sharpe from zero
+#' (`detection_underpowered == TRUE`) -- or whose verdict was never computed
+#' at all (`NA`, which S20 already treats as a defect on the leaderboard
+#' itself) -- must not be handed MORE than 1.0x gross by the allocator,
+#' however the vol-normalised arithmetic alone would size it.
+#' `detection_underpowered = NA` is deliberately treated the SAME as `TRUE`
+#' here (`fail-loud-not-null.md`: an unknown verdict must not silently
+#' permit what a known-bad verdict would forbid) -- distinct from S20's own
+#' handling of NA, which requires every positive-Sharpe leaderboard row to
+#' HAVE a verdict in the first place; this gate additionally refuses to
+#' lever on the absence of one.
+#'
+#' `G_capped`, not `G_implied`, is the column checked: the backstop-capped
+#' figure is what the allocator would actually assign. `G_implied` may
+#' exceed 1.0x for a strategy the backstop itself brings back under it, and
+#' that case is not an offence.
+#'
+#' @param allocator_gross Tibble -- the `leverage_allocator_gross` target
+#'   (needs `strategy`, `G_capped`).
+#' @param leaderboard Tibble -- the `leaderboard` target (needs `strategy`,
+#'   `period`, `detection_underpowered`).
+#' @param override_tbl Tibble with `strategy`, `reason` columns --
+#'   `LEVERAGE_GROSS_DETECTION_OVERRIDE` above.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leverage_gross_detection_gate <- function(allocator_gross, leaderboard,
+                                                 override_tbl = LEVERAGE_GROSS_DETECTION_OVERRIDE) {
+  required_alloc_cols <- c("strategy", "G_capped")
+  missing_alloc <- setdiff(required_alloc_cols, names(allocator_gross))
+  if (length(missing_alloc) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg allocator_gross} is missing required column{?s}: {.field {missing_alloc}}.",
+      "i" = "check_leverage_gross_detection_gate() (S31) needs {.field {required_alloc_cols}} (see compute_allocator_gross())."
+    ))
+  }
+  required_lb_cols <- c("strategy", "period", "detection_underpowered")
+  missing_lb <- setdiff(required_lb_cols, names(leaderboard))
+  if (length(missing_lb) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg leaderboard} is missing required column{?s}: {.field {missing_lb}}.",
+      "i" = "check_leverage_gross_detection_gate() (S31) needs {.field {required_lb_cols}}."
+    ))
+  }
+  if (!all(c("strategy", "reason") %in% names(override_tbl))) {
+    cli::cli_abort(c(
+      "x" = "{.arg override_tbl} is missing required column(s): strategy, reason.",
+      "i" = "check_leverage_gross_detection_gate() (S31) requires LEVERAGE_GROSS_DETECTION_OVERRIDE's strategy, reason columns."
+    ))
+  }
+
+  det_full <- leaderboard[leaderboard$period == "Full Period",
+                           c("strategy", "detection_underpowered"), drop = FALSE]
+  joined <- dplyr::left_join(allocator_gross, det_full, by = "strategy")
+
+  # NA detection_underpowered is treated the same as TRUE -- see roxygen.
+  blocked <- is.na(joined$detection_underpowered) | (joined$detection_underpowered %in% TRUE)
+
+  offenders <- joined[
+    !is.na(joined$G_capped) & joined$G_capped > 1.0 & blocked &
+      !(joined$strategy %in% override_tbl$strategy),
+    , drop = FALSE
+  ]
+
+  if (nrow(offenders) > 0L) {
+    msgs <- sprintf(
+      "  %s -- G_capped = %.2fx, detection_underpowered = %s",
+      offenders$strategy, offenders$G_capped,
+      ifelse(is.na(offenders$detection_underpowered), "NA (not computed)",
+             as.character(offenders$detection_underpowered))
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "{nrow(offenders)} strategy/strategies would receive allocator gross ",
+        "above 1.0x while detection-underpowered or unverified (#626/#719 ",
+        "Layer 2, detection-power-required.md):"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "A strategy that cannot be distinguished from a zero Sharpe (or has ",
+        "no verdict at all) must not be levered above 1.0x gross. Either fix ",
+        "the underlying detection verdict, lower the strategy's allocator ",
+        "input (leverage_gross_backstop / HD_LEVERAGE_GROSS_BACKSTOP), or add ",
+        "a written row to LEVERAGE_GROSS_DETECTION_OVERRIDE (R/plan_qa_gates.R) ",
+        "with an explicit reason."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -3313,6 +3425,26 @@ plan_qa_gates <- function() {
           "qa_leaderboard_plausibility_amber: S30 ran (STAGED report-only ",
           "unless HD_ENFORCE_PLAUSIBILITY_AMBER=1 -- see cli_inform/cli_warn ",
           "output above for any flags, #719 Layer 1)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: no strategy receives allocator gross above 1.0x while
+    # detection-underpowered or unverified (S31, #626/#719 Layer 2 narrow
+    # slice, detection-power-required.md's allocation-gating rule). This is
+    # NOT the full Layer 2 provenance checklist (#719) -- only the
+    # detection-power slice of it; the remaining provenance facts remain
+    # separately scoped and are not enforced here.
+    targets::tar_target(
+      qa_leverage_gross_detection_gate,
+      command = {
+        check_leverage_gross_detection_gate(leverage_allocator_gross, leaderboard)
+        cli::cli_inform(c("v" = paste0(
+          "qa_leverage_gross_detection_gate: S31 passed (no detection-",
+          "underpowered/unverified strategy above 1.0x allocator gross, ",
+          "#626/#719 Layer 2 narrow slice)"
         )))
         TRUE
       },
