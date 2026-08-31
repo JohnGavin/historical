@@ -180,6 +180,7 @@ source(here::here("R/plan_cost_convention.R"))
 # derivation and why this replaces a hand-typed issue-comment constant.
 source(here::here("R/plan_leverage.R"))
 source(here::here("R/plan_avoid_worst.R"))
+source(here::here("R/plan_avoid_worst_v2.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
 source(here::here("R/plan_falsification.R"))
@@ -260,7 +261,7 @@ c(plan_strategy_names(),
   plan_interval_coverage(),
   plan_regime(), plan_alpha_decay(),
   plan_kelly_variants(),
-  plan_avoid_worst(),
+  plan_avoid_worst(), plan_avoid_worst_v2(),
   plan_risk_state(),
   plan_mean_reversion(),
   plan_marginal_contribution(),
