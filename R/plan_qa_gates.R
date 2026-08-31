@@ -2196,6 +2196,193 @@ check_cmr_effective_breadth <- function(cmr_portfolios) {
 }
 
 
+#' Mapping from strat_returns_daily_native's code_names to STRATEGY_OBS_
+#' ANN_FACTOR's display `strategy` labels (S28, #719 Layer 3)
+#'
+#' `strat_returns_daily_native` (R/plan_strategy_correlation.R) keys its
+#' list by the STRAT_RETURNS_WIDE_CODES code_name vocabulary ("cmr",
+#' "olmar_1", "tom", "risk_state", "avoid_worst" -- note "olmar_1" there,
+#' matching that file's own documented vocabulary, vs "olmar" in
+#' `hd_strategy_names_tbl()`). `STRATEGY_OBS_ANN_FACTOR`
+#' (R/plan_leaderboard.R) keys by the display `strategy` column
+#' (`short_name`). This table bridges the two so `check_strategy_
+#' periodicity_reconciliation()` below can look up each series' declared
+#' `ann_factor` without a third hand-maintained copy of the strategy roster.
+#'
+#' @noRd
+PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY <- c(
+  cmr         = "CMR",
+  olmar_1     = "OLMAR-1",
+  tom         = "TOM",
+  risk_state  = "Risk State",
+  avoid_worst = "Avoid Worst"
+)
+
+#' Known, documented periodicity exceptions for the S28 coverage gate
+#'
+#' #738 found `cmr_portfolio_1m`/`_3m`/`_6m` (the source of
+#' `strat_returns_daily_native`'s `cmr` entry) mixes ~12 obs/year before
+#' 2000 with ~255 obs/year after, declared daily throughout -- the SAME
+#' defect class this gate exists to catch, already discovered, already
+#' tracked on #738, and already staged to `"warn"` at CMR's own production
+#' call sites (`.compute_cmr_metrics()`'s `periodicity_check` argument,
+#' R/plan_commodities_mean_reversion.R). Re-aborting the pipeline on a
+#' known, open issue here would not surface new information -- it would
+#' just block every build until #738 is separately resolved.
+#'
+#' Per fail-loud-not-null.md Required Pattern 2 (an explicit, documented
+#' default, with a test asserting it holds -- see
+#' tests/testthat/test-strategy-periodicity-reconciliation.R), this table
+#' lists every `code_name` allowed to run in `"warn"` mode instead of
+#' `"abort"`, with the issue tracking its resolution. Any `code_name` NOT
+#' listed here runs in full `"abort"` mode -- this is an exemption list, not
+#' a default, and adding a row to it requires a cited, open issue.
+#'
+#' @noRd
+PERIODICITY_RECONCILIATION_EXEMPT <- tibble::tibble(
+  code_name = c("cmr"),
+  reason = c(paste(
+    "Mixed-frequency series (12 obs/yr pre-2000, ~255 obs/yr after),",
+    "declared daily throughout -- tracked and staged to warn-mode at",
+    "source (#738); re-aborting here duplicates a known, open issue",
+    "rather than catching a new one."
+  ))
+)
+
+#' Reconcile each daily-native strategy's declared ann_factor against its
+#' own observed date frequency (S28, #719 Layer 3)
+#'
+#' The pipeline-wide coverage backstop #719 Layer 3 option (a) asks for:
+#' "A QA target comparing each strategy's declared ann_factor against the
+#' median gap between its own observation dates ... covers everything at
+#' once." `.assert_cmr_ann_factor()` (R/plan_commodities_mean_reversion.R,
+#' #717/#720/#738) already does this for CMR, at the point CMR's own
+#' `.compute_cmr_metrics()` receives `ann_factor` -- but that guard fires
+#' only if a new call site remembers to call it, exactly the "guard scoped
+#' to the known path" gap fail-loud-not-null.md Required Pattern 5 warns
+#' about. This gate is the backstop: it does not rely on any individual
+#' strategy's own code calling anything, it reconciles the DATA independent
+#' of whether a guard was wired in.
+#'
+#' Scope: the five DAILY-native strategies (CMR, OLMAR-1, TOM, Risk State,
+#' Avoid Worst) collected in one place by `strat_returns_daily_native`
+#' (R/plan_strategy_correlation.R, #733) -- this is the one existing target
+#' where a strategy's own per-observation dates are available centrally.
+#' The eleven MONTHLY-native strategies are NOT covered by this gate: each
+#' is built inside its own plan file and collapses onto a monthly `ym`
+#' spine (`format(date, "%Y-%m")`) before reaching any shared target, which
+#' structurally forecloses the specific defect shape CMR hit (a `nrow()` of
+#' daily rows fed straight into `ann_factor = 12`) -- there is no `ym`-spine
+#' analogue of "6852 rows silently treated as 6852 months". A monthly
+#' strategy could still in principle carry a genuine periodicity error (its
+#' own upstream date derivation is wrong), but that is a different defect
+#' shape this gate does not claim to catch; extending centralised raw-date
+#' collection to the monthly cohort is a documented follow-up, not silently
+#' assumed to be covered here.
+#'
+#' Uses `PERIODICITY_RECONCILIATION_EXEMPT` to run known, already-tracked
+#' issues (currently only CMR/#738) in `"warn"` mode instead of `"abort"` --
+#' see that table's roxygen. Every other strategy runs in full `"abort"`
+#' mode: a NEW mismatch here is a NEW defect, not a known one.
+#'
+#' @param daily_native Named list of tibbles, one per daily-native strategy,
+#'   each with `date` and `ret` columns -- `strat_returns_daily_native`
+#'   (R/plan_strategy_correlation.R).
+#' @param obs_ann_factor_tbl Tibble with `strategy`, `obs_ann_factor`
+#'   columns -- `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R).
+#' @param code_to_strategy Named character vector mapping
+#'   `names(daily_native)` to `obs_ann_factor_tbl$strategy`. Defaults to
+#'   `PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY`.
+#' @param exempt_tbl Tibble with `code_name`, `reason` columns naming known,
+#'   documented exceptions run in `"warn"` mode instead of `"abort"`.
+#'   Defaults to `PERIODICITY_RECONCILIATION_EXEMPT`.
+#' @return `TRUE` invisibly on success (including when the only failures
+#'   were exempted down to warnings).
+#' @noRd
+check_strategy_periodicity_reconciliation <- function(
+    daily_native, obs_ann_factor_tbl,
+    code_to_strategy = PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY,
+    exempt_tbl = PERIODICITY_RECONCILIATION_EXEMPT) {
+
+  required_obs_cols <- c("strategy", "obs_ann_factor")
+  missing_obs_cols <- setdiff(required_obs_cols, names(obs_ann_factor_tbl))
+  if (length(missing_obs_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "obs_ann_factor_tbl is missing {length(missing_obs_cols)} required column(s): {missing_obs_cols}.",
+      "i" = "check_strategy_periodicity_reconciliation() (S28) requires STRATEGY_OBS_ANN_FACTOR's strategy, obs_ann_factor columns."
+    ))
+  }
+
+  code_names <- names(daily_native)
+  unmapped <- setdiff(code_names, names(code_to_strategy))
+  if (length(unmapped) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(unmapped), " strat_returns_daily_native entr",
+        if (length(unmapped) == 1L) "y has" else "ies have",
+        " no PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY mapping:"
+      ),
+      setNames(sprintf("  %s", unmapped), rep("i", length(unmapped))),
+      "i" = "Add a row to PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY (R/plan_qa_gates.R)."
+    ))
+  }
+
+  errors  <- character(0)
+  exempt_used <- character(0)
+
+  for (cn in code_names) {
+    strategy <- code_to_strategy[[cn]]
+    declared_row <- obs_ann_factor_tbl[obs_ann_factor_tbl$strategy == strategy, , drop = FALSE]
+    if (nrow(declared_row) != 1L) {
+      errors <- c(errors, sprintf(
+        "%s (code_name %s): no matching row in STRATEGY_OBS_ANN_FACTOR for strategy %s",
+        strategy, cn, strategy
+      ))
+      next
+    }
+    declared <- declared_row$obs_ann_factor[[1]]
+
+    is_exempt <- cn %in% exempt_tbl$code_name
+    mode <- if (is_exempt) "warn" else "abort"
+
+    caught <- tryCatch({
+      .assert_periodicity_reconciles(
+        dates = daily_native[[cn]]$date,
+        ann_factor = declared,
+        label = strategy,
+        on_violation = mode
+      )
+      NULL
+    }, error = function(e) conditionMessage(e))
+
+    if (!is.null(caught)) {
+      errors <- c(errors, sprintf("%s (code_name %s): %s", strategy, cn, caught))
+    } else if (is_exempt) {
+      exempt_used <- c(exempt_used, strategy)
+    }
+  }
+
+  if (length(errors) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(errors), " strategy/strategies failed periodicity reconciliation ",
+        "(S28, #719 Layer 3):"
+      ),
+      setNames(sprintf("  %s", errors), rep("i", length(errors))),
+      "i" = paste0(
+        "A declared ann_factor must match the OBSERVED frequency of the ",
+        "series it annualises -- see .claude/rules/fail-loud-not-null.md ",
+        "Required Pattern 5 and issue #719. Known, documented exceptions go ",
+        "in PERIODICITY_RECONCILIATION_EXEMPT (R/plan_qa_gates.R), not a ",
+        "code change here."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -2742,6 +2929,32 @@ plan_qa_gates <- function() {
           `6m` = cmr_portfolio_6m
         ))
         cli::cli_inform(c("v" = "qa_cmr_effective_breadth: S27 passed (n_eff >= floor on every date holding a position, all 3 CMR lookback partitions)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: each daily-native strategy's declared ann_factor reconciles
+    # against its own observed date frequency (S28, #719 Layer 3) --
+    # pipeline-wide backstop, independent of whether any individual
+    # strategy's own metrics code calls a periodicity guard. Scoped to the
+    # five daily-native strategies collected in strat_returns_daily_native
+    # (R/plan_strategy_correlation.R, #733); see
+    # check_strategy_periodicity_reconciliation()'s roxygen above for why
+    # the eleven monthly-native strategies are not (yet) in scope.
+    targets::tar_target(
+      qa_strategy_periodicity_reconciliation,
+      command = {
+        check_strategy_periodicity_reconciliation(
+          strat_returns_daily_native,
+          STRATEGY_OBS_ANN_FACTOR
+        )
+        cli::cli_inform(c("v" = paste0(
+          "qa_strategy_periodicity_reconciliation: S28 passed (declared ",
+          "ann_factor reconciles with observed date frequency for all ",
+          "daily-native strategies; known exceptions in ",
+          "PERIODICITY_RECONCILIATION_EXEMPT run in warn-mode)"
+        )))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

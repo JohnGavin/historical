@@ -98,6 +98,10 @@ source(here::here("R/crypto_momentum_helpers.R"))
 # Source canonical backtest annualisation helper (annualise_returns()) — used by plan_kelly_variants + plan_etf_replication
 source(here::here("R/utils_metrics.R"))
 
+# Source shared periodicity reconciliation helper (#719 Layer 3) — used by
+# R/plan_qa_gates.R's qa_strategy_periodicity_reconciliation (S28)
+source(here::here("R/utils_periodicity.R"))
+
 # Source rolling utility helpers (must load before any analysis file that calls roll_mean_safe)
 source(here::here("R/utils_rolling.R"))
 
