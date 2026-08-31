@@ -431,6 +431,26 @@ plan_managed_futures <- function() {
         # on a detection-power-cleared strategy (e.g. OLMAR-1).
         detection_caveat = "sample is detection_underpowered per #726 -- see comment above target"
       )
+    }),
+
+    # ── Registry sentinel (#587 Phase 1) ────────────────────────────────────
+    # Upserts bt.strategy row for "mf_tsm", records one bt.run + bt.metric
+    # rows (full-period slice of mf_metrics, "Long-Short TS-Mom (MOP 2012,
+    # vol-targeted)" -- the same row R/plan_leaderboard.R's .norm_mf()
+    # selects as the canonical leaderboard row for "Managed Futures").
+    # Guard: returns empty tibble if DBI / duckdb are unavailable.
+    #
+    # #587: this strategy sat in the strategy_names single-source-of-truth
+    # tibble (#427) but never got a registration sentinel, so bt.strategy
+    # never carried a row for it -- one of the 3 gaps issue #587's comment
+    # (Flaw 1) identified (ev_ebit, mf_tsm, olmar; olmar itself already
+    # fixed by #629, this is the remaining 2 of 3).
+    targets::tar_target(mf_register_runs, {
+      .mf_register_runs(
+        strategy_names = strategy_names,
+        mf_metrics     = mf_metrics,
+        mf_portfolios  = mf_portfolios
+      )
     })
 
   )
@@ -488,4 +508,98 @@ plan_managed_futures <- function() {
     pos_null$GLD * df$exc_GLD +
     pos_null$DBC * df$exc_DBC
   ) / 4 - cost
+}
+
+#' Register the Managed Futures ("mf_tsm") backtest run in the strategy registry
+#'
+#' Mirrors `.ev_register_runs()` from plan_ev_ebit.R.
+#'
+#' @param strategy_names Tibble from the `strategy_names` target.
+#' @param mf_metrics Tibble from the `mf_metrics` target; the "Long-Short
+#'   TS-Mom (MOP 2012, vol-targeted)" / "Full" row is registered -- the same
+#'   row R/plan_leaderboard.R's `.norm_mf()` selects as the canonical
+#'   leaderboard row for "Managed Futures".
+#' @param mf_portfolios Tibble from the `mf_portfolios` target; used to
+#'   extract returns for SSR/top5pct stability metrics.
+#'
+#' @return Tibble with columns: strategy_id, run_uuid.
+#' @noRd
+.mf_register_runs <- function(strategy_names, mf_metrics, mf_portfolios) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      strategy_id = character(),
+      run_uuid    = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  strat_row <- strategy_names |>
+    dplyr::filter(.data$code_name == "mf_tsm") |>
+    dplyr::transmute(
+      strategy_id        = .data$code_name,
+      short_name         = .data$short_name,
+      long_name          = .data$long_name,
+      asset_class        = .data$asset_class,
+      frequency          = .data$frequency,
+      ann_factor         = as.integer(.data$ann_factor),
+      directionality     = as.character(.data$directionality),
+      liquidity_tier     = as.character(.data$liquidity_tier),
+      time_horizon_days  = as.integer(.data$time_horizon_days_avg),
+      trades_per_year    = as.numeric(.data$trades_per_year_avg),
+      turnover_pct       = as.numeric(.data$turnover_pct_per_period_avg),
+      tags               = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+
+  historicaldata::hd_strategy_upsert(con, strat_row)
+
+  uu <- historicaldata::hd_run_upsert(
+    con,
+    strategy_id      = "mf_tsm",
+    partition        = "phase1",
+    pipeline_version = "phase1"
+  )
+
+  # Record full-period metrics row for the canonical MOP 2012 long-short leg.
+  # Units (fail-loud-not-null.md): cagr/vol/max_dd/ann_rf are PERCENT
+  # (R/plan_managed_futures.R's calc_metrics() stores x*100), sharpe/calmar
+  # are scale-free ratios, n_months is a count. window_start/window_end are
+  # Date columns and are auto-skipped by hd_metric_record()'s wide-form
+  # numeric-only filter (is.numeric(Date) is FALSE).
+  full_row <- mf_metrics[
+    mf_metrics$strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)" &
+      mf_metrics$period == "Full",
+    , drop = FALSE
+  ]
+  if (nrow(full_row) == 1L) {
+    metric_cols <- setdiff(names(full_row), c("strategy", "period"))
+    mf_units <- c(
+      n_months = "count", cagr = "percent", vol = "percent",
+      sharpe = "ratio", ann_rf = "percent", max_dd = "percent",
+      calmar = "ratio"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = mf_units
+    )
+  }
+
+  # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
+  rets <- mf_portfolios$ret_ls
+  rets <- rets[!is.na(rets)]
+  if (length(rets) > 0L) {
+    historicaldata::hd_record_stability_metrics(
+      con        = con,
+      run_uuid   = uu,
+      returns    = rets,
+      w          = 36L,
+      ann_factor = 12L
+    )
+  }
+
+  tibble::tibble(strategy_id = "mf_tsm", run_uuid = uu)
 }
