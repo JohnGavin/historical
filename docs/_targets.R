@@ -171,6 +171,10 @@ source(here::here("R/plan_strategy_correlation.R"))
 source(here::here("R/plan_exposure.R"))
 # #624: per-strategy transaction-cost convention registry (measurement only)
 source(here::here("R/plan_cost_convention.R"))
+# #635: live sigma_target (budget-neutral leverage level) + regime stress
+# check, computed from `leaderboard` -- see the file header for the
+# derivation and why this replaces a hand-typed issue-comment constant.
+source(here::here("R/plan_leverage.R"))
 source(here::here("R/plan_avoid_worst.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
@@ -272,6 +276,7 @@ c(plan_strategy_names(),
   plan_exposure(),
   plan_cost_convention(),
   plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
+  plan_leverage(),
   plan_falsification(),
   plan_falsification_vignette(),
   plan_stop_rule_test(),
