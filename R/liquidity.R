@@ -27,32 +27,94 @@ calculate_adv <- function(df, window_days = 20) {
 
 #' Apply liquidity filter based on minimum ADV
 #'
-#' @param df Tibble with adv_usd column
-#' @param min_adv_usd Minimum average daily volume in USD (default $1M)
+#' Two threshold modes are supported (#625):
+#'
+#' - `"nominal"` (default) flags rows below a fixed dollar `min_adv_usd`.
+#'   This is a fixed cut that drifts in liquidity-percentile terms as
+#'   market-wide ADV grows over a multi-decade sample -- see the issue's
+#'   "A real modelling concern" section.
+#' - `"percentile"` flags the bottom `min_adv_percentile` fraction of the
+#'   cross-section defined by `by` (default `"date"`) each period, so the
+#'   threshold is recomputed from current data and is regime-invariant
+#'   against ADV growth/inflation over the sample -- the "principled fix"
+#'   option in #625.
+#'
+#' @param df Tibble with adv_usd column (and, for `threshold_mode =
+#'   "percentile"`, the column named by `by`)
+#' @param min_adv_usd Minimum average daily volume in USD (default $1M).
+#'   Used when `threshold_mode = "nominal"`.
 #' @param filter_mode "warn" (default) or "remove"
+#' @param threshold_mode "nominal" (default, fixed dollar cut) or
+#'   "percentile" (cross-sectional percentile cut, recomputed per `by`
+#'   group)
+#' @param min_adv_percentile Minimum ADV percentile rank within each `by`
+#'   group (default 0.30, i.e. the bottom 30% by ADV are flagged illiquid).
+#'   Used when `threshold_mode = "percentile"`.
+#' @param by Column defining the cross-section percentile is computed
+#'   within (default `"date"`). Used when `threshold_mode = "percentile"`.
 #' @return Filtered tibble with liquidity_flag column
 #' @export
-filter_liquidity <- function(df, min_adv_usd = 1e6, filter_mode = "warn") {
+filter_liquidity <- function(df,
+                              min_adv_usd = 1e6,
+                              filter_mode = "warn",
+                              threshold_mode = c("nominal", "percentile"),
+                              min_adv_percentile = 0.30,
+                              by = "date") {
+  threshold_mode <- match.arg(threshold_mode)
+
   if (!"adv_usd" %in% names(df)) {
     cli::cli_abort("adv_usd column missing. Run calculate_adv() first.")
   }
 
-  df <- df |>
-    dplyr::mutate(
-      liquidity_flag = dplyr::case_when(
-        is.na(adv_usd) ~ "insufficient_data",
-        adv_usd < min_adv_usd ~ "illiquid",
-        TRUE ~ "liquid"
+  if (threshold_mode == "percentile") {
+    if (!by %in% names(df)) {
+      cli::cli_abort(
+        "Column {.val {by}} (threshold_mode = 'percentile' cross-section key, `by`) not found in df."
       )
-    )
+    }
+    df <- df |>
+      dplyr::mutate(.pctile_grp = .data[[by]]) |>
+      dplyr::group_by(.pctile_grp) |>
+      dplyr::mutate(
+        .adv_pctile = dplyr::if_else(
+          is.na(adv_usd),
+          NA_real_,
+          dplyr::percent_rank(adv_usd)
+        ),
+        liquidity_flag = dplyr::case_when(
+          is.na(adv_usd) ~ "insufficient_data",
+          .adv_pctile < min_adv_percentile ~ "illiquid",
+          TRUE ~ "liquid"
+        )
+      ) |>
+      dplyr::ungroup() |>
+      dplyr::select(-.pctile_grp, -.adv_pctile)
+  } else {
+    df <- df |>
+      dplyr::mutate(
+        liquidity_flag = dplyr::case_when(
+          is.na(adv_usd) ~ "insufficient_data",
+          adv_usd < min_adv_usd ~ "illiquid",
+          TRUE ~ "liquid"
+        )
+      )
+  }
 
   n_illiquid <- sum(df$liquidity_flag == "illiquid", na.rm = TRUE)
   n_total <- nrow(df)
   pct_illiquid <- round(100 * n_illiquid / n_total, 1)
 
   if (n_illiquid > 0) {
+    threshold_desc <- if (threshold_mode == "percentile") {
+      "ADV percentile rank < {min_adv_percentile} within each '{by}' cross-section"
+    } else {
+      "ADV < ${scales::comma(min_adv_usd)}"
+    }
     cli::cli_warn(c(
-      "!" = "{n_illiquid} / {n_total} ({pct_illiquid}%) observations flagged as illiquid (ADV < ${scales::comma(min_adv_usd)})",
+      "!" = paste0(
+        "{n_illiquid} / {n_total} ({pct_illiquid}%) observations flagged as illiquid (",
+        threshold_desc, ")"
+      ),
       "i" = "Set filter_mode='remove' to exclude them"
     ))
   }
