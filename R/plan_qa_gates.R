@@ -2196,6 +2196,510 @@ check_cmr_effective_breadth <- function(cmr_portfolios) {
 }
 
 
+#' Mapping from strat_returns_daily_native's code_names to STRATEGY_OBS_
+#' ANN_FACTOR's display `strategy` labels (S28, #719 Layer 3)
+#'
+#' `strat_returns_daily_native` (R/plan_strategy_correlation.R) keys its
+#' list by the STRAT_RETURNS_WIDE_CODES code_name vocabulary ("cmr",
+#' "olmar_1", "tom", "risk_state", "avoid_worst" -- note "olmar_1" there,
+#' matching that file's own documented vocabulary, vs "olmar" in
+#' `hd_strategy_names_tbl()`). `STRATEGY_OBS_ANN_FACTOR`
+#' (R/plan_leaderboard.R) keys by the display `strategy` column
+#' (`short_name`). This table bridges the two so `check_strategy_
+#' periodicity_reconciliation()` below can look up each series' declared
+#' `ann_factor` without a third hand-maintained copy of the strategy roster.
+#'
+#' @noRd
+PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY <- c(
+  cmr         = "CMR",
+  olmar_1     = "OLMAR-1",
+  tom         = "TOM",
+  risk_state  = "Risk State",
+  avoid_worst = "Avoid Worst"
+)
+
+#' Known, documented periodicity exceptions for the S28 coverage gate
+#'
+#' #738 found `cmr_portfolio_1m`/`_3m`/`_6m` (the source of
+#' `strat_returns_daily_native`'s `cmr` entry) mixes ~12 obs/year before
+#' 2000 with ~255 obs/year after, declared daily throughout -- the SAME
+#' defect class this gate exists to catch, already discovered, already
+#' tracked on #738, and already staged to `"warn"` at CMR's own production
+#' call sites (`.compute_cmr_metrics()`'s `periodicity_check` argument,
+#' R/plan_commodities_mean_reversion.R). Re-aborting the pipeline on a
+#' known, open issue here would not surface new information -- it would
+#' just block every build until #738 is separately resolved.
+#'
+#' Per fail-loud-not-null.md Required Pattern 2 (an explicit, documented
+#' default, with a test asserting it holds -- see
+#' tests/testthat/test-strategy-periodicity-reconciliation.R), this table
+#' lists every `code_name` allowed to run in `"warn"` mode instead of
+#' `"abort"`, with the issue tracking its resolution. Any `code_name` NOT
+#' listed here runs in full `"abort"` mode -- this is an exemption list, not
+#' a default, and adding a row to it requires a cited, open issue.
+#'
+#' @noRd
+PERIODICITY_RECONCILIATION_EXEMPT <- tibble::tibble(
+  code_name = c("cmr"),
+  reason = c(paste(
+    "Mixed-frequency series (12 obs/yr pre-2000, ~255 obs/yr after),",
+    "declared daily throughout -- tracked and staged to warn-mode at",
+    "source (#738); re-aborting here duplicates a known, open issue",
+    "rather than catching a new one."
+  ))
+)
+
+#' Reconcile each daily-native strategy's declared ann_factor against its
+#' own observed date frequency (S28, #719 Layer 3)
+#'
+#' The pipeline-wide coverage backstop #719 Layer 3 option (a) asks for:
+#' "A QA target comparing each strategy's declared ann_factor against the
+#' median gap between its own observation dates ... covers everything at
+#' once." `.assert_cmr_ann_factor()` (R/plan_commodities_mean_reversion.R,
+#' #717/#720/#738) already does this for CMR, at the point CMR's own
+#' `.compute_cmr_metrics()` receives `ann_factor` -- but that guard fires
+#' only if a new call site remembers to call it, exactly the "guard scoped
+#' to the known path" gap fail-loud-not-null.md Required Pattern 5 warns
+#' about. This gate is the backstop: it does not rely on any individual
+#' strategy's own code calling anything, it reconciles the DATA independent
+#' of whether a guard was wired in.
+#'
+#' Scope: the five DAILY-native strategies (CMR, OLMAR-1, TOM, Risk State,
+#' Avoid Worst) collected in one place by `strat_returns_daily_native`
+#' (R/plan_strategy_correlation.R, #733) -- this is the one existing target
+#' where a strategy's own per-observation dates are available centrally.
+#' The eleven MONTHLY-native strategies are NOT covered by this gate: each
+#' is built inside its own plan file and collapses onto a monthly `ym`
+#' spine (`format(date, "%Y-%m")`) before reaching any shared target, which
+#' structurally forecloses the specific defect shape CMR hit (a `nrow()` of
+#' daily rows fed straight into `ann_factor = 12`) -- there is no `ym`-spine
+#' analogue of "6852 rows silently treated as 6852 months". A monthly
+#' strategy could still in principle carry a genuine periodicity error (its
+#' own upstream date derivation is wrong), but that is a different defect
+#' shape this gate does not claim to catch; extending centralised raw-date
+#' collection to the monthly cohort is a documented follow-up, not silently
+#' assumed to be covered here.
+#'
+#' Uses `PERIODICITY_RECONCILIATION_EXEMPT` to run known, already-tracked
+#' issues (currently only CMR/#738) in `"warn"` mode instead of `"abort"` --
+#' see that table's roxygen. Every other strategy runs in full `"abort"`
+#' mode: a NEW mismatch here is a NEW defect, not a known one.
+#'
+#' @param daily_native Named list of tibbles, one per daily-native strategy,
+#'   each with `date` and `ret` columns -- `strat_returns_daily_native`
+#'   (R/plan_strategy_correlation.R).
+#' @param obs_ann_factor_tbl Tibble with `strategy`, `obs_ann_factor`
+#'   columns -- `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R).
+#' @param code_to_strategy Named character vector mapping
+#'   `names(daily_native)` to `obs_ann_factor_tbl$strategy`. Defaults to
+#'   `PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY`.
+#' @param exempt_tbl Tibble with `code_name`, `reason` columns naming known,
+#'   documented exceptions run in `"warn"` mode instead of `"abort"`.
+#'   Defaults to `PERIODICITY_RECONCILIATION_EXEMPT`.
+#' @return `TRUE` invisibly on success (including when the only failures
+#'   were exempted down to warnings).
+#' @noRd
+check_strategy_periodicity_reconciliation <- function(
+    daily_native, obs_ann_factor_tbl,
+    code_to_strategy = PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY,
+    exempt_tbl = PERIODICITY_RECONCILIATION_EXEMPT) {
+
+  required_obs_cols <- c("strategy", "obs_ann_factor")
+  missing_obs_cols <- setdiff(required_obs_cols, names(obs_ann_factor_tbl))
+  if (length(missing_obs_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "obs_ann_factor_tbl is missing {length(missing_obs_cols)} required column(s): {missing_obs_cols}.",
+      "i" = "check_strategy_periodicity_reconciliation() (S28) requires STRATEGY_OBS_ANN_FACTOR's strategy, obs_ann_factor columns."
+    ))
+  }
+
+  code_names <- names(daily_native)
+  unmapped <- setdiff(code_names, names(code_to_strategy))
+  if (length(unmapped) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(unmapped), " strat_returns_daily_native entr",
+        if (length(unmapped) == 1L) "y has" else "ies have",
+        " no PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY mapping:"
+      ),
+      setNames(sprintf("  %s", unmapped), rep("i", length(unmapped))),
+      "i" = "Add a row to PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY (R/plan_qa_gates.R)."
+    ))
+  }
+
+  errors  <- character(0)
+  exempt_used <- character(0)
+
+  for (cn in code_names) {
+    strategy <- code_to_strategy[[cn]]
+    declared_row <- obs_ann_factor_tbl[obs_ann_factor_tbl$strategy == strategy, , drop = FALSE]
+    if (nrow(declared_row) != 1L) {
+      errors <- c(errors, sprintf(
+        "%s (code_name %s): no matching row in STRATEGY_OBS_ANN_FACTOR for strategy %s",
+        strategy, cn, strategy
+      ))
+      next
+    }
+    declared <- declared_row$obs_ann_factor[[1]]
+
+    is_exempt <- cn %in% exempt_tbl$code_name
+    mode <- if (is_exempt) "warn" else "abort"
+
+    caught <- tryCatch({
+      .assert_periodicity_reconciles(
+        dates = daily_native[[cn]]$date,
+        ann_factor = declared,
+        label = strategy,
+        on_violation = mode
+      )
+      NULL
+    }, error = function(e) conditionMessage(e))
+
+    if (!is.null(caught)) {
+      errors <- c(errors, sprintf("%s (code_name %s): %s", strategy, cn, caught))
+    } else if (is_exempt) {
+      exempt_used <- c(exempt_used, strategy)
+    }
+  }
+
+  if (length(errors) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(errors), " strategy/strategies failed periodicity reconciliation ",
+        "(S28, #719 Layer 3):"
+      ),
+      setNames(sprintf("  %s", errors), rep("i", length(errors))),
+      "i" = paste0(
+        "A declared ann_factor must match the OBSERVED frequency of the ",
+        "series it annualises -- see .claude/rules/fail-loud-not-null.md ",
+        "Required Pattern 5 and issue #719. Known, documented exceptions go ",
+        "in PERIODICITY_RECONCILIATION_EXEMPT (R/plan_qa_gates.R), not a ",
+        "code change here."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Assert leaderboard metrics are not PHYSICALLY IMPOSSIBLE (S29, #719
+#' Layer 1 -- Red tier)
+#'
+#' #719's "traffic light" plausibility design has three tiers: red
+#' (physically impossible -- abort), amber (peer-relative outlier --
+#' requires acknowledgement, see `check_leaderboard_plausibility_amber()`
+#' below), green (within band -- silent). This is the RED tier, checked
+#' exactly as #719 specifies it:
+#'
+#' \itemize{
+#'   \item `vol <= 0` -- a return series with zero or negative annualised
+#'     volatility is not a real return series.
+#'   \item `max_dd < -1` -- a drawdown cannot exceed -100% of peak equity.
+#'   \item `abs(sharpe) > 5` -- an annualised Sharpe this extreme has never
+#'     been documented for a real, investable strategy over any meaningful
+#'     sample (see #726's detection-power finding that even a 0.62 Sharpe
+#'     needs 16 years of data to be distinguishable from zero -- a Sharpe
+#'     of 5 implies an effect size no real market has produced).
+#'   \item implied years (`months / obs_ann_factor`) `> 100` -- #717's own
+#'     defect produced exactly this shape: `n / ann_factor` = 565.75
+#'     "years" from a 27-year series wrongly annualised.
+#' }
+#'
+#' Two of these four (`vol <= 0`, `max_dd < -1`) overlap the RANGE already
+#' checked by `check_leaderboard_metric_ranges()` (S9) -- deliberately: S9
+#' is a wide, generous SCALE-ERROR gate (bounds `vol` in `[0, 2]`, `max_dd`
+#' in `[-1, 0]`, built to catch a percent-vs-fraction unit bug, #637) and
+#' its `vol` lower bound is INCLUSIVE of zero, which this gate closes. The
+#' other two checks (`sharpe`, implied years) are not checked by S9 at all.
+#' Both gates are kept side by side rather than merged: they answer
+#' different questions ("is this the right scale" vs "is this physically
+#' possible at any scale") and a future change to one's bounds should not
+#' require reasoning about the other.
+#'
+#' The implied-years check needs each row's TRUE annualisation factor,
+#' joined from `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R) the same
+#' way S19/S20/S29 (this gate) all do -- `months` alone is ambiguous, since
+#' five strategies' `months` column actually holds a DAILY observation
+#' count (see the `STRATEGY_OBS_ANN_FACTOR` comment block).
+#'
+#' @param leaderboard Tibble with `strategy`, `period`, `vol`, `max_dd`,
+#'   `sharpe`, `months` columns (the output of the `leaderboard` target).
+#' @param obs_ann_factor_tbl Tibble with `strategy`, `obs_ann_factor`
+#'   columns -- `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_plausibility_red <- function(leaderboard, obs_ann_factor_tbl) {
+  required_cols <- c("strategy", "period", "vol", "max_dd", "sharpe", "months")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_leaderboard_plausibility_red() (S29) requires strategy, period, vol, max_dd, sharpe, months."
+    ))
+  }
+  if (!all(c("strategy", "obs_ann_factor") %in% names(obs_ann_factor_tbl))) {
+    cli::cli_abort(c(
+      "x" = "obs_ann_factor_tbl is missing required column(s): strategy, obs_ann_factor.",
+      "i" = "check_leaderboard_plausibility_red() (S29) requires STRATEGY_OBS_ANN_FACTOR's strategy, obs_ann_factor columns."
+    ))
+  }
+
+  joined <- dplyr::left_join(
+    leaderboard, obs_ann_factor_tbl[, c("strategy", "obs_ann_factor")],
+    by = "strategy"
+  )
+  implied_years <- joined$months / joined$obs_ann_factor
+
+  flag <- function(bad, metric, value, bound_desc) {
+    if (!any(bad, na.rm = TRUE)) return(NULL)
+    idx <- which(bad)
+    tibble::tibble(
+      strategy = joined$strategy[idx], period = joined$period[idx],
+      metric = metric, value = value[idx], bound_desc = bound_desc
+    )
+  }
+
+  offenders <- dplyr::bind_rows(
+    flag(!is.na(joined$vol) & joined$vol <= 0, "vol", joined$vol, "> 0"),
+    flag(!is.na(joined$max_dd) & joined$max_dd < -1, "max_dd", joined$max_dd, ">= -1"),
+    flag(!is.na(joined$sharpe) & abs(joined$sharpe) > 5, "sharpe", joined$sharpe, "abs() <= 5"),
+    flag(!is.na(implied_years) & implied_years > 100, "implied_years", implied_years, "<= 100")
+  )
+
+  if (nrow(offenders) > 0L) {
+    msgs <- purrr::pmap_chr(
+      offenders[, c("strategy", "period", "metric", "value", "bound_desc")],
+      function(strategy, period, metric, value, bound_desc) {
+        sprintf("  %s / %s -- %s = %s (expected %s)",
+                strategy, period, metric, format(value, digits = 4), bound_desc)
+      }
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has {nrow(offenders)} physically impossible metric ",
+        "value(s) (#719 Layer 1 Red tier):"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "These are RED-tier: not a peer-relative outlier judgement, a value ",
+        "that cannot be true under any correct computation. See #717 for the ",
+        "worked case (566 implied years from a mis-annualised daily series)."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
+#' Documented acknowledgements for peer-relative plausibility AMBER flags
+#' (#719 Layer 1)
+#'
+#' Empty by design at this gate's introduction. #719 explicitly asks for
+#' the amber gate to be "run once across the full leaderboard as intended"
+#' BEFORE any row is acknowledged here -- populating this table today, from
+#' this dispatch, without having seen a real run's output, would be a
+#' guess wearing the shape of a decision. See
+#' `check_leaderboard_plausibility_amber()`'s roxygen for the staging plan
+#' this leaves for the next run against real data.
+#'
+#' Schema, once populated: `strategy`, `metric`, `reason` -- e.g. exactly
+#' #719's own worked example, `strategy = "Managed Futures", metric =
+#' "vol", reason = "vol-targeted at 6%, by construction"`.
+#'
+#' @noRd
+LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED <- tibble::tibble(
+  strategy = character(0),
+  metric   = character(0),
+  reason   = character(0)
+)
+
+#' Modified z-score threshold for the AMBER tier (Iglewicz & Hoya 1993)
+#'
+#' `0.6745 * (x - median(x)) / mad(x)`, flagged when its absolute value
+#' exceeds this threshold. 3.5 is the standard citable choice for this
+#' statistic (Iglewicz, B. & Hoya, D. C. (1993), "How to Detect and Handle
+#' Outliers", ASQC), not a value invented for this gate -- a defensible,
+#' peer-reviewed default in place of an arbitrary "k standard deviations"
+#' pick, and consistent with this project's own `robust-statistics` skill
+#' (median/MAD over mean/SD for outlier-prone financial return data).
+#'
+#' @noRd
+PLAUSIBILITY_AMBER_Z_THRESHOLD <- 3.5
+
+#' Compute peer-relative modified-z outlier flags for one or more leaderboard
+#' metrics, scoped to Full Period rows (#719 Layer 1 -- Amber tier)
+#'
+#' For each metric, computes the cross-sectional median and MAD across every
+#' strategy's `period == "Full Period"` value (scoped the same way S21's
+#' `check_leaderboard_deflated_sharpe_coverage()` scopes deflated_sharpe --
+#' a full-sample statistic should be compared against full-sample peers, not
+#' mixed with sub-period rows), then flags any strategy whose modified
+#' z-score exceeds `PLAUSIBILITY_AMBER_Z_THRESHOLD` in either direction.
+#' `mad() == 0` (every peer identical) is treated as "no flags possible for
+#' this metric" rather than a division-by-zero Inf, since a modified z-score
+#' is undefined, not infinite, when the reference distribution has zero
+#' spread.
+#'
+#' Split out as a plain, unit-testable function (rather than left inline in
+#' `check_leaderboard_plausibility_amber()` below) for the same reason as
+#' `.build_wide_corr_matrix()` (R/plan_strategy_correlation.R) -- the
+#' peer-statistic computation is the part most likely to need independent
+#' verification against a hand-computed example.
+#'
+#' @param leaderboard Tibble with `strategy`, `period`, plus each column
+#'   named in `metrics`.
+#' @param metrics Character vector of leaderboard column names to check.
+#'   Defaults to `c("vol", "sharpe")` -- `vol` is #719's own worked example
+#'   (CMR's understated vol was "the second-lowest of seventeen" against
+#'   peer median); `sharpe` is the other headline ranking metric.
+#' @param period Character. Which `period` value to scope the peer
+#'   comparison to. Default `"Full Period"`.
+#' @param z_threshold Numeric. Defaults to `PLAUSIBILITY_AMBER_Z_THRESHOLD`.
+#' @return Tibble with `strategy`, `metric`, `value`, `peer_median`,
+#'   `peer_mad`, `modified_z` -- one row per flagged (strategy, metric)
+#'   pair. Zero rows (not an error) if nothing is flagged.
+#' @noRd
+.leaderboard_peer_amber_flags <- function(leaderboard, metrics = c("vol", "sharpe"),
+                                           period = "Full Period",
+                                           z_threshold = PLAUSIBILITY_AMBER_Z_THRESHOLD) {
+  scoped <- leaderboard[leaderboard$period == period, , drop = FALSE]
+
+  dplyr::bind_rows(lapply(metrics, function(m) {
+    vals <- scoped[[m]]
+    peer_median <- stats::median(vals, na.rm = TRUE)
+    peer_mad    <- stats::mad(vals, na.rm = TRUE)
+
+    if (is.na(peer_mad) || peer_mad == 0) {
+      return(tibble::tibble(
+        strategy = character(0), metric = character(0), value = double(0),
+        peer_median = double(0), peer_mad = double(0), modified_z = double(0)
+      ))
+    }
+
+    modified_z <- 0.6745 * (vals - peer_median) / peer_mad
+    flagged <- !is.na(modified_z) & abs(modified_z) > z_threshold
+
+    tibble::tibble(
+      strategy = scoped$strategy[flagged], metric = m, value = vals[flagged],
+      peer_median = peer_median, peer_mad = peer_mad,
+      modified_z = modified_z[flagged]
+    )
+  }))
+}
+
+#' Assert every peer-relative AMBER outlier is acknowledged, or escalate
+#' (S30, #719 Layer 1 -- Amber tier)
+#'
+#' #719's design point: "Amber must be acknowledged, not displayed. A
+#' dashboard column that goes amber and sits there is noise within a
+#' fortnight ... amber demands a row in a declaration table ... converts an
+#' anomaly into a documented decision, and it means the ABSENCE of a reason
+#' is what fails." This gate is that mechanism: it computes every amber
+#' flag via `.leaderboard_peer_amber_flags()` above, always reports the
+#' full list (never silent -- distinguishes red/amber/green per the parent
+#' issue), and treats an unacknowledged flag as a failure once enforcement
+#' is turned on.
+#'
+#' STAGED, not enforcing, by default -- mirroring two precedents already in
+#' this codebase for the exact same situation (a new check landing before
+#' it has been run against real leaderboard data even once): #738's
+#' `.compute_cmr_metrics(periodicity_check = "warn")` staging lever
+#' (R/plan_commodities_mean_reversion.R), and
+#' `scripts/check_dashboard_freshness.R`'s `HD_FAIL_ON_STALE_DASHBOARDS`
+#' escalation env var. #719 itself asks for this gate to be "run once
+#' across the full leaderboard as intended" -- that first run is what
+#' populates `LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED` (currently empty by
+#' design, see that table's roxygen), and only after real amber flags have
+#' been reviewed and either acknowledged or fixed does enforcing on every
+#' `tar_make()` become the right default. Escalate by setting
+#' `HD_ENFORCE_PLAUSIBILITY_AMBER=1` (or passing `enforce = TRUE` directly).
+#'
+#' @param leaderboard Tibble -- the `leaderboard` target.
+#' @param acknowledged_tbl Tibble with `strategy`, `metric`, `reason`
+#'   columns -- `LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED` above.
+#' @param metrics,period,z_threshold Passed through to
+#'   `.leaderboard_peer_amber_flags()`.
+#' @param enforce Logical. `TRUE` aborts on any unacknowledged amber flag;
+#'   `FALSE` (default) reports them via `cli::cli_warn()` and returns
+#'   `TRUE`. Defaults to reading `HD_ENFORCE_PLAUSIBILITY_AMBER` and
+#'   comparing it to the literal string `"1"` -- NOT `as.logical()` on the
+#'   env var, per `.claude/rules/fail-loud-not-null.md`'s own warning that
+#'   `as.logical("1")` returns `NA`, not `TRUE`.
+#' @return `TRUE` invisibly.
+#' @noRd
+check_leaderboard_plausibility_amber <- function(
+    leaderboard, acknowledged_tbl = LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED,
+    metrics = c("vol", "sharpe"), period = "Full Period",
+    z_threshold = PLAUSIBILITY_AMBER_Z_THRESHOLD,
+    enforce = Sys.getenv("HD_ENFORCE_PLAUSIBILITY_AMBER", "0") == "1") {
+
+  if (!all(c("strategy", "metric", "reason") %in% names(acknowledged_tbl))) {
+    cli::cli_abort(c(
+      "x" = "acknowledged_tbl is missing required column(s): strategy, metric, reason.",
+      "i" = "check_leaderboard_plausibility_amber() (S30) requires LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED's strategy, metric, reason columns."
+    ))
+  }
+
+  flags <- .leaderboard_peer_amber_flags(leaderboard, metrics, period, z_threshold)
+
+  if (nrow(flags) > 0L) {
+    is_ack <- vapply(seq_len(nrow(flags)), function(i) {
+      any(acknowledged_tbl$strategy == flags$strategy[i] & acknowledged_tbl$metric == flags$metric[i])
+    }, logical(1))
+
+    flag_msgs <- sprintf(
+      "  %s -- %s = %s (peer median %s, modified z = %s)%s",
+      flags$strategy, flags$metric, format(flags$value, digits = 4),
+      format(flags$peer_median, digits = 4), format(flags$modified_z, digits = 3),
+      ifelse(is_ack, " [acknowledged]", " [NOT acknowledged]")
+    )
+    cli::cli_inform(c(
+      "i" = paste0(
+        "qa_leaderboard_plausibility_amber: {nrow(flags)} peer-relative amber ",
+        "flag(s) (#719 Layer 1):"
+      ),
+      setNames(flag_msgs, rep("i", length(flag_msgs)))
+    ))
+
+    unacked <- flags[!is_ack, , drop = FALSE]
+    if (nrow(unacked) > 0L) {
+      if (isTRUE(enforce)) {
+        msgs <- sprintf(
+          "  %s / %s -- value = %s, peer median = %s, modified z = %s",
+          unacked$strategy, unacked$metric, format(unacked$value, digits = 4),
+          format(unacked$peer_median, digits = 4), format(unacked$modified_z, digits = 3)
+        )
+        cli::cli_abort(c(
+          "x" = paste0(
+            "{nrow(unacked)} peer-relative amber outlier(s) have no written ",
+            "acknowledgement (#719 Layer 1, S30, HD_ENFORCE_PLAUSIBILITY_AMBER=1):"
+          ),
+          setNames(msgs, rep("i", length(msgs))),
+          "i" = paste0(
+            "Add a row to LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED (R/plan_qa_gates.R) ",
+            "naming strategy, metric, and a written reason the outlier is genuine -- ",
+            "or fix the underlying data if it is not. Per fail-loud-not-null.md, the ",
+            "absence of a reason is what fails, not the outlier value itself."
+          )
+        ))
+      } else {
+        cli::cli_warn(c(
+          "!" = paste0(
+            "{nrow(unacked)} peer-relative amber outlier(s) have no written ",
+            "acknowledgement (#719 Layer 1, S30) -- STAGED (report-only): set ",
+            "HD_ENFORCE_PLAUSIBILITY_AMBER=1 to make this abort the pipeline."
+          )
+        ))
+      }
+    }
+  }
+
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -2742,6 +3246,74 @@ plan_qa_gates <- function() {
           `6m` = cmr_portfolio_6m
         ))
         cli::cli_inform(c("v" = "qa_cmr_effective_breadth: S27 passed (n_eff >= floor on every date holding a position, all 3 CMR lookback partitions)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: each daily-native strategy's declared ann_factor reconciles
+    # against its own observed date frequency (S28, #719 Layer 3) --
+    # pipeline-wide backstop, independent of whether any individual
+    # strategy's own metrics code calls a periodicity guard. Scoped to the
+    # five daily-native strategies collected in strat_returns_daily_native
+    # (R/plan_strategy_correlation.R, #733); see
+    # check_strategy_periodicity_reconciliation()'s roxygen above for why
+    # the eleven monthly-native strategies are not (yet) in scope.
+    targets::tar_target(
+      qa_strategy_periodicity_reconciliation,
+      command = {
+        check_strategy_periodicity_reconciliation(
+          strat_returns_daily_native,
+          STRATEGY_OBS_ANN_FACTOR
+        )
+        cli::cli_inform(c("v" = paste0(
+          "qa_strategy_periodicity_reconciliation: S28 passed (declared ",
+          "ann_factor reconciles with observed date frequency for all ",
+          "daily-native strategies; known exceptions in ",
+          "PERIODICITY_RECONCILIATION_EXEMPT run in warn-mode)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: leaderboard metrics are not physically impossible (S29,
+    # #719 Layer 1 -- Red tier). vol <= 0, max_dd < -100%, |sharpe| > 5, or
+    # implied years (months / obs_ann_factor) > 100 -- see #717 for the
+    # worked case that motivated the last of these (566 implied years from
+    # a mis-annualised daily series).
+    targets::tar_target(
+      qa_leaderboard_plausibility_red,
+      command = {
+        check_leaderboard_plausibility_red(leaderboard, STRATEGY_OBS_ANN_FACTOR)
+        cli::cli_inform(c("v" = paste0(
+          "qa_leaderboard_plausibility_red: S29 passed (no physically ",
+          "impossible vol/max_dd/sharpe/implied-years values, #719 Layer 1)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: peer-relative plausibility AMBER outliers are acknowledged,
+    # or this gate stays in STAGED report-only mode (S30, #719 Layer 1 --
+    # Amber tier). See check_leaderboard_plausibility_amber()'s roxygen for
+    # the staging rationale and the HD_ENFORCE_PLAUSIBILITY_AMBER escalation
+    # switch. Deliberately does NOT fail the pipeline by default: #719 asks
+    # for this gate to be run once against the full, real leaderboard
+    # before anything is acknowledged, and this repo has two existing
+    # precedents (#738's CMR periodicity_check warn-mode,
+    # scripts/check_dashboard_freshness.R's HD_FAIL_ON_STALE_DASHBOARDS) for
+    # staging a new check exactly this way.
+    targets::tar_target(
+      qa_leaderboard_plausibility_amber,
+      command = {
+        check_leaderboard_plausibility_amber(leaderboard, LEADERBOARD_PLAUSIBILITY_ACKNOWLEDGED)
+        cli::cli_inform(c("v" = paste0(
+          "qa_leaderboard_plausibility_amber: S30 ran (STAGED report-only ",
+          "unless HD_ENFORCE_PLAUSIBILITY_AMBER=1 -- see cli_inform/cli_warn ",
+          "output above for any flags, #719 Layer 1)"
+        )))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
