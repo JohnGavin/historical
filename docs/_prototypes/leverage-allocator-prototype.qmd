@@ -1,0 +1,395 @@
+---
+title: "PROTOTYPE — Leverage Allocator (Phase 0, #626)"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    include-in-header:
+      - text: |
+          <link rel="stylesheet" href="../vignette-shared.css">
+          <script src="../vignette-shared.js"></script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+::: {.callout-important title="Phase 0 prototype -- NOT for merge"}
+This page is a throwaway design artifact for [dashboard-output-first](https://github.com/JohnGavin/historical/blob/main/.claude/rules/dashboard-output-first.md)
+Phase 0, steps 1 and 4, covering [issue #626](https://github.com/JohnGavin/historical/issues/626)
+(the leverage allocator). It reads the live targets store **read-only** --
+no new pipeline target is created, `tar_make()` is never called, and it is
+not wired into `_quarto.yml`. It replicates the allocator arithmetic
+already shipped as `compute_vol_per_unit_gross()` /
+`compute_budget_neutral_sigma()` in
+[`R/plan_leverage.R`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leverage.R)
+(landed today via [#826](https://github.com/JohnGavin/historical/pull/826)) against the
+real `leaderboard` target, so every number below is current, not a hand-typed
+stub. Production implementation waits for explicit approval (Class C gate
+per `human-in-the-loop-decision-points`) and, once approved, belongs in
+`leaderboard.qmd` (exposure columns) and `falsification.qmd` (leverage
+diagnostics) -- see "Step 2 -- home" below, which is the placement #626's own
+issue body already specifies.
+:::
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(dplyr)
+library(tidyr)
+library(DT)
+
+# This is a worktree checkout (agent-identity-and-task-scopes rule) -- the
+# live targets store is gitignored and exists only in the main checkout, not
+# here. Try the normal in-project relative locations first (so this chunk
+# still works if the file is ever moved into the main checkout's docs/), then
+# fall back to the absolute main-checkout path this dispatch was told to read
+# from (READ ONLY -- see the dispatch prompt; never tar_make() against it).
+store_path <- if (dir.exists("../_targets")) "../_targets" else
+  if (dir.exists(file.path(here::here(), "docs/_targets"))) file.path(here::here(), "docs/_targets") else
+  "/Users/johngavin/docs_gh/proj/finance/data/historical/docs/_targets"
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("../vignette_utils.R")) "../vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+
+# compute_vol_per_unit_gross() / compute_budget_neutral_sigma() /
+# compute_regime_stress_ratio() -- the real, already-merged functions this
+# prototype's numbers come from. Sourcing the plain functions (not calling
+# plan_leverage(), which only returns a tar_target() list) is read-only and
+# creates no pipeline target.
+leverage_fns_path <- if (file.exists("../../R/plan_leverage.R")) "../../R/plan_leverage.R" else
+  if (file.exists("../R/plan_leverage.R")) "../R/plan_leverage.R" else
+  file.path(here::here(), "R/plan_leverage.R")
+source(leverage_fns_path)
+
+git_sha <- tryCatch(system("git -C .. rev-parse HEAD 2>/dev/null", intern = TRUE),
+                     error = function(e) "main")
+git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
+gh_base <- paste0("https://github.com/JohnGavin/historical/blob/", git_sha)
+
+lb <- safe_tar_read("leaderboard")
+```
+
+# Step 1 -- Relationship Diagram
+
+## Row
+
+Extends the existing causal-DAG surface in `falsification.qmd` (the
+"Strategy & Dashboard Relationship Map" tab, itself a #481/#514 seed diagram,
+rendered via `docs/causal-diagrams.js`'s `dag-portcons-mount`) rather than
+starting a new standalone diagram. This is the missing branch: how a
+per-strategy volatility target and a gross-exposure convention become an
+*allocated* leverage figure, and where that figure meets the still-open
+backstop decision.
+
+```{mermaid}
+%%| label: fig-leverage-allocator-dag
+%%| fig-cap: "Budget-neutral sigma_target and per-strategy gross_convention/vol feed compute_vol_per_unit_gross() and compute_budget_neutral_sigma() (both live in R/plan_leverage.R, #635/#719); the resulting implied G_i meets an UNRESOLVED gross backstop before reaching either dashboard."
+graph LR
+  LB["leaderboard target<br/>vol, strategy, period"]
+  SGC["strategy_gross_convention<br/>gross_convention, is_cap (#626)"]
+  VPUG["compute_vol_per_unit_gross()<br/>vol / gross_convention"]
+  SIGMA["compute_budget_neutral_sigma()<br/>leverage_sigma_target (live target, #635)"]
+  GI["Implied G_i = sigma_target / vol_per_unit_gross<br/>per-strategy allocator output"]
+  STRESS["compute_regime_stress_ratio()<br/>leverage_regime_stress_ratio (#635 DoD 7)"]
+  BACKSTOP{{"Gross backstop cap<br/>UNRESOLVED -- #626"}}
+  GCAPPED["G_i capped at backstop"]
+  LBDASH["leaderboard.qmd<br/>exposure columns"]
+  FALSDASH["falsification.qmd<br/>leverage diagnostics"]
+
+  LB --> VPUG
+  SGC --> VPUG
+  VPUG --> SIGMA
+  VPUG --> GI
+  SIGMA --> GI
+  VPUG --> STRESS
+  GI --> BACKSTOP
+  STRESS -. informs .-> BACKSTOP
+  BACKSTOP --> GCAPPED
+  GCAPPED -.->|"this prototype"| LBDASH
+  GI -.->|"this prototype"| FALSDASH
+  STRESS -.->|"this prototype"| FALSDASH
+
+  click LB "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leaderboard.R#L120" _blank
+  click SGC "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_exposure.R#L34" _blank
+  click VPUG "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leverage.R#L65" _blank
+  click SIGMA "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leverage.R#L105" _blank
+  click STRESS "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leverage.R#L144" _blank
+  click BACKSTOP "https://github.com/JohnGavin/historical/issues/626" _blank
+  click LBDASH "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/leaderboard.qmd#L373" _blank
+  click FALSDASH "https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/falsification.qmd#L901" _blank
+```
+
+Every node link is pinned to commit `de4a4e9` (the #826 merge that landed
+`R/plan_leverage.R`) with a `#L<n>` line anchor per
+[`mermaid-click-anchors`](https://github.com/JohnGavin/llm/blob/main/.claude/rules/mermaid-click-anchors.md).
+**Known limitation of this prototype (same as the #735 prototype before
+it):** Quarto's native `{mermaid}` fenced block runs mermaid.js in an iframe
+whose click-through and hover-tooltip behaviour is less reliable than the
+project's own `causal-diagrams.js` mount system --
+`docs/MERMAID_LESSONS.md` documents exactly why `falsification.qmd` moved
+off native fenced blocks. Production wiring should extend the
+`dag-portcons-mount` diagram already in `causal-diagrams.js` (adding these 6
+nodes and their `nodeTooltips`/`edgeMetadata` entries) rather than shipping
+a standalone native block -- the diagram above is the design for that
+extension, not the artifact itself.
+
+# Step 4 -- Table Prototype
+
+## Row {height="25%"}
+
+```{r}
+#| label: allocator-summary
+#| results: asis
+if (!is.null(lb)) {
+  vpug <- compute_vol_per_unit_gross(lb)
+  sigma_tbl <- compute_budget_neutral_sigma(vpug)
+  sigma_headline <- sigma_tbl$sigma_target_budget_neutral[sigma_tbl$is_headline]
+
+  full_vpug <- vpug |>
+    filter(period == "Full Period") |>
+    mutate(G_implied = sigma_headline / vol_per_unit_gross) |>
+    arrange(desc(G_implied))
+
+  # Candidate backstop levels for comparison -- p90 of the observed G_implied
+  # distribution (the #635 methodology) vs the highest level that binds no
+  # strategy today (the "changes nothing on day one" property #635 wanted).
+  p90 <- as.numeric(quantile(full_vpug$G_implied, 0.9))
+  max_g <- max(full_vpug$G_implied)
+  n_over_p90 <- sum(full_vpug$G_implied > p90)
+  n_cap_rows <- sum(full_vpug$is_cap)
+  n_cap_over2 <- sum(full_vpug$is_cap & full_vpug$G_implied > 2)
+
+  cat(paste0(
+    '<div class="callout-warning" style="border-left:4px solid #b35900;padding:0.6em 1em;margin-bottom:0.5em;">',
+    "<strong>Live allocator arithmetic, this build (commit <code>", substr(git_sha, 1, 7), "</code>):</strong> ",
+    "budget-neutral sigma_target = <strong>", sprintf("%.4f", sigma_headline), "</strong> (", nrow(full_vpug),
+    " strategies with a measurable gross_convention). Implied G_i ranges from ",
+    sprintf("%.2f", min(full_vpug$G_implied)), "x to <strong>", sprintf("%.2f", max_g),
+    "x</strong>. A p90-based backstop candidate sits at <strong>", sprintf("%.2f", p90),
+    "x</strong>, which binds ", n_over_p90, " strateg", if (n_over_p90 == 1) "y" else "ies",
+    " today (by construction, ~10%). This is materially LOWER than the 3.5x candidate #626's ",
+    "2026-08-05 comment derived by hand: that derivation predates the #717/#722 CMR vol-annualisation ",
+    "fixes, which moved CMR's implied G_i from a stale 4.56x down to a live ",
+    sprintf("%.2f", full_vpug$G_implied[full_vpug$strategy == "CMR"]),
+    "x -- the exact kind of drift `R/plan_leverage.R`'s header comment (four prior hand-derivations, three ",
+    "invalidated by data bugs) exists to stop. Today the only strategy near any plausible backstop is ",
+    "<strong>Managed Futures</strong> (", sprintf("%.2f", max_g),
+    "x), and it is an <code>is_cap</code> row -- exactly the \"measurement artefact\" #626's own comment ",
+    "thread already flagged as inflating its apparent G_i (a 3.0x ceiling it rarely reaches, so its true ",
+    "vol-per-unit-realised-gross is understated). See the callout below the table.",
+    '</div>'
+  ))
+} else {
+  cat("*`leaderboard` target not available from the read-only store.*")
+}
+```
+
+## Row
+
+```{r}
+#| label: allocator-table
+#| results: asis
+if (!is.null(lb) && exists("full_vpug") && nrow(full_vpug) > 0) {
+
+  proto <- full_vpug |>
+    mutate(
+      `Vol (ann.)`          = paste0(round(vol * 100, 1), "%"),
+      `Gross now`           = paste0(format(gross_convention, nsmall = 1), "x", ifelse(is_cap, "*", "")),
+      `Vol / unit gross`    = round(vol_per_unit_gross, 4),
+      `Implied G_i`         = round(G_implied, 2),
+      `G_i @ p90 backstop`  = round(pmin(G_implied, p90), 2),
+      `Backstop binds?`     = ifelse(G_implied > p90,
+                                      paste0("YES (-", round((G_implied - pmin(G_implied, p90)) / G_implied * 100, 0), "%)"),
+                                      "no"),
+      .g_rank = -G_implied
+    ) |>
+    select(Strategy = strategy, `Vol (ann.)`, `Gross now`, `Vol / unit gross`,
+           `Implied G_i`, .g_rank, `G_i @ p90 backstop`, `Backstop binds?`)
+
+  g_col    <- which(names(proto) == "Implied G_i") - 1L
+  rank_col <- which(names(proto) == ".g_rank") - 1L
+
+  cap <- paste0(
+    "PROTOTYPE allocator table -- Full Period, ", nrow(proto), " strategies with a measurable ",
+    "gross_convention (Value (HML) and PSO Optimal excluded by construction, matching every #635 ",
+    "hand-derivation). Implied G_i = sigma_target (", sprintf("%.4f", sigma_headline),
+    ") / vol_per_unit_gross, i.e. the vol-normalised leverage this strategy would receive under the ",
+    "layered allocator design #626's 2026-08-03 comment adopted (vol-normalised allocator sets relative ",
+    "sizing; a gross-exposure cap binds the total). \"Gross now\" is the SAME column already live in ",
+    "`leaderboard.qmd` (`strategy_gross_convention`, trailing `*` = construction ceiling, not always ",
+    "realised). A trailing `*` on Implied G_i is not shown because this column is itself a proposal, not ",
+    "yet a measured or capped figure. Source: R/plan_leverage.R (compute_vol_per_unit_gross, ",
+    "compute_budget_neutral_sigma), R/plan_exposure.R (strategy_gross_convention)."
+  )
+
+  DT::datatable(
+    proto,
+    caption = htmltools::tags$caption(
+      style = "caption-side: top; text-align: left; font-weight: bold;",
+      class = "dt-caption", cap
+    ),
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 20,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(visible = FALSE, targets = rank_col),
+        list(orderData = rank_col, targets = g_col)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
+}
+```
+
+## Row
+
+```{r}
+#| label: regime-stress-table
+#| results: asis
+if (!is.null(lb)) {
+  stress <- tryCatch(compute_regime_stress_ratio(vpug), error = function(e) NULL)
+  if (!is.null(stress) && nrow(stress) > 0) {
+    n_covered <- nrow(stress)
+    n_total   <- length(unique(full_vpug$strategy))
+    hd_dt(
+      as.data.frame(stress) |> mutate(across(c(Training, Testing, stress_ratio), \(x) round(x, 4))),
+      paste0(
+        "Training-vs-Testing stress ratio of vol_per_unit_gross (compute_regime_stress_ratio(), ",
+        "R/plan_leverage.R -- the live replacement for #635 DoD item 7's hand-run regime check). Ratio > 1 ",
+        "means a strategy's risk-per-unit-of-gross rose in the 2020-22 Testing partition relative to the calm ",
+        "Training partition -- informs how conservative the still-open backstop decision should be, per this ",
+        "prototype's Step 1 diagram. Coverage: ", n_covered, " of ", n_total,
+        " strategies with a measurable gross_convention have BOTH a Training and a Testing row -- the ",
+        "remaining strategies (CMR, Mom Pre-Peak, Mom Post-Peak, Mom 12-2, Managed Futures) are the #648 ",
+        "coverage gap already documented in R/plan_leverage.R's own header comment, and are silently absent ",
+        "here, not a bug."
+      )
+    )
+  } else {
+    cat("*Regime stress ratio not available.*")
+  }
+}
+```
+
+```{=html}
+<style>
+.dt-caption { margin-bottom: 4px; }
+</style>
+```
+
+# Design Notes
+
+## Row
+
+### Step 2 -- Locate the home
+
+**No new dashboard.** #626's own issue body already states the placement:
+"exposure columns extend `leaderboard.qmd`; leverage diagnostics extend
+`falsification.qmd`." This prototype's two artifacts map directly onto that
+split:
+
+- The **allocator table** (Implied G_i, G_i @ backstop, Backstop binds?)
+  belongs in `docs/leaderboard.qmd`, immediately beside the existing
+  [`Gross` column](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/leaderboard.qmd#L373)
+  (same table, same row per strategy) -- not a new tab, an extension of the
+  existing exposure disclosure.
+- The **regime stress-ratio table** and the **relationship diagram** belong
+  in `docs/falsification.qmd`'s existing "Strategy & Dashboard Relationship
+  Map" tab
+  ([`#L901`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/falsification.qmd#L901))
+  and its `dag-portcons-mount` diagram, alongside the covariance-estimator
+  subsystem already documented there.
+
+### Step 3 -- Comparable-output audit
+
+This output sits beside, and must stay consistent with:
+
+- **`Gross` column** (`docs/leaderboard.qmd`
+  [`#L373-377`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/leaderboard.qmd#L373)) --
+  same `strategy_gross_convention` source, same trailing `*` convention for
+  `is_cap` ceiling rows. `Implied G_i` is deliberately placed as a SEPARATE
+  proposed column, not a replacement, because `Gross` reports what a
+  strategy's own code implements today and `Implied G_i` reports what the
+  vol-normalised allocator would assign -- conflating them would erase the
+  gap the whole allocator design exists to close.
+- **`gross_note` dynamic disclosure** (same file,
+  [`#L512-523`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/leaderboard.qmd#L512)) --
+  this prototype's summary callout follows the identical pattern: every
+  number computed from the live store, never hardcoded, with the same `*`
+  convention explained inline.
+- **Strategy naming**
+  ([`strategy-name-consistency`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/strategy-name-consistency.md)):
+  `strategy` values are used unchanged from `leaderboard`/`strategy_gross_convention` --
+  no new naming introduced.
+- **Captions**
+  ([`visualization-standards`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/) family):
+  both table captions are assembled from live values (sigma_target, counts,
+  coverage), matching the project's established caption style, with source
+  links to `R/plan_leverage.R` and `R/plan_exposure.R`.
+- **`falsification.qmd`'s covariance-regularisation block**
+  ([`#L410-468`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/docs/falsification.qmd)) --
+  named in `docs/DASHBOARDS.md`'s Template Recipe as the model for a
+  walk-forward-estimator-style diagnostic; the regime stress-ratio table
+  above follows its "comprehensive table + explicit coverage-gap disclosure"
+  shape rather than hiding the #648 gap.
+
+### Step 5 -- Consolidation review (mandatory)
+
+**Proposal: fold `Implied G_i` into the existing `Gross` column's cell as a
+secondary figure, rather than adding it as a wholly separate column.**
+
+`docs/leaderboard.qmd` already carries 21 columns in its main ranking table
+(`Strategy` through `Breach Risk`). Adding `Implied G_i`, `G_i @ backstop`,
+and `Backstop binds?` as three more columns repeats the "column 60 of 61"
+sprawl pattern #726 already diagnosed and #735's prototype already proposed
+fixing for `Rigour`. Once the backstop level is actually decided (this
+prototype's live numbers argue for something much closer to the p90 ≈
+`r if (exists("p90")) sprintf("%.1f", p90) else "?"`x than the stale 3.5x),
+the concrete proposal is:
+
+- **One new column, `Gross (target)`**, showing `Implied G_i` alongside the
+  existing `Gross` (now relabelled `Gross (now)`), with the backstop-bound
+  state as a hover tooltip on that cell (same badge pattern as
+  `Detection`/`Rigour`) rather than three separate columns.
+- The regime stress-ratio table does **not** need its own dashboard tab --
+  it folds into the same `falsification.qmd` tab that already documents the
+  covariance-estimator subsystem, as one more diagnostic accordion, per the
+  Template Recipe.
+
+**Net effect on `docs/DASHBOARDS.md` inventory: dashboard count unchanged
+(11).** Within `leaderboard.qmd`, net column count grows by one (not three)
+relative to a naive per-metric-per-column implementation. This is a smaller
+consolidation than a dashboard merge, but "no change" would understate what
+this prototype's own comparable-output audit found: three raw columns
+compress to one badge column, the same simplification #735 already
+identified for `Rigour`/`Detection` and shipped in #741.
+
+### Data sources
+
+- `tar_read("leaderboard")` -- [`R/plan_leaderboard.R#L120`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leaderboard.R#L120)
+- `tar_read("strategy_gross_convention")` -- [`R/plan_exposure.R#L34`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_exposure.R#L34)
+- `compute_vol_per_unit_gross()` / `compute_budget_neutral_sigma()` / `compute_regime_stress_ratio()` -- [`R/plan_leverage.R`](https://github.com/JohnGavin/historical/blob/de4a4e99fb1335c19f79032ee86b40e8c29d85ac/R/plan_leverage.R)
+- [#626](https://github.com/JohnGavin/historical/issues/626) (this issue), [#635](https://github.com/JohnGavin/historical/issues/635) (sigma_target measurement), [#719](https://github.com/JohnGavin/historical/issues/719) (periodicity + plausibility gates, prerequisite), [#648](https://github.com/JohnGavin/historical/issues/648) (regime-coverage gap), [`dashboard-output-first`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/dashboard-output-first.md)
