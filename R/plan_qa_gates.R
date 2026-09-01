@@ -2569,7 +2569,10 @@ PLAUSIBILITY_AMBER_Z_THRESHOLD <- 3.5
   dplyr::bind_rows(lapply(metrics, function(m) {
     vals <- scoped[[m]]
     peer_median <- stats::median(vals, na.rm = TRUE)
-    peer_mad    <- stats::mad(vals, na.rm = TRUE)
+    # constant = 1: Iglewicz & Hoya's 0.6745 below already IS the
+    # normal-consistency scaling factor (1/1.4826); stats::mad()'s default
+    # constant = 1.4826 would double-apply it (historical#9941 / #726 roborev).
+    peer_mad    <- stats::mad(vals, na.rm = TRUE, constant = 1)
 
     if (is.na(peer_mad) || peer_mad == 0) {
       return(tibble::tibble(
