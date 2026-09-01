@@ -1,5 +1,53 @@
 # Changelog
 
+## 2026-09-01 (session 27 — roborev daily-report follow-up)
+
+Short session triggered by the 2026-09-01 roborev daily report. Merged the
+session 26 docs handover (PR #835), fixed the one in-scope finding the
+report surfaced, and filed the rest as cross-cutting `llm` issues per
+`cross-project-scope` rather than fixing tooling belonging to another
+project from here.
+
+### Completed
+
+- **historical#9941 (roborev, High) fixed**: `.leaderboard_peer_amber_flags()`
+  (S30, `R/plan_qa_gates.R`, #719 Layer 1) double-applied MAD scaling —
+  `stats::mad()`'s default `constant = 1.4826` stacked on top of the
+  Iglewicz & Hoya `0.6745` multiplier, which is itself the inverse of
+  `1.4826`. Deflated every amber-flag modified z-score by ~32% (CMR's flag:
+  `-5.46` computed vs `-8.09` correct), silently making the gate's cited
+  "3.5" threshold behave like an effective ~5.19. Fixed via
+  `constant = 1` (unscaled MAD); snapshot updated to the hand/Python-verified
+  correct value. Merged as [#836](https://github.com/JohnGavin/historical/pull/836).
+- **PR #835 merged** (session 26 CHANGELOG/CURRENT_WORK handover, docs-only,
+  no code changes).
+
+### Filed elsewhere (not fixed here — see `cross-project-scope`)
+
+- [llm#1123](https://github.com/JohnGavin/llm/issues/1123) — the rest of the
+  2026-09-01 daily report: `.roborev/` is gitignored in every reviewed repo
+  (confirmed in `historical`, `llmtelemetry`, `llm`), which lines up exactly
+  with the report's "29 reviews that did not run" (the review agent can't
+  read its own snapshot diff); 14 findings with unclassified severity
+  (parser/format gap); the dashboard button reported as 404 despite `llm`
+  already merging a fix for that exact symptom on 2026-08-23
+  ([llm#946](https://github.com/JohnGavin/llm/issues/946) /
+  [PR #1009](https://github.com/JohnGavin/llm/pull/1009)) — three candidate
+  explanations listed for the `llm` session to run down. micromort#9962/
+  #9963/#9968 (High) explicitly left untouched — belong to `micromort`.
+- [llm#1126](https://github.com/JohnGavin/llm/issues/1126) — whether `/bye`'s
+  roborev NOT-CLEAN Y/N gate should account for session volume (this
+  session ended with 54 verdict failures / 43 addressed = 11 net
+  unaddressed, 0 crash, 0 quota, consistency clean — informational, not
+  something to re-litigate per-session going forward).
+
+### Known Limitations
+
+- Root `R/` changes (including this session's S30 fix) get **no CI at all**
+  — `r-tests`/`pkgctx` workflows only fire on `packages/historicaldata/**`.
+  `scripts/verify.sh` is the only gate for this class of change; confirmed
+  again this session (PR #836 showed zero status checks).
+
 ## 2026-08-29 → 2026-08-31 (session 26 — the Signal Board triage)
 
 Built a triage artifact (all 161 open issues, classified into risk tiers by
