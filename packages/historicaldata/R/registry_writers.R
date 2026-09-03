@@ -16,16 +16,50 @@
 #' already exists, this call is a no-op (no update). Use [hd_strategy_update()]
 #' (PR 3/4) if a keyword needs to change after creation.
 #'
+#' ## `leg_count` / composite-book tracking (#839)
+#'
+#' `leg_count` records how many underlying signals/expressions are
+#' equal-weighted blended into this one reported strategy. This matters
+#' because blending correlated legs manufactures Sharpe inflation via
+#' variance reduction that trial-count-based multiple-testing corrections
+#' (`hd_strat_keff_vertox()`, `hd_deflated_sharpe()`) do not capture -- see
+#' `.claude/rules/detection-power-required.md`'s sibling issue #839 and
+#' [hd_zero_alpha_calibration()].
+#'
+#' Per `.claude/rules/fail-loud-not-null.md`, this is a "must not silently
+#' default" field for composite writes: pass `underlying_signals` (the
+#' character vector of signal names being blended) so the composite case is
+#' detectable. When `length(underlying_signals) > 1` you MUST also supply
+#' `leg_count` (and it must equal `length(underlying_signals)`) -- otherwise
+#' this function `cli_abort()`s rather than silently writing `leg_count = 1`
+#' or `NA` for a book that is, in fact, a blend of several signals. A
+#' genuinely single-signal strategy (no `underlying_signals`, or
+#' `underlying_signals` of length 1) is unaffected: `leg_count` defaults to
+#' `1L`, matching every caller written before #839.
+#'
 #' @param con A DBI connection from [hd_registry_open()] opened with
 #'   `read_only = FALSE`.
 #' @param strategy_row A single-row tibble or named list with columns:
 #'   `strategy_id` (required), `short_name`, `long_name`, `asset_class`,
 #'   `frequency`, `ann_factor`, `directionality`, `liquidity_tier`,
 #'   `time_horizon_days`, `trades_per_year`, `turnover_pct`, `tags`,
-#'   `research_paper_doi`. Missing columns insert as NULL.
+#'   `research_paper_doi`, `leg_count` (optional -- see below). Missing
+#'   columns insert as NULL (`leg_count` defaults to `1L`).
+#' @param underlying_signals Optional character vector naming the
+#'   underlying signals/expressions blended into this strategy. When its
+#'   length is `> 1`, `leg_count` (via the `leg_count` argument or a
+#'   `leg_count` column in `strategy_row`) is REQUIRED and must equal
+#'   `length(underlying_signals)`. `NULL` (default) skips this check
+#'   entirely -- existing single-signal callers are unaffected.
+#' @param leg_count Optional integer. Explicit leg count for this
+#'   strategy. Falls back to `strategy_row$leg_count` if present, then to
+#'   `1L`. Required (and cross-checked against
+#'   `length(underlying_signals)`) whenever `underlying_signals` has length
+#'   `> 1`.
 #' @return Invisibly returns `strategy_row$strategy_id`.
 #' @export
-hd_strategy_upsert <- function(con, strategy_row) {
+hd_strategy_upsert <- function(con, strategy_row, underlying_signals = NULL,
+                               leg_count = NULL) {
   rlang::check_installed("DBI")
   if (is.list(strategy_row) && !is.data.frame(strategy_row)) {
     strategy_row <- tibble::as_tibble(strategy_row)
@@ -37,6 +71,38 @@ hd_strategy_upsert <- function(con, strategy_row) {
   if (is.null(sid) || is.na(sid) || !nzchar(sid)) {
     cli::cli_abort("{.field strategy_id} is required and must be non-empty.")
   }
+
+  row <- as.list(strategy_row)
+
+  # ── leg_count resolution + composite guard (#839) ──────────────────────
+  resolved_leg_count <- leg_count
+  if (is.null(resolved_leg_count) && !is.null(row$leg_count) && !is.na(row$leg_count)) {
+    resolved_leg_count <- row$leg_count
+  }
+
+  n_signals <- if (is.null(underlying_signals)) NA_integer_ else length(underlying_signals)
+
+  if (!is.na(n_signals) && n_signals > 1L) {
+    if (is.null(resolved_leg_count) || is.na(resolved_leg_count)) {
+      cli::cli_abort(c(
+        "x" = "{.arg strategy_row} for {.val {sid}} is missing {.field leg_count}.",
+        "i" = "{.arg underlying_signals} lists {n_signals} legs blended into this strategy.",
+        "i" = "Composite (multi-leg) strategies must declare {.field leg_count} explicitly -- it is not safe to silently default to 1.",
+        "i" = "Pass {.arg leg_count} = {n_signals} (or a {.field leg_count} column in {.arg strategy_row})."
+      ))
+    }
+    if (resolved_leg_count != n_signals) {
+      cli::cli_abort(c(
+        "x" = "{.field leg_count} ({resolved_leg_count}) does not match {.code length(underlying_signals)} ({n_signals}) for {.val {sid}}.",
+        "i" = "These must agree -- {.field leg_count} is meant to record exactly how many legs went into this book."
+      ))
+    }
+  }
+
+  if (is.null(resolved_leg_count) || is.na(resolved_leg_count)) {
+    resolved_leg_count <- 1L
+  }
+  row$leg_count <- as.integer(resolved_leg_count)
 
   existing <- DBI::dbGetQuery(
     con,
@@ -51,9 +117,8 @@ hd_strategy_upsert <- function(con, strategy_row) {
     "strategy_id", "short_name", "long_name", "asset_class",
     "frequency", "ann_factor", "directionality", "liquidity_tier",
     "time_horizon_days", "trades_per_year", "turnover_pct",
-    "tags", "research_paper_doi"
+    "tags", "research_paper_doi", "leg_count"
   )
-  row <- as.list(strategy_row)
   vals <- lapply(cols, function(col) if (is.null(row[[col]])) NA else row[[col]])
 
   placeholders <- paste(rep("?", length(cols)), collapse = ", ")
