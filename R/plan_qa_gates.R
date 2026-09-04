@@ -2703,6 +2703,63 @@ check_leaderboard_plausibility_amber <- function(
 }
 
 
+#' Assert Markov diagonal dominance: each state's persistence probability
+#' exceeds a naive random baseline (S32, #838)
+#'
+#' A regime/vol-state classifier whose transition matrix is close to
+#' uniform (each state persists no better than chance) is not detecting
+#' persistence -- it is noise wearing a regime label. This asserts, for
+#' every declared state with at least one observed transition FROM it
+#' (`n_from > 0`), that its diagonal persistence probability
+#' (`P(state_t+1 = i | state_t = i)`, from `hd_markov_transition()`)
+#' exceeds the naive random baseline `1 / n_states` -- the persistence a
+#' state would show if the next state were drawn uniformly at random,
+#' independent of the current one.
+#'
+#' A state with `n_from == 0` (never observed as an origin -- e.g. an
+#' extremely rare "hostile" regime in a short sample) is excluded from the
+#' check rather than treated as a failure: `hd_markov_transition()` already
+#' reports `NA` for such a row, and per `fail-loud-not-null.md` an
+#' unobserved case is a distinct, disclosed condition, not silently folded
+#' into either PASS or FAIL.
+#'
+#' @param state Character or factor vector, in time order -- the classified
+#'   state series to check (e.g. `rsc_regime$regime`).
+#' @param label Character scalar used in the `cli_abort()` message to name
+#'   the series being checked. Defaults to `deparse(substitute(state))`.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_markov_diagonal_dominance <- function(state, label = deparse(substitute(state))) {
+  mt <- hd_markov_transition(state)
+  n_states <- length(mt$states)
+  baseline <- 1 / n_states
+
+  checkable <- mt$persistence[mt$persistence$n_from > 0L, , drop = FALSE]
+  offenders <- checkable[
+    is.na(checkable$p_stay) | checkable$p_stay <= baseline, , drop = FALSE
+  ]
+
+  if (nrow(offenders) > 0L) {
+    msgs <- sprintf(
+      "  %s -- p_stay = %s (baseline = %.3f, n_from = %d)",
+      offenders$state,
+      ifelse(is.na(offenders$p_stay), "NA", sprintf("%.3f", offenders$p_stay)),
+      baseline, offenders$n_from
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "{nrow(offenders)} state(s) in ", label, " show no better persistence than a ",
+        "1/{n_states} random baseline ({round(baseline, 3)}) -- the classifier is not ",
+        "detecting real persistence for these state(s) (S32, #838):"
+      ),
+      setNames(msgs, rep("i", length(msgs)))
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Declared overrides for the leverage-allocator detection-power gate (S31,
 #' #626/#719 Layer 2 narrow slice)
 #'
@@ -3558,6 +3615,27 @@ plan_qa_gates <- function() {
           "qa_leverage_gross_detection_gate: S31 passed (no detection-",
           "underpowered/unverified strategy above 1.0x allocator gross, ",
           "#626/#719 Layer 2 narrow slice)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: Markov transition-matrix diagonal dominance for the risk-state
+    # classifier (S32, #838, detection-power-required.md-style persistence
+    # check). Asserts each observed state's P(stay) exceeds the naive
+    # 1/n_states random baseline -- a classifier whose transition matrix is
+    # ~uniform is not detecting persistence, it's noise. Checked against
+    # rsc_regime$regime (R/plan_risk_state.R, #51, benign/cautious/hostile).
+    # regime_classification$regime (R/plan_regime.R, #34) is left for a
+    # follow-up -- see #838 PR body deferred items.
+    targets::tar_target(
+      qa_markov_diagonal_dominance,
+      command = {
+        check_markov_diagonal_dominance(rsc_regime$regime, label = "rsc_regime$regime")
+        cli::cli_inform(c("v" = paste0(
+          "qa_markov_diagonal_dominance: S32 passed (every observed state's ",
+          "persistence exceeds the 1/n_states random baseline, #838)"
         )))
         TRUE
       },
