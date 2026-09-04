@@ -54,9 +54,10 @@ test_that("hd_registry_init creates a DuckDB file with all bt and art tables", {
     c("dependency", "deploy", "diagram", "vignette")
   )
 
-  # schema_version row inserted by the bootstrap
+  # schema_version rows inserted by the bootstrap (1.1.0 added by #839's
+  # leg_count migration; see schema.sql's "Schema version metadata" section)
   sv <- DBI::dbGetQuery(con, "SELECT version FROM schema_version")
-  expect_equal(sv$version, "1.0.0")
+  expect_setequal(sv$version, c("1.0.0", "1.1.0"))
 })
 
 test_that("hd_registry_init is idempotent (second call is a no-op)", {
@@ -69,11 +70,12 @@ test_that("hd_registry_init is idempotent (second call is a no-op)", {
   hd_registry_init(tmp)
   expect_no_error(hd_registry_init(tmp))
 
-  # Still exactly one schema_version row after re-init
+  # Still exactly one row per version after re-init (2 versions as of #839:
+  # 1.0.0 + 1.1.0's leg_count migration)
   con <- hd_registry_open(tmp, read_only = TRUE)
   withr::defer(DBI::dbDisconnect(con, shutdown = TRUE))
   n <- DBI::dbGetQuery(con, "SELECT COUNT(*) AS n FROM schema_version")$n
-  expect_equal(n, 1L)
+  expect_equal(n, 2L)
 })
 
 test_that("hd_registry_schema_version returns the current version", {
@@ -87,7 +89,10 @@ test_that("hd_registry_schema_version returns the current version", {
   expect_true(is.na(hd_registry_schema_version(tmp)))
 
   hd_registry_init(tmp)
-  expect_equal(hd_registry_schema_version(tmp), "1.0.0")
+  # hd_registry_schema_version() returns the LATEST applied version
+  # (ORDER BY applied_at DESC LIMIT 1) -- 1.1.0 as of #839's leg_count
+  # migration, up from 1.0.0.
+  expect_equal(hd_registry_schema_version(tmp), "1.1.0")
 })
 
 test_that("hd_registry_open errors if the file does not exist", {

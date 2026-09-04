@@ -68,6 +68,7 @@ Other falsification:
 \code{\link{hd_structural_breaks}()},
 \code{\link{hd_tail_dependence}()},
 \code{\link{hd_tail_keff_frob}()},
-\code{\link{hd_wf_correlation}()}
+\code{\link{hd_wf_correlation}()},
+\code{\link{hd_zero_alpha_calibration}()}
 }
 \concept{falsification}

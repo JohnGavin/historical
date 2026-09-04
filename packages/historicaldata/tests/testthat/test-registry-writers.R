@@ -126,6 +126,103 @@ test_that("HD_GIT_SHA env var populates git_sha column", {
   expect_equal(sha, "abc123def456")
 })
 
+# ── leg_count tests (#839) ──────────────────────────────────────────────
+
+test_that("hd_strategy_upsert defaults leg_count to 1 for single-signal callers", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  tmp <- .init_tmp_registry()
+  withr::defer(unlink(tmp))
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  hd_strategy_upsert(con, tibble::tibble(
+    strategy_id = "cmr", short_name = "MR", long_name = "MR"
+  ))
+
+  got <- DBI::dbGetQuery(con, "SELECT leg_count FROM bt.strategy WHERE strategy_id = 'cmr'")
+  expect_equal(got$leg_count, 1L)
+})
+
+test_that("hd_strategy_upsert records an explicit leg_count", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  tmp <- .init_tmp_registry()
+  withr::defer(unlink(tmp))
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  hd_strategy_upsert(
+    con,
+    tibble::tibble(strategy_id = "ensemble1", short_name = "ENS", long_name = "Ensemble"),
+    underlying_signals = c("sig_a", "sig_b", "sig_c"),
+    leg_count = 3L
+  )
+
+  got <- DBI::dbGetQuery(con, "SELECT leg_count FROM bt.strategy WHERE strategy_id = 'ensemble1'")
+  expect_equal(got$leg_count, 3L)
+})
+
+test_that("hd_strategy_upsert aborts when underlying_signals has > 1 leg and leg_count is not supplied", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  tmp <- .init_tmp_registry()
+  withr::defer(unlink(tmp))
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  expect_snapshot(
+    error = TRUE,
+    hd_strategy_upsert(
+      con,
+      tibble::tibble(strategy_id = "ensemble2", short_name = "ENS2", long_name = "Ensemble 2"),
+      underlying_signals = c("sig_a", "sig_b")
+    )
+  )
+})
+
+test_that("hd_strategy_upsert aborts when leg_count does not match length(underlying_signals)", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  tmp <- .init_tmp_registry()
+  withr::defer(unlink(tmp))
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  expect_snapshot(
+    error = TRUE,
+    hd_strategy_upsert(
+      con,
+      tibble::tibble(strategy_id = "ensemble3", short_name = "ENS3", long_name = "Ensemble 3"),
+      underlying_signals = c("sig_a", "sig_b"),
+      leg_count = 5L
+    )
+  )
+})
+
+test_that("hd_strategy_upsert does not require leg_count when underlying_signals has length 1", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  tmp <- .init_tmp_registry()
+  withr::defer(unlink(tmp))
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer(DBI::dbDisconnect(con, shutdown = TRUE))
+
+  hd_strategy_upsert(
+    con,
+    tibble::tibble(strategy_id = "single1", short_name = "S1", long_name = "Single 1"),
+    underlying_signals = "sig_a"
+  )
+
+  got <- DBI::dbGetQuery(con, "SELECT leg_count FROM bt.strategy WHERE strategy_id = 'single1'")
+  expect_equal(got$leg_count, 1L)
+})
+
 test_that("two run_uuid values are distinct", {
   skip_if_not_installed("DBI")
   skip_if_not_installed("duckdb")

@@ -2815,6 +2815,116 @@ check_leverage_gross_detection_gate <- function(allocator_gross, leaderboard,
 }
 
 
+#' Assert every composite (leg_count > 1) registry strategy has a
+#' manufactured-Sharpe calibration annotation (S33, #839)
+#'
+#' Companion gate to S20 (`check_leaderboard_detection_power_values`,
+#' #726) and S21 (`check_leaderboard_deflated_sharpe_coverage`) -- those
+#' gate the trial-count / multiple-testing axis of Sharpe inflation
+#' (`hd_strat_keff_vertox()`, `hd_deflated_sharpe()`,
+#' `hd_detection_power()`). This gate is for the DISTINCT leg-blending
+#' axis those do not cover (#839): a strategy blending `leg_count > 1`
+#' correlated legs into one reported book manufactures additional Sharpe
+#' via variance reduction, and neither S20 nor S21 would ever flag it,
+#' because both operate at the strategy level, not the leg-within-a-book
+#' level.
+#'
+#' Operates on the REGISTRY (`bt.strategy`/`bt.diagnostic`), not the
+#' `leaderboard` target -- deliberately: this is a bounded first slice
+#' (#839), and threading `leg_count` through the full leaderboard-building
+#' pipeline (`R/plan_leaderboard.R`) and any dashboard table that renders
+#' `leaderboard`'s columns is out of scope (per
+#' `.claude/rules/dashboard-output-first.md`, this PR adds no new
+#' dashboard-visible output). `hd_zero_alpha_calibration()` (packages/
+#' historicaldata/R/zero_alpha_calibration.R) is the harness a caller
+#' points at their own leg-blended book to produce the annotation this
+#' gate looks for; recording it is via
+#' `hd_diagnostic_record(con, run_uuid, tibble::tibble(diagnostic_name =
+#' "leg_blend_manufactured_sharpe", value_num = <sharpe>))`.
+#'
+#' @param status Tibble with columns `strategy_id`, `leg_count`,
+#'   `has_leg_calibration` -- the output of
+#'   [historicaldata::hd_registry_leg_count_status()].
+#' @return `TRUE` invisibly on success (including when `status` has zero
+#'   rows -- no composite strategy registered yet is not a defect).
+#' @noRd
+check_registry_leg_count_calibration <- function(status) {
+  required_cols <- c("strategy_id", "leg_count", "has_leg_calibration")
+  missing_cols <- setdiff(required_cols, names(status))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg status} is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_registry_leg_count_calibration() (S33) requires strategy_id, ",
+        "leg_count, has_leg_calibration -- the output of ",
+        "hd_registry_leg_count_status()."
+      )
+    ))
+  }
+
+  if (nrow(status) == 0L) {
+    return(invisible(TRUE))
+  }
+
+  bad <- !status$has_leg_calibration
+  if (any(bad)) {
+    idx <- which(bad)
+    offenders <- sprintf(
+      "  %s -- leg_count = %d",
+      status$strategy_id[idx], status$leg_count[idx]
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        length(idx), " composite (leg_count > 1) registry strateg",
+        if (length(idx) == 1L) "y has" else "ies have",
+        " no manufactured-Sharpe calibration annotation (#839):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "Record a 'leg_blend_manufactured_sharpe' diagnostic via ",
+        "hd_diagnostic_record() -- see hd_zero_alpha_calibration() (#839)."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+#' Run S33 against the live registry, tolerating an absent registry file
+#'
+#' A fresh checkout (or `scripts/verify.sh` run without a prior full
+#' `tar_make()`) has no `registry.duckdb` file yet -- that is a genuinely
+#' not-yet-applicable state, not a defect, and per
+#' `.claude/rules/checks-must-distinguish-unknown.md` it must be reported
+#' as such (loudly, via `cli::cli_inform()`), not silently coerced into
+#' either a pass or a fail. Once the registry exists (which most full
+#' pipeline runs create via the many `hd_registry_init()` sentinel targets
+#' across `R/plan_*.R`), this delegates straight to
+#' [check_registry_leg_count_calibration()].
+#'
+#' @return `TRUE` invisibly.
+#' @noRd
+.run_qa_registry_leg_count_calibration <- function() {
+  path <- historicaldata::hd_registry_path()
+  if (!file.exists(path)) {
+    cli::cli_inform(c(
+      "i" = paste0(
+        "qa_registry_leg_count_calibration: S33 skipped -- no registry file ",
+        "at ", path, " yet (no strategies registered in this checkout/run)."
+      )
+    ))
+    return(invisible(TRUE))
+  }
+
+  con <- historicaldata::hd_registry_open(path, read_only = TRUE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  status <- historicaldata::hd_registry_leg_count_status(con)
+  check_registry_leg_count_calibration(status)
+  invisible(TRUE)
+}
+
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -3448,6 +3558,31 @@ plan_qa_gates <- function() {
           "qa_leverage_gross_detection_gate: S31 passed (no detection-",
           "underpowered/unverified strategy above 1.0x allocator gross, ",
           "#626/#719 Layer 2 narrow slice)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every composite (leg_count > 1) registry strategy has a
+    # manufactured-Sharpe calibration annotation (S33, #839). Sibling to
+    # S20/S21 (trial-count multiple-testing axis) -- this covers the
+    # DISTINCT leg-blending axis neither of those gates targets. Reads the
+    # registry directly (bt.strategy/bt.diagnostic), not the leaderboard
+    # target -- threading leg_count through the leaderboard pipeline and
+    # any dashboard rendering of it is out of scope for this bounded first
+    # slice (#839; see check_registry_leg_count_calibration() /
+    # .run_qa_registry_leg_count_calibration() roxygen above). Skips
+    # (report-only, not a failure) when no registry.duckdb file exists yet
+    # -- genuinely not-yet-applicable, not a defect.
+    targets::tar_target(
+      qa_registry_leg_count_calibration,
+      command = {
+        .run_qa_registry_leg_count_calibration()
+        cli::cli_inform(c("v" = paste0(
+          "qa_registry_leg_count_calibration: S33 passed (every composite/",
+          "leg_count>1 registry strategy has a manufactured-Sharpe ",
+          "calibration annotation, or none is registered yet)"
         )))
         TRUE
       },
