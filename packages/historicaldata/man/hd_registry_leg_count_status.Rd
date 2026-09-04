@@ -26,5 +26,5 @@ manufactured-Sharpe calibration annotation, recorded via
 \details{
 This is a pure read -- it does not itself decide pass/fail; see
 \code{check_registry_leg_count_calibration()} (\code{R/plan_qa_gates.R}, QA gate
-S32) for the gate built on top of this reader.
+S33) for the gate built on top of this reader.
 }

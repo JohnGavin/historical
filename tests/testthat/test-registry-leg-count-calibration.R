@@ -1,4 +1,4 @@
-# Tests for check_registry_leg_count_calibration() -- QA gate S32 (#839)
+# Tests for check_registry_leg_count_calibration() -- QA gate S33 (#839)
 #
 # Mirrors the S20 pattern (check_leaderboard_detection_power_values,
 # #726): a pure function over a status tibble, so it's testable without a
@@ -57,7 +57,7 @@ test_that("check_registry_leg_count_calibration aborts on a status tibble missin
   )
 })
 
-# ── .run_qa_registry_leg_count_calibration (the S32 target wrapper) ─────
+# ── .run_qa_registry_leg_count_calibration (the S33 target wrapper) ─────
 #
 # Exercises the wrapper that opens the live registry -- distinct from the
 # pure check_registry_leg_count_calibration() tests above, which never

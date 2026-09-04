@@ -15,5 +15,5 @@
     Condition
       Error in `check_registry_leg_count_calibration()`:
       x `status` is missing 2 required column(s): leg_count and has_leg_calibration.
-      i check_registry_leg_count_calibration() (S32) requires strategy_id, leg_count, has_leg_calibration -- the output of hd_registry_leg_count_status().
+      i check_registry_leg_count_calibration() (S33) requires strategy_id, leg_count, has_leg_calibration -- the output of hd_registry_leg_count_status().
 

@@ -2816,7 +2816,7 @@ check_leverage_gross_detection_gate <- function(allocator_gross, leaderboard,
 
 
 #' Assert every composite (leg_count > 1) registry strategy has a
-#' manufactured-Sharpe calibration annotation (S32, #839)
+#' manufactured-Sharpe calibration annotation (S33, #839)
 #'
 #' Companion gate to S20 (`check_leaderboard_detection_power_values`,
 #' #726) and S21 (`check_leaderboard_deflated_sharpe_coverage`) -- those
@@ -2855,7 +2855,7 @@ check_registry_leg_count_calibration <- function(status) {
     cli::cli_abort(c(
       "x" = "{.arg status} is missing {length(missing_cols)} required column(s): {missing_cols}.",
       "i" = paste0(
-        "check_registry_leg_count_calibration() (S32) requires strategy_id, ",
+        "check_registry_leg_count_calibration() (S33) requires strategy_id, ",
         "leg_count, has_leg_calibration -- the output of ",
         "hd_registry_leg_count_status()."
       )
@@ -2890,7 +2890,7 @@ check_registry_leg_count_calibration <- function(status) {
   invisible(TRUE)
 }
 
-#' Run S32 against the live registry, tolerating an absent registry file
+#' Run S33 against the live registry, tolerating an absent registry file
 #'
 #' A fresh checkout (or `scripts/verify.sh` run without a prior full
 #' `tar_make()`) has no `registry.duckdb` file yet -- that is a genuinely
@@ -2909,7 +2909,7 @@ check_registry_leg_count_calibration <- function(status) {
   if (!file.exists(path)) {
     cli::cli_inform(c(
       "i" = paste0(
-        "qa_registry_leg_count_calibration: S32 skipped -- no registry file ",
+        "qa_registry_leg_count_calibration: S33 skipped -- no registry file ",
         "at ", path, " yet (no strategies registered in this checkout/run)."
       )
     ))
@@ -3565,7 +3565,7 @@ plan_qa_gates <- function() {
     ),
 
     # QA gate: every composite (leg_count > 1) registry strategy has a
-    # manufactured-Sharpe calibration annotation (S32, #839). Sibling to
+    # manufactured-Sharpe calibration annotation (S33, #839). Sibling to
     # S20/S21 (trial-count multiple-testing axis) -- this covers the
     # DISTINCT leg-blending axis neither of those gates targets. Reads the
     # registry directly (bt.strategy/bt.diagnostic), not the leaderboard
@@ -3580,7 +3580,7 @@ plan_qa_gates <- function() {
       command = {
         .run_qa_registry_leg_count_calibration()
         cli::cli_inform(c("v" = paste0(
-          "qa_registry_leg_count_calibration: S32 passed (every composite/",
+          "qa_registry_leg_count_calibration: S33 passed (every composite/",
           "leg_count>1 registry strategy has a manufactured-Sharpe ",
           "calibration annotation, or none is registered yet)"
         )))

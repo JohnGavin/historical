@@ -386,7 +386,7 @@ hd_record_stability_metrics <- function(con, run_uuid, returns,
 #'
 #' This is a pure read -- it does not itself decide pass/fail; see
 #' `check_registry_leg_count_calibration()` (`R/plan_qa_gates.R`, QA gate
-#' S32) for the gate built on top of this reader.
+#' S33) for the gate built on top of this reader.
 #'
 #' @param con DBI connection (read-only is fine).
 #' @return A tibble with columns `strategy_id`, `leg_count`,
