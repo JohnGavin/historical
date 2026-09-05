@@ -1,52 +1,81 @@
-# Current Work — session 27 (2026-09-01, roborev daily-report follow-up)
+# Current Work — session 28 (2026-09-03 → 2026-09-05)
 
 ## State
 
-`main` at `b178b96` (S30 fix, PR #836) → `16d5755` (session 26 docs, PR
-#835) both merged. This worktree's own branch (`feat/cc-20260829-145821`)
-is clean, in sync with its own remote copy, but stale relative to `main`
-(its content already landed via PR #835's squash-merge under a different
-SHA). Nothing uncommitted.
+This worktree's branch (`feat/cc-20260903-181019`) has been merged with
+`origin/main` to reconcile with a **parallel worktree** that landed session
+26 (PR #835) and session 27 (PR #837) while this session was running
+unaware of it — this file's own session-number collision (this session had
+mislabeled itself "26") is exactly that discovery surfacing. `main` is now
+at session 27's `19a17d2`, plus this session's two merged PRs
+([#840](https://github.com/JohnGavin/historical/pull/840),
+[#841](https://github.com/JohnGavin/historical/pull/841)).
 
 ## What this session was
 
-Short, triggered by a pasted roborev daily report. Fixed the one in-scope
-finding (S30 modified z-score double-MAD-scaling bug, historical#9941 →
-PR #836), merged the outstanding session-26 docs PR (#835), and filed two
-`llm` issues for everything else the report surfaced rather than fixing
-another project's tooling from here. Full detail in `CHANGELOG.md`'s
-"session 27" entry.
+Three rounds of "raise gaps relative to this external article" → verify
+against the actual codebase → file issues, plus one round of "implement two
+of them end-to-end."
 
-## Verification posture
+1. aligrithm vol-clustering article → gaps filed as #838/#839 → implemented
+   via two parallel `fixer` dispatches → hit a QA-gate numbering collision
+   and a merge conflict between the two PRs → both resolved and merged →
+   4 deferred-work follow-ups filed (#843–#846).
+2. algoadvantage Bollinger interview → 3 gaps filed (#847–#849): McClellan
+   breadth indicators, Bollinger/Keltner/ATR squeeze, and a materially
+   weaker-than-described parameter-robustness gate.
+3. StratProof crypto momentum-decay article → 5 gaps filed (#850–#854):
+   pessimistic-cost-first modeling, P(Sharpe>0) gate, per-year win-rate
+   breakdown + arbitraged-out diagnostic, graduation-gate purge verification,
+   spec-first-before-tuning rule. The article's referenced backtest JSON
+   (`xsmom-backtest-v1.json`) was auth-walled for both me and the user —
+   left unexamined.
 
-The S30 fix (PR #836) is structural + unit-test verified only
-(`scripts/verify.sh`: PASS, baseline-exact on both suites;
-`test-leaderboard-plausibility-amber.R`: 13/13 pass). Root `R/` changes get
-**no CI** — confirmed again this session. Not verified against a real
-`tar_make()` — low risk given it's an isolated scaling-constant change with
-no schema/signature change, but `scripts/build.sh` (main checkout only)
-would be the way to see the real CMR amber-flag row update in a built store.
+## The lesson
 
-## Open decisions (not code — need a human, or need `llm`)
+A dispatched agent's own `verification-before-completion` habit caught an
+error the orchestrator (me) introduced: I told a follow-up fixer to
+renumber a QA gate to "S24" based on a stale, never-fetched local `main`
+checkout. The agent re-verified against `git show origin/main:...` before
+acting, found the true ceiling was `S31`, and self-corrected to `S33`
+instead — silently doing the wrong thing would have collided with two
+already-existing unrelated gates (#656/#603).
 
-- [llm#1123](https://github.com/JohnGavin/llm/issues/1123) — `.roborev/`
-  gitignore bug (29 non-running reviews), 14 unclassified-severity
-  findings, dashboard-button 404 (three candidate causes listed, unresolved)
-- [llm#1126](https://github.com/JohnGavin/llm/issues/1126) — whether `/bye`'s
-  roborev Y/N gate should scale with session volume
-- Everything carried over from session 26's CURRENT_WORK (leverage backstop
-  level D1, #586 fat-tail/finite-horizon fallback, #719 Layer 2 full
-  provenance checklist) is **unchanged** — this session didn't touch any of
-  it. See `CHANGELOG.md`'s session 26 entry for the full list.
+A second, structurally identical mistake happened at the ORCHESTRATOR level
+at session end: this file and `CHANGELOG.md` were both edited and numbered
+"session 26" without first fetching `origin/main` to check what session
+number was actually current there — main already had 26 and 27 from a
+parallel worktree. Caught only because merging back into `main` produced a
+real conflict, not because anyone checked first. Same root cause both
+times: state a fact about `main` without fetching it first.
+
+Separately: two independent `fixer` dispatches both backgrounded a
+long-running verification step and stalled on "waiting" — a known,
+previously-documented anti-pattern (5 prior occurrences before today).
+Recoverable via `SendMessage` resume every time, but worth noticing it keeps
+recurring across sessions/models rather than treating each instance as a
+one-off.
 
 ## Next session
 
-**Signal Board tiers P2-P5 still untouched** (re-derive from a fresh `gh
-issue list`, not the stale Signal Board snapshot — two sessions have moved
-issues since it was built).
+**Open, unstarted (filed this session, none started):**
 
-**Held back, still open, still worth a look** (carried over from session 26,
-unchanged this session):
+| Issue | |
+|---|---|
+| [#843](https://github.com/JohnGavin/historical/issues/843) | Forward-move statistics + `hd_detection_power()` integration on the Markov diagnostic |
+| [#844](https://github.com/JohnGavin/historical/issues/844) | Evaluate walk-forward/rolling threshold recalibration for risk-state/regime classifiers |
+| [#845](https://github.com/JohnGavin/historical/issues/845) | Calibrate zero-alpha surface against real strategy grammar + estimate `rho_bar` |
+| [#846](https://github.com/JohnGavin/historical/issues/846) | Phase-0 dashboard design for both new diagnostics (combined, per consolidation-over-sprawl) |
+| [#847](https://github.com/JohnGavin/historical/issues/847) | No McClellan breadth indicators |
+| [#848](https://github.com/JohnGavin/historical/issues/848) | No Bollinger Bands / Keltner Channels / ATR / squeeze strategy |
+| [#849](https://github.com/JohnGavin/historical/issues/849) | Tighten `backtest-robustness.md` to a dense-neighborhood parameter check |
+| [#850](https://github.com/JohnGavin/historical/issues/850) | No pessimistic-cost-first backtest pass |
+| [#851](https://github.com/JohnGavin/historical/issues/851) | No P(true Sharpe > 0) posterior-style gate |
+| [#852](https://github.com/JohnGavin/historical/issues/852) | No per-calendar-year win-rate breakdown / arbitraged-out diagnostic |
+| [#853](https://github.com/JohnGavin/historical/issues/853) | Verify + wire `K_eff_strat` into a mandatory graduation-purge gate |
+| [#854](https://github.com/JohnGavin/historical/issues/854) | Add "implement cited spec unmodified first" rule |
+
+**Carried over from session 27 (still open, unchanged by this session):**
 
 | Issue | Why held |
 |---|---|
@@ -54,10 +83,21 @@ unchanged this session):
 | [#585](https://github.com/JohnGavin/historical/issues/585) G1/G4 | Blocked on #587 Phase 2+ / #463 |
 | [#490](https://github.com/JohnGavin/historical/issues/490) Gap 5 | pointblank pilot — low priority |
 | [#813](https://github.com/JohnGavin/historical/issues/813) | avoid_worst leaderboard metrics wired to SPY buy-and-hold |
-| [#804](https://github.com/JohnGavin/historical/issues/804) | `pkgctx-freshness` CI flake — still unfixed |
+| [#804](https://github.com/JohnGavin/historical/issues/804) | `pkgctx-freshness` CI flake — still unfixed; confirmed again this session via 10 independent CI runs, all failing the same way since 2026-08-30 |
 | [#830](https://github.com/JohnGavin/historical/issues/830), [#831](https://github.com/JohnGavin/historical/issues/831) | Crypto microstructure + NautilusTrader evaluation — not started |
+| [llm#1123](https://github.com/JohnGavin/llm/issues/1123) | `.roborev/` gitignore bug (29 non-running reviews), 14 unclassified-severity findings, dashboard-button 404 — unresolved |
+| [llm#1126](https://github.com/JohnGavin/llm/issues/1126) | whether `/bye`'s roborev Y/N gate should scale with session volume |
 
-**roborev at session end:** 54 verdict failures / 43 addressed → 11 net
-unaddressed. 0 crashes, 0 quota, consistency check clean. Informational per
-[llm#1126](https://github.com/JohnGavin/llm/issues/1126) — not re-asked
-this session per explicit user instruction.
+**Signal Board tiers P2-P5 still untouched** (re-derive from a fresh `gh
+issue list`, not the stale Signal Board snapshot — three sessions have now
+moved issues since it was built).
+
+**roborev at this session's `/bye`:** 30 verdict failures, 29 addressed →
+**1 unaddressed** (job from 2026-08-21, network `ENOTFOUND`, not
+crash-class). 0 crashes, 0 quota this window. (Session 27 reported 54/43/11
+at its own end on 2026-09-01 — the drop to 1 by now reflects roborev's own
+auto-close/requeue activity between sessions, not anything this session
+did.)
+
+**Not investigated:** `xsmom-backtest-v1.json` — auth-walled for both the
+user and this session, ask again only if access changes.

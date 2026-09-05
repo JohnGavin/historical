@@ -1,5 +1,83 @@
 # Changelog
 
+## 2026-09-03 → 2026-09-05 (session 28 — external methodology gap sweeps)
+
+### Completed
+
+- **Gap analyses against three external methodology pieces, each turned into
+  filed issues.** aligrithm's Bitcoin vol-clustering/regime-persistence piece
+  → [#838](https://github.com/JohnGavin/historical/issues/838)/[#839](https://github.com/JohnGavin/historical/issues/839);
+  algoadvantage's Bollinger interview → [#847](https://github.com/JohnGavin/historical/issues/847)–[#849](https://github.com/JohnGavin/historical/issues/849);
+  StratProof's crypto cross-sectional momentum decay piece → [#850](https://github.com/JohnGavin/historical/issues/850)–[#854](https://github.com/JohnGavin/historical/issues/854).
+  Each gap was verified against the actual codebase (grep + rule text quoted)
+  before filing, not asserted from the article alone — one theme (crypto
+  funding-rate work) was deliberately *not* re-filed since #551 already
+  tracks it, and implementing the StratProof article's own strategy was
+  deliberately *not* proposed since its own conclusion is that the edge is
+  dead.
+
+- **#838 and #839 implemented and merged** ([PR #841](https://github.com/JohnGavin/historical/pull/841),
+  [PR #840](https://github.com/JohnGavin/historical/pull/840)) via two
+  parallel `fixer` (sonnet, worktree-isolated) dispatches: Markov
+  transition-matrix + diagonal-persistence diagnostic and manual ADF/ACF
+  stationarity checks (`hd_markov_transition.R`, `hd_stationarity_diagnostics.R`,
+  QA gate S32) for #838; `leg_count` registry tracking with fail-loud
+  validation and `hd_zero_alpha_calibration()` (QA gate S33) for #839. Both
+  scoped deliberately narrow — forward-move statistics, walk-forward
+  recalibration, full-grammar calibration, and any dashboard integration were
+  explicitly deferred and re-filed as [#843](https://github.com/JohnGavin/historical/issues/843)–[#846](https://github.com/JohnGavin/historical/issues/846).
+
+- **A real QA-gate numbering defect caught by an agent's own verification,
+  not by me.** Both PRs independently added a gate labelled "S32" — correct
+  relative to `main`'s actual state (`S1`–`S31`) but colliding with each
+  other. I misdiagnosed this: a stale, never-`fetch`ed local `main` checkout
+  made me believe the ceiling was `S23` and instructed a follow-up agent to
+  renumber to `S24` — which **would have collided with two already-existing,
+  unrelated gates** (`S24`/`S25`, #656/#603/#656). The dispatched agent
+  independently re-verified against `git show origin/main:...` before
+  acting, caught the false premise, and self-corrected to `S33` — exactly
+  the `verification-before-completion` discipline this codebase asks for,
+  demonstrated by a subagent catching the orchestrator's own error.
+
+- **A genuine merge conflict** (both PRs touched the same insertion point in
+  `R/plan_qa_gates.R`) resolved by a third dispatched fix, keeping both gates
+  as separate adjacent targets, re-verified clean, then merged.
+
+- **Confirmed `pkgctx-freshness` CI is pre-existing, unrelated infra breakage,
+  not doc drift.** Reproduced the exact failure locally (`nix run
+  github:b-rodrigues/pkgctx` → crates.io SSL/403 on the `zmij` crate) and
+  confirmed via `gh run list` across 10 unrelated-branch CI runs going back
+  to 2026-08-30 — already tracked in [#804](https://github.com/JohnGavin/historical/issues/804).
+  Merged both PRs on green `r-tests` alone rather than treating the
+  known-broken check as a genuine blocker.
+
+### Failed Approaches
+
+- Both worktree-isolated `fixer` dispatches independently backgrounded a
+  long-running verification step (`nix-shell` build / `devtools::document()`)
+  and ended their turn reporting "waiting for the background job" — the
+  exact anti-pattern the `auto-delegation` companion doc already documents
+  five prior occurrences of. Fixed each time by `SendMessage`-resuming with
+  an explicit "poll the output file now, never background verification
+  again" instruction; cost one extra turn per agent, no data loss.
+- Assumed a local main checkout was current without `git fetch`ing first —
+  see the QA-gate-numbering entry above. The fix wasn't catching my own
+  mistake; it was that the downstream agent's own verification habit caught
+  it before it shipped.
+
+### Known Limitations
+
+- `xsmom-backtest-v1.json` (referenced by the StratProof article as
+  reproducible backtest detail) is behind `accounts.stratproof.com` sign-in
+  for both the user and this session — never examined, left unexamined
+  rather than guessed at.
+- roborev: 1 unaddressed verdict failure found at session end (job from
+  2026-08-21, network `ENOTFOUND`, pre-dates this session, not crash-class
+  per the consistency check) — flagged to the user, not yet resolved.
+- 12 issues filed this session ([#843](https://github.com/JohnGavin/historical/issues/843)–[#854](https://github.com/JohnGavin/historical/issues/854))
+  remain open and unstarted — all are follow-up/gap-analysis items, not
+  regressions.
+
 ## 2026-09-01 (session 27 — roborev daily-report follow-up)
 
 Short session triggered by the 2026-09-01 roborev daily report. Merged the
