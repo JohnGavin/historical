@@ -120,3 +120,67 @@ test_that("hd_trade_metrics: max_consecutive_losses is non-NA for any strategy w
   # With 3 and 4 consecutive loss runs, max must be >= 3
   expect_gte(metrics$max_consecutive_losses, 3L)
 })
+
+# ── hd_cdap: Coherent Drawdown-Adjusted Performance (#588) ──────────────────
+
+test_that("hd_cdap: positive return matches conventional Calmar exactly", {
+  expect_equal(hd_cdap(0.10, -0.05), 0.10 / 0.05)
+  expect_equal(hd_cdap(0.30, -0.10), 0.30 / 0.10)
+})
+
+test_that("hd_cdap: negative return -- LARGER drawdown ranks WORSE (the #588 fix)", {
+  # The defect: conventional cagr/abs(max_dd) would give -0.50 and -0.25
+  # respectively, ranking the DEEPER drawdown "better". CDAP inverts this.
+  shallow <- hd_cdap(-0.10, -0.20)
+  deep    <- hd_cdap(-0.10, -0.40)
+
+  expect_equal(shallow, -0.02)
+  expect_equal(deep, -0.04)
+  # The coherent ordering: identical return, deeper drawdown ranks worse
+  # (more negative), never better.
+  expect_lt(deep, shallow)
+})
+
+test_that("hd_cdap: zero drawdown returns NA (matches prior Calmar convention)", {
+  expect_true(is.na(hd_cdap(0.10, 0)))
+  expect_true(is.na(hd_cdap(-0.10, 0)))
+})
+
+test_that("hd_cdap: NA propagates", {
+  expect_true(is.na(hd_cdap(NA_real_, -0.10)))
+  expect_true(is.na(hd_cdap(0.10, NA_real_)))
+})
+
+test_that("hd_cdap: r == 0 returns 0, not NaN", {
+  expect_equal(hd_cdap(0, -0.10), 0)
+})
+
+test_that("hd_cdap: vectorised over paired r/d, and d may be signed or magnitude", {
+  r <- c(0.10, -0.10, -0.10, 0)
+  d <- c(-0.05, -0.20, -0.40, -0.10)
+  out <- hd_cdap(r, d)
+  expect_equal(out, c(2, -0.02, -0.04, 0))
+  # Passing the magnitude directly (unsigned d) gives the same result.
+  expect_equal(hd_cdap(r, abs(d)), out)
+})
+
+test_that("hd_cdap: non-numeric inputs abort with an informative message", {
+  expect_snapshot(error = TRUE, hd_cdap("not_numeric", -0.10))
+  expect_snapshot(error = TRUE, hd_cdap(0.10, "not_numeric"))
+})
+
+test_that("hd_cdap: mismatched vector lengths abort", {
+  expect_snapshot(error = TRUE, hd_cdap(c(0.1, 0.2, 0.3), c(-0.1, -0.2)))
+})
+
+test_that("hd_cdap: sign-behaviour snapshot pins the coherent ordering (#588)", {
+  # A small grid spanning both signs and a range of drawdown depths --
+  # this is the artefact a future change to the formula must explicitly
+  # re-approve, per .claude/rules/snapshot-test-policy.md.
+  grid <- expand.grid(
+    r = c(-0.20, -0.10, 0, 0.10, 0.20),
+    d = c(-0.05, -0.10, -0.20, -0.40)
+  )
+  out <- round(hd_cdap(grid$r, grid$d), 4)
+  expect_snapshot(cat(paste(sprintf("r=%.2f d=%.2f -> cdap=%s", grid$r, grid$d, out), collapse = "\n")))
+})

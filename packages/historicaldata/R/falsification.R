@@ -796,11 +796,45 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #' (2) the best of K strategies has an inflated expected Sharpe
 #' even under pure noise (the "haircut").
 #'
+#' @section Variance-aware hurdle (#558):
+#' The expected-maximum-Sharpe hurdle E[max SR] that the "haircut" subtracts
+#' depends on TWO things, not one: the trial COUNT \code{K_trials} (the
+#' "logarithmic blessing" -- adding trials raises the hurdle only slowly) and
+#' the trial-population VARIANCE \code{trial_sharpe_var} (V) -- how dispersed
+#' the Sharpe ratios of the \code{K_trials} candidates were. A pool containing
+#' low-trade, erratic "junk" strategies has a wide Sharpe dispersion and
+#' therefore a much higher honest hurdle than a clean pool of the same size,
+#' even though \code{K_trials} is identical. Bailey, Borwein, Lopez de Prado &
+#' Zhu (2014) write this as
+#' \eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where \eqn{E[\max Z]} is
+#' the expected maximum of \code{K_trials} unit-variance (V = 1) trial
+#' Z-scores. This implementation keeps the asymptotic Euler-Mascheroni
+#' approximation to \eqn{E[\max Z]} already used here (a form of the same
+#' extreme-value-theory result the LdP papers derive) and multiplies it by
+#' \eqn{\sqrt{V}}. \code{trial_sharpe_var = 1} (the default) reproduces the
+#' pre-#558 output for every \code{K_trials} exactly, so existing callers are
+#' unaffected unless they opt in.
+#'
+#' When the caller has (or can estimate) the population of trial Sharpe
+#' ratios that produced \code{K_trials}, pass
+#' \code{var(trial_sharpes, na.rm = TRUE)} as \code{trial_sharpe_var} rather
+#' than leaving it at 1 -- omitting it silently assumes the trial pool has
+#' the tightest possible Sharpe dispersion, understating the hurdle whenever
+#' the pool contains noisy, low-trade strategies (the "junk-variance trap").
+#'
 #' @param r Numeric vector of returns (daily or monthly).
 #' @param K_trials Integer. Number of strategies tested (default 1 = no
 #'   multiple-testing adjustment).
 #' @param ann_factor Integer. Annualisation factor (252 for daily, 12 for
 #'   monthly). Default 252.
+#' @param trial_sharpe_var Numeric scalar > 0. Variance of the Sharpe ratios
+#'   across the \code{K_trials} trial population (V in the Details section).
+#'   Default \code{1}, i.e. a unit-variance trial pool -- the implicit
+#'   assumption of every call before #558. A wider trial-Sharpe dispersion
+#'   (e.g. a pool containing low-trade "junk" strategies) should be passed
+#'   here as \code{var(trial_sharpes)}; this widens the hurdle and therefore
+#'   lowers \code{dsr} / raises \code{dsr_pvalue} for the SAME underlying
+#'   returns, all else equal.
 #'
 #' @return Named list:
 #'   \describe{
@@ -811,6 +845,7 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #'     \item{skewness}{Sample skewness of returns.}
 #'     \item{kurtosis}{Sample excess kurtosis of returns.}
 #'     \item{K_trials}{Number of strategies tested.}
+#'     \item{trial_sharpe_var}{Echoed input V (see Details).}
 #'     \item{T}{Number of observations.}
 #'   }
 #'
@@ -819,16 +854,32 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #' Selection Bias, Backtest Overfitting, and Non-Normality."
 #' \emph{Journal of Portfolio Management}, 40(5), 94-107.
 #'
+#' Bailey, D. H., Borwein, J. M., Lopez de Prado, M., & Zhu, Q. J. (2014).
+#' "Pseudo-Mathematics and Financial Charlatanism: The Effects of Backtest
+#' Overfitting on Out-of-Sample Performance." \emph{Notices of the AMS},
+#' 61(5), 458-471. (Trial-population-variance form of E[max SR].)
+#'
 #' @family falsification
 #' @export
-hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
+hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L,
+                                trial_sharpe_var = 1) {
+  if (!is.numeric(trial_sharpe_var) || length(trial_sharpe_var) != 1L ||
+      is.na(trial_sharpe_var) || !is.finite(trial_sharpe_var) ||
+      trial_sharpe_var <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg trial_sharpe_var} must be a single positive finite number.",
+      "i" = "Got {.val {trial_sharpe_var}}.",
+      "i" = "It is the variance of the Sharpe ratios across the {.arg K_trials} trial population (V); see {.fn hd_deflated_sharpe} Details."
+    ))
+  }
   r <- r[!is.na(r)]
   T_obs <- length(r)
   if (T_obs < 10L) {
     return(list(dsr = NA_real_, dsr_pvalue = NA_real_,
                 naive_sharpe = NA_real_, haircut_pct = NA_real_,
                 skewness = NA_real_, kurtosis = NA_real_,
-                K_trials = K_trials, T = T_obs))
+                K_trials = K_trials, trial_sharpe_var = trial_sharpe_var,
+                T = T_obs))
   }
 
   mu    <- mean(r)
@@ -848,13 +899,16 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
   # Var(SR) ≈ (1 - m3*SR + (m4-1)/4 * SR^2) / T
   var_sr <- (1 - m3 * sr + (m4 - 1) / 4 * sr^2) / T_obs
 
-  # Expected maximum Sharpe under K independent trials (Euler-Mascheroni):
-  # E[max(SR)] ≈ sqrt(2*log(K)) - (gamma + log(pi/2)) / (2*sqrt(2*log(K)))
-  # For K=1: E[max] = 0
+  # Expected maximum Sharpe under K independent trials (Euler-Mascheroni),
+  # scaled by sqrt(trial_sharpe_var) for a trial population that is not
+  # unit-variance (#558 -- see the "Variance-aware hurdle" roxygen section):
+  # E[max(SR)] ≈ sqrt(V) * [sqrt(2*log(K)) - (gamma + log(pi/2)) / (2*sqrt(2*log(K)))]
+  # For K=1: E[max] = 0 regardless of V (no multiple-testing hurdle to widen)
   if (K_trials > 1L) {
     z <- sqrt(2 * log(K_trials))
     euler_mascheroni <- 0.5772156649
     e_max_sr <- z - (euler_mascheroni + log(pi / 2)) / (2 * z)
+    e_max_sr <- e_max_sr * sqrt(trial_sharpe_var)
     # Scale to per-period SR (not annualised)
     e_max_sr <- e_max_sr / sqrt(T_obs)
   } else {
@@ -885,6 +939,361 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L) {
     skewness      = m3,
     kurtosis      = ek,
     K_trials      = K_trials,
+    trial_sharpe_var = trial_sharpe_var,
     T             = T_obs
+  )
+}
+
+
+# ── 13b. Harvey-Liu Sharpe haircut (multiple-testing p-value correction) ────
+
+#' Harvey-Liu multiple-testing "haircut" for a reported Sharpe ratio
+#'
+#' Adjusts a single reported Sharpe ratio for the number of strategies tested
+#' (\code{n_tests}) and their average pairwise correlation (\code{rho}), using
+#' one of three named family-wise/false-discovery corrections from the
+#' multiple-testing literature that Harvey & Liu (2014) apply to trading
+#' strategies: Bonferroni, Holm (step-down FWER), and Benjamini-Hochberg-
+#' Yekutieli ("BHY", false-discovery rate under general dependence).
+#'
+#' @section Relationship to deflated Sharpe and K_eff (#490 Gap 1):
+#' This repo already guards against multiple testing via
+#' \code{\link{hd_deflated_sharpe}} (Lopez de Prado's Deflated Sharpe Ratio,
+#' DSR) parameterised by \code{K_trials} = \code{\link{hd_strat_keff_vertox}}
+#' (Vertox \code{K_eff}, a correlation-aware effective-strategy count derived
+#' from the full pairwise correlation matrix). \code{hd_sharpe_haircut()} is a
+#' second, independent view of the same underlying question -- "how much of
+#' this Sharpe ratio survives once I account for how many things I tried?" --
+#' built on different machinery:
+#' \describe{
+#'   \item{DSR (\code{hd_deflated_sharpe})}{Tests H0: true Sharpe <= the
+#'     expected maximum Sharpe among \code{K_trials} noise trials, using an
+#'     extreme-value-theory approximation to that expected maximum and the
+#'     sampling variance of the Sharpe estimator (Lo, 2002). Non-normality
+#'     (skew/kurtosis) enters directly.}
+#'   \item{Haircut (\code{hd_sharpe_haircut})}{Converts the reported Sharpe to
+#'     a two-sided normal p-value, then applies a NAMED multiple-testing
+#'     correction (Bonferroni / Holm / BHY) via \code{\link[stats]{p.adjust}}
+#'     to that p-value, and reports the Sharpe ratio that would have produced
+#'     the corrected p-value on its own. It answers "which of the standard,
+#'     citable correction procedures does this Sharpe survive, and by how
+#'     much is it haircut under each?" -- a complementary, more
+#'     conservative-by-name-recognition check next to the DSR figure.}
+#' }
+#' The two are expected to broadly agree in DIRECTION (more effective tests
+#' -> bigger haircut) but not in MAGNITUDE (different tail approximations,
+#' different treatment of correlation) -- reporting them side by side, per
+#' #490 Gap 1, is itself the point: a strategy whose edge only survives one
+#' of the two methods is exactly the case worth flagging to a reader.
+#'
+#' \code{K_eff} enters this function through \code{n_tests}: pass the SAME
+#' correlation-aware effective count already used for DSR (e.g.
+#' \code{k_eff_leaderboard} in \code{R/plan_leaderboard.R}) as \code{n_tests},
+#' and \code{rho = 0} -- the correlation adjustment has already been folded
+#' into \code{n_tests} by \code{\link{hd_strat_keff_vertox}}, so applying it a
+#' second time via \code{rho} would double-count it. \code{rho} remains
+#' meaningful for a caller supplying a RAW (not correlation-adjusted) test
+#' count -- see Details.
+#'
+#' @details
+#' Given the annualised \code{sharpe} and its sample size \code{T_obs}, the
+#' per-period Sharpe is reconstructed as \code{sharpe / sqrt(ann_factor)} and
+#' converted to a t-statistic \code{t = sharpe/sqrt(ann_factor) *
+#' sqrt(T_obs)}. A two-sided normal p-value is computed for H0: true Sharpe ==
+#' 0 (two-sided, not one-sided, matching the Harvey-Liu/Harvey-Liu-Zhu
+#' convention that a "significant" factor could show up as either a long or a
+#' short signal -- their well-known "two-sigma is not enough" result is
+#' precisely this two-sided threshold moving from ~2.0 to ~3.0 once multiple
+#' testing is corrected for).
+#'
+#' \code{n_tests} and \code{rho} are combined into an effective number of
+#' independent tests using the equicorrelated-family approximation
+#' \eqn{M_{eff} = n_{tests} / (1 + (n_{tests} - 1) \cdot \rho)} (\code{rho =
+#' 0} gives \eqn{M_{eff} = n_{tests}}, fully independent; \code{rho -> 1}
+#' gives \eqn{M_{eff} -> 1}, fully redundant). \code{max(1, round(M_eff))} --
+#' matching the \code{round(k_eff)} convention already used for
+#' \code{K_trials} in \code{\link{hd_deflated_sharpe}} callers -- is then
+#' passed as \code{n} to \code{\link[stats]{p.adjust}} with the single
+#' original p-value, which -- because a length-1 \code{p} is algebraically the
+#' rank-1 (most significant) case for all three of \code{p.adjust}'s
+#' \code{"bonferroni"}, \code{"holm"} and \code{"BY"} methods -- reproduces
+#' the textbook formulas exactly:
+#' \describe{
+#'   \item{bonferroni}{\eqn{p_{adj} = \min(1, M_{eff} \cdot p)}.}
+#'   \item{holm}{Identical to Bonferroni for a single (rank-1) p-value; Holm's
+#'     extra power over Bonferroni only shows up across a full vector of
+#'     hypotheses, which this scalar-summary function does not have access
+#'     to.}
+#'   \item{bhy}{Mapped to \code{p.adjust(method = "BY")} (Benjamini &
+#'     Yekutieli, 2001) -- controls the false discovery rate under arbitrary
+#'     (including positive) dependence, at the cost of an extra harmonic-sum
+#'     factor \eqn{H_{M_{eff}} = \sum_{i=1}^{M_{eff}} 1/i}, making it MORE
+#'     conservative than Bonferroni/Holm for \eqn{M_{eff} > 1}. This is the
+#'     "BHY" of Harvey & Liu (2014) and the article this issue cites.}
+#' }
+#'
+#' The \strong{haircut Sharpe} is then the Sharpe ratio whose OWN naive
+#' (single-test, \code{n_tests = 1}) p-value equals the multiple-testing-
+#' adjusted \code{p_value_adj} -- i.e. inverting the two-sided normal test in
+#' the other direction: \code{t_adj <- qnorm(1 - p_value_adj / 2) *
+#' sign(t)}, then rescaling back to an annualised Sharpe. This is directly
+#' analogous to \code{hd_deflated_sharpe()}'s \code{haircut_pct}: "how much of
+#' the reported edge would a reader be left with, if only the corrected
+#' significance level were honoured."
+#'
+#' @param sharpe Numeric scalar. The annualised Sharpe ratio to haircut
+#'   (e.g. \code{naive_sharpe} from \code{\link{hd_deflated_sharpe}}).
+#' @param n_tests Numeric scalar >= 1. Number of tests in the family. May be
+#'   the RAW count of strategies tried, or an already correlation-adjusted
+#'   effective count (e.g. \code{k_eff_leaderboard}) -- see
+#'   "Relationship to deflated Sharpe and K_eff" above for which to use with
+#'   \code{rho}. Need not be an integer (rounded up internally via
+#'   \code{ceiling()} after the \code{rho} adjustment).
+#' @param rho Numeric scalar in \verb{[0, 1)}. Average pairwise correlation
+#'   among the \code{n_tests} trials, used to shrink \code{n_tests} to an
+#'   effective count \code{M_eff}. Pass \code{0} when \code{n_tests} is
+#'   already correlation-adjusted (see above).
+#' @param T_obs Numeric scalar >= 2. Number of return observations underlying
+#'   \code{sharpe} (used to reconstruct the per-period t-statistic).
+#' @param ann_factor Integer. Annualisation factor (252 for daily, 12 for
+#'   monthly). Default 252, matching \code{\link{hd_deflated_sharpe}}.
+#' @param method One of \code{"bonferroni"}, \code{"holm"}, \code{"bhy"}.
+#'
+#' @return Named list:
+#'   \describe{
+#'     \item{haircut_sharpe}{Multiple-testing-adjusted Sharpe ratio
+#'       (annualised, same sign as \code{sharpe}).}
+#'     \item{haircut_pct}{Percentage reduction from \code{sharpe} to
+#'       \code{haircut_sharpe} (\code{NA} when \code{sharpe} is
+#'       approximately zero, matching \code{hd_deflated_sharpe}'s
+#'       convention).}
+#'     \item{p_value}{Naive (single-test) two-sided p-value.}
+#'     \item{p_value_adj}{Multiple-testing-adjusted p-value.}
+#'     \item{M_eff}{Effective number of tests after the \code{rho}
+#'       adjustment.}
+#'     \item{n_tests}{Echoed input.}
+#'     \item{rho}{Echoed input.}
+#'     \item{method}{Echoed input.}
+#'     \item{T_obs}{Echoed input.}
+#'   }
+#'
+#' @references
+#' Harvey, C. R., & Liu, Y. (2014). "Evaluating Trading Strategies."
+#' \emph{The Journal of Portfolio Management}, 40(5), 108-118.
+#'
+#' Harvey, C. R., Liu, Y., & Zhu, H. (2016). "...and the Cross-Section of
+#' Expected Returns." \emph{The Review of Financial Studies}, 29(1), 5-68.
+#'
+#' Benjamini, Y., & Yekutieli, D. (2001). "The Control of the False Discovery
+#' Rate in Multiple Testing under Dependency." \emph{The Annals of
+#' Statistics}, 29(4), 1165-1188.
+#'
+#' Holm, S. (1979). "A Simple Sequentially Rejective Multiple Test
+#' Procedure." \emph{Scandinavian Journal of Statistics}, 6(2), 65-70.
+#'
+#' @family falsification
+#' @export
+hd_sharpe_haircut <- function(sharpe, n_tests, rho, T_obs, ann_factor = 252L,
+                                method = c("bonferroni", "holm", "bhy")) {
+  method <- match.arg(method)
+
+  if (!is.numeric(sharpe) || length(sharpe) != 1L || is.na(sharpe) ||
+      !is.finite(sharpe)) {
+    cli::cli_abort(c(
+      "x" = "{.arg sharpe} must be a single finite numeric value.",
+      "i" = "Got {.val {sharpe}}."
+    ))
+  }
+  if (!is.numeric(n_tests) || length(n_tests) != 1L || is.na(n_tests) ||
+      !is.finite(n_tests) || n_tests < 1) {
+    cli::cli_abort(c(
+      "x" = "{.arg n_tests} must be a single finite number >= 1.",
+      "i" = "Got {.val {n_tests}}.",
+      "i" = paste(
+        "Typically the leaderboard-wide effective strategy count",
+        "(k_eff_leaderboard); see {.fn hd_strat_keff_vertox}."
+      )
+    ))
+  }
+  if (!is.numeric(rho) || length(rho) != 1L || is.na(rho) ||
+      !is.finite(rho) || rho < 0 || rho >= 1) {
+    cli::cli_abort(c(
+      "x" = "{.arg rho} must be a single finite number in [0, 1).",
+      "i" = "Got {.val {rho}}.",
+      "i" = paste(
+        "It is the average pairwise correlation among the {.arg n_tests}",
+        "tested strategies; pass 0 when {.arg n_tests} is already",
+        "correlation-adjusted (see {.fn hd_sharpe_haircut} Details)."
+      )
+    ))
+  }
+  if (!is.numeric(T_obs) || length(T_obs) != 1L || is.na(T_obs) ||
+      !is.finite(T_obs) || T_obs < 2) {
+    cli::cli_abort(c(
+      "x" = "{.arg T_obs} must be a single finite number >= 2.",
+      "i" = "Got {.val {T_obs}}.",
+      "i" = "It is the number of return observations underlying {.arg sharpe}."
+    ))
+  }
+  if (!is.numeric(ann_factor) || length(ann_factor) != 1L ||
+      is.na(ann_factor) || !is.finite(ann_factor) || ann_factor <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg ann_factor} must be a single positive finite number.",
+      "i" = "Got {.val {ann_factor}}."
+    ))
+  }
+
+  # Reconstruct the per-period t-statistic implied by the annualised Sharpe
+  # (inverse of hd_deflated_sharpe()'s naive_sr <- sr * sqrt(ann_factor)):
+  sr_period <- sharpe / sqrt(ann_factor)
+  t_orig <- sr_period * sqrt(T_obs)
+
+  # Two-sided p-value under H0: true Sharpe == 0 (normal approximation).
+  p_orig <- 2 * stats::pnorm(-abs(t_orig))
+
+  # Effective number of independent tests from the average pairwise
+  # correlation rho among the n_tests trial population:
+  #   M_eff = n_tests / (1 + (n_tests - 1) * rho)
+  M_eff <- n_tests / (1 + (n_tests - 1) * rho)
+  M_eff <- max(1, M_eff)
+
+  adjust_method <- switch(method,
+    bonferroni = "bonferroni",
+    holm       = "holm",
+    bhy        = "BY"
+  )
+  p_adj <- stats::p.adjust(p_orig, method = adjust_method, n = max(1, round(M_eff)))
+  p_adj <- min(p_adj, 1)
+
+  # Haircut Sharpe: the Sharpe ratio whose OWN naive (single-test) p-value
+  # equals the multiple-testing-adjusted p-value p_adj.
+  t_adj <- if (p_adj >= 1) 0 else stats::qnorm(1 - p_adj / 2) * sign(t_orig)
+  sr_period_adj <- t_adj / sqrt(T_obs)
+  haircut_sharpe <- sr_period_adj * sqrt(ann_factor)
+
+  haircut_pct <- if (abs(sharpe) > 0.001) {
+    (1 - haircut_sharpe / sharpe) * 100
+  } else {
+    NA_real_
+  }
+
+  list(
+    haircut_sharpe = haircut_sharpe,
+    haircut_pct    = haircut_pct,
+    p_value        = p_orig,
+    p_value_adj    = p_adj,
+    M_eff          = M_eff,
+    n_tests        = n_tests,
+    rho            = rho,
+    method         = method,
+    T_obs          = T_obs
+  )
+}
+
+
+# ── 14. Signal-null rank (generalised placebo test, #718) ────────────────────
+
+#' Rank a strategy's real metric within a distribution of signal-null metrics
+#'
+#' Generic statistical layer for signal-null falsification tests (#718,
+#' generalising the strategy-specific placebo test that previously existed
+#' only for \code{mom_prepeak} -- see \code{.mom_prepeak_random_peak_signal()}
+#' in \code{R/plan_mom_prepeak_gauntlet.R}, the reference implementation).
+#'
+#' A DATA null (\code{hd_null_env_*} in this file) asks whether performance is
+#' distinguishable from the same strategy run on a synthetic series with no
+#' edge. A SIGNAL null asks a narrower, complementary question: on REAL data,
+#' holding every other piece of machinery fixed (costs, sizing, execution),
+#' is performance distinguishable from the same machinery with the claimed
+#' edge-carrying signal corrupted or randomised? A strategy can pass every
+#' data null while harvesting a structural property of real markets rather
+#' than its stated signal -- the signal null is designed to catch that case.
+#'
+#' This function performs only the comparison: given the real strategy's
+#' metric and a vector of the same metric computed on N signal-corrupted
+#' variants, it returns a rank statistic ("k of N corrupted variants beat the
+#' real strategy"), mirroring Heger (2026)'s "0 of 80" construction without
+#' any distributional assumption. HOW to corrupt a given strategy's signal is
+#' declared per strategy -- see \code{.mom_prepeak_random_peak_signal()}
+#' (mom_prepeak), \code{olmar_backtest(signal_null = TRUE)} (OLMAR-1,
+#' cross-sectional shuffle of the predicted price relative), and
+#' \code{.mf_signal_null_signs()} (managed futures, random trend sign) --
+#' and is intentionally NOT automated here.
+#'
+#' @param actual_metric Numeric scalar. The real strategy's metric (e.g.
+#'   annualised Sharpe) computed with its real, uncorrupted signal.
+#' @param null_metrics Numeric vector. The same metric computed on each of
+#'   N signal-corrupted variants. May contain `NA` (e.g. a variant with too
+#'   few observations to compute a Sharpe); these are excluded before
+#'   ranking. Length 1 is a valid degenerate case (a single corrupted
+#'   replicate, as the pre-#718 mom_prepeak test used).
+#' @param dominance_threshold Numeric scalar in `[0, 1]`. Fraction of valid
+#'   null variants that must perform at least as well as `actual_metric` for
+#'   `null_dominates` to be `TRUE`. Default `0.5` (a majority).
+#'
+#' @return Named list:
+#'   \describe{
+#'     \item{actual_metric}{The input `actual_metric`, unchanged.}
+#'     \item{n_beat}{Count of valid null variants with metric `>= actual_metric`.
+#'       `NA_integer_` when indeterminate (see below).}
+#'     \item{n_valid}{Count of null variants with a non-`NA` metric.}
+#'     \item{n_total}{`length(null_metrics)`, including any `NA`s.}
+#'     \item{rank_pct}{`n_beat / n_valid`. `NA_real_` when indeterminate.}
+#'     \item{null_dominates}{Logical: is `rank_pct >= dominance_threshold`?
+#'       `NA` -- never coerced to `FALSE` -- when `actual_metric` is `NA` or
+#'       `n_valid == 0`, per \code{checks-must-distinguish-unknown}: an
+#'       unmeasurable verdict must not look like a passing one.}
+#'   }
+#'
+#' @family falsification
+#' @export
+hd_signal_null_rank <- function(actual_metric, null_metrics,
+                                 dominance_threshold = 0.5) {
+  if (!is.numeric(actual_metric) || length(actual_metric) != 1L) {
+    cli::cli_abort(c(
+      "x" = "{.arg actual_metric} must be a numeric scalar.",
+      "i" = "Got {.cls {class(actual_metric)}} of length {length(actual_metric)}."
+    ))
+  }
+  if (!is.numeric(null_metrics)) {
+    cli::cli_abort(c(
+      "x" = "{.arg null_metrics} must be a numeric vector.",
+      "i" = "Got {.cls {class(null_metrics)}}."
+    ))
+  }
+  if (!is.numeric(dominance_threshold) || length(dominance_threshold) != 1L ||
+      is.na(dominance_threshold) ||
+      dominance_threshold < 0 || dominance_threshold > 1) {
+    cli::cli_abort(c(
+      "x" = "{.arg dominance_threshold} must be a single numeric in [0, 1].",
+      "i" = "Got {.val {dominance_threshold}}."
+    ))
+  }
+
+  n_total <- length(null_metrics)
+  valid   <- null_metrics[!is.na(null_metrics)]
+  n_valid <- length(valid)
+
+  if (is.na(actual_metric) || n_valid == 0L) {
+    return(list(
+      actual_metric  = actual_metric,
+      n_beat         = NA_integer_,
+      n_valid        = n_valid,
+      n_total        = n_total,
+      rank_pct       = NA_real_,
+      null_dominates = NA
+    ))
+  }
+
+  n_beat   <- sum(valid >= actual_metric)
+  rank_pct <- n_beat / n_valid
+
+  list(
+    actual_metric  = actual_metric,
+    n_beat         = n_beat,
+    n_valid        = n_valid,
+    n_total        = n_total,
+    rank_pct       = rank_pct,
+    null_dominates = rank_pct >= dominance_threshold
   )
 }

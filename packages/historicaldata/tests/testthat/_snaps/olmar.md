@@ -65,3 +65,30 @@
       Error in `olmar_backtest()`:
       x `prices` has 4 rows but `window` = 25 requires at least 26.
 
+# signal_null must be a single non-NA logical
+
+    Code
+      olmar_backtest(prices, window = 10L, signal_null = "yes")
+    Condition
+      Error in `olmar_backtest()`:
+      x `signal_null` must be a single non-NA logical.
+      i Got "yes".
+
+---
+
+    Code
+      olmar_backtest(prices, window = 10L, signal_null = NA)
+    Condition
+      Error in `olmar_backtest()`:
+      x `signal_null` must be a single non-NA logical.
+      i Got NA.
+
+# seed must be NULL or a single numeric
+
+    Code
+      olmar_backtest(prices, window = 10L, signal_null = TRUE, seed = "42")
+    Condition
+      Error in `olmar_backtest()`:
+      x `seed` must be NULL or a single numeric.
+      i Got <character> of length 1.
+

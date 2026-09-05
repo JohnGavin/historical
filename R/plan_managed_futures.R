@@ -361,7 +361,245 @@ plan_managed_futures <- function() {
         "in 4 asset classes back to 1900s (passes the bar). ",
         "v0 proxy note: ", mf_params$proxy_note
       )
+    }),
+
+    # ── Signal null (#718) ───────────────────────────────────────
+    # The canonical leaderboard row ("Managed Futures" -> ret_ls, MOP 2012
+    # long-short, R/plan_leaderboard.R .norm_mf()) is a trend-following
+    # strategy: sig_<asset> = sign(trailing-12m return), lagged 1 month,
+    # then vol-targeted. The edge-carrying component is the SIGN -- vol
+    # targeting and costs are machinery, not signal. .mf_signal_null_ls()
+    # replaces sig_<asset> with an independent random +/-1 draw wherever the
+    # real signal is non-NA (preserving the identical warm-up/NA shape),
+    # keeping the SAME lagged vol series, leverage cap, and cost per month,
+    # so only trend DIRECTION is corrupted.
+    #
+    # CAVEAT (detection-power-required.md, #726): the "Managed Futures"
+    # leaderboard row is currently detection_underpowered (naive Sharpe
+    # ~0.48 on ~19 years needs ~27 years to clear hd_detection_power()'s
+    # bar) -- unlike OLMAR-1 (olmar_signal_null_test, R/plan_olmar.R), which
+    # clears the bar. A signal-null test on an underpowered sample has
+    # little power to reject even on the REAL signal, so a low n_beat here
+    # should not be read as strong evidence of a real trend-following edge
+    # -- only as evidence this specific corruption does not obviously
+    # dominate. Included for coverage (2nd of 2-3 strategies extended
+    # beyond mom_prepeak per #718) with this limitation stated explicitly,
+    # per detection-power-required.md's guidance for exactly this case.
+    targets::tar_target(mf_signal_null_params, {
+      list(n_reps = 20L, seed_base = 42L)
+    }),
+
+    targets::tar_target(mf_signal_null_sharpes, {
+      params <- mf_signal_null_params
+      vapply(seq_len(params$n_reps), function(i) {
+        seed_i   <- params$seed_base + i
+        ret_null <- .mf_signal_null_ls(mf_portfolios, mf_params, seed = seed_i)
+        keep     <- !is.na(ret_null)
+        if (sum(keep) < 12L) return(NA_real_)
+        sr <- sharpe_ratio_rf(
+          ret_null[keep], mf_portfolios$RF[keep],
+          periods_per_year = 12L, na.rm = TRUE
+        )
+        sr$sharpe
+      }, numeric(1L))
+    }),
+
+    targets::tar_target(mf_signal_null_test, {
+      actual_sharpe <- mf_metrics |>
+        dplyr::filter(
+          .data$strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)",
+          .data$period == "Full"
+        ) |>
+        dplyr::pull(.data$sharpe)
+
+      rank <- historicaldata::hd_signal_null_rank(
+        actual_metric = actual_sharpe,
+        null_metrics  = mf_signal_null_sharpes
+      )
+
+      tibble::tibble(
+        strategy       = "Managed Futures",
+        actual_sharpe  = actual_sharpe,
+        null_sharpes   = list(mf_signal_null_sharpes),
+        n_beat         = rank$n_beat,
+        n_valid        = rank$n_valid,
+        n_total        = rank$n_total,
+        rank_pct       = rank$rank_pct,
+        null_dominates = rank$null_dominates,
+        # #726: this strategy's own sample is detection_underpowered, so a
+        # low n_beat here is weaker evidence than the same result would be
+        # on a detection-power-cleared strategy (e.g. OLMAR-1).
+        detection_caveat = "sample is detection_underpowered per #726 -- see comment above target"
+      )
+    }),
+
+    # ── Registry sentinel (#587 Phase 1) ────────────────────────────────────
+    # Upserts bt.strategy row for "mf_tsm", records one bt.run + bt.metric
+    # rows (full-period slice of mf_metrics, "Long-Short TS-Mom (MOP 2012,
+    # vol-targeted)" -- the same row R/plan_leaderboard.R's .norm_mf()
+    # selects as the canonical leaderboard row for "Managed Futures").
+    # Guard: returns empty tibble if DBI / duckdb are unavailable.
+    #
+    # #587: this strategy sat in the strategy_names single-source-of-truth
+    # tibble (#427) but never got a registration sentinel, so bt.strategy
+    # never carried a row for it -- one of the 3 gaps issue #587's comment
+    # (Flaw 1) identified (ev_ebit, mf_tsm, olmar; olmar itself already
+    # fixed by #629, this is the remaining 2 of 3).
+    targets::tar_target(mf_register_runs, {
+      .mf_register_runs(
+        strategy_names = strategy_names,
+        mf_metrics     = mf_metrics,
+        mf_portfolios  = mf_portfolios
+      )
     })
 
   )
+}
+
+
+# ── Internal helper ────────────────────────────────────────────────────────────
+# Prefixed .mf_* (private; not exported from the package).
+
+#' Random-sign trend-following null for the managed-futures L/S strategy (#718)
+#'
+#' Recomputes the canonical long-short TS-momentum return series
+#' (`mf_portfolios$ret_ls`) with each asset's trailing-12m trend SIGN
+#' replaced by an independent random +/-1 draw, wherever the real signal is
+#' non-`NA`. Vol-targeting (the same lagged trailing vol per asset),
+#' leverage cap, risk-free rate, and monthly cost are all held identical to
+#' the real strategy -- only trend direction is corrupted.
+#'
+#' @param mf_portfolios Tibble from the `mf_portfolios` target -- must carry
+#'   `sig_<asset>`, `vol_<asset>`, `exc_<asset>`, and `RF` for
+#'   `asset in c("SPY", "TLT", "GLD", "DBC")`.
+#' @param mf_params List from the `mf_params` target (`vol_target`,
+#'   `max_leverage`, `cost_monthly`).
+#' @param seed Integer random seed for the sign draw.
+#'
+#' @return Numeric vector, same length as `nrow(mf_portfolios)`: the
+#'   signal-null long-short monthly return series.
+#' @noRd
+.mf_signal_null_ls <- function(mf_portfolios, mf_params, seed) {
+  set.seed(seed)
+  vt   <- mf_params$vol_target
+  ml   <- mf_params$max_leverage
+  cost <- mf_params$cost_monthly
+  df   <- mf_portfolios
+  n    <- nrow(df)
+
+  assets   <- c("SPY", "TLT", "GLD", "DBC")
+  pos_null <- vector("list", length(assets))
+  names(pos_null) <- assets
+
+  for (asset in assets) {
+    orig_sig <- df[[paste0("sig_", asset)]]
+    lag_vol  <- df[[paste0("vol_", asset)]]
+
+    rand_sig <- sample(c(-1, 1), size = n, replace = TRUE)
+    rand_sig[is.na(orig_sig)] <- NA_real_
+
+    p <- rand_sig * pmin(vt / lag_vol, ml)
+    pos_null[[asset]] <- ifelse(is.na(p), 0, p)
+  }
+
+  df$RF + (
+    pos_null$SPY * df$exc_SPY +
+    pos_null$TLT * df$exc_TLT +
+    pos_null$GLD * df$exc_GLD +
+    pos_null$DBC * df$exc_DBC
+  ) / 4 - cost
+}
+
+#' Register the Managed Futures ("mf_tsm") backtest run in the strategy registry
+#'
+#' Mirrors `.ev_register_runs()` from plan_ev_ebit.R.
+#'
+#' @param strategy_names Tibble from the `strategy_names` target.
+#' @param mf_metrics Tibble from the `mf_metrics` target; the "Long-Short
+#'   TS-Mom (MOP 2012, vol-targeted)" / "Full" row is registered -- the same
+#'   row R/plan_leaderboard.R's `.norm_mf()` selects as the canonical
+#'   leaderboard row for "Managed Futures".
+#' @param mf_portfolios Tibble from the `mf_portfolios` target; used to
+#'   extract returns for SSR/top5pct stability metrics.
+#'
+#' @return Tibble with columns: strategy_id, run_uuid.
+#' @noRd
+.mf_register_runs <- function(strategy_names, mf_metrics, mf_portfolios) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      strategy_id = character(),
+      run_uuid    = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  strat_row <- strategy_names |>
+    dplyr::filter(.data$code_name == "mf_tsm") |>
+    dplyr::transmute(
+      strategy_id        = .data$code_name,
+      short_name         = .data$short_name,
+      long_name          = .data$long_name,
+      asset_class        = .data$asset_class,
+      frequency          = .data$frequency,
+      ann_factor         = as.integer(.data$ann_factor),
+      directionality     = as.character(.data$directionality),
+      liquidity_tier     = as.character(.data$liquidity_tier),
+      time_horizon_days  = as.integer(.data$time_horizon_days_avg),
+      trades_per_year    = as.numeric(.data$trades_per_year_avg),
+      turnover_pct       = as.numeric(.data$turnover_pct_per_period_avg),
+      tags               = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+
+  historicaldata::hd_strategy_upsert(con, strat_row)
+
+  uu <- historicaldata::hd_run_upsert(
+    con,
+    strategy_id      = "mf_tsm",
+    partition        = "phase1",
+    pipeline_version = "phase1"
+  )
+
+  # Record full-period metrics row for the canonical MOP 2012 long-short leg.
+  # Units (fail-loud-not-null.md): cagr/vol/max_dd/ann_rf are PERCENT
+  # (R/plan_managed_futures.R's calc_metrics() stores x*100), sharpe/calmar
+  # are scale-free ratios, n_months is a count. window_start/window_end are
+  # Date columns and are auto-skipped by hd_metric_record()'s wide-form
+  # numeric-only filter (is.numeric(Date) is FALSE).
+  full_row <- mf_metrics[
+    mf_metrics$strategy == "Long-Short TS-Mom (MOP 2012, vol-targeted)" &
+      mf_metrics$period == "Full",
+    , drop = FALSE
+  ]
+  if (nrow(full_row) == 1L) {
+    metric_cols <- setdiff(names(full_row), c("strategy", "period"))
+    mf_units <- c(
+      n_months = "count", cagr = "percent", vol = "percent",
+      sharpe = "ratio", ann_rf = "percent", max_dd = "percent",
+      calmar = "ratio"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = mf_units
+    )
+  }
+
+  # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
+  rets <- mf_portfolios$ret_ls
+  rets <- rets[!is.na(rets)]
+  if (length(rets) > 0L) {
+    historicaldata::hd_record_stability_metrics(
+      con        = con,
+      run_uuid   = uu,
+      returns    = rets,
+      w          = 36L,
+      ann_factor = 12L
+    )
+  }
+
+  tibble::tibble(strategy_id = "mf_tsm", run_uuid = uu)
 }

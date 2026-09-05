@@ -78,6 +78,195 @@
   remain open and unstarted — all are follow-up/gap-analysis items, not
   regressions.
 
+## 2026-09-01 (session 27 — roborev daily-report follow-up)
+
+Short session triggered by the 2026-09-01 roborev daily report. Merged the
+session 26 docs handover (PR #835), fixed the one in-scope finding the
+report surfaced, and filed the rest as cross-cutting `llm` issues per
+`cross-project-scope` rather than fixing tooling belonging to another
+project from here.
+
+### Completed
+
+- **historical#9941 (roborev, High) fixed**: `.leaderboard_peer_amber_flags()`
+  (S30, `R/plan_qa_gates.R`, #719 Layer 1) double-applied MAD scaling —
+  `stats::mad()`'s default `constant = 1.4826` stacked on top of the
+  Iglewicz & Hoya `0.6745` multiplier, which is itself the inverse of
+  `1.4826`. Deflated every amber-flag modified z-score by ~32% (CMR's flag:
+  `-5.46` computed vs `-8.09` correct), silently making the gate's cited
+  "3.5" threshold behave like an effective ~5.19. Fixed via
+  `constant = 1` (unscaled MAD); snapshot updated to the hand/Python-verified
+  correct value. Merged as [#836](https://github.com/JohnGavin/historical/pull/836).
+- **PR #835 merged** (session 26 CHANGELOG/CURRENT_WORK handover, docs-only,
+  no code changes).
+
+### Filed elsewhere (not fixed here — see `cross-project-scope`)
+
+- [llm#1123](https://github.com/JohnGavin/llm/issues/1123) — the rest of the
+  2026-09-01 daily report: `.roborev/` is gitignored in every reviewed repo
+  (confirmed in `historical`, `llmtelemetry`, `llm`), which lines up exactly
+  with the report's "29 reviews that did not run" (the review agent can't
+  read its own snapshot diff); 14 findings with unclassified severity
+  (parser/format gap); the dashboard button reported as 404 despite `llm`
+  already merging a fix for that exact symptom on 2026-08-23
+  ([llm#946](https://github.com/JohnGavin/llm/issues/946) /
+  [PR #1009](https://github.com/JohnGavin/llm/pull/1009)) — three candidate
+  explanations listed for the `llm` session to run down. micromort#9962/
+  #9963/#9968 (High) explicitly left untouched — belong to `micromort`.
+- [llm#1126](https://github.com/JohnGavin/llm/issues/1126) — whether `/bye`'s
+  roborev NOT-CLEAN Y/N gate should account for session volume (this
+  session ended with 54 verdict failures / 43 addressed = 11 net
+  unaddressed, 0 crash, 0 quota, consistency clean — informational, not
+  something to re-litigate per-session going forward).
+
+### Known Limitations
+
+- Root `R/` changes (including this session's S30 fix) get **no CI at all**
+  — `r-tests`/`pkgctx` workflows only fire on `packages/historicaldata/**`.
+  `scripts/verify.sh` is the only gate for this class of change; confirmed
+  again this session (PR #836 showed zero status checks).
+
+## 2026-08-29 → 2026-08-31 (session 26 — the Signal Board triage)
+
+Built a triage artifact (all 161 open issues, classified into risk tiers by
+whether they touch data/decision integrity) and worked through it tier by
+tier via parallel worktree-isolated agents, each fixing, verifying
+(`scripts/verify.sh`), and opening a PR for orchestrator review/merge — never
+self-merging. ~30 PRs landed this session.
+
+### Completed — P0 (all 26 issues addressed)
+
+- **Silent-drop / silent-coercion bugs fixed**, each with a new QA gate so the
+  class doesn't recur: `inner_join` chains silently deleting months in
+  bootstrap CI and `stk_all_comparison` (#603, #656 → gates S24/S25);
+  registry unit maps missing `ann_rf`, masked by `error = "continue"` (#691);
+  `check_pipeline_errors.R` itself failing open on an unreadable store (#730);
+  `hd_ohlcv()`/`hd_macro()` date-type mismatch causing silent zero-row joins
+  (#615), extended to a general accessor date-type gate (#616) and 8 missing
+  `dv_*` validation targets (#617); `rf_annual` hardcoded 2% + `borrow_rate`
+  NA-conflation overstating 3 strategies' returns (#608, #664); Partition
+  table factor levels silently dropping the OOS label (#646); unseeded
+  XGBoost training making `xgb_drif_signal`'s SSR non-deterministic across
+  rebuilds, occasionally landing on a spurious NA (#779, real root-cause
+  debug, not a guess).
+- **CMR (commodities mean-reversion) fully overhauled** across 5 landed
+  fixes (#752 calendar lookback, #755 tradeable-era truncation, #758 tercile
+  fractions, #762 WTI deduplication, #765 rank-weighting-vs-terciles
+  decision): sharpe −0.747 → 0.142, deflated sharpe → −0.019 — still
+  indistinguishable from zero, but every known construction defect is gone.
+- **Data-sourcing decision recorded, not left as a silent gap**:
+  `macro_daily`/`equity_daily`'s upstream (`dsfefvx/finance-historical-data`)
+  is dead; decided to mark archived rather than "outage pending refresh",
+  documented in new `docs/DATA_SOURCING_LESSONS.md` (#619, #655, #673).
+- **Property-based QA gate replacing two hardcoded ones** (#668): any
+  leaderboard metric column going entirely NA now aborts, not just the two
+  columns a prior gate happened to name. Paired with a new glossary +
+  entity-resolution registry (`R/glossary.R`, `data/glossary.yaml`).
+- Several issues (#753, #710, #691-partial, #574, #726/#728-partial, #711,
+  #740, #580) turned out to be **already fixed by prior merged work that
+  never auto-closed** (non-closing PR phrasing) — verified with evidence and
+  closed rather than re-fixed.
+- Hit the account's monthly spend limit twice mid-run; resumed interrupted
+  agents via `SendMessage` where their worktree was still live, redispatched
+  fresh where it wasn't (a `SendMessage` resume into an agent whose worktree
+  was never created falls back to the *orchestrator's own* worktree — caught
+  both times by the agent's own isolation self-check, no bad commits landed).
+
+### Completed — P1 (partial: ~24 issues progressed, most merged)
+
+- **Detection power / statistical rigour extended**: variance-aware deflated
+  Sharpe (#558, Bailey/Borwein/López de Prado/Zhu), `k_eff_leaderboard`
+  coverage 11→16 strategies (#733, already landed by prior work), Harvey-Liu
+  Sharpe haircut (#490 Gap 1, caught its own boundary bug in its own test
+  suite before commit), cost-adjusted metric coverage 6→17 strategies (#778),
+  market-impact cost model wired opt-in into the real backtest (#490 Gap 4).
+- **Path-dependent risk**: Calmar/CDAP fix for negative-return incoherence
+  (`R/utils_metrics.R` — same bug independently reported by #586 and #588),
+  first-passage/gambler's-ruin breach-risk column (#586), prop-constrained
+  re-ranking view (#586, merged on a static target-name check in lieu of a
+  full render — see Known Limitations), regime-aware stop-rule test engine
+  with pre-registered Arm A/B/C sequencing (#588) — real numbers against
+  live strategies still need a main-checkout `scripts/build.sh` run.
+- **Signal-null testing generalised** beyond mom_prepeak to OLMAR-1 and
+  Managed Futures (#718); DRIF multiverse pattern generalised to Avoid Worst
+  Days (#490 Gap 2, chosen because it's one of only 2 strategies clearing the
+  detection-power bar).
+- **`avoid_worst`'s overstated causal claim corrected** (#611): VIX
+  "predicting" SPX drawdowns doesn't hold at the strength the dashboard prose
+  claimed; also surfaced (independently corroborated by the #718 dispatch)
+  that the leaderboard's registered Avoid Worst metrics are wired to SPY
+  buy-and-hold, not the actual VIX-timed strategy — filed as #813, not fixed
+  here (out of scope for a causal-claim issue).
+
+### Completed — leverage-policy decision cluster (#624/#625/#626/#635/#719/#587)
+
+Investigated, then decided D1–D6 and dispatched accordingly:
+
+- **#719 Layers 1+3 built first** (periodicity-reconciliation gate S28,
+  peer-relative plausibility bands S29/S30) — deliberately the prerequisite
+  before touching the allocator, since the leverage backstop number had been
+  silently corrupted by undetected data bugs three separate times.
+  Discovering this fixed also **removed the original problem being solved**:
+  with CMR's periodicity bug fixed, its implied leverage dropped from a
+  stale 4.56x to ~0.93x, so the "backstop binds and forces 13% de-risking"
+  tension from the original design conversation no longer exists.
+- **σ_target made a live computed target** instead of a hand-derived
+  constant re-typed into an issue comment each time a bug was found (#635) —
+  it already moved on its own (0.1354 → 0.1369) when unrelated CMR work
+  landed later the same day, which is exactly the failure mode this closes.
+- **#625**: liquidity-dashboard wiring turned out already merged by an
+  earlier PR; shipped the percentile-indexed ADV threshold instead
+  (informational-only — did not touch the $5M production gate that feeds
+  published returns), filed #821/#822 for the two things deliberately not
+  done blind.
+- **#587 Phase 1 only**: fixed a real registry-presence gap (`ev_ebit`,
+  `mf_tsm`, `olmar` were listed in the strategy-names table but never
+  actually registered) — Phases 2-6 (`mechanism_status` schema, provenance
+  linkage) explicitly deferred.
+- **#626's allocator, approved via a `dashboard-output-first` Phase-0
+  prototype gate then built for real**: vol-normalised gross from the live
+  σ_target, capped by an overridable (not hardcoded) backstop, gated so no
+  `detection_underpowered` strategy can size above 1.0x gross — a working
+  narrow slice of #719's still-unbuilt Layer 2. The backstop *level* itself
+  remains an open decision, shipped as a labelled-provisional default (2.0x).
+
+### New issues filed this session
+
+#800 (mom_prepeak_gauntlet zero-borrow gap), #804 (`pkgctx-freshness` CI job
+flaky on a crates.io 403 — hit and worked around 4 times this session),
+#813 (avoid_worst leaderboard metrics wired to the wrong strategy), #816
+(PIT/survivorship universe stub, spun out of #490 Gap 3), #821 (liquidity
+`filter_mode` warn→remove flip, needs its own before/after comparison), #822
+(percentile-index the production $5M ADV gate), #830 (crypto minute-bar
+microstructure — Roll/VPIN/Amihud, evaluated against a critical re-read of
+the source article), #831 (NautilusTrader evaluation — not in nixpkgs, no R
+interface, probably not worth it given this repo has no live-execution
+layer).
+
+### Known Limitations
+
+- **`scripts/verify.sh` was the verification bar for nearly everything
+  merged today.** It proves structure, not runtime behaviour — pipeline-body
+  changes (CMR overlay wiring, the leverage allocator, XGBoost reseeding, the
+  stop-rule engine) are flagged in their respective PRs as needing a
+  `scripts/build.sh` run in the main checkout before their numbers are
+  trusted for real sizing decisions. None of that was run this session (this
+  worktree cannot run it).
+- **#586's prop-constrained view** (`docs/leaderboard.qmd`) was merged on a
+  static target-name consistency check (confirmed `leaderboard_prop_constrained`
+  matches between its `tar_target()` definition and the qmd's
+  `safe_tar_read()` call, which has a graceful fallback) rather than a real
+  `quarto render` — the specific render-time-only failure class this
+  project's own docs warn about was checked narrowly, not eliminated.
+  Follow-up: render it for real next main-checkout session.
+- **Leverage backstop level (D1)** is still an open decision — the allocator
+  ships a default, not a final number.
+- **roborev backlog**: 58 verdict failures / 35 addressed at session end (23
+  net unaddressed) — expected given ~30 PRs merged in one session, not
+  triaged individually here.
+- P2-P5 tiers of the Signal Board (the bulk of the 161-issue backlog,
+  mostly exploratory research/strategy proposals) untouched this session.
+
 ## 2026-08-27 → 2026-08-29 (session 25 — the instrument was the bug)
 
 ### Completed

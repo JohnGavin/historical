@@ -9,7 +9,9 @@ olmar_backtest(
   window = 25L,
   epsilon = 10,
   leverage = 0.2,
-  cost_bps = 10
+  cost_bps = 10,
+  signal_null = FALSE,
+  seed = NULL
 )
 }
 \arguments{
@@ -30,6 +32,20 @@ Default \code{0.2}.}
 
 \item{cost_bps}{Numeric; one-way turnover transaction cost in basis points.
 Default \code{10}.}
+
+\item{signal_null}{Logical; if \code{TRUE}, the predicted price relative
+\eqn{x_{pred}} is randomly permuted across the active assets on each day
+before the passive-aggressive update runs (#718 signal-null
+falsification). Every other piece of machinery — universe, active-asset
+handling, leverage tilt, turnover costs, t+1 execution — is left
+identical to the real backtest; only the correspondence between an
+asset's SMA/price ratio and that asset is destroyed. Default
+\code{FALSE}.}
+
+\item{seed}{Integer or \code{NULL}; random seed for the \code{signal_null}
+permutation, set once via \code{set.seed()} before the daily loop so the
+run is reproducible. Ignored when \code{signal_null = FALSE}. Default
+\code{NULL}.}
 }
 \value{
 A \link[tibble]{tibble} with columns:

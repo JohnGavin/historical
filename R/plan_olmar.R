@@ -339,6 +339,89 @@ plan_olmar <- function() {
           "i" = conditionMessage(e)
         ))
       })
+    }),
+
+    # ── Signal null (#718) ───────────────────────────────────────
+    # OLMAR-1's edge-carrying signal is the predicted price relative
+    # x_pred = SMA(window)/price. olmar_backtest(signal_null = TRUE)
+    # permutes x_pred across the active assets each day, holding the
+    # universe, active-asset handling, leverage tilt, turnover cost, and
+    # t+1 execution identical to the real backtest -- everything except the
+    # asset<->x_pred correspondence. OLMAR-1 is one of the two strategies
+    # (#726) whose current sample clears detection_power::hd_detection_power()
+    # (i.e. NOT detection_underpowered) -- see detection-power-required.md --
+    # so its signal-null rank is informative, not just a formality.
+    targets::tar_target(olmar_signal_null_params, {
+      list(n_reps = 20L, seed_base = 42L)
+    }),
+
+    targets::tar_target(olmar_signal_null_sharpes, {
+      library(dplyr)
+      params <- olmar_signal_null_params
+
+      vapply(seq_len(params$n_reps), function(i) {
+        seed_i <- params$seed_base + i
+        port <- historicaldata::olmar_backtest(
+          prices      = olmar_prices,
+          window      = olmar_params$window,
+          epsilon     = olmar_params$epsilon,
+          leverage    = olmar_params$leverage,
+          cost_bps    = olmar_params$cost_bps,
+          signal_null = TRUE,
+          seed        = seed_i
+        ) |>
+          dplyr::mutate(date = as.Date(date)) |>
+          .olmar_join_rf(daily_rf)
+
+        keep <- !is.na(port$net_ret) & !is.na(port$rf_ret)
+        ret  <- port$net_ret[keep]
+        rf   <- port$rf_ret[keep]
+        if (length(ret) < 20L) return(NA_real_)
+
+        sr <- sharpe_ratio_rf(ret, rf, periods_per_year = 252L, na.rm = TRUE)
+        sr$sharpe
+      }, numeric(1L))
+    }),
+
+    targets::tar_target(olmar_signal_null_test, {
+      actual_sharpe <- olmar_metrics |>
+        dplyr::filter(.data$period == "Full Period") |>
+        dplyr::pull(.data$sharpe)
+
+      rank <- historicaldata::hd_signal_null_rank(
+        actual_metric = actual_sharpe,
+        null_metrics  = olmar_signal_null_sharpes
+      )
+
+      tibble::tibble(
+        strategy       = "OLMAR-1",
+        actual_sharpe  = actual_sharpe,
+        null_sharpes   = list(olmar_signal_null_sharpes),
+        n_beat         = rank$n_beat,
+        n_valid        = rank$n_valid,
+        n_total        = rank$n_total,
+        rank_pct       = rank$rank_pct,
+        null_dominates = rank$null_dominates
+      )
+    }),
+
+    # ── Registry sentinel (#587 Phase 1) ────────────────────────────────────
+    # Upserts bt.strategy row for "olmar", records one bt.run + bt.metric
+    # rows (full-period slice of olmar_metrics). Guard: returns empty tibble
+    # if DBI / duckdb are unavailable.
+    #
+    # #587: OLMAR-1 was already ranked on the leaderboard (STRATEGY_OBS_ANN_
+    # FACTOR, R/plan_leaderboard.R) and #629 added its row to the
+    # strategy_names single-source-of-truth tibble, but neither of those
+    # writes bt.strategy -- this was the "OLMAR-1 has zero registry
+    # presence" gap issue #587's comment (Flaw 1) named explicitly. This
+    # target closes it the same way #629 closed the strategy_names gap.
+    targets::tar_target(olmar_register_runs, {
+      .olmar_register_runs(
+        strategy_names  = strategy_names,
+        olmar_metrics   = olmar_metrics,
+        olmar_portfolio = olmar_portfolio
+      )
     })
 
   )
@@ -370,4 +453,96 @@ plan_olmar <- function() {
     df_label = "olmar_portfolio", strategy_label = "OLMAR-1",
     period_noun = "date", df_arg_name = "port"
   )
+}
+
+#' Register the OLMAR-1 ("olmar") backtest run in the strategy registry
+#'
+#' Mirrors `.ev_register_runs()` from plan_ev_ebit.R / `.avoid_worst_register_runs()`
+#' from plan_avoid_worst.R (both daily-frequency strategies).
+#'
+#' @param strategy_names Tibble from the `strategy_names` target.
+#' @param olmar_metrics Tibble from the `olmar_metrics` target; the "Full
+#'   Period" row is registered.
+#' @param olmar_portfolio Tibble from the `olmar_portfolio` target; used to
+#'   extract returns for SSR/top5pct stability metrics.
+#'
+#' @return Tibble with columns: strategy_id, run_uuid.
+#' @noRd
+.olmar_register_runs <- function(strategy_names, olmar_metrics, olmar_portfolio) {
+  if (!requireNamespace("DBI", quietly = TRUE) ||
+      !requireNamespace("duckdb", quietly = TRUE)) {
+    return(tibble::tibble(
+      strategy_id = character(),
+      run_uuid    = character()
+    ))
+  }
+
+  path <- historicaldata::hd_registry_path()
+  historicaldata::hd_registry_init(path)
+  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+
+  strat_row <- strategy_names |>
+    dplyr::filter(.data$code_name == "olmar") |>
+    dplyr::transmute(
+      strategy_id        = .data$code_name,
+      short_name         = .data$short_name,
+      long_name          = .data$long_name,
+      asset_class        = .data$asset_class,
+      frequency          = .data$frequency,
+      ann_factor         = as.integer(.data$ann_factor),
+      directionality     = as.character(.data$directionality),
+      liquidity_tier     = as.character(.data$liquidity_tier),
+      time_horizon_days  = as.integer(.data$time_horizon_days_avg),
+      trades_per_year    = as.numeric(.data$trades_per_year_avg),
+      turnover_pct       = as.numeric(.data$turnover_pct_per_period_avg),
+      tags               = .data$tags,
+      research_paper_doi = .data$research_paper_doi
+    )
+
+  historicaldata::hd_strategy_upsert(con, strat_row)
+
+  uu <- historicaldata::hd_run_upsert(
+    con,
+    strategy_id      = "olmar",
+    partition        = "phase1",
+    pipeline_version = "phase1"
+  )
+
+  # Record full-period metrics row.
+  # Units (fail-loud-not-null.md): cagr/vol/max_dd/ann_rf are PERCENT
+  # (this file's olmar_metrics target stores round(x * 100, 2)), sharpe is
+  # a scale-free ratio, days is a count of daily observations, years is a
+  # year-duration, avg_turnover_daily is a decimal fraction of portfolio
+  # value turned over per day.
+  full_row <- olmar_metrics[
+    olmar_metrics$period == "Full Period",
+    , drop = FALSE
+  ]
+  if (nrow(full_row) == 1L) {
+    metric_cols <- setdiff(names(full_row), "period")
+    olmar_units <- c(
+      days = "count", years = "years", cagr = "percent", vol = "percent",
+      sharpe = "ratio", ann_rf = "percent", max_dd = "percent",
+      avg_turnover_daily = "fraction"
+    )
+    historicaldata::hd_metric_record(
+      con, uu, full_row[, metric_cols, drop = FALSE], units = olmar_units
+    )
+  }
+
+  # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.
+  rets <- olmar_portfolio$net_ret
+  rets <- rets[!is.na(rets)]
+  if (length(rets) > 0L) {
+    historicaldata::hd_record_stability_metrics(
+      con        = con,
+      run_uuid   = uu,
+      returns    = rets,
+      w          = 252L,
+      ann_factor = 252L
+    )
+  }
+
+  tibble::tibble(strategy_id = "olmar", run_uuid = uu)
 }

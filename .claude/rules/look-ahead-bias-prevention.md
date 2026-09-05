@@ -88,6 +88,130 @@ Re-run P&L with 1-5 period delays. If alpha disappears at t+1, the
 edge is speed-dependent and may be impractical. See `execution-delay-sensitivity` rule.
 Full CHECK 5 snippet in `qa-bias-template.md`.
 
+### Fundamental / accounting data — availability lag (4th leakage type, #553)
+
+The three leakage types above (same-match, cross-period, within-fold
+bet-time) all describe data that is either wrong or not-yet-existent at
+decision time. Fundamental/accounting data (10-K/10-Q XBRL revenue, EPS,
+book equity, cash flow) introduces a **4th, distinct** leakage type:
+
+| Type | What leaks | Detection |
+|---|---|---|
+| **Availability lag** | Data describing a PAST period, correctly dated to that period, but not yet PUBLISHED at decision time | Filing-date (`first_filed`) vs period-end (`period_end`) gap |
+
+A period-end join (`period_end` as the join key with no filing-date
+cutoff) hands a backtest a fiscal quarter's numbers on the day the
+quarter *ended* — weeks to months before SEC deadlines (60/75/90 calendar
+days by filer size) required the company to actually disclose them. This
+is leakage even though the number itself is not "wrong" in any way — it
+correctly describes the period. The bug is availability, not accuracy.
+
+A second, compounding failure is **restatement leakage**: many sources
+store one mutable value per period, so a later restatement silently
+overwrites the historical value and a backtest reads the CORRECTED number
+stamped with the ORIGINAL filing date.
+
+**Required for any fundamental/accounting feature:**
+
+1. A revision-triangle schema carrying `first_filed` (public-availability
+   date) AND both `original_value` (as first reported) / `latest_value`
+   (post-restatement) — never one mutable value per period. See
+   `hd_fundamentals()` / `packages/historicaldata/R/fundamentals.R`.
+2. Every query defaults to `original_value` and enforces
+   `first_filed <= as_of` — `latest_value` is an explicit, clearly-labelled
+   opt-in for current screening, never for backtests.
+3. **CHECK 6 — fundamentals filing-lag shift** (#554): re-run the
+   backtest with every fundamental input delayed to
+   `period_end + FUNDAMENTAL_MAX_LAG_DAYS` (`R/plan_qa_fundamentals.R`,
+   default 120 days). Same threshold table as CHECK 2 (<15% OK, 15-40%
+   warn, >40% FAIL).
+4. **Join-date audit** (#555): `leaked_pct = mean(visible_date < first_filed)`
+   over the assembled feature frame, must be ~0. Structural, always-on,
+   cheap — the behavioural counterpart to CHECK 6.
+
+See `R/plan_qa_fundamentals.R` for the check functions
+(`check_fundamentals_lag_shift()`, `check_fundamentals_join_dates()`) and
+GitHub issues #553 (schema), #554 (CHECK 6), #555 (join-date audit).
+
+### Diagnostic-stratum leakage (5th leakage type, #600)
+
+The four leakage types above (same-match, cross-period, within-fold
+bet-time, availability lag) all describe leakage into a **feature**: the
+model itself sees data it should not have at decision time. Diagnostic-
+stratum leakage is different -- the **model can be perfectly clean and
+pass all four checks above**, and the leakage is instead in the report
+*about* the model: the conditioning variable used to define strata for a
+calibration or performance diagnostic.
+
+| Type | What leaks | Detection |
+|---|---|---|
+| **Diagnostic-stratum** | Outcome used to define the evaluation stratum | Stratum variable must be computed from data strictly prior to the evaluation window open |
+
+Concretely: stratifying a calibration or performance check on a
+volatility regime (or any regime/risk proxy) computed at the **close**
+of the evaluation window silently conditions on the outcome -- the
+regime label and the outcome being evaluated are both functions of the
+same realised volatility. The strata are contaminated and the
+diagnostic reports a flattering number, even though nothing about the
+model's training or feature set is wrong.
+
+**Wrong** -- regime computed from the same window being evaluated:
+
+```r
+# rolling_vol here is realised vol over the SAME period as net (the
+# P&L being evaluated) -- the stratum is a function of the outcome.
+bets |>
+  dplyr::mutate(
+    regime = dplyr::if_else(
+      rolling_vol > median(rolling_vol, na.rm = TRUE),
+      "high_vol", "low_vol"
+    )
+  ) |>
+  dplyr::group_by(regime) |>
+  dplyr::summarise(sharpe = mean(net) / sd(net), .groups = "drop")
+```
+
+**Right** -- regime measured strictly before the window it stratifies,
+using only information available at the window's open:
+
+```r
+# regime_open is the vol regime as of the START of each evaluation
+# window (e.g. a trailing 21-day realised vol computed through t-1,
+# then dplyr::lag()'d onto the window it will be used to stratify).
+bets |>
+  dplyr::mutate(
+    regime = dplyr::if_else(
+      regime_open > median(regime_open, na.rm = TRUE),
+      "high_vol", "low_vol"
+    )
+  ) |>
+  dplyr::group_by(regime) |>
+  dplyr::summarise(sharpe = mean(net) / sd(net), .groups = "drop")
+```
+
+**Origin:** [Gelman blog, 2026-07-29](https://statmodeling.stat.columbia.edu/2026/07/29/over-coverage-caught-by-pre-registration-47-of-56-inside-a-stated-50-interval/).
+Malinowski caught a 47/56-inside-a-stated-50% over-coverage bug by hand,
+by conditioning on regime measured at each window's open (not its
+close, which leaks the outcome). Gelman's reply generalises it:
+
+> it's indeed a good idea to look at conditional calibration, but you
+> have to be careful only to condition on things in the forecast, not
+> on the outcome
+
+**Required for any regime-conditional or stratified diagnostic:**
+
+1. The stratum/regime variable must be a dplyr::lag()-based or
+   as-of-cutoff quantity, computed from data strictly prior to the
+   window it stratifies -- never from data drawn from the window itself.
+2. If the diagnostic's regime column and the outcome column share any
+   date range, treat it as leaked until proven otherwise (same burden
+   of proof as the four feature-leakage types above).
+3. See backtest-robustness Section 2 (Regime-Conditional Evaluation) --
+   the qa_regime_robustness example there computes regime from the
+   full backtest window's median; a project claiming diagnostic-stratum
+   cleanliness must instead compute it from a shifted/as-of quantity as
+   shown above.
+
 ## In Commit Messages (experiment format)
 
 Every experiment commit MUST include the OOS metric alongside in-sample:

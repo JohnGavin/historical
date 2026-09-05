@@ -46,9 +46,11 @@ hd_guardian("recession", from = "2024-01-01")
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
 \code{\link{hd_factors}()},
+\code{\link{hd_fundamentals}()},
 \code{\link{hd_guardian_monthly}()},
 \code{\link{hd_jst}()},
 \code{\link{hd_kraken_ohlcvt}()},

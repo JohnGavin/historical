@@ -47,6 +47,16 @@ source(disc_path)
 qa_gates_path <- if (file.exists("../R/plan_qa_gates.R")) "../R/plan_qa_gates.R" else
   file.path(here::here(), "R/plan_qa_gates.R")
 source(qa_gates_path)
+
+# PERIOD_LABELS_ALLOWED is the single source of truth for every value the
+# `period` column may hold (#643/#644). Sourced here so the By Partition
+# table below can build its display-order factor levels from the same
+# vocabulary the S10 gate (check_leaderboard_period_vocab) enforces on the
+# target -- rather than hardcoding a levels vector that silently drops any
+# label the target legitimately emits (#646).
+partitions_path <- if (file.exists("../R/plan_partitions.R")) "../R/plan_partitions.R" else
+  file.path(here::here(), "R/plan_partitions.R")
+source(partitions_path)
 ```
 
 # Rankings
@@ -54,8 +64,11 @@ source(qa_gates_path)
 ::: {.callout-note .small collapse="false"}
 ⚠ This leaderboard carries known caveats — survivorship bias in the stock
 universe, and per-strategy statistical detection power/rigour limits (see the
-**Detection** and **Rigour** columns below). Full detail, collected in one
-place: [Biases and Caveats](#biases-and-caveats).
+**Detection** and **Rigour** columns below). The **Breach Risk (±20% DD)**
+column is a secondary, informational diagnostic (issue #586) — it does NOT
+affect this table's ranking. For a separate re-ranking by survivability under
+a drawdown mandate, see the **Prop-Constrained View** tab. Full detail,
+collected in one place: [Biases and Caveats](#biases-and-caveats).
 :::
 
 ## Row
@@ -136,11 +149,38 @@ if (!is.null(lb)) {
   # Joined here so the Rigour badge tooltip below can show the full trio the
   # now-removed "Deflated Sharpe" tab used to show, with zero information
   # loss (Step 5 consolidation).
+  #
+  # sharpe_haircut_pct (#490 Gap 1) is the complementary Harvey-Liu
+  # multiple-testing haircut (hd_sharpe_haircut(), method = "bhy") --
+  # joined the same way, alongside dsr_haircut_pct, so the tooltip shows
+  # both the DSR view and the named-correction view side by side.
   strat_ds <- safe_tar_read("strat_deflated_sharpe")
   if (!is.null(strat_ds) && "dsr_haircut_pct" %in% names(strat_ds)) {
     full <- full |> left_join(strat_ds |> select(strategy, dsr_haircut_pct), by = "strategy")
   }
   if (!"dsr_haircut_pct" %in% names(full)) full$dsr_haircut_pct <- NA_real_
+  if (!is.null(strat_ds) && "sharpe_haircut_pct" %in% names(strat_ds)) {
+    full <- full |> left_join(strat_ds |> select(strategy, sharpe_haircut_pct), by = "strategy")
+  }
+  if (!"sharpe_haircut_pct" %in% names(full)) full$sharpe_haircut_pct <- NA_real_
+
+  # ── Leverage allocator gross-exposure target (#626 production
+  # implementation, replacing the #827 prototype) -- the vol-normalised
+  # allocator's per-strategy gross target, capped at a PROVISIONAL
+  # backstop (#626 D1 not finalized). NA for strategies with no measurable
+  # gross_convention (Value (HML), PSO Optimal), same exclusion as
+  # Gross (now) below.
+  lev_gross <- safe_tar_read("leverage_allocator_gross")
+  if (!is.null(lev_gross) && "G_capped" %in% names(lev_gross)) {
+    full <- full |> left_join(
+      lev_gross |> select(strategy, G_capped, backstop_binds, backstop_used, sigma_target_used),
+      by = "strategy"
+    )
+  }
+  for (.col in c("G_capped", "backstop_binds", "backstop_used", "sigma_target_used")) {
+    if (!.col %in% names(full)) full[[.col]] <- NA
+  }
+  rm(.col)
 
   detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
     # 5-state verdict, symbol AND text on every state (never colour alone,
@@ -198,12 +238,19 @@ if (!is.null(lb)) {
     )
   }
 
-  rigour_badge <- function(strategy, deflated, dsr_p, keff, kraw, sr, haircut) {
+  rigour_badge <- function(strategy, deflated, dsr_p, keff, kraw, sr, haircut,
+                            mt_haircut = NA_real_) {
     # Rank: 1 = full coverage (best), 2 = partial (defect-in-progress),
     # 3 = documented exclusion (legitimate, not a defect), 4 = zero
     # coverage with no exemption (defect). Mirrors the .credible_rank /
     # .redundant_rank hidden-sort-column pattern already used in this table
     # so DT's default alphabetical string sort never scrambles verdict order.
+    #
+    # mt_haircut (#490 Gap 1) is the complementary Harvey-Liu BHY
+    # multiple-testing haircut (hd_sharpe_haircut()) -- informational only,
+    # appended to the tooltip alongside the DSR haircut. It does NOT
+    # participate in the 3/3 coverage count above (that stays scoped to
+    # deflated Sharpe / DSR p-value / K_eff, per QA gate S21, #728 item 4).
     exempt_reason <- DEFLATED_SHARPE_EXEMPTIONS$reason[DEFLATED_SHARPE_EXEMPTIONS$strategy == strategy]
     if (length(exempt_reason) > 0) {
       return(list(
@@ -217,10 +264,11 @@ if (!is.null(lb)) {
     present <- sum(!is.na(c(deflated, dsr_p, keff)))
     if (present == 3L) {
       haircut_txt <- if (is.na(haircut)) "" else sprintf(" (%.1f%% haircut)", haircut)
+      mt_txt <- if (is.na(mt_haircut)) "" else sprintf(" Harvey-Liu BHY haircut: %.1f%%.", mt_haircut)
       return(list(
         html = sprintf(
-          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f. K_eff = %.1f of %s raw.'>&#10003; 3/3</span>",
-          deflated, sr, haircut_txt, dsr_p, keff, kraw
+          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f. K_eff = %.1f of %s raw.%s'>&#10003; 3/3</span>",
+          deflated, sr, haircut_txt, dsr_p, keff, kraw, mt_txt
         ),
         rank = 1L
       ))
@@ -240,16 +288,142 @@ if (!is.null(lb)) {
     )
   }
 
+  # ── Gross (target) badge (#626, R/plan_leverage.R) ─────────────────────
+  # The vol-normalised allocator's per-strategy gross target, distinct from
+  # the "Gross (now)" column below: that column reports what a strategy's
+  # OWN construction implements today; this one reports what the allocator
+  # WOULD assign -- the gap the whole allocator design (#626) exists to
+  # close. G_capped is the backstop-capped figure actually shown; a
+  # `backstop_binds = TRUE` strategy had a higher uncapped implied leverage.
+  # The backstop LEVEL is PROVISIONAL (#626 D1 not finalized) -- always
+  # disclosed in the tooltip and in gross_target_note below, never presented
+  # as settled. A strategy whose detection verdict is underpowered or
+  # unverified (NA) is additionally flagged as BLOCKED by QA gate S31
+  # (detection-power-required.md) when its G_capped exceeds 1.0x -- the
+  # badge still shows the allocator's raw figure for transparency, but the
+  # tooltip states plainly that gate S31 forbids actually granting it.
+  gross_target_badge <- function(g_capped, binds, backstop, underpowered) {
+    if (is.na(g_capped)) {
+      return(list(
+        html = paste0(
+          "<span class='gross-target-badge napp' title='No measurable ",
+          "gross_convention for this strategy -- same exclusion as Gross ",
+          "(now) (Value (HML), PSO Optimal: pre-computed factor series or ",
+          "meta-portfolio blend, no explicit weight vector to measure).",
+          "'>&ndash; n/a</span>"
+        ),
+        rank = -Inf
+      ))
+    }
+    blocked <- is.na(underpowered) || isTRUE(underpowered)
+    block_txt <- if (blocked && g_capped > 1.0) {
+      paste0(
+        " BLOCKED at 1.0x by QA gate S31 (#626/#719 Layer 2, detection-",
+        "power-required.md) -- this strategy is detection-underpowered or ",
+        "has no detection verdict; the figure shown is the allocator&#39;s ",
+        "unblocked value for transparency, not what would actually be ",
+        "granted."
+      )
+    } else ""
+    binds_txt <- if (isTRUE(binds)) {
+      sprintf(
+        " Gross backstop (%.1fx, PROVISIONAL -- #626 D1 not finalized) binds: uncapped implied leverage was higher.",
+        backstop
+      )
+    } else ""
+    cls <- if (blocked && g_capped > 1.0) "blocked" else if (isTRUE(binds)) "capped" else "ok"
+    list(
+      html = sprintf(
+        paste0(
+          "<span class='gross-target-badge %s' title='Vol-normalised ",
+          "allocator target (sigma_target / vol_per_unit_gross, capped at ",
+          "a PROVISIONAL %.1fx backstop).%s%s'>%.2fx%s</span>"
+        ),
+        cls, backstop, binds_txt, block_txt, g_capped, if (isTRUE(binds)) "*" else ""
+      ),
+      rank = g_capped
+    )
+  }
+
+  # ── Breach-risk badge (#586 G1, historicaldata::hd_first_passage()) ───────
+  # SECONDARY, DE-EMPHASISED diagnostic: "what is the probability this
+  # strategy's return path hits a -20% drawdown floor before a +20% profit
+  # target" -- infinite-horizon, drifted-Brownian-motion approximation, see
+  # the plan_leaderboard.R comment above `fp_breach_prob_20pct` for the full
+  # derivation and its documented scope limits. This column INFORMS; it does
+  # NOT rank -- deliberately no hidden `.rank` sort column and a single
+  # neutral, muted style regardless of value (per #586's "Proposed shape":
+  # "flagged, never removed" from the primary board, and never averaged into
+  # the primary ordering).
+  fp_badge <- function(prob) {
+    if (is.na(prob)) {
+      return("<span class='fp-badge' title='Not computed -- see plan_leaderboard.R fp_breach_prob_20pct comment for the NA paths (missing cagr/vol/obs_ann_factor, or hd_first_passage() itself failing).'>not computed</span>")
+    }
+    sprintf(
+      paste0(
+        "<span class='fp-badge' title='Probability of hitting a -20%% drawdown ",
+        "floor before a +20%% profit target, from a drifted-Brownian-motion ",
+        "approximation (historicaldata::hd_first_passage()). Infinite horizon ",
+        "(no time limit) and assumes Gaussian iid returns -- real fat-tailed ",
+        "paths breach MORE often than this implies. Informational only: does ",
+        "NOT affect this table&#39;s ranking. See issue #586.'>%.0f%%</span>"
+      ),
+      prob * 100
+    )
+  }
+
   det <- mapply(detection_badge, full$sharpe, full$detection_underpowered,
                 full$detection_min_n_years, full$detection_underpowered_mt,
                 full$detection_min_n_years_mt, SIMPLIFY = FALSE)
   rig <- mapply(rigour_badge, full$strategy, full$deflated_sharpe, full$dsr_pvalue,
                 full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
-                full$dsr_haircut_pct, SIMPLIFY = FALSE)
+                full$dsr_haircut_pct, full$sharpe_haircut_pct, SIMPLIFY = FALSE)
+  gt <- mapply(gross_target_badge, full$G_capped, full$backstop_binds, full$backstop_used,
+               full$detection_underpowered, SIMPLIFY = FALSE)
+  fp_html <- if ("fp_breach_prob_20pct" %in% names(full)) {
+    vapply(full$fp_breach_prob_20pct, fp_badge, character(1))
+  } else {
+    rep(fp_badge(NA_real_), nrow(full))
+  }
+
+  # ── Sharpe confidence interval (#585 G2) — computed by boot_ci_summary
+  # (R/plan_bootstrap_ci.R, 90% block bootstrap: 1000 draws, 3-month
+  # blocks) and joined onto `leaderboard` (R/plan_leaderboard.R:687-699) as
+  # sharpe_ci_lo/sharpe_ci_hi/ci_crosses_zero, but until now only displayed
+  # in the "Robustness > Bootstrap CI" tab far below -- a bare point Sharpe
+  # in THIS table is exactly the over-precision the `Radical Uncertainty`
+  # review (#585) objects to, when the honest interval was one join away.
+  # A strategy whose CI crosses zero is flagged with a warning glyph rather
+  # than silently ranked between two strategies whose CIs don't.
+  has_sharpe_ci <- all(c("sharpe_ci_lo", "sharpe_ci_hi") %in% names(full))
+  n_ci_crosses_zero <- if ("ci_crosses_zero" %in% names(full)) {
+    sum(full$ci_crosses_zero, na.rm = TRUE)
+  } else 0L
 
   metrics_table <- full |>
     mutate(
-      Sharpe     = ifelse(is.na(sharpe),       "—", as.character(round(sharpe, 2))),
+      Sharpe = if (has_sharpe_ci) {
+        crosses <- if ("ci_crosses_zero" %in% names(full)) ci_crosses_zero else NA
+        flag_html <- ifelse(
+          !is.na(crosses) & crosses,
+          " <span class='sharpe-ci-flag' title='90% block-bootstrap CI for Sharpe crosses zero -- cannot reject that the true Sharpe is zero, even though the point estimate is positive. See Robustness > Bootstrap CI below.'>&#9888;</span>",
+          ""
+        )
+        dplyr::case_when(
+          is.na(sharpe) ~ "—",
+          is.na(sharpe_ci_lo) | is.na(sharpe_ci_hi) ~ as.character(round(sharpe, 2)),
+          TRUE ~ paste0(sprintf("%.2f [%.2f, %.2f]", sharpe, sharpe_ci_lo, sharpe_ci_hi), flag_html)
+        )
+      } else {
+        ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2)))
+      },
+      # Hidden numeric sort key: once Sharpe carries the CI text it is no
+      # longer a plain number, so DT's default column sort would compare it
+      # lexicographically ("0.62 [...]" before "1.24 [...]") -- same
+      # orderData pattern as .credible_rank/.det_rank/.rig_rank below. NA
+      # sharpe is mapped to -Inf so an unranked strategy sorts to the
+      # bottom on the default descending sort this table opens with.
+      .sharpe_rank = ifelse(is.na(sharpe), -Inf, sharpe),
       Detection  = vapply(det, function(x) x$html, character(1)),
       .det_rank  = vapply(det, function(x) x$rank, integer(1)),
       Rigour     = vapply(rig, function(x) x$html, character(1)),
@@ -274,11 +448,22 @@ if (!is.null(lb)) {
       `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
       `CVaR 95%` = ifelse(is.na(cvar_95),      "not computed", paste0(round(cvar_95 * 100, 1), "%")),
       Vol        = paste0(round(vol * 100, 1), "%"),
-      Gross      = dplyr::case_when(
+      # Renamed from "Gross" to "Gross (now)" (#626): what a strategy's own
+      # construction implements TODAY, as distinct from the new
+      # "Gross (target)" column below (what the vol-normalised allocator
+      # would assign). Same case_when logic, unchanged.
+      `Gross (now)` = dplyr::case_when(
         !("gross_convention" %in% names(full)) | is.na(gross_convention) ~ "—",
         is_cap ~ paste0(format(gross_convention, nsmall = 1), "x*"),
         TRUE   ~ paste0(format(gross_convention, nsmall = 1), "x")
       ),
+      # Allocator target under the vol-normalised leverage design (#626,
+      # R/plan_leverage.R) -- see gross_target_badge() above. Placed
+      # immediately beside Gross (now) per the #827 prototype's Step 3
+      # comparable-output audit and Step 5 consolidation review (one badge
+      # column, not three raw ones).
+      `Gross (target)` = vapply(gt, function(x) x$html, character(1)),
+      .grosstgt_rank    = vapply(gt, function(x) x$rank, double(1)),
       `Cost (bps)` = dplyr::case_when(
         !("cost_per_trade_bps" %in% names(full)) | is.na(cost_per_trade_bps) ~ "—",
         cost_per_trade_bps == 0 ~ "0*",
@@ -343,7 +528,11 @@ if (!is.null(lb)) {
       # is always identical (never one populated without the other).
       `Incremental Sharpe` = if ("incremental_sharpe" %in% names(full)) {
         ifelse(is.na(incremental_sharpe), "not computed", as.character(round(incremental_sharpe, 3)))
-      } else "not computed"
+      } else "not computed",
+      # SECONDARY, de-emphasised column (#586 G1) -- see fp_badge() above.
+      # Deliberately placed LAST: it informs, it never ranks (no hidden
+      # `.rank` sort column, unlike every badge column before it).
+      `Breach Risk (±20% DD)` = fp_html
     ) |>
     # Detection sits immediately right of Sharpe per requirement 2 of the
     # `detection-power-required` rule ("beside its Sharpe, not in a distant
@@ -352,9 +541,11 @@ if (!is.null(lb)) {
     # cost-plausibility and correlation-redundancy respectively. CAGR sits
     # immediately left of Net CAGR (gross, then net of cost) per item B of
     # the presentation-fix pass this column set belongs to.
-    select(Strategy = strategy, Credible, .credible_rank, Sharpe, Detection, .det_rank,
-           CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, Gross, `Cost (bps)`, SSR, Rigour, .rig_rank,
-           `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`)
+    select(Strategy = strategy, Credible, .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
+           CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, `Gross (now)`, `Gross (target)`, .grosstgt_rank,
+           `Cost (bps)`, SSR, Rigour, .rig_rank,
+           `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`,
+           `Breach Risk (±20% DD)`)
 
   # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
   # is NA, and indexing a character vector with a logical vector containing
@@ -415,11 +606,58 @@ if (!is.null(lb)) {
     " strategies are built dollar-neutral long-short at 2.0x gross while others run long-only at 1.0x, ",
     "so Vol, Net CAGR, and Max DD are not directly comparable across rows even when Sharpe is similar ",
     "(Sharpe is leverage-invariant under proportional scaling; the other three columns are not). ",
-    "A trailing `*` on the Gross column (", n_capped,
+    "A trailing `*` on the Gross (now) column (", n_capped,
     " strategies) marks a construction ceiling the strategy can reach but does not realise every period ",
     "(e.g. Managed Futures targets volatility and only hits its 3.0x cap in low-vol regimes) — treat those as upper bounds, not realised averages. ",
-    if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross: either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
+    if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross (now): either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
   )
+
+  # ── Leverage allocator gross-target disclosure note (#626) — dynamically
+  # computed, never hardcoded. Distinct from gross_note above: that note
+  # describes Gross (now) (what a strategy's own construction implements
+  # today); this one describes Gross (target) (what the vol-normalised
+  # allocator would assign) and explicitly flags the backstop level as
+  # PROVISIONAL, per #626 decision D1.
+  leverage_plan_link <- hd_link(
+    htmltools::tags$code("compute_allocator_gross()"),
+    sprintf("%s/blob/%s/R/plan_leverage.R", gh_base, git_sha)
+  )
+  issue_626_link <- htmltools::tags$a(
+    href = "https://github.com/JohnGavin/historical/issues/626",
+    target = "_blank", rel = "noopener noreferrer", "#626"
+  )
+  n_gross_target <- sum(!is.na(full$G_capped))
+  n_binds <- sum(full$backstop_binds, na.rm = TRUE)
+  n_blocked_s31 <- sum(
+    !is.na(full$G_capped) & full$G_capped > 1.0 &
+      (is.na(full$detection_underpowered) | full$detection_underpowered),
+    na.rm = TRUE
+  )
+  sigma_used_vals <- full$sigma_target_used[!is.na(full$sigma_target_used)]
+  backstop_used_vals <- full$backstop_used[!is.na(full$backstop_used)]
+
+  gross_target_note <- if (n_gross_target > 0) {
+    htmltools::tagList(
+      " Gross (target) (", leverage_plan_link, ", ", issue_626_link,
+      ") is the leverage the vol-normalised allocator would assign this build: sigma_target = ",
+      sprintf("%.4f", sigma_used_vals[1]),
+      " divided by each strategy's own vol-per-unit-gross, capped at a PROVISIONAL gross-exposure ",
+      "backstop of ", sprintf("%.1f", backstop_used_vals[1]),
+      "x (issue #626 decision D1 — this LEVEL is not yet finalized; override with HD_LEVERAGE_GROSS_BACKSTOP). ",
+      "The backstop binds for ", n_binds, " strateg", if (n_binds == 1) "y" else "ies", " (", n_gross_target,
+      " strategies have a measurable target). ",
+      if (n_blocked_s31 > 0) {
+        paste0(
+          n_blocked_s31, " strategy row(s) show a BLOCKED badge — QA gate S31 (R/plan_qa_gates.R) forbids ",
+          "actually granting more than 1.0x gross to a detection-underpowered or unverified strategy ",
+          "(detection-power-required.md); the figure displayed is the allocator's raw, unblocked output, ",
+          "shown for transparency only."
+        )
+      } else {
+        "No strategy is currently blocked by the detection-power gate (S31)."
+      }
+    )
+  } else ""
 
   # ── Transaction-cost disclosure note (#624) — dynamically computed, never hardcoded ──
   cost_registry_link <- hd_link(
@@ -502,6 +740,20 @@ if (!is.null(lb)) {
     "`DEFLATED_SHARPE_EXEMPTIONS` (R/plan_qa_gates.R), not a gap — see #728."
   )
 
+  # ── Sharpe confidence-interval disclosure note (#585 G2) — dynamically
+  # computed, never hardcoded. n_ci_crosses_zero/has_sharpe_ci come from the
+  # mutate() block above (same values used to render the flag).
+  sharpe_ci_note <- if (has_sharpe_ci) {
+    paste0(
+      " Sharpe is shown as point [90% block-bootstrap CI lo, hi] (1000 draws, ",
+      "3-month blocks — R/plan_bootstrap_ci.R); &#9888; marks the ", n_ci_crosses_zero,
+      " of ", nrow(full),
+      " strateg", if (n_ci_crosses_zero == 1L) "y" else "ies",
+      " whose CI spans zero — a positive point estimate there is not evidence the true ",
+      "Sharpe differs from zero (see Robustness > Bootstrap CI below for CAGR/Max DD CIs too)."
+    )
+  } else ""
+
   # Short caption (#1 in the caption-length audit, historical#0b412a9c): the
   # unconditional text states only what the table ranks and the single most
   # important comparability warning. Everything else (column definitions,
@@ -534,7 +786,8 @@ if (!is.null(lb)) {
     "CVaR 95% columns share this exact same \"not computed\" scope (", n_net_covered, " of ",
     nrow(full), " strategies covered) — all three come from the same cost_rows join and are ",
     "jointly present or jointly absent per row (QA gate S23, R/plan_qa_gates.R).",
-    flag_note, bias_note, gross_note, cost_note, diversification_note, detection_note
+    flag_note, bias_note, gross_note, gross_target_note, cost_note, diversification_note, detection_note,
+    sharpe_ci_note
   )
 
   full_caption <- hd_caption(
@@ -543,14 +796,16 @@ if (!is.null(lb)) {
     summary_label = "Column definitions and comparability caveats"
   )
 
-  # Bespoke DT call (not hd_dt()): the Credible, Redundant, Detection, and
-  # Rigour columns each need an explicit sort rank (.credible_rank /
-  # .redundant_rank / .det_rank / .rig_rank, added above) instead of DT's
-  # default alphabetical string comparator -- ascending on the display
-  # string does not put assessed-good first, then assessed-bad, then
-  # never-assessed. orderData points each column's sort at its hidden rank
-  # column instead (#637 follow-up; Redundant added #643; Detection/Rigour
-  # added #726/#728).
+  # Bespoke DT call (not hd_dt()): the Credible, Redundant, Detection,
+  # Rigour, and (since #585 G2) Sharpe columns each need an explicit sort
+  # rank (.credible_rank / .redundant_rank / .det_rank / .rig_rank /
+  # .sharpe_rank, added above) instead of DT's default alphabetical string
+  # comparator -- ascending on the display string does not put
+  # assessed-good first, then assessed-bad, then never-assessed (and for
+  # Sharpe, once it carries "[lo, hi]" CI text, no longer sorts numerically
+  # at all). orderData points each column's sort at its hidden rank column
+  # instead (#637 follow-up; Redundant added #643; Detection/Rigour added
+  # #726/#728; Sharpe added #585).
   credible_col  <- which(names(metrics_table) == "Credible") - 1L
   cred_rank_col <- which(names(metrics_table) == ".credible_rank") - 1L
   redundant_col <- which(names(metrics_table) == "Redundant") - 1L
@@ -559,6 +814,10 @@ if (!is.null(lb)) {
   det_rank_col  <- which(names(metrics_table) == ".det_rank") - 1L
   rig_col       <- which(names(metrics_table) == "Rigour") - 1L
   rig_rank_col  <- which(names(metrics_table) == ".rig_rank") - 1L
+  sharpe_col    <- which(names(metrics_table) == "Sharpe") - 1L
+  sharpe_rank_col <- which(names(metrics_table) == ".sharpe_rank") - 1L
+  grosstgt_col      <- which(names(metrics_table) == "Gross (target)") - 1L
+  grosstgt_rank_col <- which(names(metrics_table) == ".grosstgt_rank") - 1L
   numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
@@ -581,11 +840,13 @@ if (!is.null(lb)) {
       search = list(regex = TRUE, caseInsensitive = TRUE),
       columnDefs = list(
         list(className = 'dt-right', targets = numeric_cols - 1),
-        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col)),
+        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col, sharpe_rank_col, grosstgt_rank_col)),
         list(orderData = cred_rank_col, targets = credible_col),
         list(orderData = red_rank_col, targets = redundant_col),
         list(orderData = det_rank_col, targets = det_col),
-        list(orderData = rig_rank_col, targets = rig_col)
+        list(orderData = rig_rank_col, targets = rig_col),
+        list(orderData = sharpe_rank_col, targets = sharpe_col),
+        list(orderData = grosstgt_rank_col, targets = grosstgt_col)
       ),
       initComplete = DT::JS(
         "function(settings, json) {",
@@ -615,6 +876,20 @@ if (!is.null(lb)) {
 .rig-badge.partial      { color: #9a5b00; }
 .rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
 .rig-badge.notcomputed  { color: #fff; background: #c0392b; }
+/* fp-badge (#586 G1): deliberately a SINGLE, neutral, muted style
+   regardless of value -- this column informs, it never ranks, so unlike
+   det-badge/rig-badge it carries no severity-coded colour variants. */
+.fp-badge { color: #6c757d; font-style: italic; font-weight: 400; white-space: nowrap; }
+.sharpe-ci-flag         { color: #c0392b; font-weight: 700; }
+/* gross-target-badge (#626): mirrors det-badge/rig-badge's severity-coded
+   shape -- ok (below backstop), capped (backstop binds, informational),
+   blocked (QA gate S31 would forbid actually granting this), napp (no
+   measurable allocator input, same population as Gross (now)'s "—"). */
+.gross-target-badge     { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.gross-target-badge.ok      { color: #1a7f37; }
+.gross-target-badge.capped  { color: #9a5b00; }
+.gross-target-badge.blocked { color: #fff; background: #c0392b; }
+.gross-target-badge.napp    { color: #6c757d; font-style: italic; font-weight: 400; }
 
 [data-bs-theme="dark"] .det-badge.detectable,   body.dark-mode .det-badge.detectable   { color: #4ade80; }
 [data-bs-theme="dark"] .det-badge.mtfail,       body.dark-mode .det-badge.mtfail       { color: #c084fc; }
@@ -623,12 +898,183 @@ if (!is.null(lb)) {
 [data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
 [data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
 [data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
+[data-bs-theme="dark"] .fp-badge,               body.dark-mode .fp-badge               { color: #9ca3af; }
+[data-bs-theme="dark"] .sharpe-ci-flag,         body.dark-mode .sharpe-ci-flag         { color: #ff6b6b; }
+[data-bs-theme="dark"] .gross-target-badge.ok,     body.dark-mode .gross-target-badge.ok     { color: #4ade80; }
+[data-bs-theme="dark"] .gross-target-badge.capped, body.dark-mode .gross-target-badge.capped { color: #fbbf24; }
+[data-bs-theme="dark"] .gross-target-badge.napp,   body.dark-mode .gross-target-badge.napp   { color: #9ca3af; }
 @media (prefers-color-scheme: dark) {
   .det-badge.detectable   { color: #4ade80; }
   .det-badge.mtfail       { color: #c084fc; }
   .det-badge.underpowered { color: #fbbf24; }
   .rig-badge.computed     { color: #4ade80; }
   .rig-badge.partial      { color: #fbbf24; }
+  .fp-badge                { color: #9ca3af; }
+  .sharpe-ci-flag         { color: #ff6b6b; }
+  .gross-target-badge.ok      { color: #4ade80; }
+  .gross-target-badge.capped  { color: #fbbf24; }
+}
+</style>
+```
+
+#### Prop-Constrained View
+
+This is the separately agreed second half of [#586](https://github.com/JohnGavin/historical/issues/586)'s two-portfolio design. The Full Period tab above answers *is the edge real* — Sharpe, deflated Sharpe, detection power, rigour. This tab answers a different question — *would this strategy survive a drawdown mandate*, such as a redemption trigger, a risk-committee drawdown limit, or an evaluation window — as a **separate ranking**, never folded into the primary one. The per-row Breach Risk (±20% DD) badge on the Full Period tab is a single fixed-barrier diagnostic; this tab is the fuller, parameterised view the issue asked for: three drawdown-floor scenarios (profit target held fixed at 10%), re-ranking the same strategies by survival probability. A strategy scoring poorly here is **flagged, never removed**, from the primary board above.
+
+```{r}
+#| label: prop-constrained-view
+pc <- safe_tar_read("leaderboard_prop_constrained")
+if (!is.null(pc)) {
+  gh_url <- tryCatch({
+    remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
+    sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
+  }, error = function(e) NULL)
+  git_sha <- tryCatch(
+    system("git rev-parse HEAD 2>/dev/null", intern = TRUE),
+    error = function(e) "main"
+  )
+  git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
+  gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
+    "https://github.com/JohnGavin/historical"
+
+  fp_fn_link <- hd_link(
+    htmltools::tags$code("hd_first_passage()"),
+    sprintf("%s/blob/%s/packages/historicaldata/R/first_passage.R#L117", gh_base, git_sha)
+  )
+  pc_tgt_link <- hd_link(
+    htmltools::tags$code("leaderboard_prop_constrained"),
+    sprintf("%s/blob/%s/R/plan_leaderboard.R#L1250", gh_base, git_sha)
+  )
+
+  # Scenario column order == PROP_CONSTRAINED_SCENARIOS row order (R/plan_
+  # leaderboard.R), preserved by purrr::map_dfr appending one scenario's
+  # rows for ALL strategies before moving to the next.
+  scenario_order <- unique(pc$scenario)
+  standard_scenario <- scenario_order[grepl("^Standard", scenario_order)]
+  if (length(standard_scenario) == 0) standard_scenario <- scenario_order[1]
+
+  base_cols <- pc |>
+    dplyr::distinct(strategy, sharpe, cagr, max_dd)
+
+  pct_wide <- pc |>
+    dplyr::mutate(
+      pct_label = ifelse(is.na(pass_prob), "not computed", paste0(round(pass_prob * 100), "%"))
+    ) |>
+    dplyr::select(strategy, scenario, pct_label) |>
+    tidyr::pivot_wider(names_from = scenario, values_from = pct_label)
+
+  rank_key <- pc |>
+    dplyr::filter(scenario == standard_scenario) |>
+    dplyr::select(strategy, .rank_key = pass_prob)
+
+  n_strats  <- dplyr::n_distinct(pc$strategy)
+  n_flagged <- sum(rank_key$.rank_key < 0.5, na.rm = TRUE)
+  n_na      <- sum(is.na(rank_key$.rank_key))
+
+  flag_badge <- function(p) {
+    if (is.na(p)) {
+      return("<span class='fp-badge' title='Not computed -- see leaderboard_prop_constrained target comment for the NA paths.'>not computed</span>")
+    }
+    if (p < 0.5) {
+      return(sprintf(
+        "<span class='pc-flag warn' title='Survival probability under the %s scenario is below 50%%. Flagged here only -- NOT removed from the primary Full Period leaderboard above.'>&#9888; flagged</span>",
+        gsub("'", "&#39;", standard_scenario, fixed = TRUE)
+      ))
+    }
+    "<span class='pc-flag ok'>&#10003;</span>"
+  }
+
+  view_table <- base_cols |>
+    dplyr::left_join(pct_wide, by = "strategy") |>
+    dplyr::left_join(rank_key, by = "strategy") |>
+    dplyr::mutate(
+      Flag   = vapply(.rank_key, flag_badge, character(1)),
+      Sharpe = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
+      CAGR   = ifelse(is.na(cagr),   "—", paste0(round(cagr * 100, 1), "%")),
+      `Max DD` = paste0(round(max_dd * 100, 1), "%")
+    ) |>
+    dplyr::arrange(dplyr::desc(.rank_key)) |>
+    dplyr::select(strategy, Sharpe, CAGR, `Max DD`, dplyr::all_of(scenario_order), Flag, .rank_key) |>
+    dplyr::rename(Strategy = strategy) |>
+    dplyr::rename_with(~ paste0("Survival: ", .x), .cols = dplyr::all_of(scenario_order))
+
+  pc_short <- paste0(
+    "Re-ranked view of the same ", n_strats, " Full Period strategies by survivability under a ",
+    "drawdown-mandate constraint — profit target fixed at 10%, drawdown floor tightening from 20% ",
+    "(Lenient) to 5% (Strict). Ordered by Survival: ", standard_scenario, " (descending). ",
+    n_flagged, " of ", n_strats, " strategies fall below 50% survival under that scenario",
+    if (n_na > 0) paste0(" (", n_na, " not computed)") else "", " — those are flagged here only, ",
+    "never removed from the primary Full Period ranking above. Expand for the full methodology note."
+  )
+
+  pc_notes <- htmltools::tagList(
+    "Infinite-horizon, drifted-Brownian-motion approximation, computed per strategy by ", fp_fn_link,
+    " and assembled in ", pc_tgt_link, " — issue #586's agreed two-portfolio design: this view answers ",
+    "\"would this strategy survive a drawdown mandate\", separately from the primary leaderboard's ",
+    "\"is the edge real\". Each scenario holds the profit target fixed at 10% and varies only the ",
+    "drawdown floor (5% / 10% / 20%): decreasing the floor distance while the target stays fixed ",
+    "monotonically decreases survival probability for any strategy, regardless of its own drift/vol — ",
+    "which is why this ordering reads as \"tightening a mandate\" the way a naive symmetric floor/",
+    "target sweep would not (see the PROP_CONSTRAINED_SCENARIOS comment in R/plan_leaderboard.R for the ",
+    "full reasoning). This is deliberately NOT a new dashboard and NOT a new set of strategies — the ",
+    "same Full Period rows shown above, re-ranked. Two parameters this view does NOT yet support: a ",
+    "per-day loss limit, and a finite evaluation horizon (\"within N months\", as opposed to \"ever\") — ",
+    "both remain deferred, same as ", fp_fn_link, "'s own documented scope limits. Every probability ",
+    "here is therefore an infinite-horizon, Gaussian-iid approximation: real fat-tailed paths and any ",
+    "time-boxed evaluation window make breaches MORE likely than these numbers imply, so treat the ",
+    "Survival columns as an optimistic ceiling on survivability, not a point estimate of it."
+  )
+
+  pc_caption <- hd_caption(pc_notes, short = pc_short, summary_label = "Full methodology note")
+
+  pc_display <- view_table |> dplyr::select(-.rank_key)
+  numeric_cols <- which(sapply(pc_display, function(x) is.numeric(x) ||
+                                  grepl("^[0-9.%$,-]+$", as.character(x[1]))))
+
+  DT::datatable(
+    pc_display,
+    caption = pc_caption,
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 15,
+      scrollX = TRUE,
+      autoWidth = FALSE,
+      dom = "frtip",
+      order = list(),
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      columnDefs = list(
+        list(className = 'dt-right', targets = numeric_cols - 1)
+      ),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
+} else {
+  cat("*`leaderboard_prop_constrained` target not available.*")
+}
+```
+
+```{=html}
+<style>
+.pc-flag { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.pc-flag.warn { color: #9a5b00; }
+.pc-flag.ok   { color: #1a7f37; }
+[data-bs-theme="dark"] .pc-flag.warn, body.dark-mode .pc-flag.warn { color: #fbbf24; }
+[data-bs-theme="dark"] .pc-flag.ok,   body.dark-mode .pc-flag.ok   { color: #4ade80; }
+@media (prefers-color-scheme: dark) {
+  .pc-flag.warn { color: #fbbf24; }
+  .pc-flag.ok   { color: #4ade80; }
 }
 </style>
 ```
@@ -672,23 +1118,68 @@ if (!is.null(lb)) {
   )
 
   # Explicit period display order (NOT alphabetical, per rule): Testing,
-  # Holdout, Full Period, Training. Testing and Holdout are adjacent because
-  # Holdout is the more recent, more-informative-but-unsealed evaluation
-  # window that directly follows Testing chronologically; Full Period and
-  # Training close out the table the same way they always have (#660).
+  # Holdout, Full Period, OOS, Training. Testing and Holdout are adjacent
+  # because Holdout is the more recent, more-informative-but-unsealed
+  # evaluation window that directly follows Testing chronologically; Full
+  # Period and Training close out the table the same way they always have
+  # (#660). "OOS" sits after Full Period and before Training -- a deliberate
+  # choice, not an incidental one (#646): OOS spans a wider, strategy-defined
+  # window than the canonical Testing partition (see PERIOD_LABELS_ALLOWED's
+  # comment in R/plan_partitions.R and #645), so it is placed among the
+  # wider/aggregate partitions rather than next to Testing.
   # Implemented via factor levels so dplyr::arrange() sorts by this order
-  # rather than alphabetically ("Full Period" < "Holdout" < "Testing" <
-  # "Training").
-  period_order <- c("Testing", "Holdout", "Full Period", "Training")
+  # rather than alphabetically ("Full Period" < "Holdout" < "OOS" <
+  # "Testing" < "Training").
+  #
+  # Built from PERIOD_LABELS_ALLOWED (R/plan_partitions.R) rather than a
+  # hand-rolled vector so a label the target legitimately emits can never be
+  # silently dropped by factor() again (#646) -- "Validation" is excluded
+  # here because it is already removed by the `filter()` below (sealed
+  # envelope, never displayed).
+  period_order <- PERIOD_LABELS_ALLOWED[
+    match(
+      c("Testing", "Holdout", "Full Period", "OOS", "Training"),
+      PERIOD_LABELS_ALLOWED
+    )
+  ]
+  if (anyNA(period_order)) {
+    cli::cli_abort(c(
+      "x" = "period_order references a label not in PERIOD_LABELS_ALLOWED.",
+      "i" = "PERIOD_LABELS_ALLOWED: {.val {PERIOD_LABELS_ALLOWED}}"
+    ))
+  }
 
   by_part <- lb |>
     filter(period != "Validation") |>
     left_join(years_map, by = "period") |>
-    mutate(period = factor(period, levels = period_order)) |>
+    # period_raw preserves the pre-coercion label so the NA guard below can
+    # name exactly which offending value slipped past period_order, without
+    # relying on a strategy-based re-lookup that would be ambiguous for
+    # strategies with more than one period row.
+    mutate(period_raw = period, period = factor(period, levels = period_order)) |>
     # Sort on the NUMERIC sharpe column before it is formatted to character
     # below -- sorting the formatted string ("9.5" vs "10.2") would sort
     # lexicographically and put "9.5" above "10.2".
-    arrange(period, desc(sharpe)) |>
+    arrange(period, desc(sharpe))
+
+  # Fail loud, never null (project rule): factor() maps any period value
+  # outside `period_order` to NA silently. #646 was exactly this -- "OOS"
+  # fell outside the (then-incomplete) levels vector and rendered as a blank
+  # Period cell on the published page. Assert here, at the coercion site,
+  # rather than trusting the upstream S10 target-level gate to have caught
+  # every value that could reach this presentation-layer table.
+  na_period_rows <- by_part |> filter(is.na(period))
+  if (nrow(na_period_rows) > 0) {
+    cli::cli_abort(c(
+      "x" = "{nrow(na_period_rows)} row{?s} in the By Partition table has a `period` value outside period_order.",
+      "i" = "Offending strategy/period pairs: {.val {paste(na_period_rows$strategy, na_period_rows$period_raw, sep = '/')}}",
+      "i" = "period_order: {.val {as.character(period_order)}}",
+      "i" = "Add the missing label to period_order (and PERIOD_LABELS_ALLOWED if new) -- see #646."
+    ))
+  }
+
+  by_part <- by_part |>
+    select(-period_raw) |>
     mutate(
       CAGR = paste0(round(cagr * 100, 1), "%"),
       Vol = paste0(round(vol * 100, 1), "%"),
@@ -700,7 +1191,7 @@ if (!is.null(lb)) {
     select(Strategy = strategy, Period, Sharpe, Years, CAGR, Vol, `Max DD`, `CVaR 95%`)
 
   # Bespoke DT call (not hd_dt()): rows above are already sorted by Period
-  # (Testing / Holdout / Full Period / Training) then Sharpe descending. hd_dt()'s
+  # (Testing / Holdout / Full Period / OOS / Training) then Sharpe descending. hd_dt()'s
   # fixed options list has no `order` entry, so DT would apply its default
   # initial sort (column 0 ascending = Strategy) and silently undo the sort
   # above -- `order = list()` (empty array) disables DT's initial sort and
@@ -715,9 +1206,9 @@ if (!is.null(lb)) {
   # below).
   by_part_caption <- hd_caption(
     paste0(
-      "All strategies × Training, Testing, and Holdout partitions, ordered Testing / Holdout / Full Period / Training then by Sharpe (descending). Years column shows date ranges. Holdout (2024-2026) is observed, not sealed -- treat it with a discount relative to a genuinely untouched sample (#660). Validation partition is sealed and genuinely untouched (2026-05-01 onwards) — not shown until production deployment."
+      "All strategies × Training, Testing, and Holdout partitions, ordered Testing / Holdout / Full Period / OOS / Training then by Sharpe (descending). Years column shows date ranges. Holdout (2024-2026) is observed, not sealed -- treat it with a discount relative to a genuinely untouched sample (#660). Validation partition is sealed and genuinely untouched (2026-05-01 onwards) — not shown until production deployment. OOS rows are a strategy-defined out-of-sample window (dates >= 2010-01-01, unbounded above at the current test_end) -- wider than, and not directly comparable to, the canonical Testing partition (#645, #646)."
     ),
-    short = "All strategies across Training, Testing, and Holdout partitions, sorted by Sharpe within each. Holdout is observed, not sealed — expand for caveats.",
+    short = "All strategies across Training, Testing, and Holdout partitions, sorted by Sharpe within each. Holdout is observed, not sealed; OOS is a wider, strategy-defined window, not the canonical Testing partition — expand for caveats.",
     summary_label = "Partition caveats"
   )
 
@@ -1021,6 +1512,99 @@ safe_tar_read("port_comparison_plot")
 ::: {.fig-caption}
 **PSO optimal vs equal-weight portfolio.** Combines all 4 strategies with weights optimised on training partition Sharpe. The PSO optimal tilts toward strategies with better risk-adjusted returns (Factor DRIF + Stock MAX).
 :::
+
+#### PSO vs 1/N (Out-of-Sample)
+
+```{r}
+# #585 G3 -- direct empirical test of Radical Uncertainty's central practical
+# claim (naive 1/N robustness vs optimisation fragility under model
+# uncertainty; DeMiguel/Garlappi/Uppal 2009) on this repo's own PSO-vs-
+# equal-weight 4-strategy combined portfolio (Factor MAX/DRIF + Stock
+# MAX/DRIF -- port_metrics, R/plan_portfolio_opt.R). Training is IN-SAMPLE
+# for the PSO weights (port_optimal_weights is fit ONLY on
+# `port_returns |> filter(date <= stk_params$is_end)`) -- PSO wins there by
+# construction, not evidence of anything. Testing/Holdout are the honest
+# out-of-sample comparison. Validation is EXCLUDED even though port_metrics
+# computes it -- sealed envelope, see `backtest-partitions` rule and the "By
+# Partition" tab above ("NEVER show Validation data").
+pm <- safe_tar_read("port_metrics")
+params_oos <- safe_tar_read("stk_params")
+if (!is.null(pm)) {
+  period_order <- c("Training", "Testing", "Holdout", "Full Period")
+  oos <- pm |>
+    filter(period %in% period_order) |>
+    mutate(
+      period = factor(period, levels = period_order),
+      delta_sharpe = opt_sharpe - eq_sharpe,
+      sample = dplyr::case_when(
+        period == "Training"    ~ "in-sample (PSO fit here)",
+        period == "Testing"     ~ "out-of-sample",
+        period == "Holdout"     ~ "out-of-sample (observed, not sealed -- #660)",
+        period == "Full Period" ~ "mixed (includes in-sample)",
+        TRUE                     ~ "—"
+      ),
+      verdict = dplyr::case_when(
+        is.na(opt_sharpe) | is.na(eq_sharpe) ~ "not computed",
+        period == "Training"                  ~ "n/a — in-sample",
+        period == "Full Period"                ~ "n/a — mixed",
+        delta_sharpe > 0                       ~ "PSO Optimal wins",
+        delta_sharpe < 0                       ~ "1/N wins",
+        TRUE                                    ~ "tie"
+      )
+    ) |>
+    arrange(period) |>
+    transmute(
+      Period = as.character(period),
+      Sample = sample,
+      `PSO Sharpe` = ifelse(is.na(opt_sharpe), "—", as.character(round(opt_sharpe, 2))),
+      `1/N Sharpe` = ifelse(is.na(eq_sharpe), "—", as.character(round(eq_sharpe, 2))),
+      `Delta (PSO − 1/N)` = ifelse(is.na(delta_sharpe), "—", as.character(round(delta_sharpe, 2))),
+      Verdict = verdict
+    )
+
+  oos_periods <- c("Testing", "Holdout")
+  n_oos <- sum(oos$Period %in% oos_periods & oos$Verdict != "not computed")
+  n_oos_pso_wins <- sum(oos$Period %in% oos_periods & oos$Verdict == "PSO Optimal wins")
+  n_oos_1n_wins  <- sum(oos$Period %in% oos_periods & oos$Verdict == "1/N wins")
+
+  holdout_years <- if (!is.null(params_oos)) {
+    paste0(format(as.Date(params_oos$holdout_start), "%Y"), "-",
+           format(as.Date(params_oos$holdout_end), "%Y"))
+  } else "not available"
+
+  hd_dt(
+    oos,
+    paste0(
+      "Out-of-sample test of the DeMiguel/Garlappi/Uppal 1/N result (`Radical Uncertainty` review, #585 G3). ",
+      "PSO Optimal is fit on Training only, so its Training-row Sharpe is in-sample and excluded from the ",
+      "verdict; Testing and Holdout (", holdout_years, ", observed not sealed -- #660) are genuine ",
+      "out-of-sample. Of ", n_oos, " out-of-sample period(s) with data, PSO Optimal beats naive 1/N on ",
+      "Sharpe in ", n_oos_pso_wins, " and naive 1/N beats PSO Optimal in ", n_oos_1n_wins, ". ",
+      "Full Period mixes in-sample and out-of-sample months so its verdict is marked n/a, not scored. ",
+      "Validation is excluded entirely -- sealed envelope, `backtest-partitions` rule."
+    )
+  )
+
+  # A clearly negative result for the optimised approach (1/N beats PSO on
+  # every out-of-sample period, with none tied or reversed) is exactly the
+  # book's central practical claim reproduced on our own data -- surfaced
+  # immediately here per #585, with a pointer to where the formal
+  # falsification write-up belongs.
+  if (n_oos > 0L && n_oos_pso_wins == 0L && n_oos_1n_wins == n_oos) {
+    cat(
+      "\n::: callout-warning\n",
+      "**Negative result: naive 1/N beats PSO Optimal on every out-of-sample period measured here.** ",
+      "Across all ", n_oos, " out-of-sample period(s) evaluated (Testing, Holdout), equal-weight Sharpe ",
+      "exceeds the PSO-optimised Sharpe. This is the direct empirical signature the *Radical Uncertainty* ",
+      "review predicts for optimisation under model uncertainty (#585 G3) -- worth a formal writeup on the ",
+      "[Strategy Falsification dashboard](falsification.html), not just this callout.\n",
+      ":::\n", sep = ""
+    )
+  }
+} else {
+  cat("*Portfolio metrics not available — run `tar_make(\"port_metrics\")` to populate this tab.*")
+}
+```
 
 #### Monthly Returns
 

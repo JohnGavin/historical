@@ -163,7 +163,10 @@ plan_rafi <- function() {
         cum_w    <- cumprod(1 + ret_vec)
         drawdown <- (cum_w - cummax(cum_w)) / cummax(cum_w)
         max_dd   <- min(drawdown) * 100
-        calmar   <- ifelse(abs(max_dd) > 0, cagr / abs(max_dd), NA_real_)
+        # CDAP, not conventional Calmar -- cagr / abs(max_dd) is
+        # sign-incoherent for negative cagr (#588). historicaldata::hd_cdap()
+        # flips the exponent so a larger drawdown always ranks worse.
+        calmar   <- historicaldata::hd_cdap(cagr, max_dd)
 
         tibble::tibble(
           strategy = strategy_name,

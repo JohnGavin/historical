@@ -195,17 +195,28 @@ plan_mom_prepeak_gauntlet <- function() {
     }),
 
     # Comparison: random-peak Sharpe vs actual Sharpe
+    #
+    # #718: the comparison itself is delegated to hd_signal_null_rank()
+    # (packages/historicaldata/R/falsification.R), the generic signal-null
+    # rank statistic extracted from this target -- the reference
+    # implementation for the pattern. This is the single-replicate
+    # (n_total = 1) case: `.mom_prepeak_random_peak_signal()` runs one
+    # seed (42L). `actual_sharpe`/`random_sharpe`/`null_dominates` are kept
+    # as the published column names (docs/momentum-prepeak.qmd reads them
+    # directly); `rank` carries the same information under the shared
+    # vocabulary (n_beat/n_valid/n_total/rank_pct) other strategies now use.
     targets::tar_target(mom_prepeak_random_peak_test, {
       actual_sharpe <- mom_prepeak_metrics$sharpe
       random_sharpe <- mom_prepeak_random_peak_metrics$sharpe
+      rank <- historicaldata::hd_signal_null_rank(actual_sharpe, random_sharpe)
       tibble::tibble(
-        actual_sharpe = actual_sharpe,
-        random_sharpe = random_sharpe,
-        null_dominates = if (is.na(random_sharpe) || is.na(actual_sharpe)) {
-          NA
-        } else {
-          random_sharpe >= actual_sharpe
-        }
+        actual_sharpe  = actual_sharpe,
+        random_sharpe  = random_sharpe,
+        null_dominates = rank$null_dominates,
+        n_beat         = rank$n_beat,
+        n_valid        = rank$n_valid,
+        n_total        = rank$n_total,
+        rank_pct       = rank$rank_pct
       )
     }),
 

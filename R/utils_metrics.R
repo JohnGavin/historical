@@ -30,7 +30,12 @@
 #'     \item{vol}{Annualised volatility (sd * sqrt(periods_per_year)).}
 #'     \item{sharpe}{Sharpe ratio (CAGR / vol); NA when vol is zero.}
 #'     \item{max_dd}{Maximum drawdown (negative number, e.g. -0.12 = -12\%).}
-#'     \item{calmar}{Calmar ratio (CAGR / abs(max_dd)); NA when max_dd is zero.}
+#'     \item{calmar}{Coherent Drawdown-Adjusted Performance (CDAP,
+#'       \code{historicaldata::hd_cdap()}) -- \code{cagr / abs(max_dd)} for
+#'       positive cagr (identical to the conventional Calmar ratio), and
+#'       \code{cagr * abs(max_dd)} for negative cagr, so a larger drawdown
+#'       always ranks worse regardless of return sign (#588). NA when
+#'       max_dd is zero.}
 #'     \item{n}{Number of non-NA observations used.}
 #'   }
 #'
@@ -70,7 +75,12 @@ annualise_returns <- function(ret, periods_per_year = 12L, na.rm = TRUE) {
   vol    <- stats::sd(ret) * sqrt(periods_per_year)
   sharpe <- if (vol > 0) cagr / vol else NA_real_
   max_dd <- min(equity / cummax(equity) - 1)
-  calmar <- if (max_dd < 0) cagr / abs(max_dd) else NA_real_
+  # CDAP (Coherent Drawdown-Adjusted Performance), not conventional Calmar:
+  # cagr / abs(max_dd) is sign-incoherent for negative cagr -- a larger
+  # drawdown magnitude then divides toward a LESS negative (better-ranked)
+  # ratio. hd_cdap() flips the exponent for negative returns so a larger
+  # drawdown always ranks worse. See #588 and hd_cdap()'s roxygen.
+  calmar <- historicaldata::hd_cdap(cagr, max_dd)
 
   list(
     cagr   = cagr,

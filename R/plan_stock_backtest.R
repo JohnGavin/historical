@@ -252,6 +252,78 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
   list(capped_w = w_capped, hit_cap = hit_cap)
 }
 
+#' Market-impact cost, square-root law (local helper; #490 Gap 4)
+#' @param order_usd,adv_usd,sigma,eta See historicaldata::hd_market_impact.
+#' @return Numeric fraction of order_usd.
+#' @noRd
+market_impact_cost <- function(order_usd, adv_usd, sigma, eta = 1) {
+  if (!is.numeric(order_usd) || anyNA(order_usd) || any(order_usd < 0)) {
+    cli::cli_abort(c(
+      "x" = "{.arg order_usd} must be numeric, non-NA, and >= 0.",
+      "i" = "Got {.val {order_usd}}."
+    ))
+  }
+  if (!is.numeric(adv_usd) || anyNA(adv_usd) || any(adv_usd <= 0)) {
+    cli::cli_abort(c(
+      "x" = "{.arg adv_usd} must be numeric, non-NA, and > 0.",
+      "i" = "Got {.val {adv_usd}}."
+    ))
+  }
+  if (!is.numeric(sigma) || anyNA(sigma) || any(sigma < 0)) {
+    cli::cli_abort(c(
+      "x" = "{.arg sigma} must be numeric, non-NA, and >= 0.",
+      "i" = "Got {.val {sigma}}."
+    ))
+  }
+  if (!is.numeric(eta) || length(eta) != 1L || is.na(eta) || eta <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg eta} must be a single positive number.",
+      "i" = "Got {.val {eta}}."
+    ))
+  }
+  eta * sigma * sqrt(order_usd / adv_usd)
+}
+
+#' Validate impact_eta/impact_aum/impact_sigma args (#490 Gap 4)
+#' @noRd
+validate_impact_args <- function(adv_monthly, impact_aum, impact_sigma, impact_eta) {
+  bad_num <- function(x) !is.numeric(x) || length(x) != 1L || is.na(x)
+  if (is.null(adv_monthly)) {
+    cli::cli_abort("impact_eta requires adv_monthly to be supplied.")
+  }
+  if (bad_num(impact_aum) || impact_aum <= 0) {
+    cli::cli_abort(c("x" = "impact_aum must be a single positive number.", "i" = "Got {.val {impact_aum}}."))
+  }
+  if (bad_num(impact_sigma) || impact_sigma < 0) {
+    cli::cli_abort(c("x" = "impact_sigma must be a single non-negative number.", "i" = "Got {.val {impact_sigma}}."))
+  }
+  if (bad_num(impact_eta) || impact_eta <= 0) {
+    cli::cli_abort(c("x" = "impact_eta must be a single positive number, or NULL to disable.", "i" = "Got {.val {impact_eta}}."))
+  }
+  invisible(TRUE)
+}
+
+#' Market-impact cost for one rebalance, both legs (#490 Gap 4)
+#' @noRd
+compute_impact_cost_frac <- function(use_impact, w_long, w_short, adv_vec,
+                                      turnover_long, turnover_short,
+                                      impact_aum, impact_sigma, impact_eta) {
+  if (!use_impact) return(0)
+  adv_long_total  <- sum(adv_vec[intersect(names(w_long),  names(adv_vec))], na.rm = TRUE)
+  adv_short_total <- sum(adv_vec[intersect(names(w_short), names(adv_vec))], na.rm = TRUE)
+  order_long_usd  <- impact_aum * turnover_long
+  order_short_usd <- impact_aum * turnover_short
+  impact_long_frac <- 0
+  if (adv_long_total > 0 && order_long_usd > 0) {
+    impact_long_frac <- market_impact_cost(order_long_usd, adv_long_total, impact_sigma, eta = impact_eta) * turnover_long
+  }
+  impact_short_frac <- 0
+  if (adv_short_total > 0 && order_short_usd > 0) {
+    impact_short_frac <- market_impact_cost(order_short_usd, adv_short_total, impact_sigma, eta = impact_eta) * turnover_short
+  }
+  2 * (impact_long_frac + impact_short_frac)
+}
+
 #' Long-short portfolio with HRP weighting per leg (Lopez de Prado 2016)
 #' @param df Data frame with ym, ticker, decile, monthly_ret (signal-to-return merged)
 #' @param returns_wide Wide tibble: rows = ym, cols = ticker, values = monthly_ret
@@ -263,7 +335,16 @@ apply_adv_cap <- function(w, adv_by_ticker, adv_pct_cap = 0.10) {
 #' @param max_monthly_ret Winsorise monthly returns at ±this (default 0.20 = 20%)
 #' @param adv_monthly Monthly ADV data: tibble(ym, ticker, adv_dollars). NULL = no cap.
 #' @param adv_pct_cap Maximum participation per stock as multiple of ADV-weight share × n (default 0.10)
-#' @return Tibble with same shape as portfolio_longshort, plus adv_cap columns when adv_monthly supplied
+#' @param impact_eta NULL (default) or a positive number: square-root-law
+#'   market-impact eta (#490 Gap 4), opt-in cost term on top of
+#'   cost_per_trade. Requires adv_monthly, impact_aum, impact_sigma.
+#' @param impact_aum Assumed AUM (single positive number) used to size
+#'   orders for the impact-cost term. Required when impact_eta is set.
+#' @param impact_sigma Return volatility (single non-negative number) used
+#'   in the impact-cost formula. Required when impact_eta is set.
+#' @return Tibble with same shape as portfolio_longshort, plus adv_cap
+#'   columns when adv_monthly supplied, plus impact_cost_frac (0 when
+#'   impact_eta is NULL).
 portfolio_longshort_hrp <- function(df, returns_wide,
                                     long_decile = 1L, short_decile = 10L,
                                     lookback_months = 36L,
@@ -271,11 +352,18 @@ portfolio_longshort_hrp <- function(df, returns_wide,
                                     borrow_rate_annual = 0.03,
                                     max_monthly_ret = 0.20,
                                     adv_monthly = NULL,
-                                    adv_pct_cap = 0.10) {
+                                    adv_pct_cap = 0.10,
+                                    impact_eta = NULL,
+                                    impact_aum = NULL,
+                                    impact_sigma = NULL) {
   if (!requireNamespace("HierPortfolios", quietly = TRUE)) {
     cli::cli_abort("HierPortfolios package required for HRP weighting")
   }
   use_adv_cap <- !is.null(adv_monthly)
+  use_impact  <- !is.null(impact_eta)
+  if (use_impact) {
+    validate_impact_args(adv_monthly, impact_aum, impact_sigma, impact_eta)
+  }
   # Winsorise returns
   df <- df |>
     dplyr::mutate(monthly_ret = pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret))
@@ -338,10 +426,12 @@ portfolio_longshort_hrp <- function(df, returns_wide,
     # ADV participation cap (applied AFTER HRP, BEFORE return computation)
     n_cap_long  <- 0L
     n_cap_short <- 0L
-    if (use_adv_cap) {
-      adv_t <- adv_monthly[adv_monthly$ym == ym_t, c("ticker", "adv_dollars")]
+    adv_vec <- NULL
+    if (use_adv_cap || use_impact) {
+      adv_t   <- adv_monthly[adv_monthly$ym == ym_t, c("ticker", "adv_dollars")]
       adv_vec <- setNames(adv_t$adv_dollars, adv_t$ticker)
-
+    }
+    if (use_adv_cap) {
       cap_long  <- apply_adv_cap(w_long,  adv_vec, adv_pct_cap)
       cap_short <- apply_adv_cap(w_short, adv_vec, adv_pct_cap)
 
@@ -396,7 +486,11 @@ portfolio_longshort_hrp <- function(df, returns_wide,
 
     trade_cost  <- turnover * cost_per_trade * 2 * 2   # both legs, buy + sell
     borrow_cost <- borrow_rate_annual / 12
-    total_cost  <- trade_cost + borrow_cost
+    impact_cost_frac <- compute_impact_cost_frac(
+      use_impact, w_long, w_short, adv_vec, turnover_long, turnover_short,
+      impact_aum, impact_sigma, impact_eta
+    )
+    total_cost  <- trade_cost + borrow_cost + impact_cost_frac
     port_ret    <- long_ret - short_ret - total_cost
 
     out[[i]] <- dplyr::tibble(
@@ -409,7 +503,8 @@ portfolio_longshort_hrp <- function(df, returns_wide,
       turnover   = turnover,
       total_cost = total_cost,
       n_cap_long  = n_cap_long,
-      n_cap_short = n_cap_short
+      n_cap_short = n_cap_short,
+      impact_cost_frac = impact_cost_frac
     )
 
     prev_w_long  <- w_long
@@ -425,6 +520,81 @@ portfolio_longshort_hrp <- function(df, returns_wide,
     )
   }
   dplyr::bind_rows(out)
+}
+
+#' Validate eta_grid for market_impact_sensitivity (#490 Gap 4)
+#' @noRd
+validate_eta_grid <- function(eta_grid, adv_monthly) {
+  bad <- !is.numeric(eta_grid) || length(eta_grid) == 0L || anyNA(eta_grid) || any(eta_grid <= 0)
+  if (bad) {
+    cli::cli_abort(c(
+      "x" = "eta_grid must be a non-empty numeric vector of positive values.",
+      "i" = "Got {.val {eta_grid}}."
+    ))
+  }
+  if (is.null(adv_monthly)) {
+    cli::cli_abort("adv_monthly is required to sweep market-impact cost.")
+  }
+  invisible(TRUE)
+}
+
+#' One row of the impact sensitivity panel, for one eta (#490 Gap 4)
+#' @noRd
+sensitivity_panel_row <- function(eta, df, returns_wide, long_decile, short_decile,
+                                   lookback_months, cost_per_trade, borrow_rate_annual,
+                                   max_monthly_ret, adv_monthly, adv_pct_cap,
+                                   impact_aum, impact_sigma, rf, rf_col) {
+  port <- portfolio_longshort_hrp(
+    df, returns_wide, long_decile = long_decile, short_decile = short_decile,
+    lookback_months = lookback_months, cost_per_trade = cost_per_trade,
+    borrow_rate_annual = borrow_rate_annual, max_monthly_ret = max_monthly_ret,
+    adv_monthly = adv_monthly, adv_pct_cap = adv_pct_cap,
+    impact_eta = eta, impact_aum = impact_aum, impact_sigma = impact_sigma
+  )
+  if (!is.null(rf)) port <- dplyr::left_join(port, rf, by = "ym")
+
+  n <- nrow(port)
+  if (n < 2L) {
+    return(tibble::tibble(eta = eta, months = n, sharpe = NA_real_,
+                           cagr = NA_real_, vol = NA_real_,
+                           avg_impact_cost_frac = NA_real_))
+  }
+  ann_ret <- prod(1 + port$port_ret)^(12 / n) - 1
+  ann_vol <- stats::sd(port$port_ret) * sqrt(12)
+  have_rf <- !is.null(rf) && rf_col %in% names(port)
+  rf_ann  <- if (have_rf) mean(port[[rf_col]], na.rm = TRUE) * 12 else 0
+  sharpe  <- if (ann_vol > 0) (ann_ret - rf_ann) / ann_vol else NA_real_
+
+  tibble::tibble(
+    eta = eta, months = n, sharpe = sharpe, cagr = ann_ret, vol = ann_vol,
+    avg_impact_cost_frac = mean(port$impact_cost_frac, na.rm = TRUE)
+  )
+}
+
+#' Sharpe-vs-impact-coefficient sensitivity panel (#490 Gap 4)
+#' @inheritParams portfolio_longshort_hrp
+#' @param eta_grid Numeric vector of eta values to sweep (each > 0).
+#' @param rf Optional tibble(ym, rf_col), joined before computing Sharpe.
+#' @return Tibble: eta, months, sharpe, cagr, vol, avg_impact_cost_frac.
+#' @noRd
+market_impact_sensitivity <- function(df, returns_wide, eta_grid,
+                                       long_decile = 1L, short_decile = 10L,
+                                       lookback_months = 36L,
+                                       cost_per_trade = 0.005,
+                                       borrow_rate_annual = 0.03,
+                                       max_monthly_ret = 0.20,
+                                       adv_monthly, adv_pct_cap = 0.10,
+                                       impact_aum, impact_sigma,
+                                       rf = NULL, rf_col = "rf_ret") {
+  validate_eta_grid(eta_grid, adv_monthly)
+  rows <- lapply(eta_grid, function(eta) {
+    sensitivity_panel_row(
+      eta, df, returns_wide, long_decile, short_decile, lookback_months,
+      cost_per_trade, borrow_rate_annual, max_monthly_ret,
+      adv_monthly, adv_pct_cap, impact_aum, impact_sigma, rf, rf_col
+    )
+  })
+  dplyr::bind_rows(rows)
 }
 
 #' Standard backtest metrics
@@ -1223,6 +1393,21 @@ plan_stock_backtest <- function() {
     }),
 
     # ── All strategies comparison ─────────────────────────────────
+    #
+    # #656: this used to be a 4-way inner_join chain identical to the #641
+    # port_returns defect and the #603 boot_monthly_returns defect -- any
+    # month missing from ONE constituent silently deleted that month for ALL
+    # FOUR. Unlike those two, stk_all_comparison had ZERO instrumentation
+    # (no contiguity diagnostic, no QA gate) and feeds
+    # stk_all_comparison_plot, published on BOTH leaderboard.qmd and
+    # stock-backtest.qmd.
+    #
+    # Fix mirrors #651/#603: a calendar-complete monthly spine bounded to
+    # the stock-level overlap window (see the identical comment on
+    # port_returns, R/plan_portfolio_opt.R, and boot_monthly_returns,
+    # R/plan_bootstrap_ci.R -- all three draw on these same four
+    # constituents), LEFT-joined so a missing constituent is an explicit NA
+    # in its own column rather than a deleted row.
     targets::tar_target(stk_all_comparison, {
       library(dplyr)
 
@@ -1231,16 +1416,69 @@ plan_stock_backtest <- function() {
       fac_max <- fm_portfolio |> select(ym, fac_max = portfolio_ret)
       fac_drif <- drif_portfolio |> select(ym, fac_drif = portfolio_ret)
 
-      stk_max |>
-        inner_join(stk_drif, by = "ym") |>
-        inner_join(fac_max, by = "ym") |>
-        inner_join(fac_drif, by = "ym") |>
+      spine_start <- max(min(stk_max$ym), min(stk_drif$ym))
+      spine_end   <- min(max(stk_max$ym), max(stk_drif$ym))
+      spine <- tibble::tibble(
+        ym = format(
+          seq(as.Date(paste0(spine_start, "-01")),
+              as.Date(paste0(spine_end, "-01")),
+              by = "month"),
+          "%Y-%m"
+        )
+      )
+
+      combined <- spine |>
+        left_join(stk_max, by = "ym") |>
+        left_join(stk_drif, by = "ym") |>
+        left_join(fac_max, by = "ym") |>
+        left_join(fac_drif, by = "ym")
+
+      # Fail loud, not null (fail-loud-not-null.md #4): report which months
+      # and strategies are missing rather than letting the gap pass
+      # silently. Expected to be empty in the current data -- this exists as
+      # a regression guard, not a live-defect report.
+      strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+      avail <- rowSums(!is.na(as.matrix(combined[, strat_cols])))
+      thin <- combined[avail < length(strat_cols), , drop = FALSE]
+      if (nrow(thin) > 0L) {
+        thin_msgs <- vapply(seq_len(nrow(thin)), function(i) {
+          row <- thin[i, ]
+          missing_strats <- strat_cols[is.na(row[strat_cols])]
+          sprintf("  %s -- missing: %s", row$ym, paste(missing_strats, collapse = ", "))
+        }, character(1L))
+        cli::cli_warn(c(
+          "!" = paste0(
+            length(thin_msgs), " month(s) in stk_all_comparison have at ",
+            "least one missing constituent strategy (#656):"
+          ),
+          setNames(thin_msgs, rep("i", length(thin_msgs))),
+          "i" = paste0(
+            "Cumulative growth columns hold flat (no compounding) across a ",
+            "gap month instead of propagating NA forward -- see the ",
+            "cumgrowth_na_safe() comment below."
+          )
+        ))
+      }
+
+      # NA-safe cumulative growth: a missing month means "no observation",
+      # not "zero return", but cumprod(1 + NA) propagates NA forward to
+      # EVERY subsequent element (fail-loud-not-null.md's forward-
+      # propagation trap) -- which would permanently poison the equity
+      # curve and stk_all_caption's use of the LAST cum value
+      # (fmt_growth(last$stk_max_cum)) from that gap onward. Hold the
+      # cumulative value flat across a gap month instead; the underlying
+      # return column (stk_max/stk_drif/fac_max/fac_drif) keeps its real NA
+      # for NA-aware stats (stk_all_caption's fmt_vol() already uses
+      # sd(..., na.rm = TRUE)).
+      cumgrowth_na_safe <- function(ret) cumprod(1 + tidyr::replace_na(ret, 0))
+
+      combined |>
         mutate(
           date = as.Date(paste0(ym, "-15")),
-          stk_max_cum = cumprod(1 + stk_max),
-          stk_drif_cum = cumprod(1 + stk_drif),
-          fac_max_cum = cumprod(1 + fac_max),
-          fac_drif_cum = cumprod(1 + fac_drif)
+          stk_max_cum = cumgrowth_na_safe(stk_max),
+          stk_drif_cum = cumgrowth_na_safe(stk_drif),
+          fac_max_cum = cumgrowth_na_safe(fac_max),
+          fac_drif_cum = cumgrowth_na_safe(fac_drif)
         )
     }),
 

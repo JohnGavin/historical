@@ -100,9 +100,39 @@
 # observation count, so an empty window silently contributes zero rows
 # rather than erroring or emitting a spurious NA row (verified per source
 # target as part of #660; see the PR report for the full list).
-PERIOD_LABELS_ALLOWED <- c(
-  "Training", "Testing", "Holdout", "Validation", "Full Period", "OOS"
-)
+#
+# ── Why the data boundary itself is not expected to move (#619/#673) ───────
+# The above described the boundary as a moving target that would eventually
+# reach val_start on its own. It will not. #619 found that `macro_daily` and
+# `equity_daily` -- the datasets that set the equity/factor/macro boundaries
+# above -- have NO producer: they were seeded once (2026-05-06) by duplicating
+# `dsfefvx/finance-historical-data` on HuggingFace, and nothing in this repo
+# has refreshed them since. #619's follow-up investigation found the upstream
+# itself went inactive on 2026-04-23 -- BEFORE we even duplicated it -- so
+# re-syncing from it gains nothing; there is no live source to catch up to.
+# #673 confirmed the same for `equity_daily` specifically (frozen at
+# 2026-04-13) and found the Validation seal on `rsc_subperiod` was, as a
+# result, being held by this outage rather than by the #660 design (fixed by
+# bounding that target at `holdout_end` -- see R/plan_risk_state.R).
+#
+# Per the project decision recorded in #619/#655/#673 and
+# docs/DATA_SOURCING_LESSONS.md, these two datasets are ARCHIVED, not
+# "pending refresh": no active work is sourcing a replacement, so treat the
+# boundary above as structurally stationary rather than "hasn't caught up
+# yet". Advancing it past val_start requires a deliberate decision to source
+# new data (see #619's revised plan: `scripts/build_macro_daily.R` +
+# `scripts/fetch_equity.py` + an upload step, none of which currently run on
+# a schedule) -- not the mere passage of time, and not another duplication of
+# the same dead upstream.
+#
+# ── #668: derived from the glossary, not a second source of truth ──────────
+# This constant used to hand-type the same six values that now live in
+# data/glossary.yaml's `period_label` entity. Deriving it here (rather than
+# maintaining both) is exactly the fix #668 asked for: "PERIOD_LABELS_ALLOWED
+# becomes a *consumer* of the registry rather than a second source of
+# truth." R/glossary.R is sourced immediately before this file in
+# docs/_targets.R for exactly this reason -- see that file's module comment.
+PERIOD_LABELS_ALLOWED <- load_glossary()$period_label$values
 
 plan_partitions <- function() {
   list(

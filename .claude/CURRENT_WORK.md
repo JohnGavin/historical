@@ -1,13 +1,15 @@
-# Current Work — session 26 (2026-09-03 → 2026-09-05)
+# Current Work — session 28 (2026-09-03 → 2026-09-05)
 
 ## State
 
-This worktree's branch (`feat/cc-20260903-181019`) has no commits ahead of
-`origin/main` and a clean working tree — all real code changes this session
-landed via two subagent-authored PRs, already merged.
-
-**2 PRs merged:** [#840](https://github.com/JohnGavin/historical/pull/840),
-[#841](https://github.com/JohnGavin/historical/pull/841). No PRs open.
+This worktree's branch (`feat/cc-20260903-181019`) has been merged with
+`origin/main` to reconcile with a **parallel worktree** that landed session
+26 (PR #835) and session 27 (PR #837) while this session was running
+unaware of it — this file's own session-number collision (this session had
+mislabeled itself "26") is exactly that discovery surfacing. `main` is now
+at session 27's `19a17d2`, plus this session's two merged PRs
+([#840](https://github.com/JohnGavin/historical/pull/840),
+[#841](https://github.com/JohnGavin/historical/pull/841)).
 
 ## What this session was
 
@@ -39,6 +41,14 @@ acting, found the true ceiling was `S31`, and self-corrected to `S33`
 instead — silently doing the wrong thing would have collided with two
 already-existing unrelated gates (#656/#603).
 
+A second, structurally identical mistake happened at the ORCHESTRATOR level
+at session end: this file and `CHANGELOG.md` were both edited and numbered
+"session 26" without first fetching `origin/main` to check what session
+number was actually current there — main already had 26 and 27 from a
+parallel worktree. Caught only because merging back into `main` produced a
+real conflict, not because anyone checked first. Same root cause both
+times: state a fact about `main` without fetching it first.
+
 Separately: two independent `fixer` dispatches both backgrounded a
 long-running verification step and stalled on "waiting" — a known,
 previously-documented anti-pattern (5 prior occurrences before today).
@@ -48,7 +58,7 @@ one-off.
 
 ## Next session
 
-**Open, unstarted (all filed this session, none started):**
+**Open, unstarted (filed this session, none started):**
 
 | Issue | |
 |---|---|
@@ -65,9 +75,29 @@ one-off.
 | [#853](https://github.com/JohnGavin/historical/issues/853) | Verify + wire `K_eff_strat` into a mandatory graduation-purge gate |
 | [#854](https://github.com/JohnGavin/historical/issues/854) | Add "implement cited spec unmodified first" rule |
 
-**roborev:** 30 verdict failures, 29 addressed → **1 unaddressed** (job from
-2026-08-21, network `ENOTFOUND`, not crash-class, pre-dates this session).
-0 crashes, 0 quota this window.
+**Carried over from session 27 (still open, unchanged by this session):**
 
-**Not investigated:** `xsmom-backtest-v1.json` — auth-walled, ask the user
-again only if they gain access.
+| Issue | Why held |
+|---|---|
+| [#553](https://github.com/JohnGavin/historical/issues/553)/[#554](https://github.com/JohnGavin/historical/issues/554)/[#555](https://github.com/JohnGavin/historical/issues/555) | Fundamentals pipeline built for a 10-ticker pilot only |
+| [#585](https://github.com/JohnGavin/historical/issues/585) G1/G4 | Blocked on #587 Phase 2+ / #463 |
+| [#490](https://github.com/JohnGavin/historical/issues/490) Gap 5 | pointblank pilot — low priority |
+| [#813](https://github.com/JohnGavin/historical/issues/813) | avoid_worst leaderboard metrics wired to SPY buy-and-hold |
+| [#804](https://github.com/JohnGavin/historical/issues/804) | `pkgctx-freshness` CI flake — still unfixed; confirmed again this session via 10 independent CI runs, all failing the same way since 2026-08-30 |
+| [#830](https://github.com/JohnGavin/historical/issues/830), [#831](https://github.com/JohnGavin/historical/issues/831) | Crypto microstructure + NautilusTrader evaluation — not started |
+| [llm#1123](https://github.com/JohnGavin/llm/issues/1123) | `.roborev/` gitignore bug (29 non-running reviews), 14 unclassified-severity findings, dashboard-button 404 — unresolved |
+| [llm#1126](https://github.com/JohnGavin/llm/issues/1126) | whether `/bye`'s roborev Y/N gate should scale with session volume |
+
+**Signal Board tiers P2-P5 still untouched** (re-derive from a fresh `gh
+issue list`, not the stale Signal Board snapshot — three sessions have now
+moved issues since it was built).
+
+**roborev at this session's `/bye`:** 30 verdict failures, 29 addressed →
+**1 unaddressed** (job from 2026-08-21, network `ENOTFOUND`, not
+crash-class). 0 crashes, 0 quota this window. (Session 27 reported 54/43/11
+at its own end on 2026-09-01 — the drop to 1 by now reflects roborev's own
+auto-close/requeue activity between sessions, not anything this session
+did.)
+
+**Not investigated:** `xsmom-backtest-v1.json` — auth-walled for both the
+user and this session, ask again only if access changes.
