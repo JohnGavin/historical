@@ -1,78 +1,73 @@
-# Current Work — session 25 (2026-08-27 → 2026-08-29)
+# Current Work — session 26 (2026-09-03 → 2026-09-05)
 
 ## State
 
-`main` at `90576f5`, working tree clean, pushed. Store built and verified:
-19 pages render clean, 0 errored targets.
+This worktree's branch (`feat/cc-20260903-181019`) has no commits ahead of
+`origin/main` and a clean working tree — all real code changes this session
+landed via two subagent-authored PRs, already merged.
 
-**11 PRs merged:** #769, #770, #775, #776, #780, #786, #789, #790, #792, plus
-publish PRs #772, #777, #781, #787. #791 was yours.
+**2 PRs merged:** [#840](https://github.com/JohnGavin/historical/pull/840),
+[#841](https://github.com/JohnGavin/historical/pull/841). No PRs open.
 
 ## What this session was
 
-Owner-reported dashboard defects, fixed and published. Then a set of gaps filed
-against an external methodology piece.
+Three rounds of "raise gaps relative to this external article" → verify
+against the actual codebase → file issues, plus one round of "implement two
+of them end-to-end."
 
-Root causes were mostly in **vendored CSS**, not our code:
-- DataTables ships `div.datatables { color: #333 }` — ~1.3:1 on dark
-- Bootstrap ships `caption { font-size: 0.875em }`
-- bslib grid rows are `1fr`, so content overflows into the next row
-- Quarto's article layout is an 850px `.page-columns` grid — the width
-  complaint was a **format** difference (`html` vs `dashboard`), not CSS
-
-And one in our own: `quiz.qmd` never loaded `vignette-shared.css` at all, so
-every shared fix this session had bypassed it. It passed every audit because
-those checked what the stylesheet contained, never whether a page loaded it.
+1. aligrithm vol-clustering article → gaps filed as #838/#839 → implemented
+   via two parallel `fixer` dispatches → hit a QA-gate numbering collision
+   and a merge conflict between the two PRs → both resolved and merged →
+   4 deferred-work follow-ups filed (#843–#846).
+2. algoadvantage Bollinger interview → 3 gaps filed (#847–#849): McClellan
+   breadth indicators, Bollinger/Keltner/ATR squeeze, and a materially
+   weaker-than-described parameter-robustness gate.
+3. StratProof crypto momentum-decay article → 5 gaps filed (#850–#854):
+   pessimistic-cost-first modeling, P(Sharpe>0) gate, per-year win-rate
+   breakdown + arbitraged-out diagnostic, graduation-gate purge verification,
+   spec-first-before-tuning rule. The article's referenced backtest JSON
+   (`xsmom-backtest-v1.json`) was auth-walled for both me and the user —
+   left unexamined.
 
 ## The lesson
 
-Nearly every wrong conclusion came from a **check that could not distinguish
-the states it was meant to separate**:
+A dispatched agent's own `verification-before-completion` habit caught an
+error the orchestrator (me) introduced: I told a follow-up fixer to
+renumber a QA gate to "S24" based on a stale, never-fetched local `main`
+checkout. The agent re-verified against `git show origin/main:...` before
+acting, found the true ceiling was `S31`, and self-corrected to `S33`
+instead — silently doing the wrong thing would have collided with two
+already-existing unrelated gates (#656/#603).
 
-| Check | Why it couldn't fail |
-|---|---|
-| Caption word count | counted hidden `<details>` text |
-| Pages `errored` at 0 ms | means *superseded*, not failed |
-| Pages `built` in 1253 ms | published nothing; real build is ~27 s |
-| Three `until` waiters | broken command ≡ not-finished; cancelled ≡ complete; compared response to itself |
-| `grep -c` | counts lines, not occurrences |
-| `Working tree` field | always dirty — counted its own render output |
-
-The code defects hunted were the same shape. `checks-must-distinguish-unknown`
-applies to throwaway shell, not only to production gates.
-
-## Verified live (OBSERVED, by served bytes)
-
-- `Source tree | clean` on all 11 real dashboards
-- Captions >45 visible words: 0 of 11
-- `page-layout-full` on evidence/bdbb-sol/quiz; TOC markup 0
-- evidence.html: 19 tabs, 4/4 DT tables carrying data (4, 6, 16, 18 rows)
-- heatmap PNG hash matches local
+Separately: two independent `fixer` dispatches both backgrounded a
+long-running verification step and stalled on "waiting" — a known,
+previously-documented anti-pattern (5 prior occurrences before today).
+Recoverable via `SendMessage` resume every time, but worth noticing it keeps
+recurring across sessions/models rather than treating each instance as a
+one-off.
 
 ## Next session
 
-**Unverified — needs a human at a browser.** Every visual outcome. Specifically
-[leaderboard#rankings](https://johngavin.github.io/historical/leaderboard.html#rankings)
-in **Chrome** (where the contrast broke; Edge was always fine), and
-[evidence](https://johngavin.github.io/historical/evidence.html) — does 457
-lines of prose read well at full width? If not, the fix is a max-width on prose
-blocks, **not** reverting `page-layout: full`.
-
-**Open, unstarted:**
+**Open, unstarted (all filed this session, none started):**
 
 | Issue | |
 |---|---|
-| [#793](https://github.com/JohnGavin/historical/issues/793) | No mechanical kill switches — highest priority; unbounded failure mode |
-| [#778](https://github.com/JohnGavin/historical/issues/778) | Cost metrics reach 6 of 17 strategies |
-| [#794](https://github.com/JohnGavin/historical/issues/794) | Capacity never modelled — sequence behind #778 |
-| [#795](https://github.com/JohnGavin/historical/issues/795) | Proxy measurement error undocumented; includes a **revision-risk** finding |
-| [#788](https://github.com/JohnGavin/historical/issues/788) | Column hover help — planned, phased, decisions recorded |
-| [#779](https://github.com/JohnGavin/historical/issues/779) | XGB DRIF SSR indeterminate — now *less* visible after the uniform labels |
-| [#782](https://github.com/JohnGavin/historical/issues/782) | SSR name collision + a **false citation** in roxygen (fix that first) |
-| [#771](https://github.com/JohnGavin/historical/issues/771), [#774](https://github.com/JohnGavin/historical/issues/774), [#783](https://github.com/JohnGavin/historical/issues/783), [#784](https://github.com/JohnGavin/historical/issues/784), [#785](https://github.com/JohnGavin/historical/issues/785) | filed with evidence |
+| [#843](https://github.com/JohnGavin/historical/issues/843) | Forward-move statistics + `hd_detection_power()` integration on the Markov diagnostic |
+| [#844](https://github.com/JohnGavin/historical/issues/844) | Evaluate walk-forward/rolling threshold recalibration for risk-state/regime classifiers |
+| [#845](https://github.com/JohnGavin/historical/issues/845) | Calibrate zero-alpha surface against real strategy grammar + estimate `rho_bar` |
+| [#846](https://github.com/JohnGavin/historical/issues/846) | Phase-0 dashboard design for both new diagnostics (combined, per consolidation-over-sprawl) |
+| [#847](https://github.com/JohnGavin/historical/issues/847) | No McClellan breadth indicators |
+| [#848](https://github.com/JohnGavin/historical/issues/848) | No Bollinger Bands / Keltner Channels / ATR / squeeze strategy |
+| [#849](https://github.com/JohnGavin/historical/issues/849) | Tighten `backtest-robustness.md` to a dense-neighborhood parameter check |
+| [#850](https://github.com/JohnGavin/historical/issues/850) | No pessimistic-cost-first backtest pass |
+| [#851](https://github.com/JohnGavin/historical/issues/851) | No P(true Sharpe > 0) posterior-style gate |
+| [#852](https://github.com/JohnGavin/historical/issues/852) | No per-calendar-year win-rate breakdown / arbitraged-out diagnostic |
+| [#853](https://github.com/JohnGavin/historical/issues/853) | Verify + wire `K_eff_strat` into a mandatory graduation-purge gate |
+| [#854](https://github.com/JohnGavin/historical/issues/854) | Add "implement cited spec unmodified first" rule |
 
-**roborev:** 39 verdict failures, 21 addressed → **18 unaddressed**. 0 crashes,
-0 quota, consistency check clean.
+**roborev:** 30 verdict failures, 29 addressed → **1 unaddressed** (job from
+2026-08-21, network `ENOTFOUND`, not crash-class, pre-dates this session).
+0 crashes, 0 quota this window.
 
-**Housekeeping:** untracked vendored `docs/*_files/libs/**` — some pages may
-reference libraries never committed. Worth a look before it bites.
+**Not investigated:** `xsmom-backtest-v1.json` — auth-walled, ask the user
+again only if they gain access.
