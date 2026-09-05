@@ -1,6 +1,6 @@
 # Changelog
 
-## 2026-09-03 → 2026-09-05 (session 26 — external methodology gap sweeps)
+## 2026-09-03 → 2026-09-05 (session 28 — external methodology gap sweeps)
 
 ### Completed
 
