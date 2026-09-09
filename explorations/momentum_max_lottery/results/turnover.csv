@@ -1,0 +1,7 @@
+strategy,leg,turnover
+mom_plain,long,0.1959499513372909
+mom_plain,short,0.19288356619362318
+mom_lottery,long,0.5152692736533115
+mom_lottery,short,0.5420848042486279
+mom_nonlottery,long,0.6507599294352755
+mom_nonlottery,short,0.6275007638976406
