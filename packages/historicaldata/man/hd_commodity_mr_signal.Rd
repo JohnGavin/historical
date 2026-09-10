@@ -75,6 +75,8 @@ returned tibble, exactly as an insufficient-history \code{NA} always has.
 }
 \seealso{
 Other commodities_mr: 
+\code{\link{hd_commodity_mr_conditioning_signal}()},
+\code{\link{hd_commodity_mr_conditioning_universe}()},
 \code{\link{hd_commodity_mr_dedupe_universe}()},
 \code{\link{hd_commodity_mr_portfolio}()}
 }

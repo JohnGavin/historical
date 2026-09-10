@@ -81,6 +81,87 @@ test_that("filter_liquidity aborts with an informative error when adv_usd is mis
   )
 })
 
+# ── filter_liquidity() percentile threshold_mode (#625) ──────────────────
+#
+# The nominal $ threshold drifts in liquidity-percentile terms as ADV grows
+# over a multi-decade sample -- see .claude/rules/valuation-spread-threshold.md
+# and issue #625's "A real modelling concern" section. threshold_mode =
+# "percentile" recomputes the cutoff from the current cross-section (`by`,
+# default "date") each period instead of a fixed dollar figure, so the gate
+# is regime-invariant.
+
+test_that("filter_liquidity threshold_mode='nominal' is unchanged default behaviour", {
+  df <- tibble::tibble(
+    ticker = c("AAA", "AAA", "BBB"),
+    adv_usd = c(NA_real_, 5e6, 1e5)
+  )
+  expect_warning(
+    result <- filter_liquidity(df, min_adv_usd = 1e6),
+    "illiquid"
+  )
+  expect_equal(result$liquidity_flag, c("insufficient_data", "liquid", "illiquid"))
+})
+
+test_that("filter_liquidity threshold_mode='percentile' flags the bottom fraction per cross-section", {
+  # Two dates, 4 tickers each. adv_usd ranks are stable within each date, but
+  # the ABSOLUTE dollar levels double from date 1 to date 2 -- a nominal
+  # threshold would misclassify a differently-sized bottom fraction on each
+  # date; a percentile threshold flags the same rank fraction on both.
+  df <- tibble::tibble(
+    date = rep(as.Date(c("2024-01-01", "2024-01-02")), each = 4),
+    ticker = rep(c("AAA", "BBB", "CCC", "DDD"), 2),
+    adv_usd = c(1e5, 2e5, 3e5, 4e5, 2e5, 4e5, 6e5, 8e5)
+  )
+  result <- suppressWarnings(filter_liquidity(
+    df,
+    threshold_mode = "percentile",
+    min_adv_percentile = 0.30,
+    by = "date"
+  ))
+  # Bottom 30% by rank (percent_rank < 0.30) is the single lowest-ADV name
+  # (percent_rank 0) on each date -- AAA on date 1, AAA (2e5) on date 2.
+  expect_equal(
+    result$liquidity_flag[result$date == as.Date("2024-01-01") & result$ticker == "AAA"],
+    "illiquid"
+  )
+  expect_equal(
+    result$liquidity_flag[result$date == as.Date("2024-01-02") & result$ticker == "AAA"],
+    "illiquid"
+  )
+  # DDD (highest ADV on both dates) is always liquid despite the absolute
+  # dollar level doubling between dates -- this is the regime-invariance
+  # property nominal thresholds lack.
+  expect_true(all(
+    result$liquidity_flag[result$ticker == "DDD"] == "liquid"
+  ))
+})
+
+test_that("filter_liquidity threshold_mode='percentile' preserves insufficient_data for NA adv_usd", {
+  df <- tibble::tibble(
+    date = as.Date("2024-01-01"),
+    ticker = c("AAA", "BBB", "CCC"),
+    adv_usd = c(NA_real_, 1e5, 2e5)
+  )
+  result <- suppressWarnings(filter_liquidity(
+    df,
+    threshold_mode = "percentile",
+    min_adv_percentile = 0.30,
+    by = "date"
+  ))
+  expect_equal(result$liquidity_flag[result$ticker == "AAA"], "insufficient_data")
+})
+
+test_that("filter_liquidity threshold_mode='percentile' aborts when the `by` column is absent", {
+  expect_snapshot(
+    error = TRUE,
+    filter_liquidity(
+      tibble::tibble(ticker = "AAA", adv_usd = 1e6),
+      threshold_mode = "percentile",
+      by = "date"
+    )
+  )
+})
+
 # ── liquidity_summary() ───────────────────────────────────────────────────
 
 test_that("liquidity_summary computes correct per-ticker medians and orders by median_adv_usd desc", {

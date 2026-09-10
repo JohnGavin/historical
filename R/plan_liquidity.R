@@ -173,6 +173,57 @@ plan_liquidity_dashboard <- function() {
             min_adv_threshold = 1e6
           )
       }
+    ),
+
+    # ── Percentile-indexed threshold variant (#625 "principled fix") ──────
+    #
+    # The nominal $1M cut above is a fixed dollar figure applied across the
+    # full sample. As market-wide ADV grows over a multi-decade span, $1M
+    # sits at a different liquidity percentile in 2005 than in 2025, so the
+    # nominal gate silently tightens or loosens over time (#625, "A real
+    # modelling concern" section). This variant recomputes the cutoff from
+    # the current day's cross-section instead: it flags the bottom
+    # min_adv_percentile (30%) of names by ADV each day, which is invariant
+    # to the absolute dollar level and comparable across liquidity regimes
+    # (e.g. 2008, 2020).
+    #
+    # Deliberately scoped to this dashboard-visible, informational flag only
+    # (filter_mode stays "warn" -- nothing is removed from any backtest by
+    # this target, same as the nominal-threshold targets above). The other
+    # nominal ADV gate in this codebase, stk_params$adv_threshold ($5M,
+    # R/plan_stock_backtest.R:483), is a production INVESTABILITY gate that
+    # is filtered into directly during Factor MAX / DRIF decile construction
+    # (R/plan_stock_backtest.R:1141, R/plan_xgb_signal.R:133) -- switching
+    # that one to a percentile basis would change published backtest
+    # returns and needs its own before/after comparison, exactly like the
+    # filter_mode flip this issue explicitly keeps out of scope. Not done
+    # here; see the #625 follow-up issue.
+    targets::tar_target(
+      equity_daily_liquidity_filtered_pctile,
+      {
+        equity_daily_with_adv |>
+          filter_liquidity(
+            threshold_mode = "percentile",
+            min_adv_percentile = 0.30,
+            by = "date",
+            filter_mode = "warn"
+          )
+      }
+    ),
+
+    targets::tar_target(
+      equity_daily_volume_stats_pctile,
+      {
+        equity_daily_liquidity_filtered_pctile |>
+          dplyr::summarise(
+            total_tickers = dplyr::n_distinct(ticker),
+            total_observations = dplyr::n(),
+            median_adv_all = median(adv_usd, na.rm = TRUE),
+            pct_liquid = 100 * mean(liquidity_flag == "liquid", na.rm = TRUE),
+            pct_illiquid = 100 * mean(liquidity_flag == "illiquid", na.rm = TRUE),
+            min_adv_percentile = 0.30
+          )
+      }
     )
   )
 }

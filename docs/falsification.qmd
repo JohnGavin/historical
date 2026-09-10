@@ -693,6 +693,41 @@ if (!is.null(vol_stats)) {
 }
 ```
 
+#### Percentile-Indexed Threshold
+
+```{r}
+#| label: liquidity-volume-stats-pctile
+#| results: asis
+vol_stats_pctile <- safe_tar_read("equity_daily_volume_stats_pctile")
+if (!is.null(vol_stats_pctile)) {
+  cap <- paste0(
+    "**Dashboard-universe liquid/illiquid split, percentile-indexed threshold.** ",
+    "Same universe and `calculate_adv()` output as the Volume Stats tab, but the ",
+    "liquidity cutoff is recomputed each day as the bottom ",
+    scales::percent(vol_stats_pctile$min_adv_percentile, accuracy = 1),
+    " of that day's cross-sectional ADV, rather than a fixed dollar figure. ",
+    "This is the regime-invariant \"principled fix\" from ",
+    "[#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"}: ",
+    "a fixed $1M cut sits at a different liquidity percentile in 2005 than in 2025 as ",
+    "market-wide ADV grows, so the nominal gate on the Volume Stats tab silently ",
+    "tightens or loosens over the sample; this table does not. ",
+    "Sourced from [`filter_liquidity(threshold_mode = \"percentile\")`]",
+    "(https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L35){target=\"_blank\" rel=\"noopener noreferrer\"} ",
+    "via `equity_daily_volume_stats_pctile` ",
+    "([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target=\"_blank\" rel=\"noopener noreferrer\"}). ",
+    "Informational only, same as the Volume Stats tab: `filter_mode = \"warn\"` here too, ",
+    "so nothing is removed from any backtest by this table."
+  )
+  fals_dt(vol_stats_pctile, cap)
+} else {
+  cat(paste0(
+    "*Not available: `equity_daily_volume_stats_pctile` has not been built by this run of ",
+    "`tar_make()` yet — see the “How to Read This” tab and ",
+    "[#625](https://github.com/JohnGavin/historical/issues/625){target=\"_blank\" rel=\"noopener noreferrer\"}.*"
+  ))
+}
+```
+
 #### ADV-Cap Impact (MAX HRP)
 
 ```{r}
@@ -750,6 +785,8 @@ if (!is.null(adv_impact) && !is.null(sp)) {
 Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode = "warn"`** — it flags illiquid rows but removes nothing, for both the ingestion-side (`equity_liquidity_filtered`) and dashboard-side (`equity_daily_liquidity_filtered`) targets. `stk_universe` ([`R/plan_stock_backtest.R:421`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target="_blank" rel="noopener noreferrer"}) does not depend on either filtered target — the dependency runs the other way (`equity_daily_liquidity_filtered` is derived *from* `stk_universe`, not vice versa). **Illiquid stocks are not excluded from any backtest portfolio shown on this dashboard today.** Do not read the Universe Summary / Volume Stats tabs as implying otherwise; they are a diagnostic, not a filter.
 
 **Universe Summary / Volume Stats now wired in (#625, resolved 2026-08-04):** the two tabs above are computed by [`plan_liquidity_dashboard()`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target="_blank" rel="noopener noreferrer"} in `R/plan_liquidity.R`, which re-expresses the same `calculate_adv()` → `filter_liquidity()` → `liquidity_summary()` pipeline against `stk_universe` instead of `consolidated_equity` (which only exists in the root ingestion pipeline). This means the two tabs describe the **top-market-cap dashboard universe**, not the full ingested equity universe — see the per-table captions above for the exact scope. The original `plan_liquidity()` targets (`liquidity_summary_tbl`, `volume_stats`) are unchanged and still run only in the ingestion pipeline (root `_targets.R`); this dashboard has never depended on them. **Provenance risk:** nothing asserts the two equity sources (`consolidated_equity` vs. `stk_universe`) agree, so the ingestion-side and dashboard-side liquidity summaries can diverge — this is flagged as a follow-up in [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}, not resolved here. **Also unverified:** this PR could not run `tar_make()` (concurrent-store conflict with other work on this repo), so neither of these two tabs has been confirmed to actually render — the "Not available" fallback text above will show if the target has not yet been built by a subsequent pipeline run.
+
+**Percentile-Indexed Threshold (#625, added 2026-08-31):** the nominal $1M cut used by the Universe Summary / Volume Stats tabs is a fixed dollar figure applied across the full 2005–2026 sample; as market-wide ADV grows over that span, $1M sits at a different liquidity percentile in 2005 than in 2025, so the nominal gate silently tightens or loosens over time. The Percentile-Indexed Threshold tab surfaces the alternative flagged as "the principled fix" in [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}: recompute the cutoff from each day's cross-sectional ADV distribution (bottom 30% flagged illiquid) instead of a fixed dollar amount. This is deliberately scoped to this dashboard-visible, informational flag only — `filter_mode` stays `"warn"` here too, so nothing is removed from any backtest. The *other* nominal ADV gate in this codebase, `stk_params$adv_threshold` ($5M, used directly inside Factor MAX / DRIF decile construction), is a production investability gate whose numbers feed the leaderboard; switching it to a percentile basis would change published backtest returns and needs its own before/after comparison, so it is intentionally left nominal here — tracked as a follow-up, not resolved in this change.
 
 **ADV-Cap Impact (MAX HRP) is a live target** ([`stk_max_adv_cap_impact`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L656){target="_blank" rel="noopener noreferrer"}) already built by the deployed pipeline — it compares the [HRP-weighted](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L609){target="_blank" rel="noopener noreferrer"} Stock MAX portfolio with and without the 10% ADV participation cap, and this tab is the first place it is displayed.
 

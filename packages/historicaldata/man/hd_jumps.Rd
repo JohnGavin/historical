@@ -29,6 +29,7 @@ hd_jumps("equity_daily", threshold = 0.5, n = 20)
 \seealso{
 Other quality-audit: 
 \code{\link{hd_amendments}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_metadata_amendments}()},
 \code{\link{hd_quality}()},

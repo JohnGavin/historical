@@ -32,11 +32,18 @@ Lazy duckplyr frame or tibble
 \description{
 Query Fama-French factor returns
 }
+\section{Date type guarantee (#615)}{
+
+The \code{date} column is always returned as \code{Date} (see \code{\link[=hd_ohlcv]{hd_ohlcv()}}).
+}
+
 \seealso{
 Other data-access: 
 \code{\link{hd_alphavantage}()},
+\code{\link{hd_check_accessor_date_types}()},
 \code{\link{hd_check_survivorship_bias}()},
 \code{\link{hd_ecb}()},
+\code{\link{hd_fundamentals}()},
 \code{\link{hd_guardian}()},
 \code{\link{hd_guardian_monthly}()},
 \code{\link{hd_jst}()},

@@ -4,7 +4,7 @@
 \alias{hd_deflated_sharpe}
 \title{Deflated Sharpe Ratio}
 \usage{
-hd_deflated_sharpe(r, K_trials = 1L, ann_factor = 252L)
+hd_deflated_sharpe(r, K_trials = 1L, ann_factor = 252L, trial_sharpe_var = 1)
 }
 \arguments{
 \item{r}{Numeric vector of returns (daily or monthly).}
@@ -14,6 +14,15 @@ multiple-testing adjustment).}
 
 \item{ann_factor}{Integer. Annualisation factor (252 for daily, 12 for
 monthly). Default 252.}
+
+\item{trial_sharpe_var}{Numeric scalar > 0. Variance of the Sharpe ratios
+across the \code{K_trials} trial population (V in the Details section).
+Default \code{1}, i.e. a unit-variance trial pool -- the implicit
+assumption of every call before #558. A wider trial-Sharpe dispersion
+(e.g. a pool containing low-trade "junk" strategies) should be passed
+here as \code{var(trial_sharpes)}; this widens the hurdle and therefore
+lowers \code{dsr} / raises \code{dsr_pvalue} for the SAME underlying
+returns, all else equal.}
 }
 \value{
 Named list:
@@ -25,6 +34,7 @@ Named list:
 \item{skewness}{Sample skewness of returns.}
 \item{kurtosis}{Sample excess kurtosis of returns.}
 \item{K_trials}{Number of strategies tested.}
+\item{trial_sharpe_var}{Echoed input V (see Details).}
 \item{T}{Number of observations.}
 }
 }
@@ -39,10 +49,43 @@ The DSR tests H0: true Sharpe <= 0, accounting for the fact that:
 (2) the best of K strategies has an inflated expected Sharpe
 even under pure noise (the "haircut").
 }
+\section{Variance-aware hurdle (#558)}{
+
+The expected-maximum-Sharpe hurdle E\link{max SR} that the "haircut" subtracts
+depends on TWO things, not one: the trial COUNT \code{K_trials} (the
+"logarithmic blessing" -- adding trials raises the hurdle only slowly) and
+the trial-population VARIANCE \code{trial_sharpe_var} (V) -- how dispersed
+the Sharpe ratios of the \code{K_trials} candidates were. A pool containing
+low-trade, erratic "junk" strategies has a wide Sharpe dispersion and
+therefore a much higher honest hurdle than a clean pool of the same size,
+even though \code{K_trials} is identical. Bailey, Borwein, Lopez de Prado &
+Zhu (2014) write this as
+\eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where \eqn{E[\max Z]} is
+the expected maximum of \code{K_trials} unit-variance (V = 1) trial
+Z-scores. This implementation keeps the asymptotic Euler-Mascheroni
+approximation to \eqn{E[\max Z]} already used here (a form of the same
+extreme-value-theory result the LdP papers derive) and multiplies it by
+\eqn{\sqrt{V}}. \code{trial_sharpe_var = 1} (the default) reproduces the
+pre-#558 output for every \code{K_trials} exactly, so existing callers are
+unaffected unless they opt in.
+
+When the caller has (or can estimate) the population of trial Sharpe
+ratios that produced \code{K_trials}, pass
+\code{var(trial_sharpes, na.rm = TRUE)} as \code{trial_sharpe_var} rather
+than leaving it at 1 -- omitting it silently assumes the trial pool has
+the tightest possible Sharpe dispersion, understating the hurdle whenever
+the pool contains noisy, low-trade strategies (the "junk-variance trap").
+}
+
 \references{
 Lopez de Prado, M. (2018). "The Deflated Sharpe Ratio: Correcting for
 Selection Bias, Backtest Overfitting, and Non-Normality."
 \emph{Journal of Portfolio Management}, 40(5), 94-107.
+
+Bailey, D. H., Borwein, J. M., Lopez de Prado, M., & Zhu, Q. J. (2014).
+"Pseudo-Mathematics and Financial Charlatanism: The Effects of Backtest
+Overfitting on Out-of-Sample Performance." \emph{Notices of the AMS},
+61(5), 458-471. (Trial-population-variance form of E\link{max SR}.)
 }
 \seealso{
 Other falsification: 
@@ -62,11 +105,14 @@ Other falsification:
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_null_rejection_rate}()},
 \code{\link{hd_rolling_sharpe}()},
+\code{\link{hd_sharpe_haircut}()},
 \code{\link{hd_sharpe_stability_ratio}()},
+\code{\link{hd_signal_null_rank}()},
 \code{\link{hd_structural_breaks}()},
 \code{\link{hd_tail_dependence}()},
 \code{\link{hd_tail_keff_frob}()},
 \code{\link{hd_top5pct_share}()},
-\code{\link{hd_wf_correlation}()}
+\code{\link{hd_wf_correlation}()},
+\code{\link{hd_zero_alpha_calibration}()}
 }
 \concept{falsification}

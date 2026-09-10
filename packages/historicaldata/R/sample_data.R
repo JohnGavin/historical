@@ -29,6 +29,7 @@ hd_sample_path <- function(dataset) {
     macro_daily = "macro_sample.parquet",
     factors = "factors_sample.parquet",
     metadata = "metadata_sample.parquet",
+    fundamentals = "fundamentals_sample.parquet",
     cli::cli_abort("No sample data for dataset: {dataset}")
   )
   system.file("extdata", "sample", file, package = "historicaldata", mustWork = TRUE)

@@ -34,6 +34,26 @@ plan_bootstrap_ci <- function() {
     # this IS a statistical-inference display (does the strategy's Sharpe
     # differ from zero), so it must use the same basis as what it is
     # implicitly being compared against.
+    #
+    # #603/#656: this used to be a 4-way inner_join chain, so any `ym`
+    # missing from ONE of the four constituents silently deleted that month
+    # for ALL FOUR (historically ~128 of ~190 rows -- see #603). Worse: the
+    # block bootstrap below (boot_draws) resamples CONTIGUOUS row-index
+    # blocks to preserve serial dependence, so a join that leaves calendar
+    # gaps let a "3-month block" splice two non-adjacent calendar months
+    # together, defeating the entire point of block resampling.
+    #
+    # Fix mirrors #651 (R/plan_portfolio_opt.R's port_returns, the same
+    # defect on the identical four constituents): an explicit
+    # calendar-complete monthly spine, bounded to the OVERLAP of the two
+    # stock-level series' own date ranges, with everything LEFT-joined onto
+    # it. A missing constituent is now an explicit NA in its own column,
+    # never a deleted row -- and because the spine is one row per calendar
+    # month, row order downstream is always calendar-contiguous, so a block
+    # sampled from it can never straddle a gap. calc_boot_metrics() in
+    # boot_metrics below drops NA pairwise per strategy/rf pair, so one
+    # strategy's gap cannot poison another strategy's draws for the same
+    # block (they use their own, independently-paired columns).
     targets::tar_target(boot_monthly_returns, {
       library(dplyr)
 
@@ -42,11 +62,58 @@ plan_bootstrap_ci <- function() {
       fac_max  <- fm_portfolio       |> select(ym, fac_max = portfolio_ret,  fac_max_rf = rf_ret)
       fac_drif <- drif_portfolio     |> select(ym, fac_drif = portfolio_ret, fac_drif_rf = rf_ret)
 
-      stk_max |>
-        inner_join(stk_drif, by = "ym") |>
-        inner_join(fac_max, by = "ym") |>
-        inner_join(fac_drif, by = "ym") |>
+      # Calendar-complete monthly spine bounded to the stock-level overlap
+      # window -- NOT the literal set of ym values present in stk_max/
+      # stk_drif, which is exactly what would silently re-drop a month if
+      # either ever loses one again (see the #651 comment on port_returns,
+      # R/plan_portfolio_opt.R, for the full rationale on this bound).
+      spine_start <- max(min(stk_max$ym), min(stk_drif$ym))
+      spine_end   <- min(max(stk_max$ym), max(stk_drif$ym))
+      spine <- tibble::tibble(
+        ym = format(
+          seq(as.Date(paste0(spine_start, "-01")),
+              as.Date(paste0(spine_end, "-01")),
+              by = "month"),
+          "%Y-%m"
+        )
+      )
+
+      combined <- spine |>
+        left_join(stk_max, by = "ym") |>
+        left_join(stk_drif, by = "ym") |>
+        left_join(fac_max, by = "ym") |>
+        left_join(fac_drif, by = "ym") |>
         arrange(ym)
+
+      # Fail loud, not null (fail-loud-not-null.md #4): report which months
+      # and strategies are missing rather than letting the gap pass
+      # silently. This is expected to be empty in the current data (#656
+      # measured 193/193 exact) -- it exists as a regression guard, not a
+      # live-defect report.
+      strat_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif")
+      avail <- rowSums(!is.na(as.matrix(combined[, strat_cols])))
+      thin <- combined[avail < length(strat_cols), , drop = FALSE]
+      if (nrow(thin) > 0L) {
+        thin_msgs <- vapply(seq_len(nrow(thin)), function(i) {
+          row <- thin[i, ]
+          missing_strats <- strat_cols[is.na(row[strat_cols])]
+          sprintf("  %s -- missing: %s", row$ym, paste(missing_strats, collapse = ", "))
+        }, character(1L))
+        cli::cli_warn(c(
+          "!" = paste0(
+            length(thin_msgs), " month(s) in boot_monthly_returns have at ",
+            "least one missing constituent strategy (#603/#656):"
+          ),
+          setNames(thin_msgs, rep("i", length(thin_msgs))),
+          "i" = paste0(
+            "calc_boot_metrics() (boot_metrics target below) drops NA ",
+            "pairwise per strategy, so this cannot poison another ",
+            "strategy's bootstrap draws."
+          )
+        ))
+      }
+
+      combined
     }),
 
     # Block bootstrap resampling
@@ -114,8 +181,22 @@ plan_bootstrap_ci <- function() {
       }
 
       # Compute rf-adjusted Sharpe, CAGR, max DD for a return + rf pair
+      #
+      # #603/#656: ret/rf can now contain NA (a missing constituent month,
+      # via the calendar spine built in boot_monthly_returns above). prod()/
+      # sd()/cumprod() on a vector containing any NA all return NA, so drop
+      # pairwise before computing -- this keeps one strategy's gap from
+      # poisoning ITS OWN cagr/vol/max_dd while leaving the other three
+      # strategies' draws for that same block untouched (each uses its own,
+      # independently-paired ret/rf columns).
       calc_boot_metrics <- function(ret, rf) {
+        keep <- !is.na(ret) & !is.na(rf)
+        ret <- ret[keep]
+        rf  <- rf[keep]
         n <- length(ret)
+        if (n < 2L) {
+          return(c(sharpe = NA_real_, cagr = NA_real_, max_dd = NA_real_))
+        }
         cagr <- prod(1 + ret)^(12 / n) - 1
         vol <- sd(ret) * sqrt(12)
         sr <- sharpe_ratio_rf(ret, rf, periods_per_year = 12L)

@@ -12,6 +12,7 @@ testthat::local_edition(3)
 # "Full Period", so "Value (HML)" and "Managed Futures" were silently
 # dropped. This gate catches a recurrence of that defect class.
 
+source(here::here("R/glossary.R"))  # #668: PERIOD_LABELS_ALLOWED derives from this
 source(here::here("R/plan_partitions.R"))
 source(here::here("R/plan_qa_gates.R"))
 

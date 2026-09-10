@@ -322,11 +322,81 @@ arrow::write_parquet(metadata_sample, file.path(out_dir, "metadata_sample.parque
 arrow::write_parquet(factors_sample, file.path(out_dir, "factors_sample.parquet"))
 arrow::write_parquet(macro_sample, file.path(out_dir, "macro_sample.parquet"))
 
+# ---------------------------------------------------------------------------
+# Fundamentals: SEC EDGAR XBRL revision-triangle sample (#553/#554/#555).
+#
+# Appended AFTER every other write_parquet() call above so the RNG stream
+# consumed while generating equity/crypto/metadata/factors/macro is
+# untouched by this block -- regenerating this script must not change
+# those five files' numeric content.
+#
+# Provenance: fabricated by this seeded generator, same discipline as the
+# rest of this script -- NOT derived from any real filing. Ticker symbols
+# reuse two real large-cap labels already used above (AAPL, MSFT); the
+# period_end/first_filed timing follows plausible SEC filing-lag windows
+# (10-K ~60 calendar days, 10-Q ~42 days) so the fixture exercises
+# realistic point-in-time cutoffs for hd_fundamentals(as_of=). Every 5th
+# row is deterministically marked restated=TRUE (i %% 5L == 0L) so both
+# the restated and non-restated paths are covered without depending on
+# random chance.
+# ---------------------------------------------------------------------------
+FUND_TICKERS <- c("AAPL", "MSFT")
+FUND_TAGS <- c("Revenues", "EarningsPerShareDiluted",
+               "StockholdersEquity",
+               "NetCashProvidedByUsedInOperatingActivities")
+FUND_PERIODS <- tibble::tribble(
+  ~fiscal_period, ~period_end,            ~filing_lag_days, ~form,
+  "2023Q4",        as.Date("2023-09-30"),  60L,              "10-K",
+  "2024Q1",        as.Date("2023-12-31"),  42L,              "10-Q",
+  "2024Q2",        as.Date("2024-03-31"),  42L,              "10-Q"
+)
+
+fund_rows <- list()
+fi <- 0L
+for (tk in FUND_TICKERS) {
+  for (tag in FUND_TAGS) {
+    for (p in seq_len(nrow(FUND_PERIODS))) {
+      fi <- fi + 1L
+      period_end  <- FUND_PERIODS$period_end[p]
+      first_filed <- period_end + FUND_PERIODS$filing_lag_days[p]
+      base_val <- switch(tag,
+        Revenues = round(runif(1, 5e10, 1.2e11), 2),
+        EarningsPerShareDiluted = round(runif(1, 1.0, 3.0), 4),
+        StockholdersEquity = round(runif(1, 5e10, 2e11), 2),
+        NetCashProvidedByUsedInOperatingActivities = round(runif(1, 1e10, 4e10), 2)
+      )
+      restated <- (fi %% 5L == 0L)
+      latest_val <- if (restated) round(base_val * (1 + runif(1, 0.01, 0.03)), 4) else base_val
+      fund_rows[[fi]] <- tibble::tibble(
+        ticker         = tk,
+        fiscal_period  = FUND_PERIODS$fiscal_period[p],
+        period_end     = period_end,
+        first_filed    = first_filed,
+        xbrl_tag       = tag,
+        original_value = base_val,
+        latest_value   = latest_val,
+        restated       = restated,
+        source         = paste0("SEC EDGAR XBRL (", FUND_PERIODS$form[p], ", synthetic)")
+      )
+    }
+  }
+}
+fundamentals_sample <- dplyr::bind_rows(fund_rows)
+stopifnot(
+  nrow(fundamentals_sample) == length(FUND_TICKERS) * length(FUND_TAGS) * nrow(FUND_PERIODS),
+  any(fundamentals_sample$restated), any(!fundamentals_sample$restated),
+  all(fundamentals_sample$first_filed > fundamentals_sample$period_end)
+)
+arrow::write_parquet(fundamentals_sample, file.path(out_dir, "fundamentals_sample.parquet"))
+
 cat("\nWrote sample parquets to", out_dir, "\n")
 cat("equity_sample:   ", nrow(equity_sample), "rows,", length(EQUITY_TICKERS), "tickers\n")
 cat("crypto_sample:   ", nrow(crypto_sample), "rows,", length(CRYPTO_TICKERS), "tickers\n")
 cat("metadata_sample: ", nrow(metadata_sample), "rows\n")
 cat("factors_sample:  ", nrow(factors_sample), "rows\n")
 cat("macro_sample:    ", nrow(macro_sample), "rows,", nrow(MACRO_SERIES), "series\n")
+cat("fundamentals_sample: ", nrow(fundamentals_sample), "rows,",
+    length(FUND_TICKERS), "tickers,", length(FUND_TAGS), "tags,",
+    sum(fundamentals_sample$restated), "restated\n")
 cat("EQUITY_DATES:    ", format(min(EQUITY_DATES)), "to", format(max(EQUITY_DATES)), "\n")
 cat("CRYPTO_DATES:    ", format(min(CRYPTO_DATES)), "to", format(max(CRYPTO_DATES)), "\n")

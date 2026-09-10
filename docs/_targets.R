@@ -98,6 +98,10 @@ source(here::here("R/crypto_momentum_helpers.R"))
 # Source canonical backtest annualisation helper (annualise_returns()) — used by plan_kelly_variants + plan_etf_replication
 source(here::here("R/utils_metrics.R"))
 
+# Source shared periodicity reconciliation helper (#719 Layer 3) — used by
+# R/plan_qa_gates.R's qa_strategy_periodicity_reconciliation (S28)
+source(here::here("R/utils_periodicity.R"))
+
 # Source rolling utility helpers (must load before any analysis file that calls roll_mean_safe)
 source(here::here("R/utils_rolling.R"))
 
@@ -139,6 +143,9 @@ source(here::here("R/cov_config.R"))
 
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
+# Entity glossary + alias resolution (#668) — MUST precede plan_partitions.R:
+# PERIOD_LABELS_ALLOWED there is derived from load_glossary() at source time.
+source(here::here("R/glossary.R"))
 # Source plans (partitions FIRST — all backtests depend on it)
 source(here::here("R/plan_partitions.R"))
 source(here::here("R/plan_vignette.R"))
@@ -168,11 +175,19 @@ source(here::here("R/plan_strategy_correlation.R"))
 source(here::here("R/plan_exposure.R"))
 # #624: per-strategy transaction-cost convention registry (measurement only)
 source(here::here("R/plan_cost_convention.R"))
+# #635: live sigma_target (budget-neutral leverage level) + regime stress
+# check, computed from `leaderboard` -- see the file header for the
+# derivation and why this replaces a hand-typed issue-comment constant.
+source(here::here("R/plan_leverage.R"))
 source(here::here("R/plan_avoid_worst.R"))
+source(here::here("R/plan_avoid_worst_v2.R"))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/plan_qa_vignette.R"))
 source(here::here("R/plan_falsification.R"))
 source(here::here("R/plan_falsification_vignette.R"))
+# #588 G2/G3: retrospective drawdown stop-rule test (reuses fals_*_input
+# bridge targets above and regime_classification, R/plan_regime.R)
+source(here::here("R/plan_stop_rule_test.R"))
 source(here::here("R/plan_ltr_momentum.R"))
 source(here::here("R/plan_quiz.R"))
 source(here::here("R/plan_mean_reversion.R"))
@@ -215,7 +230,17 @@ source(here::here("R/plan_turn_of_month.R"))
 source(here::here("R/plan_wf_correlation.R"))
 source(here::here("R/plan_structural_breaks.R"))
 source(here::here("R/plan_artefact_registry.R"))
+# #617: dv_pairwise_alignment_matrix — previously written but never sourced
+# here, so plan_data_validation() was unreachable and the target unwired.
+# Wired now rather than deleted: tests/testthat/test-pairwise-alignment.R
+# already asserts plan_data_validation() returns a list containing this
+# target, and its two probed dimensions (date_class, freq) are a genuine
+# pairwise cross-check distinct from dv_join_key_types' n-way comparison.
+source(here::here("R/plan_data_validation.R"))
 source(here::here("R/plan_qa_gates.R"))
+# #553/#554/#555: fundamentals revision-triangle QA gates (guarded no-op
+# until a fundamentals-consuming strategy exists -- see file header)
+source(here::here("R/plan_qa_fundamentals.R"))
 # Phase B of #389: covariance infrastructure + fixed cross-asset correlation plan
 source(here::here("R/plan_returns.R"))
 source(here::here("R/plan_cross_asset_corr.R"))
@@ -236,7 +261,7 @@ c(plan_strategy_names(),
   plan_interval_coverage(),
   plan_regime(), plan_alpha_decay(),
   plan_kelly_variants(),
-  plan_avoid_worst(),
+  plan_avoid_worst(), plan_avoid_worst_v2(),
   plan_risk_state(),
   plan_mean_reversion(),
   plan_marginal_contribution(),
@@ -256,8 +281,10 @@ c(plan_strategy_names(),
   plan_exposure(),
   plan_cost_convention(),
   plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
+  plan_leverage(),
   plan_falsification(),
   plan_falsification_vignette(),
+  plan_stop_rule_test(),
   plan_ltr_momentum(),
   plan_quiz(),
   plan_kalshi(),
@@ -327,6 +354,7 @@ c(plan_strategy_names(),
   ),
 
   plan_qa_gates(),
+  plan_qa_fundamentals(),
   # Phase B of #389: covariance targets + fixed cross-asset correlation plan
   plan_returns(),
   plan_cross_asset_corr(),
@@ -378,5 +406,37 @@ c(plan_strategy_names(),
     command = quote(check_frequency_alignment(dataset_registry())),
     deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
     cue = targets::tar_cue(mode = "always")
-  )
+  ),
+
+  # #617: two of the nine data-validation-timeseries rule's mandated targets.
+  # The other 7 stay explicitly backlogged (see the rule + issue #617) until
+  # these two prove their keep — building all nine at once was rejected in
+  # the issue in favour of the pair that pays for itself on data we hold.
+  #
+  # dv_temporal_coverage — expected-vs-actual trading-day observations per
+  # daily-freq target (Mon-Fri, no holiday calendar). Aborts < 30% coverage,
+  # warns < 80% (rule #1 thresholds). This is what would have caught the
+  # VIXCLS 302-NA gap named in #617 had it existed at the time.
+  # tar_target_raw + explicit deps, matching the #152 scheduling fix used by
+  # dv_join_key_types/dv_frequency_alignment above. cb_data/cb_regime
+  # excluded pending #145.
+  targets::tar_target_raw(
+    "dv_temporal_coverage",
+    command = quote(check_temporal_coverage(dataset_registry())),
+    deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
+    cue = targets::tar_cue(mode = "always")
+  ),
+
+  # dv_freshness — latest observation vs today, threshold scaled by the
+  # registry's declared freq. Warns (does not abort): a stale upstream fetch
+  # (#613 was exactly this) is a signal to investigate, not a hard pipeline
+  # failure, since a warning alone should not block unrelated targets.
+  targets::tar_target_raw(
+    "dv_freshness",
+    command = quote(check_freshness(dataset_registry())),
+    deps = setdiff(dataset_registry()$target_name, c("cb_data", "cb_regime")),
+    cue = targets::tar_cue(mode = "always")
+  ),
+
+  plan_data_validation()
 )

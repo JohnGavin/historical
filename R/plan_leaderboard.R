@@ -167,6 +167,91 @@ STRATEGY_OBS_ANN_FACTOR <- .build_strategy_obs_ann_factor(
   .strategy_obs_ann_factor_source
 )
 
+# ── #778: turnover-aware cost basis, per strategy code_name ────────────────
+# Feeds the `leaderboard` target's cost_rows-extension block (see the "#778:
+# extend cost_rows" comment inside that target below) -- the flat
+# COST_PER_MONTH constant used by the ORIGINAL 6 cost_rows strategies
+# (Factor MAX/DRIF, Stock MAX/DRIF, XGB DRIF, PSO Optimal) is left unchanged
+# there (#778 scope: extend coverage, not revise those 6's published
+# numbers); every strategy NEWLY added by the extension gets its OWN
+# monthly cost derived here instead.
+#
+# Formula matches the codebase's EXISTING cost-model convention, not a new
+# invention:
+#   - R/plan_stock_backtest.R's portfolio_longshort()/portfolio_longshort_hrp()
+#     (trade_cost <- turnover * cost_per_trade * 2 * 2; both legs, buy+sell
+#     each; borrow_cost <- borrow_rate_annual / 12)
+#   - .claude/rules/backtesting-assumptions.md "Cost Model Detail" (same
+#     turnover x cost_per_trade x 2 (buy+sell) x 2 (both legs) formula, same
+#     0.50%/trade and 3%/yr borrow-rate defaults)
+#
+#   monthly_txn_cost    = (turnover_pct_per_period_avg / 100) * COST_PER_TRADE * leg_multiplier
+#   leg_multiplier      = 4 for directionality == "long_short" (both legs)
+#                        = 2 otherwise (long_only / overlay -- single leg, buy+sell)
+#   monthly_borrow_cost = BORROW_RATE_ANNUAL / 12, ONLY for directionality == "long_short"
+#   monthly_cost        = monthly_txn_cost + monthly_borrow_cost
+#
+# turnover_pct_per_period_avg and directionality both come from
+# R/plan_strategy_names.R's hd_strategy_names_tbl() (the single source of
+# truth per strategy-name-consistency.md) -- so a future change to a
+# strategy's declared turnover automatically updates its leaderboard cost
+# basis without touching this file again.
+.STRATEGY_COST_PER_TRADE     <- 0.005  # 0.50%/trade (backtesting-assumptions.md)
+.STRATEGY_BORROW_RATE_ANNUAL <- 0.03   # 3%/yr (backtesting-assumptions.md)
+
+.strategy_turnover_cost_basis <- function(strategy_names_tbl) {
+  strategy_names_tbl |>
+    dplyr::transmute(
+      code_name = code_name,
+      short_name = short_name,
+      leg_multiplier = ifelse(directionality == "long_short", 4, 2),
+      monthly_cost = (turnover_pct_per_period_avg / 100) *
+        .STRATEGY_COST_PER_TRADE * leg_multiplier +
+        ifelse(directionality == "long_short",
+               .STRATEGY_BORROW_RATE_ANNUAL / 12, 0)
+    )
+}
+
+STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(hd_strategy_names_tbl())
+
+# ── Prop-constrained view scenarios (#586 second comment, "Proposed shape") ──
+# The per-row "Breach Risk (+/-20% DD)" column above (fp_breach_prob_20pct)
+# is a single fixed-barrier diagnostic that INFORMS the primary leaderboard
+# without re-ranking it. `leaderboard_prop_constrained` below builds the
+# separately agreed second half of the two-portfolio design: a re-ranked
+# VIEW of the same Full Period targets, parameterised by (floor, target)
+# pairs -- "would this strategy survive a drawdown mandate", answered
+# separately from "is the edge real" (the unconstrained leaderboard).
+#
+# These three rows are NOT any specific prop-trading firm's rules (#586:
+# "We are not going to trade prop-firm challenges") -- floor/target are the
+# caller-supplied INPUTS the source article's maths generalises to any
+# capital with a redemption trigger, a risk-committee drawdown limit, or a
+# review period. `target` is held FIXED at 10% across all three rows and
+# only `floor` (the drawdown mandate) tightens -- this is deliberate, not an
+# oversight: for the two-barrier gambler's-ruin formula, decreasing the
+# distance to ONE barrier while holding the other fixed monotonically
+# decreases the probability of hitting the FIXED barrier first, for any
+# drift/vol (Karlin & Taylor, see packages/historicaldata/R/first_passage.R).
+# A design that scaled floor and target together (e.g. symmetric 10/10,
+# 15/15, 20/20) would NOT have this monotone property -- wider symmetric
+# barriers give MORE room for genuine drift to dominate noise, which moves
+# pass_prob further from 50% in the direction of the strategy's own edge
+# sign, not predictably up or down -- so it would not read as "tightening a
+# mandate" the way this ordering does.
+#
+# `daily_limit` and finite `horizon` are deliberately NOT parameterised
+# here -- see `leaderboard_prop_constrained`'s own comment for why
+# (`hd_first_passage()` does not implement either; both remain documented,
+# deferred follow-up work, same as that function's own scope note).
+PROP_CONSTRAINED_SCENARIOS <- tibble::tibble(
+  label  = c("Strict (5% floor / 10% target)",
+             "Standard (10% floor / 10% target)",
+             "Lenient (20% floor / 10% target)"),
+  floor  = c(0.05, 0.10, 0.20),
+  target = c(0.10, 0.10, 0.10)
+)
+
 plan_leaderboard <- function() {
   list(
     # Explicit deps — targets must be named as function args
@@ -454,17 +539,28 @@ plan_leaderboard <- function() {
 
       # ── Cost metrics (net_cagr, cum_pnl, cvar_95) ─────────────────
       # Compute per strategy per period from raw portfolio returns.
-      # cost: 0.20% round-trip per month (full turnover assumed).
+      # cost: 0.20% round-trip per month (full turnover assumed) -- the
+      # HISTORICAL default for the original 6 strategies below
+      # (slice_portfolio() calls + PSO Optimal). Left UNCHANGED here
+      # (#778 scope: extend coverage, not revise these 6's published
+      # numbers) even though it is flat, not turnover-aware -- see the
+      # "#778 turnover-aware cost basis" block below, which supplies a
+      # per-strategy rate for every NEWLY added strategy instead of reusing
+      # this constant.
       COST_PER_MONTH <- 0.002
 
-      calc_cost_metrics <- function(ret) {
+      calc_cost_metrics <- function(ret, cost_per_month = COST_PER_MONTH) {
         # ret: numeric vector of monthly returns
+        # cost_per_month: fraction deducted from EVERY period's return before
+        #   compounding (e.g. 0.002 == 0.20%/month). Defaults to the flat
+        #   historical rate above; #778's extension block passes a
+        #   turnover-aware rate instead (see .strategy_cost_basis() below).
         ret <- ret[!is.na(ret)]
         n <- length(ret)
         if (n == 0L) {
           return(tibble(net_cagr = NA_real_, cum_pnl = NA_real_, cvar_95 = NA_real_))
         }
-        net_ret <- ret * (1 - COST_PER_MONTH)
+        net_ret <- ret * (1 - cost_per_month)
         net_cagr <- prod(1 + net_ret)^(12 / n) - 1
         cum_pnl_net <- prod(1 + net_ret) - 1  # net of costs, not gross
         q05      <- quantile(ret, 0.05)
@@ -543,6 +639,81 @@ plan_leaderboard <- function() {
           stk_params
         ) |> mutate(strategy = "PSO Optimal")
         cost_rows <- bind_rows(cost_rows, pso_cost)
+      }
+
+      # ── #778: extend cost_rows to the 11 strategies with zero coverage ──
+      # cost_rows above only ever covered 6 strategies (Factor MAX/DRIF,
+      # Stock MAX/DRIF, XGB DRIF, PSO Optimal) via slice_portfolio(), which
+      # needs each strategy's own portfolio object + partition params. The
+      # 11 strategies below have no such wiring, but their FULL-PERIOD
+      # return series already exist: strat_returns_wide
+      # (R/plan_strategy_correlation.R) aligns every monthly-frequency
+      # strategy, PLUS the five daily-frequency strategies MONTHLY-RESAMPLED
+      # (compounded within each calendar month, see .resample_daily_to_
+      # monthly() there), onto one common `ym` spine.
+      #
+      # Only "Full Period" rows are added -- #778's own "Verified state"
+      # counts are themselves Full-Period-only (see the issue), and
+      # Training/Testing/Holdout cost cells would need each strategy's own
+      # partition-slicing params (is_end/test_start/.../holdout_end), which
+      # is a wider wiring task out of this issue's scope. Those sub-period
+      # cost cells stay NA -- same treatment every OTHER Full-Period-only
+      # leaderboard column already gets (correlation_max, incremental_sharpe,
+      # wf_corr, add_corr, deflated_sharpe, ...) above/below.
+      #
+      # cost_per_month for each strategy comes from STRATEGY_COST_BASIS
+      # (module level, top of file) -- turnover-aware (per-strategy
+      # turnover_pct_per_period_avg x directionality), NOT the flat
+      # COST_PER_MONTH the original 6 strategies use. See #778 scope item 1
+      # ("a cost basis per strategy family, turnover-aware, not a single
+      # blanket rate") and STRATEGY_COST_BASIS's own comment for the formula
+      # and its precedent (R/plan_stock_backtest.R's
+      # portfolio_longshort()/portfolio_longshort_hrp() cost formula;
+      # .claude/rules/backtesting-assumptions.md "Cost Model Detail").
+      #
+      # NOTE: several of these strategies already deduct their OWN internal
+      # transaction cost before this leaderboard-level pass runs (e.g. CMR:
+      # R/plan_commodities_mean_reversion.R:740; OLMAR-1: R/plan_olmar.R
+      # cost_bps=10/day). This layers an ADDITIONAL round-trip cost on top,
+      # the SAME "leaderboard applies its own cost pass atop the strategy's
+      # own model" pattern the original 6 already use (Factor MAX/DRIF:
+      # R/plan_factormax.R:141-142 / R/plan_drif.R:242-243 compute
+      # `port_ret <- gross_ret - cost` BEFORE calc_cost_metrics() deducts
+      # COST_PER_MONTH again) -- not a new defect introduced here. Whether
+      # that double layering is itself the right model is a question that
+      # applies equally to the original 6 and is out of #778's scope.
+      .cost_ext_map <- list(
+        list(code = "ltr",          wide_col = "ltr",             label = "LTR"),
+        list(code = "mom_prepeak",  wide_col = "mom_prepeak",     label = "Mom Pre-Peak"),
+        list(code = "mom_postpeak", wide_col = "mom_postpeak",    label = "Mom Post-Peak"),
+        list(code = "mom_combined", wide_col = "mom_combined",    label = "Mom 12-2"),
+        list(code = "ev_ebit",      wide_col = "value_hml",       label = "Value (HML)"),
+        list(code = "mf_tsm",       wide_col = "managed_futures", label = "Managed Futures"),
+        list(code = "cmr",          wide_col = "cmr",             label = "CMR"),
+        list(code = "olmar",        wide_col = "olmar_1",         label = "OLMAR-1"),
+        list(code = "tom",          wide_col = "tom",             label = "TOM"),
+        list(code = "rsc",          wide_col = "risk_state",      label = "Risk State"),
+        list(code = "avoid_worst",  wide_col = "avoid_worst",     label = "Avoid Worst")
+      )
+
+      if (!is.null(strat_returns_wide) && nrow(strat_returns_wide) > 0) {
+        cost_ext_rows <- bind_rows(lapply(.cost_ext_map, function(m) {
+          if (!m$wide_col %in% names(strat_returns_wide)) return(NULL)
+          basis_row <- STRATEGY_COST_BASIS[STRATEGY_COST_BASIS$code_name == m$code, ]
+          if (nrow(basis_row) != 1L) {
+            cli::cli_abort(c(
+              "x" = "No turnover-aware cost basis found for strategy code {.val {m$code}}.",
+              "i" = paste0(
+                "check R/plan_strategy_names.R hd_strategy_names_tbl() and ",
+                "STRATEGY_COST_BASIS (R/plan_leaderboard.R) for a mismatch."
+              )
+            ))
+          }
+          r <- strat_returns_wide[[m$wide_col]]
+          calc_cost_metrics(r, cost_per_month = basis_row$monthly_cost) |>
+            mutate(period = "Full Period", strategy = m$label)
+        }))
+        cost_rows <- bind_rows(cost_rows, cost_ext_rows)
       }
 
       # Join cost metrics onto all_metrics
@@ -633,12 +804,26 @@ plan_leaderboard <- function() {
         # Each return vector must be numeric, already NA-stripped by the helpers.
         ssr_map <- list()
 
-        safe_ssr <- function(r) {
+        # #779: label identifies which strategy failed so a real
+        # computational error is never indistinguishable from either
+        # "not enough data" (< 38 obs) or a legitimate zero-variance NA
+        # returned by hd_sharpe_stability_ratio() itself (see its own
+        # documented contract: constant/near-constant return series yield
+        # NA because every rolling window has zero variance). Per
+        # fail-loud-not-null, an unexpected error must never be silently
+        # coerced into the same NA as those two legitimate cases.
+        safe_ssr <- function(r, label) {
           r <- r[!is.na(r)]
           if (length(r) < 38L) return(NA_real_)
           tryCatch(
             historicaldata::hd_sharpe_stability_ratio(r, w = 36L, ann_factor = 12L)$ssr,
-            error = function(e) NA_real_
+            error = function(e) {
+              cli::cli_warn(c(
+                "!" = "SSR computation errored for {.val {label}} -- returning NA.",
+                "i" = "Underlying error: {conditionMessage(e)}"
+              ))
+              NA_real_
+            }
           )
         }
 
@@ -654,45 +839,81 @@ plan_leaderboard <- function() {
         # Factor MAX and Factor DRIF: monthly portfolio_ret
         if (!is.null(fm_portfolio) && "portfolio_ret" %in% names(fm_portfolio)) {
           r <- fm_portfolio$portfolio_ret
-          ssr_map[["Factor MAX"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Factor MAX"]] <- list(ssr = safe_ssr(r, "Factor MAX"), top5 = safe_top5(r))
         }
         if (!is.null(drif_portfolio) && "portfolio_ret" %in% names(drif_portfolio)) {
           r <- drif_portfolio$portfolio_ret
-          ssr_map[["Factor DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Factor DRIF"]] <- list(ssr = safe_ssr(r, "Factor DRIF"), top5 = safe_top5(r))
         }
 
         # Stock MAX, Stock DRIF, XGB DRIF: monthly port_ret
         if (!is.null(stk_max_portfolio) && "port_ret" %in% names(stk_max_portfolio)) {
           r <- stk_max_portfolio$port_ret
-          ssr_map[["Stock MAX"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Stock MAX"]] <- list(ssr = safe_ssr(r, "Stock MAX"), top5 = safe_top5(r))
         }
         if (!is.null(stk_drif_portfolio) && "port_ret" %in% names(stk_drif_portfolio)) {
           r <- stk_drif_portfolio$port_ret
-          ssr_map[["Stock DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Stock DRIF"]] <- list(ssr = safe_ssr(r, "Stock DRIF"), top5 = safe_top5(r))
         }
         if (!is.null(xgb_drif_portfolio) && "port_ret" %in% names(xgb_drif_portfolio)) {
           r <- xgb_drif_portfolio$port_ret
-          ssr_map[["XGB DRIF"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["XGB DRIF"]] <- list(ssr = safe_ssr(r, "XGB DRIF"), top5 = safe_top5(r))
         }
 
         # Mom Pre-Peak, Post-Peak, Combined: monthly ret_ls
         if (!is.null(mom_prepeak_returns) && "ret_ls" %in% names(mom_prepeak_returns)) {
           r <- mom_prepeak_returns$ret_ls
-          ssr_map[["Mom Pre-Peak"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Mom Pre-Peak"]] <- list(ssr = safe_ssr(r, "Mom Pre-Peak"), top5 = safe_top5(r))
         }
         if (!is.null(mom_postpeak_returns) && "ret_ls" %in% names(mom_postpeak_returns)) {
           r <- mom_postpeak_returns$ret_ls
-          ssr_map[["Mom Post-Peak"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Mom Post-Peak"]] <- list(ssr = safe_ssr(r, "Mom Post-Peak"), top5 = safe_top5(r))
         }
         if (!is.null(mom_combined_returns) && "ret_ls" %in% names(mom_combined_returns)) {
           r <- mom_combined_returns$ret_ls
-          ssr_map[["Mom 12-2"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["Mom 12-2"]] <- list(ssr = safe_ssr(r, "Mom 12-2"), top5 = safe_top5(r))
         }
 
         # LTR: monthly port_ret
         if (!is.null(ltr_portfolio) && "port_ret" %in% names(ltr_portfolio)) {
           r <- ltr_portfolio$port_ret
-          ssr_map[["LTR"]] <- list(ssr = safe_ssr(r), top5 = safe_top5(r))
+          ssr_map[["LTR"]] <- list(ssr = safe_ssr(r, "LTR"), top5 = safe_top5(r))
+        }
+
+        # ── #778: extend SSR/top5pct coverage to the remaining strategies ──
+        # 7 of the 8 previously-uncovered strategies already have a full-period
+        # return series aligned in strat_returns_wide (the SAME target used by
+        # the cost_rows extension below and by strat_deflated_sharpe further
+        # down this file) -- reuse it rather than hunting each strategy's own
+        # portfolio object. PSO Optimal (the 8th) is handled separately below
+        # because it is a linear combination computed inline in THIS target
+        # (opt_returns_df, in the "PSO Optimal" cost_rows block above), not a
+        # standalone pipeline target.
+        if (!is.null(strat_returns_wide) && nrow(strat_returns_wide) > 0) {
+          .ssr_ext_map <- list(
+            olmar_1     = "OLMAR-1",
+            tom         = "TOM",
+            cmr         = "CMR",
+            risk_state  = "Risk State",
+            avoid_worst = "Avoid Worst",
+            value_hml   = "Value (HML)",
+            managed_futures = "Managed Futures"
+          )
+          for (col in names(.ssr_ext_map)) {
+            if (col %in% names(strat_returns_wide)) {
+              label <- .ssr_ext_map[[col]]
+              r <- strat_returns_wide[[col]]
+              ssr_map[[label]] <- list(ssr = safe_ssr(r, label), top5 = safe_top5(r))
+            }
+          }
+        }
+
+        # PSO Optimal: opt_returns_df is built earlier in this target (the
+        # "PSO Optimal" cost_rows block above) ONLY when port_metrics and
+        # port_optimal_weights are both available -- guard the same way.
+        if (exists("opt_returns_df") && "opt_ret" %in% names(opt_returns_df)) {
+          r <- opt_returns_df$opt_ret
+          ssr_map[["PSO Optimal"]] <- list(ssr = safe_ssr(r, "PSO Optimal"), top5 = safe_top5(r))
         }
 
         # Build lookup tibble for joining
@@ -922,10 +1143,148 @@ plan_leaderboard <- function() {
       )
 
       all_metrics <- all_metrics |>
-        dplyr::bind_cols(detection_diag) |>
+        dplyr::bind_cols(detection_diag)
+
+      # ── First-passage breach-probability diagnostic (#586 G1) ─────────────
+      # "What is the probability this strategy's cumulative return path
+      # hits a -20% drawdown floor before a +20% profit target?" -- computed
+      # PER ROW from a drifted-Brownian-motion approximation
+      # (historicaldata::hd_first_passage()), using per-period mu/sigma
+      # implied by this row's own cagr/vol/obs_ann_factor (the SAME
+      # STRATEGY_OBS_ANN_FACTOR periodicity the detection-power diagnostic
+      # above uses).
+      #
+      # SECONDARY, DE-EMPHASISED column per #586's "Proposed shape" comment:
+      # this INFORMS the leaderboard, it does NOT rank -- primary ordering
+      # is unchanged by this column. A strategy with a high breach
+      # probability is flagged, never removed, from the primary board (see
+      # docs/leaderboard.qmd for the display treatment).
+      #
+      # The +/-20% symmetric barrier is a DOCUMENTED CONVENTION (matching
+      # the source article's own reported Sharpe-vs-pass-rate range, which
+      # spans roughly 10-20% floors), not a per-strategy parameter. The
+      # fuller, separately-scoped "prop-constrained view" -- floor,
+      # daily_limit, horizon, and target as caller-supplied INPUTS,
+      # re-ranking the same targets by survivability -- is #586's larger
+      # deliverable and is deliberately NOT built here; see that issue's
+      # second comment ("Proposed shape") for the full spec, and
+      # hd_first_passage()'s own "Assumptions and limits" roxygen section
+      # for what else is deferred (finite-horizon conditioning, a
+      # fat-tail-aware simulation fallback for empirical return paths).
+      #
+      # mu_period is the geometric per-period drift implied by this row's
+      # ANNUALISED cagr: (1+cagr)^(1/ann_factor) - 1 -- not cagr/ann_factor,
+      # which understates compounding. sigma_period = vol / sqrt(ann_factor),
+      # inverting the sqrt(ann_factor) annualisation convention used
+      # throughout this file (see the STRATEGY_OBS_ANN_FACTOR comment
+      # above). NA wherever cagr/vol/obs_ann_factor are unavailable, or
+      # where hd_first_passage() itself fails inside the tryCatch below.
+      FIRST_PASSAGE_BARRIER <- 0.20
+
+      .fp_breach_row <- function(cagr, vol, af) {
+        if (is.na(cagr) || is.na(vol) || is.na(af) || af <= 0 || vol <= 0) {
+          return(tibble::tibble(fp_breach_prob_20pct = NA_real_))
+        }
+        mu_period    <- (1 + cagr)^(1 / af) - 1
+        sigma_period <- vol / sqrt(af)
+        fp <- tryCatch(
+          historicaldata::hd_first_passage(
+            mu = mu_period, sigma = sigma_period,
+            upper = FIRST_PASSAGE_BARRIER, lower = FIRST_PASSAGE_BARRIER
+          ),
+          error = function(e) NULL
+        )
+        if (is.null(fp) || is.na(fp$pass_prob)) {
+          tibble::tibble(fp_breach_prob_20pct = NA_real_)
+        } else {
+          # hd_first_passage()'s pass_prob is P(hit UPPER first). Its exact
+          # complement, P(hit LOWER first) -- the breach probability this
+          # column reports -- holds because the barriers are symmetric.
+          tibble::tibble(fp_breach_prob_20pct = 1 - fp$pass_prob)
+        }
+      }
+
+      fp_diag <- purrr::pmap_dfr(
+        list(all_metrics$cagr, all_metrics$vol, all_metrics$obs_ann_factor),
+        .fp_breach_row
+      )
+
+      all_metrics <- all_metrics |>
+        dplyr::bind_cols(fp_diag) |>
         dplyr::select(-obs_ann_factor, -obs_ann_factor_source)
 
       all_metrics
+    }),
+
+    # ── Prop-constrained re-ranking view (#586 second comment) ────────────
+    # Long-format: one row per (strategy x PROP_CONSTRAINED_SCENARIOS row),
+    # for the Full Period rows of `leaderboard` only -- this is a VIEW of
+    # the same targets, not a new set of strategies (dashboard-output-first,
+    # subtractive-first). A strategy failing every scenario here is
+    # FLAGGED on the "Prop-Constrained View" tab only; it is never removed
+    # from the primary leaderboard (#586's "Proposed shape": "flagged,
+    # never removed").
+    #
+    # PARAMETERISATION -- what is and is not implemented:
+    #   floor / target (hd_first_passage()'s lower/upper barriers) ARE the
+    #     caller-supplied inputs swept below, via PROP_CONSTRAINED_SCENARIOS
+    #     (module-level constant above plan_leaderboard()). Any (floor,
+    #     target) pair can be added as a new scenario row without touching
+    #     this target's logic.
+    #   daily_limit and horizon are NOT implemented. hd_first_passage()
+    #     itself documents both as deferred (see the file-level scope note
+    #     at the top of packages/historicaldata/R/first_passage.R: "finite-
+    #     horizon conditioning... requires the inverse-Gaussian first-
+    #     passage-TIME distribution... neither of which is implemented
+    #     here"). Every pass_prob/breach_prob below is therefore
+    #     INFINITE-HORIZON (no evaluation window) and has NO per-day loss
+    #     cap -- an honest CEILING on survivability under a real time-boxed
+    #     mandate, not a point estimate of it (docs/leaderboard.qmd's tab
+    #     prose carries the matching caveat). Closing this gap is
+    #     separately scoped, deferred follow-up; it is not attempted here.
+    #
+    # mu_period/sigma_period use the IDENTICAL derivation as the per-row
+    # fp_breach_prob_20pct diagnostic above -- (1+cagr)^(1/af)-1 and
+    # vol/sqrt(af) -- so the two views can never silently disagree on the
+    # underlying drift/vol estimate, only on the barrier distances.
+    targets::tar_target(leaderboard_prop_constrained, {
+      library(dplyr)
+
+      full <- leaderboard |>
+        filter(period == "Full Period") |>
+        left_join(STRATEGY_OBS_ANN_FACTOR, by = "strategy")
+
+      .pc_pass_prob <- function(cagr, vol, af, floor, target) {
+        if (is.na(cagr) || is.na(vol) || is.na(af) || af <= 0 || vol <= 0) {
+          return(NA_real_)
+        }
+        mu_period    <- (1 + cagr)^(1 / af) - 1
+        sigma_period <- vol / sqrt(af)
+        fp <- tryCatch(
+          historicaldata::hd_first_passage(
+            mu = mu_period, sigma = sigma_period, upper = target, lower = floor
+          ),
+          error = function(e) NULL
+        )
+        if (is.null(fp) || is.na(fp$pass_prob)) NA_real_ else fp$pass_prob
+      }
+
+      purrr::map_dfr(seq_len(nrow(PROP_CONSTRAINED_SCENARIOS)), function(i) {
+        scen <- PROP_CONSTRAINED_SCENARIOS[i, ]
+        full |>
+          transmute(
+            strategy,
+            sharpe, cagr, vol, max_dd,
+            scenario  = scen$label,
+            floor     = scen$floor,
+            target    = scen$target,
+            pass_prob = purrr::pmap_dbl(
+              list(cagr, vol, obs_ann_factor),
+              function(c, v, a) .pc_pass_prob(c, v, a, scen$floor, scen$target)
+            ),
+            breach_prob = ifelse(is.na(pass_prob), NA_real_, 1 - pass_prob)
+          )
+      })
     }),
 
     # ── Correlation matrix of monthly returns across strategies ───────
@@ -1048,16 +1407,41 @@ plan_leaderboard <- function() {
       .dsr_row <- function(strategy_label, r, ann_factor, is_family = FALSE) {
         r <- r[!is.na(r)]
         d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
+
+        # ── Harvey-Liu Sharpe haircut (#490 Gap 1) ─────────────────────────
+        # n_tests = k_eff_lb (the SAME correlation-aware K_eff used for DSR
+        # above) and rho = 0 -- the correlation adjustment is already folded
+        # into k_eff_lb by hd_strat_keff_vertox(), so applying it a second
+        # time via rho here would double-count it; see
+        # hd_sharpe_haircut()'s "Relationship to deflated Sharpe and K_eff"
+        # roxygen section. method = "bhy" (Benjamini-Hochberg-Yekutieli) is
+        # the headline figure surfaced on the leaderboard alongside the
+        # existing deflated Sharpe -- the underlying function also supports
+        # "bonferroni"/"holm" for callers wanting the more conservative
+        # variants. Guarded (not called) when there is no naive_sharpe or
+        # too few observations to form a t-statistic -- those are legitimate
+        # "not enough data" states, not caller errors (fail-loud-not-null).
+        hc <- if (!is.na(d$naive_sharpe) && length(r) >= 2L) {
+          historicaldata::hd_sharpe_haircut(
+            sharpe = d$naive_sharpe, n_tests = k_eff_lb, rho = 0,
+            T_obs = length(r), ann_factor = ann_factor, method = "bhy"
+          )
+        } else {
+          list(haircut_sharpe = NA_real_, haircut_pct = NA_real_)
+        }
+
         tibble::tibble(
-          strategy          = strategy_label,
-          naive_sharpe      = d$naive_sharpe,
-          deflated_sharpe   = d$dsr,
-          dsr_pvalue        = d$dsr_pvalue,
-          dsr_haircut_pct   = d$haircut_pct,
-          k_eff_leaderboard = strat_keff_vertox_leaderboard,
-          k_raw_leaderboard = k_raw_lb,
-          k_eff_family      = if (is_family) k_eff_fam else NA_real_,
-          k_raw_family      = if (is_family) k_raw_fam else NA_integer_
+          strategy           = strategy_label,
+          naive_sharpe       = d$naive_sharpe,
+          deflated_sharpe    = d$dsr,
+          dsr_pvalue         = d$dsr_pvalue,
+          dsr_haircut_pct    = d$haircut_pct,
+          sharpe_haircut     = hc$haircut_sharpe,
+          sharpe_haircut_pct = hc$haircut_pct,
+          k_eff_leaderboard  = strat_keff_vertox_leaderboard,
+          k_raw_leaderboard  = k_raw_lb,
+          k_eff_family       = if (is_family) k_eff_fam else NA_real_,
+          k_raw_family       = if (is_family) k_raw_fam else NA_integer_
         )
       }
 

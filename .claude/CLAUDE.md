@@ -6,6 +6,8 @@
 
 **Automation (issue #438):** A project-local Stop hook (`.claude/hooks/pkgctx_regen_on_stop.sh`) runs automatically at session end. If `packages/historicaldata/R/` was touched during the session it invokes `scripts/regen_api_context.sh`; otherwise it exits silently. The hook is fail-open — a regen failure prints a warning but never blocks the session. A CI check (`.github/workflows/pkgctx-check.yml`) catches any stale doc on PRs that touch `packages/historicaldata/R/` or `docs/api-historicaldata.md`.
 
+**`macro_daily`/`equity_daily` are archived, not stale-pending-refresh (#619, #655, #673):** both HuggingFace-backed datasets read by `hd_macro()`/`hd_ohlcv()` were seeded once (2026-05-06) by duplicating `dsfefvx/finance-historical-data`, which was itself already inactive by then and has had no commits since 2026-04-23. No replacement source is currently being sourced — this is a decision, not an open outage. See [`docs/DATA_SOURCING_LESSONS.md`](../docs/DATA_SOURCING_LESSONS.md) for the full retrospective (what happened, what was tried, lessons for next time) before touching any code that reasons about these datasets' staleness or the Validation-seal boundary (`R/plan_partitions.R`, `R/plan_risk_state.R`).
+
 ## Verifying a change (issue #569)
 
 **Run `scripts/verify.sh` — it is the one command to run before claiming a change is verified.** `scripts/verify.sh --quick` does a fast parse-only check; plain `scripts/verify.sh` runs the full suite. Do not hand-roll a verification sequence — every fact below was learned the slow way by agents that got it wrong.

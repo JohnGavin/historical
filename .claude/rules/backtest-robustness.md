@@ -80,6 +80,12 @@ tar_target(qa_regime_robustness, {
 })
 ```
 
+**Diagnostic-stratum leakage (#600):** the `regime` column above must be computed from data strictly prior to the
+window it stratifies -- never from `rolling_vol` drawn from the same window as the P&L
+being evaluated, as the illustrative snippet above does. See
+`look-ahead-bias-prevention`'s Diagnostic-stratum leakage section for the wrong/right
+worked example and the required as-of-open construction.
+
 ### 3. Multi-Frequency Evaluation (where applicable)
 
 For strategies that could be evaluated at different frequencies, test
@@ -110,6 +116,21 @@ reserved — always use a method-suffixed name. The deflated Sharpe ratio
 (`hd_deflated_sharpe(r, K_trials = round(K_eff_strat))`) takes `K_eff_strat`,
 NOT the raw strategy count `M`: on a correlated portfolio the raw count
 over-penalises (the strategies are not independent tests).
+
+**The DSR hurdle depends on N AND V, not just N (#558).** `hd_deflated_sharpe()`
+also accepts `trial_sharpe_var` (V) — the variance of the Sharpe ratios across
+the `K_trials` trial population, per Bailey, Borwein, Lopez de Prado & Zhu
+(2014): \eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]}. `V` defaults to `1`
+(unit-variance trial pool), matching every call before #558 — but a trial pool
+containing low-trade, erratic "junk" strategies has a wider Sharpe dispersion
+and therefore a genuinely higher honest hurdle at the SAME `K_trials`; passing
+`V = 1` for such a pool understates the hurdle (the "junk-variance trap").
+When the population of trial Sharpes is available, pass
+`trial_sharpe_var = var(trial_sharpes, na.rm = TRUE)` rather than leaving the
+default. Screen the trial population for low-trade strategies (a `min_trades`
+gate) BEFORE computing `V` from it — junk strategies inflate V by definition,
+so they must be excluded from the population the hurdle is calibrated against,
+not merely from the survivor list reported afterward.
 
 Report these in a dedicated table in every backtest output, not just the
 equity curve and raw Sharpe. References: [Backtests Lie](https://www.vertoxquant.com/p/backtests-lie),

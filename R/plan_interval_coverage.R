@@ -35,12 +35,22 @@
 # Nothing computed inside or after the outcome window may be used to form the
 # interval or to define a stratum. See the look-ahead-bias-prevention rule.
 #
-# ── Known upstream defect (#603) ───────────────────────────────────────────
+# ── Structural contiguity guarantee (#603/#656) ─────────────────────────────
 #
-# boot_monthly_returns is NOT calendar-contiguous: an inner_join across four
-# strategies drops any month where one is missing (128 rows spanning ~190
-# calendar months). Block resampling over that row order splices non-adjacent
-# months. This plan reports the gap count rather than silently inheriting it.
+# boot_monthly_returns previously chained four inner_join()s across its
+# constituent strategies, so any month missing from ONE dropped that month
+# for ALL FOUR (128 rows spanning ~190 calendar months) -- and because block
+# resampling draws contiguous row-index blocks, that gap-riddled row order
+# let a block splice non-adjacent calendar months together, defeating the
+# purpose of block resampling. R/plan_bootstrap_ci.R now builds
+# boot_monthly_returns from an explicit calendar-complete monthly spine
+# (bounded to the stock-level overlap window) and LEFT-joins every
+# constituent onto it, so a missing constituent surfaces as an explicit NA
+# in its own column rather than a deleted row -- row order is therefore
+# always calendar-contiguous. ic_contiguity below (and S25,
+# R/plan_qa_gates.R) is now a permanent regression guard rather than a
+# live-defect report: if it ever fires again, the spine construction was
+# reverted or bypassed.
 
 plan_interval_coverage <- function() {
   list(
@@ -58,9 +68,14 @@ plan_interval_coverage <- function() {
       )
     }),
 
-    # ── Contiguity report (#603) ───────────────────────────────────────────
-    # Surfaces the gap defect in pipeline output instead of letting the
-    # coverage number silently absorb it.
+    # ── Contiguity regression guard (#603/#656) ─────────────────────────────
+    # boot_monthly_returns is now built from a calendar-complete spine
+    # (R/plan_bootstrap_ci.R) so this is expected to report zero missing
+    # months. Kept as a live check -- and the warning below kept as a warning,
+    # not an abort, matching S25's (R/plan_qa_gates.R) deliberate choice to
+    # abort on this exact condition instead -- so if this target's own
+    # dplyr::arrange/date handling ever diverges from the spine's guarantee,
+    # it is still visible here rather than only in the QA gate.
     targets::tar_target(ic_contiguity, {
       d <- as.Date(paste0(boot_monthly_returns$ym, "-01"))
       d <- sort(d)
@@ -79,8 +94,8 @@ plan_interval_coverage <- function() {
       if (out$missing_months > 0L) {
         cli::cli_warn(c(
           "!" = "boot_monthly_returns is not calendar-contiguous: {out$n_rows} rows over {out$calendar_months} months ({out$pct_missing}% missing).",
-          "i" = "Block resampling splices non-adjacent months. See issue #603.",
-          "i" = "Coverage numbers below inherit this defect."
+          "i" = "This should be structurally impossible given the calendar spine in R/plan_bootstrap_ci.R -- see #603/#656 and S25 (R/plan_qa_gates.R).",
+          "i" = "Block resampling splices non-adjacent months when this happens. Coverage numbers below would inherit that defect."
         ))
       }
       out

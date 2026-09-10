@@ -136,6 +136,13 @@ hd_check_survivorship_bias <- function(dataset) {
 #' = FALSE` cannot be honoured because lazy frames from distinct parquet
 #' sources cannot be bound.
 #' @return Lazy duckplyr frame (collect=FALSE) or tibble (collect=TRUE)
+#' @section Date type guarantee (#615):
+#'   The `date` column is always returned as `Date`, regardless of the
+#'   underlying parquet's storage type (some sources are TIMESTAMP/POSIXct).
+#'   This holds for both `collect = TRUE` and `collect = FALSE`. Every other
+#'   exported daily-frequency accessor ([hd_macro()], [hd_factors()]) makes
+#'   the same guarantee, so joining their outputs on `date` never silently
+#'   produces zero matching rows from a type mismatch.
 #' @section Point-in-time guard:
 #'   Passing `to > Sys.Date()` raises a classed error (`"hd_future_date"`).
 #'   Future-dated requests imply look-ahead knowledge and are forbidden to
@@ -251,8 +258,8 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
   # convert the bound values accordingly:
   #   TIMESTAMP_NS → as.POSIXct(tz="UTC")  (matches via TIMESTAMP candidate)
   #   DATE         → as.Date()              (matches via DATE candidate)
+  date_is_timestamp <- inherits(schema0[["date"]], "POSIXct")
   if (!is.null(from) || !is.null(to)) {
-    date_is_timestamp <- inherits(schema0[["date"]], "POSIXct")
     date_coerce <- if (date_is_timestamp) {
       function(x) as.POSIXct(x, tz = "UTC")
     } else {
@@ -260,6 +267,30 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
     }
     if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))
     if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))
+  }
+
+  # Accessor-boundary type guarantee (#615): every exported accessor returns
+  # `date` as `Date`, regardless of the underlying parquet's storage type --
+  # this is the fix for the silent zero-row `hd_ohlcv()`/`hd_macro()` join
+  # bug in #615. Applied to `lf` before the collect/lazy branch so the
+  # guarantee holds for both `collect = TRUE` and `collect = FALSE`.
+  #
+  # Known nuisance (documented in #615, NOT a regression introduced here):
+  # coercing a genuinely TIMESTAMP_NS-sourced value to Date, by any R-level
+  # code path, can trigger "Coercing nanoseconds to a lower resolution may
+  # result in a loss of data" against the live equity_daily parquet -- this
+  # already fires today at every one of the 40+ existing call sites' own
+  # defensive `mutate(date = as.Date(date, tz = "UTC"))` workaround (see
+  # `feedback_date-type-consistency` memory). Moving the coercion in here
+  # does not add new warning emissions; if anything it reduces the total
+  # count, since a downstream `as.Date()` on an already-Date column is a
+  # no-op. Eliminating the warning outright turned out to need changes
+  # inside duckplyr's own lazy re-materialisation (out of scope here;
+  # confirmed empirically that no R-level expression form escapes it once
+  # duckplyr's fallback path is engaged) -- worth its own follow-up issue if
+  # the noise becomes a real problem, but not a blocker for the type fix.
+  if (date_is_timestamp) {
+    lf <- lf |> dplyr::mutate(date = as.Date(date))
   }
 
   if (collect) {
@@ -344,6 +375,8 @@ hd_lazy <- function(dataset = "equity_daily", local = FALSE) {
 #' @param local If TRUE, query local cache instead of remote.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Lazy duckplyr frame or tibble
+#' @section Date type guarantee (#615):
+#'   The `date` column is always returned as `Date` (see [hd_ohlcv()]).
 #' @section Point-in-time guard:
 #'   Passing `to > Sys.Date()` raises a classed error (`"hd_future_date"`).
 #'   Future-dated requests imply look-ahead knowledge and are forbidden to
@@ -371,15 +404,25 @@ hd_macro <- function(series_id, from = NULL, to = NULL,
     dplyr::filter(series_id %in% !!series_id) |>
     dplyr::arrange(series_id, date)
 
+  schema0 <- lf |> head(0) |> dplyr::collect()
+  date_is_timestamp <- inherits(schema0[["date"]], "POSIXct")
   if (!is.null(from) || !is.null(to)) {
-    schema0 <- lf |> head(0) |> dplyr::collect()
-    date_coerce <- if (inherits(schema0[["date"]], "POSIXct")) {
+    date_coerce <- if (date_is_timestamp) {
       function(x) as.POSIXct(x, tz = "UTC")
     } else {
       as.Date
     }
     if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))  # (#453)
     if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))    # (#453)
+  }
+
+  # Accessor-boundary type guarantee (#615): see hd_ohlcv_single() for the
+  # full rationale (including the pre-existing nanosecond-warning nuisance
+  # this does not newly introduce). hd_macro() and hd_ohlcv() must agree on
+  # the `date` type so a join between them does not silently produce zero
+  # matching rows.
+  if (date_is_timestamp) {
+    lf <- lf |> dplyr::mutate(date = as.Date(date))
   }
 
   if (collect) dplyr::collect(lf) else lf
@@ -411,6 +454,8 @@ hd_macro_series <- function(local = FALSE) {
 #' @param local If TRUE, query local cache.
 #' @param collect If TRUE (default), materialise. If FALSE, return lazy frame.
 #' @return Lazy duckplyr frame or tibble
+#' @section Date type guarantee (#615):
+#'   The `date` column is always returned as `Date` (see [hd_ohlcv()]).
 #' @family data-access
 #' @export
 hd_factors <- function(dataset = "FF3", frequency = "daily",
@@ -422,15 +467,23 @@ hd_factors <- function(dataset = "FF3", frequency = "daily",
     dplyr::filter(dataset == !!dataset, frequency == !!frequency) |>
     dplyr::arrange(date)
 
+  schema0 <- lf |> head(0) |> dplyr::collect()
+  date_is_timestamp <- inherits(schema0[["date"]], "POSIXct")
   if (!is.null(from) || !is.null(to)) {
-    schema0 <- lf |> head(0) |> dplyr::collect()
-    date_coerce <- if (inherits(schema0[["date"]], "POSIXct")) {
+    date_coerce <- if (date_is_timestamp) {
       function(x) as.POSIXct(x, tz = "UTC")
     } else {
       as.Date
     }
     if (!is.null(from)) lf <- lf |> dplyr::filter(date >= !!date_coerce(from))  # (#453)
     if (!is.null(to))   lf <- lf |> dplyr::filter(date <= !!date_coerce(to))    # (#453)
+  }
+
+  # Accessor-boundary type guarantee (#615): see hd_ohlcv_single() for the
+  # full rationale (including the pre-existing nanosecond-warning nuisance
+  # this does not newly introduce).
+  if (date_is_timestamp) {
+    lf <- lf |> dplyr::mutate(date = as.Date(date))
   }
 
   if (collect) dplyr::collect(lf) else lf

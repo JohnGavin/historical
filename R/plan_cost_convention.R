@@ -17,8 +17,10 @@
 # `strategy` values match the display labels used by the `leaderboard`
 # target's own `strategy` column (see R/plan_leaderboard.R, `add_meta()`
 # calls) -- the same join key used by `strategy_gross_convention`
-# (R/plan_exposure.R), including the "OLMAR-1" naming gap documented there
-# (#626, #629: `strategy_names` is missing an `olmar` row).
+# (R/plan_exposure.R). `strategy_names` was missing an `olmar` row when this
+# file was authored (#626, #629), but that gap was closed in #747; the
+# `by = "strategy"` join key is retained here for consistency with
+# `strategy_gross_convention`, not because of any remaining gap.
 #
 # `cost_per_trade_bps`: the transaction-cost figure the strategy's own code
 #   deducts, in basis points, verified against source at the commit this
@@ -129,8 +131,8 @@ BORROW_STATUS_OVERRIDES <- tibble::tibble(
 #' @param directionality Character vector (same length as `strategy`). Values
 #'   from `strategy_names$directionality` (R/plan_strategy_names.R):
 #'   long_only, long_short, market_neutral, overlay -- or NA if the strategy
-#'   has no `strategy_names` row (see the OLMAR-1 fill in the
-#'   `strategy_cost_convention` target below) and no override.
+#'   has no `strategy_names` row and no override (see #629/#747: this used
+#'   to be OLMAR-1's state before it gained a `strategy_names` row).
 #' @param has_borrow_rate Logical vector (same length). `TRUE` where
 #'   `borrow_rate_annual` is non-NA in the cost registry.
 #' @param override Character vector (same length), or NA where no override
@@ -458,12 +460,16 @@ plan_cost_convention <- function() {
       # (R/plan_strategy_names.R). Join on strategy == short_name -- the
       # same join key strategy_gross_convention (R/plan_exposure.R) uses.
       #
-      # OLMAR-1 has no row in strategy_names (#626/#629 known join gap) --
-      # filled explicitly (long-only simplex projection, R/plan_olmar.R:30)
-      # rather than left NA (fail-loud-not-null.md): a silently-NA
-      # directionality would make derive_borrow_status() abort below, which
-      # is correct for a GENUINELY unknown strategy but wrong for a known,
-      # documented gap.
+      # OLMAR-1 previously had no row in strategy_names (#626/#629 known
+      # join gap) and required an explicit post-join fill here. #747 added
+      # the missing `olmar` row (directionality = "long_only", matching
+      # what this file used to fill in by hand -- verified against
+      # R/plan_olmar.R:30's long-only simplex projection), so the join
+      # alone now resolves OLMAR-1 correctly and the fill was removed. A
+      # genuinely undeclared strategy still fails loud below, via
+      # derive_borrow_status()'s NA-directionality abort (fail-loud-not-
+      # null.md) -- and via QA gate S7's reverse leaderboard/strategy_names
+      # set-equality check (R/plan_qa_gates.R, check_leaderboard_coverage()).
       sn_lookup <- dplyr::transmute(
         strategy_names,
         strategy = short_name,
@@ -472,11 +478,6 @@ plan_cost_convention <- function() {
 
       with_direction <- base |>
         dplyr::left_join(sn_lookup, by = "strategy") |>
-        dplyr::mutate(
-          directionality = dplyr::if_else(
-            strategy == "OLMAR-1", "long_only", directionality
-          )
-        ) |>
         dplyr::left_join(BORROW_STATUS_OVERRIDES, by = "strategy")
 
       with_status <- with_direction |>

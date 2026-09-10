@@ -369,3 +369,147 @@ test_that("missing series returns status=missing without aborting", {
   expect_equal(result$status, "missing")
   expect_true(is.na(result$observed_median_days))
 })
+
+# ── Tests for check_temporal_coverage() (#617) ────────────────────────────────
+
+# All weekdays present in [start, start+n_weekdays) -- full coverage.
+full_coverage_dates_df <- function(start = as.Date("2025-01-01"), n_weekdays = 20) {
+  all_days <- seq(start, by = "day", length.out = ceiling(n_weekdays * 7 / 5) + 10)
+  weekdays_only <- all_days[!(format(all_days, "%u") %in% c("6", "7"))]
+  d <- weekdays_only[seq_len(n_weekdays)]
+  tibble::tibble(date = d, value = seq_along(d))
+}
+
+test_that("check_temporal_coverage: full weekday coverage returns ok, coverage ~= 1", {
+  reg    <- make_freq_registry("vix_daily", "daily")
+  reader <- make_reader(vix_daily = full_coverage_dates_df(n_weekdays = 40))
+
+  result <- check_temporal_coverage(reg, read_fn = reader)
+  expect_s3_class(result, "tbl_df")
+  expect_equal(result$status, "ok")
+  expect_equal(result$coverage, 1)
+  expect_equal(result$actual_obs, result$expected_obs)
+})
+
+test_that("check_temporal_coverage: below-abort-floor coverage aborts, names target + pct", {
+  # Span 100 weekdays but only keep every 4th -> ~25% coverage, well below 30%.
+  full <- full_coverage_dates_df(n_weekdays = 100)
+  sparse <- full[seq(1, nrow(full), by = 4), ]
+  reg    <- make_freq_registry("sparse_tgt", "daily")
+  reader <- make_reader(sparse_tgt = sparse)
+
+  expect_snapshot(
+    error = TRUE,
+    check_temporal_coverage(reg, read_fn = reader)
+  )
+})
+
+test_that("check_temporal_coverage: below-warn-floor coverage warns but does not abort", {
+  reg <- make_freq_registry("partial_tgt", "daily")
+
+  # Keep ~60% of rows -> below 80% warn floor, above 30% abort floor.
+  set.seed(1)
+  full    <- full_coverage_dates_df(n_weekdays = 100)
+  partial <- full[sort(sample(seq_len(nrow(full)), size = round(nrow(full) * 0.6))), ]
+  reader  <- make_reader(partial_tgt = partial)
+
+  expect_warning(
+    result <- check_temporal_coverage(reg, read_fn = reader),
+    regexp = NULL
+  )
+  expect_equal(result$status, "ok")
+  expect_true(result$coverage >= 0.30 && result$coverage < 0.80)
+})
+
+test_that("check_temporal_coverage: non-daily freq is skipped, not checked", {
+  reg    <- make_freq_registry("monthly_tgt", "monthly")
+  reader <- make_reader(monthly_tgt = monthly_dates_df(12))
+
+  result <- check_temporal_coverage(reg, read_fn = reader)
+  expect_equal(result$status, "skipped-freq")
+  expect_true(is.na(result$coverage))
+})
+
+test_that("check_temporal_coverage: missing target returns status=missing without aborting", {
+  reg    <- make_freq_registry("missing_tgt", "daily")
+  reader <- make_reader()
+
+  result <- check_temporal_coverage(reg, read_fn = reader)
+  expect_equal(result$status, "missing")
+  expect_true(is.na(result$coverage))
+})
+
+test_that("check_temporal_coverage: empty registry returns zero-row tibble", {
+  reg <- tibble::tibble(
+    target_name = character(0), kind = character(0), freq = character(0),
+    date_anchor = character(0), notes = character(0)
+  )
+  result <- check_temporal_coverage(reg, read_fn = make_reader())
+  expect_equal(nrow(result), 0L)
+  expect_true(all(c("target_name", "status", "expected_obs", "actual_obs", "coverage") %in% names(result)))
+})
+
+# ── Tests for check_freshness() (#617) ────────────────────────────────────────
+
+test_that("check_freshness: data within the daily threshold returns ok", {
+  reg    <- make_freq_registry("fresh_daily", "daily")
+  as_of  <- as.Date("2025-06-10")
+  reader <- make_reader(fresh_daily = tibble::tibble(date = as_of - 2, value = 1))
+
+  result <- check_freshness(reg, read_fn = reader, as_of = as_of)
+  expect_equal(result$status, "ok")
+  expect_equal(result$days_stale, 2L)
+})
+
+test_that("check_freshness: data past the daily threshold warns and is flagged stale", {
+  reg    <- make_freq_registry("stale_daily", "daily")
+  as_of  <- as.Date("2025-06-10")
+  reader <- make_reader(stale_daily = tibble::tibble(date = as_of - 30, value = 1))
+
+  expect_warning(
+    result <- check_freshness(reg, read_fn = reader, as_of = as_of),
+    regexp = NULL
+  )
+  expect_equal(result$status, "stale")
+  expect_equal(result$days_stale, 30L)
+})
+
+test_that("check_freshness: threshold scales with declared freq (monthly tolerant of daily gap)", {
+  reg    <- make_freq_registry("monthly_ok", "monthly")
+  as_of  <- as.Date("2025-06-10")
+  # 30 days stale would fail the daily threshold (7d) but not monthly (45d).
+  reader <- make_reader(monthly_ok = tibble::tibble(date = as_of - 30, value = 1))
+
+  result <- check_freshness(reg, read_fn = reader, as_of = as_of)
+  expect_equal(result$status, "ok")
+  expect_equal(result$threshold_days, 45)
+})
+
+test_that("check_freshness: stale message names target, days stale, and threshold", {
+  reg    <- make_freq_registry("stale_named", "daily")
+  as_of  <- as.Date("2025-06-10")
+  reader <- make_reader(stale_named = tibble::tibble(date = as_of - 15, value = 1))
+
+  expect_snapshot(
+    . <- check_freshness(reg, read_fn = reader, as_of = as_of)
+  )
+})
+
+test_that("check_freshness: missing target returns status=missing without aborting", {
+  reg    <- make_freq_registry("absent_tgt", "daily")
+  reader <- make_reader()
+
+  result <- check_freshness(reg, read_fn = reader)
+  expect_equal(result$status, "missing")
+  expect_true(is.na(result$days_stale))
+})
+
+test_that("check_freshness: empty registry returns zero-row tibble", {
+  reg <- tibble::tibble(
+    target_name = character(0), kind = character(0), freq = character(0),
+    date_anchor = character(0), notes = character(0)
+  )
+  result <- check_freshness(reg, read_fn = make_reader())
+  expect_equal(nrow(result), 0L)
+  expect_true(all(c("target_name", "status", "latest_date", "days_stale", "threshold_days") %in% names(result)))
+})

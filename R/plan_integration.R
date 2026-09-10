@@ -103,48 +103,17 @@ plan_integration <- function() {
       }
     ),
 
-    # === LIQUIDITY: equity with ADV ===
-    # Note: Uses full equity universe from hd_ohlcv()
-    # For production use, may want to filter to liquid universe first
-    targets::tar_target(
-      equity_with_adv,
-      {
-        # Get SPY as example - full universe would be hd_universe("equity")
-        # but that's 50+ tickers and slow for demo
-        equity_data <- hd_ohlcv("SPY") |>
-          dplyr::mutate(ticker = "SPY") |>
-          dplyr::select(date, ticker, open, high, low, close, adjusted_close, volume)
-
-        calculate_adv(equity_data, window_days = 20)
-      }
-    ),
-
-    # === LIQUIDITY: filtered equity ===
-    targets::tar_target(
-      equity_liquidity_filtered,
-      {
-        filter_liquidity(
-          equity_with_adv,
-          min_adv_usd = 1e6,  # $1M minimum ADV
-          filter_mode = "warn"  # Warn but don't remove
-        )
-      }
-    ),
-
-    # === LIQUIDITY: summary table ===
-    targets::tar_target(
-      liquidity_summary_table,
-      {
-        liquidity_summary(equity_liquidity_filtered) |>
-          DT::datatable(
-            caption = "Liquidity Summary by Ticker (SPY Example)",
-            options = list(pageLength = 20),
-            rownames = FALSE
-          ) |>
-          DT::formatCurrency(columns = c("median_adv_usd", "p25_adv_usd", "p75_adv_usd"), digits = 0) |>
-          DT::formatRound(columns = "n_obs", digits = 0)
-      }
-    ),
+    # LIQUIDITY targets deliberately removed here (#625, proposed-work item 6):
+    # this file's equity_with_adv/equity_liquidity_filtered/liquidity_summary_table
+    # trio (a) duplicated target NAMES already defined by plan_liquidity()
+    # (R/plan_liquidity.R), which would collide if this file were ever sourced
+    # alongside it, and (b) liquidity_summary_table's DT::formatCurrency() call
+    # referenced p25_adv_usd/p75_adv_usd columns that liquidity_summary()
+    # (R/liquidity.R) does not return, so it would have errored on first build.
+    # plan_integration() is not sourced by any _targets.R (root or docs/) --
+    # see the commented-out `source(here::here("R/plan_integration.R"))` and
+    # `# plan_integration(),` lines in docs/_targets.R -- so removing this
+    # dead code changes no currently-running pipeline.
 
     # === TRACKING ERROR / IR: calculate for all strategies ===
     targets::tar_target(

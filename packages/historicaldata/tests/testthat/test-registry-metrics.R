@@ -276,3 +276,63 @@ test_that("hd_leaderboard_from_registry aborts on legacy NA-unit rows", {
     hd_leaderboard_from_registry(s$con, metric_name = "legacy_cagr")
   )
 })
+
+# ── hd_registry_leg_count_status (#839) ──────────────────────────────────
+
+test_that("hd_registry_leg_count_status returns zero rows when no strategy is a composite", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  s <- .setup_registry_with_run()
+  withr::defer({ DBI::dbDisconnect(s$con, shutdown = TRUE); unlink(s$tmp) })
+
+  out <- hd_registry_leg_count_status(s$con)
+  expect_s3_class(out, "tbl_df")
+  expect_equal(nrow(out), 0L)
+  expect_true(all(c("strategy_id", "leg_count", "has_leg_calibration") %in% names(out)))
+})
+
+test_that("hd_registry_leg_count_status flags a composite strategy with no calibration diagnostic", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  tmp <- tempfile(fileext = ".duckdb")
+  hd_registry_init(tmp)
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(tmp) })
+
+  hd_strategy_upsert(
+    con,
+    list(strategy_id = "ensemble", short_name = "ENS", long_name = "Ensemble"),
+    underlying_signals = c("a", "b"), leg_count = 2L
+  )
+  hd_run_record(con, strategy_id = "ensemble")
+
+  out <- hd_registry_leg_count_status(con)
+  expect_equal(nrow(out), 1L)
+  expect_equal(out$strategy_id, "ensemble")
+  expect_equal(out$leg_count, 2L)
+  expect_false(out$has_leg_calibration)
+})
+
+test_that("hd_registry_leg_count_status recognises a recorded calibration diagnostic", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  tmp <- tempfile(fileext = ".duckdb")
+  hd_registry_init(tmp)
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer({ DBI::dbDisconnect(con, shutdown = TRUE); unlink(tmp) })
+
+  hd_strategy_upsert(
+    con,
+    list(strategy_id = "ensemble2", short_name = "ENS2", long_name = "Ensemble 2"),
+    underlying_signals = c("a", "b", "c"), leg_count = 3L
+  )
+  uuid <- hd_run_record(con, strategy_id = "ensemble2")
+  hd_diagnostic_record(
+    con, uuid,
+    tibble::tibble(
+      diagnostic_name = "leg_blend_manufactured_sharpe",
+      value_num = 0.9
+    )
+  )
+
+  out <- hd_registry_leg_count_status(con)
+  expect_equal(nrow(out), 1L)
+  expect_true(out$has_leg_calibration)
+})

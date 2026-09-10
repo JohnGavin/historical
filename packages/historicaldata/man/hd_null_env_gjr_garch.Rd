@@ -59,11 +59,14 @@ Other falsification:
 \code{\link{hd_null_env_white_noise}()},
 \code{\link{hd_null_rejection_rate}()},
 \code{\link{hd_rolling_sharpe}()},
+\code{\link{hd_sharpe_haircut}()},
 \code{\link{hd_sharpe_stability_ratio}()},
+\code{\link{hd_signal_null_rank}()},
 \code{\link{hd_structural_breaks}()},
 \code{\link{hd_tail_dependence}()},
 \code{\link{hd_tail_keff_frob}()},
 \code{\link{hd_top5pct_share}()},
-\code{\link{hd_wf_correlation}()}
+\code{\link{hd_wf_correlation}()},
+\code{\link{hd_zero_alpha_calibration}()}
 }
 \concept{falsification}

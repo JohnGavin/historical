@@ -44,6 +44,25 @@ diagnostic, #751 item C).}
 that date's ranked universe actually held (breadth diagnostic,
 #751 item C). 0 when \code{n_avail} is below the minimum-breadth
 floor.}
+\item{n_eff}{Effective breadth (#751 item F): the inverse Herfindahl
+index of the NORMALISED absolute weights held that date,
+\code{1 / sum(p_i^2)} where \code{p_i = abs(weight_i) /
+      sum(abs(weight_i))} over the held names. Salvaged from the
+rank-weighted construction proposed (and closed unmerged) on #765,
+and computed here against the LIVE tercile construction instead --
+under \strong{equal-weight} tercile legs every held name carries
+identical \code{|weight|}, so \code{n_eff} collapses to exactly
+\code{n_long + n_short} whenever a position is held (the inverse
+Herfindahl index of N equal shares is N). This still answers the
+fundamental-law question \code{held_frac} does not -- "how many
+independent bets is this portfolio effectively making" (Grinold &
+Kahn; Ding & Martin 2017, cited in #751) -- and is the quantity a
+future change to the weighting scheme (a return to rank-weighting,
+item D) would make diverge from a plain headcount, at which point
+this column (and the S24 QA gate built on it,
+\code{check_cmr_effective_breadth()}, R/plan_qa_gates.R) would be
+doing non-redundant work without any call-site change. 0 on dates
+holding no position.}
 }
 Dates below \code{.HD_CMR_MIN_LEG_NAMES}'s minimum-breadth floor
 hold no position at all: \code{n_long = n_short = 0},
@@ -75,6 +94,8 @@ trusted silently.
 }
 \seealso{
 Other commodities_mr: 
+\code{\link{hd_commodity_mr_conditioning_signal}()},
+\code{\link{hd_commodity_mr_conditioning_universe}()},
 \code{\link{hd_commodity_mr_dedupe_universe}()},
 \code{\link{hd_commodity_mr_signal}()}
 }

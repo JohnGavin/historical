@@ -121,6 +121,28 @@ hd_datasets <- function() {
         # fetch_equity.py L163; #325).  See inst/COLUMN_NAMING.md.
       )
     ),
+    fundamentals = list(
+      url = hd_base_url("fundamentals.parquet"),
+      schema = c("ticker", "fiscal_period", "period_end", "first_filed",
+                 "xbrl_tag", "original_value", "latest_value", "restated",
+                 "source"),
+      frequency = "filing",
+      description = paste0(
+        "SEC EDGAR XBRL company-fundamentals revision triangle: one row ",
+        "per (ticker, xbrl_tag, fiscal_period), carrying both the ",
+        "as-first-reported value (original_value) and the ",
+        "post-restatement value (latest_value), keyed by first_filed -- ",
+        "the date the filing became public. Use hd_fundamentals(as_of=) ",
+        "for point-in-time-safe backtest access (defaults to ",
+        "original_value; enforces first_filed <= as_of). See GitHub ",
+        "issue #553. PILOT COVERAGE ONLY as of 2026-08: 10 large-cap US ",
+        "tickers (AAPL, MSFT, GOOGL, AMZN, JNJ, WMT, PG, JPM, XOM, KO) ",
+        "and 4 XBRL tags (Revenues, EarningsPerShareDiluted, ",
+        "StockholdersEquity, NetCashProvidedByUsedInOperatingActivities) ",
+        "via scripts/fetch_fundamentals_edgar.R. NOT a broad-universe ",
+        "dataset -- a ticker outside the pilot list returns zero rows."
+      )
+    ),
     kraken_ohlcvt = list(
       url = hd_base_url("kraken_ohlcvt.parquet"),
       schema = c("ticker", "pair", "interval_min", "time", "open", "high",

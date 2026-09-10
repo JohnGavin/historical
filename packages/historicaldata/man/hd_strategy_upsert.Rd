@@ -4,7 +4,12 @@
 \alias{hd_strategy_upsert}
 \title{Idempotently upsert a strategy definition}
 \usage{
-hd_strategy_upsert(con, strategy_row)
+hd_strategy_upsert(
+  con,
+  strategy_row,
+  underlying_signals = NULL,
+  leg_count = NULL
+)
 }
 \arguments{
 \item{con}{A DBI connection from \code{\link[=hd_registry_open]{hd_registry_open()}} opened with
@@ -14,7 +19,21 @@ hd_strategy_upsert(con, strategy_row)
 \code{strategy_id} (required), \code{short_name}, \code{long_name}, \code{asset_class},
 \code{frequency}, \code{ann_factor}, \code{directionality}, \code{liquidity_tier},
 \code{time_horizon_days}, \code{trades_per_year}, \code{turnover_pct}, \code{tags},
-\code{research_paper_doi}. Missing columns insert as NULL.}
+\code{research_paper_doi}, \code{leg_count} (optional -- see below). Missing
+columns insert as NULL (\code{leg_count} defaults to \code{1L}).}
+
+\item{underlying_signals}{Optional character vector naming the
+underlying signals/expressions blended into this strategy. When its
+length is \verb{> 1}, \code{leg_count} (via the \code{leg_count} argument or a
+\code{leg_count} column in \code{strategy_row}) is REQUIRED and must equal
+\code{length(underlying_signals)}. \code{NULL} (default) skips this check
+entirely -- existing single-signal callers are unaffected.}
+
+\item{leg_count}{Optional integer. Explicit leg count for this
+strategy. Falls back to \code{strategy_row$leg_count} if present, then to
+\code{1L}. Required (and cross-checked against
+\code{length(underlying_signals)}) whenever \code{underlying_signals} has length
+\verb{> 1}.}
 }
 \value{
 Invisibly returns \code{strategy_row$strategy_id}.
@@ -23,4 +42,27 @@ Invisibly returns \code{strategy_row$strategy_id}.
 Inserts one row into \code{bt.strategy}. If a row with the same \code{strategy_id}
 already exists, this call is a no-op (no update). Use \code{\link[=hd_strategy_update]{hd_strategy_update()}}
 (PR 3/4) if a keyword needs to change after creation.
+}
+\details{
+\subsection{\code{leg_count} / composite-book tracking (#839)}{
+
+\code{leg_count} records how many underlying signals/expressions are
+equal-weighted blended into this one reported strategy. This matters
+because blending correlated legs manufactures Sharpe inflation via
+variance reduction that trial-count-based multiple-testing corrections
+(\code{hd_strat_keff_vertox()}, \code{hd_deflated_sharpe()}) do not capture -- see
+\code{.claude/rules/detection-power-required.md}'s sibling issue #839 and
+\code{\link[=hd_zero_alpha_calibration]{hd_zero_alpha_calibration()}}.
+
+Per \code{.claude/rules/fail-loud-not-null.md}, this is a "must not silently
+default" field for composite writes: pass \code{underlying_signals} (the
+character vector of signal names being blended) so the composite case is
+detectable. When \code{length(underlying_signals) > 1} you MUST also supply
+\code{leg_count} (and it must equal \code{length(underlying_signals)}) -- otherwise
+this function \code{cli_abort()}s rather than silently writing \code{leg_count = 1}
+or \code{NA} for a book that is, in fact, a blend of several signals. A
+genuinely single-signal strategy (no \code{underlying_signals}, or
+\code{underlying_signals} of length 1) is unaffected: \code{leg_count} defaults to
+\code{1L}, matching every caller written before #839.
+}
 }

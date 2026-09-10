@@ -1,6 +1,6 @@
-# Current Work
+# Current Work — session 29 (2026-09-08 → 2026-09-10)
 
-**Session 26 ended 2026-09-10.** Branch `feat/cc-20260908-195542`, 3 commits,
+**Ended 2026-09-10.** Branch `feat/cc-20260908-195542`, 3 commits,
 pushed. [PR #858](https://github.com/JohnGavin/historical/pull/858) OPEN,
 MERGEABLE — **not merged**, awaiting review.
 
@@ -53,3 +53,14 @@ Worth its own issue if nobody has raised one.
   2026-05-23 and 2026-06-16). Breaks any count query.
 - Morningstar Direct Web Services docs are unreadable (JS SPA) — the DWS row in
   the #816 comparison is deliberately blank. Paste the pages to fill it.
+
+## Note on session numbering
+
+This session initially self-labelled "26" and collided with `main`, which was
+already at **session 28**. Session 28's own notes record it making the same
+mistake for the same reason: parallel worktrees, each unaware of what the
+others have landed. Renumbered to 29 during the merge. Session 28's handover
+is preserved in its `CHANGELOG.md` entry (2026-09-03 → 2026-09-05).
+
+**Before writing a session number, read `git show origin/main:CHANGELOG.md`** —
+the local checkout's newest entry is not the repo's.

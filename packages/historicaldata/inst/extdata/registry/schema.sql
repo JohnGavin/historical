@@ -21,6 +21,15 @@ CREATE SCHEMA IF NOT EXISTS art;
 
 -- One row per strategy definition. Mirrors `strategy_names` target but
 -- carries the keyword columns from #346 plus lifecycle metadata.
+--
+-- `leg_count` (#839): number of underlying signals/expressions blended
+-- (equal-weighted) into this one reported strategy/book. 1 = genuinely
+-- single-signal (the default -- most existing callers). > 1 = a composite
+-- book; per fail-loud-not-null.md, hd_strategy_upsert() REQUIRES an
+-- explicit leg_count for composite writes (called with
+-- `underlying_signals` of length > 1) -- it is never silently defaulted
+-- for that case. See hd_zero_alpha_calibration() for the manufactured-
+-- Sharpe calibration surface this field feeds.
 CREATE TABLE IF NOT EXISTS bt.strategy (
   strategy_id        VARCHAR PRIMARY KEY,
   short_name         VARCHAR NOT NULL,
@@ -37,8 +46,15 @@ CREATE TABLE IF NOT EXISTS bt.strategy (
   research_paper_doi VARCHAR,
   lifecycle          VARCHAR DEFAULT 'stable',
   superseded_by      VARCHAR,
+  leg_count          INTEGER DEFAULT 1,
   created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+-- Idempotent migration: adds leg_count to any bt.strategy table created by
+-- a schema.sql predating #839. A no-op when the CREATE TABLE above already
+-- ran with the column present (DuckDB 0.10+ supports
+-- ADD COLUMN IF NOT EXISTS).
+ALTER TABLE bt.strategy ADD COLUMN IF NOT EXISTS leg_count INTEGER DEFAULT 1;
 
 -- One row per point-in-time eligible asset set.
 CREATE TABLE IF NOT EXISTS bt.universe (
@@ -179,3 +195,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 INSERT INTO schema_version (version, description)
 SELECT '1.0.0', 'Phase 1 — bt.* + art.* core tables (#347 PR 1/4)'
 WHERE NOT EXISTS (SELECT 1 FROM schema_version WHERE version = '1.0.0');
+
+INSERT INTO schema_version (version, description)
+SELECT '1.1.0', 'bt.strategy.leg_count — composite/blend-count tracking (#839)'
+WHERE NOT EXISTS (SELECT 1 FROM schema_version WHERE version = '1.1.0');

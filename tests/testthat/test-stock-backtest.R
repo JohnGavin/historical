@@ -13,6 +13,13 @@ suppressWarnings(
   )
 )
 apply_adv_cap <- local_env$apply_adv_cap
+market_impact_cost        <- local_env$market_impact_cost
+validate_impact_args      <- local_env$validate_impact_args
+compute_impact_cost_frac  <- local_env$compute_impact_cost_frac
+portfolio_longshort_hrp   <- local_env$portfolio_longshort_hrp
+validate_eta_grid         <- local_env$validate_eta_grid
+sensitivity_panel_row     <- local_env$sensitivity_panel_row
+market_impact_sensitivity <- local_env$market_impact_sensitivity
 
 # ── F3: apply_adv_cap iterative convergence ────────────────────────────────
 
@@ -184,4 +191,198 @@ test_that("raw POSIXct vs Date comparison emits Ops.POSIXt warning (baseline)", 
     df |> filter(date >= start_date),
     regexp = "Incompatible methods"
   )
+})
+
+# ── #490 Gap 4: market_impact_cost() — hand-derived square-root law ─────────
+
+test_that("market_impact_cost matches the hand-derived square-root-law formula", {
+  out <- market_impact_cost(order_usd = 1e6, adv_usd = 1e8, sigma = 0.02, eta = 1)
+  expect_equal(out, 0.002, tolerance = 1e-12)
+})
+
+test_that("market_impact_cost scales with sqrt(participation)", {
+  small <- market_impact_cost(order_usd = 1e6, adv_usd = 1e8, sigma = 0.02)
+  large <- market_impact_cost(order_usd = 4e6, adv_usd = 1e8, sigma = 0.02)
+  expect_equal(large, 2 * small, tolerance = 1e-9)
+})
+
+test_that("market_impact_cost rejects negative order_usd", {
+  expect_snapshot(error = TRUE, market_impact_cost(order_usd = -1, adv_usd = 1e8, sigma = 0.02))
+})
+
+test_that("market_impact_cost rejects non-positive adv_usd", {
+  expect_snapshot(error = TRUE, market_impact_cost(order_usd = 1e6, adv_usd = 0, sigma = 0.02))
+})
+
+test_that("market_impact_cost rejects negative sigma", {
+  expect_snapshot(error = TRUE, market_impact_cost(order_usd = 1e6, adv_usd = 1e8, sigma = -0.01))
+})
+
+test_that("market_impact_cost rejects non-positive eta", {
+  expect_snapshot(error = TRUE, market_impact_cost(order_usd = 1e6, adv_usd = 1e8, sigma = 0.02, eta = 0))
+})
+
+test_that("market_impact_cost function signature is stable", {
+  expect_snapshot(args(market_impact_cost))
+})
+
+# -- #490 Gap 4: portfolio_longshort_hrp() opt-in market-impact cost --------
+
+make_impact_fixture <- function() {
+  returns_wide <- tibble::tibble(
+    ym = c("2019-11", "2019-12"),
+    L1 = c(0.01, 0.01), L2 = c(0.01, 0.01),
+    S1 = c(0.01, 0.01), S2 = c(0.01, 0.01)
+  )
+  df <- tibble::tibble(
+    ym          = c(rep("2020-01", 4), rep("2020-02", 4)),
+    ticker      = rep(c("L1", "L2", "S1", "S2"), 2),
+    decile      = rep(c(1L, 1L, 10L, 10L), 2),
+    monthly_ret = c(0.02, 0.03, -0.01, 0.00, 0.01, 0.02, 0.00, 0.01)
+  )
+  adv_monthly <- tibble::tibble(
+    ym = c(rep("2020-01", 4), rep("2020-02", 4)),
+    ticker = rep(c("L1", "L2", "S1", "S2"), 2),
+    adv_dollars = rep(c(6e7, 4e7, 3e7, 2e7), 2)
+  )
+  list(returns_wide = returns_wide, df = df, adv_monthly = adv_monthly)
+}
+
+test_that("portfolio_longshort_hrp: impact_eta = NULL leaves impact_cost_frac at zero", {
+  fx <- make_impact_fixture()
+  out <- portfolio_longshort_hrp(fx$df, fx$returns_wide, lookback_months = 1L)
+  expect_equal(out$impact_cost_frac, rep(0, nrow(out)))
+  row1 <- out[out$ym == "2020-01", ]
+  expect_equal(row1$total_cost, row1$turnover * 0.005 * 4 + 0.03 / 12, tolerance = 1e-9)
+})
+
+test_that("portfolio_longshort_hrp: impact_eta adds a hand-derived cost term (month 1)", {
+  fx <- make_impact_fixture()
+  out <- portfolio_longshort_hrp(
+    fx$df, fx$returns_wide, lookback_months = 1L,
+    adv_monthly = fx$adv_monthly, adv_pct_cap = 1,
+    impact_eta = 1, impact_aum = 1e7, impact_sigma = 0.02
+  )
+  row1 <- out[out$ym == "2020-01", ]
+  impact_long  <- 1 * 0.02 * sqrt(1e7 / 1e8)
+  impact_short <- 1 * 0.02 * sqrt(1e7 / 5e7)
+  expected_impact <- 2 * (impact_long + impact_short)
+  expect_equal(row1$impact_cost_frac, expected_impact, tolerance = 1e-9)
+
+  long_ret  <- 0.5 * 0.02 + 0.5 * 0.03
+  short_ret <- 0.5 * -0.01 + 0.5 * 0.00
+  trade_cost  <- 1.0 * 0.005 * 4
+  borrow_cost <- 0.03 / 12
+  expected_port_ret <- long_ret - short_ret - (trade_cost + borrow_cost + expected_impact)
+  expect_equal(row1$port_ret, expected_port_ret, tolerance = 1e-9)
+})
+
+test_that("portfolio_longshort_hrp: higher impact_eta strictly increases impact_cost_frac", {
+  fx <- make_impact_fixture()
+  low <- portfolio_longshort_hrp(
+    fx$df, fx$returns_wide, lookback_months = 1L,
+    adv_monthly = fx$adv_monthly, adv_pct_cap = 1, impact_eta = 0.5, impact_aum = 1e7, impact_sigma = 0.02
+  )
+  high <- portfolio_longshort_hrp(
+    fx$df, fx$returns_wide, lookback_months = 1L,
+    adv_monthly = fx$adv_monthly, adv_pct_cap = 1, impact_eta = 2, impact_aum = 1e7, impact_sigma = 0.02
+  )
+  row_low  <- low[low$ym == "2020-01", ]
+  row_high <- high[high$ym == "2020-01", ]
+  expect_true(row_high$impact_cost_frac > row_low$impact_cost_frac)
+  expect_true(row_high$port_ret < row_low$port_ret)
+})
+
+test_that("portfolio_longshort_hrp: impact_eta requires adv_monthly", {
+  fx <- make_impact_fixture()
+  expect_snapshot(
+    error = TRUE,
+    portfolio_longshort_hrp(fx$df, fx$returns_wide, lookback_months = 1L,
+                             impact_eta = 1, impact_aum = 1e7, impact_sigma = 0.02)
+  )
+})
+
+test_that("portfolio_longshort_hrp: impact_eta requires impact_aum", {
+  fx <- make_impact_fixture()
+  expect_snapshot(
+    error = TRUE,
+    portfolio_longshort_hrp(fx$df, fx$returns_wide, lookback_months = 1L,
+                             adv_monthly = fx$adv_monthly, impact_eta = 1, impact_sigma = 0.02)
+  )
+})
+
+test_that("portfolio_longshort_hrp: impact_eta requires impact_sigma", {
+  fx <- make_impact_fixture()
+  expect_snapshot(
+    error = TRUE,
+    portfolio_longshort_hrp(fx$df, fx$returns_wide, lookback_months = 1L,
+                             adv_monthly = fx$adv_monthly, impact_eta = 1, impact_aum = 1e7)
+  )
+})
+
+test_that("portfolio_longshort_hrp: invalid impact_eta value errors", {
+  fx <- make_impact_fixture()
+  expect_snapshot(
+    error = TRUE,
+    portfolio_longshort_hrp(fx$df, fx$returns_wide, lookback_months = 1L,
+                             adv_monthly = fx$adv_monthly, impact_eta = -1,
+                             impact_aum = 1e7, impact_sigma = 0.02)
+  )
+})
+
+test_that("portfolio_longshort_hrp: function signature is stable (impact params present)", {
+  expect_snapshot(args(portfolio_longshort_hrp))
+})
+
+# -- #490 Gap 4: market_impact_sensitivity() -- Sharpe-vs-eta panel ---------
+
+test_that("market_impact_sensitivity returns one row per eta_grid element", {
+  fx <- make_impact_fixture()
+  out <- market_impact_sensitivity(
+    fx$df, fx$returns_wide, eta_grid = c(0.5, 1, 2),
+    lookback_months = 1L, adv_monthly = fx$adv_monthly, adv_pct_cap = 1,
+    impact_aum = 1e7, impact_sigma = 0.02
+  )
+  expect_equal(nrow(out), 3L)
+  expect_setequal(names(out), c("eta", "months", "sharpe", "cagr", "vol", "avg_impact_cost_frac"))
+  expect_equal(out$eta, c(0.5, 1, 2))
+})
+
+test_that("market_impact_sensitivity: avg_impact_cost_frac is strictly increasing in eta", {
+  fx <- make_impact_fixture()
+  out <- market_impact_sensitivity(
+    fx$df, fx$returns_wide, eta_grid = c(0.5, 1, 2, 4),
+    lookback_months = 1L, adv_monthly = fx$adv_monthly, adv_pct_cap = 1,
+    impact_aum = 1e7, impact_sigma = 0.02
+  )
+  diffs <- diff(out$avg_impact_cost_frac)
+  expect_true(all(diffs > 0))
+})
+
+test_that("market_impact_sensitivity rejects an empty eta_grid", {
+  fx <- make_impact_fixture()
+  expect_snapshot(
+    error = TRUE,
+    market_impact_sensitivity(
+      fx$df, fx$returns_wide, eta_grid = numeric(0),
+      lookback_months = 1L, adv_monthly = fx$adv_monthly,
+      impact_aum = 1e7, impact_sigma = 0.02
+    )
+  )
+})
+
+test_that("market_impact_sensitivity requires adv_monthly", {
+  fx <- make_impact_fixture()
+  expect_snapshot(
+    error = TRUE,
+    market_impact_sensitivity(
+      fx$df, fx$returns_wide, eta_grid = 1,
+      lookback_months = 1L, adv_monthly = NULL,
+      impact_aum = 1e7, impact_sigma = 0.02
+    )
+  )
+})
+
+test_that("market_impact_sensitivity function signature is stable", {
+  expect_snapshot(args(market_impact_sensitivity))
 })

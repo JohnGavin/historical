@@ -263,6 +263,247 @@ check_frequency_alignment <- function(
   result
 }
 
+#' Check temporal coverage (expected vs actual trading-day observations)
+#'
+#' For each `freq == "daily"` target in the registry, computes the fraction
+#' of expected trading days -- Mon-Fri within the target's own observed date
+#' range, no holiday calendar (the same approximation documented in
+#' [to_month_end_bizday()]) -- that are actually present, and aborts /
+#' warns per the thresholds in `data-validation-timeseries` rule #1.
+#'
+#' Coverage is computed over the target's `date` column as a whole, not
+#' per-entity within cross-sectional targets (e.g. `stk_universe`, keyed by
+#' `ticker`) -- a coarse, target-level signal. Per-entity coverage (e.g. a
+#' newly-IPO'd ticker legitimately having fewer observations than the
+#' universe) is a follow-up; see #617.
+#'
+#' Non-daily targets (`freq` != "daily") are reported with status
+#' "skipped-freq": the weekday-based expected-count approximation does not
+#' apply to monthly/quarterly/annual cadence.
+#'
+#' @inheritParams check_date_key_types
+#' @param min_coverage_abort Coverage fraction below which the pipeline
+#'   aborts. Default `0.30`.
+#' @param min_coverage_warn Coverage fraction below which a warning is
+#'   emitted (and the abort threshold has not already fired). Default `0.80`.
+#' @return Tibble: `target_name`, `status` ("ok", "missing", "skipped-freq"),
+#'   `expected_obs`, `actual_obs`, `coverage`.
+#' @export
+check_temporal_coverage <- function(
+    registry = dataset_registry(),
+    read_fn = NULL,
+    store   = "_targets",
+    min_coverage_abort = 0.30,
+    min_coverage_warn  = 0.80) {
+
+  if (is.null(read_fn)) {
+    read_fn <- .make_store_reader(store)
+  }
+
+  if (nrow(registry) == 0L) {
+    return(tibble::tibble(
+      target_name  = character(0),
+      status       = character(0),
+      expected_obs = integer(0),
+      actual_obs   = integer(0),
+      coverage     = numeric(0)
+    ))
+  }
+
+  rows <- purrr::map(seq_len(nrow(registry)), function(i) {
+    nm   <- registry$target_name[[i]]
+    freq <- registry$freq[[i]]
+
+    if (!identical(freq, "daily")) {
+      return(tibble::tibble(
+        target_name = nm, status = "skipped-freq",
+        expected_obs = NA_integer_, actual_obs = NA_integer_, coverage = NA_real_
+      ))
+    }
+
+    obj <- tryCatch(
+      read_fn(nm),
+      error = function(e) {
+        cli::cli_inform(c("i" = "Skipping {nm}: not in cache ({conditionMessage(e)})"))
+        NULL
+      }
+    )
+
+    if (is.null(obj) || !is.data.frame(obj) || ncol(obj) == 0L || !("date" %in% names(obj))) {
+      return(tibble::tibble(
+        target_name = nm, status = "missing",
+        expected_obs = NA_integer_, actual_obs = NA_integer_, coverage = NA_real_
+      ))
+    }
+
+    dates <- sort(unique(as.Date(obj$date)))
+    dates <- dates[!is.na(dates)]
+
+    if (length(dates) < 2L) {
+      return(tibble::tibble(
+        target_name = nm, status = "missing",
+        expected_obs = NA_integer_, actual_obs = NA_integer_, coverage = NA_real_
+      ))
+    }
+
+    all_days <- seq(dates[[1L]], dates[[length(dates)]], by = "day")
+    # %u: ISO weekday, Mon=1 .. Sun=7 -- exclude Sat(6)/Sun(7). No holiday
+    # calendar (documented limitation, matches to_month_end_bizday()).
+    expected <- sum(!(format(all_days, "%u") %in% c("6", "7")))
+    actual   <- length(dates)
+    coverage <- actual / expected
+
+    tibble::tibble(
+      target_name = nm, status = "ok",
+      expected_obs = expected, actual_obs = actual, coverage = coverage
+    )
+  })
+
+  result <- dplyr::bind_rows(rows)
+  ok_rows <- dplyr::filter(result, status == "ok")
+
+  aborts <- dplyr::filter(ok_rows, coverage < min_coverage_abort)
+  if (nrow(aborts) > 0L) {
+    detail <- paste0(
+      aborts$target_name, ": ", round(aborts$coverage * 100, 1), "%",
+      collapse = "; "
+    )
+    cli::cli_abort(
+      c(
+        "x" = paste0(
+          nrow(aborts), " target", if (nrow(aborts) == 1L) "" else "s",
+          " below the ", min_coverage_abort * 100, "% temporal-coverage floor."
+        ),
+        "i" = "{detail}",
+        "i" = "Coverage = distinct trading days present / expected weekdays in the target's date range."
+      ),
+      class = "hd_temporal_coverage_abort"
+    )
+  }
+
+  warns <- dplyr::filter(ok_rows, coverage >= min_coverage_abort, coverage < min_coverage_warn)
+  if (nrow(warns) > 0L) {
+    detail <- paste0(
+      warns$target_name, ": ", round(warns$coverage * 100, 1), "%",
+      collapse = "; "
+    )
+    cli::cli_warn(c(
+      "!" = paste0(
+        nrow(warns), " target", if (nrow(warns) == 1L) "" else "s",
+        " below ", min_coverage_warn * 100, "% temporal coverage (above the abort floor)."
+      ),
+      "i" = "{detail}"
+    ))
+  }
+
+  result
+}
+
+#' Check data freshness (latest observation within a lookback window)
+#'
+#' For each target in the registry, computes the number of days between the
+#' target's most recent `date` value and `as_of`, and warns (does not abort)
+#' when it exceeds the threshold for that target's declared `freq`. A weekly
+#' data poll can fail silently (#613) and nothing downstream would otherwise
+#' notice stale data.
+#'
+#' @inheritParams check_date_key_types
+#' @param as_of Reference date to measure staleness against. Default
+#'   `Sys.Date()`. Pass an explicit date in tests for determinism.
+#' @param max_stale_days Named numeric vector of staleness thresholds (days),
+#'   one entry per `freq` value expected in the registry, plus a `"default"`
+#'   fallback for any unrecognised `freq`. Default: `daily = 7, weekly = 14,
+#'   monthly = 45, quarterly = 120, annual = 400, yearly = 400, default = 30`.
+#' @return Tibble: `target_name`, `status` ("ok", "stale", "missing"),
+#'   `latest_date`, `days_stale`, `threshold_days`.
+#' @export
+check_freshness <- function(
+    registry = dataset_registry(),
+    read_fn = NULL,
+    store   = "_targets",
+    as_of   = Sys.Date(),
+    max_stale_days = c(daily = 7, weekly = 14, monthly = 45,
+                        quarterly = 120, annual = 400, yearly = 400,
+                        default = 30)) {
+
+  if (is.null(read_fn)) {
+    read_fn <- .make_store_reader(store)
+  }
+  as_of <- as.Date(as_of)
+
+  if (nrow(registry) == 0L) {
+    return(tibble::tibble(
+      target_name    = character(0),
+      status         = character(0),
+      latest_date    = as.Date(character(0)),
+      days_stale     = integer(0),
+      threshold_days = integer(0)
+    ))
+  }
+
+  rows <- purrr::map(seq_len(nrow(registry)), function(i) {
+    nm   <- registry$target_name[[i]]
+    freq <- registry$freq[[i]]
+
+    threshold <- unname(max_stale_days[freq])
+    if (is.na(threshold)) threshold <- unname(max_stale_days[["default"]])
+
+    obj <- tryCatch(
+      read_fn(nm),
+      error = function(e) {
+        cli::cli_inform(c("i" = "Skipping {nm}: not in cache ({conditionMessage(e)})"))
+        NULL
+      }
+    )
+
+    if (is.null(obj) || !is.data.frame(obj) || ncol(obj) == 0L || !("date" %in% names(obj))) {
+      return(tibble::tibble(
+        target_name = nm, status = "missing", latest_date = as.Date(NA),
+        days_stale = NA_integer_, threshold_days = threshold
+      ))
+    }
+
+    dates <- as.Date(obj$date)
+    dates <- dates[!is.na(dates)]
+
+    if (length(dates) == 0L) {
+      return(tibble::tibble(
+        target_name = nm, status = "missing", latest_date = as.Date(NA),
+        days_stale = NA_integer_, threshold_days = threshold
+      ))
+    }
+
+    latest     <- max(dates)
+    stale_days <- as.integer(as_of - latest)
+    status     <- if (stale_days > threshold) "stale" else "ok"
+
+    tibble::tibble(
+      target_name = nm, status = status, latest_date = latest,
+      days_stale = stale_days, threshold_days = threshold
+    )
+  })
+
+  result <- dplyr::bind_rows(rows)
+
+  stale_rows <- dplyr::filter(result, status == "stale")
+  if (nrow(stale_rows) > 0L) {
+    detail <- paste0(
+      stale_rows$target_name, ": ", stale_rows$days_stale, "d stale (threshold ",
+      stale_rows$threshold_days, "d)", collapse = "; "
+    )
+    cli::cli_warn(c(
+      "!" = paste0(
+        nrow(stale_rows), " target", if (nrow(stale_rows) == 1L) "" else "s",
+        " exceed", if (nrow(stale_rows) == 1L) "s" else "", " their freshness threshold."
+      ),
+      "i" = "{detail}",
+      "i" = "A weekly data poll can fail silently (#613) -- check the upstream fetch."
+    ))
+  }
+
+  result
+}
+
 #' Probe pairwise alignment between two registered datasets
 #'
 #' Given a two-row registry slice (one row per dataset in the pair), reads each

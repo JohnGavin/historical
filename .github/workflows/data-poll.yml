@@ -252,22 +252,57 @@ jobs:
       # revoked, wrong scope) means the build that follows is wasted work —
       # the parquet cannot be published either way, so stop before spending
       # runner minutes on setup-r/apt-get/R-install/build_macro_daily.R.
+      #
+      # Also warns (does not fail) when a valid token is close to expiring
+      # (#705 Problem 2), so rotation happens on a schedule instead of on
+      # the next scheduled run's failure. whoami-v2's response carries an
+      # `auth.expiresAt` ISO-8601 field for tokens created WITH an expiry —
+      # confirmed against huggingface.js's own AuthInfo type
+      # (packages/hub/src/lib/who-am-i.ts, the official JS client's typed
+      # mirror of this exact endpoint's `auth` object: `type`,
+      # `accessToken`, `expiresAt`), since testing against the live field
+      # would require a real token, which this preflight is explicitly not
+      # given. A token created WITHOUT an expiry omits the field — jq's
+      # `// empty` renders that as "no expiry", not an error.
       - name: Preflight — validate HF_TOKEN before any build work
         if: env.HF_TOKEN != ''
+        env:
+          HF_TOKEN_EXPIRY_WARN_DAYS: '30'
         run: |
           set -euo pipefail
-          # -o /dev/null: never capture/echo the response body just in case
-          # it ever changed shape to include anything sensitive. Only the
-          # HTTP status is inspected. -H passes the token but the value is
-          # masked by Actions' log redaction; no -v, no echo of $HF_TOKEN.
-          status=$(curl -s -o /dev/null -w '%{http_code}' \
+          # Body IS captured now (needed for the expiry field below) but is
+          # never echoed or logged anywhere — only the two fields pulled out
+          # via jq (http status, auth.expiresAt) ever reach a log line. No
+          # -v, no echo of $HF_TOKEN, no echo of $body. -H passes the token
+          # but the value is masked by Actions' log redaction regardless.
+          response=$(curl -s -w '\n%{http_code}' \
             -H "Authorization: Bearer ${HF_TOKEN}" \
             https://huggingface.co/api/whoami-v2)
+          status="${response##*$'\n'}"
+          body="${response%$'\n'*}"
           if [ "$status" != "200" ]; then
             echo "::error::HF_TOKEN is invalid or expired — https://huggingface.co/api/whoami-v2 returned HTTP $status instead of 200. Publishing to HuggingFace would fail with this token, so failing now rather than after ~4 minutes of setup and build. Rotate it: (1) generate a new token with write access to JohnGavin/finance-data at https://huggingface.co/settings/tokens, (2) gh secret set HF_TOKEN --repo JohnGavin/historical."
             exit 1
           fi
           echo "HF_TOKEN preflight OK — whoami-v2 returned 200."
+
+          expires_at=$(printf '%s' "$body" | jq -r '.auth.expiresAt // empty' 2>/dev/null || true)
+          if [ -z "$expires_at" ] || [ "$expires_at" = "null" ]; then
+            echo "HF_TOKEN preflight: no expiry set on this token (or the field was absent from the API response) — nothing to warn about."
+          else
+            expires_epoch=$(date -u -d "$expires_at" +%s 2>/dev/null || echo '')
+            if [ -z "$expires_epoch" ]; then
+              echo "::notice::HF_TOKEN preflight: whoami-v2 returned an auth.expiresAt value that could not be parsed as a date ($expires_at). Skipping the expiry-warning check; token itself is still valid (HTTP 200 above)."
+            else
+              now_epoch=$(date -u +%s)
+              days_left=$(( (expires_epoch - now_epoch) / 86400 ))
+              if [ "$days_left" -le "$HF_TOKEN_EXPIRY_WARN_DAYS" ]; then
+                echo "::warning::HF_TOKEN expires in ${days_left} day(s) ($expires_at). Rotate it before it fails a scheduled run: (1) generate a new token with write access to JohnGavin/finance-data at https://huggingface.co/settings/tokens, (2) gh secret set HF_TOKEN --repo JohnGavin/historical."
+              else
+                echo "HF_TOKEN preflight: expires in ${days_left} day(s) ($expires_at) — beyond the ${HF_TOKEN_EXPIRY_WARN_DAYS}-day warning window, no action needed yet."
+              fi
+            fi
+          fi
 
       # The poll jobs commit their parquets during this same run, so the
       # checkout above predates them.

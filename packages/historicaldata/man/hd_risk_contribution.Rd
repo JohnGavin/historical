@@ -95,8 +95,10 @@ hd_risk_contribution(c(C_long = 1, D_short = -0.5), Sigma2)
 }
 \seealso{
 Other risk_metrics: 
+\code{\link{hd_cdap}()},
 \code{\link{hd_dd_duration}()},
 \code{\link{hd_exposure_metrics}()},
+\code{\link{hd_first_passage}()},
 \code{\link{hd_loss_clustering}()}
 }
 \concept{risk_metrics}

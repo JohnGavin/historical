@@ -169,8 +169,38 @@ test_that("hd_commodity_mr_portfolio: long/short weights sized by fraction, not 
               info = "n_long positions never exceeds floor(n_avail * frac)")
   expect_true(all(port$n_short <= 5L),
               info = "n_short positions never exceeds floor(n_avail * frac)")
-  # Breadth diagnostics (#751 item C / step toward item F) are reported.
-  expect_true(all(c("n_avail", "held_frac") %in% names(port)))
+  # Breadth diagnostics (#751 item C / item F) are reported.
+  expect_true(all(c("n_avail", "held_frac", "n_eff") %in% names(port)))
+})
+
+
+test_that("hd_commodity_mr_portfolio: n_eff equals n_long + n_short under equal-weight terciles (#751 item F)", {
+  # n_eff is the inverse Herfindahl index of normalised |weight|. Under the
+  # LIVE tercile construction every held name carries identical |weight|
+  # (1 / n_leg), so the index of N equal shares is exactly N -- n_eff must
+  # equal n_long + n_short on every date holding a position, and 0 on every
+  # date holding none. See hd_commodity_mr_portfolio()'s n_eff roxygen for
+  # why this is expected (and how it would diverge under a different
+  # weighting scheme, e.g. #765's closed rank-weighted proposal).
+  set.seed(21)
+  n_months <- 30
+  n_assets <- 18
+  dates    <- seq.Date(as.Date("2003-01-31"), by = "month", length.out = n_months)
+  ids      <- paste0("F", seq_len(n_assets))
+  tbl <- tidyr::expand_grid(date = dates, series_id = ids) |>
+    dplyr::mutate(monthly_ret = rnorm(dplyr::n(), 0, 0.03))
+
+  sig  <- hd_commodity_mr_signal(tbl, lookback_months = 3L)
+  port <- hd_commodity_mr_portfolio(sig, tbl)
+
+  held <- port[port$n_long + port$n_short > 0L, ]
+  flat <- port[port$n_long + port$n_short == 0L, ]
+
+  expect_true(nrow(held) > 0L)
+  expect_equal(held$n_eff, held$n_long + held$n_short)
+  if (nrow(flat) > 0L) {
+    expect_true(all(flat$n_eff == 0))
+  }
 })
 
 
@@ -265,17 +295,20 @@ test_that("hd_commodity_mr_portfolio: below the minimum-breadth floor, no positi
   expect_equal(low$n_short, 0L)
   expect_equal(low$gross_ret, 0)
   expect_equal(low$held_frac, 0)
+  expect_equal(low$n_eff, 0)
   expect_equal(low$n_avail, 4L)
 
   # n_avail = 9 >= 6 -> floor(9 / 3) = 3 per leg.
   expect_equal(mid$n_long, 3L)
   expect_equal(mid$n_short, 3L)
   expect_equal(mid$n_avail, 9L)
+  expect_equal(mid$n_eff, 6)  # n_eff == n_long + n_short under equal-weight terciles
 
   # n_avail = 24 -> floor(24 / 3) = 8 per leg.
   expect_equal(high$n_long, 8L)
   expect_equal(high$n_short, 8L)
   expect_equal(high$n_avail, 24L)
+  expect_equal(high$n_eff, 16)
 })
 
 
@@ -385,6 +418,21 @@ test_that(".HD_CMR_EXPOSURE_MAP: every series_id appears exactly once", {
 })
 
 
+test_that(".HD_CMR_EXPOSURE_MAP: exactly 8 rows are conditioning-only, none is both keep and conditioning (#751 item 1)", {
+  # #751 item 1 (decided 2026-08-29): the 8 untradeable-twin IMF/FRED series
+  # are now conditioning = TRUE / keep = FALSE, not positions.
+  expect_equal(sum(.HD_CMR_EXPOSURE_MAP$conditioning), 8L)
+  both <- .HD_CMR_EXPOSURE_MAP |>
+    dplyr::filter(.data$keep & .data$conditioning)
+  expect_equal(nrow(both), 0L)
+  expect_setequal(
+    .HD_CMR_EXPOSURE_MAP$series_id[.HD_CMR_EXPOSURE_MAP$conditioning],
+    c("PNGASEUUSDM", "PCOALAUUSDM", "PAABORUSDM", "PNICKUSDM", "PIRONUSDM",
+      "PRICEUSDM", "PBEEFINDUSDM", "PPABORUSDM")
+  )
+})
+
+
 test_that("hd_commodity_mr_dedupe_universe: keeps the futures contract and drops the FRED/ETF twins for a known duplicated exposure (WTI)", {
   tbl <- tibble::tibble(
     date        = as.Date("2020-01-31"),
@@ -408,14 +456,96 @@ test_that("hd_commodity_mr_dedupe_universe: ETF baskets are always dropped, even
 })
 
 
-test_that("hd_commodity_mr_dedupe_universe: an exposure with no tradeable twin is kept as its sole IMF/FRED representative", {
+test_that("hd_commodity_mr_dedupe_universe: an untradeable-twin IMF/FRED series is EXCLUDED, not kept (#751 item 1, decided 2026-08-29)", {
+  # Superseded expectation: prior to #751 item 1, these were kept as their
+  # own sole IMF/FRED representative (item B, 2026-08-25). #751 item 1
+  # reclassified them conditioning-only -- see
+  # hd_commodity_mr_conditioning_universe() for where they now appear.
   tbl <- tibble::tibble(
     date        = as.Date("2020-01-31"),
     series_id   = c("PNGASEUUSDM", "PCOALAUUSDM", "PNICKUSDM"),
     monthly_ret = c(0.01, 0.02, 0.03)
   )
   out <- hd_commodity_mr_dedupe_universe(tbl)
-  expect_setequal(out$series_id, c("PNGASEUUSDM", "PCOALAUUSDM", "PNICKUSDM"))
+  expect_equal(nrow(out), 0L)
+})
+
+
+# ── hd_commodity_mr_conditioning_universe (#751 item 1) ────────────────────
+
+test_that("hd_commodity_mr_conditioning_universe: selects exactly the 8 untradeable-twin IMF/FRED series", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = c("PNGASEUUSDM", "PCOALAUUSDM", "PAABORUSDM", "PNICKUSDM",
+                     "PIRONUSDM", "PRICEUSDM", "PBEEFINDUSDM", "PPABORUSDM",
+                     "CL=F", "GC=F"),
+    monthly_ret = seq(0.01, 0.10, by = 0.01)
+  )
+  out <- hd_commodity_mr_conditioning_universe(tbl)
+  expect_equal(nrow(out), 8L)
+  expect_setequal(
+    out$series_id,
+    c("PNGASEUUSDM", "PCOALAUUSDM", "PAABORUSDM", "PNICKUSDM",
+      "PIRONUSDM", "PRICEUSDM", "PBEEFINDUSDM", "PPABORUSDM")
+  )
+  expect_false(any(c("CL=F", "GC=F") %in% out$series_id))
+})
+
+
+test_that("hd_commodity_mr_conditioning_universe and hd_commodity_mr_dedupe_universe never overlap on the same input", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = .HD_CMR_EXPOSURE_MAP$series_id,
+    monthly_ret = seq_along(.HD_CMR_EXPOSURE_MAP$series_id) * 0.001
+  )
+  pos  <- hd_commodity_mr_dedupe_universe(tbl)
+  cond <- hd_commodity_mr_conditioning_universe(tbl)
+  expect_equal(length(intersect(pos$series_id, cond$series_id)), 0L)
+  # Sizes derived from the map itself (45 rows total, not the 37-series live
+  # store the golden-value regression test below pins) so this assertion
+  # can never drift out of sync with .HD_CMR_EXPOSURE_MAP's row count.
+  expect_equal(nrow(pos), sum(.HD_CMR_EXPOSURE_MAP$keep))
+  expect_equal(nrow(cond), sum(.HD_CMR_EXPOSURE_MAP$conditioning))
+  expect_equal(nrow(cond), 8L)
+})
+
+
+test_that("hd_commodity_mr_conditioning_universe: unmapped series_id aborts loudly (fail-loud-not-null)", {
+  tbl <- tibble::tibble(
+    date        = as.Date("2020-01-31"),
+    series_id   = "NOT_A_REAL_TICKER",
+    monthly_ret = 0.01
+  )
+  expect_error(hd_commodity_mr_conditioning_universe(tbl), regexp = "NOT_A_REAL_TICKER")
+  expect_snapshot(error = TRUE, hd_commodity_mr_conditioning_universe(tbl))
+})
+
+
+test_that("hd_commodity_mr_conditioning_universe: input validation -- not a data frame / missing series_id", {
+  expect_snapshot(error = TRUE, hd_commodity_mr_conditioning_universe(list(a = 1)))
+  expect_snapshot(
+    error = TRUE,
+    hd_commodity_mr_conditioning_universe(tibble::tibble(date = Sys.Date()))
+  )
+})
+
+
+# ── hd_commodity_mr_conditioning_signal (#751 item 1 follow-up) ────────────
+
+test_that("hd_commodity_mr_conditioning_signal: aggregates per-series signal to one composite per date", {
+  set.seed(5)
+  n_months <- 24
+  ids <- c("PNGASEUUSDM", "PCOALAUUSDM", "PNICKUSDM")
+  dates <- seq.Date(as.Date("2010-01-31"), by = "month", length.out = n_months)
+  tbl <- tidyr::expand_grid(date = dates, series_id = ids) |>
+    dplyr::mutate(monthly_ret = rnorm(dplyr::n(), 0, 0.02))
+
+  out <- hd_commodity_mr_conditioning_signal(tbl, lookback_months = 1L)
+  expect_true(all(c("date", "cond_signal", "n_series") %in% names(out)))
+  expect_true(all(out$n_series >= 1L))
+  expect_true(all(out$n_series <= length(ids)))
+  # One row per date -- the per-series signals were aggregated, not passed through.
+  expect_equal(nrow(out), length(unique(out$date)))
 })
 
 
@@ -434,12 +564,16 @@ test_that("hd_commodity_mr_dedupe_universe: other columns pass through unchanged
 })
 
 
-test_that("hd_commodity_mr_dedupe_universe: reduces the exact live-store 37-series universe to the expected 20 kept series (#751 item B regression)", {
+test_that("hd_commodity_mr_dedupe_universe: reduces the exact live-store 37-series universe to the expected 17 kept series (#751 items B + item 1 regression)", {
   # Hardcoded against the live commodities_returns store measured 2026-08-25
   # (37 distinct series_id values; see the #751 item B PR for the exact
   # count). This is a golden-value regression test, not a live-data read --
   # it locks the CURRENT behaviour of the map, so an accidental edit that
   # changes which instrument is kept for an exposure is caught here.
+  # Count updated 2026-08-29 (#751 item 1): PNGASEUUSDM/PCOALAUUSDM/
+  # PNICKUSDM moved from keep = TRUE (item B, 20 kept) to conditioning-only
+  # (item 1, 17 kept) -- see hd_commodity_mr_conditioning_universe() for
+  # where they are selected instead.
   live_series_ids <- c(
     "BZ=F", "CC=F", "CL=F", "CT=F", "DBA", "DBB", "DBC", "GC=F", "GLD",
     "HE=F", "HG=F", "KC=F", "LE=F", "NG=F", "PA=F", "PCOALAUUSDM",
@@ -458,11 +592,11 @@ test_that("hd_commodity_mr_dedupe_universe: reduces the exact live-store 37-seri
   out <- hd_commodity_mr_dedupe_universe(tbl)
 
   expected_kept <- c(
-    "BZ=F", "CL=F", "PNGASEUUSDM", "NG=F", "PCOALAUUSDM", "GC=F", "SI=F",
-    "HG=F", "PNICKUSDM", "PL=F", "PA=F", "ZW=F", "ZC=F", "ZS=F", "KC=F",
+    "BZ=F", "CL=F", "NG=F", "GC=F", "SI=F",
+    "HG=F", "PL=F", "PA=F", "ZW=F", "ZC=F", "ZS=F", "KC=F",
     "SB=F", "CC=F", "CT=F", "LE=F", "HE=F"
   )
-  expect_equal(nrow(out), 20L)
+  expect_equal(nrow(out), 17L)
   expect_setequal(out$series_id, expected_kept)
 })
 

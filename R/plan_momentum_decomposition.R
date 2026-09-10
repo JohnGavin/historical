@@ -281,9 +281,13 @@ plan_momentum_decomposition <- function() {
     tar_target(
       performance_summary,
       {
+        # #608 sweep: derive rf from the shared FF3 stk_rf series (annualised
+        # arithmetic mean, same convention as sharpe_ratio_rf()'s ann_rf,
+        # R/utils_metrics.R) instead of the hardcoded 2%/yr default this
+        # function still carries for standalone/test callers.
         summarize_backtest_performance(
           backtest_results,
-          annual_rf = 0.02
+          annual_rf = mean(stk_rf$rf_ret) * 12
         ) |>
           mutate(
             scheme_label = recode(

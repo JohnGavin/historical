@@ -70,9 +70,16 @@ plan_multi_strategy <- function() {
           sharpe = round(mean(ret) / sd(ret) * sqrt(12), 2),
           max_dd_pct = round(min((cumprod(1 + ret) - cummax(cumprod(1 + ret))) /
                                    cummax(cumprod(1 + ret))) * 100, 1),
-          calmar = round((prod(1 + ret)^(12 / n) - 1) /
-                           abs(min((cumprod(1 + ret) - cummax(cumprod(1 + ret))) /
-                                     cummax(cumprod(1 + ret)))), 2)
+          # CDAP, not conventional Calmar -- (cagr) / abs(max_dd_frac) is
+          # sign-incoherent for negative cagr (#588). historicaldata::hd_cdap()
+          # flips the exponent so a larger drawdown always ranks worse. Uses
+          # the FRACTION-scale drawdown (not max_dd_pct above) to match the
+          # fraction-scale cagr computed here.
+          calmar = round(historicaldata::hd_cdap(
+            prod(1 + ret)^(12 / n) - 1,
+            min((cumprod(1 + ret) - cummax(cumprod(1 + ret))) /
+                  cummax(cumprod(1 + ret)))
+          ), 2)
         )
       }
 

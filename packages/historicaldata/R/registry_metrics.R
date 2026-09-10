@@ -374,6 +374,57 @@ hd_record_stability_metrics <- function(con, run_uuid, returns,
 }
 
 
+#' Leg-count / manufactured-Sharpe calibration coverage from the registry
+#'
+#' For every strategy in `bt.strategy` whose `leg_count > 1` (a declared
+#' composite/blended book -- see [hd_strategy_upsert()]'s `leg_count`
+#' section, #839), reports whether ANY of its runs has an accompanying
+#' manufactured-Sharpe calibration annotation, recorded via
+#' [hd_diagnostic_record()] under `diagnostic_name =
+#' "leg_blend_manufactured_sharpe"` -- the diagnostic name
+#' [hd_zero_alpha_calibration()]'s output is intended to feed.
+#'
+#' This is a pure read -- it does not itself decide pass/fail; see
+#' `check_registry_leg_count_calibration()` (`R/plan_qa_gates.R`, QA gate
+#' S33) for the gate built on top of this reader.
+#'
+#' @param con DBI connection (read-only is fine).
+#' @return A tibble with columns `strategy_id`, `leg_count`,
+#'   `has_leg_calibration` (logical) -- one row per composite strategy
+#'   (`leg_count > 1`) currently in `bt.strategy`. Zero rows if no
+#'   composite strategy is registered yet.
+#' @export
+hd_registry_leg_count_status <- function(con) {
+  rlang::check_installed("DBI")
+  sql <- "
+    SELECT
+      s.strategy_id,
+      s.leg_count,
+      EXISTS (
+        SELECT 1
+        FROM bt.run r
+        JOIN bt.diagnostic d ON d.run_uuid = r.run_uuid
+        WHERE r.strategy_id = s.strategy_id
+          AND d.diagnostic_name = 'leg_blend_manufactured_sharpe'
+      ) AS has_leg_calibration
+    FROM bt.strategy s
+    WHERE s.leg_count > 1
+    ORDER BY s.strategy_id
+  "
+  out <- DBI::dbGetQuery(con, sql)
+  out <- tibble::as_tibble(out)
+  if (nrow(out) == 0L) {
+    out <- tibble::tibble(
+      strategy_id = character(0),
+      leg_count = integer(0),
+      has_leg_calibration = logical(0)
+    )
+  } else {
+    out$has_leg_calibration <- as.logical(out$has_leg_calibration)
+  }
+  out
+}
+
 # ── internals ─────────────────────────────────────────────────────────────
 
 #' @param tbl A metrics tibble (long or wide form; see [hd_metric_record()]).

@@ -73,9 +73,13 @@ plan_commodities_momentum <- function() {
 
     # ── Performance summary ──────────────────────────────────────────────
     targets::tar_target(commodities_perf_summary, {
+      # #608 sweep: derive rf from the shared FF3 stk_rf series (annualised
+      # arithmetic mean, same convention as sharpe_ratio_rf()'s ann_rf,
+      # R/utils_metrics.R) instead of the hardcoded 2%/yr default this
+      # function still carries for standalone/test callers.
       summarize_commodity_performance(
         backtest_results = commodities_backtest,
-        annual_rf = 0.02
+        annual_rf = mean(stk_rf$rf_ret) * 12
       )
     }),
 
