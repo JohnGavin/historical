@@ -1,78 +1,55 @@
-# Current Work — session 25 (2026-08-27 → 2026-08-29)
+# Current Work
 
-## State
+**Session 26 ended 2026-09-10.** Branch `feat/cc-20260908-195542`, 3 commits,
+pushed. [PR #858](https://github.com/JohnGavin/historical/pull/858) OPEN,
+MERGEABLE — **not merged**, awaiting review.
 
-`main` at `90576f5`, working tree clean, pushed. Store built and verified:
-19 pages render clean, 0 errored targets.
+## What shipped
 
-**11 PRs merged:** #769, #770, #775, #776, #780, #786, #789, #790, #792, plus
-publish PRs #772, #777, #781, #787. #791 was yours.
-
-## What this session was
-
-Owner-reported dashboard defects, fixed and published. Then a set of gaps filed
-against an external methodology piece.
-
-Root causes were mostly in **vendored CSS**, not our code:
-- DataTables ships `div.datatables { color: #333 }` — ~1.3:1 on dark
-- Bootstrap ships `caption { font-size: 0.875em }`
-- bslib grid rows are `1fr`, so content overflows into the next row
-- Quarto's article layout is an 850px `.page-columns` grid — the width
-  complaint was a **format** difference (`html` vs `dashboard`), not CSS
-
-And one in our own: `quiz.qmd` never loaded `vignette-shared.css` at all, so
-every shared fix this session had bypassed it. It passed every audit because
-those checked what the stylesheet contained, never whether a page loaded it.
-
-## The lesson
-
-Nearly every wrong conclusion came from a **check that could not distinguish
-the states it was meant to separate**:
-
-| Check | Why it couldn't fail |
+| Commit | What |
 |---|---|
-| Caption word count | counted hidden `<details>` text |
-| Pages `errored` at 0 ms | means *superseded*, not failed |
-| Pages `built` in 1253 ms | published nothing; real build is ~27 s |
-| Three `until` waiters | broken command ≡ not-finished; cancelled ≡ complete; compared response to itself |
-| `grep -c` | counts lines, not occurrences |
-| `Working tree` field | always dirty — counted its own render output |
+| `2409162` | `.claude/rules/strategy-combination-modes.md` — filter/blend/time/hedge, 7 checks for a filter |
+| `e4be0dc` | `explorations/momentum_max_lottery/` — momentum x MAX double sort |
+| `a3577fc` | Research-log DB entries for the failure (2 hypotheses, 1 impl, 12 results, 3 critiques) |
 
-The code defects hunted were the same shape. `checks-must-distinguish-unknown`
-applies to throwaway shell, not only to production gates.
+Issues touched: [#857](https://github.com/JohnGavin/historical/issues/857)
+raised (Thesis A of #549 had no impl issue),
+[#549](https://github.com/JohnGavin/historical/issues/549) updated twice,
+[#816](https://github.com/JohnGavin/historical/issues/816) labelled
+`theme:data`/`high-priority` and given evidence + a vendor comparison.
 
-## Verified live (OBSERVED, by served bytes)
+## Next session — pick one
 
-- `Source tree | clean` on all 11 real dashboards
-- Captions >45 visible words: 0 of 11
-- `page-layout-full` on evidence/bdbb-sol/quiz; TOC markup 0
-- evidence.html: 19 tabs, 4/4 DT tables carrying data (4, 6, 16, 18 rows)
-- heatmap PNG hash matches local
+1. **Trial Norgate Diamond** (3 weeks free, ~$787.50/yr, US back to 1950,
+   delisted + PIT index constituents). Run `plan_universe_pit.R`'s own step 3
+   against the fixture: Enron, Lehman, Bear Stearns, WorldCom, WaMu — all five
+   verified absent from `equity_daily` today. **First question to the vendor is
+   not price: does it carry a `delisting_price` / delisting return?** Unknown
+   for Norgate; known present for CRSP. This gates #816, #857 and #552.
+2. **Build `hd_max_daily_return()` + `hd_realized_skewness()`** (#857
+   deliverable 1). Cheap, reusable, needed regardless of how the Zadeh claim
+   resolves. Migrate `R/plan_mean_reversion.R:85`'s inline `slider::slide_dbl`
+   skew to the exported version so there is one definition, not two. Package
+   export changes → run `scripts/regen_api_context.sh`.
+3. **Apply the new rule to `plan_mean_reversion.R`** — it applies three
+   simultaneous risk filters (`min_skew`, `max_semivar_ratio`, `max_cvar_pct`)
+   with hardcoded thresholds, no complement control, no per-filter attribution.
+   Zadeh's design with none of the checks. `ablation` appears nowhere in `R/`.
+4. **Obtain both papers.** Zadeh (2026) and the datageeek "66-page SSRN study".
+   Both #857 sources are second-hand. Step 0 there.
 
-## Next session
+## Carry forward — the finding with the widest blast radius
 
-**Unverified — needs a human at a browser.** Every visual outcome. Specifically
-[leaderboard#rankings](https://johngavin.github.io/historical/leaderboard.html#rankings)
-in **Chrome** (where the contrast broke; Edge was always fine), and
-[evidence](https://johngavin.github.io/historical/evidence.html) — does 457
-lines of prose read well at full width? If not, the fix is a max-width on prose
-blocks, **not** reverting `page-layout: full`.
+**Plain 12-2 momentum is underpowered on 52.8 years of our data** (Sharpe
+0.163, needs 231 years at 80% power). That is the universe, not momentum. It
+applies to every cross-sectional long/short on `equity_daily` — including the
+live `ltr_*` leaderboard strategy — not just the experiment that found it.
+Worth its own issue if nobody has raised one.
 
-**Open, unstarted:**
+## Loose ends, unfiled
 
-| Issue | |
-|---|---|
-| [#793](https://github.com/JohnGavin/historical/issues/793) | No mechanical kill switches — highest priority; unbounded failure mode |
-| [#778](https://github.com/JohnGavin/historical/issues/778) | Cost metrics reach 6 of 17 strategies |
-| [#794](https://github.com/JohnGavin/historical/issues/794) | Capacity never modelled — sequence behind #778 |
-| [#795](https://github.com/JohnGavin/historical/issues/795) | Proxy measurement error undocumented; includes a **revision-risk** finding |
-| [#788](https://github.com/JohnGavin/historical/issues/788) | Column hover help — planned, phased, decisions recorded |
-| [#779](https://github.com/JohnGavin/historical/issues/779) | XGB DRIF SSR indeterminate — now *less* visible after the uniform labels |
-| [#782](https://github.com/JohnGavin/historical/issues/782) | SSR name collision + a **false citation** in roxygen (fix that first) |
-| [#771](https://github.com/JohnGavin/historical/issues/771), [#774](https://github.com/JohnGavin/historical/issues/774), [#783](https://github.com/JohnGavin/historical/issues/783), [#784](https://github.com/JohnGavin/historical/issues/784), [#785](https://github.com/JohnGavin/historical/issues/785) | filed with evidence |
-
-**roborev:** 39 verdict failures, 21 addressed → **18 unaddressed**. 0 crashes,
-0 quota, consistency check clean.
-
-**Housekeeping:** untracked vendored `docs/*_files/libs/**` — some pages may
-reference libraries never committed. Worth a look before it bites.
+- `hd_rlog_path()` roxygen says "package root"; code returns the **repo** root.
+- OLMAR hypothesis duplicated in the append-only research log (same UUID,
+  2026-05-23 and 2026-06-16). Breaks any count query.
+- Morningstar Direct Web Services docs are unreadable (JS SPA) — the DWS row in
+  the #816 comparison is deliberately blank. Paste the pages to fill it.
