@@ -184,12 +184,16 @@ hypotheses <- tibble::tibble(
     "MAX adds nothing: mom_lottery and mom_nonlottery have equal Sharpe.",
     "The low-mom/high-MAX bucket return does not differ from the low-mom/low-MAX bucket."
   ),
-  # Distinct statuses: these two failed in DIFFERENT ways, and collapsing
-  # them to one label would lose the distinction `checks-must-distinguish-
-  # unknown` exists to preserve.
+  # Distinct statuses from the hd_rlog_statuses() controlled vocabulary.
+  # These two failed in DIFFERENT ways and the difference decides what to do
+  # next -- collapsing them to one label would lose exactly the distinction
+  # `checks-must-distinguish-unknown` exists to preserve:
+  #   underpowered  -> more data of the same kind WOULD help
+  #   unmeasurable  -> more data of the same kind would NOT help; the
+  #                    required population is absent at any sample size
   status = c(
-    "tested-underpowered",   # measured; sample cannot resolve it either way
-    "untestable-on-this-data" # population required by the claim is absent
+    "inconclusive-underpowered",
+    "inconclusive-unmeasurable"
   ),
   commit_hash = NA_character_,
   sealed_at   = as.POSIXct(NA),
