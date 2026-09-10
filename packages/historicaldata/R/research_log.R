@@ -85,6 +85,72 @@ hd_rlog_tables <- function() {
   c("hypotheses", "implementations", "results", "critiques", "robustness")
 }
 
+# ── 1b. Status vocabulary ────────────────────────────────────────────────────
+
+#' Controlled vocabulary for \code{hypotheses$status}
+#'
+#' Returns the fixed set of values \code{hypotheses$status} may take, one
+#' row per status with a \code{description} explaining its meaning.  The
+#' vocabulary is data, not prose, so it can be validated against
+#' programmatically (see \code{hd_rlog_append()}).
+#'
+#' @details
+#' The vocabulary carries two distinct "inconclusive" outcomes rather than
+#' one, and \code{refuted} is deliberately not one of them.  A test that
+#' concludes the claim is false (\code{refuted}) and a test that could not
+#' reach a conclusion at all (\code{inconclusive-underpowered} or
+#' \code{inconclusive-unmeasurable}) are different findings that must not
+#' collapse into the same label — a negative result and "I could not
+#' determine this" are not the same thing, and reporting an underpowered
+#' test as \code{refuted} would misrepresent a null result as a rejection
+#' when the sample simply could not tell the difference.  See
+#' \code{.claude/rules/checks-must-distinguish-unknown.md} for the general
+#' principle this vocabulary implements.
+#'
+#' The two inconclusive values are themselves distinct along a second axis:
+#' \code{inconclusive-underpowered} means more data of the same kind would
+#' eventually resolve the claim (see
+#' \code{.claude/rules/detection-power-required.md}), while
+#' \code{inconclusive-unmeasurable} means no amount of additional data would
+#' help, because the population or variable the claim depends on is not
+#' present in what is available.
+#'
+#' \code{tested} is retained only so that existing writers (e.g.
+#' \code{R/plan_olmar.R}) keep working; it is deprecated and
+#' \code{hd_rlog_append()} warns whenever it is used, naming the four
+#' precise alternatives it should be replaced with.
+#'
+#' @return A tibble with columns \code{status} and \code{description}, one
+#'   row per allowed value.
+#' @family research-log
+#' @export
+hd_rlog_statuses <- function() {
+  tibble::tribble(
+    ~status,                       ~description,
+    "proposed",                    "Stated, not yet tested.",
+    "testing",                     "Test in progress.",
+    "supported",                   "Tested with adequate power; the claim held.",
+    "refuted",                     "Tested with adequate power; the claim failed.",
+    "inconclusive-underpowered",   paste0(
+      "Tested, but the sample cannot resolve it either way. Distinct from ",
+      "'refuted': no conclusion was reached, and reporting it as a failure ",
+      "would be wrong."
+    ),
+    "inconclusive-unmeasurable",   paste0(
+      "Not testable on the available data at any sample size, because the ",
+      "required population or variable is absent. Distinct from ",
+      "'inconclusive-underpowered': more data of the same kind would not ",
+      "help."
+    ),
+    "withdrawn",                   "Abandoned before testing.",
+    "tested",                      paste0(
+      "DEPRECATED, legacy only. Ambiguous -- does not say what the test ",
+      "concluded. Accepted so existing writers keep working; must not be ",
+      "used in new code."
+    )
+  )
+}
+
 # ── 2. Schema ───────────────────────────────────────────────────────────────
 
 #' Zero-row typed tibble for one research-log table
@@ -191,6 +257,13 @@ hd_rlog_path <- function(base_dir = NULL) {
 #' \code{<base_dir>/<table>/}.  This is append-only (audit log);
 #' rows are never deduped or overwritten.
 #'
+#' When \code{table} is \code{"hypotheses"}, \code{status} is validated
+#' against \code{hd_rlog_statuses()} before anything is written: a value
+#' outside the vocabulary, or a missing (\code{NA}) status, aborts with
+#' \code{cli::cli_abort()} rather than being silently written or coerced.
+#' The deprecated \code{"tested"} value is accepted (for existing writers)
+#' but triggers a \code{cli::cli_warn()} naming its replacements.
+#'
 #' @param table One of \code{hd_rlog_tables()}.
 #' @param rows Data frame or tibble of rows to append.
 #' @param base_dir Override base directory (see \code{hd_rlog_path()}).
@@ -220,6 +293,40 @@ hd_rlog_append <- function(table, rows, base_dir = NULL) {
     )
   }
   rows <- rows[, names(schema), drop = FALSE]
+
+  # ── Status vocabulary validation (hypotheses only) ───────────────────────
+  # `status` is free text everywhere else in the schema, but a hypothesis's
+  # status is a controlled vocabulary (see hd_rlog_statuses()). Validate
+  # BEFORE the parquet is written -- once written, the append-only store
+  # never gets a second chance to reject a bad value.
+  if (identical(table, "hypotheses")) {
+    valid_statuses <- hd_rlog_statuses()$status
+    status_vals    <- rows$status
+
+    if (anyNA(status_vals)) {
+      cli::cli_abort(c(
+        "x" = "{.field status} is required for every hypothesis row; it cannot be {.val NA}.",
+        "i" = "Allowed values: {.val {valid_statuses}}"
+      ))
+    }
+
+    unknown <- setdiff(unique(status_vals), valid_statuses)
+    if (length(unknown) > 0L) {
+      cli::cli_abort(c(
+        "x" = "Unknown hypothesis {.field status}: {.val {unknown}}",
+        "i" = "Allowed values: {.val {valid_statuses}}"
+      ))
+    }
+
+    if ("tested" %in% status_vals) {
+      alternatives <- c("supported", "refuted", "inconclusive-underpowered",
+                         "inconclusive-unmeasurable")
+      cli::cli_warn(c(
+        "!" = "Status {.val tested} is deprecated and ambiguous -- it does not say what the test concluded.",
+        "i" = "Use one of: {.val {alternatives}}"
+      ))
+    }
+  }
 
   # ── Auto-fill lineage per row ────────────────────────────────────────────
   n <- nrow(rows)

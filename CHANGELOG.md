@@ -1,5 +1,162 @@
 # Changelog
 
+## 2026-09-08 → 2026-09-10 (session 29 — the data cannot answer the question)
+
+### Completed
+
+- **Gap analysis against two external skewness sources, raised as
+  [#857](https://github.com/JohnGavin/historical/issues/857).** A datageeek
+  walkthrough of a 5-asset realized-skewness sort, then Klement's summary of
+  Zadeh (2026) on lottery-momentum. Found that **Thesis A of #549 had no
+  implementation issue** — only Thesis B did (#552) — so #857 fills that slot.
+  Also found `grep -ril skew` returns skewness only as a *diagnostic* in this
+  repo (deflated-Sharpe `m3`, the `γ₃` term in `hd_detection_power`, a metrics
+  column, one inline `slider::slide_dbl` risk filter). `NAMESPACE` exports no
+  skew function; it has never been used as a signal.
+
+- **Klement/Zadeh changed three things about the #549 triage.** The lottery
+  proxy is **MAX** (max daily return in the prior month, Bali/Cakici/Whitelaw
+  2011), not `moments::skewness()`. The signal is **short-side only** — lottery
+  winners 15.0% vs traditional 16.5% (unchanged), lottery losers −14.8% vs 0.1%.
+  And it resolves datageeek's internal contradiction: that article's stated
+  rationale (lottery payoffs are overpriced) and its code (long the top two by
+  skewness) point opposite ways, and Zadeh comes down on the rationale's side.
+
+- **`.claude/rules/strategy-combination-modes.md`** — generalised the finding
+  into a construction framework. Four modes (**filter / blend / time / hedge**)
+  that must be declared before coding, since filter and blend make opposite
+  claims about where the information is. Seven checks for any filter, of which
+  two are the load-bearing ones: the **complement control** (if you filter to
+  high-B you must report low-B, or you have one draw from a partition you
+  chose), and **detection power recomputed on the filtered sample** — a filter
+  that improves the point estimate while shrinking the cross-section can leave
+  you strictly less certain than before, while feeling productive.
+
+- **`explorations/momentum_max_lottery/`** — the momentum × MAX double sort,
+  502 US non-ETF equities, 633 months (52.8 years), 3×3, equal-weighted, t+1
+  execution, with `mom_nonlottery` as the control. **Does not clear the first
+  gate, and the underlying claim is untestable here.**
+
+- **Recorded the failure in the research-log DB** (`hd_rlog_*`): 2 hypotheses,
+  1 implementation, 12 results, 3 critiques. Verified retrievable by querying
+  back. Every metric is read from the committed result CSVs by
+  `log_to_research_db.R` — none typed by hand.
+
+- **[#816](https://github.com/JohnGavin/historical/issues/816) unblocked from
+  argument to evidence, and given a vendor comparison.** It was unlabelled and
+  explicitly blocked "pending a data-source decision"; now carries `theme:data`
+  + `high-priority`, the empirical harm measurement, and a comparison of its
+  own candidate list (CRSP / Norgate / EODHD) plus Morningstar.
+
+### Findings worth carrying forward
+
+- **Plain 12-2 momentum is underpowered on 52.8 years of our data** (Sharpe
+  0.163, needs 231 years at 80% power). That is a statement about the universe,
+  not about momentum — 502 large-cap survivors is the wrong population — and it
+  applies to *every* cross-sectional long/short on this panel, including the
+  live `ltr_*` leaderboard strategy, not just this experiment.
+
+- **Sharpe inverted the ranking.** The three L/S strategies rank in exactly
+  opposite order on Sharpe versus CAGR, max drawdown and skew. `mom_lottery` is
+  best on Sharpe (0.221) and worst on CAGR (−0.69%), drawdown (−96.6%) and skew
+  (−5.66). A +4.86% arithmetic mean at 22.0% vol with −5.66 skew yields a
+  respectable Sharpe and a negative compounded return, because a 96.6%
+  drawdown does not come back. Judged on Sharpe the filter wins; judged on
+  money it loses.
+
+- **The mechanism may survive even though the trade did not.** Momentum built
+  on high-MAX names has skew −5.66 and a 96.6% drawdown against +0.14 and
+  −62.9% for the identical strategy on low-MAX names — lottery-ness
+  concentrating momentum crash risk, showing up in the third and fourth moments
+  in a panel that excludes the worst crashes. Recorded as a hypothesis for
+  delisting-inclusive data, not a result: one sample, on a strategy whose mean
+  is indistinguishable from zero, with no significance test on a skew
+  difference.
+
+- **HAC barely moves these numbers** (`mom_plain` 0.163 → 0.160). Worth having
+  on record: autocorrelation is not what is wrong with them.
+
+- **CRSP is now a Morningstar product.** `crsp.org` 301-redirects to
+  `indexes.morningstar.com`. Collapses two candidate vendors into one
+  relationship.
+
+- **Norgate Diamond is the pragmatic first cut for #816** — self-service,
+  reaches **1950** (so it covers Zadeh's 1962 start, which Morningstar's
+  30-year cap and QuantConnect's 1998 start both miss), ~$787.50/yr, with a
+  **3-week free trial** that makes `plan_universe_pit.R`'s own step 3
+  ("run the known-delisted-ticker presence test") executable at zero cost.
+
+- **The question that decides the vendor is not price.** `plan_universe_pit.R`
+  asks for `delisting_price` — "final traded price (0 for liquidations to
+  zero)". Every vendor advertises "history up to the delisting date", which is
+  not the same thing: a series that merely stops marks the position at its last
+  quote rather than what it was worth. Confirmed present for CRSP; **unknown**
+  for Norgate and the Morningstar Equity API. A panel with delisted *names* but
+  not delisted *prices* would let every loser-leg backtest run and quietly
+  produce wrong numbers — worse than today, where it honestly cannot run.
+
+### Failed Approaches
+
+- **My dispatch brief said "~51 stocks"; the panel has 502.** I took the number
+  from `plan_ltr_momentum.R`'s comment about *its own* filtered universe rather
+  than checking `equity_daily`. The agent flagged it but kept terciles as
+  directed, so the sorts are coarser than they needed to be — quintiles would
+  have been fine. Lesson: a universe size read off another plan's comment is a
+  claim, not a fact.
+
+- **Wrote `sharpe_hac` as the naive Sharpe on the first pass, and left six rows
+  NA.** Both caught before commit. The first is the `fail-loud-not-null`
+  mislabelling defect (a column named `sharpe_hac` holding a naive number); the
+  second is #728 (NA standing in for a value that was computable from bucket
+  CSVs sitting right there). Fixed by deriving HAC via
+  `hd_hac_sharpe()` as `hac_tstat × √(ann_factor/T)` and mapping every bucket
+  to its series, with a `cli_abort` if any id fails to resolve.
+
+- **Nearly filed a duplicate of #816.** Recommended a new `theme:data` issue for
+  the delisting panel in two comments before searching; #816 already existed and
+  had for weeks. Search before filing, not after recommending.
+
+- **Reported the research-log store as empty; it was not.** Looked under
+  `packages/historicaldata/inst/extdata/` when `hd_rlog_path()` actually
+  resolves to the **repo** root. Two prior OLMAR entries were already there.
+
+- **Three Morningstar documentation fetches returned empty JS shells**
+  (`developer.morningstar.com` DWS docs, the product page, the Postman
+  collection). Left the Direct Web Services row out of the comparison entirely
+  rather than reconstructing it from search snippets.
+
+### Accuracy / Metrics
+
+- `scripts/verify.sh --quick`: **PASS** (exit 0) — `_targets.R` parses,
+  `docs/_targets.R` parses and `tar_validate`s (8.39s). Run twice, after each
+  code-bearing commit.
+- `scripts/build.sh`: **not applicable**, not skipped — nothing under `R/`,
+  `packages/*/R/`, `docs/` or `_targets.R` changed, so no target body can be
+  affected.
+- roborev: clean — `verdicts.failed` 5 / `addressed` 5, `overview.failed` 0,
+  crash 0, quota 0, consistency check `consistent`.
+- Research log: 4 tables written, queried back successfully.
+
+### Known Limitations
+
+- **`hd_rlog_path()` code and docs disagree.** The roxygen says
+  "under the package root"; the code is `file.path(here::here(), "inst", ...)`,
+  i.e. the repo root. Followed the code. Not filed.
+- **The pre-existing OLMAR hypothesis is duplicated in the research log** —
+  same UUID appended twice, 2026-05-23 and 2026-06-16, in an append-only store.
+  Matters if the log is ever queried for counts. Not filed.
+- **Both #857 sources remain second-hand.** The datageeek article's "66-page
+  SSRN study" is unnamed and Zadeh (2026) is known only through Klement's
+  summary. Universe construction, weighting and skip convention are all
+  unverified and all materially affect a replication. Step 0 of #857.
+- **Norgate prices are third-party.** Their own pricing page 404s; the tier
+  table came from a review site. Confirm at source before quoting in a
+  decision. Norgate also ships Python and no R API, and its updater looks like
+  a desktop application — a real integration cost for an R-first repo.
+- **`results/stock_month_signals.parquet` is not committed** (9.4MB,
+  regenerable by `run.R`). Re-run the script if the per-stock signal table is
+  needed.
+
 ## 2026-09-03 → 2026-09-05 (session 28 — external methodology gap sweeps)
 
 ### Completed

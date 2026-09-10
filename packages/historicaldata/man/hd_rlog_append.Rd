@@ -31,6 +31,14 @@ Each call writes a single parquet file named
 \code{<base_dir>/<table>/}.  This is append-only (audit log);
 rows are never deduped or overwritten.
 }
+\details{
+When \code{table} is \code{"hypotheses"}, \code{status} is validated
+against \code{hd_rlog_statuses()} before anything is written: a value
+outside the vocabulary, or a missing (\code{NA}) status, aborts with
+\code{cli::cli_abort()} rather than being silently written or coerced.
+The deprecated \code{"tested"} value is accepted (for existing writers)
+but triggers a \code{cli::cli_warn()} naming its replacements.
+}
 \seealso{
 Other research-log: 
 \code{\link{hd_rlog_connect}()},
@@ -41,6 +49,7 @@ Other research-log:
 \code{\link{hd_rlog_seal}()},
 \code{\link{hd_rlog_seal_export}()},
 \code{\link{hd_rlog_seal_verify}()},
+\code{\link{hd_rlog_statuses}()},
 \code{\link{hd_rlog_tables}()},
 \code{\link{hd_rlog_uuid}()}
 }

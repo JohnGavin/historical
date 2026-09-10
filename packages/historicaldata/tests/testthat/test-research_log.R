@@ -104,7 +104,7 @@ test_that("append + query round-trips a hypotheses row", {
     predictor       = "book_to_market",
     sample_spec     = "US equities 1963-2023",
     null_hypothesis = "No premium net of costs",
-    status          = "active",
+    status          = "proposed",
     extra_json      = NA_character_
   )
 
@@ -128,7 +128,7 @@ test_that("append auto-fills uuid and timestamp", {
     predictor       = "x",
     sample_spec     = "all",
     null_hypothesis = "none",
-    status          = "draft",
+    status          = "testing",
     extra_json      = NA_character_
   )
 
@@ -159,7 +159,7 @@ test_that("hd_rlog_lineage() returns 3-deep ancestry in order", {
     predictor       = "bm",
     sample_spec     = "US 1963-2023",
     null_hypothesis = "none",
-    status          = "active",
+    status          = "supported",
     extra_json      = NA_character_
   )
   hd_rlog_append("hypotheses", hyp_row, base_dir = tmp)
@@ -221,7 +221,7 @@ test_that("hd_rlog_connect() returns a working connection and view matches appen
     predictor       = c("bm", "me"),
     sample_spec     = c("US", "INT"),
     null_hypothesis = c("none", "none"),
-    status          = c("active", "draft"),
+    status          = c("proposed", "testing"),
     extra_json      = c(NA_character_, NA_character_)
   )
   hd_rlog_append("hypotheses", rows, base_dir = tmp)
@@ -231,4 +231,120 @@ test_that("hd_rlog_connect() returns a working connection and view matches appen
 
   count_result <- DBI::dbGetQuery(con, "SELECT count(*) AS n FROM hypotheses")
   expect_equal(count_result$n, 2L)
+})
+
+# ── Status vocabulary ────────────────────────────────────────────────────────
+
+test_that("hd_rlog_statuses() returns the documented vocabulary", {
+  s <- hd_rlog_statuses()
+  expect_s3_class(s, "tbl_df")
+  expect_named(s, c("status", "description"))
+  expect_type(s$status, "character")
+  expect_type(s$description, "character")
+  expect_false(anyNA(s$status))
+  expect_false(anyNA(s$description))
+  expect_setequal(
+    s$status,
+    c("proposed", "testing", "supported", "refuted",
+      "inconclusive-underpowered", "inconclusive-unmeasurable",
+      "withdrawn", "tested")
+  )
+})
+
+.rlog_status_helper_row <- function(status) {
+  tibble::tibble(
+    economic_claim  = paste0("Claim for status ", status),
+    dependent_var   = "ret",
+    predictor       = "x",
+    sample_spec     = "all",
+    null_hypothesis = "none",
+    status          = status,
+    extra_json      = NA_character_
+  )
+}
+
+test_that("hd_rlog_append() aborts on unknown hypothesis status", {
+  skip_if_not_installed("arrow")
+  tmp <- withr::local_tempdir()
+
+  expect_snapshot(
+    error = TRUE,
+    hd_rlog_append("hypotheses", .rlog_status_helper_row("bogus-status"), base_dir = tmp)
+  )
+})
+
+test_that("hd_rlog_append() aborts when hypothesis status is NA", {
+  skip_if_not_installed("arrow")
+  tmp <- withr::local_tempdir()
+
+  expect_snapshot(
+    error = TRUE,
+    hd_rlog_append("hypotheses", .rlog_status_helper_row(NA_character_), base_dir = tmp)
+  )
+})
+
+test_that("hd_rlog_append() warns on deprecated 'tested' status but still writes", {
+  skip_if_not_installed("arrow")
+  tmp <- withr::local_tempdir()
+
+  expect_snapshot(
+    suppressMessages(
+      hd_rlog_append("hypotheses", .rlog_status_helper_row("tested"), base_dir = tmp)
+    )
+  )
+
+  result <- hd_rlog_query("hypotheses", base_dir = tmp)
+  expect_equal(result$status, "tested")
+})
+
+test_that("hd_rlog_append() round-trips every valid hypothesis status", {
+  skip_if_not_installed("arrow")
+
+  for (s in hd_rlog_statuses()$status) {
+    tmp <- withr::local_tempdir()
+    row <- .rlog_status_helper_row(s)
+
+    if (identical(s, "tested")) {
+      suppressWarnings(suppressMessages(
+        hd_rlog_append("hypotheses", row, base_dir = tmp)
+      ))
+    } else {
+      suppressMessages(hd_rlog_append("hypotheses", row, base_dir = tmp))
+    }
+
+    result <- hd_rlog_query("hypotheses", base_dir = tmp)
+    expect_equal(result$status, s, label = paste0("round-trip status ", s))
+  }
+})
+
+test_that("hd_rlog_append() status validation does not affect tables without a status column", {
+  skip_if_not_installed("arrow")
+
+  tmp_results <- withr::local_tempdir()
+  res_row <- tibble::tibble(
+    strategy_id         = "value_bm",
+    partition           = "OOS_2010_2023",
+    cagr                = 0.08,
+    sharpe_hac          = 0.65,
+    max_dd              = -0.32,
+    turnover_annual     = 1.2,
+    n_obs               = 156L,
+    results_db_run_date = as.Date(NA),
+    extra_json          = NA_character_
+  )
+  hd_rlog_append("results", res_row, base_dir = tmp_results)
+  res_result <- hd_rlog_query("results", base_dir = tmp_results)
+  expect_equal(nrow(res_result), 1L)
+
+  tmp_critiques <- withr::local_tempdir()
+  crit_row <- tibble::tibble(
+    defect_class = "look-ahead",
+    severity     = "high",
+    finding      = "uses future data",
+    cell_ref     = "R5C2",
+    resolved     = FALSE
+  )
+  hd_rlog_append("critiques", crit_row, base_dir = tmp_critiques)
+  crit_result <- hd_rlog_query("critiques", base_dir = tmp_critiques)
+  expect_equal(nrow(crit_result), 1L)
 })

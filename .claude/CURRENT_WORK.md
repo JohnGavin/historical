@@ -1,103 +1,66 @@
-# Current Work — session 28 (2026-09-03 → 2026-09-05)
+# Current Work — session 29 (2026-09-08 → 2026-09-10)
 
-## State
+**Ended 2026-09-10.** Branch `feat/cc-20260908-195542`, 3 commits,
+pushed. [PR #858](https://github.com/JohnGavin/historical/pull/858) OPEN,
+MERGEABLE — **not merged**, awaiting review.
 
-This worktree's branch (`feat/cc-20260903-181019`) has been merged with
-`origin/main` to reconcile with a **parallel worktree** that landed session
-26 (PR #835) and session 27 (PR #837) while this session was running
-unaware of it — this file's own session-number collision (this session had
-mislabeled itself "26") is exactly that discovery surfacing. `main` is now
-at session 27's `19a17d2`, plus this session's two merged PRs
-([#840](https://github.com/JohnGavin/historical/pull/840),
-[#841](https://github.com/JohnGavin/historical/pull/841)).
+## What shipped
 
-## What this session was
-
-Three rounds of "raise gaps relative to this external article" → verify
-against the actual codebase → file issues, plus one round of "implement two
-of them end-to-end."
-
-1. aligrithm vol-clustering article → gaps filed as #838/#839 → implemented
-   via two parallel `fixer` dispatches → hit a QA-gate numbering collision
-   and a merge conflict between the two PRs → both resolved and merged →
-   4 deferred-work follow-ups filed (#843–#846).
-2. algoadvantage Bollinger interview → 3 gaps filed (#847–#849): McClellan
-   breadth indicators, Bollinger/Keltner/ATR squeeze, and a materially
-   weaker-than-described parameter-robustness gate.
-3. StratProof crypto momentum-decay article → 5 gaps filed (#850–#854):
-   pessimistic-cost-first modeling, P(Sharpe>0) gate, per-year win-rate
-   breakdown + arbitraged-out diagnostic, graduation-gate purge verification,
-   spec-first-before-tuning rule. The article's referenced backtest JSON
-   (`xsmom-backtest-v1.json`) was auth-walled for both me and the user —
-   left unexamined.
-
-## The lesson
-
-A dispatched agent's own `verification-before-completion` habit caught an
-error the orchestrator (me) introduced: I told a follow-up fixer to
-renumber a QA gate to "S24" based on a stale, never-fetched local `main`
-checkout. The agent re-verified against `git show origin/main:...` before
-acting, found the true ceiling was `S31`, and self-corrected to `S33`
-instead — silently doing the wrong thing would have collided with two
-already-existing unrelated gates (#656/#603).
-
-A second, structurally identical mistake happened at the ORCHESTRATOR level
-at session end: this file and `CHANGELOG.md` were both edited and numbered
-"session 26" without first fetching `origin/main` to check what session
-number was actually current there — main already had 26 and 27 from a
-parallel worktree. Caught only because merging back into `main` produced a
-real conflict, not because anyone checked first. Same root cause both
-times: state a fact about `main` without fetching it first.
-
-Separately: two independent `fixer` dispatches both backgrounded a
-long-running verification step and stalled on "waiting" — a known,
-previously-documented anti-pattern (5 prior occurrences before today).
-Recoverable via `SendMessage` resume every time, but worth noticing it keeps
-recurring across sessions/models rather than treating each instance as a
-one-off.
-
-## Next session
-
-**Open, unstarted (filed this session, none started):**
-
-| Issue | |
+| Commit | What |
 |---|---|
-| [#843](https://github.com/JohnGavin/historical/issues/843) | Forward-move statistics + `hd_detection_power()` integration on the Markov diagnostic |
-| [#844](https://github.com/JohnGavin/historical/issues/844) | Evaluate walk-forward/rolling threshold recalibration for risk-state/regime classifiers |
-| [#845](https://github.com/JohnGavin/historical/issues/845) | Calibrate zero-alpha surface against real strategy grammar + estimate `rho_bar` |
-| [#846](https://github.com/JohnGavin/historical/issues/846) | Phase-0 dashboard design for both new diagnostics (combined, per consolidation-over-sprawl) |
-| [#847](https://github.com/JohnGavin/historical/issues/847) | No McClellan breadth indicators |
-| [#848](https://github.com/JohnGavin/historical/issues/848) | No Bollinger Bands / Keltner Channels / ATR / squeeze strategy |
-| [#849](https://github.com/JohnGavin/historical/issues/849) | Tighten `backtest-robustness.md` to a dense-neighborhood parameter check |
-| [#850](https://github.com/JohnGavin/historical/issues/850) | No pessimistic-cost-first backtest pass |
-| [#851](https://github.com/JohnGavin/historical/issues/851) | No P(true Sharpe > 0) posterior-style gate |
-| [#852](https://github.com/JohnGavin/historical/issues/852) | No per-calendar-year win-rate breakdown / arbitraged-out diagnostic |
-| [#853](https://github.com/JohnGavin/historical/issues/853) | Verify + wire `K_eff_strat` into a mandatory graduation-purge gate |
-| [#854](https://github.com/JohnGavin/historical/issues/854) | Add "implement cited spec unmodified first" rule |
+| `2409162` | `.claude/rules/strategy-combination-modes.md` — filter/blend/time/hedge, 7 checks for a filter |
+| `e4be0dc` | `explorations/momentum_max_lottery/` — momentum x MAX double sort |
+| `a3577fc` | Research-log DB entries for the failure (2 hypotheses, 1 impl, 12 results, 3 critiques) |
 
-**Carried over from session 27 (still open, unchanged by this session):**
+Issues touched: [#857](https://github.com/JohnGavin/historical/issues/857)
+raised (Thesis A of #549 had no impl issue),
+[#549](https://github.com/JohnGavin/historical/issues/549) updated twice,
+[#816](https://github.com/JohnGavin/historical/issues/816) labelled
+`theme:data`/`high-priority` and given evidence + a vendor comparison.
 
-| Issue | Why held |
-|---|---|
-| [#553](https://github.com/JohnGavin/historical/issues/553)/[#554](https://github.com/JohnGavin/historical/issues/554)/[#555](https://github.com/JohnGavin/historical/issues/555) | Fundamentals pipeline built for a 10-ticker pilot only |
-| [#585](https://github.com/JohnGavin/historical/issues/585) G1/G4 | Blocked on #587 Phase 2+ / #463 |
-| [#490](https://github.com/JohnGavin/historical/issues/490) Gap 5 | pointblank pilot — low priority |
-| [#813](https://github.com/JohnGavin/historical/issues/813) | avoid_worst leaderboard metrics wired to SPY buy-and-hold |
-| [#804](https://github.com/JohnGavin/historical/issues/804) | `pkgctx-freshness` CI flake — still unfixed; confirmed again this session via 10 independent CI runs, all failing the same way since 2026-08-30 |
-| [#830](https://github.com/JohnGavin/historical/issues/830), [#831](https://github.com/JohnGavin/historical/issues/831) | Crypto microstructure + NautilusTrader evaluation — not started |
-| [llm#1123](https://github.com/JohnGavin/llm/issues/1123) | `.roborev/` gitignore bug (29 non-running reviews), 14 unclassified-severity findings, dashboard-button 404 — unresolved |
-| [llm#1126](https://github.com/JohnGavin/llm/issues/1126) | whether `/bye`'s roborev Y/N gate should scale with session volume |
+## Next session — pick one
 
-**Signal Board tiers P2-P5 still untouched** (re-derive from a fresh `gh
-issue list`, not the stale Signal Board snapshot — three sessions have now
-moved issues since it was built).
+1. **Trial Norgate Diamond** (3 weeks free, ~$787.50/yr, US back to 1950,
+   delisted + PIT index constituents). Run `plan_universe_pit.R`'s own step 3
+   against the fixture: Enron, Lehman, Bear Stearns, WorldCom, WaMu — all five
+   verified absent from `equity_daily` today. **First question to the vendor is
+   not price: does it carry a `delisting_price` / delisting return?** Unknown
+   for Norgate; known present for CRSP. This gates #816, #857 and #552.
+2. **Build `hd_max_daily_return()` + `hd_realized_skewness()`** (#857
+   deliverable 1). Cheap, reusable, needed regardless of how the Zadeh claim
+   resolves. Migrate `R/plan_mean_reversion.R:85`'s inline `slider::slide_dbl`
+   skew to the exported version so there is one definition, not two. Package
+   export changes → run `scripts/regen_api_context.sh`.
+3. **Apply the new rule to `plan_mean_reversion.R`** — it applies three
+   simultaneous risk filters (`min_skew`, `max_semivar_ratio`, `max_cvar_pct`)
+   with hardcoded thresholds, no complement control, no per-filter attribution.
+   Zadeh's design with none of the checks. `ablation` appears nowhere in `R/`.
+4. **Obtain both papers.** Zadeh (2026) and the datageeek "66-page SSRN study".
+   Both #857 sources are second-hand. Step 0 there.
 
-**roborev at this session's `/bye`:** 30 verdict failures, 29 addressed →
-**1 unaddressed** (job from 2026-08-21, network `ENOTFOUND`, not
-crash-class). 0 crashes, 0 quota this window. (Session 27 reported 54/43/11
-at its own end on 2026-09-01 — the drop to 1 by now reflects roborev's own
-auto-close/requeue activity between sessions, not anything this session
-did.)
+## Carry forward — the finding with the widest blast radius
 
-**Not investigated:** `xsmom-backtest-v1.json` — auth-walled for both the
-user and this session, ask again only if access changes.
+**Plain 12-2 momentum is underpowered on 52.8 years of our data** (Sharpe
+0.163, needs 231 years at 80% power). That is the universe, not momentum. It
+applies to every cross-sectional long/short on `equity_daily` — including the
+live `ltr_*` leaderboard strategy — not just the experiment that found it.
+Worth its own issue if nobody has raised one.
+
+## Loose ends, unfiled
+
+- `hd_rlog_path()` roxygen says "package root"; code returns the **repo** root.
+- OLMAR hypothesis duplicated in the append-only research log (same UUID,
+  2026-05-23 and 2026-06-16). Breaks any count query.
+- Morningstar Direct Web Services docs are unreadable (JS SPA) — the DWS row in
+  the #816 comparison is deliberately blank. Paste the pages to fill it.
+
+## Note on session numbering
+
+This session initially self-labelled "26" and collided with `main`, which was
+already at **session 28**. Session 28's own notes record it making the same
+mistake for the same reason: parallel worktrees, each unaware of what the
+others have landed. Renumbered to 29 during the merge. Session 28's handover
+is preserved in its `CHANGELOG.md` entry (2026-09-03 → 2026-09-05).
+
+**Before writing a session number, read `git show origin/main:CHANGELOG.md`** —
+the local checkout's newest entry is not the repo's.
