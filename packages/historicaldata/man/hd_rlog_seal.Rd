@@ -53,6 +53,7 @@ Other research-log:
 \code{\link{hd_rlog_schema}()},
 \code{\link{hd_rlog_seal_export}()},
 \code{\link{hd_rlog_seal_verify}()},
+\code{\link{hd_rlog_statuses}()},
 \code{\link{hd_rlog_tables}()},
 \code{\link{hd_rlog_uuid}()}
 }
