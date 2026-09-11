@@ -1,0 +1,1 @@
+has_ticker_or_name_column_in_firm_level_file: FALSE
