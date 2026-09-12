@@ -1,5 +1,130 @@
 # Changelog
 
+## 2026-09-11 → 2026-09-12 (session 30 — the free data has the right universe and no returns)
+
+### Completed
+
+- **Norgate deprioritised on cost; searched open-source alternatives instead**
+  and found one that removes the blocker. [Open Source Asset Pricing](https://www.openassetpricing.com/)
+  (Chen & Zimmermann) redistributes CRSP-derived firm-level signals free.
+  Raised [#862](https://github.com/JohnGavin/historical/issues/862) to ingest
+  it and verify four presumptions, then **worked it**.
+
+- **P1 verified: the survivorship blocker genuinely lifts, free.**
+  **86.7% of 38,870 permnos exit more than a year before the panel end**
+  (85.8% excluding the lag tail; 37% even on a pre-2000 cutoff immune to any
+  recency artefact). Comparator: `equity_daily` is a structural **0 of 502**.
+  `MaxRet` (Bali/Cakici/Whitelaw 2011 — the exact signal #857 needs),
+  `Mom12m`, `CoskewACX` and `ReturnSkew` are all present.
+
+- **P2 failed, and it costs us the headline test.** The firm-level file is
+  exactly 211 columns — `permno`, `yyyymm`, 209 signals — with **no return
+  column of any kind**. We can rank on MAX and momentum but cannot compute
+  what the portfolios earned, so #857's 3x3 corner table against Zadeh's
+  15.0% / −14.8% is not reproducible free. It narrows to a portfolio-level
+  interaction test on the 212 pre-built long-short series.
+
+- **P3: no data licence exists.** Verified absence rather than an unchecked
+  assumption — GitHub LICENSE is GPL-2.0 code-only, the README greps clean,
+  the FAQ and the Drive bundle carry nothing. SSRN 403'd and was deliberately
+  **not** reconstructed from search snippets.
+
+- **P4 passed** — all three files downloaded via plain `curl` with zero
+  WRDS/Postgres environment variables set.
+
+- **[#863](https://github.com/JohnGavin/historical/issues/863) raised:
+  "stale by design" and "the fetch broke" are indistinguishable.** OSAP
+  releases roughly annually and lags ~10 months, which would fail
+  `check_dashboard_freshness.R`'s single hardcoded 14-day threshold every run,
+  forever, for a correct reason.
+
+- **Consolidated a duplicate I created.** #861 duplicated
+  [#804](https://github.com/JohnGavin/historical/issues/804) (2026-08-29,
+  same crates.io/zmij failure). Closed #804 as superseded with three
+  corrections recorded there.
+
+### Findings worth carrying forward
+
+- **The two free sources have complementary defects, and neither alone
+  answers Zadeh.** OSAP has the right universe and no returns; `equity_daily`
+  has returns and the wrong universe. The full design still needs returns
+  joined to a delisting-inclusive panel — CRSP, or something supplying both.
+  The free route has a ceiling and #857 now records where it is.
+
+- **Scaling a freshness threshold only delays the question.** A 365-day
+  threshold on a slow source means a broken fetch is invisible for up to a
+  year — trading a false alarm for a silent failure, which is worse. The
+  distinguishing signal is not age but two timestamps: *last-checked* (always
+  recent if healthy) versus *last-changed* (legitimately ancient). Only the
+  first is a health signal. #863.
+
+- **Derived data is a different licensing question from redistribution.**
+  Owner point, and it splits P3 into P3a (publishing the files or a
+  re-encoded copy — blocking if unclear) and P3b (publishing statistics
+  computed from them — usually fine). A re-encoded copy is still a copy
+  however much the pipeline touched it; a `permno` x month signal panel is
+  close enough to the original to be worth asking about, a long-short return
+  series is not.
+
+- **Tokenised equities are the wrong instrument, decisively.** A token exists
+  *because* a company is currently listed and liquid — Enron cannot be
+  tokenised — so it is `equity_daily`'s defect concentrated. Ondo launched
+  Sept 2025, Robinhood EU June 2025: 12–15 months against a 1962 sample.
+  Genuinely interesting for weekend/overnight price discovery; not a
+  survivorship fix.
+
+- **CRSP is now distributed by Morningstar** — `crsp.org` 301-redirects to
+  `indexes.morningstar.com`. Collapses two candidate vendors into one.
+
+### Failed Approaches
+
+- **Filed #861 without searching first; it duplicated #804.** Second
+  duplicate-adjacent miss in two sessions (the first was nearly re-filing
+  #816). The habit that would have caught both is one `gh issue list --search`
+  before writing, not after recommending.
+
+- **Trusted a subagent's corroborating argument without checking it.** The
+  OSAP report called the permno rise-decline-rise "the signature of
+  continuous entry and exit". Checking the numbers, the 2024 count (10,907)
+  *exceeds* the 1998 peak (10,490), which contradicts the documented US
+  listing decline. Withdrew the claim in `FINDINGS.md` and added the
+  universe-breadth limitation that actually follows: with no
+  `shrcd`/`exchcd`/ticker column the panel cannot be filtered to US common
+  stocks. P1 was unaffected — the exit rate is direct evidence — but the
+  supporting argument was wrong and would have been quoted onward.
+
+- **Three attempts to regenerate `docs/api-historicaldata.md` failed before
+  the cause was found.** First a stale literal `/tmp/pkgctx_output_XXXXXX.md`
+  (BSD `mktemp` does not substitute X's followed by a suffix), then the
+  crates.io 403, then a wrong guess that it was a local CA-bundle problem.
+  The actual cause — crates.io rejecting curl's default User-Agent — was only
+  isolated by testing the URL with and without a browser UA.
+
+### Accuracy / Metrics
+
+- `scripts/verify.sh --quick`: **PASS** (exit 0).
+- roborev: **clean** — verdicts 8 failed / 8 addressed, `overview.failed` 0,
+  crash 0, quota 0, consistency check `consistent`.
+- OSAP verification: 4 presumptions answered, each with an explicit
+  PASS/FAIL/INDETERMINATE verdict. Committed artefacts are small — largest
+  14KB, no OSAP data committed.
+- `regen_api_context.sh` / `ctx_audit`: not applicable — no package `R/`
+  changes this session, and the repo root is not a package.
+
+### Known Limitations
+
+- **No free `permno` crosswalk**, so OSAP cannot be joined to our
+  ticker-keyed data at all. Tracked in #862.
+- **The OSAP universe cannot be filtered to US common stocks** — no share
+  code, exchange code or ticker. Any replication of a "US stocks" result is
+  sorting a different population.
+- **7.8 GB left in `/tmp/osap_scratch`** on a disk at 93% (60 GB free),
+  deliberately, so a follow-up need not re-download 8.35 GB. Delete when done.
+- **`pkgctx-freshness` CI remains red** (#861) — it dies building the tool
+  and never reaches its comparison step, so it reports nothing either way.
+- Both #857 sources are still second-hand: the datageeek "66-page SSRN study"
+  is unnamed and Zadeh (2026) is known only through Klement's summary.
+
 ## 2026-09-08 → 2026-09-10 (session 29 — the data cannot answer the question)
 
 ### Completed
