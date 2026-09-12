@@ -1,0 +1,9 @@
+"column","present_in_firm_level_file"
+"MaxRet",TRUE
+"Mom12m",TRUE
+"CoskewACX",TRUE
+"ReturnSkew",TRUE
+"Price",FALSE
+"Size",FALSE
+"STreversal",FALSE
+"any_return_like_column",FALSE
