@@ -97,7 +97,18 @@ download_gdrive_large <- function(file_id, dest) {
       "i" = "Interstitial saved at {interstitial} for inspection."
     ))
   }
-  uuid <- regmatches(uuid_match, regexpr("[a-f0-9-]{36}$", uuid_match))
+  # Capture the UUID with a group rather than re-matching a substring of
+  # `uuid_match`: that string ends in the literal closing double-quote, so a
+  # trailing-anchored "[a-f0-9-]{36}$" can never match and silently yields
+  # character(0) -- which then makes sprintf() below return character(0) and
+  # curl run with no URL at all. Caught by roborev on job 13443.
+  uuid <- regmatches(html, regexec('name="uuid" value="([a-f0-9-]{36})"', html))[[1]][2]
+  if (is.na(uuid) || !nzchar(uuid)) {
+    cli::cli_abort(c(
+      "x" = "Matched the Google Drive confirm-token block but could not extract the uuid.",
+      "i" = "Interstitial saved at {interstitial} for inspection."
+    ))
+  }
   url2 <- sprintf(
     "https://drive.usercontent.google.com/download?id=%s&export=download&confirm=t&uuid=%s",
     file_id, uuid
@@ -226,7 +237,6 @@ trailing_median <- vapply(seq_len(n_months), function(i) {
 }, numeric(1))
 dense_mask <- monthly$n_permno >= 0.8 * trailing_median
 # dense_end = last month in the longest trailing run of dense months
-last_dense_idx <- max(which(dense_mask))
 # walk backwards from the very end to find where the SUSTAINED drop begins
 run_end <- n_months
 while (run_end > 1 && !dense_mask[run_end]) run_end <- run_end - 1
