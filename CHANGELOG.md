@@ -43,6 +43,45 @@
   same crates.io/zmij failure). Closed #804 as superseded with three
   corrections recorded there.
 
+- **Read [Ghost Members](https://deadsignalslab.substack.com/p/ghost-members-a-recipe-for-reconstructing)
+  for gaps in our backfilling, and it found one I had not considered:
+  ticker recycling.** Raised
+  [#865](https://github.com/JohnGavin/historical/issues/865). We had been
+  treating survivorship as "which companies are missing"; the quieter problem
+  is *which company a symbol referred to at the time*. `APC` was Anadarko
+  until 2019 and is ARKO Corp today. `scripts/fetch_fundamentals_edgar.R`
+  resolves ticker to CIK against SEC's **current** map with no date
+  validation, then `distinct(ticker, .keep_all = TRUE)` silently keeps the
+  first row on collision. Latent today (ten mega-caps, none recycled) but
+  wrong by construction. Their fix — require the candidate CIK's filings to
+  overlap the holding window — is a check with a defined way to return
+  *wrong*, which ticker-string matching cannot have.
+
+- **A third, free route for [#816](https://github.com/JohnGavin/historical/issues/816):
+  reconstruct membership rather than buy or download it.** `fja05680/sp500`
+  snapshots + SEC records + CIK overlap validation. It also supplies the
+  number this repo has never produced: **Sharpe 0.63 to -0.06** under
+  point-in-time membership. The three free/paid routes are complements, not
+  alternatives — reconstruction gives *membership with dates*, OSAP gives
+  *signals over a delisting-inclusive universe*, neither gives returns.
+  Joining reconstructed membership to our own `equity_daily` prices is the
+  first free route to an actual survivorship-corrected result here.
+
+- **Wikidata evaluated as a data-generation and cross-check source**
+  ([llm#1193](https://github.com/JohnGavin/llm/issues/1193)), prompted by an
+  R/Shiny castle atlas built on it. Verified by live query rather than
+  assumed: Wikidata holds Enron's inception (1985), **dissolution (2001)**,
+  exchange (NYSE) and ticker (`ENE`) — so it is a genuine second source for
+  delisting facts we currently have none for. Three caveats found the same
+  way: ticker is a **qualifier on the exchange statement**, not a top-level
+  property (a naive `P249` check returns NO for Apple, Microsoft and Thales
+  alike and looks like a data gap); the model supports start/end qualifiers
+  for point-in-time listing identity but the data does not populate them; and
+  ISIN is present for all three live companies and **absent for Enron** —
+  survivorship bias in the metadata layer, worst where we need it most.
+  **Cardinal rule: absence is never evidence of non-existence**, so it can
+  confirm and never refute.
+
 ### Findings worth carrying forward
 
 - **The two free sources have complementary defects, and neither alone
@@ -99,6 +138,18 @@
   crates.io 403, then a wrong guess that it was a local CA-bundle problem.
   The actual cause — crates.io rejecting curl's default User-Agent — was only
   isolated by testing the URL with and without a browser UA.
+
+- **Committed a High-severity bug and roborev caught it, not me.**
+  `explorations/osap_verification/run.R`'s Google Drive confirm-token regex
+  could never match: `uuid_match` ends in a literal double-quote, so a
+  trailing-anchored `[a-f0-9-]{36}$` yields `character(0)`, `sprintf()`
+  propagates it, `system2()` drops the empty argument and curl runs with no
+  URL. No error at any point — the `fail-loud-not-null` shape exactly. It
+  looked fine only because the file was already cached from the original
+  fetch, short-circuiting at the `file.exists()` guard, so the script's own
+  reproducibility claim was void from a cold cache. Verified the finding by
+  direct test before fixing (`uuid length: 0`), fixed with a capturing group
+  plus an explicit abort, and re-tested. Fixed in `79a8992`.
 
 ### Accuracy / Metrics
 

@@ -21,6 +21,24 @@ Complementary defects. Neither alone reproduces Zadeh's design. The full
 thing still needs returns joined to a delisting-inclusive panel — CRSP, or
 something supplying both. Norgate deprioritised on cost.
 
+## Added late in the session (2026-09-13)
+
+- **[#865](https://github.com/JohnGavin/historical/issues/865) — ticker
+  recycling.** A distinct problem from #816: not "which companies are
+  missing" but "which company did this symbol mean at the time".
+  `fetch_fundamentals_edgar.R` resolves ticker to CIK with no date check.
+  Latent today, wrong by construction.
+- **[#816](https://github.com/JohnGavin/historical/issues/816) — a free third
+  route.** Reconstruct S&P 500 membership from `fja05680/sp500` + SEC + CIK
+  overlap validation, then join to our own prices. Complements OSAP rather
+  than replacing it.
+- **[llm#1193](https://github.com/JohnGavin/llm/issues/1193) — Wikidata** as
+  a data-generation and cross-check stack. Travel is the best first candidate
+  (private project). Confirm-only, never refute.
+- **Fixed a High roborev finding in my own commit** (`79a8992`) — the OSAP
+  script's Drive confirm-token regex could never match. Caught by roborev,
+  not by me; verified by direct test before fixing.
+
 ## Next session — pick one
 
 1. **Land the OSAP verification.** Branch is committed, `verify.sh --quick`
