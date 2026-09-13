@@ -1,0 +1,4 @@
+"dataset","n_total","n_exit_gt_1yr","pct_exit_gt_1yr"
+"osap_firm_level (panel_end = raw max observed month)",38870,33687,0.866658091072807
+"osap_firm_level (panel_end = dense-coverage month, excludes lag tail)",38870,33361,0.858271160277849
+"equity_daily",502,0,0

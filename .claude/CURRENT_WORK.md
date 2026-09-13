@@ -1,66 +1,80 @@
-# Current Work — session 29 (2026-09-08 → 2026-09-10)
+# Current Work — session 30 (2026-09-11 → 2026-09-12)
 
-**Ended 2026-09-10.** Branch `feat/cc-20260908-195542`, 3 commits,
-pushed. [PR #858](https://github.com/JohnGavin/historical/pull/858) OPEN,
-MERGEABLE — **not merged**, awaiting review.
+**Ended 2026-09-12.** Branch `feat/cc-20260912-osap-verification` (fresh from
+`origin/main`; the previous branch was squash-merged as `0c68bf4`).
 
-## What shipped
+## State
 
-| Commit | What |
-|---|---|
-| `2409162` | `.claude/rules/strategy-combination-modes.md` — filter/blend/time/hedge, 7 checks for a filter |
-| `e4be0dc` | `explorations/momentum_max_lottery/` — momentum x MAX double sort |
-| `a3577fc` | Research-log DB entries for the failure (2 hypotheses, 1 impl, 12 results, 3 critiques) |
+Session 29's work is **merged** ([PR #858](https://github.com/JohnGavin/historical/pull/858)).
+This session's OSAP verification is on the new branch, pending a PR.
 
-Issues touched: [#857](https://github.com/JohnGavin/historical/issues/857)
-raised (Thesis A of #549 had no impl issue),
-[#549](https://github.com/JohnGavin/historical/issues/549) updated twice,
-[#816](https://github.com/JohnGavin/historical/issues/816) labelled
-`theme:data`/`high-priority` and given evidence + a vendor comparison.
+## The headline
+
+**The survivorship blocker lifts, free — but not all the way.**
+
+| | universe | returns |
+|---|---|---|
+| OSAP (Chen-Zimmermann) | **right** — 86.7% of 38,870 permnos exit >1yr before panel end | **none** |
+| `equity_daily` | wrong — 0 of 502 exit | yes |
+
+Complementary defects. Neither alone reproduces Zadeh's design. The full
+thing still needs returns joined to a delisting-inclusive panel — CRSP, or
+something supplying both. Norgate deprioritised on cost.
+
+## Added late in the session (2026-09-13)
+
+- **[#865](https://github.com/JohnGavin/historical/issues/865) — ticker
+  recycling.** A distinct problem from #816: not "which companies are
+  missing" but "which company did this symbol mean at the time".
+  `fetch_fundamentals_edgar.R` resolves ticker to CIK with no date check.
+  Latent today, wrong by construction.
+- **[#816](https://github.com/JohnGavin/historical/issues/816) — a free third
+  route.** Reconstruct S&P 500 membership from `fja05680/sp500` + SEC + CIK
+  overlap validation, then join to our own prices. Complements OSAP rather
+  than replacing it.
+- **[llm#1193](https://github.com/JohnGavin/llm/issues/1193) — Wikidata** as
+  a data-generation and cross-check stack. Travel is the best first candidate
+  (private project). Confirm-only, never refute.
+- **Fixed a High roborev finding in my own commit** (`79a8992`) — the OSAP
+  script's Drive confirm-token regex could never match. Caught by roborev,
+  not by me; verified by direct test before fixing.
 
 ## Next session — pick one
 
-1. **Trial Norgate Diamond** (3 weeks free, ~$787.50/yr, US back to 1950,
-   delisted + PIT index constituents). Run `plan_universe_pit.R`'s own step 3
-   against the fixture: Enron, Lehman, Bear Stearns, WorldCom, WaMu — all five
-   verified absent from `equity_daily` today. **First question to the vendor is
-   not price: does it carry a `delisting_price` / delisting return?** Unknown
-   for Norgate; known present for CRSP. This gates #816, #857 and #552.
-2. **Build `hd_max_daily_return()` + `hd_realized_skewness()`** (#857
-   deliverable 1). Cheap, reusable, needed regardless of how the Zadeh claim
-   resolves. Migrate `R/plan_mean_reversion.R:85`'s inline `slider::slide_dbl`
-   skew to the exported version so there is one definition, not two. Package
-   export changes → run `scripts/regen_api_context.sh`.
-3. **Apply the new rule to `plan_mean_reversion.R`** — it applies three
-   simultaneous risk filters (`min_skew`, `max_semivar_ratio`, `max_cvar_pct`)
-   with hardcoded thresholds, no complement control, no per-filter attribution.
-   Zadeh's design with none of the checks. `ablation` appears nowhere in `R/`.
-4. **Obtain both papers.** Zadeh (2026) and the datageeek "66-page SSRN study".
-   Both #857 sources are second-hand. Step 0 there.
+1. **Land the OSAP verification.** Branch is committed, `verify.sh --quick`
+   passes, no PR opened yet. Cheapest thing on the list.
+2. **#857 portfolio-level interaction test.** The custom double sort is dead
+   (no returns), but OSAP ships 212 pre-built long-short series and Ken
+   French momentum deciles are already ingested. Ask whether MAX and momentum
+   interact at portfolio level — a real test, a weaker claim, and the
+   write-up must say which.
+3. **#863 freshness split.** Needed before #862 ingestion lands, or a
+   ~10-month-lagged source fails a 14-day threshold every run forever. The
+   substance is *last-checked* vs *last-changed*, not a bigger number.
+4. **#862 open sub-tasks:** find or build a `permno` crosswalk (none free —
+   blocks joining OSAP to our ticker-keyed data), and decide how to handle
+   the un-filterable non-common-stock securities.
+5. **#861 pkgctx CI** — still red, still reporting nothing either way.
 
-## Carry forward — the finding with the widest blast radius
+## Housekeeping
 
-**Plain 12-2 momentum is underpowered on 52.8 years of our data** (Sharpe
-0.163, needs 231 years at 80% power). That is the universe, not momentum. It
-applies to every cross-sectional long/short on `equity_daily` — including the
-live `ltr_*` leaderboard strategy — not just the experiment that found it.
-Worth its own issue if nobody has raised one.
+- **7.8 GB in `/tmp/osap_scratch`**, disk at 93% (60 GB free). Left
+  deliberately so a follow-up need not re-download 8.35 GB. Delete when done.
 
-## Loose ends, unfiled
+## Carried forward from session 29, still unaddressed
 
-- `hd_rlog_path()` roxygen says "package root"; code returns the **repo** root.
-- OLMAR hypothesis duplicated in the append-only research log (same UUID,
-  2026-05-23 and 2026-06-16). Breaks any count query.
-- Morningstar Direct Web Services docs are unreadable (JS SPA) — the DWS row in
-  the #816 comparison is deliberately blank. Paste the pages to fill it.
+**Plain 12-2 momentum is underpowered on 52.8 years of `equity_daily`**
+(Sharpe 0.163, needs 231 years). That is the universe, not momentum, and it
+applies to every cross-sectional long/short on this panel — including the
+live `ltr_*` leaderboard strategy. Still deserves its own issue.
 
-## Note on session numbering
+## Two process notes worth keeping
 
-This session initially self-labelled "26" and collided with `main`, which was
-already at **session 28**. Session 28's own notes record it making the same
-mistake for the same reason: parallel worktrees, each unaware of what the
-others have landed. Renumbered to 29 during the merge. Session 28's handover
-is preserved in its `CHANGELOG.md` entry (2026-09-03 → 2026-09-05).
-
-**Before writing a session number, read `git show origin/main:CHANGELOG.md`** —
-the local checkout's newest entry is not the repo's.
+- **Search before filing.** Two near-misses in two sessions: nearly re-filed
+  #816, then actually did duplicate #804 as #861. One
+  `gh issue list --search` before writing would have caught both.
+- **Check a subagent's supporting argument, not just its verdict.** The OSAP
+  report's panel-shape corroboration was wrong (the 2024 count exceeds the
+  1998 peak, contradicting the US listing decline) even though its P1 verdict
+  was right. Withdrawn in `FINDINGS.md`. A correct conclusion can rest on a
+  bad argument, and the argument is what gets quoted onward.
