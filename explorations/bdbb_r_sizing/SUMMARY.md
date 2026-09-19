@@ -23,6 +23,20 @@ verbatim `economic_claim`, `null_hypothesis`, `decision_rule`, and
 `log_to_research_db.R` only appends `implementations`/`results`/`critiques`
 rows with `parent_uuid` pointing at these existing sealed uuids.
 
+**Closure.** Both hypotheses were appended-to (never edited) with
+`status = "inconclusive-underpowered"` by
+`explorations/bdbb_r_sizing/close_hypotheses.R`, which reads the outcome
+straight from `results/decision_table.csv`, carries `commit_hash` /
+`sealed_at` / `seal_method` over unchanged, and re-verifies
+`hd_rlog_seal_verify()` on the newly appended rows before reporting
+success — recomputed hash matched the stored hash for both, confirming
+the append changed only `status` and no claim field. The previously
+`"proposed"` rows are left in the append-only store exactly as sealed;
+the closure is a NEW row per uuid, not an edit. `log_to_research_db.R` was
+then run once, appending 2 `implementations`, 52 `results`, and 10
+`critiques` rows, each `parent_uuid`-linked to these two sealed hypotheses
+(both uuids confirmed present in the research log before linking).
+
 ## (a) Combination mode
 
 **"time"**, per `.claude/rules/strategy-combination-modes.md`. The R-metric
@@ -350,15 +364,80 @@ economic claim either, and on the evidence available today a much simpler
 volatility-based overlay would be at least as good a use of the same
 capital.**
 
+## (k) Max-drawdown mechanism check — did the overlay protect against BTC's worst loss?
+
+`results/summary_metrics.csv` shows BTC's `overlay` `max_dd` (net) is
+**identical to the benchmark's to 4 decimal places at every one of the four
+`w_low` weights** (all read `-0.8392`) — including `w_low = 0.00`, where the
+overlay goes fully flat whenever R sits in its top tercile. The implied
+reading, stated in the dispatch that produced this section: **R was never
+in its top tercile during BTC's worst drawdown, so the overlay held full
+exposure right through the single largest loss in the sample** — a failure
+independent of Sharpe and independent of detection power, and therefore not
+excused by the `inconclusive-underpowered` verdict in (g)-(j).
+
+This is verified directly from the per-bar series (`results/drawdown_analysis.csv`,
+computed in `run.R` step 8b from the same in-memory analysis sample used
+for every other number in this document — not re-derived from the
+aggregate `max_dd` figure alone):
+
+| Asset | Peak | Trough | Window | `max_dd` (benchmark, net) | Frac. bars R in top tercile | Mean exposure, overlay `w_low=0.00` | Mean exposure, volsizing `w_low=0.00` |
+|---|---|---|---:|---:|---:|---:|---:|
+| BTC | 2017-12-17 13:00 | 2018-12-15 15:00 | 363.1 days / 8,663 bars | -83.92% | **0.0000** | **1.0000** | 0.7278 |
+| SOL | 2021-11-06 23:00 | 2022-12-29 20:00 | 417.9 days / 10,029 bars | -96.80% | 0.0966 | 0.9034 | 0.7350 |
+
+**The implied reading is confirmed exactly for BTC, not merely consistent
+with it.** Across all 8,663 bars of BTC's year-long 2017-2018 crash, `R`
+was in its top (highest-R) tercile on **zero** of them — `frac_bars_top_tercile_R
+= 0`. The `w_low = 0.00` overlay's mean exposure over the entire window is
+therefore exactly **1.0000**: the de-risking mechanism did not fire even
+once during the single worst loss in the 11-year sample, for the reason
+the overlay is built to de-risk on high R and R was simply never high
+during this crash. This is not a sampling artefact of `w_low = 0.00`
+specifically — it holds identically at every weight (0.00/0.25/0.50/0.75)
+because exposure only changes when the tercile condition is met, and it
+never was met.
+
+Vol-sizing, by contrast, engaged its mechanism for roughly 27% of the
+window (mean exposure 0.7278, i.e. de-risked on ~27% of bars) — this is
+exactly why volsizing's `max_dd` (net, `w_low=0.00`) is **-78.40%**, a
+5.5pp smaller loss than the identical-to-benchmark overlay. Realised
+volatility, unlike R, *was* elevated for a meaningful share of BTC's 2018
+decline; the BDBB R-metric was not.
+
+**SOL's picture is less extreme but points the same direction.** During
+SOL's 2021-2022 drawdown, R was in its top tercile on 9.7% of bars (not
+zero, but still low), giving `w_low=0.00` overlay a mean exposure of 0.9034
+— nearly full exposure throughout. This is consistent with SOL's overlay
+`max_dd` (net, `w_low=0.00`, -97.14% per `summary_metrics.csv`) being
+*slightly worse* than its own benchmark (-96.80%): the overlay engaged
+often enough to add turnover cost, but not often enough to meaningfully
+reduce the drawdown. Vol-sizing again de-risked more (mean exposure 0.7350)
+and posted a smaller loss (-93.75%).
+
+**Conclusion: the data confirms the implied reading for BTC and is directionally
+consistent for SOL.** This is a second, independent line of evidence against
+the R-metric as a drawdown-protection signal, distinct from (e)'s
+Sharpe-based "vol-sizing beats R-sizing at every cell" finding: it shows
+specifically *why* — on the one loss event that would have mattered most to
+avoid, R gave no warning at all on BTC and only a weak one on SOL, while
+plain trailing volatility gave a stronger one on both.
+
 ## Files
 
 - `run.R` — the script (self-contained, re-runnable; `cli::cli_abort()` on
   hard failures; no silent NA coercion; ~46s per asset for `bdbb_fit()`,
-  ~3.5 min end-to-end for both assets).
+  ~3.5 min end-to-end for both assets). Extended (this pass) to also
+  compute the max-drawdown window analysis in step 8b and write the two new
+  files below.
+- `close_hypotheses.R` — appends a `status`-only update row per sealed
+  hypothesis (see the "Closure" note under the header table). Append-only
+  and NOT idempotent by design: re-running it appends a second, redundant
+  closure row per uuid. Already run once as part of this pass.
 - `log_to_research_db.R` — writes `implementations`/`results`/`critiques`
-  rows linked to the two sealed hypotheses. **Not executed as part of this
-  dispatch** — the orchestrator reviews `results/` first and runs it
-  deliberately.
+  rows linked to the two sealed hypotheses. Already run once as part of
+  this pass (verified beforehand that both target uuids resolve in the
+  research log).
 - `results/summary_metrics.csv` — every metric row summarised in (b)/(c)
   above, one row per (asset, variant, w_low, cost_type), 52 rows.
 - `results/decision_table.csv` — the 8 (asset, w_low) verdicts in (g).
@@ -366,8 +445,35 @@ capital.**
   figures in (e).
 - `results/turnover.csv` — annualised turnover per (asset, variant),
   referenced throughout (d)/(e)/(f).
-- `results/analysis_sample_series.parquet` — the full bar-level analysis
-  sample (time, log_ret, R, R_tercile_lag1, trailing_realised_vol,
-  vol_tercile_lag1) for both assets, 134,184 rows. **Not committed** — at
-  4.9MB it is well over a reasonable committed footprint for this
-  exploration; it is fully regenerable by re-running `run.R`.
+- `results/drawdown_analysis.csv` — the max-drawdown peak-to-trough window,
+  per asset, and the fraction-in-top-tercile / mean-exposure figures in (k).
+- `results/daily_series.csv` — **committed**, 6,005 rows (both assets),
+  ~0.92MB. Daily-downsampled per-bar series: `date`, `n_bars` (hourly bars
+  aggregated into that day), `log_ret` (day's total compounded log return —
+  exact, since log returns sum losslessly regardless of the aggregation
+  window), `R_last`/`R_tercile_lag1_last` (end-of-day BDBB state),
+  `frac_bars_top_tercile_R` (share of that day's hourly bars in R's top
+  tercile), `trailing_realised_vol_last`/`vol_tercile_lag1_last`, and for
+  benchmark / R-overlay (`w_low=0.00`) / vol-sizing (`w_low=0.00`): mean
+  intraday exposure and the day's total net-of-cost strategy return. Any
+  other `w_low` weight's exposure/return is a deterministic function of
+  `R_tercile_lag1` alone (`exposure = w_low` if tercile `== 3` else `1.0`)
+  and is fully reconstructable from `R_tercile_lag1_last`/`frac_bars_top_tercile_R`
+  plus `log_ret` without needing a column per weight.
+  **What is lost by downsampling to daily, stated explicitly rather than
+  silently truncated:** intra-day exposure transitions (an overlay that
+  flips exposure mid-day shows only that day's mean exposure, not when
+  within the day it flipped) and per-bar return timing (only the day's
+  total compounded return survives, not its intraday path). Total return
+  over any date range, end-of-day regime state, and the within-day
+  top-tercile share are all exact, not approximated.
+- `results/analysis_sample_series.parquet` — the full **hourly** bar-level
+  series (now also carrying `exposure_benchmark`, `ret_net_benchmark`,
+  `exposure_overlay_w0.00`, `ret_net_overlay_w0.00`,
+  `exposure_volsizing_w0.00`, `ret_net_volsizing_w0.00` in addition to the
+  columns `daily_series.csv` downsamples from) for both assets, 134,184
+  rows, 8.7MB. **Not committed** — well over a reasonable committed
+  footprint for this exploration; it is fully regenerable by re-running
+  `run.R`. `daily_series.csv` above is the committed, reproducibility-gap-closing
+  substitute this dispatch adds; regenerate the hourly file locally with
+  `run.R` for bar-level inspection beyond what the daily file preserves.
