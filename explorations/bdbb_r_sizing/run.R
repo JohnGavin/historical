@@ -228,6 +228,22 @@ all_decision_rows <- list()
 all_corr_rows <- list()
 all_turnover_rows <- list()
 all_series_frames <- list()
+all_drawdown_rows <- list()
+
+# ── Helper: peak-to-trough window of the single worst drawdown in a log-
+#    return series. Returns row INDICES (into the aligned `analysis`
+#    frame), not dates -- the caller maps indices to dates/columns. The
+#    "decline window" is (peak_idx+1):trough_idx -- the returns actually
+#    realised while the drawdown was accruing (the peak bar itself is the
+#    pre-decline high-water mark, not part of the decline).
+find_max_drawdown_window <- function(r) {
+  cum <- exp(cumsum(r))
+  peak <- cummax(cum)
+  dd <- cum / peak - 1
+  trough_idx <- which.min(dd)
+  peak_idx <- max(which(dd[seq_len(trough_idx)] == 0))
+  list(peak_idx = peak_idx, trough_idx = trough_idx, max_dd = dd[trough_idx])
+}
 
 for (a in seq_len(nrow(ASSETS))) {
   asset <- ASSETS$asset[a]
@@ -393,6 +409,46 @@ for (a in seq_len(nrow(ASSETS))) {
   }
   cat("\n")
 
+  # ── 8b. Max-drawdown window analysis (#443 dispatch follow-up task 3) ──
+  # summary_metrics.csv shows BTC's overlay max_dd is IDENTICAL to the
+  # benchmark's at every w_low weight (net-of-cost) -- implying R was never
+  # in its top tercile during BTC's worst drawdown, so the overlay held
+  # full exposure right through the single largest loss in the sample. This
+  # verifies that directly from the per-bar series rather than asserting it
+  # from the identical max_dd figure alone.
+  cat("=== 8b. max-drawdown peak-to-trough window (benchmark net series) ===\n")
+  bench_net_v <- variant_returns[["benchmark"]]$net
+  dd_win <- find_max_drawdown_window(bench_net_v)
+  win_idx <- seq(dd_win$peak_idx + 1L, dd_win$trough_idx)
+
+  ov0_exposure <- variant_returns[["overlay_w0.00"]]$exposure
+  vs0_exposure <- variant_returns[["volsizing_w0.00"]]$exposure
+
+  dd_row <- tibble::tibble(
+    asset = asset,
+    peak_time = analysis$time[dd_win$peak_idx],
+    trough_time = analysis$time[dd_win$trough_idx],
+    window_days = as.numeric(difftime(
+      analysis$time[dd_win$trough_idx], analysis$time[dd_win$peak_idx], units = "days"
+    )),
+    n_bars_window = length(win_idx),
+    max_dd_benchmark_net = dd_win$max_dd,
+    frac_bars_top_tercile_R = mean(analysis$R_tercile_lag1[win_idx] == 3L, na.rm = TRUE),
+    mean_exposure_overlay_w0.00 = mean(ov0_exposure[win_idx]),
+    mean_exposure_volsizing_w0.00 = mean(vs0_exposure[win_idx])
+  )
+  all_drawdown_rows[[asset]] <- dd_row
+
+  cat(sprintf(
+    "  peak=%s trough=%s (%.0f days, %d bars) max_dd_net=%.2f%%\n",
+    format(dd_row$peak_time), format(dd_row$trough_time),
+    dd_row$window_days, dd_row$n_bars_window, 100 * dd_row$max_dd_benchmark_net
+  ))
+  cat(sprintf(
+    "  frac bars in top tercile of R during decline = %.4f | mean exposure overlay_w0.00 = %.4f | mean exposure volsizing_w0.00 = %.4f\n\n",
+    dd_row$frac_bars_top_tercile_R, dd_row$mean_exposure_overlay_w0.00, dd_row$mean_exposure_volsizing_w0.00
+  ))
+
   # ── 9. Metrics + detection power for every variant, gross and net ──────
   cat("=== 9. metrics + detection power (naive Sharpe fed to hd_detection_power(), per repo precedent) ===\n\n")
   for (nm in names(variant_returns)) {
@@ -467,9 +523,30 @@ for (a in seq_len(nrow(ASSETS))) {
 
   # ── keep the small analysis-sample series for provenance (not committed
   #    if large -- see SUMMARY.md Files section) ─────────────────────────
+  # Enriched per-bar series (#443 dispatch follow-up task 2): exposure and
+  # net-of-cost strategy return for benchmark, R-overlay (w_low=0.00, the
+  # most aggressive/fully-de-risked case, matched to the drawdown analysis
+  # in 8b), and vol-sizing (w_low=0.00). Every other w_low's overlay/
+  # complement exposure is a deterministic function of R_tercile_lag1 alone
+  # (exposure = w_low if tercile==3L else 1.0), so R_tercile_lag1 here is
+  # sufficient to reconstruct any other weight's exposure/return without
+  # needing a column per weight.
   all_series_frames[[asset]] <- analysis |>
-    dplyr::mutate(asset = asset) |>
-    dplyr::select(asset, time, log_ret, R, R_tercile_lag1, trailing_realised_vol, vol_tercile_lag1)
+    dplyr::mutate(
+      asset = asset,
+      exposure_benchmark = variant_returns[["benchmark"]]$exposure,
+      ret_net_benchmark = variant_returns[["benchmark"]]$net,
+      exposure_overlay_w0.00 = variant_returns[["overlay_w0.00"]]$exposure,
+      ret_net_overlay_w0.00 = variant_returns[["overlay_w0.00"]]$net,
+      exposure_volsizing_w0.00 = variant_returns[["volsizing_w0.00"]]$exposure,
+      ret_net_volsizing_w0.00 = variant_returns[["volsizing_w0.00"]]$net
+    ) |>
+    dplyr::select(
+      asset, time, log_ret, R, R_tercile_lag1, trailing_realised_vol, vol_tercile_lag1,
+      exposure_benchmark, ret_net_benchmark,
+      exposure_overlay_w0.00, ret_net_overlay_w0.00,
+      exposure_volsizing_w0.00, ret_net_volsizing_w0.00
+    )
 }
 
 # ── 11. Write outputs ──────────────────────────────────────────────────────
@@ -479,18 +556,61 @@ decision_table <- dplyr::bind_rows(all_decision_rows)
 corr_checks <- dplyr::bind_rows(all_corr_rows)
 turnover_tbl <- dplyr::bind_rows(all_turnover_rows)
 series_all <- dplyr::bind_rows(all_series_frames)
+drawdown_analysis <- dplyr::bind_rows(all_drawdown_rows)
 
 readr::write_csv(summary_metrics, file.path(RESULTS_DIR, "summary_metrics.csv"))
 readr::write_csv(decision_table, file.path(RESULTS_DIR, "decision_table.csv"))
 readr::write_csv(corr_checks, file.path(RESULTS_DIR, "correlation_checks.csv"))
 readr::write_csv(turnover_tbl, file.path(RESULTS_DIR, "turnover.csv"))
+readr::write_csv(drawdown_analysis, file.path(RESULTS_DIR, "drawdown_analysis.csv"))
 
 series_path <- file.path(RESULTS_DIR, "analysis_sample_series.parquet")
 arrow::write_parquet(series_all, series_path)
+hourly_committed <- file.size(series_path) <= 2e6
 cat(sprintf(
   "  analysis_sample_series.parquet: %d rows, %.1fMB (%s committed -- see SUMMARY.md)\n",
   nrow(series_all), file.size(series_path) / 1e6,
-  if (file.size(series_path) > 2e6) "NOT" else ""
+  if (hourly_committed) "" else "NOT"
+))
+
+# Daily-downsampled series -- ALWAYS written and committed regardless of the
+# hourly file's size, so the per-bar reproducibility gap (#443 dispatch
+# follow-up task 2) is closed even when hourly is too large to commit
+# sensibly. What is lost by downsampling (stated explicitly, not silently
+# truncated -- see SUMMARY.md): intra-day exposure transitions (an overlay
+# that flips exposure mid-day shows only that day's MEAN exposure, not the
+# transition itself) and per-bar return timing (only the day's total
+# compounded log return is kept, not its intraday path). What is preserved
+# exactly: total return over any date range (log returns sum losslessly
+# regardless of aggregation window), end-of-day R/tercile state, and the
+# fraction of a day's bars that sat in R's top tercile.
+cat("  building daily-downsampled series (committed unconditionally) ...\n")
+daily_series <- series_all |>
+  dplyr::mutate(date = as.Date(time)) |>
+  dplyr::group_by(asset, date) |>
+  dplyr::summarise(
+    n_bars = dplyr::n(),
+    log_ret = sum(log_ret, na.rm = TRUE),
+    R_last = dplyr::last(R),
+    R_tercile_lag1_last = dplyr::last(R_tercile_lag1),
+    frac_bars_top_tercile_R = mean(R_tercile_lag1 == 3L, na.rm = TRUE),
+    trailing_realised_vol_last = dplyr::last(trailing_realised_vol),
+    vol_tercile_lag1_last = dplyr::last(vol_tercile_lag1),
+    exposure_benchmark_mean = mean(exposure_benchmark, na.rm = TRUE),
+    ret_net_benchmark = sum(ret_net_benchmark, na.rm = TRUE),
+    exposure_overlay_w0.00_mean = mean(exposure_overlay_w0.00, na.rm = TRUE),
+    ret_net_overlay_w0.00 = sum(ret_net_overlay_w0.00, na.rm = TRUE),
+    exposure_volsizing_w0.00_mean = mean(exposure_volsizing_w0.00, na.rm = TRUE),
+    ret_net_volsizing_w0.00 = sum(ret_net_volsizing_w0.00, na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  dplyr::arrange(asset, date)
+
+daily_path <- file.path(RESULTS_DIR, "daily_series.csv")
+readr::write_csv(daily_series, daily_path)
+cat(sprintf(
+  "  daily_series.csv: %d rows (both assets), %.2fMB (committed)\n",
+  nrow(daily_series), file.size(daily_path) / 1e6
 ))
 
 cat("\n========================================================\n")
