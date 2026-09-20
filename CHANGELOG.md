@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-09-20 (session 31 — Kraken archive inventory; intra-bar timing assessed)
+
+### Completed
+
+- **Assessed Aligrithm 3.41 / Tepelyan (arXiv 2509.16137) against the primary
+  PDF** and filed [#873](https://github.com/JohnGavin/historical/issues/873).
+  Verdict: intra-bar high/low timestamps are a 1-minute variance-forecast
+  feature (5.5% of the log-likelihood gain, 0.006 pp of direction) and are
+  not worth ingesting for their own sake; range-based volatility estimators on
+  OHLC we already hold are the cheap, related thing to test.
+- **Kraken source archive inventoried without extracting it.** It holds
+  intervals 1, 5, 15, 30, 60, 240, 720 and 1440 min for every ingested pair;
+  only 60 and 1440 were ever ingested. New `scripts/kraken_zip_inventory.sh`
+  (selftest covers exit 0/1/3) writes `inst/extdata/kraken_ohlcvt_inventory.csv`.
+- **New single source of truth for raw data sources:** `docs/DATA_SOURCES.md`,
+  linked from `.claude/CLAUDE.md`.
+
+### Not done / next
+
+- Range-volatility comparison design and calibration check for
+  [#539](https://github.com/JohnGavin/historical/issues/539) — see #873.
+
 ## 2026-09-11 → 2026-09-12 (session 30 — the free data has the right universe and no returns)
 
 ### Completed

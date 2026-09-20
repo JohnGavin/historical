@@ -8,6 +8,8 @@
 
 **`macro_daily`/`equity_daily` are archived, not stale-pending-refresh (#619, #655, #673):** both HuggingFace-backed datasets read by `hd_macro()`/`hd_ohlcv()` were seeded once (2026-05-06) by duplicating `dsfefvx/finance-historical-data`, which was itself already inactive by then and has had no commits since 2026-04-23. No replacement source is currently being sourced — this is a decision, not an open outage. See [`docs/DATA_SOURCING_LESSONS.md`](../docs/DATA_SOURCING_LESSONS.md) for the full retrospective (what happened, what was tried, lessons for next time) before touching any code that reasons about these datasets' staleness or the Validation-seal boundary (`R/plan_partitions.R`, `R/plan_risk_state.R`).
 
+**Data sources — single source of truth: [`docs/DATA_SOURCES.md`](../docs/DATA_SOURCES.md).** Read it before assuming what data we hold, where a raw archive lives, or what was left un-ingested. Add any fact you learn about a source *there*, in the same commit. Example of why it exists: the Kraken source archive (`~/Downloads/Kraken_OHLCVT.zip`, laptop-local, 7.9 GB) holds eight bar intervals (1 to 1440 min) for every ingested pair, but only 60 and 1440 were ever ingested — invisible unless someone lists the zip (`scripts/kraken_zip_inventory.sh`, [#873](https://github.com/JohnGavin/historical/issues/873)).
+
 ## Verifying a change (issue #569)
 
 **Run `scripts/verify.sh` — it is the one command to run before claiming a change is verified.** `scripts/verify.sh --quick` does a fast parse-only check; plain `scripts/verify.sh` runs the full suite. Do not hand-roll a verification sequence — every fact below was learned the slow way by agents that got it wrong.
