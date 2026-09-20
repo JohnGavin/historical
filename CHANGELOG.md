@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-09-20 (pkgctx-check hardening, refs #861)
+
+- `scripts/regen_api_context.sh`: BSD-safe `mktemp` (no suffix after the X's),
+  `trap` cleanup of temp files, and exit 3 (INDETERMINATE) when `nix run pkgctx`
+  fails, distinct from a stale doc. `pkgctx-check.yml` reports exit 3 as an
+  `INDETERMINATE` annotation and still fails the job. Root cause (crates.io 403
+  on curl's default UA) is NOT fixed; needs a maintainer decision.
+
 ## 2026-09-11 → 2026-09-12 (session 30 — the free data has the right universe and no returns)
 
 ### Completed
