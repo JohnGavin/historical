@@ -17,10 +17,32 @@
 - **New single source of truth for raw data sources:** `docs/DATA_SOURCES.md`,
   linked from `.claude/CLAUDE.md`.
 
-### Not done / next
+- **Calibration check proposed on
+  [#539](https://github.com/JohnGavin/historical/issues/539)** (PIT /
+  quantile-calibration alongside the Gaussian-vs-Student-t likelihood gap;
+  must be scored one-step-ahead or it cannot fail).
 
-- Range-volatility comparison design and calibration check for
-  [#539](https://github.com/JohnGavin/historical/issues/539) — see #873.
+### Failed Approaches
+
+- `WebFetch` on the arXiv PDF returned raw PDF source, not text. Worked
+  around by reading the PDF the tool had saved locally (`Read` with `pages`).
+- The publish guard blocked the first #873 filing: the word "acknowledged"
+  contains the substring "knowledge", the name of a private repo. A false
+  positive; fixed by rewording, not bypassed.
+
+### Known Limitations
+
+- Kraken 30-minute files are smaller than the 60-minute files (BTC 1.8 MB vs
+  5.6 MB) and number 1,403 vs ~1,521 — unexplained; do not use until checked
+  (recorded in `docs/DATA_SOURCES.md`).
+- No roborev review of this session's commits was visible (0 jobs in the
+  window, repo path is the main checkout); absence of findings is not
+  evidence of a clean review.
+- The range-volatility comparison (staged plan: simulation tests, then
+  one-month horizon on `equity_daily`, then BTC/ETH, then timestamps) is
+  designed but **not started**; the plan has not yet been posted to
+  [#873](https://github.com/JohnGavin/historical/issues/873).
+- Branch is not merged and no PR is open.
 
 ## 2026-09-11 → 2026-09-12 (session 30 — the free data has the right universe and no returns)
 

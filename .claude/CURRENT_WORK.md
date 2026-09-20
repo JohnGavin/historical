@@ -1,80 +1,24 @@
-# Current Work — session 30 (2026-09-11 → 2026-09-12)
+# Current Work — session 31 (2026-09-20)
 
-**Ended 2026-09-12.** Branch `feat/cc-20260912-osap-verification` (fresh from
-`origin/main`; the previous branch was squash-merged as `0c68bf4`).
+Branch `feat/cc-20260920-192457` (2 commits ahead of `main`, not merged, no PR).
 
-## State
+## What happened
 
-Session 29's work is **merged** ([PR #858](https://github.com/JohnGavin/historical/pull/858)).
-This session's OSAP verification is on the new branch, pending a PR.
+Assessed Aligrithm 3.41 / Tepelyan (arXiv 2509.16137) against the primary PDF and filed [#873](https://github.com/JohnGavin/historical/issues/873). Verdict: intra-bar high/low timestamps are a 1-minute variance-forecast feature (5.5% of the log-likelihood gain, 0.006 pp of direction), not worth ingesting for their own sake; range-based volatility estimators on OHLC we already hold are the cheap related test.
 
-## The headline
+Built and committed:
+- `scripts/kraken_zip_inventory.sh` (+ selftest, exit 0/1/3) → `inst/extdata/kraken_ohlcvt_inventory.csv`
+- `docs/DATA_SOURCES.md` — the single source of truth for raw data sources (linked from `.claude/CLAUDE.md`)
+- Calibration-check proposal posted on [#539](https://github.com/JohnGavin/historical/issues/539)
 
-**The survivorship blocker lifts, free — but not all the way.**
+Key facts: `~/Downloads/Kraken_OHLCVT.zip` (laptop-local, 7.9 GB, vintage 2026-01-24) holds intervals 1/5/15/30/60/240/720/1440 min for every ingested pair; only 60 and 1440 were ingested. The 30-min files look truncated (unexplained).
 
-| | universe | returns |
-|---|---|---|
-| OSAP (Chen-Zimmermann) | **right** — 86.7% of 38,870 permnos exit >1yr before panel end | **none** |
-| `equity_daily` | wrong — 0 of 502 exit | yes |
+## Next step
 
-Complementary defects. Neither alone reproduces Zadeh's design. The full
-thing still needs returns joined to a delisting-inclusive panel — CRSP, or
-something supplying both. Norgate deprioritised on cost.
+Post the staged range-volatility plan to #873 (user has not yet approved posting), then Stage 0: implement Parkinson / Garman-Klass / Rogers-Satchell / Yang-Zhang in `packages/historicaldata/` with known-answer simulation tests. Baselines must include daily close-to-close realised vol, not only the current 12-monthly-obs sd. Pre-register the prediction (range advantage shrinks as lookback grows) and seal it in the research log before looking.
 
-## Added late in the session (2026-09-13)
+## Open
 
-- **[#865](https://github.com/JohnGavin/historical/issues/865) — ticker
-  recycling.** A distinct problem from #816: not "which companies are
-  missing" but "which company did this symbol mean at the time".
-  `fetch_fundamentals_edgar.R` resolves ticker to CIK with no date check.
-  Latent today, wrong by construction.
-- **[#816](https://github.com/JohnGavin/historical/issues/816) — a free third
-  route.** Reconstruct S&P 500 membership from `fja05680/sp500` + SEC + CIK
-  overlap validation, then join to our own prices. Complements OSAP rather
-  than replacing it.
-- **[llm#1193](https://github.com/JohnGavin/llm/issues/1193) — Wikidata** as
-  a data-generation and cross-check stack. Travel is the best first candidate
-  (private project). Confirm-only, never refute.
-- **Fixed a High roborev finding in my own commit** (`79a8992`) — the OSAP
-  script's Drive confirm-token regex could never match. Caught by roborev,
-  not by me; verified by direct test before fixing.
-
-## Next session — pick one
-
-1. **Land the OSAP verification.** Branch is committed, `verify.sh --quick`
-   passes, no PR opened yet. Cheapest thing on the list.
-2. **#857 portfolio-level interaction test.** The custom double sort is dead
-   (no returns), but OSAP ships 212 pre-built long-short series and Ken
-   French momentum deciles are already ingested. Ask whether MAX and momentum
-   interact at portfolio level — a real test, a weaker claim, and the
-   write-up must say which.
-3. **#863 freshness split.** Needed before #862 ingestion lands, or a
-   ~10-month-lagged source fails a 14-day threshold every run forever. The
-   substance is *last-checked* vs *last-changed*, not a bigger number.
-4. **#862 open sub-tasks:** find or build a `permno` crosswalk (none free —
-   blocks joining OSAP to our ticker-keyed data), and decide how to handle
-   the un-filterable non-common-stock securities.
-5. **#861 pkgctx CI** — still red, still reporting nothing either way.
-
-## Housekeeping
-
-- **7.8 GB in `/tmp/osap_scratch`**, disk at 93% (60 GB free). Left
-  deliberately so a follow-up need not re-download 8.35 GB. Delete when done.
-
-## Carried forward from session 29, still unaddressed
-
-**Plain 12-2 momentum is underpowered on 52.8 years of `equity_daily`**
-(Sharpe 0.163, needs 231 years). That is the universe, not momentum, and it
-applies to every cross-sectional long/short on this panel — including the
-live `ltr_*` leaderboard strategy. Still deserves its own issue.
-
-## Two process notes worth keeping
-
-- **Search before filing.** Two near-misses in two sessions: nearly re-filed
-  #816, then actually did duplicate #804 as #861. One
-  `gh issue list --search` before writing would have caught both.
-- **Check a subagent's supporting argument, not just its verdict.** The OSAP
-  report's panel-shape corroboration was wrong (the 2024 count exceeds the
-  1998 peak, contradicting the US listing decline) even though its P1 verdict
-  was right. Withdrawn in `FINDINGS.md`. A correct conclusion can rest on a
-  bad argument, and the argument is what gets quoted onward.
+- Push branch + open PR for the inventory work (asked, not answered).
+- Investigate the 30-min Kraken anomaly.
+- Nothing was run through `scripts/verify.sh` or `scripts/build.sh` (no package or pipeline code changed).
