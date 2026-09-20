@@ -88,6 +88,7 @@ The finer files let us locate the extremes of a coarser bar to the resolution of
 - Bars exist only for periods with trades; hourly gaps are normal in thin pairs.
 - FX volume is retail crypto-exchange flow, not interbank — fine for hourly/daily returns, not for cost/spread/microstructure work.
 - The 19 pairs were chosen as the largest by 2026 volume (forward-looking selection).
+- **Unexplained anomaly — do not use the 30-minute files until checked (2026-09-20).** They are *smaller* than the 60-minute files (BTC: 1,836,905 B at 30 min vs 5,640,237 B at 60 min; the same holds for ETH), and only 1,403 pairs have a 30-min file against ~1,521 for every other interval. A finer interval over the same history cannot be smaller, so the 30-min series is probably truncated or covers a shorter window. Not yet investigated; found from `inst/extdata/kraken_ohlcvt_inventory.csv` alone, so it needs a look at the file contents (first/last timestamp) before anyone relies on it.
 
 ---
 
