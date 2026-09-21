@@ -290,7 +290,13 @@ hd_ohlcv_single <- function(ticker, dataset, from, to, local, collect) {
   # duckplyr's fallback path is engaged) -- worth its own follow-up issue if
   # the noise becomes a real problem, but not a blocker for the type fix.
   if (date_is_timestamp) {
-    lf <- lf |> dplyr::mutate(date = as.Date(date))
+    # A stingy duckplyr frame cannot translate as.Date() and refuses to fall
+    # back ("This operation cannot be carried out by DuckDB", errored
+    # cov_diag_wide_panel). Switch to a lavish frame first so the coercion
+    # may fall back to dplyr instead of aborting.
+    lf <- lf |>
+      duckplyr::as_duckdb_tibble(prudence = "lavish") |>
+      dplyr::mutate(date = as.Date(date))
   }
 
   if (collect) {

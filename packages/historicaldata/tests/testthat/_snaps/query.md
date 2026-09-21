@@ -113,3 +113,10 @@
           collect = TRUE) 
       NULL
 
+# hd_ohlcv coerces TIMESTAMP date to Date on a stingy frame
+
+    Code
+      as.character(range(dplyr::collect(lazy)$date))
+    Output
+      [1] "1990-01-01" "1990-05-19"
+

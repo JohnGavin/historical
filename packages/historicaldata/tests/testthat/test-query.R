@@ -254,3 +254,24 @@ test_that("date filter works against DATE-typed parquet column (#453)", {
 test_that("hd_ohlcv: API stability snapshot (#453)", {
   expect_snapshot(args(hd_ohlcv))
 })
+
+# Regression: cov_diag_wide_panel errored in a real build (stingy duckplyr frame cannot translate as.Date)
+# from the TIMESTAMP to Date coercion (only for frames over duckplyr thrifty 1e6-cell limit, hence 200k rows x 8 cols) in hd_ohlcv_single(). Both collect modes must return Date.
+test_that("hd_ohlcv coerces TIMESTAMP date to Date on a stingy frame", {
+  skip_if_not_installed("duckdb")
+  cache_dir <- withr::local_tempdir()
+  withr::local_envvar(HD_CACHE_DIR = cache_dir, HD_USE_SAMPLE_DATA = "")
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = ":memory:")
+  on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
+  DBI::dbExecute(con, paste0(
+    "COPY (SELECT CAST(d AS TIMESTAMP) AS date, 'SPY' AS ticker, 100.0 AS open, 101.0 AS high, 99.0 AS low, ",
+    "100.5 AS close, 100.5 AS adjusted_close, 1000.0 AS volume ",
+    "FROM (SELECT TIMESTAMP '1990-01-01' + INTERVAL (i) MINUTE AS d FROM range(200000) r(i)) t) TO '", file.path(cache_dir, "equity_daily.parquet"), "' (FORMAT PARQUET)"
+  ))
+  res <- suppressWarnings(hd_ohlcv("SPY", local = TRUE, collect = TRUE))
+  expect_s3_class(res$date, "Date")
+  expect_equal(nrow(res), 200000L)
+  lazy <- suppressWarnings(hd_ohlcv("SPY", local = TRUE, collect = FALSE))
+  expect_s3_class(dplyr::collect(lazy)$date, "Date")
+  expect_snapshot(as.character(range(dplyr::collect(lazy)$date)))
+})
