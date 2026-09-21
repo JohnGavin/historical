@@ -98,7 +98,7 @@
 # compute_allocator_gross: errors on missing required columns
 
     Code
-      compute_allocator_gross(bad, sigma_target = 0.11)
+      compute_allocator_gross(bad, sigma_target = 0.11, detection = .det_ok())
     Condition
       Error in `compute_allocator_gross()`:
       x `vpug_df` is missing required column: is_cap.
@@ -107,7 +107,7 @@
 # compute_allocator_gross: errors on a non-positive sigma_target
 
     Code
-      compute_allocator_gross(vpug, sigma_target = -0.1)
+      compute_allocator_gross(vpug, sigma_target = -0.1, detection = .det_ok())
     Condition
       Error in `compute_allocator_gross()`:
       x `sigma_target` must be a single positive number, not -0.1.
@@ -116,7 +116,7 @@
 ---
 
     Code
-      compute_allocator_gross(vpug, sigma_target = NA_real_)
+      compute_allocator_gross(vpug, sigma_target = NA_real_, detection = .det_ok())
     Condition
       Error in `compute_allocator_gross()`:
       x `sigma_target` must be a single positive number, not NA.
@@ -125,7 +125,8 @@
 # compute_allocator_gross: errors on a non-positive backstop
 
     Code
-      compute_allocator_gross(vpug, sigma_target = 0.11, backstop = 0)
+      compute_allocator_gross(vpug, sigma_target = 0.11, detection = .det_ok(),
+      backstop = 0)
     Condition
       Error in `compute_allocator_gross()`:
       x `backstop` must be a single positive number, not 0.
@@ -134,7 +135,7 @@
 # compute_allocator_gross: errors when no Full Period rows are present
 
     Code
-      compute_allocator_gross(no_full, sigma_target = 0.11)
+      compute_allocator_gross(no_full, sigma_target = 0.11, detection = .det_ok())
     Condition
       Error in `compute_allocator_gross()`:
       x `vpug_df` has no Full Period rows.
@@ -145,6 +146,33 @@
     Code
       args(compute_allocator_gross)
     Output
-      function (vpug_df, sigma_target, backstop = .leverage_gross_backstop()) 
+      function (vpug_df, sigma_target, detection, backstop = .leverage_gross_backstop()) 
       NULL
+
+# compute_allocator_gross: capping is announced, not silent
+
+    Code
+      invisible(compute_allocator_gross(vpug, sigma_target = 0.11, detection = det,
+        backstop = 1.5))
+    Message
+      ! Detection-power cap held 1 strategy to 1.0x gross (#626/#719 Layer 2): "A".
+      i Uncapped values remain in G_uncapped; reason in cap_reason.
+
+# compute_allocator_gross: errors on a detection table missing columns or duplicated
+
+    Code
+      compute_allocator_gross(vpug, sigma_target = 0.11, detection = bad)
+    Condition
+      Error in `compute_allocator_gross()`:
+      x `detection` is missing required column: detection_underpowered.
+      i compute_allocator_gross() needs strategy, period, and detection_underpowered (the leaderboard target) to enforce the detection-power cap (#626/#719 Layer 2).
+
+---
+
+    Code
+      compute_allocator_gross(vpug, sigma_target = 0.11, detection = dup)
+    Condition
+      Error in `compute_allocator_gross()`:
+      x `detection` has more than one Full Period row for: "A".
+      i compute_allocator_gross() needs exactly one detection verdict per strategy.
 

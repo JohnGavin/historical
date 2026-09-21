@@ -253,14 +253,23 @@ LEVERAGE_GROSS_BACKSTOP_DEFAULT <- 2.0
 #'   (needs `strategy`, `period`, `vol_per_unit_gross`, `is_cap`).
 #' @param sigma_target Numeric scalar > 0 -- the Full Period budget-neutral
 #'   sigma_target (`compute_budget_neutral_sigma()`'s `is_headline` row).
+#' @param detection Tibble -- the `leaderboard` target (needs `strategy`,
+#'   `period`, `detection_underpowered`; only Full Period rows are read).
+#'   Enforces the detection-power cap (#626/#719 Layer 2,
+#'   `.claude/rules/detection-power-required.md`): a strategy whose
+#'   `detection_underpowered` is `TRUE`, `NA`, or absent from this table is
+#'   held to `G_capped <= 1.0`. The pre-detection figure stays visible in
+#'   `G_uncapped`; the reason in `cap_reason`.
 #' @param backstop Numeric scalar > 0 -- the gross-exposure ceiling. Defaults
 #'   to `.leverage_gross_backstop()` (PROVISIONAL, #626 D1).
 #' @return Tibble: `strategy`, `is_cap`, `vol_per_unit_gross`, `G_implied`,
-#'   `G_capped`, `backstop_binds`, `backstop_used`, `sigma_target_used` --
+#'   `G_uncapped` (after the backstop, before the detection cap),
+#'   `G_capped` (final), `backstop_binds`, `detection_verdict`,
+#'   `detection_capped`, `cap_reason`, `backstop_used`, `sigma_target_used` --
 #'   one row per strategy with a measurable `vol_per_unit_gross`, sorted
 #'   descending by `G_implied`.
 #' @noRd
-compute_allocator_gross <- function(vpug_df, sigma_target,
+compute_allocator_gross <- function(vpug_df, sigma_target, detection,
                                      backstop = .leverage_gross_backstop()) {
   required_cols <- c("strategy", "period", "vol_per_unit_gross", "is_cap")
   missing_cols <- setdiff(required_cols, names(vpug_df))
@@ -291,16 +300,60 @@ compute_allocator_gross <- function(vpug_df, sigma_target,
     ))
   }
 
-  full |>
+  det_required <- c("strategy", "period", "detection_underpowered")
+  det_missing <- setdiff(det_required, names(detection))
+  if (length(det_missing) > 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg detection} is missing required column{?s}: {.field {det_missing}}.",
+      "i" = "compute_allocator_gross() needs {.field {det_required}} (the leaderboard target) to enforce the detection-power cap (#626/#719 Layer 2)."
+    ))
+  }
+  det_full <- detection[detection$period == "Full Period",
+                        c("strategy", "detection_underpowered"), drop = FALSE]
+  if (anyDuplicated(det_full$strategy) > 0L) {
+    dups <- unique(det_full$strategy[duplicated(det_full$strategy)])
+    cli::cli_abort(c(
+      "x" = "{.arg detection} has more than one Full Period row for: {.val {dups}}.",
+      "i" = "compute_allocator_gross() needs exactly one detection verdict per strategy."
+    ))
+  }
+
+  out <- full |>
+    dplyr::left_join(det_full, by = "strategy") |>
     dplyr::transmute(
       strategy, is_cap, vol_per_unit_gross,
       G_implied = sigma_target / vol_per_unit_gross,
-      G_capped = pmin(G_implied, backstop),
+      G_uncapped = pmin(G_implied, backstop),
       backstop_binds = G_implied > backstop,
+      # Named `detection_verdict` (not `detection_underpowered`) so the
+      # independent S31 gate's own left_join against the leaderboard does not
+      # collide on column name and produce .x/.y suffixes.
+      detection_verdict = detection_underpowered,
+      # NA (not computed) is capped the same as TRUE: an unknown verdict must
+      # not permit what a known-bad one forbids (fail-loud-not-null.md).
+      detection_capped = (is.na(detection_underpowered) |
+                            (detection_underpowered %in% TRUE)) &
+        !is.na(G_uncapped) & G_uncapped > 1.0,
+      cap_reason = dplyr::case_when(
+        !detection_capped ~ NA_character_,
+        is.na(detection_underpowered) ~ "detection verdict NA (unverified): capped at 1.0x",
+        TRUE ~ "detection underpowered: capped at 1.0x"
+      ),
+      G_capped = dplyr::if_else(detection_capped, 1.0, G_uncapped),
       backstop_used = backstop,
       sigma_target_used = sigma_target
     ) |>
+    dplyr::relocate(G_capped, .after = G_uncapped) |>
     dplyr::arrange(dplyr::desc(G_implied))
+
+  n_capped <- sum(out$detection_capped)
+  if (n_capped > 0L) {
+    cli::cli_inform(c(
+      "!" = "Detection-power cap held {n_capped} strateg{?y/ies} to 1.0x gross (#626/#719 Layer 2): {.val {out$strategy[out$detection_capped]}}.",
+      "i" = "Uncapped values remain in {.field G_uncapped}; reason in {.field cap_reason}."
+    ))
+  }
+  out
 }
 
 plan_leverage <- function() {
@@ -337,7 +390,7 @@ plan_leverage <- function() {
     # sigma_target from leverage_sigma_target.
     targets::tar_target(leverage_allocator_gross, {
       sigma_headline <- leverage_sigma_target$sigma_target_budget_neutral[leverage_sigma_target$is_headline]
-      compute_allocator_gross(leverage_vol_per_unit_gross, sigma_headline, leverage_gross_backstop)
+      compute_allocator_gross(leverage_vol_per_unit_gross, sigma_headline, leaderboard, leverage_gross_backstop)
     })
   )
 }
