@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-21 (glossary path independent of cwd, refs #806 #668)
+
+- `load_glossary()` / `load_entity_resolution()` defaulted to `here::here("data", ...)`. Under `quarto render` the cwd is `docs/` and `docs/_quarto.yml` makes `here::here()` resolve to `docs/`, so `docs/data/glossary.yaml` was looked for and not found. New internal `.repo_data_file()` walks up from `getwd()` to the first ancestor containing `data/<name>`; aborts loudly (listing directories searched) if none. Explicit `path=` unchanged. Tests in `test-glossary.R`. Full leaderboard.qmd render unverified in the worktree.
+
 ## 2026-09-21 (leaderboard.qmd render fix, refs #806 #668)
 
 - `docs/leaderboard.qmd` setup chunk now sources `R/glossary.R` before `R/plan_partitions.R`. Since #806, `PERIOD_LABELS_ALLOWED` is derived from `load_glossary()` at source time, so `scripts/build.sh --render-all` failed this page with `could not find function "load_glossary"`. Full render unverified in the worktree; verify in the main checkout.

@@ -28,15 +28,49 @@
 # This file is sourced BEFORE R/plan_partitions.R in docs/_targets.R (root
 # _targets.R never sources plan_partitions.R, so it never needs this file).
 
+#' Locate `data/<name>` by walking up from the working directory
+#'
+#' Independent of `here::here()`: under `quarto render` the cwd is `docs/` and
+#' `docs/_quarto.yml` makes `here::here()` treat `docs/` as the project root,
+#' so `here::here("data", ...)` misses the real `<repo root>/data/` file.
+#'
+#' @param name Character scalar. File name under `data/`.
+#' @param start Character scalar. Directory to start the upward walk from.
+#' @return Character scalar path to the first `data/<name>` found. Aborts
+#'   (never returns NA/NULL) listing the directories searched if none exists.
+#' @noRd
+.repo_data_file <- function(name, start = getwd()) {
+  dir <- normalizePath(start, winslash = "/", mustWork = FALSE)
+  searched <- character(0)
+  repeat {
+    candidate <- file.path(dir, "data", name)
+    searched <- c(searched, dir)
+    if (file.exists(candidate)) {
+      return(candidate)
+    }
+    parent <- dirname(dir)
+    if (identical(parent, dir)) {
+      break
+    }
+    dir <- parent
+  }
+  cli::cli_abort(c(
+    "x" = "File {.file data/{name}} not found in the working directory or any ancestor.",
+    "i" = "Directories searched: {.path {searched}}.",
+    "i" = "Run from inside the repo, or pass {.arg path} explicitly."
+  ))
+}
+
 #' Load the canonical entity glossary (data/glossary.yaml)
 #'
-#' @param path Character. Path to the glossary YAML file.
+#' @param path Character. Path to the glossary YAML file. Defaults to the
+#'   first `data/glossary.yaml` found walking up from the working directory.
 #' @return A named list, one element per entity. Each entity is itself a
 #'   list with at least `canonical` and `description`; vocabulary entities
 #'   also carry `values` (character vector of allowed values), unit entities
 #'   carry `canonical_value`.
 #' @noRd
-load_glossary <- function(path = here::here("data", "glossary.yaml")) {
+load_glossary <- function(path = .repo_data_file("glossary.yaml")) {
   if (!file.exists(path)) {
     cli::cli_abort(c(
       "x" = "Glossary file not found: {.path {path}}.",
@@ -61,7 +95,7 @@ load_glossary <- function(path = here::here("data", "glossary.yaml")) {
 #'   this file has no known aliases -- `resolve_entity()` then returns its
 #'   input unchanged.
 #' @noRd
-load_entity_resolution <- function(path = here::here("data", "entity_resolution.yaml")) {
+load_entity_resolution <- function(path = .repo_data_file("entity_resolution.yaml")) {
   if (!file.exists(path)) {
     cli::cli_abort(c(
       "x" = "Entity-resolution file not found: {.path {path}}.",
