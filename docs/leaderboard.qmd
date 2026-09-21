@@ -54,6 +54,14 @@ source(qa_gates_path)
 # vocabulary the S10 gate (check_leaderboard_period_vocab) enforces on the
 # target -- rather than hardcoding a levels vector that silently drops any
 # label the target legitimately emits (#646).
+#
+# Entity glossary (#668) MUST be sourced before plan_partitions.R:
+# PERIOD_LABELS_ALLOWED there is derived from load_glossary() at source time
+# (mirrors the ordering in docs/_targets.R).
+glossary_path <- if (file.exists("../R/glossary.R")) "../R/glossary.R" else
+  file.path(here::here(), "R/glossary.R")
+source(glossary_path)
+
 partitions_path <- if (file.exists("../R/plan_partitions.R")) "../R/plan_partitions.R" else
   file.path(here::here(), "R/plan_partitions.R")
 source(partitions_path)
