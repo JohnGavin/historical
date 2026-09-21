@@ -396,6 +396,23 @@ hd_record_stability_metrics <- function(con, run_uuid, returns,
 #' @export
 hd_registry_leg_count_status <- function(con) {
   rlang::check_installed("DBI")
+  # Fail loud on a registry file created before #839: the column is only
+  # added by hd_registry_init()'s idempotent migration, which a read-only
+  # connection cannot apply. Abort with an actionable message rather than
+  # surfacing a DuckDB Binder Error.
+  strategy_cols <- DBI::dbGetQuery(
+    con,
+    "SELECT column_name FROM information_schema.columns
+     WHERE table_schema = 'bt' AND table_name = 'strategy'"
+  )$column_name
+  if (!"leg_count" %in% strategy_cols) {
+    cli::cli_abort(c(
+      "x" = "{.field bt.strategy} has no {.field leg_count} column.",
+      "i" = "Columns present: {.val {strategy_cols}}.",
+      "i" = "The registry file predates schema 1.1.0 (#839) and was never migrated.",
+      "i" = "Run {.code hd_registry_init()} (idempotent) to add it."
+    ))
+  }
   sql <- "
     SELECT
       s.strategy_id,

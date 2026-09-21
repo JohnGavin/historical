@@ -336,3 +336,14 @@ test_that("hd_registry_leg_count_status recognises a recorded calibration diagno
   expect_equal(nrow(out), 1L)
   expect_true(out$has_leg_calibration)
 })
+
+test_that("hd_registry_leg_count_status aborts clearly on a pre-#839 registry with no leg_count column", {
+  skip_if_not_installed("DBI"); skip_if_not_installed("duckdb")
+  tmp <- tempfile(fileext = ".duckdb")
+  withr::defer(unlink(tmp))
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  withr::defer(DBI::dbDisconnect(con, shutdown = TRUE), priority = "first")
+  DBI::dbExecute(con, "CREATE SCHEMA bt")
+  DBI::dbExecute(con, "CREATE TABLE bt.strategy (strategy_id VARCHAR PRIMARY KEY, short_name VARCHAR)")
+  expect_snapshot(error = TRUE, hd_registry_leg_count_status(con))
+})

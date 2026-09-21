@@ -2973,6 +2973,12 @@ check_registry_leg_count_calibration <- function(status) {
     return(invisible(TRUE))
   }
 
+  # Apply the idempotent schema migration first (#839): a registry file
+  # written before leg_count existed would otherwise be read read-only with
+  # a stale schema ("Binder Error: ... no column named leg_count").
+  # hd_registry_init() is a no-op on an up-to-date file.
+  historicaldata::hd_registry_init(path)
+
   con <- historicaldata::hd_registry_open(path, read_only = TRUE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
