@@ -36,7 +36,18 @@ jobs:
         run: cp docs/api-historicaldata.md /tmp/api-committed.md
 
       - name: Regenerate docs/api-historicaldata.md
-        run: bash scripts/regen_api_context.sh
+        # Exit 3 = pkgctx could not be built/run (INDETERMINATE), which is
+        # NOT the same as a stale doc and must never look like a pass.
+        run: |
+          rc=0
+          bash scripts/regen_api_context.sh || rc=$?
+          if [ "$rc" -eq 3 ]; then
+            echo "::error title=INDETERMINATE::pkgctx could not be built/run. docs/api-historicaldata.md freshness was NOT checked (this is not a stale-doc result)."
+            exit 3
+          elif [ "$rc" -ne 0 ]; then
+            echo "::error title=regen failed::scripts/regen_api_context.sh exited $rc"
+            exit "$rc"
+          fi
 
       - name: Fail if doc is stale
         # Order- and header-insensitive comparison. Two sources of false
