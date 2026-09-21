@@ -49,3 +49,14 @@
       i Allowed units: "fraction", "percent", "ratio", "count", "days", and "years".
       i Long form: add a metric_unit column. Wide form: pass `units`.
 
+# hd_registry_leg_count_status aborts clearly on a pre-#839 registry with no leg_count column
+
+    Code
+      hd_registry_leg_count_status(con)
+    Condition
+      Error in `hd_registry_leg_count_status()`:
+      x bt.strategy has no leg_count column.
+      i Columns present: "strategy_id" and "short_name".
+      i The registry file predates schema 1.1.0 (#839) and was never migrated.
+      i Run `hd_registry_init()` (idempotent) to add it.
+

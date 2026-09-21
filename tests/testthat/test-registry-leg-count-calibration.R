@@ -100,3 +100,16 @@ test_that(".run_qa_registry_leg_count_calibration aborts against a real registry
     regexp = "manufactured-Sharpe calibration annotation"
   )
 })
+
+test_that(".run_qa_registry_leg_count_calibration migrates a pre-#839 registry instead of hitting a Binder Error", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+  tmp <- tempfile(fileext = ".duckdb")
+  withr::defer(unlink(tmp))
+  con <- DBI::dbConnect(duckdb::duckdb(), dbdir = tmp)
+  DBI::dbExecute(con, "CREATE SCHEMA bt")
+  DBI::dbExecute(con, "CREATE TABLE bt.strategy (strategy_id VARCHAR PRIMARY KEY, short_name VARCHAR NOT NULL, long_name VARCHAR NOT NULL)")
+  DBI::dbDisconnect(con, shutdown = TRUE)
+  withr::local_envvar(c(HD_REGISTRY_PATH = tmp))
+  expect_true(.run_qa_registry_leg_count_calibration())
+})
