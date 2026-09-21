@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-21 (leaderboard.qmd render fix, refs #806 #668)
+
+- `docs/leaderboard.qmd` setup chunk now sources `R/glossary.R` before `R/plan_partitions.R`. Since #806, `PERIOD_LABELS_ALLOWED` is derived from `load_glossary()` at source time, so `scripts/build.sh --render-all` failed this page with `could not find function "load_glossary"`. Full render unverified in the worktree; verify in the main checkout.
+
 ## 2026-09-20 (pkgctx-check hardening, refs #861)
 
 - `scripts/regen_api_context.sh`: BSD-safe `mktemp` (no suffix after the X's),
