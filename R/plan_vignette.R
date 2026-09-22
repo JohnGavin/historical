@@ -192,7 +192,7 @@ ggplot(cor_long, aes(row, col, fill = cor)) +
   geom_tile(colour = "grey30") +
   geom_text(aes(label = round(cor, 2)), colour = "white", size = 4) +
   scale_fill_gradient2(low = "#00BFFF", mid = "grey30", high = "#FF6347",
-                       midpoint = 0.5, limits = c(0, 1)) +
+                       midpoint = 0, limits = c(-1, 1)) +
   labs(x = NULL, y = NULL, fill = "Corr",
        title = "Crypto log-return correlation (2023+)") +
   hd_theme() +
