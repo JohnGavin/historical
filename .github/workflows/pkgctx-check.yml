@@ -51,6 +51,18 @@ on:
 jobs:
   pkgctx-freshness:
     runs-on: ubuntu-latest
+    # Job-level env so CACHIX_AUTH_TOKEN is visible to a step's own `if:`
+    # condition below (JohnGavin/historical#861 CI-parse fix). GitHub
+    # Actions does not expose the `secrets` context inside a step-level
+    # `if:` at all ("Unrecognized named-value: 'secrets'" -- confirmed by
+    # the workflow_dispatch parse error this fixes), and a step's own
+    # `env:` is not yet populated when that same step's `if:` is
+    # evaluated (env application happens only after the step is selected
+    # to run). Job-level `env:` has neither restriction: it is part of
+    # the job context before any step's `if:` runs, so every step in
+    # this job -- including its own -- can read `env.CACHIX_AUTH_TOKEN`.
+    env:
+      CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
     steps:
       - uses: actions/checkout@v4
@@ -94,9 +106,7 @@ jobs:
         # Skipped entirely (not a failure) when CACHIX_AUTH_TOKEN is not
         # configured -- see header comment for the one-time manual step
         # that activates this.
-        if: ${{ steps.build-pkgctx.outcome == 'success' && secrets.CACHIX_AUTH_TOKEN != '' }}
-        env:
-          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        if: ${{ steps.build-pkgctx.outcome == 'success' && env.CACHIX_AUTH_TOKEN != '' }}
         run: nix run nixpkgs#cachix -- push johngavin /tmp/pkgctx-result
 
       - name: Snapshot committed doc

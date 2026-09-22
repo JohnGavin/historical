@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-09-22 (pkgctx-check.yml: fix `secrets` context parse error in step `if:`, refs #861)
+
+- **CI-breaking**, fixed urgently. `gh workflow run pkgctx-check.yml` failed
+  with `HTTP 422: ... Unrecognized named-value: 'secrets'` at the "Push
+  pkgctx build to johngavin cachix" step's `if:` condition
+  (`steps.build-pkgctx.outcome == 'success' && secrets.CACHIX_AUTH_TOKEN !=
+  ''`, introduced by the entry immediately below). GitHub Actions does not
+  expose the `secrets` context inside a step-level `if:` at all, and a
+  step's own `env:` is not yet populated when that same step's `if:` is
+  evaluated (env application happens only after the step is selected to
+  run) -- so the step's existing `env: CACHIX_AUTH_TOKEN: ${{
+  secrets.CACHIX_AUTH_TOKEN }}` block (needed by its `run:` line) could not
+  fix the `if:` either.
+- Fix: moved `CACHIX_AUTH_TOKEN` to job-level `env:` (visible to every
+  step's `if:` in that job, including its own, since job-level env is part
+  of the job context before any step's `if:` runs) and changed the `if:`
+  to reference `env.CACHIX_AUTH_TOKEN != ''` instead of
+  `secrets.CACHIX_AUTH_TOKEN != ''`. Removed the now-redundant step-level
+  `env:` block (the job-level one covers the `run:` line too). No change
+  to build/push logic -- push still happens iff the build succeeded AND
+  the token is set.
+
 ## 2026-09-22 (pkgctx-check: route crates.io 403 around via johngavin cachix, refs #861)
 
 - `.github/workflows/pkgctx-check.yml`: added `johngavin` as a trusted pull
