@@ -21,6 +21,26 @@
   does today -- the code gap is closed, the operational gap (no token, no
   seeded cache) is not; see PR body.
 
+## 2026-09-22 (full-render-cadence.yml: check pages_failed + dedup filed issues, refs #834 #856 #866 #878 #740)
+
+- `.github/workflows/full-render-cadence.yml` had two defects confirmed
+  2026-09-22 across four near-identical, all-now-closed-as-duplicate issues.
+  (1) The staleness check never read `docs/_full_render_marker.txt`'s
+  `pages_failed:` field, so a fresh marker recording a real render failure
+  (`scripts/build.sh --render-all`'s own `[RENDER-FAIL]` output) still
+  passed. It now also fails when `pages_failed > 0`, naming the count; a
+  marker with no `pages_failed:` line at all (pre-#740 format) is reported
+  as a distinct note, not silently treated as 0 failures or as a hard
+  failure. (2) `peter-evans/create-issue-from-file@v5` fired unconditionally
+  on every scheduled failure with no dedup, filing #834/#856/#866/#878
+  across three weekly runs with the identical title. A new step now
+  searches for an existing open issue with an exact title match (via `gh
+  issue list` + a `jq` exact-match filter, since `gh`'s `--search` is
+  fuzzy) and comments on it instead of creating a duplicate.
+- Tested by extracting the shell logic into standalone scripts run against
+  synthetic marker files (fresh+clean, fresh+failed, fresh+old-format) and
+  synthetic issue-list JSON (exact match, fuzzy-only, none) — not run
+  through GitHub Actions itself.
 
 ## 2026-09-21 (glossary path independent of cwd, refs #806 #668)
 
