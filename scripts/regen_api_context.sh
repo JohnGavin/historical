@@ -26,7 +26,24 @@ trap 'rm -f "$TMPFILE" "$HEADERFILE"' EXIT
 # Generate pkgctx output. A failure here means pkgctx could not be built or
 # run -- the doc's freshness is UNKNOWN, which is not the same as stale.
 # Exit 3 = INDETERMINATE (exit-code-conventions).
-if ! nix run github:b-rodrigues/pkgctx -- r "$ROOT/packages/historicaldata" --compact > "$TMPFILE"; then
+#
+# PKGCTX_BIN (optional, set by CI): path to an already-built pkgctx binary.
+# JohnGavin/historical#861's cachix workaround builds pkgctx once via
+# `nix build ... -o <path>` (giving a concrete store path a targeted
+# `cachix push` can push), then passes that build's bin/pkgctx here so
+# this script never has to invoke `nix run` fresh in CI. Local/dev usage
+# is unaffected: PKGCTX_BIN is unset, so the `nix run` fallback below
+# runs exactly as before.
+if [ -n "${PKGCTX_BIN:-}" ]; then
+  if [ ! -x "$PKGCTX_BIN" ]; then
+    echo "INDETERMINATE: PKGCTX_BIN=$PKGCTX_BIN is not an executable file; docs/api-historicaldata.md freshness was NOT checked" >&2
+    exit 3
+  fi
+  if ! "$PKGCTX_BIN" r "$ROOT/packages/historicaldata" --compact > "$TMPFILE"; then
+    echo "INDETERMINATE: could not run PKGCTX_BIN=$PKGCTX_BIN; docs/api-historicaldata.md freshness was NOT checked" >&2
+    exit 3
+  fi
+elif ! nix run github:b-rodrigues/pkgctx -- r "$ROOT/packages/historicaldata" --compact > "$TMPFILE"; then
   echo "INDETERMINATE: could not build/run pkgctx; docs/api-historicaldata.md freshness was NOT checked" >&2
   exit 3
 fi
