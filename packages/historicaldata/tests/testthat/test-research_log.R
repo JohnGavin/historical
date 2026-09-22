@@ -89,6 +89,35 @@ test_that("hd_rlog_uuid() generates distinct values", {
   expect_equal(length(unique(uuids)), 100L)
 })
 
+test_that("hd_rlog_uuid() is NOT deterministic under a fixed seed (regression, #860)", {
+  # Issue #860: hd_rlog_uuid() used to draw from base R's seeded RNG
+  # (sample()), which is deterministic under targets' per-target seed
+  # (targets::tar_seed_create()) -- every rebuild of a target calling
+  # hd_rlog_uuid() re-emitted the SAME uuid, producing duplicate rows in
+  # the append-only research-log store. This is the direct falsification
+  # of that defect, exactly as suggested in the issue: call
+  # hd_rlog_uuid() twice under the identical set.seed() and assert the
+  # two results DIFFER.
+  withr::local_seed(42L)
+  u1 <- historicaldata:::hd_rlog_uuid()
+  withr::local_seed(42L)
+  u2 <- historicaldata:::hd_rlog_uuid()
+  expect_false(identical(u1, u2))
+})
+
+test_that("hd_rlog_uuid() is deterministic-input-independent under targets' seeding scheme (#860)", {
+  # targets::tar_seed_create() fixes a per-target seed derived from the
+  # target's name -- reproduced here directly rather than depending on
+  # the {targets} package being installed, so this test always runs.
+  same_seed <- 123456789L
+  withr::local_seed(same_seed)
+  ids_a <- replicate(5L, historicaldata:::hd_rlog_uuid())
+  withr::local_seed(same_seed)
+  ids_b <- replicate(5L, historicaldata:::hd_rlog_uuid())
+  expect_false(identical(ids_a, ids_b))
+  expect_length(unique(c(ids_a, ids_b)), 10L)
+})
+
 # ── Append → query round-trip ────────────────────────────────────────────────
 
 test_that("append + query round-trips a hypotheses row", {
@@ -141,6 +170,63 @@ test_that("append auto-fills uuid and timestamp", {
 
   uuid_re <- "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
   expect_match(result$uuid[1L], uuid_re)
+})
+
+# -- Idempotency guard (belt-and-braces, #860) -------------------------------
+
+test_that("hd_rlog_append() skips a row whose uuid already exists (#860)", {
+  skip_if_not_installed("arrow")
+
+  tmp <- tempfile("rlog-idem-")
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+
+  row <- tibble::tibble(
+    uuid            = "11111111-1111-4111-8111-111111111111",
+    economic_claim  = "Idempotency test claim",
+    dependent_var   = "ret",
+    predictor       = "x",
+    sample_spec     = "all",
+    null_hypothesis = "none",
+    status          = "proposed",
+    extra_json      = NA_character_
+  )
+
+  # First append writes the row.
+  hd_rlog_append("hypotheses", row, base_dir = tmp)
+  after_first <- hd_rlog_query("hypotheses", base_dir = tmp)
+  expect_equal(nrow(after_first), 1L)
+
+  # Second append with the SAME uuid is skipped (warns, writes nothing new).
+  expect_warning(
+    hd_rlog_append("hypotheses", row, base_dir = tmp),
+    regexp = "already exists"
+  )
+  after_second <- hd_rlog_query("hypotheses", base_dir = tmp)
+  expect_equal(nrow(after_second), 1L)
+})
+
+test_that("hd_rlog_append() returns invisible NA when every row is a duplicate (#860)", {
+  skip_if_not_installed("arrow")
+
+  tmp <- tempfile("rlog-idem-na-")
+  dir.create(tmp)
+  on.exit(unlink(tmp, recursive = TRUE), add = TRUE)
+
+  row <- tibble::tibble(
+    uuid            = "22222222-2222-4222-8222-222222222222",
+    economic_claim  = "Idempotency return-value test",
+    dependent_var   = "ret",
+    predictor       = "x",
+    sample_spec     = "all",
+    null_hypothesis = "none",
+    status          = "proposed",
+    extra_json      = NA_character_
+  )
+
+  hd_rlog_append("hypotheses", row, base_dir = tmp)
+  result <- suppressWarnings(hd_rlog_append("hypotheses", row, base_dir = tmp))
+  expect_true(is.na(result))
 })
 
 # ── 3-deep lineage ───────────────────────────────────────────────────────────

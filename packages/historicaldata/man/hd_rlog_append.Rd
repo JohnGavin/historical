@@ -14,14 +14,16 @@ hd_rlog_append(table, rows, base_dir = NULL)
 \item{base_dir}{Override base directory (see \code{hd_rlog_path()}).}
 }
 \value{
-Invisible path to the written parquet file.
+Invisible path to the written parquet file, or invisible
+\code{NA_character_} when every row was already present (see the
+idempotency guard above) and nothing was written.
 }
 \description{
 Coerces \code{rows} to the table schema (adds missing columns as
 \code{NA}, drops extras, coerces types).  Lineage columns are
 auto-filled per row when missing or \code{NA}:
 \itemize{
-\item \code{uuid} — UUID-v4 from base R.
+\item \code{uuid} — UUID-v4 from non-seeded entropy (see \code{hd_rlog_uuid()}).
 \item \code{timestamp} — \code{Sys.time()}.
 \item \code{git_commit} — current HEAD SHA via \code{system2("git")}.
 \item \code{sandbox_image_hash} — MD5 of \code{flake.lock}.
@@ -29,7 +31,9 @@ auto-filled per row when missing or \code{NA}:
 Each call writes a single parquet file named
 \code{<first-uuid>_<timestamp>.parquet} under
 \code{<base_dir>/<table>/}.  This is append-only (audit log);
-rows are never deduped or overwritten.
+rows are never overwritten. A row whose \code{uuid} already exists in
+the table is skipped rather than re-appended (see
+\href{https://github.com/JohnGavin/historical/issues/860}{issue #860}).
 }
 \details{
 When \code{table} is \code{"hypotheses"}, \code{status} is validated
