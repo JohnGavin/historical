@@ -31,6 +31,31 @@ name: Full render cadence (weekly)
 # WEEKLY, NOT DAILY: mirrors dashboard-freshness.yml's own cadence
 # reasoning -- the fix is a deliberate ~20-minute human act, and a threshold
 # measured in weeks gives a full working week to act before this goes red.
+#
+# #834/#856/#866/#878: two defects fixed here, confirmed 2026-09-22.
+#
+# (1) This workflow used to check ONLY the marker's age, never its
+# `pages_failed:` field -- a fresh marker recording a real render failure
+# (scripts/build.sh --render-all's own `[RENDER-FAIL]` output, see Step 4
+# there) passed this gate as long as it was recent. The marker-age check
+# below now also fails when `pages_failed` is present and > 0, naming the
+# failure count. A marker with NO `pages_failed:` line at all (the
+# pre-#740 format, if one is ever re-committed) is NOT treated the same as
+# `pages_failed: 0` -- per the checks-must-distinguish-unknown rule, an
+# absent field is a distinct, lower-severity note, not a hard failure,
+# since it says nothing about whether any page actually failed.
+#
+# (2) `peter-evans/create-issue-from-file@v5` fired unconditionally on
+# every scheduled failure, unconditionally creating a new issue each time
+# -- four near-identical issues (#834, #856, #866, #878) were filed across
+# three weekly runs with the identical title. The "Create issue" step now
+# searches for an existing OPEN issue with the exact title first (GitHub's
+# `--search` is fuzzy, so the match is filtered exactly, client-side, via
+# `jq`) and comments on it instead of creating a duplicate; a new issue is
+# only opened when no exact-title match is open. Uses `GH_TOKEN:
+# ${{ secrets.GITHUB_TOKEN }}` -- `gh` is preinstalled on ubuntu-latest and
+# this token is already scoped by the `issues: write` permission below, so
+# no new permission or secret is needed.
 
 on:
   schedule:
@@ -100,10 +125,74 @@ jobs:
             cat "$REPORT"
             exit 1
           fi
-          echo "PASS: last full render was $LAST_RENDER ($AGE_DAYS day(s) ago) -- within the ${FULL_RENDER_MAX_AGE_DAYS}-day threshold."
+
+          # (#834/#856/#866/#878 defect 1): a fresh marker is not
+          # necessarily a CLEAN marker -- check pages_failed too, not just
+          # staleness. A marker with no `pages_failed:` line at all is the
+          # pre-#740 format; note it distinctly rather than treating it as
+          # either 0 (would hide a real failure) or a hard failure (would
+          # reject a marker this field never applied to).
+          if grep -q '^pages_failed:' "$MARKER"; then
+            PAGES_FAILED="$(grep '^pages_failed:' "$MARKER" | cut -d' ' -f2)"
+            if [[ "$PAGES_FAILED" -gt 0 ]]; then
+              {
+                echo "Last full render ($LAST_RENDER, $AGE_DAYS day(s) ago) recorded"
+                echo "**$PAGES_FAILED page(s) failed** (\`pages_failed: $PAGES_FAILED\` in \`$MARKER\`)."
+                echo ""
+                echo "A recent marker is not a clean one -- scripts/build.sh --render-all's"
+                echo "Step 4 flags a failed page as \`[RENDER-FAIL]\` in its own output; see"
+                echo "that output (re-run \`scripts/build.sh --render-all\` in the main"
+                echo "checkout to reproduce it) for which page(s) and why."
+                echo ""
+                echo "Fix the failing page(s), then re-run \`scripts/build.sh --render-all\`,"
+                echo "review the output, and commit the refreshed \`docs/*.html\` + \`$MARKER\` (#740)."
+              } > "$REPORT"
+              cat "$REPORT"
+              exit 1
+            fi
+            echo "PASS: last full render was $LAST_RENDER ($AGE_DAYS day(s) ago) -- within the ${FULL_RENDER_MAX_AGE_DAYS}-day threshold, pages_failed: $PAGES_FAILED."
+          else
+            echo "NOTE: \`$MARKER\` has no \`pages_failed:\` line (pre-#740 marker format)."
+            echo "      Cannot confirm the render was clean -- age check alone is not a"
+            echo "      substitute. Not treated as a failure on this field alone."
+            echo "PASS: last full render was $LAST_RENDER ($AGE_DAYS day(s) ago) -- within the ${FULL_RENDER_MAX_AGE_DAYS}-day threshold (pages_failed unknown)."
+          fi
+
+      - name: Find existing open issue (dedup, #834/#856/#866/#878)
+        id: find_issue
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: "full-render-cadence: docs/_full_render_marker.txt is stale or missing"
+        run: |
+          # gh's --search is fuzzy (matches on words, not the exact string),
+          # so filter to an EXACT title match client-side with jq -- a
+          # fuzzy-only match risked either missing the real duplicate or
+          # matching an unrelated issue that merely shares words with it.
+          # `env.TITLE` (gh's --jq is gojq, jq-compatible) reads TITLE from
+          # the step env above rather than interpolating it into the jq
+          # filter string, so no shell/jq quoting hazard either way.
+          MATCH_NUMBER="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "$TITLE" --json number,title \
+            --jq '[.[] | select(.title == env.TITLE)][0].number // empty')"
+          if [[ -n "$MATCH_NUMBER" ]]; then
+            echo "Found existing open issue #$MATCH_NUMBER with exact title match -- will comment, not create."
+          else
+            echo "No existing open issue with exact title match -- will create."
+          fi
+          echo "match_number=$MATCH_NUMBER" >> "$GITHUB_OUTPUT"
+
+      - name: Comment on existing issue
+        if: failure() && github.event_name == 'schedule' && steps.find_issue.outputs.match_number != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue comment "${{ steps.find_issue.outputs.match_number }}" \
+            --repo "$GITHUB_REPOSITORY" \
+            --body-file ./full-render-cadence-report.md
 
       - name: Create issue on schedule failure
-        if: failure() && github.event_name == 'schedule'
+        if: failure() && github.event_name == 'schedule' && steps.find_issue.outputs.match_number == ''
         uses: peter-evans/create-issue-from-file@v5
         with:
           title: "full-render-cadence: docs/_full_render_marker.txt is stale or missing"
