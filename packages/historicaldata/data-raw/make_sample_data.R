@@ -12,10 +12,11 @@
 # dates -- NOT derived from any real market data, and NOT hand-typed. Ticker
 # symbols reuse real large-cap US tickers as plausible labels only; the
 # price/volume/metadata series attached to them are fabricated. Re-running
-# this script reproduces byte-identical numeric content every time (Parquet
-# writer metadata such as creation timestamps may differ). This discharges
-# the technical debt the previous hand-committed sample_*.parquet files
-# carried: no generator, no audit trail, no way to regenerate or extend them.
+# this script reproduces byte-identical numeric content every time across R
+# versions because RNGkind is pinned explicitly (R 3.6+ changed sample()
+# algorithm). Parquet writer metadata such as creation timestamps may differ.
+# This discharges the technical debt the previous hand-committed sample_*.parquet
+# files carried: no generator, no audit trail, no way to regenerate or extend them.
 #
 # Regenerate with (from the repo root, inside the project's Nix flake shell):
 #   nix develop --command Rscript packages/historicaldata/data-raw/make_sample_data.R
@@ -35,6 +36,8 @@ suppressPackageStartupMessages({
   library(tibble)
 })
 
+# Pin RNGkind explicitly for determinism across R versions (R 3.6+ changed sample() algorithm).
+RNGkind("Mersenne-Twister", "Inversion", "Rejection")
 set.seed(42)
 
 # ---------------------------------------------------------------------------
