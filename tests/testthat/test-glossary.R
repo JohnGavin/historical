@@ -22,6 +22,24 @@ test_that("load_glossary reads data/glossary.yaml and returns the registered ent
   expect_true("Full Period" %in% g$period_label$values)
 })
 
+test_that("loaders resolve data/*.yaml when cwd is docs/ (here::here() is fooled by docs/_quarto.yml)", {
+  root <- here::here()
+  g_root <- load_glossary()
+  er_root <- load_entity_resolution()
+  withr::local_dir(file.path(root, "docs"))
+  expect_identical(load_glossary(), g_root)
+  expect_identical(load_entity_resolution(), er_root)
+})
+
+test_that("default path aborts loudly, listing searched dirs, when no data/ ancestor exists", {
+  tmp <- withr::local_tempdir()
+  withr::local_dir(tmp)
+  expect_error(load_glossary(), regexp = "not found")
+  msg <- tryCatch(load_glossary(), error = function(e) conditionMessage(e))
+  expect_match(msg, "Directories searched")
+  expect_snapshot(cat(strsplit(msg, "\n")[[1]][1]))
+})
+
 test_that("load_glossary aborts when the file does not exist", {
   expect_error(
     load_glossary(path = tempfile(fileext = ".yaml")),
