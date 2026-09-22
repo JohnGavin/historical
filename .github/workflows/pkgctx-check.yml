@@ -6,6 +6,39 @@ name: pkgctx API doc freshness
 #
 # Triggered only when the R source or the generated doc is touched, so
 # unrelated PRs pay zero cost.
+#
+# --- Cachix strategy (JohnGavin/historical#861) ---------------------------
+# Building the third-party github:b-rodrigues/pkgctx flake requires
+# fetching its Rust crate dependencies from crates.io/static.crates.io.
+# That endpoint 403s curl's default User-Agent when nix fetches it -- a
+# server-side block we cannot fix from this repo. Working around it:
+#
+#   PULL (always on, no secret needed): johngavin is added as a trusted
+#   substituter below, alongside the existing rstats-on-nix one. If the
+#   built pkgctx derivation is already in that cache, nix build
+#   substitutes the final output directly and never evaluates -- let alone
+#   fetches -- its build-time inputs (rustc, cargo, the crates.io vendor
+#   fetch). That is why only the FINAL result path needs to be pushed,
+#   never its build-time dependency closure (see the push step below).
+#
+#   PUSH (opt-in via secret): once CACHIX_AUTH_TOKEN (a johngavin-cache
+#   write token, see https://app.cachix.org/cache/johngavin) is added as a
+#   repo secret, a successful build here pushes ONLY the pkgctx result
+#   path via a targeted `cachix push johngavin <one store path>` call --
+#   never `cachix watch-exec` and never an unscoped `nix-store -qR piped
+#   to cachix push` -- so unrelated crates/nixpkgs build artefacts are
+#   never re-hosted on a cache meant for our own custom packages (see the
+#   sibling llm project's nix-operations.md "Cachix Push Rule" for the
+#   general convention this follows).
+#
+#   ONE-TIME MANUAL STEP (not done by this PR): (1) add the
+#   CACHIX_AUTH_TOKEN secret to this repo (a johngavin-cache token from
+#   https://app.cachix.org/cache/johngavin), (2) run this workflow once
+#   via workflow_dispatch to seed the cache. Until both happen, this
+#   workflow still fails exactly as it does today: the push step is a
+#   silent no-op without the secret, and pull-only cannot help before
+#   anything has been pushed.
+# ----------------------------------------------------------------------------
 
 on:
   pull_request:
@@ -26,11 +59,45 @@ jobs:
         with:
           # Same substituter config used by r-tests.yml so the pkgctx
           # flake derivation is also covered by the rstats-on-nix cache
-          # (avoids slow from-source R rebuilds on cache miss).
+          # (avoids slow from-source R rebuilds on cache miss), plus
+          # johngavin for the pkgctx build itself (see header comment).
           extra-conf: |
             trusted-users = root runner
-            extra-substituters = https://rstats-on-nix.cachix.org
-            extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
+            extra-substituters = https://rstats-on-nix.cachix.org https://johngavin.cachix.org
+            extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0= johngavin.cachix.org-1:ZWxhgInMqbjM7pEvgRm8g3TpaJDhborNGouk4DeHcPc=
+
+      - name: Build pkgctx (nix build -> named result path)
+        # nix build (rather than nix run) gives a concrete store path
+        # that the push step below can target precisely. Not fatal on
+        # failure: the crates.io 403 (JohnGavin/historical#861) is exactly
+        # the failure this cache strategy exists to route around, and it
+        # is expected here until the cache is seeded. The next step falls
+        # back to nix run internally and reports the correct exit-3
+        # INDETERMINATE result rather than a false stale-doc failure.
+        id: build-pkgctx
+        continue-on-error: true
+        run: nix build github:b-rodrigues/pkgctx -o /tmp/pkgctx-result
+
+      - name: Push pkgctx build to johngavin cachix (single result path only)
+        # Never `cachix watch-exec` and never an unscoped `nix-store -qR`
+        # piped to `cachix push` -- both push the full build-time closure
+        # (rustc, cargo, every crates.io vendor fetch), re-hosting
+        # unrelated third-party build artefacts on a cache meant for our
+        # own custom packages. `cachix push <cache> <one store path>`
+        # pushes only that path's RUNTIME closure (the R/python/curl/tar
+        # wrapper baked in by pkgctx's own postFixup, all already
+        # substitutable from rstats-on-nix/cache.nixos.org) -- never
+        # rustc, cargo, or the crates.io fetch this whole workaround
+        # exists to avoid touching again. See header comment for the
+        # pull-side half of this strategy.
+        #
+        # Skipped entirely (not a failure) when CACHIX_AUTH_TOKEN is not
+        # configured -- see header comment for the one-time manual step
+        # that activates this.
+        if: ${{ steps.build-pkgctx.outcome == 'success' && secrets.CACHIX_AUTH_TOKEN != '' }}
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: nix run nixpkgs#cachix -- push johngavin /tmp/pkgctx-result
 
       - name: Snapshot committed doc
         run: cp docs/api-historicaldata.md /tmp/api-committed.md
@@ -38,8 +105,14 @@ jobs:
       - name: Regenerate docs/api-historicaldata.md
         # Exit 3 = pkgctx could not be built/run (INDETERMINATE), which is
         # NOT the same as a stale doc and must never look like a pass.
+        # PKGCTX_BIN is set only when the nix-build step above actually
+        # produced a usable binary; regen_api_context.sh falls back to
+        # `nix run` internally when it is unset (see script changes).
         run: |
           rc=0
+          if [ "${{ steps.build-pkgctx.outcome }}" = "success" ]; then
+            export PKGCTX_BIN=/tmp/pkgctx-result/bin/pkgctx
+          fi
           bash scripts/regen_api_context.sh || rc=$?
           if [ "$rc" -eq 3 ]; then
             echo "::error title=INDETERMINATE::pkgctx could not be built/run. docs/api-historicaldata.md freshness was NOT checked (this is not a stale-doc result)."

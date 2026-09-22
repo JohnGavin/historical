@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-09-22 (pkgctx-check: route crates.io 403 around via johngavin cachix, refs #861)
+
+- `.github/workflows/pkgctx-check.yml`: added `johngavin` as a trusted pull
+  substituter (alongside the existing rstats-on-nix one, always on, no
+  secret needed), and built pkgctx via `nix build -o /tmp/pkgctx-result`
+  (a named result path) instead of `nix run`, so a new push step can target
+  that ONE store path with `cachix push johngavin <path>` -- never
+  `cachix watch-exec`, never an unscoped `nix-store -qR | cachix push` over
+  the full build-time closure. The push step is guarded
+  `if: secrets.CACHIX_AUTH_TOKEN != ''` and is a silent no-op without it.
+- `scripts/regen_api_context.sh`: new optional `PKGCTX_BIN` env var lets the
+  workflow hand it the already-built binary instead of `nix run`-ing fresh;
+  unset (local/dev) behaviour is unchanged. Exit-3 INDETERMINATE contract
+  preserved on both paths (build failure and unusable/non-executable
+  `PKGCTX_BIN`).
+- **NOT done by this PR (manual, one-time):** add the `CACHIX_AUTH_TOKEN`
+  repo secret (a johngavin-cache write token) and run this workflow once via
+  `workflow_dispatch` to seed the cache. Until then, CI fails exactly as it
+  does today -- the code gap is closed, the operational gap (no token, no
+  seeded cache) is not; see PR body.
+
+
 ## 2026-09-21 (glossary path independent of cwd, refs #806 #668)
 
 - `load_glossary()` / `load_entity_resolution()` defaulted to `here::here("data", ...)`. Under `quarto render` the cwd is `docs/` and `docs/_quarto.yml` makes `here::here()` resolve to `docs/`, so `docs/data/glossary.yaml` was looked for and not found. New internal `.repo_data_file()` walks up from `getwd()` to the first ancestor containing `data/<name>`; aborts loudly (listing directories searched) if none. Explicit `path=` unchanged. Tests in `test-glossary.R`. Full leaderboard.qmd render unverified in the worktree.
