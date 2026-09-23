@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-09-23 (fetch_fundamentals_edgar.R: CIK-resolution overlap validation + dedup check, refs #865)
+
+- **Ticker recycling (#865):** `scripts/fetch_fundamentals_edgar.R` resolved
+  a ticker to a CIK on string-coincidence alone, with no check that the
+  resolved company actually existed during the period our data covers. Per
+  the "Ghost Members" article cited in #865 (APC used to mean Anadarko
+  Petroleum, acquired 2019; SEC's current ticker map resolves it to an
+  unrelated later company), this is exactly the `fail-loud-not-null`
+  failure shape -- no error, no NA, just a plausible number for the wrong
+  company.
+- Item 1: added `validate_cik_filing_overlap()`, which requires the
+  candidate CIK's own 10-K/10-Q filing dates (extracted from the SAME SEC
+  companyfacts payload `fetch_companyfacts()` already fetches -- no new
+  endpoint) to overlap the date range we intend to hold data for that
+  ticker (`PILOT_DATA_START`/`PILOT_DATA_END`); `cli_abort()`s naming the
+  ticker and the mismatched CIK/company otherwise. Deliberately wide-open
+  for the current 10-mega-cap pilot universe (matches #865's own "Severity
+  today: latent, not live"); becomes load-bearing once this script covers a
+  historical/delisted universe.
+- Item 2: replaced the `distinct(ticker, .keep_all = TRUE)` swallow with
+  `resolve_ticker_cik()`, which `cli_abort()`s naming both CIK candidates if
+  SEC's map ever returns more than one row for a requested ticker, instead
+  of silently keeping the first.
+- Item 5: `tests/testthat/test-fetch-fundamentals-edgar.R` -- regression
+  coverage using a synthetic/mocked APC/ARKO fixture (Anadarko's real
+  2010-2019 filing years vs. a later company's post-2020 filings under the
+  same recycled ticker; SEC EDGAR is not reachable from this test
+  environment, so no live network call is made). Asserts the correct
+  candidate (Anadarko, pre-2019 window) is accepted and the wrong candidate
+  (ARKO's fixture CIK) is rejected -- this is the assertion that would have
+  passed silently (no error) on the OLD code path.
+- Refactor (no behaviour change to the script's CLI/output): resolution
+  logic extracted into ordinary, testable functions; the network-fetching
+  driver wrapped in `.ffe_main()`, gated by `sys.nframe() == 0` -- same
+  pattern as `scripts/check_pkg_staleness.R` -- so
+  `source()`ing the file for tests never triggers a live SEC EDGAR fetch.
+- **Not done by this PR (explicitly out of scope, per #865 items 3/4):**
+  carrying CIK as a first-class column throughout the repo, and a
+  repo-wide audit of every other ticker-keyed join (`equity_daily`,
+  `metadata`, `alphavantage_daily`, etc.). Recommended as separate
+  follow-up issue(s) if not already tracked.
+
 ## 2026-09-23 (bdbb_tail_predict: fix contemporaneous join + full-sample threshold, #868, refs #443 #867)
 
 - **Look-ahead bias, fixed.** `bdbb_tail_predict()`
