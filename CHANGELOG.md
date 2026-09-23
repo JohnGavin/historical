@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-09-23 (r-tests.yml: explicit NOT_CRAN/TESTTHAT_EDITION hardening, refs #574)
+
+- `.github/workflows/r-tests.yml`: the `Run R package tests` step now
+  exports `NOT_CRAN=true TESTTHAT_EDITION=3` before `Rscript -e
+  "devtools::test(...)"`, mirroring `scripts/verify.sh` (#573).
+- **Investigated, premise not confirmed as an active bug.** Issue #574
+  item 4 asked whether CI has the same silent-skip gap it found in a plain
+  `testthat::test_dir()` call. Empirically it does not, for two independent
+  reasons, both confirmed 2026-09-23 in this repo's own nix shell:
+  1. `devtools::test()` (what this step calls, not `test_dir()` directly)
+     always runs `withr::local_envvar(devtools:::r_env_vars())` first, and
+     `r_env_vars()` sets `NOT_CRAN = "true"` unconditionally. A side-by-side
+     `devtools::test(stop_on_failure = FALSE)` run with vs without the new
+     exports produced an identical `[ FAIL 0 | WARN 11 | SKIP 32 | PASS
+     2158 ]` both times.
+  2. `packages/historicaldata/DESCRIPTION` already declares
+     `Config/testthat/edition: 3`, so `testthat::edition_get()` resolves to
+     3 regardless of `TESTTHAT_EDITION` (confirmed with no env vars set).
+- The exports are added anyway as explicit hardening: they make the intent
+  visible next to `scripts/verify.sh`'s equivalent guard, and they protect
+  against a future refactor (e.g. swapping in `testthat::test_dir()`
+  directly, or dropping `Config/testthat/edition` from DESCRIPTION) that
+  would silently reintroduce the #574 failure mode without them. No
+  behaviour change to the current CI run is expected or claimed.
+
 ## 2026-09-22 (pkgctx-check.yml: fix `secrets` context parse error in step `if:`, refs #861)
 
 - **CI-breaking**, fixed urgently. `gh workflow run pkgctx-check.yml` failed
