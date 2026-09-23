@@ -31,6 +31,33 @@ jobs:
             extra-substituters = https://rstats-on-nix.cachix.org
             extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=
 
+      # NOT_CRAN / TESTTHAT_EDITION: issue #574 found that a plain
+      # `Rscript -e 'testthat::test_dir(...)'` (no devtools) leaves NOT_CRAN
+      # unset, so testthat silently SKIPS every skip_on_cran()-gated test --
+      # including this repo's mandated snapshot tests -- while the suite
+      # still reports green. scripts/verify.sh (#573) fixed that for LOCAL
+      # verification by exporting both before running.
+      #
+      # This step calls `devtools::test()`, not `testthat::test_dir()`
+      # directly, and devtools::test() is NOT susceptible to the #574 gap:
+      # it always runs `withr::local_envvar(devtools:::r_env_vars())` before
+      # invoking test_local(), and r_env_vars() sets NOT_CRAN="true"
+      # unconditionally -- confirmed empirically 2026-09-23 by comparing a
+      # devtools::test() run with vs without these exports (identical
+      # SKIP=32 either way; see PR discussion for the full comparison).
+      # Likewise, testthat edition here is NOT decided by TESTTHAT_EDITION:
+      # packages/historicaldata/DESCRIPTION already declares
+      # `Config/testthat/edition: 3`, so find_edition() resolves to 3
+      # regardless of this env var -- also confirmed empirically
+      # (testthat::edition_get() == 3 with no env vars set).
+      #
+      # The exports below are therefore explicit hardening, not a fix for an
+      # active skip here: they make the intent visible (matching
+      # scripts/verify.sh) and protect against a FUTURE regression if this
+      # step is ever refactored to call testthat::test_dir() directly, or if
+      # Config/testthat/edition is ever removed from DESCRIPTION -- either
+      # change would silently reintroduce the #574 failure mode without
+      # these exports.
       - name: Run R package tests (unit only; integration tests skip on CI)
         run: |
-          nix develop --command bash -c 'cd packages/historicaldata && Rscript -e "devtools::test(stop_on_failure = TRUE)"'
+          nix develop --command bash -c 'cd packages/historicaldata && NOT_CRAN=true TESTTHAT_EDITION=3 Rscript -e "devtools::test(stop_on_failure = TRUE)"'
