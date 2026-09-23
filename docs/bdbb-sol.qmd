@@ -78,6 +78,19 @@ fit |>
 
 ## Tail-Risk Predictivity (R vs Amihud vs Kyle)
 
+::: {.callout-note}
+**Methodology fix (2026-09, [#868](https://github.com/JohnGavin/historical/issues/868)):** earlier
+renders of this page reported a spurious "predictivity" spread. The join
+scored the SAME bar the rolling window own diagnostics (R, theta, Kyle)
+were computed from -- a contemporaneous, not predictive, association -- and
+the extreme-move threshold was computed over the FULL sample, including
+bars after each window. Both are look-ahead violations; see
+[`bdbb_tail_predict()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R)
+for the fix. The table below reflects the corrected, next-bar,
+trailing-threshold test as of the last render of this page -- check the
+build-info footer commit date against the fix merge date if in doubt.
+:::
+
 ```{r tail-predict}
 tp <- tar_read(bdbb_sol_tail_predict)
 pull_spread <- function(pred) {
@@ -88,13 +101,19 @@ knitr::kable(
   tp,
   digits  = 2,
   caption = paste0(
-    "Tail-risk predictivity by predictor. ",
+    "Tail-risk predictivity by predictor (next-bar, trailing-threshold ",
+    "test -- see the methodology note above and #868). ",
     "Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). ",
     "SOL/USD spreads computed here: R = ", pull_spread("R"), " pp, ",
     "Amihud = ", pull_spread("amihud_mean"), " pp, ",
     "Kyle = ", pull_spread("kyle_mean"), " pp. ",
-    "Varma (2026) BTC benchmarks, shown for reference only: R = 8.6 pp, ",
-    "Amihud = 4.7 pp, Kyle = 1.1 pp. Kyle's lambda is estimated as the OLS ",
+    "Varma (2026) BTC benchmarks, shown for reference ONLY -- NOT a ",
+    "like-for-like comparison, since Varma Table 2 uses a genuinely ",
+    "next-day test while this page pre-#868 renders did not: R = 8.6 pp, ",
+    "Amihud = 4.7 pp, Kyle = 1.1 pp. A spread near zero, or one with a wide ",
+    "confidence interval, after the #868 fix is a legitimate outcome, not a ",
+    "defect -- see the detection-power-required and research-log-honesty ",
+    "project rules. Kyle lambda is estimated as the OLS ",
     "price-impact slope of log-returns on signed order flow within each ",
     "rolling window (cov/var; see ",
     "[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46)",

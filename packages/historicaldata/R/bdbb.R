@@ -191,21 +191,142 @@ bdbb_half_life <- function(theta) {
 }
 
 
+
+#' Minimum number of prior returns before scoring an extreme move (#868)
+#'
+#' .bdbb_score_next_return computes a trailing/expanding 90th-percentile
+#' threshold that needs a reasonable sample to not be dominated by a handful
+#' of points. 100 hourly bars (about 4 days) is a conservative floor -- roughly
+#' consistent with coverage gates elsewhere in this package (roll_quantile_safe
+#' uses min_frac = 0.9 for extreme quantiles against a FIXED window; there is
+#' no fixed window here to apply a fraction to, so an absolute floor is used
+#' instead). Below this floor, threshold_90_asof -- and therefore extreme --
+#' is NA, never a noisy quantile from a handful of points.
+.bdbb_min_threshold_obs <- 100L
+
+#' Build the per-bar next-bar scored table underlying bdbb_tail_predict() (#868)
+#'
+#' For each row of returns_df (arranged by time, and by ticker first when
+#' that column is present), computes:
+#' * next_time/next_log_ret -- the NEXT bar time and log-return, found by
+#'   ROW ORDER (dplyr::lead()), never by clock arithmetic. Kraken bars exist
+#'   only where trades occurred, so window_end + interval is not a reliable
+#'   way to locate the next bar (#868).
+#' * threshold_90_asof -- a TRAILING/EXPANDING 90th-percentile threshold of
+#'   abs(log_ret), computed from bars up to and including the CURRENT row
+#'   only (never later bars). Below .bdbb_min_threshold_obs prior
+#'   observations, this is NA rather than an unreliable quantile.
+#' * extreme -- whether abs(next_log_ret) exceeds threshold_90_asof.
+#'
+#' bdbb_tail_predict() joins diagnostics_df window_end onto this table
+#' window_end (the bar own time, renamed for the join) to pick up, for each
+#' rolling-window estimate, the STRICTLY-NEXT bar return and a threshold
+#' known as of that window own end -- never a bar inside the estimation
+#' window, and never a quantile informed by data after window_end. This
+#' fixes the pre-#868 defect, where the join matched window_end == time
+#' directly: since window_end IS the last bar of the estimation window, that
+#' join scored the SAME bar the window own diagnostics (R, theta, kyle_mean)
+#' were computed from -- a contemporaneous association, not a predictive
+#' one -- against a threshold computed over the FULL sample (including bars
+#' after window_end), a second, independent look-ahead violation.
+#'
+#' @param returns_df Tibble with columns time (POSIXct UTC) and log_ret
+#'   (numeric). An optional ticker column groups the row-order lead and the
+#'   expanding quantile separately per ticker -- bdbb_fit()/bdbb_tail_predict()
+#'   are currently exercised against single-ticker series only (see
+#'   .bdbb_required_cols), but a ticker column, if present, is honoured
+#'   defensively rather than silently mixing series.
+#' @return Tibble with columns window_end, next_time, next_log_ret,
+#'   threshold_90_asof, n_obs_asof, extreme (one row per input row).
+#' @noRd
+.bdbb_score_next_return <- function(returns_df) {
+  required_cols <- c("time", "log_ret")
+  missing_cols <- setdiff(required_cols, names(returns_df))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg returns_df} is missing required column{?s}: {.field {missing_cols}}.",
+      "i" = "Required columns: {.field {required_cols}}."
+    ))
+  }
+
+  group_cols <- intersect("ticker", names(returns_df))
+  returns_df <- dplyr::arrange(
+    returns_df, dplyr::across(dplyr::any_of(c(group_cols, "time")))
+  )
+  if (length(group_cols) > 0L) {
+    returns_df <- dplyr::group_by(returns_df, dplyr::across(dplyr::all_of(group_cols)))
+  }
+
+  returns_df <- dplyr::mutate(
+    returns_df,
+    next_time    = dplyr::lead(time),
+    next_log_ret = dplyr::lead(log_ret),
+    n_obs_asof   = cumsum(!is.na(log_ret)),
+    # Expanding (never a fixed-size) window: .before = Inf includes every
+    # PRIOR row plus the current one; .complete = FALSE lets it start
+    # returning values from row 1 (gated below by n_obs_asof instead).
+    threshold_90_asof = slider::slide_dbl(
+      log_ret,
+      ~ stats::quantile(abs(.x), 0.90, na.rm = TRUE),
+      .before = Inf, .complete = FALSE
+    )
+  )
+
+  if (length(group_cols) > 0L) {
+    returns_df <- dplyr::ungroup(returns_df)
+  }
+
+  returns_df <- dplyr::mutate(
+    returns_df,
+    threshold_90_asof = dplyr::if_else(
+      n_obs_asof < .bdbb_min_threshold_obs, NA_real_, threshold_90_asof
+    ),
+    extreme = abs(next_log_ret) > threshold_90_asof
+  )
+
+  dplyr::rename(
+    dplyr::select(
+      returns_df,
+      dplyr::any_of(group_cols), time, next_time, next_log_ret,
+      threshold_90_asof, n_obs_asof, extreme
+    ),
+    window_end = time
+  )
+}
+
 #' Tail-risk predictivity test (Varma 2026 Table 2)
 #'
-#' Replicates Varma's tercile-split predictivity test: for each predictor
+#' Replicates Varma tercile-split predictivity test: for each predictor
 #' (R, Amihud, Kyle), split windows into terciles by predictor value, then
-#' compare the probability of an extreme next-period return in the top tercile
+#' compare the probability of an extreme NEXT-bar return in the top tercile
 #' vs the bottom tercile.
 #'
 #' @param diagnostics_df Tibble output of [bdbb_fit()].  Must have columns
-#'   `window_end`, `R`, `amihud_mean`, `kyle_mean`.
-#' @param returns_df Tibble with columns `time` (POSIXct UTC) and `log_ret`
-#'   (numeric).  The function looks one period forward from `window_end`.
+#'   window_end, R, amihud_mean, kyle_mean.
+#' @param returns_df Tibble with columns time (POSIXct UTC) and log_ret
+#'   (numeric).
 #'
 #' @return A tibble with one row per predictor and columns:
-#'   `predictor`, `p_extreme_high_tercile`, `p_extreme_low_tercile`,
-#'   `spread_pp`, `n_high`, `n_low`.
+#'   predictor, p_extreme_high_tercile, p_extreme_low_tercile,
+#'   spread_pp, n_high, n_low. The per-bar scored table used to build this
+#'   result (see .bdbb_score_next_return()) is attached as the
+#'   "bdbb_scored_windows" attribute -- used by the S34 QA gate
+#'   (check_bdbb_no_lookahead(), R/plan_qa_gates.R, #868) to assert the
+#'   look-ahead-safety property directly against the join this function
+#'   actually performs, rather than a re-derived copy that could drift out
+#'   of sync with it.
+#'
+#' @section Look-ahead safety (#868):
+#' The predictor value at window_end = t (from bdbb_fit()) is compared
+#' against the return of the bar STRICTLY AFTER t, found by row order
+#' within the (time-ordered) returns_df -- never a bar inside the
+#' estimation window, and never located via clock arithmetic (Kraken bars
+#' are irregular). The extreme-move threshold at t uses only bars with
+#' time <= t. Neither the scored return nor the threshold used to judge
+#' it may see data the window itself could not have seen. Before #868 was
+#' fixed, both of these were violated: the join scored the SAME bar the
+#' window own diagnostics were computed from, against a threshold computed
+#' over the entire sample (including bars after t).
 #'
 #' @family bdbb
 #' @export
@@ -215,29 +336,17 @@ bdbb_half_life <- function(theta) {
 #' ret <- dplyr::mutate(sol, log_ret = log(close / dplyr::lag(close)))
 #' bdbb_tail_predict(fit, dplyr::select(ret, time, log_ret))
 bdbb_tail_predict <- function(diagnostics_df, returns_df) {
-  # Compute next-period extreme_move flag (top decile absolute return)
-  threshold_90 <- stats::quantile(
-    abs(returns_df$log_ret), 0.90, na.rm = TRUE
-  )
-  returns_df <- dplyr::mutate(
-    returns_df,
-    extreme = abs(log_ret) > threshold_90
-  )
+  scored <- .bdbb_score_next_return(returns_df)
 
-  # Shift diagnostics forward 1 period: window_end at t predicts returns at t+1.
-  # We create a join key by shifting the return times back by one interval
-  # (smallest observed gap) to align with the diagnostic window_end.
-  # Simpler: join diagnostics$window_end to returns$time directly,
-  # since window_end is the LAST bar of the window and the NEXT bar is t+1.
   joined <- dplyr::left_join(
     diagnostics_df,
-    returns_df,
-    by = dplyr::join_by(window_end == time)
+    dplyr::select(scored, window_end, extreme),
+    by = "window_end"
   )
 
   predictors <- c("R", "amihud_mean", "kyle_mean")
 
-  purrr::map_dfr(predictors, function(pred) {
+  out <- purrr::map_dfr(predictors, function(pred) {
     df_pred <- dplyr::filter(joined, !is.na(.data[[pred]]), !is.na(extreme))
     df_pred <- dplyr::mutate(
       df_pred,
@@ -259,4 +368,9 @@ bdbb_tail_predict <- function(diagnostics_df, returns_df) {
       n_low                 = nrow(low_t)
     )
   })
+
+  # See @return roxygen above (#868) -- exposes the join this function used
+  # so the S34 QA gate can assert look-ahead-safety without re-deriving it.
+  attr(out, "bdbb_scored_windows") <- scored
+  out
 }

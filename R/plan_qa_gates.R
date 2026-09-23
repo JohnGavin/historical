@@ -2988,6 +2988,68 @@ check_registry_leg_count_calibration <- function(status) {
 }
 
 
+#' Assert bdbb_tail_predict() never scores a return at or before window_end (S34, #868)
+#'
+#' Companion to the 4 look-ahead scanners (S1-S4) above, but targeted: those
+#' pattern-match SOURCE CODE for forbidden constructs; this asserts a
+#' RUNTIME property directly against the join bdbb_tail_predict()
+#' (packages/historicaldata/R/bdbb.R) actually performs, via the
+#' "bdbb_scored_windows" attribute it attaches to its return value. #868
+#' found that join scoring the SAME bar that ends the rolling estimation
+#' window (a same-clock, contemporaneous association), which no source-
+#' pattern scanner could have caught -- the defect was in the JOIN KEY
+#' choice, not in any of the 4 forbidden syntactic patterns S1-S4 look for.
+#'
+#' @param scored Tibble attached via
+#'   attr(bdbb_tail_predict(...), "bdbb_scored_windows") -- columns
+#'   window_end, next_time (POSIXct; NA when window_end is the last bar in
+#'   the series -- not scoreable, not a violation).
+#' @return TRUE invisibly on success (including when scored has zero
+#'   scoreable rows -- nothing to score is not a defect).
+#' @noRd
+check_bdbb_no_lookahead <- function(scored) {
+  required_cols <- c("window_end", "next_time")
+  missing_cols <- setdiff(required_cols, names(scored))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg scored} is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_bdbb_no_lookahead() (S34) requires window_end, next_time -- ",
+        "the bdbb_scored_windows attribute attached by bdbb_tail_predict()."
+      )
+    ))
+  }
+
+  scoreable <- dplyr::filter(scored, !is.na(next_time))
+  if (nrow(scoreable) == 0L) {
+    return(invisible(TRUE))
+  }
+
+  bad <- scoreable$next_time <= scoreable$window_end
+  if (any(bad)) {
+    idx   <- which(bad)
+    n_bad <- length(idx)
+    cli::cli_abort(c(
+      "x" = paste0(
+        n_bad, " row", if (n_bad == 1L) "" else "s",
+        " in bdbb_tail_predict() scored windows score a return at or ",
+        "before window_end (#868 look-ahead bias):"
+      ),
+      "i" = paste0(
+        "First offender: window_end = ", format(scoreable$window_end[idx[1]]),
+        ", next_time = ", format(scoreable$next_time[idx[1]]), "."
+      ),
+      "i" = paste0(
+        "The scored return must be strictly AFTER window_end -- see ",
+        "bdbb_tail_predict() row-order lead() join (packages/",
+        "historicaldata/R/bdbb.R)."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -3667,6 +3729,32 @@ plan_qa_gates <- function() {
           "qa_registry_leg_count_calibration: S33 passed (every composite/",
           "leg_count>1 registry strategy has a manufactured-Sharpe ",
           "calibration annotation, or none is registered yet)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: bdbb_tail_predict() (packages/historicaldata/R/bdbb.R) never
+    # scores a return at or before the window_end it is meant to predict
+    # (S34, #868). Runs against the live SOL/USD pipeline output
+    # (bdbb_sol_fit/bdbb_sol_data, R/plan_bdbb_sol.R) using the SAME
+    # returns_df construction bdbb_sol_tail_predict already uses, so this
+    # gate exercises the real join, not a synthetic one.
+    targets::tar_target(
+      qa_bdbb_no_lookahead,
+      command = {
+        returns_df <- bdbb_sol_data |>
+          dplyr::arrange(time) |>
+          dplyr::mutate(log_ret = log(close / dplyr::lag(close))) |>
+          dplyr::select(time, log_ret)
+        result <- historicaldata::bdbb_tail_predict(bdbb_sol_fit, returns_df)
+        scored <- attr(result, "bdbb_scored_windows")
+        check_bdbb_no_lookahead(scored)
+        n_scored <- sum(!is.na(scored$next_time))
+        cli::cli_inform(c("v" = paste0(
+          "qa_bdbb_no_lookahead: S34 passed (", n_scored, " scored windows, ",
+          "every scored return strictly after window_end, #868)"
         )))
         TRUE
       },

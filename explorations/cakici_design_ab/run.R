@@ -457,7 +457,7 @@ p_turnover <- ggplot2::ggplot(
   ) +
   ggplot2::scale_colour_manual(values = PALETTE_TURNOVER) +
   ggplot2::scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
-  ggplot2::scale_y_continuous(limits = c(0, 1), labels = scales::number_format(accuracy = 0.01)) +
+  ggplot2::scale_y_continuous(limits = c(-1, 1), labels = scales::number_format(accuracy = 0.01)) +
   ggplot2::labs(
     title = "Decile Membership Stability: Spearman Correlation by Variant Pair",
     subtitle = paste0(
