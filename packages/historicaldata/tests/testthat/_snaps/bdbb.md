@@ -41,3 +41,20 @@
       function (diagnostics_df, returns_df) 
       NULL
 
+# .bdbb_score_next_return aborts informatively on a returns_df missing required columns
+
+    Code
+      .bdbb_score_next_return(tibble::tibble(time = Sys.time()))
+    Condition
+      Error in `.bdbb_score_next_return()`:
+      x `returns_df` is missing required column: log_ret.
+      i Required columns: time and log_ret.
+
+# .bdbb_score_next_return signature is stable
+
+    Code
+      args(.bdbb_score_next_return)
+    Output
+      function (returns_df) 
+      NULL
+

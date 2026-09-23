@@ -1,5 +1,49 @@
 # Changelog
 
+## 2026-09-23 (bdbb_tail_predict: fix contemporaneous join + full-sample threshold, #868, refs #443 #867)
+
+- **Look-ahead bias, fixed.** `bdbb_tail_predict()`
+  (`packages/historicaldata/R/bdbb.R`) joined `window_end == time`
+  directly onto `returns_df`, which selects the return of the SAME bar
+  the rolling window own diagnostics (R, theta, kyle_mean) were computed
+  from -- a contemporaneous, not predictive, association. Independently,
+  the extreme-move threshold was `stats::quantile()` over the FULL
+  sample, including bars after each window. Both violated
+  `look-ahead-bias-prevention`; the published "R-metric tail predictivity
+  spread" on bdbb-sol.html benchmarked against Varma 8.6pp was therefore
+  not a predictive result.
+- Fix: new internal helper `.bdbb_score_next_return()` shifts the scored
+  return to the STRICTLY-NEXT bar by ROW ORDER (`dplyr::lead()`), never
+  clock arithmetic (Kraken bars are irregular), and replaces the
+  full-sample threshold with a TRAILING/EXPANDING 90th-percentile
+  threshold gated by a minimum-observations floor (100 bars). The
+  per-bar scored table is attached to `bdbb_tail_predict()` return value
+  as the `"bdbb_scored_windows"` attribute -- no new exports, no
+  NAMESPACE/man changes.
+- New QA gate S34 (`check_bdbb_no_lookahead()`, `R/plan_qa_gates.R`,
+  `qa_bdbb_no_lookahead` target) asserts every scored return is strictly
+  after `window_end`, runtime-checked against the live SOL/USD pipeline
+  output on every `tar_make()` -- per `fail-loud-not-null` Required
+  Pattern 6, a gate rather than only a test.
+- Regression tests reproduce the issue own perturbation-test logic:
+  `.bdbb_score_next_return()` next-bar return is invariant to perturbing
+  the bar AT `window_end`, and a dedicated falsification test sources
+  `origin/main`s pre-fix join and confirms it WAS contemporaneous
+  (reproduces the same perturbation, shows it WOULD have changed the old
+  scored value). Package tests:
+  `packages/historicaldata/tests/testthat/test-bdbb.R`. Gate tests:
+  `tests/testthat/test-bdbb-no-lookahead.R`.
+- `docs/bdbb-sol.qmd`: added a methodology-fix callout and rewrote the
+  tail-predictivity caption to stop presenting the Varma 8.6pp benchmark
+  as a like-for-like comparison. **Not re-rendered by this PR** -- no
+  targets store in a worktree; the corrected spread value is unknown
+  until a real `tar_make()` + render happens in the main checkout. Per
+  `resulting-prohibition`/`research-log-honesty`, nothing was tuned to
+  preserve the old headline number.
+- `docs/api-historicaldata.md`: regenerated via
+  `scripts/regen_api_context.sh` -- no change (no exported
+  function/signature changed).
+
 ## 2026-09-23 (r-tests.yml: explicit NOT_CRAN/TESTTHAT_EDITION hardening, refs #574)
 
 - `.github/workflows/r-tests.yml`: the `Run R package tests` step now
