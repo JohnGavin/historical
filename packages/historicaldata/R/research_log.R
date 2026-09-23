@@ -268,7 +268,11 @@ hd_rlog_schema <- function(table) {
 #' Default base directory for the research-log store
 #'
 #' @param base_dir Override path, or \code{NULL} to use the default
-#'   (\code{inst/extdata/research_log/} under the package root).
+#'   (via \code{here::here()}, which resolves to the repo root, not the package root).
+#' @details The research-log store lives at \code{inst/extdata/research_log/}
+#'   in the repository root, not inside the package. This is project-scoped
+#'   output (written by \code{R/plan_olmar.R} and \code{explorations/}, neither
+#'   inside the package), not package-bundled data.
 #' @return Scalar character path.
 #' @family research-log
 #' @export
