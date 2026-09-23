@@ -115,8 +115,8 @@ BASELINE_PKG_FAILURES=(
 )
 
 # ---------------------------------------------------------------------------
-# Normal SKIP count for the package suite, confirmed 2026-07-22 (issue #580
-# Phase 2). Composition (verify with the [SKIP] detail lines this script
+# Normal SKIP count for the package suite, updated 2026-09-23 (following
+# #868). Composition (verify with the [SKIP] detail lines this script
 # prints once the count exceeds this baseline):
 #   - 4: {alphavantager} not installed (test-alphavantage.R x3,
 #        test-column-naming.R x1) — pre-existing, unrelated to #580.
@@ -130,11 +130,23 @@ BASELINE_PKG_FAILURES=(
 #        preserves the original live-endpoint assertions for opt-in use
 #        (`HD_TEST_LIVE=1`) so "does the real remote schema still match?"
 #        stays checkable on demand.
+#   - 1: test-bdbb.R::"the pre-#868 join on origin/main was contemporaneous
+#        (falsification)" — a deliberately self-obsoleting falsification
+#        test written for #868's PR review. It `git show`s
+#        origin/main:packages/historicaldata/R/bdbb.R and proves the OLD
+#        buggy contemporaneous join existed there. Now that #868's fix is
+#        merged to origin/main itself, the old join string can never again
+#        be found there, so this test correctly self-skips (rather than
+#        failing or silently passing) with the message "origin/main
+#        bdbb_tail_predict() no longer contains the pre-#868 join --
+#        already fixed". This is a PERMANENT, by-design skip barring a
+#        revert of #868 — it is kept (not deleted) for its ongoing audit
+#        value as a record of how #868 was verified.
 # Do NOT bump this number to silence a rising skip count from any OTHER
-# source — a jump above it means something besides the known 4+11 above is
+# source — a jump above it means something besides the known 4+11+1 above is
 # skipping; investigate, don't hide it.
 # ---------------------------------------------------------------------------
-BASELINE_PKG_SKIP_COUNT=15
+BASELINE_PKG_SKIP_COUNT=16
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
@@ -583,7 +595,7 @@ if ! compare_failure_set "package suite (packages/historicaldata/, ${#BASELINE_P
 fi
 
 # Skip-reason surfacing (#580) + skip-count assertion (#654): a package-suite
-# SKIP count above its normal baseline (15 -- see BASELINE_PKG_SKIP_COUNT
+# SKIP count above its normal baseline (16 -- see BASELINE_PKG_SKIP_COUNT
 # above) must be impossible to miss silently AND must fail the script, not
 # merely print a warning that scrolls past. #654 found this block only ever
 # echoed a warning -- it never set OVERALL_STATUS, so the count could have
