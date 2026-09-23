@@ -315,7 +315,7 @@ p_spearman <- ggplot2::ggplot(
   ggplot2::annotate("text", x = min(decile_turnover$date), y = mean_rho_bl_a + 0.01,
                     hjust = 0, size = 3, colour = "grey40",
                     label = sprintf("Mean = %.3f", mean_rho_bl_a)) +
-  ggplot2::scale_y_continuous(limits = c(0, 1)) +
+  ggplot2::scale_y_continuous(limits = c(-1, 1)) +
   ggplot2::scale_x_date(date_breaks = "2 years", date_labels = "%Y") +
   ggplot2::labs(
     title    = "XGBoost DRIF: Decile Stability — Baseline vs A (filter-then-rank)",
