@@ -1,5 +1,39 @@
 # Changelog
 
+## 2026-09-23 (plan_avoid_worst.R: registered leaderboard metrics now source from the VIX-timed strategy, refs #813)
+
+- **Wrong return series (#813):** `avoid_worst_register_runs`'s bt.metric
+  insert sourced its Full Period cagr/vol/max_dd/sharpe/ann_rf from
+  `aw_metrics`' "Full Period" / "All Days" row -- which is plain SPY
+  buy-and-hold (`aw_metrics` runs entirely off
+  `aw_daily_returns |> filter(ticker == "SPY")` and never touches
+  `aw_practical_backtest` at all). The falsification bridge
+  (`fals_avoid_worst_input`, R/plan_falsification.R) and the shadow-trade
+  alpha-decay sensitivity (`aw_alpha_decay`, R/plan_avoid_worst.R) both
+  already correctly source `aw_practical_backtest$ret_strategy` -- the
+  mechanism itself is tested properly elsewhere; only the
+  leaderboard-facing registered metrics were wired to the wrong row.
+- `.avoid_worst_register_runs()` now computes Full Period cagr/vol/max_dd
+  directly from `aw_practical_backtest$ret_strategy` (the VIX-triggered
+  protection strategy's own daily returns), with sharpe/ann_rf via the same
+  canonical `.aw_sharpe_rf_full()` helper `aw_metrics`' own `metrics_for()`
+  uses (#677). The `aw_metrics` argument is removed from the function
+  signature (no longer needed); `aw_daily_rf` is added instead.
+- The real corrected leaderboard values are unverified pending a full
+  `tar_make()` in the main checkout -- this fix cannot run from a worktree
+  (no targets store). `docs/avoid-worst-days.qmd` computes its own local
+  Training/Testing/Full Period tables directly from `aw_metrics` and
+  `aw_practical_backtest`/`aw_practical_caption` -- it never reads the
+  registry, so no prose there needs updating; only the separate
+  registry-backed `docs/leaderboard.qmd` (out of this PR's scope) is
+  affected.
+- Regression coverage: `tests/testthat/test-register-runs-tier1.R` adds a
+  dedicated #813 test with deliberately divergent `ret_strategy`/
+  `ret_market` series and asserts the registered `cagr` matches the
+  strategy series, not the buy-and-hold benchmark series -- the shape of
+  assertion the OLD code (which never even received `aw_practical_backtest`'s
+  `ret_strategy` for this row) would have failed.
+
 ## 2026-09-23 (fetch_fundamentals_edgar.R: CIK-resolution overlap validation + dedup check, refs #865)
 
 - **Ticker recycling (#865):** `scripts/fetch_fundamentals_edgar.R` resolved

@@ -14,7 +14,9 @@ testthat::local_edition(3)
 # Load the historicaldata package (provides hd_registry_* helpers).
 pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 
-# Source all five plan files so the .* helpers are accessible.
+# Source utils_metrics.R (sharpe_ratio_rf(), needed by .avoid_worst_register_runs()'s .aw_sharpe_rf_full() call, #813) and
+# all five plan files so the .* helpers are accessible.
+source(here::here("R/utils_metrics.R"))
 source(here::here("R/plan_strategy_names.R"))
 source(here::here("R/plan_drif.R"))
 source(here::here("R/plan_factormax.R"))
@@ -434,19 +436,8 @@ test_that(".avoid_worst_register_runs schema and row counts are stable", {
 
   strategy_names <- .make_strategy_names()
 
-  # aw_metrics has period + scenario columns
-  aw_metrics <- tibble::tibble(
-    period   = rep(c("Training", "Testing", "Full Period"), each = 3),
-    scenario = rep(c("All Days", "Remove 10 Worst", "Remove 10 Best"), 3),
-    years    = rep(c(5.0, 2.0, 7.0), each = 3),
-    n_days   = as.integer(rep(c(1260, 504, 1764), each = 3)),
-    cagr     = c(10.2, 12.0, 9.8, 8.5, 11.0, 8.0, 9.5, 11.5, 9.0),
-    vol      = c(14.5, 12.1, 16.2, 13.0, 11.0, 14.5, 14.0, 11.8, 15.5),
-    max_dd   = c(-22.0, -18.0, -25.0, -18.0, -15.0, -22.0, -20.0, -16.5, -23.0),
-    sharpe   = c(0.68, 0.97, 0.58, 0.63, 0.97, 0.53, 0.66, 0.96, 0.56)
-  )
-
-  # aw_practical_backtest has ret_strategy column (daily)
+  # aw_practical_backtest has ret_strategy column (daily) -- the actual
+  # VIX-timed strategy returns the bt.metric insert must source from (#813).
   n_days <- 2520L
   aw_practical_backtest <- tibble::tibble(
     date         = seq.Date(as.Date("2010-01-04"), by = "day", length.out = n_days),
@@ -457,15 +448,18 @@ test_that(".avoid_worst_register_runs schema and row counts are stable", {
     cum_market   = cumprod(1 + rnorm(n_days, 0.0004, 0.01)),
     cum_strategy = cumprod(1 + rnorm(n_days, 0.0003, 0.009))
   )
+  aw_daily_rf <- tibble::tibble(
+    date   = aw_practical_backtest$date,
+    rf_ret = rep(0.00005, n_days)
+  )
 
   withr::local_envvar(HD_REGISTRY_PATH = tmp)
 
   result <- .avoid_worst_register_runs(
     strategy_names        = strategy_names,
-    aw_metrics            = aw_metrics,
-    aw_practical_backtest = aw_practical_backtest
+    aw_practical_backtest = aw_practical_backtest,
+    aw_daily_rf           = aw_daily_rf
   )
-
   expect_snapshot({
     cat("result columns:", paste(names(result), collapse = ", "), "\n")
     cat("result nrow:   ", nrow(result), "\n")
@@ -487,6 +481,83 @@ test_that(".avoid_worst_register_runs schema and row counts are stable", {
     cat("bt.run cols:     ", paste(names(q$runs), collapse = ", "), "\n")
     cat("n_metric_rows:   ", q$n_metric_rows, "\n")
   })
+})
+
+
+# -- Helper: read one metric_value for one strategy_id + metric_name -------
+.query_metric_value <- function(con, sid, metric_name) {
+  DBI::dbGetQuery(
+    con,
+    sprintf(
+      "SELECT m.metric_value FROM bt.metric m
+       INNER JOIN bt.run r ON m.run_uuid = r.run_uuid
+       WHERE r.strategy_id = '%s' AND m.metric_name = '%s'",
+      sid, metric_name
+    )
+  )$metric_value
+}
+
+# -- #813 regression -----------------------------------------------------
+# The registered cagr/sharpe must be sourced from aw_practical_backtest's
+# ret_strategy (the VIX-timed strategy's own returns), never from a SPY
+# buy-and-hold series (what the OLD code effectively published under the
+# avoid_worst name -- aw_metrics' "Full Period" / "All Days" row runs
+# entirely off plain SPY buy-and-hold, see R/plan_avoid_worst.R). Builds
+# ret_strategy and ret_market with deliberately divergent means so the two
+# implied CAGRs are far apart, then asserts the registered value matches
+# ret_strategy, not ret_market.
+test_that(".avoid_worst_register_runs sources cagr from the VIX-timed strategy, not SPY buy-and-hold (#813)", {
+  skip_if_not_installed("DBI")
+  skip_if_not_installed("duckdb")
+
+  tmp <- tempfile(fileext = ".duckdb")
+  hd_registry_init(tmp)
+  con <- hd_registry_open(tmp, read_only = FALSE)
+  withr::defer({
+    DBI::dbDisconnect(con, shutdown = TRUE)
+    unlink(tmp)
+  })
+
+  strategy_names <- .make_strategy_names()
+
+  set.seed(813)
+  n_days <- 1260L  # 5 years
+  dates  <- seq.Date(as.Date("2015-01-02"), by = "day", length.out = n_days)
+  ret_strategy <- rnorm(n_days, mean = -0.0006, sd = 0.006)
+  ret_market   <- rnorm(n_days, mean =  0.0012, sd = 0.010)
+
+  aw_practical_backtest <- tibble::tibble(
+    date         = dates,
+    ret_market   = ret_market,
+    ret_strategy = ret_strategy,
+    in_market    = TRUE,
+    vix          = runif(n_days, 12, 40),
+    cum_market   = cumprod(1 + ret_market),
+    cum_strategy = cumprod(1 + ret_strategy)
+  )
+  aw_daily_rf <- tibble::tibble(date = dates, rf_ret = rep(0, n_days))
+
+  withr::local_envvar(HD_REGISTRY_PATH = tmp)
+
+  .avoid_worst_register_runs(
+    strategy_names        = strategy_names,
+    aw_practical_backtest = aw_practical_backtest,
+    aw_daily_rf           = aw_daily_rf
+  )
+
+  registered_cagr <- .query_metric_value(con, "avoid_worst", "cagr")
+
+  years <- n_days / 252
+  expected_cagr_strategy <- round((prod(1 + ret_strategy)^(1 / years) - 1) * 100, 1)
+  expected_cagr_market   <- round((prod(1 + ret_market)^(1 / years) - 1) * 100, 1)
+
+  # Sanity: the two series really do diverge (else this test proves nothing).
+  expect_gt(abs(expected_cagr_strategy - expected_cagr_market), 10)
+
+  # The registered metric must match the STRATEGY series...
+  expect_equal(registered_cagr, expected_cagr_strategy)
+  # ...and must NOT match the buy-and-hold benchmark series (the #813 bug).
+  expect_false(isTRUE(all.equal(registered_cagr, expected_cagr_market)))
 })
 
 

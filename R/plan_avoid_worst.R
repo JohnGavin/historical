@@ -1193,16 +1193,18 @@ plan_avoid_worst <- function() {
       })
     }),
 
-    # ── Registry sentinel (#442 Tier 1) ─────────────────────────────────────
+    # -- Registry sentinel (#442 Tier 1) --------------------------------------
     # Upserts bt.strategy row for "avoid_worst", records one bt.run + bt.metric
-    # rows (full-period / all-days slice of aw_metrics).
+    # rows for the VIX-timed strategy's Full Period (#813 -- previously
+    # sourced from aw_metrics' "Full Period" / "All Days" row, which is
+    # plain SPY buy-and-hold, never the VIX-triggered protection strategy).
     # Returns tibble(strategy_id, run_uuid).
     # Guard: returns empty tibble if DBI / duckdb are unavailable.
     targets::tar_target(avoid_worst_register_runs, {
       .avoid_worst_register_runs(
-        strategy_names       = strategy_names,
-        aw_metrics           = aw_metrics,
-        aw_practical_backtest = aw_practical_backtest
+        strategy_names        = strategy_names,
+        aw_practical_backtest = aw_practical_backtest,
+        aw_daily_rf           = aw_daily_rf
       )
     })
 
@@ -1210,22 +1212,36 @@ plan_avoid_worst <- function() {
 }
 
 
-# ── Internal helper ────────────────────────────────────────────────────────────
+# -- Internal helper -----------------------------------------------------------
 # Prefixed .avoid_worst_* (private; not exported from the package).
 # Mirrors .mom_prepeak_register_runs() from plan_mom_prepeak.R.
 
 #' Register Avoid Worst Days backtest run in the strategy registry
 #'
-#' @param strategy_names Tibble from the `strategy_names` target.
-#' @param aw_metrics Tibble from the `aw_metrics` target. Full-period /
-#'   all-days row is used for the bt.metric insert.
-#' @param aw_practical_backtest Tibble from the `aw_practical_backtest` target;
-#'   used to extract daily returns for SSR/top5pct stability metrics.
+#' @param strategy_names Tibble from the strategy_names target.
+#' @param aw_practical_backtest Tibble from the aw_practical_backtest
+#'   target -- the VIX-triggered protection strategy. Full-period metrics
+#'   (cagr/vol/max_dd/sharpe/ann_rf) AND the SSR/top5pct stability metrics
+#'   are both derived from its ret_strategy column, the strategy own
+#'   actual daily returns (#813). Previously the bt.metric insert sourced
+#'   from aw_metrics Full Period / All Days row instead --
+#'   aw_metrics runs entirely off aw_daily_returns filtered to ticker SPY
+#'   (see its own target definition above) and never touches
+#'   aw_practical_backtest at all, so that row is plain SPY buy-and-hold,
+#'   not the VIX-timed strategy. The falsification bridge
+#'   (fals_avoid_worst_input in R/plan_falsification.R) and the
+#'   shadow-trade alpha-decay sensitivity (aw_alpha_decay above) both
+#'   correctly source aw_practical_backtest ret_strategy already --
+#'   mirrored here so the leaderboard-facing registered metrics agree with
+#'   the mechanism that is actually tested elsewhere in this file.
+#' @param aw_daily_rf Tibble from the aw_daily_rf target (date, rf_ret);
+#'   required by the rf-adjusted geometric Sharpe helper, the same
+#'   canonical formula aw_metrics own metrics_for uses (#677).
 #'
 #' @return Tibble with columns: strategy_id, run_uuid.
 #' @noRd
-.avoid_worst_register_runs <- function(strategy_names, aw_metrics,
-                                       aw_practical_backtest) {
+.avoid_worst_register_runs <- function(strategy_names, aw_practical_backtest,
+                                       aw_daily_rf) {
   if (!requireNamespace("DBI", quietly = TRUE) ||
       !requireNamespace("duckdb", quietly = TRUE)) {
     return(tibble::tibble(
@@ -1266,25 +1282,42 @@ plan_avoid_worst <- function() {
     pipeline_version = "phase1"
   )
 
-  # Record full-period / all-days metrics row
-  # Units (#640): aw_metrics stores cagr/vol/max_dd as PERCENT (x*100 in
-  # metrics_for() above — the source #637 flagged as percent-native), sharpe
-  # is a scale-free ratio, n_days is a count, and years is a year-duration.
-  # ann_rf (#677 slice 4, #691) is PERCENT, same convention as cagr
-  # (round(sr$ann_rf * 100, 2) above).
-  full_row <- aw_metrics[
-    aw_metrics$period == "Full Period" & aw_metrics$scenario == "All Days",
-    , drop = FALSE
-  ]
-  if (nrow(full_row) == 1L) {
-    metric_cols <- setdiff(names(full_row), c("period", "scenario"))
+  # Record Full Period metrics for the ACTUAL VIX-timed strategy (#813).
+  # Units (#640): cagr/vol/max_dd stored as PERCENT (x*100 below), matching
+  # aw_metrics own convention so the leaderboard normaliser divide-by-100
+  # stays correct; sharpe is a scale-free ratio; ann_rf (#677 slice 4,
+  # #691) is PERCENT, same convention as cagr.
+  d    <- aw_practical_backtest
+  dts  <- as.Date(d$date)
+  ret  <- d$ret_strategy
+  keep <- !is.na(ret) & !is.na(dts)
+  ret  <- ret[keep]
+  dts  <- dts[keep]
+
+  if (length(ret) >= 20L) {
+    years <- length(ret) / 252
+    cum   <- cumprod(1 + ret)
+    sr    <- .aw_sharpe_rf_full(dts, ret, aw_daily_rf, ann_factor = 252L)
+
+    full_row <- tibble::tibble(
+      years        = round(years, 1),
+      n_days       = length(ret),
+      cagr         = round((cum[length(cum)]^(1 / years) - 1) * 100, 1),
+      vol          = round(sd(ret) * sqrt(252) * 100, 1),
+      max_dd       = round(min((cum - cummax(cum)) / cummax(cum)) * 100, 1),
+      sharpe       = round(sr$sharpe, 2),
+      ann_rf       = round(sr$ann_rf * 100, 2),
+      window_start = min(dts),
+      window_end   = max(dts)
+    )
+
     aw_units <- c(
       years = "years", n_days = "count", cagr = "percent",
       vol = "percent", max_dd = "percent", sharpe = "ratio",
       ann_rf = "percent"
     )
     historicaldata::hd_metric_record(
-      con, uu, full_row[, metric_cols, drop = FALSE], units = aw_units
+      con, uu, full_row, units = aw_units
     )
   }
 
