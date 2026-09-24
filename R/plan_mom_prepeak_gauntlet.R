@@ -64,9 +64,16 @@ plan_mom_prepeak_gauntlet <- function() {
           min_stocks  = params$min_stocks
         )
         ret  <- .mom_prepeak_compute_returns(
-          portfolio_tbl  = port,
-          universe_tbl   = ltr_universe,
-          cost_per_trade = 0.001
+          portfolio_tbl      = port,
+          universe_tbl       = ltr_universe,
+          cost_per_trade     = 0.001,
+          # #800: charge the same GC borrow rate as the published targets
+          # (mom_prepeak_returns) so this IS/OOS recomputation is evaluated
+          # on the identical cost basis -- see qa_mom_prepeak_gauntlet_
+          # borrow_consistency (S35) and .mom_prepeak_compute_returns()
+          # roxygen (R/plan_mom_prepeak.R) for why every other caller of
+          # this function still keeps the zero default.
+          borrow_rate_annual = mom_prepeak_params$borrow_rate_annual
         )
         r    <- ret$ret_ls[!is.na(ret$ret_ls)]
         ann_ret <- mean(r) * params$ann_factor
@@ -99,9 +106,12 @@ plan_mom_prepeak_gauntlet <- function() {
           min_stocks  = params$min_stocks
         )
         ret  <- .mom_prepeak_compute_returns(
-          portfolio_tbl  = port,
-          universe_tbl   = ltr_universe,
-          cost_per_trade = 0.001
+          portfolio_tbl      = port,
+          universe_tbl       = ltr_universe,
+          cost_per_trade     = 0.001,
+          # #800: same GC borrow rate as the published targets -- see the IS
+          # block above for the full rationale.
+          borrow_rate_annual = mom_prepeak_params$borrow_rate_annual
         )
         r    <- ret$ret_ls[!is.na(ret$ret_ls)]
         ann_ret <- if (length(r) >= 1L) mean(r) * params$ann_factor else NA_real_
@@ -162,9 +172,14 @@ plan_mom_prepeak_gauntlet <- function() {
 
     targets::tar_target(mom_prepeak_random_peak_returns, {
       .mom_prepeak_compute_returns(
-        portfolio_tbl  = mom_prepeak_random_peak_portfolio,
-        universe_tbl   = ltr_universe,
-        cost_per_trade = mom_prepeak_params$cost_per_trade
+        portfolio_tbl      = mom_prepeak_random_peak_portfolio,
+        universe_tbl       = ltr_universe,
+        cost_per_trade     = mom_prepeak_params$cost_per_trade,
+        # #800: mom_prepeak_random_peak_test compares this against
+        # mom_prepeak_metrics$sharpe (derived from mom_prepeak_returns,
+        # which IS borrow-costed, #665) -- without this the null comparison
+        # would be evaluated on an easier cost basis than the actual signal.
+        borrow_rate_annual = mom_prepeak_params$borrow_rate_annual
       )
     }),
 
@@ -371,7 +386,12 @@ plan_mom_prepeak_gauntlet <- function() {
 
           if (!is.null(port_is) && nrow(port_is) > 0L) {
             ret_is <- tryCatch(
-              .mom_prepeak_compute_returns(port_is, ltr_universe, 0.001),
+              # #800: borrow_rate_annual matches the published targets'
+              # GC rate -- see mom_prepeak_wfc_grid_is (B1) for rationale.
+              .mom_prepeak_compute_returns(
+                port_is, ltr_universe, 0.001,
+                mom_prepeak_params$borrow_rate_annual
+              ),
               error = function(e) NULL
             )
             if (!is.null(ret_is)) is_mat[i, j] <- sharpe_monthly(ret_is$ret_ls)
@@ -389,7 +409,11 @@ plan_mom_prepeak_gauntlet <- function() {
 
           if (!is.null(port_oos) && nrow(port_oos) > 0L) {
             ret_oos <- tryCatch(
-              .mom_prepeak_compute_returns(port_oos, ltr_universe, 0.001),
+              # #800: same GC borrow rate -- see the IS branch above.
+              .mom_prepeak_compute_returns(
+                port_oos, ltr_universe, 0.001,
+                mom_prepeak_params$borrow_rate_annual
+              ),
               error = function(e) NULL
             )
             if (!is.null(ret_oos)) oos_mat[i, j] <- sharpe_monthly(ret_oos$ret_ls)
