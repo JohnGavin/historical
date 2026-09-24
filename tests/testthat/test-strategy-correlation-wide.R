@@ -176,3 +176,41 @@ test_that(".resample_daily_to_monthly returns zero rows for empty input without 
   out <- .resample_daily_to_monthly(as.Date(character(0L)), numeric(0L))
   expect_equal(nrow(out), 0L)
 })
+
+# ── .warn_ltr_join_gap(): #657 fail-loud-not-null.md Pattern 4 fix ─────────
+# strat_returns_aligned's `inner_join(ltr_col, by = "ym")` was audited in
+# audits/inner_join_audit_2026-09-24.md and classified LATENT: it drops 0
+# months today, but a future gap in ltr_portfolio within the 4-strategy
+# family's own window would silently shrink strat_corr_matrix ->
+# strat_keff_vertox -> the published k_eff_family column on leaderboard.qmd.
+# This is the observability fix, tested directly per the same
+# no-embedded-tar_target-coverage rationale as the tests above.
+
+test_that(".warn_ltr_join_gap warns and names the dropped months when ltr_portfolio has a gap inside the family's window", {
+  expect_snapshot(
+    .warn_ltr_join_gap(
+      base_ym = c("2020-01", "2020-02", "2020-03"),
+      ltr_ym  = c("2020-01", "2020-03")
+    )
+  )
+})
+
+test_that(".warn_ltr_join_gap is silent when ltr_portfolio fully covers the family's window", {
+  expect_no_warning(
+    .warn_ltr_join_gap(
+      base_ym = c("2020-01", "2020-02"),
+      ltr_ym  = c("2020-01", "2020-02", "2020-04")
+    )
+  )
+})
+
+test_that(".warn_ltr_join_gap returns the dropped ym invisibly for both the gap and no-gap cases", {
+  expect_equal(
+    suppressWarnings(.warn_ltr_join_gap(c("2020-01", "2020-02"), c("2020-01"))),
+    "2020-02"
+  )
+  expect_equal(
+    .warn_ltr_join_gap(c("2020-01", "2020-02"), c("2020-01", "2020-02")),
+    character(0)
+  )
+})
