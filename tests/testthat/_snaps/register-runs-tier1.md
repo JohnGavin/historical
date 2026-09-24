@@ -116,7 +116,7 @@
     Code
       cat("n_metric_rows:   ", q$n_metric_rows, "\n")
     Output
-      n_metric_rows:    14 
+      n_metric_rows:    15 
 
 # .rsc_register_runs schema and row counts are stable
 
