@@ -3050,6 +3050,103 @@ check_bdbb_no_lookahead <- function(scored) {
   invisible(TRUE)
 }
 
+
+#' Assert every mom_prepeak-gauntlet return-series recomputation charges the
+#' same borrow cost as the published targets (S35, #800)
+#'
+#' #676 made the three PUBLISHED mom_prepeak/postpeak/12-2 targets borrow-
+#' aware (`mom_prepeak_params$borrow_rate_annual`, #664/#665) but its own
+#' commit message flagged that every OTHER `.mom_prepeak_compute_returns()`
+#' caller was deliberately left at the function's zero default, INCLUDING
+#' `R/plan_mom_prepeak_gauntlet.R` -- "the walk-forward gauntlet ... still
+#' evaluates on the pre-#665 zero-borrow cost basis -- an apples-to-oranges
+#' gap of the #624/#664 class, deliberately left for a separate decision
+#' rather than silently widened in scope." The gauntlet RECOMPUTES the
+#' mom_prepeak short-leg return series at different `n_quantiles` (WFC, B1),
+#' on a random-peak null (B2), and on IS/OOS CPCV folds (B4) rather than
+#' reusing the published `mom_prepeak_returns` target -- each of those
+#' recomputations must charge the identical borrow rate, or the gauntlet's
+#' verdicts (WFC pass/fail, null-dominance, PBO) are silently computed on an
+#' easier cost basis than the strategy they are meant to validate
+#' (fail-loud-not-null.md: an unstated behaviour difference between "the
+#' strategy" and "the thing being gauntlet-tested" is exactly the defect
+#' class that rule targets).
+#'
+#' Static source scan, same family as the S1-S4 look-ahead scanners above:
+#' every `.mom_prepeak_compute_returns(` call site in the gauntlet file must
+#' mention `borrow_rate_annual` within its call block, or carry the
+#' `# zero-borrow-intentional` opt-out marker with a comment explaining why
+#' that specific recomputation is exempt. The call block is found by
+#' balancing parentheses across lines (comments stripped before counting),
+#' NOT a fixed line window -- S2's fixed-window approach is too narrow once
+#' an explanatory comment (like this fix's own #800 comments) sits inside
+#' the call.
+#'
+#' @param file Absolute path to `R/plan_mom_prepeak_gauntlet.R` (or a
+#'   fixture file, for testing).
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_mom_prepeak_gauntlet_borrow_consistency <- function(file) {
+  if (length(file) != 1L || !file.exists(file)) {
+    cli::cli_abort(c(
+      "x" = "check_mom_prepeak_gauntlet_borrow_consistency(): file not found.",
+      "i" = "Got: {.val {file}}."
+    ))
+  }
+
+  lines <- readLines(file, warn = FALSE)
+  call_starts <- grep("\\.mom_prepeak_compute_returns\\s*\\(", lines)
+  # Exclude commented-out call sites (docstrings/dead code) -- nothing
+  # executes on those lines, so there is no cost basis to check.
+  call_starts <- call_starts[!grepl("^\\s*#", lines[call_starts])]
+
+  offenders <- purrr::map_dfr(call_starts, function(i) {
+    # Walk forward from the call's opening paren, tracking paren balance on
+    # the CODE portion of each line (comments stripped) until the call's
+    # closing paren is reached. This reads a multi-line call -- including
+    # one with interleaved explanatory comments -- as a single block,
+    # rather than truncating it at an arbitrary fixed number of lines.
+    depth <- 0L
+    end   <- i
+    for (j in seq(i, length(lines))) {
+      code_only <- sub("#.*$", "", lines[j])
+      n_open  <- length(regmatches(code_only, gregexpr("\\(", code_only))[[1]])
+      n_close <- length(regmatches(code_only, gregexpr("\\)", code_only))[[1]])
+      depth <- depth + n_open - n_close
+      end <- j
+      if (depth <= 0L) break
+    }
+    block_code  <- paste(sub("#.*$", "", lines[i:end]), collapse = " ")
+    block_raw   <- paste(lines[i:end], collapse = " ")
+    has_borrow  <- grepl("borrow_rate_annual", block_code)
+    has_opt_out <- grepl("# zero-borrow-intentional", block_raw, fixed = TRUE)
+    if (has_borrow || has_opt_out) return(NULL)
+    tibble::tibble(file = file, line = i, code = trimws(lines[i]))
+  })
+
+  if (nrow(offenders) > 0L) {
+    msgs <- purrr::pmap_chr(offenders, function(file, line, code) {
+      sprintf("  %s:%d -- %s", basename(file), line, code)
+    })
+    cli::cli_abort(c(
+      "x" = paste0(
+        nrow(offenders), " .mom_prepeak_compute_returns() call(s) in ",
+        basename(file), " omit borrow_rate_annual (#800):"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "Pass borrow_rate_annual = mom_prepeak_params$borrow_rate_annual ",
+        "to match the published mom_prepeak/mom_postpeak/mom_combined ",
+        "targets' cost basis (#665), or add a trailing ",
+        "'# zero-borrow-intentional' comment explaining why this specific ",
+        "recomputation is exempt."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -3755,6 +3852,27 @@ plan_qa_gates <- function() {
         cli::cli_inform(c("v" = paste0(
           "qa_bdbb_no_lookahead: S34 passed (", n_scored, " scored windows, ",
           "every scored return strictly after window_end, #868)"
+        )))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: every mom_prepeak-gauntlet return-series recomputation
+    # charges the same GC borrow rate as the published mom_prepeak/
+    # mom_postpeak/mom_combined targets (S35, #800). #676's own commit
+    # message named this an "apples-to-oranges gap ... deliberately left
+    # for a separate decision" -- this gate is that decision, enforced.
+    targets::tar_target(
+      qa_mom_prepeak_gauntlet_borrow_consistency,
+      command = {
+        check_mom_prepeak_gauntlet_borrow_consistency(
+          here::here("R", "plan_mom_prepeak_gauntlet.R")
+        )
+        cli::cli_inform(c("v" = paste0(
+          "qa_mom_prepeak_gauntlet_borrow_consistency: S35 passed (every ",
+          "gauntlet return-series recomputation charges the published ",
+          "borrow rate, #800)"
         )))
         TRUE
       },
