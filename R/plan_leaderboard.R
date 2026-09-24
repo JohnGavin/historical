@@ -98,7 +98,7 @@
     "fac_max", "drif", "stk_max", "stk_drif", "xgb_drif",
     "ltr", "cmr", "mom_prepeak", "mom_postpeak", "mom_combined",
     "ev_ebit", "mf_tsm", "pso_optimal",
-    "olmar", "tom", "rsc", "avoid_worst"
+    "olmar", "tom", "rsc", "avoid_worst", "cmr_conditioned"
   ),
   obs_ann_factor_source = c(
     "R/plan_factormax.R (ann_vol <- sd(...) * sqrt(12))",
@@ -117,7 +117,8 @@
     "This file's own .norm_olmar() comment ('daily ann_factor'); OLMAR (Li & Hoi 2012) rebalances daily",
     "R/plan_turn_of_month.R:368 ('TOM is a daily strategy (sqrt(252) annualisation)')",
     "R/plan_risk_state.R calc_metrics(periods_per_year = 252L default); calc_metrics() now returns n_obs (#726 item 3), renamed to `months` by .norm_rsc() below -- previously this row's `months` was always NA because rsc_metrics had no months/n_days column at all",
-    "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())"
+    "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())",
+    "R/plan_commodities_mean_reversion.R .compute_cmr_metrics() called on cmr_portfolio_*_conditioned (same daily date spine as the base 'cmr' row -- the conditioning overlay only rescales net_ret, it does not resample dates)"
   )
 )
 
@@ -340,6 +341,20 @@ plan_leaderboard <- function() {
         )
       }
 
+      # cmr_summary_conditioned has the SAME shape as cmr_summary above (it
+      # is built by the SAME .compute_cmr_metrics() function -- see
+      # R/plan_commodities_mean_reversion.R's cmr_summary_conditioned
+      # target) -- so this is a thin wrapper around .norm_cmr(), not a
+      # re-derivation. #751 (owner decision 2026-09-24): wired onto the
+      # leaderboard ALONGSIDE the base "cmr" row, never replacing it -- see
+      # that file's header comment for the TIME/exposure-scaling
+      # combination mode this overlay implements
+      # (.claude/rules/strategy-combination-modes.md).
+      .norm_cmr_conditioned <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        .norm_cmr(m)
+      }
+
       # rsc_metrics contains multiple internal strategy variants (SPY_overlay,
       # DRIF_overlay, etc.). Pick only the SPY_overlay rows which represent the
       # strategy's own performance. Those rows now carry a canonical `sharpe`
@@ -474,6 +489,14 @@ plan_leaderboard <- function() {
                  "turn-of-month.html"),
         add_meta(.norm_cmr(cmr_summary), "CMR", "Commodities",
                  "Commodities mean reversion (best lookback)",
+                 "commodities-mean-reversion.html"),
+        # ── #751 (owner decision 2026-09-24): CMR regime-conditioning
+        # overlay -- ALONGSIDE the base "CMR" row above, not replacing it.
+        # cmr_summary_conditioned (R/plan_commodities_mean_reversion.R) is
+        # diagnostic-only no longer as of this wiring; see that target's
+        # header comment.
+        add_meta(.norm_cmr_conditioned(cmr_summary_conditioned), "CMR Conditioned", "Commodities",
+                 "Commodities mean reversion, regime-conditioning exposure overlay (best lookback)",
                  "commodities-mean-reversion.html"),
         add_meta(.norm_rsc(rsc_metrics), "Risk State", "Overlay",
                  "VIX regime overlay on SPY",

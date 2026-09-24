@@ -4,9 +4,10 @@
 # All downstream plans (falsification vignette, leaderboard, etc.)
 # should filter this target rather than defining their own name tables.
 #
-# Current count: 17 strategies (rows 1-11 original; rows 12-14 mom_prepeak
+# Current count: 18 strategies (rows 1-11 original; rows 12-14 mom_prepeak
 # siblings added in #365 PR 2/4; row 15 ev_ebit added in #426;
-# row 16 mf_tsm added in #427; row 17 olmar added in #629).
+# row 16 mf_tsm added in #427; row 17 olmar added in #629; row 18
+# cmr_conditioned added in #751, owner decision 2026-09-24).
 
 plan_strategy_names <- function() {
   list(
@@ -44,7 +45,15 @@ hd_strategy_names_tbl <- function() {
       # STRATEGY_OBS_ANN_FACTOR) but missing from this declared list --
       # appended at the end (not inserted mid-vector) to avoid corrupting
       # the alignment of any existing row.
-      "olmar"
+      "olmar",
+      # ── #751 (owner decision 2026-09-24): CMR regime-conditioning overlay
+      # -- wired onto the leaderboard ALONGSIDE (not replacing) the base
+      # "cmr" row above. See R/plan_commodities_mean_reversion.R's
+      # cmr_summary_conditioned target and .cmr_apply_conditioning_overlay()
+      # for the construction, and .claude/rules/strategy-combination-modes.md
+      # for why this is a TIME-mode (exposure-scaling) overlay, not a
+      # separate signal. Appended at the end, same convention as "olmar".
+      "cmr_conditioned"
     ),
     short_name = c(
       "Avoid Worst", "Factor DRIF", "Factor MAX", "Risk State", "LTR", "TOM",
@@ -55,7 +64,12 @@ hd_strategy_names_tbl <- function() {
       "Managed Futures",
       # Must exactly match STRATEGY_OBS_ANN_FACTOR's "OLMAR-1" display key
       # (R/plan_leaderboard.R) -- that is the join key the two now share.
-      "OLMAR-1"
+      "OLMAR-1",
+      # Must exactly match STRATEGY_OBS_ANN_FACTOR's "CMR Conditioned" key
+      # and col_map_daily's value (R/plan_leaderboard.R,
+      # R/plan_strategy_correlation.R's name_map) -- same join-key
+      # convention as "OLMAR-1" above.
+      "CMR Conditioned"
     ),
     long_name = c(
       "Avoid Worst Days (VIX Protection)",
@@ -74,7 +88,8 @@ hd_strategy_names_tbl <- function() {
       "Standard 12-2 Momentum (Büsing baseline)",
       "EV/EBIT Value Sleeve (HML+RMW Proxy, v0)",
       "Cross-Asset TS-Momentum (MOP 2012, ETF Proxies, v0)",
-      "OLMAR-1 (Online Moving Average Reversion, Li & Hoi 2012)"
+      "OLMAR-1 (Online Moving Average Reversion, Li & Hoi 2012)",
+      "Commodities Mean Reversion (Regime-Conditioning Overlay, #751)"
     ),
     asset_class = c(
       "overlay", "factor", "factor", "overlay", "equity", "overlay",
@@ -83,7 +98,8 @@ hd_strategy_names_tbl <- function() {
       "equity", "equity", "equity",
       "factor",
       "multi_asset",
-      "equity"
+      "equity",
+      "commodities"
     ),
     frequency = c(
       "daily", "monthly", "monthly", "daily", "monthly", "daily",
@@ -96,11 +112,15 @@ hd_strategy_names_tbl <- function() {
       "monthly",
       # #629: OLMAR-1 rebalances daily (R/plan_olmar.R weights formed at
       # close of day t, realised on t+1 -- see this file's own comment).
+      "daily",
+      # #751: same daily portfolio dates as "cmr" -- the conditioning
+      # overlay only rescales cmr's own net_ret, it does not change the
+      # date spine.
       "daily"
     ),
     ann_factor = c(252L, 12L, 12L, 252L, 12L, 252L, 12L, 12L, 12L, 12L, 252L,
                    12L, 12L, 12L, 12L, 12L,
-                   252L),
+                   252L, 252L),
     vignette_url = c(
       "avoid-worst-days.html", "drif.html", "factor-max.html",
       "leaderboard.html", "leaderboard.html", "turn-of-month.html",
@@ -112,11 +132,15 @@ hd_strategy_names_tbl <- function() {
       "leaderboard.html",
       # No dedicated vignette (plan_olmar.R explicitly defers it) --
       # only appears on the leaderboard, same as PSO Optimal.
-      "leaderboard.html"
+      "leaderboard.html",
+      # Same vignette as the base "cmr" row -- the overlay is documented
+      # alongside it, not in a separate vignette.
+      "commodities-mean-reversion.html"
     ),
     # ── #346 strategy registry keywords (rough first-pass; refine after a full tar_make) ──
     # Order matches code_name above (1 avoid_worst .. 11 cmr, 12-14 mom_prepeak siblings,
-    # 15 ev_ebit added in #426, 16 mf_tsm added in #427, 17 olmar added in #629).
+    # 15 ev_ebit added in #426, 16 mf_tsm added in #427, 17 olmar added in #629,
+    # 18 cmr_conditioned added in #751).
     time_horizon_days_avg = c(
       1L,  21L, 21L, 1L,  252L, 1L,
       21L, 21L, 21L, 90L,
@@ -125,7 +149,10 @@ hd_strategy_names_tbl <- function() {
       252L,
       252L,
       # OLMAR-1's SMA window (R/plan_olmar.R olmar_params$window = 25L).
-      25L
+      25L,
+      # Same underlying CMR book as row 11 -- the overlay does not change
+      # the position-level holding horizon, only the aggregate exposure.
+      21L
     ),
     trades_per_year_avg = c(
       12,  12,  12,  12,  12,  12,
@@ -136,6 +163,9 @@ hd_strategy_names_tbl <- function() {
       12,
       # Same convention as the other daily strategies above (avoid_worst,
       # rsc, tom, cmr) -- rebalance-evaluation frequency, not literal count.
+      12,
+      # Same as "cmr" above (row 11) -- the overlay reclassifies exposure,
+      # it does not change the underlying rebalance cadence.
       12
     ),
     liquidity_tier = factor(
@@ -147,7 +177,9 @@ hd_strategy_names_tbl <- function() {
         "high",
         # 30-ticker large-cap + broad-ETF universe (R/plan_olmar.R
         # olmar_params$tickers) -- highly liquid, same tier as Stock MAX.
-        "high"),
+        "high",
+        # Same underlying instrument pool as "cmr" (row 11).
+        "med"),
       levels = c("high", "med", "low")
     ),
     turnover_pct_per_period_avg = c(
@@ -158,6 +190,12 @@ hd_strategy_names_tbl <- function() {
       20,
       25,
       # Daily online mean-reversion rebalance -- same turnover tier as CMR.
+      100,
+      # Same underlying position turnover as "cmr" (row 11) -- the
+      # conditioning overlay adds an occasional exposure-scaling switch
+      # (charged separately via .HD_CMR_COND_SWITCH_COST inside
+      # .cmr_apply_conditioning_overlay()), not a change to how often the
+      # underlying tercile legs themselves turn over.
       100
     ),
     directionality = factor(
@@ -169,7 +207,10 @@ hd_strategy_names_tbl <- function() {
         "long_short",
         # Tilt fraction around equal weight (R/plan_olmar.R
         # olmar_params$leverage = 0.2) -- no shorting evidence in the code.
-        "long_only"),
+        "long_only",
+        # Same long_short tercile construction as "cmr" (row 11) -- the
+        # overlay scales aggregate exposure, it does not change directionality.
+        "long_short"),
       levels = c("long_only", "long_short", "market_neutral", "overlay")
     ),
     # Tags as JSON-encoded character vectors so duckplyr can pick them
@@ -191,7 +232,8 @@ hd_strategy_names_tbl <- function() {
       '["momentum","cross_sectional","baseline"]',
       '["value","fundamental","factor","monthly","quality"]',
       '["managed_futures","time_series_momentum","cross_asset","monthly","trend"]',
-      '["mean_reversion","online_portfolio_selection","equity_basket","daily"]'
+      '["mean_reversion","online_portfolio_selection","equity_basket","daily"]',
+      '["mean_reversion","commodities","conditioning_overlay","regime_timing"]'
     ),
     research_paper_doi = c(
       NA_character_,                  # 1 avoid_worst (folk wisdom; no single paper)
@@ -210,7 +252,8 @@ hd_strategy_names_tbl <- function() {
       "10.2139/ssrn.4298538",         # 14 mom_combined (baseline)
       "10.1111/j.1540-6261.1993.tb04741.x", # 15 ev_ebit (Fama & French 1993 three-factor model)
       "10.1111/jofi.12131",                  # 16 mf_tsm (Moskowitz, Ooi & Pedersen 2012)
-      NA_character_                   # 17 olmar (Li & Hoi 2012, ICML -- arXiv:1206.4626, no verified formal DOI at this commit)
+      NA_character_,                  # 17 olmar (Li & Hoi 2012, ICML -- arXiv:1206.4626, no verified formal DOI at this commit)
+      NA_character_                   # 18 cmr_conditioned (internal -- #751, house-rule construction, no literature precedent sought)
     )
   )
 }
