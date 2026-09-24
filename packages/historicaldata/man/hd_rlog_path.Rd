@@ -8,7 +8,11 @@ hd_rlog_path(base_dir = NULL)
 }
 \arguments{
 \item{base_dir}{Override path, or \code{NULL} to use the default
-(\code{inst/extdata/research_log/} under the package root).}
+(\code{inst/extdata/research_log/} under the \strong{repository} root,
+as resolved by \code{here::here()} — not the package root). The log
+spans the whole project, and its writers (\code{R/plan_olmar.R},
+\code{explorations/}) live outside the package, so the store lives at
+the repo level rather than inside \code{packages/historicaldata/}.}
 }
 \value{
 Scalar character path.
