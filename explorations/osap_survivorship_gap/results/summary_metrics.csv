@@ -1,0 +1,5 @@
+label,n_months,ann_ret_cagr,ann_vol,sharpe,detection_verdict,min_n_years_for_80pct_power,correlation_vs_osap_overlap
+"our_mom_plain (equity_daily, survivorship-biased) -- OVERLAP window",619,0.0161104409094861,0.12379130890725482,0.1920219953676626,UNDERPOWERED,167.7613515298801,-0.05050112698422511
+"OSAP Mom12m (CRSP, delisting-inclusive) -- OVERLAP window",619,0.06807232413359676,0.26869585168898447,0.4219956634269289,adequately powered,34.80488576729823,NA
+our_mom_plain (equity_daily) -- FULL available sample,634,0.017650632046917636,0.12330806668849432,0.2045704077243015,UNDERPOWERED,147.8218726019937,NA
+OSAP Mom12m -- FULL available sample (1927-2024),1176,0.04677953510874211,0.28340980816675365,0.3810370605798152,adequately powered,42.66985800463055,NA
