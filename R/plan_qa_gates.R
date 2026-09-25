@@ -2411,21 +2411,41 @@ check_cmr_effective_breadth <- function(cmr_portfolios) {
 #'
 #' `strat_returns_daily_native` (R/plan_strategy_correlation.R) keys its
 #' list by the STRAT_RETURNS_WIDE_CODES code_name vocabulary ("cmr",
-#' "olmar_1", "tom", "risk_state", "avoid_worst" -- note "olmar_1" there,
-#' matching that file's own documented vocabulary, vs "olmar" in
-#' `hd_strategy_names_tbl()`). `STRATEGY_OBS_ANN_FACTOR`
-#' (R/plan_leaderboard.R) keys by the display `strategy` column
-#' (`short_name`). This table bridges the two so `check_strategy_
-#' periodicity_reconciliation()` below can look up each series' declared
-#' `ann_factor` without a third hand-maintained copy of the strategy roster.
+#' "cmr_conditioned", "olmar_1", "tom", "risk_state", "avoid_worst" -- note
+#' "olmar_1" there, matching that file's own documented vocabulary, vs
+#' "olmar" in `hd_strategy_names_tbl()`; "cmr_conditioned" matches exactly).
+#' `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R) keys by the display
+#' `strategy` column (`short_name`). This table bridges the two so
+#' `check_strategy_periodicity_reconciliation()` below can look up each
+#' series' declared `ann_factor` without a third hand-maintained copy of the
+#' strategy roster.
+#'
+#' Every RHS literal here must exactly match `hd_strategy_names_tbl()`'s
+#' `short_name` for the corresponding strategy (R/plan_strategy_names.R) --
+#' this file cannot call `hd_strategy_names_tbl()` directly at source time
+#' without breaking two contexts that source this file WITHOUT
+#' R/plan_strategy_names.R: root `_targets.R`'s `tar_source("R/plan_qa_
+#' gates.R")` (the small sandbox pipeline) and this gate's own test file's
+#' standalone `source()` calls. tests/testthat/test-strategy-periodicity-
+#' reconciliation.R therefore cross-checks every value here against
+#' `hd_strategy_names_tbl()$short_name` directly, so a typo or future drift
+#' still fails loudly even though this vector itself stays a static literal.
+#'
+#' `cmr_conditioned` added in #901 (originally missing -- caught by a real
+#' `scripts/build.sh` run against the main store, not by any test; see the
+#' companion structural test below that now derives its expected set from
+#' `STRAT_RETURNS_DAILY_NATIVE_CODES` (R/plan_strategy_correlation.R) instead
+#' of a hand-typed literal, specifically to catch the next such omission in
+#' verify.sh rather than a 40-minute build).
 #'
 #' @noRd
 PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY <- c(
-  cmr         = "CMR",
-  olmar_1     = "OLMAR-1",
-  tom         = "TOM",
-  risk_state  = "Risk State",
-  avoid_worst = "Avoid Worst"
+  cmr             = "CMR",
+  cmr_conditioned = "CMR Conditioned",
+  olmar_1         = "OLMAR-1",
+  tom             = "TOM",
+  risk_state      = "Risk State",
+  avoid_worst     = "Avoid Worst"
 )
 
 #' Known, documented periodicity exceptions for the S28 coverage gate
@@ -2447,6 +2467,16 @@ PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY <- c(
 #' `"abort"`, with the issue tracking its resolution. Any `code_name` NOT
 #' listed here runs in full `"abort"` mode -- this is an exemption list, not
 #' a default, and adding a row to it requires a cited, open issue.
+#'
+#' `cmr_conditioned` (#751/#901) was checked empirically against the main
+#' store when its mapping was added to `PERIODICITY_RECONCILIATION_CODE_TO_
+#' STRATEGY` above and deliberately NOT added here: unlike the base `cmr`
+#' row, `cmr_portfolio_{1m,3m,6m}_conditioned` has NO pre-2000 data at all
+#' (its regime-conditioning signal only exists from 2000-07-06 onward) and
+#' is uniformly business-daily (~250-255 obs/year every calendar year,
+#' 2000-2026) throughout its entire history -- the #738 mixed-frequency
+#' defect does not exist in this series, so it correctly runs in the
+#' default `"abort"` mode, not `"warn"`.
 #'
 #' @noRd
 PERIODICITY_RECONCILIATION_EXEMPT <- tibble::tibble(
@@ -2474,10 +2504,11 @@ PERIODICITY_RECONCILIATION_EXEMPT <- tibble::tibble(
 #' strategy's own code calling anything, it reconciles the DATA independent
 #' of whether a guard was wired in.
 #'
-#' Scope: the five DAILY-native strategies (CMR, OLMAR-1, TOM, Risk State,
-#' Avoid Worst) collected in one place by `strat_returns_daily_native`
-#' (R/plan_strategy_correlation.R, #733) -- this is the one existing target
-#' where a strategy's own per-observation dates are available centrally.
+#' Scope: the six DAILY-native strategies (CMR, CMR Conditioned, OLMAR-1,
+#' TOM, Risk State, Avoid Worst) collected in one place by
+#' `strat_returns_daily_native` (R/plan_strategy_correlation.R, #733/#751)
+#' -- this is the one existing target where a strategy's own
+#' per-observation dates are available centrally.
 #' The eleven MONTHLY-native strategies are NOT covered by this gate: each
 #' is built inside its own plan file and collapses onto a monthly `ym`
 #' spine (`format(date, "%Y-%m")`) before reaching any shared target, which

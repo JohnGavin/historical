@@ -83,14 +83,36 @@ REDUNDANCY_THRESH <- 0.80
 # CMR itself was by #733 -- see strat_returns_daily_native's cmr_conditioned
 # entry below -- so it is 17 of 18 strategies covered as of #751, still
 # excluding only PSO Optimal.
+#' Code names of the six DAILY-native strategies inside
+#' STRAT_RETURNS_WIDE_CODES below (#733, widened by #751)
+#'
+#' Split out to a named constant, rather than left inline inside
+#' STRAT_RETURNS_WIDE_CODES, because this is also the exact vocabulary
+#' `strat_returns_daily_native`'s own `list()` (below) is keyed by, and the
+#' set `PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY` (R/plan_qa_gates.R,
+#' S28) must map completely. #901 added "cmr_conditioned" to
+#' STRAT_RETURNS_WIDE_CODES and to `strat_returns_daily_native`'s list()
+#' but NOT to PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY -- a hand-typed
+#' literal duplicated a third time (inside a test file) had silently gone
+#' stale and did not catch it; `scripts/build.sh` did, 40 minutes into a
+#' real run. Naming this list once here lets
+#' tests/testthat/test-strategy-periodicity-reconciliation.R assert
+#' PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY's coverage against this
+#' constant directly, instead of a second hand-typed copy, so the next
+#' omission fails in `scripts/verify.sh` instead.
+#' @noRd
+STRAT_RETURNS_DAILY_NATIVE_CODES <- c(
+  "cmr", "olmar_1", "tom", "risk_state", "avoid_worst",
+  # ── #751: CMR conditioning overlay, same daily-resampled convention ──
+  "cmr_conditioned"
+)
+
 STRAT_RETURNS_WIDE_CODES <- c(
   "stk_max", "stk_drif", "fac_max", "fac_drif", "ltr", "xgb_drif",
   "mom_prepeak", "mom_postpeak", "mom_combined", "value_hml",
   "managed_futures",
-  # ── #733: daily strategies, monthly-resampled ──
-  "cmr", "olmar_1", "tom", "risk_state", "avoid_worst",
-  # ── #751: CMR conditioning overlay, same daily-resampled convention ──
-  "cmr_conditioned"
+  # ── #733/#751: daily strategies, monthly-resampled ──
+  STRAT_RETURNS_DAILY_NATIVE_CODES
 )
 
 #' Full-join a list of per-strategy return tables onto a common `ym` spine
