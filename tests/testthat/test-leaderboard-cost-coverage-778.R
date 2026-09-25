@@ -24,24 +24,28 @@ source(here::here("R/plan_qa_gates.R"))
 # ── STRATEGY_COST_BASIS: coverage ───────────────────────────────────────────
 
 test_that("STRATEGY_COST_BASIS covers every strategy in hd_strategy_names_tbl()", {
-  expect_equal(nrow(STRATEGY_COST_BASIS), 17L)
+  # #751 (owner decision 2026-09-24): 17 -> 18 with the addition of
+  # "cmr_conditioned" to strategy_names.
+  expect_equal(nrow(STRATEGY_COST_BASIS), 18L)
   expect_setequal(STRATEGY_COST_BASIS$code_name, hd_strategy_names_tbl()$code_name)
   expect_true(all(!is.na(STRATEGY_COST_BASIS$monthly_cost)))
   expect_true(all(STRATEGY_COST_BASIS$monthly_cost > 0))
 })
 
-# The 11 strategy codes #778's cost_rows extension targets (R/plan_leaderboard.R
-# `leaderboard` target, ".cost_ext_map" list) -- duplicated here deliberately
-# (not extracted, since .cost_ext_map lives inside the tar_target command
-# block, not at module level) so a future rename of one without the other
-# fails a test instead of silently going stale.
+# The 12 strategy codes #778/#751's cost_rows extension targets
+# (R/plan_leaderboard.R `leaderboard` target, ".cost_ext_map" list) --
+# duplicated here deliberately (not extracted, since .cost_ext_map lives
+# inside the tar_target command block, not at module level) so a future
+# rename of one without the other fails a test instead of silently going
+# stale. #751 (owner decision 2026-09-24) added "cmr_conditioned" (12th
+# entry) alongside the original 11 from #778.
 COST_EXT_CODES_778 <- c(
   "ltr", "mom_prepeak", "mom_postpeak", "mom_combined", "ev_ebit",
-  "mf_tsm", "cmr", "olmar", "tom", "rsc", "avoid_worst"
+  "mf_tsm", "cmr", "cmr_conditioned", "olmar", "tom", "rsc", "avoid_worst"
 )
 
-test_that("every #778 cost-extension strategy code has a STRATEGY_COST_BASIS row", {
-  expect_length(COST_EXT_CODES_778, 11L)
+test_that("every #778/#751 cost-extension strategy code has a STRATEGY_COST_BASIS row", {
+  expect_length(COST_EXT_CODES_778, 12L)
   expect_true(all(COST_EXT_CODES_778 %in% STRATEGY_COST_BASIS$code_name))
 })
 
