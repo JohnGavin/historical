@@ -1,0 +1,3 @@
+"file","bytes","sha256","download_date","source_file_id","source_url","note"
+"SignalDoc.csv",181581,"590a308e40483fa87c0cbb95f73c010d09a61e22a3e2059627d2b3de9b77e0d9","2026-09-25","1Sev9s6cPFUGgxp1pFiej0lGzpsMqJCI2","https://drive.google.com/file/d/1Sev9s6cPFUGgxp1pFiej0lGzpsMqJCI2/view","Documentation for 331 anomaly signals (acronym, authors, sample dates, sign, ...)."
+"portfolios_wide.csv",3293172,"79aa0896d79924e1efa83f9afe51a3b4ce94137adfd2c5c3fd2d5d350532ee18","2026-09-25","10sOryk_ddjkXagaajTKUk1nwJs2ZLRiI","https://drive.google.com/file/d/10sOryk_ddjkXagaajTKUk1nwJs2ZLRiI/view","Monthly long-short portfolio returns, wide (date + 212 predictor columns, percent scale)."
