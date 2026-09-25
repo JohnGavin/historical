@@ -924,6 +924,9 @@ plan_leaderboard <- function() {
             olmar_1     = "OLMAR-1",
             tom         = "TOM",
             cmr         = "CMR",
+            # #751 (owner decision 2026-09-24): same strat_returns_wide
+            # column availability as "cmr" above.
+            cmr_conditioned = "CMR Conditioned",
             risk_state  = "Risk State",
             avoid_worst = "Avoid Worst",
             value_hml   = "Value (HML)",
