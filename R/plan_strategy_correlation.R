@@ -261,6 +261,38 @@ STRAT_RETURNS_WIDE_CODES <- c(
   cor_mat
 }
 
+#' Warn (never silently drop) when strat_returns_aligned's inner_join would
+#' truncate the 4-strategy family's own window (#657, fail-loud-not-null.md
+#' Pattern 4).
+#'
+#' Split out as a plain function (same rationale as .build_wide_corr_matrix()
+#' above) so the check is directly unit-testable -- the audit in
+#' audits/inner_join_audit_2026-09-24.md classified strat_returns_aligned's
+#' `inner_join(ltr_col, by = "ym")` as LATENT: as of that audit ltr_portfolio
+#' fully covers the family's window (0 months dropped), but a FUTURE gap in
+#' ltr_portfolio within that window would silently shrink strat_corr_matrix /
+#' strat_keff_vertox / the published k_eff_family column on leaderboard.qmd
+#' with no trace. This makes that shrinkage observable instead.
+#'
+#' @param base_ym Character vector of `ym` values in the 4-strategy family's
+#'   own (already complete-case) window.
+#' @param ltr_ym Character vector of `ym` values ltr_portfolio has a non-NA
+#'   return for.
+#' @return Invisibly, the character vector of dropped `ym` values (empty if
+#'   none). Called for its `cli::cli_warn()` side effect when non-empty.
+#' @noRd
+.warn_ltr_join_gap <- function(base_ym, ltr_ym) {
+  dropped_ym <- setdiff(base_ym, ltr_ym)
+  if (length(dropped_ym) > 0) {
+    cli::cli_warn(c(
+      "!" = "strat_returns_aligned: {length(dropped_ym)} month{?s} in the 4-strategy family (port_returns) with no matching ltr_portfolio return -- dropped by inner_join.",
+      "i" = "Dropped ym: {paste(sort(dropped_ym), collapse = ', ')}.",
+      "i" = "This silently shrinks the window behind strat_corr_matrix / strat_keff_vertox / the published k_eff_family column on leaderboard.qmd."
+    ))
+  }
+  invisible(dropped_ym)
+}
+
 plan_strategy_correlation <- function() {
   list(
 
@@ -296,6 +328,12 @@ plan_strategy_correlation <- function() {
         filter(!is.na(port_ret)) |>
         mutate(ym = format(as.Date(date), "%Y-%m")) |>
         select(ym, ltr = port_ret)
+
+      # #657 fail-loud-not-null.md Pattern 4: make a future truncation of
+      # this inner_join observable. See .warn_ltr_join_gap()'s roxygen above
+      # for why (LATENT per audits/inner_join_audit_2026-09-24.md -- 0 months
+      # dropped today, but this feeds the published k_eff_family column).
+      .warn_ltr_join_gap(base$ym, ltr_col$ym)
 
       # Inner-join on ym (stable month key, not date) then drop ym
       aligned <- base |>
