@@ -557,6 +557,23 @@ check_leaderboard_period_vocab <- function(leaderboard) {
 #' `window_end = max(`, then diff the target names found against this
 #' registry) -- that is a `scripts/` check, not a targets target, and is
 #' flagged as a follow-up rather than built here.
+#'
+#' @section #668 deferred item 1 -- reuse, not re-derivation:
+#' `discover_subperiod_targets()` (below `check_leaderboard_no_all_na_
+#' metric()`) delivers the source-level-lint follow-up flagged above, but
+#' ONLY for the `*_subperiod` naming shape -- a mechanical pattern a regex
+#' can find reliably. It does NOT attempt to re-derive THIS registry's own
+#' 10 entries from source: four of them (`fip_comparison`, `eur_results`,
+#' `eur_comparison`, `eur_ciss_results`) don't even carry a `_metrics`
+#' suffix, so a name-pattern scan would silently miss them -- this registry
+#' was curated by identifying registry-writer (`hd_metric_record()`)
+#' targets by hand, which a regex cannot safely reconstruct. `names(S11_
+#' METRICS_REGISTRY)` is instead REUSED directly by the S36 gate
+#' (`check_metrics_registry_no_all_na()`, `qa_metrics_registry_no_all_na`
+#' target) as one half of its covered-target union -- so any future
+#' addition here (subject to `check_s11_registry_consistency()`'s existing
+#' bidirectional guard) automatically widens S36's coverage too, with no
+#' second list to maintain.
 #' @noRd
 S11_METRICS_REGISTRY <- list(
   mf_metrics       = "macro",   # #645 original
@@ -2090,6 +2107,199 @@ check_leaderboard_no_all_na_metric <- function(leaderboard) {
 }
 
 
+#' Discover subperiod-analysis targets across the plan files (S36, #668
+#' deferred item 1)
+#'
+#' Source-level scan for `targets::tar_target(<name>_subperiod, ...)`
+#' definitions in `R/plan_*.R` -- exactly the follow-up `S11_METRICS_
+#' REGISTRY`'s own roxygen (`@section Why this is NOT full auto-discovery`,
+#' above) flagged and deferred: "a genuinely automatic omission check would
+#' need a source-level lint ... that is a scripts/ check, not a targets
+#' target". Unlike `S11_METRICS_REGISTRY` (a hand-curated list of
+#' registry-writer targets, each mapped to a `bt_partitions` class this
+#' discovery has no way to infer), subperiod targets share one mechanical
+#' naming shape that a regex CAN find reliably, so this one category is
+#' discovered rather than hand-typed -- closing #668's own critique of S11
+#' ("a hardcoded pair ... could not see the third target with the same
+#' defect") for this category rather than repeating it.
+#'
+#' #691's `ltr_subperiod$sharpe` all-NA-since-inception incident (#677
+#' defect B) is the motivating case (#668 comment thread, 2026-08-18):
+#' `ltr_subperiod` is not a registry-writer target (S11's scope) and is not
+#' consumed by `leaderboard` (S26's scope), so it sat outside every existing
+#' gate. `aw_subperiod` (R/plan_avoid_worst.R) and `rsc_subperiod`
+#' (R/plan_risk_state.R) share the exact same shape and the exact same
+#' blind spot.
+#'
+#' @param plan_dir Directory containing `plan_*.R` files. Default:
+#'   `here::here("R")`.
+#' @return Character vector of discovered target names, sorted, deduplicated.
+#'   Aborts loud if zero `plan_*.R` files are found (almost certainly a bad
+#'   `plan_dir`) or if zero `*_subperiod` targets are found across them --
+#'   per `fail-loud-not-null.md` Pattern 5 (#693/#694), a discovery
+#'   mechanism that silently returns nothing is indistinguishable from one
+#'   that ran, looked, and correctly found none; only the former is a
+#'   defect, and the abort forces a human to tell them apart rather than
+#'   letting the calling gate quietly check zero targets and report PASS.
+#' @noRd
+discover_subperiod_targets <- function(plan_dir = here::here("R")) {
+  files <- list.files(plan_dir, pattern = "^plan_.*\\.R$", full.names = TRUE)
+
+  if (length(files) == 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "discover_subperiod_targets() found zero plan_*.R files under ",
+        plan_dir, "."
+      ),
+      "i" = paste0(
+        "This almost certainly means plan_dir is wrong, not that the ",
+        "project has no plan files -- verify the path before trusting an ",
+        "empty result (fail-loud-not-null.md Pattern 5)."
+      )
+    ))
+  }
+
+  pattern <- "tar_target\\(\\s*([A-Za-z][A-Za-z0-9._]*_subperiod)\\b"
+
+  hits <- unlist(lapply(files, function(f) {
+    lines <- readLines(f, warn = FALSE)
+    m <- regmatches(lines, regexec(pattern, lines))
+    vapply(m, function(x) if (length(x) >= 2L) x[[2]] else NA_character_, character(1L))
+  }))
+
+  found <- sort(unique(hits[!is.na(hits)]))
+
+  if (length(found) == 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "discover_subperiod_targets() found zero `*_subperiod` targets ",
+        "across ", length(files), " plan_*.R file(s)."
+      ),
+      "i" = paste0(
+        "This is fail-loud-not-null.md's Pattern 5 shape applied to a ",
+        "discovery mechanism: silently returning nothing looks identical ",
+        "to a real empty result. Known subperiod targets as of #668 ",
+        "(aw_subperiod, ltr_subperiod, rsc_subperiod) should have matched."
+      ),
+      "i" = paste0(
+        "If the naming convention genuinely changed, update the regex in ",
+        "discover_subperiod_targets() (R/plan_qa_gates.R) -- do not silence ",
+        "this abort or make it a warning."
+      )
+    ))
+  }
+
+  found
+}
+
+#' Per-target column exemptions for the metrics-registry + subperiod all-NA
+#' gate (S36, #668 deferred item 1)
+#'
+#' Empty by design -- see `LEADERBOARD_ALL_NA_EXEMPT`'s roxygen for the same
+#' rationale, applied here per-target rather than globally: a named list
+#' keyed by target name, each value a character vector of column names
+#' exempt for THAT target (a column legitimately all-NA on `mf_metrics` is
+#' not necessarily legitimately all-NA on `ltr_subperiod`, so a flat,
+#' un-keyed exemption list would be too coarse). Add an entry ONLY with a
+#' documented, specific reason -- an undocumented addition defeats the point
+#' of the gate the same way a per-instance check did (#668 deferred item 3
+#' tracks calibrating this against real data; it starts empty).
+#' @noRd
+METRICS_REGISTRY_ALL_NA_EXEMPT <- list()
+
+#' Assert no numeric column is entirely NA across the metrics-registry +
+#' subperiod targets that sit outside `leaderboard`'s S26 coverage (S36,
+#' #668 deferred item 1)
+#'
+#' Applies `check_no_all_na_numeric_columns()` -- the same property-based
+#' check S26 applies to `leaderboard` -- to every target named in
+#' `registry_names`. The covered set (built by the `qa_metrics_registry_
+#' no_all_na` target below) is the UNION of `S11_METRICS_REGISTRY` (reused
+#' as-is, not re-hand-typed -- see that constant's own roxygen for how it is
+#' kept consistent with reality) and `discover_subperiod_targets()` (a real
+#' source-code scan, see its roxygen). #691's `ltr_subperiod$sharpe`
+#' all-NA-since-inception incident sat outside every prior gate's scope
+#' precisely because it is neither an S26 leaderboard input nor an S11
+#' registry-writer target -- this gate closes that gap for its whole
+#' category, not for `ltr_subperiod` alone.
+#'
+#' Reads each target directly from the store (`.make_store_reader()`,
+#' R/utils_validation.R) rather than via literal symbol references, the way
+#' `dv_join_key_types` (docs/_targets.R) reads `dataset_registry()`'s
+#' targets. This is what lets the covered set be computed programmatically
+#' (`deps = ` on `targets::tar_target_raw()`) instead of the S11-style
+#' literal `list(mf_metrics = mf_metrics, ...)` block, which would need
+#' hand-editing every time this gate's coverage widens -- exactly the
+#' "hardcoded pair" shape #668/#667 fault S11 for.
+#'
+#' A target not yet present in the store (not built this run, or broken
+#' upstream) is skipped with an informational message, matching
+#' `check_date_key_types()`'s treatment of a missing dependency as "nothing
+#' to check yet" rather than a defect in its own right.
+#'
+#' @param registry_names Character vector of target names to check. Must be
+#'   non-empty -- see Details.
+#' @param read_fn Function `read_fn(name)` returning the target's value.
+#'   Default reads RDS objects directly from `store`. Tests inject a fake to
+#'   avoid touching the real targets store.
+#' @param store Path to the targets store. Default `"_targets"` (the
+#'   standard default when running from `docs/`; matches `check_date_key_
+#'   types()`'s `store` param).
+#' @return `TRUE` invisibly on success.
+#'
+#' @section Why `registry_names` must be non-empty:
+#' Both of `registry_names`'s two sources (`S11_METRICS_REGISTRY`,
+#' `discover_subperiod_targets()`) already abort loud if they would
+#' otherwise be empty. This function's own empty-input abort is defence in
+#' depth, not the primary guard -- if it ever fires, something upstream
+#' swallowed one of those two aborts (e.g. a `tryCatch()` added later
+#' without reading this section), and per `fail-loud-not-null.md` Pattern 5
+#' that must not silently degrade into "0 targets checked, gate passes".
+#' @noRd
+check_metrics_registry_no_all_na <- function(
+    registry_names,
+    read_fn = NULL,
+    store   = "_targets") {
+
+  if (length(registry_names) == 0L) {
+    cli::cli_abort(c(
+      "x" = "check_metrics_registry_no_all_na() was called with zero registry_names.",
+      "i" = paste0(
+        "Both S11_METRICS_REGISTRY and discover_subperiod_targets() abort ",
+        "loud when empty, so this should be unreachable -- something ",
+        "upstream swallowed that abort (fail-loud-not-null.md Pattern 5)."
+      )
+    ))
+  }
+
+  if (is.null(read_fn)) {
+    read_fn <- .make_store_reader(store)
+  }
+
+  for (nm in registry_names) {
+    tbl <- tryCatch(
+      read_fn(nm),
+      error = function(e) {
+        cli::cli_inform(c("i" = paste0(
+          "qa_metrics_registry_no_all_na: skipping ", nm,
+          ", not in cache (", conditionMessage(e), ")"
+        )))
+        NULL
+      }
+    )
+
+    if (is.null(tbl)) next
+
+    exempt <- METRICS_REGISTRY_ALL_NA_EXEMPT[[nm]]
+    if (is.null(exempt)) exempt <- character(0)
+
+    check_no_all_na_numeric_columns(tbl, nm, exempt)
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Minimum effective breadth (n_eff) tolerated on any CMR date holding a
 #' position (S27, #751 item F)
 #'
@@ -3150,6 +3360,16 @@ check_mom_prepeak_gauntlet_borrow_consistency <- function(file) {
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
+  # #668 deferred item 1 / S36: computed once here, at plan-definition time,
+  # rather than hand-typed -- see discover_subperiod_targets() and
+  # S11_METRICS_REGISTRY's own roxygen for why each half of this union is
+  # sourced the way it is. Both halves abort loud if they would otherwise be
+  # empty, so this line itself never silently produces an empty deps vector.
+  qa_metrics_registry_all_na_deps <- sort(unique(c(
+    names(S11_METRICS_REGISTRY),
+    discover_subperiod_targets()
+  )))
+
   list(
     # QA gate: look-ahead bias — 4 forbidden patterns
     #
@@ -3876,6 +4096,48 @@ plan_qa_gates <- function() {
         )))
         TRUE
       },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: no numeric column is entirely NA across the metrics-registry
+    # + subperiod targets outside `leaderboard`'s S26 coverage (S36, #668
+    # deferred item 1) -- #691's `ltr_subperiod$sharpe` all-NA-since-
+    # inception incident (#677 defect B) is the motivating case: neither a
+    # leaderboard input (S26) nor a registry-writer target (S11) covered it.
+    #
+    # tar_target_raw + explicit deps (matching the dv_join_key_types pattern,
+    # docs/_targets.R) rather than a literal `list(mf_metrics = mf_metrics,
+    # ...)` block (the S11/qa_metric_window_bounds pattern) -- the covered
+    # set here is the UNION of S11_METRICS_REGISTRY (reused, not re-hand-
+    # typed -- see #668's own comment thread: "iterate S11_METRICS_REGISTRY
+    # ... and abort on any all-NA numeric column in any registered metrics
+    # target") and discover_subperiod_targets() (a real source-code scan of
+    # R/plan_*.R for `tar_target(<name>_subperiod, ...)` definitions), so it
+    # is computed once (qa_metrics_registry_all_na_deps, above) instead of
+    # hand-edited on every widening. Both source lists abort loud if empty
+    # (fail-loud-not-null.md Pattern 5) -- see check_metrics_registry_no_
+    # all_na()'s own defence-in-depth check for the same property.
+    #
+    # Renumbered S35 -> S36 during rebase onto main (#898, #668): PR #897
+    # merged to main first and independently claimed S35 for
+    # qa_mom_prepeak_gauntlet_borrow_consistency (#800) above. S36 is the
+    # next free number in the R/plan_qa_gates.R sequence at rebase time.
+    targets::tar_target_raw(
+      "qa_metrics_registry_no_all_na",
+      command = quote({
+        registry_names <- sort(unique(c(
+          names(S11_METRICS_REGISTRY),
+          discover_subperiod_targets()
+        )))
+        check_metrics_registry_no_all_na(registry_names)
+        cli::cli_inform(c("v" = paste0(
+          "qa_metrics_registry_no_all_na: S36 passed (", length(registry_names),
+          " target(s) checked: ", paste(registry_names, collapse = ", "),
+          ", no numeric column entirely NA, #668)"
+        )))
+        TRUE
+      }),
+      deps = qa_metrics_registry_all_na_deps,
       cue = targets::tar_cue(mode = "always")
     )
   )
