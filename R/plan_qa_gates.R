@@ -3713,6 +3713,204 @@ check_param_neighbourhood <- function(windows, sharpes, centre, strategy_label,
   invisible(verdict)
 }
 
+#' Strategy-family trial-population registry for the search-funnel QA gate
+#' (S38, #558 Gap G5)
+#'
+#' Maps each strategy family that currently has a multiverse/specification-
+#' curve trial population -- R/plan_drif_v2.R's \code{drif_multiverse},
+#' R/plan_avoid_worst_v2.R's \code{aw_multiverse} -- to the column names
+#' \code{build_search_funnel_table()} needs from that family's tibble, plus
+#' the annualisation factor its Sharpe column uses. This is what "where
+#' trial populations are actually assembled" (#558 Gap G2's own wording)
+#' resolves to today. A THIRD multiverse family added later (the pattern
+#' #157/#490 Gap 2 generalised) registers a new entry here rather than
+#' re-deriving the mapping ad hoc at the call site.
+#'
+#' \code{n_obs_col} is deliberately NOT always the same kind of count
+#' across families -- see \code{drif_multiverse_trial_var}/
+#' \code{aw_multiverse_trial_var}'s own comments (R/plan_drif_v2.R,
+#' R/plan_avoid_worst_v2.R) for why DRIF uses \code{n_months} (one
+#' rebalance IS one round of trades for that family) while Avoid Worst uses
+#' \code{n_switches} (position-change count, since every spec there shares
+#' one fixed-length OOS window regardless of how often it actually traded).
+#'
+#' @noRd
+QA_SEARCH_FUNNEL_FAMILIES <- list(
+  drif = list(
+    sharpe_col = "oos_sharpe",
+    n_obs_col  = "n_months",
+    ann_factor = 12L
+  ),
+  avoid_worst = list(
+    sharpe_col = "oos_sharpe",
+    n_obs_col  = "n_switches",
+    ann_factor = 252L
+  )
+)
+
+#' Build the (tried -> min-trades-passed -> deflation-survivor) funnel table
+#' for every registered strategy-family trial population (S38, #558 Gap G5)
+#'
+#' Issue #558 Gap G5: "so the search size behind every published Sharpe is
+#' visible." Three stages, one row per family:
+#' \enumerate{
+#'   \item \strong{n_tried} -- how many specifications/variants the
+#'     family's multiverse runner tried (\code{nrow()} of its trial table).
+#'   \item \strong{n_min_trades_pass} -- how many of those survive
+#'     \code{\link{hd_trial_sharpe_var}}'s \code{min_trades} screen (#558
+#'     Gap G2) -- the trials that actually inform \code{trial_sharpe_var}.
+#'   \item \strong{n_deflation_survivors} -- of the min-trades survivors,
+#'     how many still test significant (one-sided, \code{alpha}) once
+#'     deflated against the population's own \code{K}/\code{V} hurdle. See
+#'     the "Deflation-survival approximation" section below -- this stage
+#'     is a documented approximation, not an exact
+#'     \code{\link{hd_deflated_sharpe}} call.
+#' }
+#'
+#' @section Deflation-survival approximation:
+#' \code{\link{hd_deflated_sharpe}}'s \code{var_sr} line needs RAW returns
+#' to estimate the trial's own sample skewness/kurtosis (Lo, 2002). The
+#' multiverse runners this gate reads (\code{drif_multiverse},
+#' \code{aw_multiverse}) discard per-spec raw returns and keep only summary
+#' \code{oos_sharpe}/observation-count columns, so this function cannot
+#' call \code{\link{hd_deflated_sharpe}} directly. It instead substitutes
+#' the SAME normal-returns simplification \code{\link{hd_detection_power}}
+#' already uses for the identical reason ("no data exists yet from which to
+#' estimate skew/kurtosis"):
+#' \eqn{Var(SR_{period}) \approx (1 + SR_{period}^2/2) / T}, combined with
+#' \code{\link{hd_deflated_sharpe}}'s own exact \eqn{E[\max SR]} formula
+#' (\code{K = n_min_trades_pass} survivors, \code{V = trial_sharpe_var} just
+#' computed by \code{\link{hd_trial_sharpe_var}}). This is a diagnostic
+#' approximation for funnel REPORTING ONLY -- it is not a substitute for a
+#' real \code{\link{hd_deflated_sharpe}} call against raw returns, which is
+#' left to a follow-up (#558 Gaps G3/G4).
+#'
+#' @param trial_tables Named list of trial-population tibbles, one per
+#'   family, keyed by the SAME family names as \code{families}. Each
+#'   tibble must have the columns that family's config in \code{families}
+#'   names via \code{sharpe_col}/\code{n_obs_col}.
+#' @param families Named list of per-family configs: \code{sharpe_col},
+#'   \code{n_obs_col}, \code{ann_factor}. Default
+#'   \code{QA_SEARCH_FUNNEL_FAMILIES}.
+#' @param alpha Numeric scalar in `(0, 1)`. One-sided significance level
+#'   for the deflation-survival stage. Default `0.05`, matching
+#'   \code{\link{hd_deflated_sharpe}}'s own convention.
+#'
+#' @return Tibble, one row per family, columns: \code{family}, \code{n_tried},
+#'   \code{n_min_trades_pass}, \code{n_deflation_survivors} (\code{NA_integer_}
+#'   when fewer than 2 trials pass the min-trades screen -- a variance needs
+#'   at least 2 points, per \code{\link{hd_trial_sharpe_var}}), \code{min_trades},
+#'   \code{trial_sharpe_var}, \code{n_excluded_na}, \code{n_excluded_min_trades}.
+#'
+#' @noRd
+build_search_funnel_table <- function(trial_tables,
+                                       families = QA_SEARCH_FUNNEL_FAMILIES,
+                                       alpha = 0.05) {
+  if (length(families) == 0L) {
+    cli::cli_abort(c(
+      "x" = "QA_SEARCH_FUNNEL_FAMILIES (or the {.arg families} override) is empty.",
+      "i" = "build_search_funnel_table() (S38) needs at least one registered strategy family."
+    ))
+  }
+  missing_tables <- setdiff(names(families), names(trial_tables))
+  if (length(missing_tables) > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        "{.arg trial_tables} is missing ", length(missing_tables),
+        " registered famil", if (length(missing_tables) == 1L) "y" else "ies",
+        ": ", paste(missing_tables, collapse = ", "), "."
+      )
+    ))
+  }
+
+  rows <- lapply(names(families), function(fam) {
+    cfg    <- families[[fam]]
+    tbl    <- trial_tables[[fam]]
+    sharpe <- tbl[[cfg$sharpe_col]]
+    n_obs  <- tbl[[cfg$n_obs_col]]
+
+    v <- historicaldata::hd_trial_sharpe_var(sharpe = sharpe, n_obs = n_obs)
+    n_tried           <- v$n_total
+    n_min_trades_pass <- v$n_included
+
+    n_deflation_survivors <- NA_integer_
+    if (n_min_trades_pass >= 2L && is.finite(v$trial_sharpe_var) &&
+        v$trial_sharpe_var > 0) {
+      keep       <- v$included
+      sr_annual  <- sharpe[keep]
+      T_obs      <- n_obs[keep]
+      ann_factor <- cfg$ann_factor
+      K          <- n_min_trades_pass
+
+      sr_period     <- sr_annual / sqrt(ann_factor)
+      var_sr_period <- (1 + 0.5 * sr_period^2) / T_obs
+      if (K > 1L) {
+        z <- sqrt(2 * log(K))
+        euler_mascheroni <- 0.5772156649
+        e_max_sr <- (z - (euler_mascheroni + log(pi / 2)) / (2 * z)) *
+          sqrt(v$trial_sharpe_var) / sqrt(T_obs)
+      } else {
+        e_max_sr <- 0
+      }
+      z_stat  <- (sr_period - e_max_sr) / sqrt(var_sr_period)
+      p_value <- 1 - stats::pnorm(z_stat)
+      n_deflation_survivors <- as.integer(sum(p_value < alpha, na.rm = TRUE))
+    }
+
+    tibble::tibble(
+      family                = fam,
+      n_tried               = n_tried,
+      n_min_trades_pass     = n_min_trades_pass,
+      n_deflation_survivors = n_deflation_survivors,
+      min_trades            = v$min_trades,
+      trial_sharpe_var      = v$trial_sharpe_var,
+      n_excluded_na         = v$n_excluded_na,
+      n_excluded_min_trades = v$n_excluded_min_trades
+    )
+  })
+
+  dplyr::bind_rows(rows)
+}
+
+#' Assert the search funnel is internally consistent (S38, #558 Gap G5)
+#'
+#' Each stage must be no larger than the stage before it:
+#' \code{n_deflation_survivors <= n_min_trades_pass <= n_tried}. A violation
+#' means the funnel's own construction is broken (e.g. a screen that grew
+#' the population instead of shrinking it) -- this is a defect in the
+#' REPORTING, not a finding about any strategy, so it aborts rather than
+#' silently reporting an impossible number.
+#'
+#' @param funnel Tibble as returned by \code{\link{build_search_funnel_table}}.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_search_funnel <- function(funnel) {
+  if (nrow(funnel) == 0L) {
+    cli::cli_abort(c(
+      "x" = "check_search_funnel() (S38) received a zero-row funnel table.",
+      "i" = "build_search_funnel_table() already aborts on an empty families registry -- this should be unreachable."
+    ))
+  }
+
+  bad <- funnel$n_min_trades_pass > funnel$n_tried |
+    (!is.na(funnel$n_deflation_survivors) &
+       funnel$n_deflation_survivors > funnel$n_min_trades_pass)
+
+  if (any(bad)) {
+    offenders <- funnel$family[bad]
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Internally inconsistent search funnel for famil",
+        if (length(offenders) == 1L) "y" else "ies", ": ",
+        paste(offenders, collapse = ", "), "."
+      ),
+      "i" = "Each stage must be <= the stage before it (tried >= min-trades-pass >= deflation-survivors)."
+    ))
+  }
+
+  invisible(TRUE)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -4512,6 +4710,7 @@ plan_qa_gates <- function() {
       cue = targets::tar_cue(mode = "always")
     ),
 
+
     # QA gate: OLMAR-1's window parameter (centre = olmar_params$window)
     # sits in a dense-neighbourhood PLATEAU, not an isolated PEAK (S39,
     # #849 -- Bollinger's stated practice: "if a 20-day moving average
@@ -4547,6 +4746,41 @@ plan_qa_gates <- function() {
         ", #849)"
       )))
       verdict
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: search-size transparency for every strategy family with a
+    # multiverse/specification-curve trial population (S38, #558 Gap G5).
+    # "So the search size behind every published Sharpe is visible" --
+    # reports, per family, how many variants were tried, how many survive
+    # the min_trades screen (#558 Gap G2, hd_trial_sharpe_var()), and how
+    # many still test significant once deflated against that population's
+    # own K/V hurdle (see build_search_funnel_table()'s "Deflation-survival
+    # approximation" roxygen section for why that last stage is an
+    # approximation, not an exact hd_deflated_sharpe() call). Aborts on an
+    # internally inconsistent funnel (a stage larger than the one before
+    # it) or an empty registered-family set -- both would mean the
+    # REPORTING is broken, not that a strategy failed a test.
+    #
+    # Numbered S38: S37 (#905) and S39 (#849) are already taken by other
+    # gates in this file -- S38 is the next free number that avoids
+    # colliding with either.
+    targets::tar_target(qa_search_funnel, {
+      funnel <- build_search_funnel_table(list(
+        drif        = drif_multiverse,
+        avoid_worst = aw_multiverse
+      ))
+      check_search_funnel(funnel)
+      cli::cli_inform(c("v" = paste0(
+        "qa_search_funnel: S38 passed -- ",
+        paste(sprintf(
+          "%s: %d tried / %d passed min-trades / %s survived deflation",
+          funnel$family, funnel$n_tried, funnel$n_min_trades_pass,
+          ifelse(is.na(funnel$n_deflation_survivors), "NA",
+                 as.character(funnel$n_deflation_survivors))
+        ), collapse = "; "),
+        " (#558)"
+      )))
+      funnel
     }, cue = targets::tar_cue(mode = "always"))
   )
 }

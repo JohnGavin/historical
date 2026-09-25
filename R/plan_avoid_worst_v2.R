@@ -176,6 +176,48 @@ plan_avoid_worst_v2 <- function() {
         )
     }),
 
+    # ── 2b. Trial-population Sharpe variance (V) for hd_deflated_sharpe() ──
+    # (#558 Gap G2). Screens the 16-spec trial population through
+    # hd_trial_sharpe_var()'s min_trades floor BEFORE computing V -- see
+    # that function's roxygen (packages/historicaldata/R/falsification.R)
+    # and backtest-robustness.md's "junk-variance trap". "Trades" here =
+    # n_switches (position-change count), NOT n_days -- a spec whose VIX/
+    # shock triggers rarely fire (e.g. an idealised 0bp-cost, tight-cooloff
+    # combination that mostly just holds the market) can have a large
+    # n_days but almost no actual trading activity, which is exactly the
+    # "did this strategy actually do anything" case the min_trades screen
+    # exists to catch; n_days would not catch it (every spec here shares
+    # the SAME 1006-day OOS window regardless of how often it traded).
+    #
+    # Diagnostic/exploratory, like aw_multiverse itself: NOT yet wired into
+    # strat_deflated_sharpe's hd_deflated_sharpe() call
+    # (R/plan_leaderboard.R), which still defaults to trial_sharpe_var = 1.
+    # Wiring THIS family-scoped V into that call is left for a follow-up
+    # (#558 Gaps G3/G4 territory) -- see drif_multiverse_trial_var's
+    # comment (R/plan_drif_v2.R) for the identical reconciliation-with-
+    # k_eff_lb rationale.
+    targets::tar_target(aw_multiverse_trial_var, {
+      v <- historicaldata::hd_trial_sharpe_var(
+        sharpe = aw_multiverse$oos_sharpe,
+        n_obs  = aw_multiverse$n_switches
+      )
+      cli::cli_inform(c("i" = paste0(
+        "aw_multiverse_trial_var: V = ", round(v$trial_sharpe_var, 4),
+        " from ", v$n_included, "/", v$n_total,
+        " trials (min_trades = ", v$min_trades, ", #558)"
+      )))
+      tibble::tibble(
+        family                = "avoid_worst",
+        trial_sharpe_var      = v$trial_sharpe_var,
+        min_trades            = v$min_trades,
+        n_total               = v$n_total,
+        n_included            = v$n_included,
+        n_excluded            = v$n_excluded,
+        n_excluded_na         = v$n_excluded_na,
+        n_excluded_min_trades = v$n_excluded_min_trades
+      )
+    }),
+
     # ── 3. Spec-curve plot ────────────────────────────────────────
     # Fan chart: each bar = one specification, sorted by OOS Sharpe.
     # Current spec highlighted with a different fill.

@@ -1498,6 +1498,17 @@ arguments:
 returns: 'Named list: Deflated Sharpe Ratio (annualised).'
 ---
 kind: function
+name: hd_trial_sharpe_var
+exported: true
+signature: hd_trial_sharpe_var(sharpe, n_obs, min_trades = HD_MIN_TRIAL_TRADES)
+purpose: Screen a trial population for low-trade "junk" and compute its Sharpe variance (V) for...
+arguments:
+  min_trades: Integer scalar > 0.
+  n_obs: Numeric vector, the SAME length as sharpe.
+  sharpe: Numeric vector.
+returns: 'Named list: var(sharpe[included]) -- pass this directly as \link{hd_deflated_sharpe}''s trial_sharpe_var argument.'
+---
+kind: function
 name: hd_sharpe_haircut
 exported: true
 signature: hd_sharpe_haircut(sharpe, n_tests, rho, T_obs, ann_factor = 252L,method = c("bonferroni", "holm", "bhy"))

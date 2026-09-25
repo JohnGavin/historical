@@ -945,6 +945,172 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L,
 }
 
 
+# ── 13a2. Trial-population screen for hd_deflated_sharpe()'s V (#558 Gap G2) ──
+
+#' Minimum trades/observations for a trial to enter a deflated-Sharpe trial
+#' population (#558 Gap G2)
+#'
+#' \code{\link{hd_deflated_sharpe}}'s \code{var_sr} line estimates the
+#' sampling variance of a Sharpe ratio from the SAME sample's skewness
+#' (\code{m3}) and kurtosis (\code{m4}). Both sample moments are themselves
+#' noisy estimators: the standard error of sample skewness is approximately
+#' \eqn{\sqrt{6/n}} and of sample (excess) kurtosis approximately
+#' \eqn{\sqrt{24/n}} (standard large-sample theory, e.g. Kendall & Stuart).
+#' At \code{n = 10} -- \code{\link{hd_deflated_sharpe}}'s own \code{T_obs <
+#' 10} computability floor, which exists only to avoid degenerate division,
+#' not to certify reliability -- those standard errors are approximately
+#' 0.77 and 1.55: the moments feeding \code{var_sr} are themselves almost
+#' pure noise. At \code{n = 30} they fall to approximately 0.45 and 0.89 --
+#' still wide, but the point at which this package's other asymptotic-normal
+#' Sharpe machinery (\code{\link{hd_detection_power}}'s own normal-returns
+#' simplification) is already treated as usable. \code{30} is also strictly
+#' above the two ad hoc per-family gates already embedded in this package's
+#' multiverse/specification-curve runners (R/plan_drif_v2.R's \code{n <
+#' 12L} monthly floor, R/plan_avoid_worst_v2.R's \code{n < 60L} daily
+#' floor) -- neither of those was designed to protect a shared trial
+#' population VARIANCE estimate from one noisy contributor; they only
+#' guarantee a Sharpe can be COMPUTED at all, not that it is stable enough
+#' to inform every OTHER trial's multiple-testing hurdle. See
+#' \code{backtest-robustness.md}'s "junk-variance trap" and issue #558.
+#'
+#' @noRd
+HD_MIN_TRIAL_TRADES <- 30L
+
+#' Screen a trial population for low-trade "junk" and compute its Sharpe
+#' variance (V) for \code{\link{hd_deflated_sharpe}} (#558 Gap G2)
+#'
+#' Bailey, Borwein, Lopez de Prado & Zhu (2014)'s variance-aware hurdle
+#' (implemented by \code{\link{hd_deflated_sharpe}}'s \code{trial_sharpe_var}
+#' argument) is calibrated from the DISPERSION of a trial population's
+#' Sharpe ratios. A trial that ran on too few trades or return observations
+#' cannot have produced a reliable Sharpe estimate -- its noise inflates
+#' that dispersion and therefore overstates (or understates, depending on
+#' where it happens to land) the honest hurdle for every OTHER trial in the
+#' same population. \code{backtest-robustness.md} names this the
+#' "junk-variance trap" and requires screening the population BEFORE
+#' computing V from it, not merely reporting the exclusion afterward. This
+#' function is that screen.
+#'
+#' @param sharpe Numeric vector. One (annualised) Sharpe ratio per trial in
+#'   the population -- e.g. a specification-curve/multiverse runner's
+#'   \code{oos_sharpe} column, one row per parameter combination tried
+#'   (\code{drif_multiverse}/\code{aw_multiverse}, R/plan_drif_v2.R /
+#'   R/plan_avoid_worst_v2.R).
+#' @param n_obs Numeric vector, the SAME length as \code{sharpe}. The number
+#'   of trades or return observations underlying EACH trial's Sharpe (e.g.
+#'   that runner's own \code{n_months}/\code{n_switches} column). Must be
+#'   in whatever unit makes a value below \code{min_trades} mean "this
+#'   trial did not do enough to trust its Sharpe" for that family --
+#'   \code{hd_trial_sharpe_var()} itself is unit-agnostic.
+#' @param min_trades Integer scalar > 0. Minimum trades/observations a
+#'   trial must have to enter the population \code{V} is computed from.
+#'   Default \code{HD_MIN_TRIAL_TRADES} (30) -- see that constant's roxygen
+#'   (this file) for the derivation.
+#'
+#' @section Fewer than 2 survivors:
+#' A variance needs at least 2 points. When fewer than 2 trials survive the
+#' screen, \code{trial_sharpe_var} is \code{NA_real_} -- an explicit,
+#' documented "cannot compute" result (fail-loud-not-null.md Required
+#' Pattern 2), NOT a silent default back to \code{1}. A caller MUST decide
+#' how to handle this (e.g. fall back to a documented default with its own
+#' justification, or abort) before passing it on to
+#' \code{\link{hd_deflated_sharpe}}, which itself rejects a non-finite
+#' \code{trial_sharpe_var}.
+#'
+#' @return Named list:
+#'   \describe{
+#'     \item{trial_sharpe_var}{\code{var(sharpe[included])} -- pass this
+#'       directly as \code{\link{hd_deflated_sharpe}}'s
+#'       \code{trial_sharpe_var} argument. \code{NA_real_} when fewer than
+#'       2 trials survive the screen (see Details).}
+#'     \item{min_trades}{Echoed input floor.}
+#'     \item{n_total}{Number of trials passed in (\code{length(sharpe)}).}
+#'     \item{n_included}{Number of trials that survived the screen.}
+#'     \item{n_excluded}{\code{n_total - n_included}.}
+#'     \item{n_excluded_na}{Of the excluded trials, how many had a
+#'       missing/non-finite \code{sharpe} or \code{n_obs}.}
+#'     \item{n_excluded_min_trades}{Of the excluded trials, how many had
+#'       valid (finite, non-NA) values but \code{n_obs < min_trades}.}
+#'     \item{included}{Logical vector, length \code{n_total}: \code{TRUE}
+#'       for every trial that survived the screen, in the SAME order as
+#'       \code{sharpe}/\code{n_obs} -- use it to subset the caller's own
+#'       trial table for further reporting.}
+#'   }
+#'
+#' @references
+#' Bailey, D. H., Borwein, J. M., Lopez de Prado, M., & Zhu, Q. J. (2014).
+#' "Pseudo-Mathematics and Financial Charlatanism: The Effects of Backtest
+#' Overfitting on Out-of-Sample Performance." \emph{Notices of the AMS},
+#' 61(5), 458-471.
+#'
+#' @family falsification
+#' @export
+hd_trial_sharpe_var <- function(sharpe, n_obs, min_trades = HD_MIN_TRIAL_TRADES) {
+  if (!is.numeric(sharpe) || !is.numeric(n_obs)) {
+    cli::cli_abort(c(
+      "x" = "{.arg sharpe} and {.arg n_obs} must both be numeric vectors.",
+      "i" = "Got {.cls {class(sharpe)}} and {.cls {class(n_obs)}}."
+    ))
+  }
+  if (length(sharpe) != length(n_obs)) {
+    cli::cli_abort(c(
+      "x" = "{.arg sharpe} and {.arg n_obs} must be the same length.",
+      "i" = "Got length {length(sharpe)} and length {length(n_obs)}."
+    ))
+  }
+  if (length(sharpe) == 0L) {
+    cli::cli_abort(c(
+      "x" = "{.arg sharpe} and {.arg n_obs} must have at least one trial.",
+      "i" = "Got a zero-length vector."
+    ))
+  }
+  if (!is.numeric(min_trades) || length(min_trades) != 1L || is.na(min_trades) ||
+      !is.finite(min_trades) || min_trades <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg min_trades} must be a single positive finite number.",
+      "i" = "Got {.val {min_trades}}."
+    ))
+  }
+
+  n_total <- length(sharpe)
+  valid <- !is.na(sharpe) & !is.na(n_obs) & is.finite(sharpe) & is.finite(n_obs)
+  passes_floor <- valid & n_obs >= min_trades
+  n_excluded_na         <- sum(!valid)
+  n_excluded_min_trades <- sum(valid & !passes_floor)
+  n_included <- sum(passes_floor)
+  n_excluded <- n_total - n_included
+
+  if (n_excluded > 0L) {
+    cli::cli_warn(c(
+      "!" = paste0(
+        "hd_trial_sharpe_var(): excluded ", n_excluded, " of ", n_total,
+        " trial(s) from the population used to compute V (",
+        n_excluded_na, " missing/non-finite, ", n_excluded_min_trades,
+        " below min_trades = ", min_trades, ")."
+      ),
+      "i" = "See backtest-robustness.md's junk-variance trap (#558 Gap G2)."
+    ))
+  }
+
+  trial_sharpe_var <- if (n_included >= 2L) {
+    stats::var(sharpe[passes_floor])
+  } else {
+    NA_real_
+  }
+
+  list(
+    trial_sharpe_var      = trial_sharpe_var,
+    min_trades            = min_trades,
+    n_total               = n_total,
+    n_included            = n_included,
+    n_excluded            = n_excluded,
+    n_excluded_na         = n_excluded_na,
+    n_excluded_min_trades = n_excluded_min_trades,
+    included              = passes_floor
+  )
+}
+
+
 # ── 13b. Harvey-Liu Sharpe haircut (multiple-testing p-value correction) ────
 
 #' Harvey-Liu multiple-testing "haircut" for a reported Sharpe ratio
