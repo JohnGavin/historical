@@ -327,6 +327,59 @@ plan_commodities_mean_reversion <- function() {
     }),
 
 
+    # ── Conditioned metrics per lookback (#751, owner decision 2026-09-24) ──
+    # SAME .compute_cmr_metrics() function as cmr_metrics_1m/3m/6m above --
+    # not a re-derivation -- but fed net_ret_conditioned (renamed to
+    # net_ret) instead of the unconditioned net_ret column. Renaming (not
+    # adding a second column) is deliberate: .compute_cmr_metrics() reads
+    # `df$net_ret` unconditionally (see its own body below), so passing the
+    # tibble through unchanged would silently score the UNCONDITIONED
+    # returns under the "_conditioned" target name -- the exact
+    # fail-loud-not-null.md mislabelling defect this rename avoids.
+    # cmr_portfolio_*_conditioned already carries `date` (needed by
+    # .cmr_fill_non_trading_rf_gaps()/.cmr_join_rf()/.assert_cmr_ann_factor(),
+    # all of which only require `date`, not any of the overlay's other
+    # columns), so select(date, net_ret = net_ret_conditioned) is sufficient.
+
+    targets::tar_target(cmr_metrics_1m_conditioned, {
+      .compute_cmr_metrics(
+        cmr_portfolio_1m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+        lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
+        periodicity_check = "warn"
+      )
+    }),
+
+    targets::tar_target(cmr_metrics_3m_conditioned, {
+      .compute_cmr_metrics(
+        cmr_portfolio_3m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+        lookback = "3m", daily_rf = daily_rf, ann_factor = 252L,
+        periodicity_check = "warn"
+      )
+    }),
+
+    targets::tar_target(cmr_metrics_6m_conditioned, {
+      .compute_cmr_metrics(
+        cmr_portfolio_6m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+        lookback = "6m", daily_rf = daily_rf, ann_factor = 252L,
+        periodicity_check = "warn"
+      )
+    }),
+
+
+    # ── Summary: comparison across lookbacks, CONDITIONED (#751) ───────────
+    # SAME shape as cmr_summary above (built by the SAME .compute_cmr_metrics()
+    # function) -- feeds the leaderboard's "CMR Conditioned" row
+    # (R/plan_leaderboard.R's .norm_cmr_conditioned(), which reuses
+    # .norm_cmr()'s best-lookback selection unchanged).
+
+    targets::tar_target(cmr_summary_conditioned, {
+      dplyr::bind_rows(
+        cmr_metrics_1m_conditioned, cmr_metrics_3m_conditioned, cmr_metrics_6m_conditioned
+      ) |>
+        dplyr::arrange(lookback)
+    }),
+
+
     # ── Head-to-head: mean reversion vs momentum (Part C) ─────────────────
     # Joins commodity-momentum metrics (from plan_commodities_momentum.R)
     # with MR metrics. Lightweight: no new data fetch.
@@ -378,6 +431,34 @@ plan_commodities_mean_reversion <- function() {
           `3m` = cmr_portfolio_3m,
           `6m` = cmr_portfolio_6m
         )
+      )
+    }),
+
+    # ── Registry sentinel, CONDITIONED (#751, owner decision 2026-09-24) ────
+    # Same writer as cmr_registry_run above (.cmr_register_runs(), extended
+    # with a strategy_id parameter rather than duplicated -- see that
+    # function's roxygen) -- registers "cmr_conditioned" (strategy_names'
+    # code_name added alongside "cmr") using cmr_summary_conditioned and the
+    # conditioned portfolios' OWN net_ret_conditioned column (renamed to
+    # net_ret so hd_record_stability_metrics()'s port$net_ret read scores
+    # the conditioned series, not the unconditioned one it would otherwise
+    # silently fall back to -- same rename rationale as cmr_metrics_*_conditioned
+    # above). Reuses the SAME `cmr_units` map inside .cmr_register_runs() --
+    # not a new units map -- because cmr_summary_conditioned has the
+    # IDENTICAL column schema (both are .compute_cmr_metrics() output), so
+    # tests/testthat/test-registry-unit-map-coverage.R's existing cmr_units
+    # case already covers this writer; no new test case is needed.
+
+    targets::tar_target(cmr_registry_run_conditioned, {
+      .cmr_register_runs(
+        strategy_names = strategy_names,
+        cmr_summary    = cmr_summary_conditioned,
+        portfolio_list = list(
+          `1m` = cmr_portfolio_1m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+          `3m` = cmr_portfolio_3m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+          `6m` = cmr_portfolio_6m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned)
+        ),
+        strategy_id = "cmr_conditioned"
       )
     })
 
@@ -1141,12 +1222,22 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
 
 
 # ── Registry sentinel helper (#347 PR 2/4; stability metrics #400 PR 5/6) ──
-# Initialises (idempotent) + upserts CMR strategy + records one bt.run
-# row per lookback partition. Also records SSR + top5pct stability metrics
-# via hd_record_stability_metrics() when portfolio_list is supplied.
+# Initialises (idempotent) + upserts a CMR-family strategy + records one
+# bt.run row per lookback partition. Also records SSR + top5pct stability
+# metrics via hd_record_stability_metrics() when portfolio_list is supplied.
 # Returns a tibble of (partition, run_uuid).
+#
+# `strategy_id` (#751, owner decision 2026-09-24): defaults to "cmr" (the
+# original, only caller before this change) -- extended with a parameter
+# rather than duplicated into a second near-identical function so the base
+# "cmr" and conditioned "cmr_conditioned" registrations can never drift
+# apart. Both strategy_names code_names ("cmr", "cmr_conditioned") and both
+# cmr_summary shapes (cmr_summary, cmr_summary_conditioned -- IDENTICAL
+# schema, both built by .compute_cmr_metrics()) are covered by this one
+# function; see cmr_registry_run / cmr_registry_run_conditioned above for
+# the two call sites.
 .cmr_register_runs <- function(strategy_names, cmr_summary,
-                               portfolio_list = list()) {
+                               portfolio_list = list(), strategy_id = "cmr") {
   if (!requireNamespace("DBI", quietly = TRUE) ||
       !requireNamespace("duckdb", quietly = TRUE)) {
     return(tibble::tibble(
@@ -1161,7 +1252,7 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   cmr_row <- strategy_names |>
-    dplyr::filter(.data$code_name == "cmr") |>
+    dplyr::filter(.data$code_name == strategy_id) |>
     dplyr::transmute(
       strategy_id       = .data$code_name,
       short_name        = .data$short_name,
@@ -1185,7 +1276,7 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
     p <- partitions[i]
     uu <- historicaldata::hd_run_upsert(
       con,
-      strategy_id      = "cmr",
+      strategy_id      = strategy_id,
       partition        = p,
       pipeline_version = "phase1"
     )

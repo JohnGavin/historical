@@ -1384,12 +1384,13 @@ plan_leaderboard <- function() {
     #     distributional assumptions for no reason). ann_factor = 252L for
     #     every row here, matching STRATEGY_OBS_ANN_FACTOR.
     #
-    # Together these cover 16 of 17 leaderboard strategies (#733), up from
-    # 11 after #728 and 4 before it. The one remaining exclusion, PSO
-    # Optimal, is a genuine, documented exclusion (linear-combination
-    # circularity) -- see STRAT_RETURNS_WIDE_CODES's comment in
-    # plan_strategy_correlation.R, not an oversight -- and remains NA on
-    # deflated_sharpe/dsr_pvalue/k_eff_leaderboard.
+    # Together these cover 17 of 18 leaderboard strategies (#751 adds
+    # "cmr_conditioned" to the #733 count of 16 of 17), up from 11 after
+    # #728 and 4 before it. The one remaining exclusion, PSO Optimal, is a
+    # genuine, documented exclusion (linear-combination circularity) -- see
+    # STRAT_RETURNS_WIDE_CODES's comment in plan_strategy_correlation.R, not
+    # an oversight -- and remains NA on deflated_sharpe/dsr_pvalue/
+    # k_eff_leaderboard.
     #
     # k_eff_family / k_raw_family are populated ONLY for the original
     # 5-strategy family (NA elsewhere) -- informational context, no longer
@@ -1413,12 +1414,22 @@ plan_leaderboard <- function() {
       # #733: keys match strat_returns_daily_native's names
       # (plan_strategy_correlation.R), values match STRATEGY_OBS_ANN_FACTOR's
       # strategy labels above.
+      # #751 (owner decision 2026-09-24): "cmr_conditioned" added alongside
+      # "cmr" -- same daily native series convention, see
+      # strat_returns_daily_native's own cmr_conditioned entry
+      # (plan_strategy_correlation.R). Folding it into this daily group (and
+      # into STRAT_RETURNS_WIDE_CODES, so it also enters the correlation
+      # matrix that determines k_eff_lb for EVERY strategy) is what
+      # strategy-combination-modes.md's multiplicity check requires: leaving
+      # a new strategy variant out of K_eff_strat would silently under-
+      # deflate every Sharpe on the leaderboard, not just this new one.
       col_map_daily <- c(
-        cmr         = "CMR",
-        olmar_1     = "OLMAR-1",
-        tom         = "TOM",
-        risk_state  = "Risk State",
-        avoid_worst = "Avoid Worst"
+        cmr             = "CMR",
+        cmr_conditioned = "CMR Conditioned",
+        olmar_1         = "OLMAR-1",
+        tom             = "TOM",
+        risk_state      = "Risk State",
+        avoid_worst     = "Avoid Worst"
       )
       family_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr")
 

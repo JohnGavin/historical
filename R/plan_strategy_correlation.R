@@ -75,12 +75,22 @@ REDUNDANCY_THRESH <- 0.80
 #
 # That leaves 16 of 17 strategies covered here (up from 11 after #728, and
 # 4-5 in the original family).
+#
+# #751 (owner decision 2026-09-24) adds a 18th leaderboard strategy, "CMR
+# Conditioned" (regime-conditioning exposure overlay on CMR -- a TIME-mode
+# combination per .claude/rules/strategy-combination-modes.md, not a new
+# independent signal). It is folded into this widened scope the same way
+# CMR itself was by #733 -- see strat_returns_daily_native's cmr_conditioned
+# entry below -- so it is 17 of 18 strategies covered as of #751, still
+# excluding only PSO Optimal.
 STRAT_RETURNS_WIDE_CODES <- c(
   "stk_max", "stk_drif", "fac_max", "fac_drif", "ltr", "xgb_drif",
   "mom_prepeak", "mom_postpeak", "mom_combined", "value_hml",
   "managed_futures",
   # ── #733: daily strategies, monthly-resampled ──
-  "cmr", "olmar_1", "tom", "risk_state", "avoid_worst"
+  "cmr", "olmar_1", "tom", "risk_state", "avoid_worst",
+  # ── #751: CMR conditioning overlay, same daily-resampled convention ──
+  "cmr_conditioned"
 )
 
 #' Full-join a list of per-strategy return tables onto a common `ym` spine
@@ -390,11 +400,11 @@ plan_strategy_correlation <- function() {
         code_name      = c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr",
                             "xgb_drif", "mom_prepeak", "mom_postpeak", "mom_combined",
                             "value_hml", "managed_futures",
-                            "cmr", "olmar_1", "tom", "risk_state", "avoid_worst"),
+                            "cmr", "cmr_conditioned", "olmar_1", "tom", "risk_state", "avoid_worst"),
         strategy_label = c("Stock MAX", "Stock DRIF", "Factor MAX", "Factor DRIF", "LTR",
                             "XGB DRIF", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2",
                             "Value (HML)", "Managed Futures",
-                            "CMR", "OLMAR-1", "TOM", "Risk State", "Avoid Worst")
+                            "CMR", "CMR Conditioned", "OLMAR-1", "TOM", "Risk State", "Avoid Worst")
       )
 
       strat_cols <- rownames(strat_corr_matrix_leaderboard)
@@ -573,6 +583,32 @@ plan_strategy_correlation <- function() {
       cmr_daily <- cmr_source |>
         transmute(date = as.Date(date), ret = strategy_ret)
 
+      # #751 (owner decision 2026-09-24): same best-lookback selection
+      # pattern as cmr_daily above, but over cmr_summary_conditioned's OWN
+      # Sharpe ranking (which lookback wins conditioned may differ from
+      # which wins unconditioned) -- so the series feeding K_eff/deflated
+      # Sharpe for "CMR Conditioned" is the SAME one .norm_cmr_conditioned()
+      # (R/plan_leaderboard.R) selects for that leaderboard row, not a
+      # lookalike. net_ret_conditioned (not net_ret) is the CONDITIONED
+      # column -- see R/plan_commodities_mean_reversion.R's
+      # cmr_metrics_*_conditioned targets for the same rename rationale.
+      best_lookback_conditioned <- cmr_summary_conditioned |>
+        filter(!is.na(sharpe)) |>
+        arrange(desc(sharpe)) |>
+        slice(1) |>
+        pull(lookback)
+      cmr_conditioned_source <- switch(best_lookback_conditioned,
+        "1m" = cmr_portfolio_1m_conditioned,
+        "3m" = cmr_portfolio_3m_conditioned,
+        "6m" = cmr_portfolio_6m_conditioned,
+        cli::cli_abort(c(
+          "x" = "Unrecognised CMR lookback {.val {best_lookback_conditioned}} from cmr_summary_conditioned.",
+          "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
+        ))
+      )
+      cmr_conditioned_daily <- cmr_conditioned_source |>
+        transmute(date = as.Date(date), ret = net_ret_conditioned)
+
       olmar_daily <- olmar_portfolio |>
         transmute(date = as.Date(date), ret = net_ret)
 
@@ -592,11 +628,12 @@ plan_strategy_correlation <- function() {
         transmute(date = as.Date(date), ret = ret)
 
       list(
-        cmr         = cmr_daily,
-        olmar_1     = olmar_daily,
-        tom         = tom_daily,
-        risk_state  = risk_state_daily,
-        avoid_worst = avoid_worst_daily
+        cmr             = cmr_daily,
+        cmr_conditioned = cmr_conditioned_daily,
+        olmar_1         = olmar_daily,
+        tom             = tom_daily,
+        risk_state      = risk_state_daily,
+        avoid_worst     = avoid_worst_daily
       )
     }),
 
