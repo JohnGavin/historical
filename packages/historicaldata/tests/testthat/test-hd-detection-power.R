@@ -145,3 +145,141 @@ test_that("n_obs < 2 aborts", {
 test_that("function signature is stable (catches API drift)", {
   expect_snapshot(args(hd_detection_power))
 })
+
+# ── Multiple-testing correction (n_tests / correction, #903) ────────────────
+#
+# detection-power-required.md requirement 5: "Report the multiple-testing-
+# corrected requirement alongside the single-test one." Before #903 this was
+# only ever done AD HOC inside R/plan_leaderboard.R's .detection_diag_row()
+# (a second, separately-parameterised call passing `alpha = 0.05 / keff`
+# directly) -- never as a documented, testable part of the package API. These
+# tests are written BEFORE the n_tests/correction args exist (RED), per
+# test-driven-development.
+
+test_that("default call (n_tests = 1, correction = 'none') is byte-identical to pre-#903 behaviour on every pre-existing field", {
+  # Recomputes every ORIGINAL field independently, exactly as the
+  # pre-existing tests above do -- if this test passes, adding the new args
+  # did not perturb a single byte of the original return contract.
+  sharpe_annual <- 0.6
+  n_obs <- 84
+  ann_factor <- 12
+  alpha <- 0.05
+  target_power <- 0.8
+
+  out <- hd_detection_power(
+    sharpe_annual = sharpe_annual, n_obs = n_obs, ann_factor = ann_factor,
+    alpha = alpha, target_power = target_power
+  )
+
+  sr_period <- sharpe_annual / sqrt(ann_factor)
+  z_alpha <- stats::qnorm(1 - alpha)
+  z_beta  <- stats::qnorm(target_power)
+  c1 <- sqrt(1 + 0.5 * sr_period^2)
+  expected_min_n_periods <- ((z_beta * c1 + z_alpha) / sr_period)^2
+  expected_power <- stats::pnorm((sr_period - z_alpha / sqrt(n_obs)) / (c1 / sqrt(n_obs)))
+
+  expect_equal(out$min_n_periods, expected_min_n_periods, tolerance = 1e-9)
+  expect_equal(out$min_n_years, expected_min_n_periods / ann_factor, tolerance = 1e-9)
+  expect_equal(out$power, expected_power, tolerance = 1e-9)
+  expect_equal(out$underpowered, n_obs < expected_min_n_periods)
+  expect_equal(out$n_obs, n_obs)
+  expect_equal(out$sharpe_annual, sharpe_annual)
+  expect_equal(out$sharpe_period, sr_period)
+  expect_equal(out$ann_factor, ann_factor)
+  expect_equal(out$alpha, alpha)
+  expect_equal(out$target_power, target_power)
+})
+
+test_that("default n_tests/correction produce a corrected figure identical to the uncorrected one (falsification: k_eff = 1)", {
+  out <- hd_detection_power(sharpe_annual = 0.5, n_obs = 60, ann_factor = 12)
+  expect_equal(out$n_tests, 1)
+  expect_equal(out$correction, "none")
+  expect_equal(out$min_n_years_corrected, out$min_n_years)
+  expect_equal(out$min_n_periods_corrected, out$min_n_periods)
+  expect_equal(out$power_corrected, out$power)
+  expect_equal(out$underpowered_corrected, out$underpowered)
+  expect_equal(out$alpha_corrected, out$alpha)
+})
+
+test_that("n_tests = 1 with correction = 'bonferroni' also reproduces the uncorrected figure exactly (falsification: k_eff = 1)", {
+  out <- hd_detection_power(
+    sharpe_annual = 0.5, n_obs = 60, ann_factor = 12,
+    n_tests = 1, correction = "bonferroni"
+  )
+  expect_equal(out$correction, "bonferroni")
+  expect_equal(out$alpha_corrected, out$alpha)
+  expect_equal(out$min_n_years_corrected, out$min_n_years, tolerance = 1e-9)
+  expect_equal(out$underpowered_corrected, out$underpowered)
+})
+
+test_that("bonferroni correction with n_tests > 1 widens the required sample (never narrows it)", {
+  out_1  <- hd_detection_power(sharpe_annual = 0.3, n_obs = 60, ann_factor = 12)
+  out_18 <- hd_detection_power(
+    sharpe_annual = 0.3, n_obs = 60, ann_factor = 12,
+    n_tests = 18, correction = "bonferroni"
+  )
+  expect_equal(out_18$alpha_corrected, 0.05 / 18, tolerance = 1e-12)
+  expect_gt(out_18$min_n_years_corrected, out_1$min_n_years)
+  expect_lte(out_18$power_corrected, out_1$power)
+})
+
+test_that("bonferroni-corrected min_n_years_corrected matches an independently recomputed value", {
+  sharpe_annual <- 0.4
+  ann_factor <- 12
+  n_tests <- 5
+  alpha <- 0.05
+  target_power <- 0.8
+  alpha_corrected <- alpha / n_tests
+
+  sr_period <- sharpe_annual / sqrt(ann_factor)
+  z_alpha_corrected <- stats::qnorm(1 - alpha_corrected)
+  z_beta <- stats::qnorm(target_power)
+  c1 <- sqrt(1 + 0.5 * sr_period^2)
+  expected_min_n_periods_corrected <- ((z_beta * c1 + z_alpha_corrected) / sr_period)^2
+
+  out <- hd_detection_power(
+    sharpe_annual = sharpe_annual, ann_factor = ann_factor,
+    n_tests = n_tests, correction = "bonferroni"
+  )
+  expect_equal(out$min_n_periods_corrected, expected_min_n_periods_corrected, tolerance = 1e-9)
+  expect_equal(out$min_n_years_corrected, expected_min_n_periods_corrected / ann_factor, tolerance = 1e-9)
+})
+
+test_that("correction = 'none' ignores n_tests entirely, even when n_tests > 1", {
+  out <- hd_detection_power(
+    sharpe_annual = 0.5, n_obs = 60, ann_factor = 12,
+    n_tests = 18, correction = "none"
+  )
+  expect_equal(out$correction, "none")
+  expect_equal(out$alpha_corrected, out$alpha)
+  expect_equal(out$min_n_years_corrected, out$min_n_years)
+})
+
+test_that("n_obs = NULL leaves power_corrected/underpowered_corrected NA but min_n_years_corrected finite", {
+  out <- hd_detection_power(sharpe_annual = 0.5, ann_factor = 12, n_tests = 4, correction = "bonferroni")
+  expect_true(is.na(out$power_corrected))
+  expect_true(is.na(out$underpowered_corrected))
+  expect_true(is.finite(out$min_n_years_corrected))
+})
+
+# ── Input validation for n_tests / correction (fail-loud-not-null.md) ──────
+
+test_that("n_tests < 1 aborts", {
+  expect_snapshot(error = TRUE, hd_detection_power(sharpe_annual = 0.5, n_tests = 0))
+  expect_snapshot(error = TRUE, hd_detection_power(sharpe_annual = 0.5, n_tests = -1))
+})
+
+test_that("NA n_tests aborts", {
+  expect_snapshot(error = TRUE, hd_detection_power(sharpe_annual = 0.5, n_tests = NA_real_))
+})
+
+test_that("non-scalar n_tests aborts", {
+  expect_snapshot(error = TRUE, hd_detection_power(sharpe_annual = 0.5, n_tests = c(1, 2)))
+})
+
+test_that("invalid correction value aborts via match.arg", {
+  expect_error(
+    hd_detection_power(sharpe_annual = 0.5, correction = "holm"),
+    "should be one of"
+  )
+})

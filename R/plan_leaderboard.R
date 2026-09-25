@@ -1079,8 +1079,14 @@ plan_leaderboard <- function() {
       # alpha = 0.05 / k_eff_leaderboard instead of the single-test
       # alpha = 0.05 above -- the Bonferroni multiple-testing correction
       # hd_detection_power()'s own roxygen "Assumptions and limits" section
-      # already suggests combining with hd_strat_keff_vertox(). Before #728
-      # this used k_eff_strat (now k_eff_family), the FAMILY-scoped count --
+      # already suggests combining with hd_strat_keff_vertox(). #903 moved
+      # this correction INTO hd_detection_power() itself (the `n_tests`/
+      # `correction` arguments), so `.detection_diag_row()` below now passes
+      # `n_tests = k_eff_leaderboard, correction = "bonferroni"` in a single
+      # call rather than hand-computing `alpha = 0.05 / keff` at the call
+      # site -- see that function's roxygen for the documented, tested
+      # implementation and the `_corrected` field names it returns.
+      # Before #728 this used k_eff_strat (now k_eff_family), the FAMILY-scoped count --
       # #728's finding was that this made the correction "mostly cosmetic":
       # Bonferroni-correcting alpha by a family-scoped K can only fire where
       # that K exists, so 7 of the 8 positive-Sharpe rows never got a
@@ -1116,57 +1122,65 @@ plan_leaderboard <- function() {
         all_metrics$k_eff_leaderboard <- NA_real_
       }
 
+      # #903: this used to make TWO independent hd_detection_power() calls --
+      # one uncorrected, one with `alpha = 0.05 / keff` hand-computed at the
+      # call site. hd_detection_power() now has a documented, tested
+      # n_tests/correction API for exactly this (requirement 5,
+      # detection-power-required.md) -- ONE call with
+      # correction = "bonferroni", n_tests = keff returns BOTH the
+      # single-test fields (min_n_years/underpowered) AND the
+      # multiple-testing-corrected fields (min_n_years_corrected/
+      # underpowered_corrected) together, so there is no risk of the two
+      # calls silently drifting apart (different alpha rounding, different
+      # tryCatch outcomes). The `_mt` column names below are UNCHANGED --
+      # R/plan_qa_gates.R's S20/S37 gates, docs/leaderboard.qmd, and the
+      # existing test suite all key on detection_min_n_years_mt/
+      # detection_underpowered_mt, not on the package's own
+      # `_corrected` field names.
       .detection_diag_row <- function(sr, n, af, keff) {
-        single <- if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2) {
-          tibble::tibble(
-            detection_min_n_years  = NA_real_,
-            detection_underpowered = NA
-          )
-        } else {
-          dp <- tryCatch(
-            historicaldata::hd_detection_power(sharpe_annual = sr, n_obs = n, ann_factor = af),
-            error = function(e) NULL
-          )
-          if (is.null(dp)) {
-            tibble::tibble(
-              detection_min_n_years  = NA_real_,
-              detection_underpowered = NA
-            )
-          } else {
-            tibble::tibble(
-              detection_min_n_years  = dp$min_n_years,
-              detection_underpowered = dp$underpowered
-            )
-          }
+        na_row <- tibble::tibble(
+          detection_min_n_years     = NA_real_,
+          detection_underpowered    = NA,
+          detection_min_n_years_mt  = NA_real_,
+          detection_underpowered_mt = NA
+        )
+
+        if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2) {
+          return(na_row)
         }
 
-        mt <- if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2 ||
-                    is.na(keff) || keff < 1) {
-          tibble::tibble(
-            detection_min_n_years_mt  = NA_real_,
-            detection_underpowered_mt = NA
-          )
-        } else {
-          dp_mt <- tryCatch(
-            historicaldata::hd_detection_power(
-              sharpe_annual = sr, n_obs = n, ann_factor = af, alpha = 0.05 / keff
-            ),
-            error = function(e) NULL
-          )
-          if (is.null(dp_mt)) {
-            tibble::tibble(
-              detection_min_n_years_mt  = NA_real_,
-              detection_underpowered_mt = NA
-            )
-          } else {
-            tibble::tibble(
-              detection_min_n_years_mt  = dp_mt$min_n_years,
-              detection_underpowered_mt = dp_mt$underpowered
-            )
-          }
+        # keff_usable mirrors the pre-#903 condition exactly: k_eff_leaderboard
+        # deliberately NA or < 1 means "no multiple-testing correction is
+        # applicable for this strategy today" (fail-loud-not-null.md's
+        # explicit-default pattern), not a bug -- see the comment block
+        # above this function. When it is NOT usable, n_tests = 1/
+        # correction = "none" makes hd_detection_power()'s own
+        # `_corrected` fields identical to the uncorrected ones (the
+        # falsification property the package tests assert), so they are
+        # explicitly discarded below rather than joined -- an unusable
+        # keff must still produce NA `_mt` columns, not a silently
+        # "corrected-but-actually-uncorrected" value.
+        keff_usable <- !is.na(keff) && keff >= 1
+
+        dp <- tryCatch(
+          historicaldata::hd_detection_power(
+            sharpe_annual = sr, n_obs = n, ann_factor = af,
+            n_tests    = if (keff_usable) keff else 1,
+            correction = if (keff_usable) "bonferroni" else "none"
+          ),
+          error = function(e) NULL
+        )
+
+        if (is.null(dp)) {
+          return(na_row)
         }
 
-        dplyr::bind_cols(single, mt)
+        tibble::tibble(
+          detection_min_n_years     = dp$min_n_years,
+          detection_underpowered    = dp$underpowered,
+          detection_min_n_years_mt  = if (keff_usable) dp$min_n_years_corrected else NA_real_,
+          detection_underpowered_mt = if (keff_usable) dp$underpowered_corrected else NA
+        )
       }
 
       detection_diag <- purrr::pmap_dfr(
