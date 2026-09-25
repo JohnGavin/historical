@@ -19,15 +19,15 @@ source(here::here("R/plan_leaderboard.R"))
 
 strategy_names_tbl <- hd_strategy_names_tbl()
 
-test_that("hd_strategy_names_tbl() has 17 strategies with all vectors equal length", {
-  expect_equal(nrow(strategy_names_tbl), 17L)
-  # Every column must be length 17 -- tibble::tibble() would already error
+test_that("hd_strategy_names_tbl() has 18 strategies with all vectors equal length", {
+  expect_equal(nrow(strategy_names_tbl), 18L)
+  # Every column must be length 18 -- tibble::tibble() would already error
   # on unequal lengths at construction time, but assert explicitly so a
   # future refactor that swaps tibble::tibble() for something more lenient
   # (e.g. data.frame(stringsAsFactors=...)) cannot silently recycle a
   # shorter vector.
   lengths <- vapply(strategy_names_tbl, length, integer(1))
-  expect_true(all(lengths == 17L))
+  expect_true(all(lengths == 18L))
 })
 
 test_that("hd_strategy_names_tbl() has no duplicate code_name or short_name", {
@@ -43,6 +43,20 @@ test_that("olmar row (#629) is present with the expected declared values", {
   expect_equal(olmar_row$ann_factor, 252L)
   expect_equal(olmar_row$asset_class, "equity")
   expect_equal(as.character(olmar_row$directionality), "long_only")
+})
+
+test_that("cmr_conditioned row (#751, owner decision 2026-09-24) is present with the expected declared values", {
+  cmr_cond_row <- dplyr::filter(strategy_names_tbl, code_name == "cmr_conditioned")
+  expect_equal(nrow(cmr_cond_row), 1L)
+  expect_equal(cmr_cond_row$short_name, "CMR Conditioned")
+  # Same daily-frequency, long_short, 21-day-horizon convention as the base
+  # "cmr" row -- the conditioning overlay rescales cmr's own net_ret, it
+  # does not change the underlying position construction (TIME-mode
+  # combination, .claude/rules/strategy-combination-modes.md).
+  expect_equal(cmr_cond_row$frequency, "daily")
+  expect_equal(cmr_cond_row$ann_factor, 252L)
+  expect_equal(cmr_cond_row$asset_class, "commodities")
+  expect_equal(as.character(cmr_cond_row$directionality), "long_short")
 })
 
 # OBSERVED (not predicted): full parallel-vector table for the PR record,

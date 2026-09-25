@@ -109,13 +109,19 @@ test_that(".build_wide_corr_matrix aborts and names the pair when pairwise overl
 
 # ── STRAT_RETURNS_WIDE_CODES itself ─────────────────────────────────────────
 
-test_that("STRAT_RETURNS_WIDE_CODES has no duplicates and matches the 16-strategy #733 coverage", {
+test_that("STRAT_RETURNS_WIDE_CODES has no duplicates and matches the 17-strategy #733/#751 coverage", {
+  # #751 (owner decision 2026-09-24) widens #733's 16-strategy coverage to
+  # 17 by adding "cmr_conditioned".
   expect_equal(length(STRAT_RETURNS_WIDE_CODES), length(unique(STRAT_RETURNS_WIDE_CODES)))
-  expect_length(STRAT_RETURNS_WIDE_CODES, 16L)
+  expect_length(STRAT_RETURNS_WIDE_CODES, 17L)
 })
 
 test_that("STRAT_RETURNS_WIDE_CODES includes the five daily strategies folded in by #733", {
   expect_true(all(c("cmr", "olmar_1", "tom", "risk_state", "avoid_worst") %in% STRAT_RETURNS_WIDE_CODES))
+})
+
+test_that("STRAT_RETURNS_WIDE_CODES includes cmr_conditioned, folded in by #751", {
+  expect_true("cmr_conditioned" %in% STRAT_RETURNS_WIDE_CODES)
 })
 
 # ── .resample_daily_to_monthly() (#733) ─────────────────────────────────────

@@ -98,7 +98,7 @@
     "fac_max", "drif", "stk_max", "stk_drif", "xgb_drif",
     "ltr", "cmr", "mom_prepeak", "mom_postpeak", "mom_combined",
     "ev_ebit", "mf_tsm", "pso_optimal",
-    "olmar", "tom", "rsc", "avoid_worst"
+    "olmar", "tom", "rsc", "avoid_worst", "cmr_conditioned"
   ),
   obs_ann_factor_source = c(
     "R/plan_factormax.R (ann_vol <- sd(...) * sqrt(12))",
@@ -117,7 +117,8 @@
     "This file's own .norm_olmar() comment ('daily ann_factor'); OLMAR (Li & Hoi 2012) rebalances daily",
     "R/plan_turn_of_month.R:368 ('TOM is a daily strategy (sqrt(252) annualisation)')",
     "R/plan_risk_state.R calc_metrics(periods_per_year = 252L default); calc_metrics() now returns n_obs (#726 item 3), renamed to `months` by .norm_rsc() below -- previously this row's `months` was always NA because rsc_metrics had no months/n_days column at all",
-    "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())"
+    "R/plan_avoid_worst.R (ann_factor = 252L throughout, e.g. .aw_sharpe_rf_full())",
+    "R/plan_commodities_mean_reversion.R .compute_cmr_metrics() called on cmr_portfolio_*_conditioned (same daily date spine as the base 'cmr' row -- the conditioning overlay only rescales net_ret, it does not resample dates)"
   )
 )
 
@@ -340,6 +341,20 @@ plan_leaderboard <- function() {
         )
       }
 
+      # cmr_summary_conditioned has the SAME shape as cmr_summary above (it
+      # is built by the SAME .compute_cmr_metrics() function -- see
+      # R/plan_commodities_mean_reversion.R's cmr_summary_conditioned
+      # target) -- so this is a thin wrapper around .norm_cmr(), not a
+      # re-derivation. #751 (owner decision 2026-09-24): wired onto the
+      # leaderboard ALONGSIDE the base "cmr" row, never replacing it -- see
+      # that file's header comment for the TIME/exposure-scaling
+      # combination mode this overlay implements
+      # (.claude/rules/strategy-combination-modes.md).
+      .norm_cmr_conditioned <- function(m) {
+        if (is.null(m) || nrow(m) == 0) return(NULL)
+        .norm_cmr(m)
+      }
+
       # rsc_metrics contains multiple internal strategy variants (SPY_overlay,
       # DRIF_overlay, etc.). Pick only the SPY_overlay rows which represent the
       # strategy's own performance. Those rows now carry a canonical `sharpe`
@@ -474,6 +489,14 @@ plan_leaderboard <- function() {
                  "turn-of-month.html"),
         add_meta(.norm_cmr(cmr_summary), "CMR", "Commodities",
                  "Commodities mean reversion (best lookback)",
+                 "commodities-mean-reversion.html"),
+        # ── #751 (owner decision 2026-09-24): CMR regime-conditioning
+        # overlay -- ALONGSIDE the base "CMR" row above, not replacing it.
+        # cmr_summary_conditioned (R/plan_commodities_mean_reversion.R) is
+        # diagnostic-only no longer as of this wiring; see that target's
+        # header comment.
+        add_meta(.norm_cmr_conditioned(cmr_summary_conditioned), "CMR Conditioned", "Commodities",
+                 "Commodities mean reversion, regime-conditioning exposure overlay (best lookback)",
                  "commodities-mean-reversion.html"),
         add_meta(.norm_rsc(rsc_metrics), "Risk State", "Overlay",
                  "VIX regime overlay on SPY",
@@ -690,6 +713,13 @@ plan_leaderboard <- function() {
         list(code = "ev_ebit",      wide_col = "value_hml",       label = "Value (HML)"),
         list(code = "mf_tsm",       wide_col = "managed_futures", label = "Managed Futures"),
         list(code = "cmr",          wide_col = "cmr",             label = "CMR"),
+        # #751 (owner decision 2026-09-24): cmr_conditioned now has a
+        # strat_returns_wide column (via strat_returns_daily_native's
+        # monthly resampling, plan_strategy_correlation.R) and a
+        # STRATEGY_COST_BASIS row (auto-derived from strategy_names above),
+        # so it slots into the SAME turnover-aware cost pass as every other
+        # strategy here -- no special-casing needed.
+        list(code = "cmr_conditioned", wide_col = "cmr_conditioned", label = "CMR Conditioned"),
         list(code = "olmar",        wide_col = "olmar_1",         label = "OLMAR-1"),
         list(code = "tom",          wide_col = "tom",             label = "TOM"),
         list(code = "rsc",          wide_col = "risk_state",      label = "Risk State"),
@@ -894,6 +924,9 @@ plan_leaderboard <- function() {
             olmar_1     = "OLMAR-1",
             tom         = "TOM",
             cmr         = "CMR",
+            # #751 (owner decision 2026-09-24): same strat_returns_wide
+            # column availability as "cmr" above.
+            cmr_conditioned = "CMR Conditioned",
             risk_state  = "Risk State",
             avoid_worst = "Avoid Worst",
             value_hml   = "Value (HML)",
@@ -1361,12 +1394,13 @@ plan_leaderboard <- function() {
     #     distributional assumptions for no reason). ann_factor = 252L for
     #     every row here, matching STRATEGY_OBS_ANN_FACTOR.
     #
-    # Together these cover 16 of 17 leaderboard strategies (#733), up from
-    # 11 after #728 and 4 before it. The one remaining exclusion, PSO
-    # Optimal, is a genuine, documented exclusion (linear-combination
-    # circularity) -- see STRAT_RETURNS_WIDE_CODES's comment in
-    # plan_strategy_correlation.R, not an oversight -- and remains NA on
-    # deflated_sharpe/dsr_pvalue/k_eff_leaderboard.
+    # Together these cover 17 of 18 leaderboard strategies (#751 adds
+    # "cmr_conditioned" to the #733 count of 16 of 17), up from 11 after
+    # #728 and 4 before it. The one remaining exclusion, PSO Optimal, is a
+    # genuine, documented exclusion (linear-combination circularity) -- see
+    # STRAT_RETURNS_WIDE_CODES's comment in plan_strategy_correlation.R, not
+    # an oversight -- and remains NA on deflated_sharpe/dsr_pvalue/
+    # k_eff_leaderboard.
     #
     # k_eff_family / k_raw_family are populated ONLY for the original
     # 5-strategy family (NA elsewhere) -- informational context, no longer
@@ -1390,12 +1424,22 @@ plan_leaderboard <- function() {
       # #733: keys match strat_returns_daily_native's names
       # (plan_strategy_correlation.R), values match STRATEGY_OBS_ANN_FACTOR's
       # strategy labels above.
+      # #751 (owner decision 2026-09-24): "cmr_conditioned" added alongside
+      # "cmr" -- same daily native series convention, see
+      # strat_returns_daily_native's own cmr_conditioned entry
+      # (plan_strategy_correlation.R). Folding it into this daily group (and
+      # into STRAT_RETURNS_WIDE_CODES, so it also enters the correlation
+      # matrix that determines k_eff_lb for EVERY strategy) is what
+      # strategy-combination-modes.md's multiplicity check requires: leaving
+      # a new strategy variant out of K_eff_strat would silently under-
+      # deflate every Sharpe on the leaderboard, not just this new one.
       col_map_daily <- c(
-        cmr         = "CMR",
-        olmar_1     = "OLMAR-1",
-        tom         = "TOM",
-        risk_state  = "Risk State",
-        avoid_worst = "Avoid Worst"
+        cmr             = "CMR",
+        cmr_conditioned = "CMR Conditioned",
+        olmar_1         = "OLMAR-1",
+        tom             = "TOM",
+        risk_state      = "Risk State",
+        avoid_worst     = "Avoid Worst"
       )
       family_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr")
 
