@@ -713,6 +713,13 @@ plan_leaderboard <- function() {
         list(code = "ev_ebit",      wide_col = "value_hml",       label = "Value (HML)"),
         list(code = "mf_tsm",       wide_col = "managed_futures", label = "Managed Futures"),
         list(code = "cmr",          wide_col = "cmr",             label = "CMR"),
+        # #751 (owner decision 2026-09-24): cmr_conditioned now has a
+        # strat_returns_wide column (via strat_returns_daily_native's
+        # monthly resampling, plan_strategy_correlation.R) and a
+        # STRATEGY_COST_BASIS row (auto-derived from strategy_names above),
+        # so it slots into the SAME turnover-aware cost pass as every other
+        # strategy here -- no special-casing needed.
+        list(code = "cmr_conditioned", wide_col = "cmr_conditioned", label = "CMR Conditioned"),
         list(code = "olmar",        wide_col = "olmar_1",         label = "OLMAR-1"),
         list(code = "tom",          wide_col = "tom",             label = "TOM"),
         list(code = "rsc",          wide_col = "risk_state",      label = "Risk State"),

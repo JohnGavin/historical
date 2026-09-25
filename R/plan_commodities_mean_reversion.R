@@ -112,13 +112,34 @@
 #   to the (now 12-series) tercile portfolios, following the SAME
 #   train-then-classify shape as R/plan_risk_state.R's regime overlay
 #   (rsc_thresholds -> rsc_regime -> exposure), reduced to one signal instead
-#   of three. The conditioned targets are DIAGNOSTIC ONLY as of this change:
-#   cmr_returns_1m/3m/6m (which feed cmr_metrics_* and the leaderboard) still
-#   read the UNCONDITIONED cmr_portfolio_1m/3m/6m -- wiring the overlay into
-#   the published CMR numbers is a separate, still-open decision requiring
-#   its own single-change verification pass against the live store (per
-#   verification-before-completion's one-change-per-run discipline), not
-#   bundled into the position-pool change here.
+#   of three.
+#
+# Combination mode (owner decision 2026-09-24, #751; see
+#   .claude/rules/strategy-combination-modes.md): TIME. The conditioning
+#   regime scales cmr_portfolio_*'s aggregate exposure over calendar time
+#   (blending with cash per the regime, exactly like
+#   R/plan_risk_state.R's exposure overlay) -- it does NOT change which
+#   commodities are held or how the tercile ranking selects them (that
+#   would be FILTER mode). No new instrument/position-selection logic is
+#   introduced by this overlay, so the FILTER-mode checks in
+#   strategy-combination-modes.md (complement control, per-leg
+#   attribution, signal correlation, etc.) do not apply here -- the
+#   relevant discipline for a TIME-mode overlay is the one this owner
+#   decision actually exercises: give it its own leaderboard row (never
+#   silently overwrite the base "CMR" row) and count it as an ADDITIONAL
+#   entry in K_eff_strat / deflated-Sharpe multiplicity (see
+#   R/plan_strategy_correlation.R's STRAT_RETURNS_WIDE_CODES and
+#   R/plan_leaderboard.R's strat_deflated_sharpe col_map_daily) so this new
+#   variant does not silently under-deflate every OTHER strategy's Sharpe.
+#
+# cmr_metrics_1m/3m/6m_conditioned + cmr_summary_conditioned (below) now
+# feed the leaderboard's "CMR Conditioned" row, ALONGSIDE (never replacing)
+# the base "CMR" row built from the UNCONDITIONED cmr_returns_1m/3m/6m --
+# see R/plan_leaderboard.R's .norm_cmr_conditioned()/add_meta() call sites.
+# cmr_portfolio_*_conditioned itself remains diagnostic in the sense that
+# it is not a tradeable position table on its own (it is derived FROM
+# cmr_portfolio_1m/3m/6m), but its cmr_summary_conditioned/registry
+# downstream are no longer diagnostic-only as of this owner decision.
 
 plan_commodities_mean_reversion <- function() {
   list(
@@ -177,12 +198,16 @@ plan_commodities_mean_reversion <- function() {
       .cmr_conditioning_regime(cmr_conditioning_signal)
     }),
 
-    # ── Conditioned portfolios (#751 item 1 follow-up; DIAGNOSTIC ONLY) ─────
+    # ── Conditioned portfolios (#751 item 1 follow-up) ──────────────────────
     # Applies the conditioning regime as an exposure-scaling overlay to each
     # tercile portfolio, mirroring R/plan_risk_state.R's rsc_portfolio
-    # exposure-blend-with-cash construction. NOT wired into cmr_returns_*/
-    # cmr_metrics_*/the leaderboard -- see the file header above for why that
-    # remains a separate, still-open decision.
+    # exposure-blend-with-cash construction. Feeds cmr_metrics_*_conditioned
+    # / cmr_summary_conditioned / the leaderboard's "CMR Conditioned" row as
+    # of the #751 owner decision (2026-09-24) -- see the file header above
+    # for the TIME-mode combination declaration. Still does NOT feed
+    # cmr_returns_1m/3m/6m or the base "CMR" row's own cmr_metrics_1m/3m/6m
+    # -- those remain unconditioned by design (this is an ADDITIONAL
+    # leaderboard row, never a replacement).
 
     targets::tar_target(cmr_portfolio_1m_conditioned, {
       .cmr_apply_conditioning_overlay(cmr_portfolio_1m, cmr_conditioning_regime,
@@ -830,9 +855,12 @@ plan_commodities_mean_reversion <- function() {
 #' Mirrors R/plan_risk_state.R's rsc_portfolio construction: blend the
 #' strategy's own net return with cash (the risk-free rate) at
 #' \code{1 - exposure_mult}, deduct a small cost on regime-switch days.
-#' \strong{DIAGNOSTIC ONLY as of #751 item 1's decision} -- see the file
-#' header for why this is not (yet) wired into cmr_returns_*/cmr_metrics_*/
-#' the leaderboard.
+#' Feeds cmr_metrics_*_conditioned / cmr_summary_conditioned / the
+#' leaderboard's "CMR Conditioned" row as of the #751 owner decision
+#' (2026-09-24, TIME-mode combination -- see the file header). Does NOT
+#' feed cmr_returns_1m/3m/6m or the base "CMR" row, which remain
+#' unconditioned -- this overlay is an ADDITIONAL leaderboard row, not a
+#' replacement.
 #'
 #' \code{cond_regime_tbl} is sparse (one row per date any of the 8
 #' conditioning series prints, roughly monthly) while \code{portfolio_tbl}
