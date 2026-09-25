@@ -8,22 +8,42 @@ bdbb_tail_predict(diagnostics_df, returns_df)
 }
 \arguments{
 \item{diagnostics_df}{Tibble output of \code{\link[=bdbb_fit]{bdbb_fit()}}.  Must have columns
-\code{window_end}, \code{R}, \code{amihud_mean}, \code{kyle_mean}.}
+window_end, R, amihud_mean, kyle_mean.}
 
-\item{returns_df}{Tibble with columns \code{time} (POSIXct UTC) and \code{log_ret}
-(numeric).  The function looks one period forward from \code{window_end}.}
+\item{returns_df}{Tibble with columns time (POSIXct UTC) and log_ret
+(numeric).}
 }
 \value{
 A tibble with one row per predictor and columns:
-\code{predictor}, \code{p_extreme_high_tercile}, \code{p_extreme_low_tercile},
-\code{spread_pp}, \code{n_high}, \code{n_low}.
+predictor, p_extreme_high_tercile, p_extreme_low_tercile,
+spread_pp, n_high, n_low. The per-bar scored table used to build this
+result (see .bdbb_score_next_return()) is attached as the
+"bdbb_scored_windows" attribute -- used by the S34 QA gate
+(check_bdbb_no_lookahead(), R/plan_qa_gates.R, #868) to assert the
+look-ahead-safety property directly against the join this function
+actually performs, rather than a re-derived copy that could drift out
+of sync with it.
 }
 \description{
-Replicates Varma's tercile-split predictivity test: for each predictor
+Replicates Varma tercile-split predictivity test: for each predictor
 (R, Amihud, Kyle), split windows into terciles by predictor value, then
-compare the probability of an extreme next-period return in the top tercile
+compare the probability of an extreme NEXT-bar return in the top tercile
 vs the bottom tercile.
 }
+\section{Look-ahead safety (#868)}{
+
+The predictor value at window_end = t (from bdbb_fit()) is compared
+against the return of the bar STRICTLY AFTER t, found by row order
+within the (time-ordered) returns_df -- never a bar inside the
+estimation window, and never located via clock arithmetic (Kraken bars
+are irregular). The extreme-move threshold at t uses only bars with
+time <= t. Neither the scored return nor the threshold used to judge
+it may see data the window itself could not have seen. Before #868 was
+fixed, both of these were violated: the join scored the SAME bar the
+window own diagnostics were computed from, against a threshold computed
+over the entire sample (including bars after t).
+}
+
 \examples{
 \dontshow{if (interactive()) withAutoprint(\{ # examplesIf}
 sol <- hd_kraken_ohlcvt("SOL", interval_min = 60L)
