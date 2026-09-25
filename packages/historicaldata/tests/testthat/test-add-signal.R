@@ -290,9 +290,15 @@ test_that("hd_register_add_dataset: returns a named list with required fields", 
   expect_true(all(expected_fields %in% names(reg)))
 })
 
-test_that("hd_register_add_dataset: n_anomalies is 209", {
+test_that("hd_register_add_dataset: n_anomalies is 212 (verified against the live 2024 release, #862)", {
   reg <- hd_register_add_dataset()
-  expect_equal(reg$n_anomalies, 209L)
+  expect_equal(reg$n_anomalies, 212L)
+})
+
+test_that("hd_register_add_dataset: download_url is not NA (verified working, #862)", {
+  reg <- hd_register_add_dataset()
+  expect_false(is.na(reg$download_url))
+  expect_match(reg$download_url, "drive\\.google\\.com")
 })
 
 test_that("hd_register_add_dataset: portal_url is plausible", {

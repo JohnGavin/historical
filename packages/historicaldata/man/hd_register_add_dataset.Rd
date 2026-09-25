@@ -11,17 +11,24 @@ A named list with fields:
 \describe{
 \item{source_name}{Human-readable name of the data source.}
 \item{portal_url}{URL of the data portal (no authentication required
-as of 2026-05).}
-\item{download_url}{Canonical direct download URL for the monthly
-quintile CSV bundle, or \code{NA_character_} if not yet confirmed
-stable.}
-\item{expected_schema}{Character vector of expected column names in
-the quintile-assignment table.}
+as of 2026-09).}
+\item{download_url}{Direct download URL for the monthly long-short
+portfolio-returns file actually loaded by \code{\link[=hd_osap_load]{hd_osap_load()}}.
+Google Drive file ids for this project's annual releases have
+been observed to persist across at least one release cycle, but
+are not guaranteed stable indefinitely — \code{scripts/fetch_osap.R}
+is the source of truth if this URL ever 404s.}
+\item{expected_schema}{Character vector of column names in
+\code{\link[=hd_osap_load]{hd_osap_load()}}'s output tibble (portfolio-level, not
+firm-level).}
 \item{frequency}{Rebalancing frequency of the anomaly portfolios.}
 \item{universe}{Description of the stock universe covered.}
 \item{sample_start}{Start of the data sample (character "YYYY-MM").}
 \item{sample_end}{End of the data sample (character "YYYY-MM").}
-\item{n_anomalies}{Number of anomaly signals in the dataset (integer).}
+\item{n_anomalies}{Number of predictor columns in
+\code{portfolios_wide.csv} (integer) — distinct from the 331 signals
+documented in \code{SignalDoc.csv}, which includes signals with no
+portfolio-return series.}
 \item{citation}{Full citation string for the dataset.}
 \item{related_issues}{Character vector of GitHub issue numbers
 relevant to this dataset.}
@@ -29,24 +36,30 @@ relevant to this dataset.}
 }
 \description{
 Returns a named list describing the Chen & Zimmermann (2022) "Open Source
-Cross-Sectional Asset Pricing" dataset used to construct Anomaly-Driven
-Demand (ADD) signals.  This is a \emph{registration} function only — it does
-\strong{not} download any data.  Use the returned metadata to locate and
-retrieve the data when the pipeline is ready for a full download step.
+Cross-Sectional Asset Pricing" dataset. This is a \emph{registration} function
+only — it does \strong{not} download any data. Use \code{\link[=hd_osap_load]{hd_osap_load()}} (via
+\code{scripts/fetch_osap.R}) for the actual download + load step, and this
+metadata to describe what that step provides and what it does not.
 }
 \details{
-The dataset contains per-stock anomaly characteristic values and
-quintile-portfolio assignments for 209 anomalies spanning US common
-stocks (NYSE, AMEX, NASDAQ) from January 1990 to December 2023.
-
-ADD construction requires the monthly quintile-assignment file — a tidy
-long table with columns (stock, date, anomaly_id, quintile) indicating
-which quintile each stock was assigned to for each anomaly in each month.
-See \code{\link[=hd_compute_add]{hd_compute_add()}} for the computation step.
+Verified 2026-09-11/25 (#862): the free download provides
+\code{SignalDoc.csv} (documentation for 331 anomaly signals) and
+\code{portfolios_wide.csv} (monthly long-short PORTFOLIO returns, 212
+predictor columns as of the 2024 release, 1926-01 to 2024-12). It does
+\strong{not} provide a per-stock quintile-assignment file or any firm-level
+return series — the ~8.3GB firm-level characteristics file has no return
+column at all (#862 P2). So \code{\link[=hd_compute_add]{hd_compute_add()}}'s (stock, date,
+anomaly_id, quintile) input cannot be built from the free OSAP download
+alone; only the pre-built portfolio-level series in \code{\link[=hd_osap_load]{hd_osap_load()}}'s
+output are currently available from this source.
 }
 \seealso{
 Other add: 
 \code{\link{hd_aggregate_add}()},
 \code{\link{hd_compute_add}()}
+
+Other osap: 
+\code{\link{hd_osap_load}()}
 }
 \concept{add}
+\concept{osap}
