@@ -52,6 +52,38 @@ tar_target(qa_parameter_robustness, {
 }, cue = tar_cue(mode = "always"))
 ```
 
+### 1b. Dense Parameter-Neighbourhood Plateau Check (S39, #849)
+
+The ±20% two-point sweep above catches gross overfitting cheaply, but a
+parameter can pass it while still being an isolated peak: two endpoints
+cannot see a "wobbly" neighbourhood, and ±20% is not dense enough to match
+Bollinger's stated practice ("if a 20-day moving average works but 16, 17,
+18, 19, 21, 22, 23 and 24 don't produce broadly similar behaviour, the
+system gets thrown out. He doesn't optimise it.").
+
+For any strategy with a **small, interpretable parameter set**, sweep a
+dense neighbourhood of the primary tunable integer parameter(s) — the
+immediate ±4 integers around the production value (8 neighbours), or an
+equivalent fine-grained grid for a continuous parameter — via
+`historicaldata::hd_param_neighbourhood()`. It asserts, across the WHOLE
+neighbourhood, both (a) no single neighbour retains less than 50% of the
+centre's metric, and (b) the neighbourhood's coefficient of variation does
+not exceed 0.30 (the function's roxygen derives both thresholds).
+
+**Consequence: hard abort by default**, not a warning. A strategy whose
+dense neighbourhood is a `"peak"` is discarded, not hand-tuned toward the
+best-performing single value. The only path to ship one anyway is an
+explicit, documented human override (Class C,
+`human-in-the-loop-decision-points`) via `HD_S39_ACKNOWLEDGED_PEAKS`
+(`R/plan_qa_gates.R`). An `"indeterminate"` verdict (too few neighbours
+evaluated, or a missing metric) is never treated as a pass.
+
+**Current coverage: OLMAR-1's `window` parameter only**
+(`qa_olmar_window_neighbourhood`; read its verdict from the target, not
+from this file). Every other strategy with an integer lookback is **not yet
+checked** — the requirement above applies to them, but no gate enforces it
+until each is wired into S39. Do not read the gate's existence as coverage.
+
 ### 2. Regime-Conditional Evaluation
 
 Separate backtest results by **volatility regime** (or equivalent risk
