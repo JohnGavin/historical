@@ -105,6 +105,7 @@ Other falsification:
 \code{\link{hd_tail_dependence}()},
 \code{\link{hd_tail_keff_frob}()},
 \code{\link{hd_top5pct_share}()},
+\code{\link{hd_trial_sharpe_var}()},
 \code{\link{hd_zero_alpha_calibration}()}
 }
 \concept{falsification}
