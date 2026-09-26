@@ -217,16 +217,80 @@ jobs:
           GUARDIAN_API_KEY: ${{ secrets.GUARDIAN_API_KEY }}
         run: Rscript scripts/fetch_${{ matrix.source }}.R
 
+      # The poll matrix runs every source in parallel (fail-fast: false), and
+      # each one independently commits-and-pushes here. Two sources finishing
+      # at nearly the same time race for the ref: source A rebases onto main,
+      # then source B pushes before A's push lands, and A's `git push` is
+      # rejected ("cannot lock ref ... is at X but expected Y" / "[rejected]
+      # main -> main (fetch first)"). Confirmed in run history at least 3
+      # times (run 31244583224, 2026-08-08, ecb; run 33251946852,
+      # 2026-08-29, cboe_vol; run 36236700524, 2026-09-26, macro) and loses
+      # the whole source's data commit for that run, since nothing here
+      # retried.
+      #
+      # Fix: bounded retry with jittered backoff around pull-rebase + push.
+      # A push rejection (another job won the race) is expected and
+      # retryable. A rebase CONFLICT is NOT the same failure -- each source
+      # writes only its own file(s) under data/raw/, so two sources should
+      # never touch the same path, and a real conflict here means something
+      # unexpected happened. Conflicts fail loudly and immediately; they are
+      # never retried.
       - name: Commit if data changed
         run: |
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add -f data/raw/
-          if ! git diff --cached --quiet; then
-            git commit -m "data: ${{ matrix.source }} $(date +%Y-%m-%d)"
-            git pull --rebase origin ${{ github.ref_name }}
-            git push
+
+          if git diff --cached --quiet; then
+            echo "No data changes for ${{ matrix.source }}; nothing to commit."
+            exit 0
           fi
+
+          git commit -m "data: ${{ matrix.source }} $(date +%Y-%m-%d)"
+
+          max_attempts=5
+          attempt=1
+          while [ "$attempt" -le "$max_attempts" ]; do
+            echo "::group::Push attempt ${attempt}/${max_attempts} for ${{ matrix.source }}"
+
+            if git pull --rebase origin "${{ github.ref_name }}"; then
+              if git push origin "HEAD:${{ github.ref_name }}"; then
+                echo "Pushed ${{ matrix.source }} data on attempt ${attempt}."
+                echo "::endgroup::"
+                exit 0
+              fi
+              echo "Push rejected on attempt ${attempt} (another job likely won the race)."
+            else
+              # Distinguish a genuine rebase conflict from any other pull
+              # failure (network blip, transient auth issue, etc). A
+              # conflict leaves rebase state behind and/or unmerged paths;
+              # neither should ever occur since each source only touches
+              # its own file(s), so treat it as a real problem and fail
+              # immediately rather than retrying.
+              if [ -d .git/rebase-apply ] || [ -d .git/rebase-merge ] || [ -n "$(git ls-files -u)" ]; then
+                echo "::error::git pull --rebase hit a CONFLICT for ${{ matrix.source }} on attempt ${attempt}. Each poll source should only ever touch its own file(s) under data/raw/, so this is not the expected concurrent-push race -- treating it as a real problem, not retrying."
+                git rebase --abort 2>/dev/null || true
+                echo "::endgroup::"
+                exit 1
+              fi
+              echo "git pull --rebase failed on attempt ${attempt} for a non-conflict reason (see log above)."
+            fi
+
+            echo "::endgroup::"
+
+            if [ "$attempt" -eq "$max_attempts" ]; then
+              break
+            fi
+
+            sleep_secs=$(( (RANDOM % 10) + 5 ))
+            echo "Retrying in ${sleep_secs}s..."
+            sleep "$sleep_secs"
+            attempt=$(( attempt + 1 ))
+          done
+
+          echo "::error::Failed to push data for ${{ matrix.source }} after ${max_attempts} attempts -- persistent push rejection or pull failure (not a conflict). See the per-attempt logs above for the specific git error."
+          exit 1
 
   # Rebuilds macro_daily.parquet from the three components the poll now
   # refreshes, and publishes it to HuggingFace — the missing "last mile" that
