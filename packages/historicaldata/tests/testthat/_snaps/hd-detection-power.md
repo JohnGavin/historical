@@ -79,6 +79,46 @@
       args(hd_detection_power)
     Output
       function (sharpe_annual, n_obs = NULL, ann_factor = 12, alpha = 0.05, 
-          target_power = 0.8) 
+          target_power = 0.8, n_tests = 1, correction = c("none", "bonferroni")) 
       NULL
+
+# n_tests < 1 aborts
+
+    Code
+      hd_detection_power(sharpe_annual = 0.5, n_tests = 0)
+    Condition
+      Error in `hd_detection_power()`:
+      x `n_tests` must be a single number >= 1.
+      i Got 0.
+      i n_tests is the effective number of tests this claim is one of (e.g. a leaderboard's k_eff_leaderboard) -- a value below 1 would WIDEN alpha under Bonferroni, the opposite of a correction.
+
+---
+
+    Code
+      hd_detection_power(sharpe_annual = 0.5, n_tests = -1)
+    Condition
+      Error in `hd_detection_power()`:
+      x `n_tests` must be a single number >= 1.
+      i Got -1.
+      i n_tests is the effective number of tests this claim is one of (e.g. a leaderboard's k_eff_leaderboard) -- a value below 1 would WIDEN alpha under Bonferroni, the opposite of a correction.
+
+# NA n_tests aborts
+
+    Code
+      hd_detection_power(sharpe_annual = 0.5, n_tests = NA_real_)
+    Condition
+      Error in `hd_detection_power()`:
+      x `n_tests` must be a single number >= 1.
+      i Got NA.
+      i n_tests is the effective number of tests this claim is one of (e.g. a leaderboard's k_eff_leaderboard) -- a value below 1 would WIDEN alpha under Bonferroni, the opposite of a correction.
+
+# non-scalar n_tests aborts
+
+    Code
+      hd_detection_power(sharpe_annual = 0.5, n_tests = c(1, 2))
+    Condition
+      Error in `hd_detection_power()`:
+      x `n_tests` must be a single number >= 1.
+      i Got 1 and 2.
+      i n_tests is the effective number of tests this claim is one of (e.g. a leaderboard's k_eff_leaderboard) -- a value below 1 would WIDEN alpha under Bonferroni, the opposite of a correction.
 

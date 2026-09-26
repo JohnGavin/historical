@@ -1704,6 +1704,160 @@ check_leaderboard_detection_power_values <- function(leaderboard) {
 }
 
 
+#' Assert the multiple-testing-corrected detection-power verdict is complete
+#' and never LESS demanding than the single-test one (S37, #903)
+#'
+#' Companion to S20 (\code{check_leaderboard_detection_power_values()},
+#' above), which already asserts \code{detection_min_n_years_mt}/
+#' \code{detection_underpowered_mt} are non-NA wherever
+#' \code{k_eff_leaderboard} is usable. This gate checks two DIFFERENT
+#' properties S20 does not:
+#'
+#' \enumerate{
+#'   \item \strong{Coverage, restated with a documented-reason escape hatch.}
+#'     Every positive-Sharpe row either has a non-NA
+#'     \code{detection_min_n_years_mt}/\code{detection_underpowered_mt}
+#'     verdict wherever \code{k_eff_leaderboard} is usable, OR the strategy
+#'     has a written reason in \code{exemptions} (default
+#'     \code{DEFLATED_SHARPE_EXEMPTIONS}, R/plan_qa_gates.R -- the SAME
+#'     table S21 uses, since a strategy excluded from
+#'     \code{STRAT_RETURNS_WIDE_CODES}/\code{k_eff_leaderboard} for a
+#'     documented reason is exempt from every K_eff-derived diagnostic for
+#'     the same reason, not a second, independently-maintained list). This
+#'     restates S20's own coverage assertion as a standalone, self-contained
+#'     gate (per \code{fail-loud-not-null.md}'s "add a QA gate, not just a
+#'     test" requirement item 6) rather than assuming S20 always runs first.
+#'   \item \strong{Monotonicity (the genuinely NEW check).} Wherever BOTH
+#'     \code{detection_min_n_years} and \code{detection_min_n_years_mt} are
+#'     non-NA, the corrected figure must be \code{>=} the uncorrected one
+#'     (within a tiny floating-point tolerance) -- a Bonferroni correction
+#'     tightens alpha, which can only WEAKEN power and therefore can only
+#'     WEAKLY INCREASE the sample required
+#'     (\code{historicaldata::hd_detection_power()}'s own roxygen states
+#'     this property explicitly). Neither S20 nor S21 checks this: S20 only
+#'     checks non-NA-ness, not the relationship BETWEEN the two verdicts. A
+#'     future regression that accidentally swapped \code{alpha}/
+#'     \code{alpha_corrected}, or fed a \code{k_eff_leaderboard} < 1 into
+#'     the correction, would silently produce a corrected figure LESS
+#'     demanding than the uncorrected one -- exactly backwards for a
+#'     multiple-testing correction -- and pass S20 (both columns still
+#'     non-NA) while failing this property.
+#' }
+#'
+#' Falsification: setting \code{k_eff_leaderboard = 1} for a strategy makes
+#' \code{detection_min_n_years_mt == detection_min_n_years} exactly (the
+#' Bonferroni correction with a single effective test is a no-op) --
+#' see \code{historicaldata::hd_detection_power()}'s own falsification test
+#' for this identical property at the package level, and
+#' \code{test-leaderboard-detection-power-corrected.R} for the leaderboard-
+#' level equivalent.
+#'
+#' @param leaderboard Tibble with at least \code{strategy}, \code{period},
+#'   \code{sharpe}, \code{detection_min_n_years},
+#'   \code{detection_min_n_years_mt}, \code{detection_underpowered_mt},
+#'   \code{k_eff_leaderboard} columns (the output of the \code{leaderboard}
+#'   target).
+#' @param exemptions Tibble with \code{strategy}/\code{reason} columns.
+#'   Default \code{DEFLATED_SHARPE_EXEMPTIONS} above.
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_detection_power_correction <- function(leaderboard, exemptions = DEFLATED_SHARPE_EXEMPTIONS) {
+  required_cols <- c(
+    "strategy", "period", "sharpe", "detection_min_n_years",
+    "detection_min_n_years_mt", "detection_underpowered_mt", "k_eff_leaderboard"
+  )
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_leaderboard_detection_power_correction() (S37) requires strategy, ",
+        "period, sharpe, detection_min_n_years, detection_min_n_years_mt, ",
+        "detection_underpowered_mt, k_eff_leaderboard."
+      )
+    ))
+  }
+  if (!all(c("strategy", "reason") %in% names(exemptions))) {
+    cli::cli_abort(c(
+      "x" = "exemptions table is missing required column(s): strategy, reason.",
+      "i" = "check_leaderboard_detection_power_correction() (S37) requires DEFLATED_SHARPE_EXEMPTIONS' strategy/reason columns."
+    ))
+  }
+
+  positive <- !is.na(leaderboard$sharpe) & leaderboard$sharpe > 0
+
+  # ── Check 1: coverage, with a documented-reason escape hatch ───────────
+  mt_applicable <- positive & !is.na(leaderboard$k_eff_leaderboard) & leaderboard$k_eff_leaderboard >= 1
+  mt_missing <- mt_applicable &
+    (is.na(leaderboard$detection_min_n_years_mt) | is.na(leaderboard$detection_underpowered_mt))
+
+  if (any(mt_missing)) {
+    idx <- which(mt_missing)
+    exempted <- leaderboard$strategy[idx] %in% exemptions$strategy
+    offender_idx <- idx[!exempted]
+
+    if (length(offender_idx) > 0L) {
+      offenders <- sprintf(
+        "  %s / %s -- sharpe = %s, k_eff_leaderboard = %s (no declared exemption)",
+        leaderboard$strategy[offender_idx], leaderboard$period[offender_idx],
+        format(leaderboard$sharpe[offender_idx], digits = 3),
+        format(leaderboard$k_eff_leaderboard[offender_idx], digits = 4)
+      )
+      cli::cli_abort(c(
+        "x" = paste0(
+          "Leaderboard has ", length(offender_idx),
+          " row(s) with sharpe > 0 and a usable k_eff_leaderboard but no ",
+          "multiple-testing-corrected detection-power verdict AND no ",
+          "declared exemption (#903):"
+        ),
+        setNames(offenders, rep("i", length(offenders))),
+        "i" = paste0(
+          "check_leaderboard_detection_power_correction() (S37) requires ",
+          "detection_min_n_years_mt/detection_underpowered_mt to be non-NA ",
+          "whenever k_eff_leaderboard is usable, or a written reason in ",
+          "DEFLATED_SHARPE_EXEMPTIONS (R/plan_qa_gates.R)."
+        )
+      ))
+    }
+  }
+
+  # ── Check 2: monotonicity -- corrected years must never be LESS than the
+  # uncorrected years, wherever both are non-NA. #903's genuinely new check.
+  both_present <- !is.na(leaderboard$detection_min_n_years) & !is.na(leaderboard$detection_min_n_years_mt)
+  tol <- 1e-6
+  less_than <- both_present &
+    (leaderboard$detection_min_n_years_mt < leaderboard$detection_min_n_years - tol)
+
+  if (any(less_than)) {
+    idx <- which(less_than)
+    offenders <- sprintf(
+      "  %s / %s -- detection_min_n_years = %s, detection_min_n_years_mt = %s (corrected < uncorrected)",
+      leaderboard$strategy[idx], leaderboard$period[idx],
+      format(leaderboard$detection_min_n_years[idx], digits = 4),
+      format(leaderboard$detection_min_n_years_mt[idx], digits = 4)
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) where the multiple-testing-corrected detection-power ",
+        "requirement is LESS demanding than the uncorrected one (#903):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_detection_power_correction() (S37) requires ",
+        "detection_min_n_years_mt >= detection_min_n_years for every row -- ",
+        "a Bonferroni correction tightens alpha and can only WEAKLY ",
+        "INCREASE the sample required. Check for an inverted alpha/",
+        "alpha_corrected, or a k_eff_leaderboard < 1 reaching the ",
+        "correction in R/plan_leaderboard.R's .detection_diag_row()."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Declared exemptions from deflated-Sharpe / K_eff coverage (S21, #728 item
 #' 4, narrowed by #733)
 #'
@@ -3827,6 +3981,21 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_deflated_sharpe_coverage(leaderboard, DEFLATED_SHARPE_EXEMPTIONS)
         cli::cli_inform(c("v" = "qa_leaderboard_deflated_sharpe_coverage: S21 passed (every positive-Sharpe Full Period strategy has a deflated-Sharpe verdict or a declared exemption)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: the multiple-testing-corrected detection-power verdict is
+    # complete (or documented-exempt) AND never less demanding than the
+    # single-test one (S37, #903, detection-power-required.md requirement
+    # 5). See check_leaderboard_detection_power_correction() roxygen for
+    # the two distinct properties this asserts beyond S20's non-NA check.
+    targets::tar_target(
+      qa_leaderboard_detection_power_correction,
+      command = {
+        check_leaderboard_detection_power_correction(leaderboard, DEFLATED_SHARPE_EXEMPTIONS)
+        cli::cli_inform(c("v" = "qa_leaderboard_detection_power_correction: S37 passed (multiple-testing-corrected verdict complete and never less demanding than the single-test one)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
