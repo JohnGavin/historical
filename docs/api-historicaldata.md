@@ -1276,6 +1276,19 @@ arguments:
 returns: 'Tibble (or lazy frame) with columns: ticker, pair, interval_min, time (POSIXct UTC), open, high, low, close, volume, trades.'
 ---
 kind: function
+name: hd_param_neighbourhood
+exported: true
+signature: hd_param_neighbourhood(param_values, metric_values, centre,min_retention  = HD_PARAM_NEIGHBOURHOOD_MIN_RETENTION,max_cv         = HD_PARAM_NEIGHBOURHOOD_MAX_CV,min_neighbours = HD_PARAM_NEIGHBOURHOOD_MIN_N)
+arguments:
+  centre: Numeric scalar, the chosen/production parameter value.
+  max_cv: Numeric scalar > 0.
+  metric_values: Numeric vector of the metric (e.g.
+  min_neighbours: Positive integer scalar.
+  min_retention: Numeric scalar in (0, 1].
+  param_values: Numeric vector of parameter values tested (the centre plus its neighbours), e.g.
+returns: 'Named list: One of "plateau", "peak", "indeterminate".'
+---
+kind: function
 name: hd_first_passage
 exported: true
 signature: hd_first_passage(mu, sigma, upper, lower = upper)

@@ -3542,6 +3542,177 @@ check_mom_prepeak_gauntlet_borrow_consistency <- function(file) {
   invisible(TRUE)
 }
 
+#' Half-width of the dense parameter neighbourhood checked by S39 (#849)
+#'
+#' Matches Bollinger's own stated practice exactly: "16, 17, 18, 19, 21, 22,
+#' 23 and 24" around a chosen 20 is +/-4 integer steps -- 8 neighbours
+#' total. See [HD_PARAM_NEIGHBOURHOOD_MIN_N] (packages/historicaldata/R/
+#' param_neighbourhood.R) for the SEPARATE, looser indeterminate-vs-
+#' computable floor (4) this half-width comfortably clears: a half-width of
+#' 4 always produces exactly 8 neighbours, twice that floor.
+#' @noRd
+HD_S39_NEIGHBOURHOOD_HALF_WIDTH <- 4L
+
+#' Strategies exempted from S39's hard-abort consequence, with a documented
+#' reason (S39, #849)
+#'
+#' Empty by design, mirroring `METRICS_REGISTRY_ALL_NA_EXEMPT` / `LEADERBOARD_
+#' PLAUSIBILITY_ACKNOWLEDGED`'s own empty-by-design rationale (see either's
+#' roxygen above): add a strategy label here ONLY after a human has looked
+#' at its actual neighbourhood verdict (`min_retention_ratio`, `cv`,
+#' `reason`) printed by the gate and made an explicit, documented Class C
+#' decision (`human-in-the-loop-decision-points.md`) to ship it anyway --
+#' never to make a genuinely fragile parameter choice silently pass. This
+#' is the escalation issue #849 item 2 asks for: a hard gate by default,
+#' with room for an explicit human override rather than a `cli_warn()`
+#' nobody reads.
+#' @noRd
+HD_S39_ACKNOWLEDGED_PEAKS <- character(0)
+
+#' Compute OLMAR-1's dense window-neighbourhood Sharpe ratios (S39, #849)
+#'
+#' Re-runs `historicaldata::olmar_backtest()` at every window in the dense
+#' neighbourhood around the production `window` (see `HD_S39_NEIGHBOURHOOD_
+#' HALF_WIDTH`), using the SAME `epsilon`/`leverage`/`cost_bps`/`prices`
+#' the production `olmar_portfolio` target uses (R/plan_olmar.R) -- only
+#' `window` varies. Sharpe is computed the same way `olmar_metrics`
+#' computes its "Full Period" row: `sharpe_ratio_rf()` (R/utils_metrics.R)
+#' on the daily net returns joined to `daily_rf` by date. Cheap: 8 extra
+#' backtests over the ~20-30 ticker OLMAR-1 universe, not a full pipeline
+#' rebuild.
+#'
+#' @param prices `olmar_prices` target (wide price matrix, date + one
+#'   column per ticker).
+#' @param params `olmar_params` target (list with `window`, `epsilon`,
+#'   `leverage`, `cost_bps`).
+#' @param rf `daily_rf` target (tibble with `date`, `rf_ret`).
+#' @param half_width Integer half-width of the neighbourhood. Default
+#'   [HD_S39_NEIGHBOURHOOD_HALF_WIDTH].
+#' @return Named numeric vector of Sharpe ratios, names = window values
+#'   (as character), in ascending window order. `NA_real_` for a window
+#'   with fewer than 20 valid joined observations (mirrors `olmar_metrics`'
+#'   own `n < 20L` guard) -- surfaced, not silently dropped, so
+#'   `hd_param_neighbourhood()`'s NA handling (`fail-loud-not-null.md`)
+#'   sees it.
+#' @noRd
+compute_olmar_window_neighbourhood_sharpes <- function(
+    prices, params, rf, half_width = HD_S39_NEIGHBOURHOOD_HALF_WIDTH) {
+
+  windows <- (params$window - half_width):(params$window + half_width)
+
+  sharpes <- vapply(windows, function(w) {
+    port <- historicaldata::olmar_backtest(
+      prices   = prices,
+      window   = w,
+      epsilon  = params$epsilon,
+      leverage = params$leverage,
+      cost_bps = params$cost_bps
+    )
+    port$date <- as.Date(port$date)
+    joined <- dplyr::inner_join(port, rf, by = "date")
+    keep   <- !is.na(joined$net_ret) & !is.na(joined$rf_ret)
+    if (sum(keep) < 20L) return(NA_real_)
+    sr <- sharpe_ratio_rf(joined$net_ret[keep], joined$rf_ret[keep],
+                           periods_per_year = 252L, na.rm = TRUE)
+    sr$sharpe
+  }, numeric(1L))
+
+  names(sharpes) <- as.character(windows)
+  sharpes
+}
+
+#' Assert (or report) a strategy's dense parameter neighbourhood is a
+#' plateau, not a peak (S39, #849)
+#'
+#' Wraps `historicaldata::hd_param_neighbourhood()` with this repo's
+#' abort/warn/inform consequence policy, per issue #849 item 2: a PEAK
+#' verdict is a HARD ABORT by default (not the two-point sweep's
+#' `cli_warn()`-only consequence) unless `strategy_label` is explicitly
+#' listed in `HD_S39_ACKNOWLEDGED_PEAKS` with a written reason (Class C
+#' human override, `human-in-the-loop-decision-points.md`). An
+#' INDETERMINATE verdict is reported loudly via `cli_warn()` -- it is
+#' explicitly NOT treated as a pass (`checks-must-distinguish-unknown.md`).
+#' A PLATEAU verdict returns quietly; the caller (the `tar_target` command
+#' block) is responsible for its own success `cli_inform()`, matching every
+#' other gate in this file.
+#'
+#' @param windows Integer vector of the parameter values tested.
+#' @param sharpes Numeric vector of the metric (Sharpe) at each `windows`
+#'   entry, same length and order.
+#' @param centre The production parameter value (must appear in `windows`).
+#' @param strategy_label Character scalar identifying the strategy in
+#'   messages and in `HD_S39_ACKNOWLEDGED_PEAKS` lookups.
+#' @param acknowledged Character vector of acknowledged-peak strategy
+#'   labels. Default [HD_S39_ACKNOWLEDGED_PEAKS].
+#' @return The verdict list from `hd_param_neighbourhood()`, invisibly, on
+#'   every non-aborting path (plateau, indeterminate, or acknowledged
+#'   peak).
+#' @noRd
+check_param_neighbourhood <- function(windows, sharpes, centre, strategy_label,
+                                       acknowledged = HD_S39_ACKNOWLEDGED_PEAKS) {
+
+  verdict <- historicaldata::hd_param_neighbourhood(
+    param_values = windows, metric_values = sharpes, centre = centre
+  )
+
+  if (identical(verdict$verdict, "peak") && !(strategy_label %in% acknowledged)) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        strategy_label, ": dense parameter-neighbourhood check found a PEAK, ",
+        "not a plateau (reason: ", verdict$reason, ")."
+      ),
+      "i" = paste0(
+        "Sharpe at centre=", verdict$centre, " is ", round(verdict$centre_metric, 3),
+        "; min_retention_ratio=", round(verdict$min_retention_ratio, 3),
+        " (floor ", verdict$min_retention, "); cv=", round(verdict$cv, 3),
+        " (max ", verdict$max_cv, ") across ", verdict$n_neighbours, " neighbour(s)."
+      ),
+      "i" = paste0(
+        "Per Bollinger's stated practice (#849, backtest-robustness.md): a ",
+        "parameter whose dense neighbourhood does not behave broadly ",
+        "similarly should be DISCARDED, not hand-tuned toward the best point."
+      ),
+      "i" = paste0(
+        "To override with an explicit, documented human decision, add ",
+        "\"", strategy_label, "\" to HD_S39_ACKNOWLEDGED_PEAKS (R/plan_qa_gates.R) ",
+        "with a written reason -- see that constant's roxygen."
+      )
+    ))
+  }
+
+  if (identical(verdict$verdict, "peak")) {
+    cli::cli_warn(c(
+      "!" = paste0(
+        strategy_label, ": dense parameter-neighbourhood check found a PEAK ",
+        "(reason: ", verdict$reason, "), but is listed in HD_S39_ACKNOWLEDGED_PEAKS."
+      ),
+      "i" = paste0(
+        "min_retention_ratio=", round(verdict$min_retention_ratio, 3),
+        ", cv=", round(verdict$cv, 3), ". Acknowledged, not fixed -- see ",
+        "HD_S39_ACKNOWLEDGED_PEAKS's roxygen for what an acknowledgement means."
+      )
+    ))
+    return(invisible(verdict))
+  }
+
+  if (identical(verdict$verdict, "indeterminate")) {
+    cli::cli_warn(c(
+      "!" = paste0(
+        strategy_label, ": dense parameter-neighbourhood check is ",
+        "INDETERMINATE (", verdict$reason, ")."
+      ),
+      "i" = paste0(
+        "This is NOT evidence the parameter is a plateau -- it means the ",
+        "neighbourhood could not be assessed (checks-must-distinguish-",
+        "unknown.md). n_neighbours=", verdict$n_neighbours, "."
+      )
+    ))
+    return(invisible(verdict))
+  }
+
+  invisible(verdict)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -4339,6 +4510,43 @@ plan_qa_gates <- function() {
       }),
       deps = qa_metrics_registry_all_na_deps,
       cue = targets::tar_cue(mode = "always")
-    )
+    ),
+
+    # QA gate: OLMAR-1's window parameter (centre = olmar_params$window)
+    # sits in a dense-neighbourhood PLATEAU, not an isolated PEAK (S39,
+    # #849 -- Bollinger's stated practice: "if a 20-day moving average
+    # works but 16, 17, 18, 19, 21, 22, 23 and 24 don't produce broadly
+    # similar behaviour, the system gets thrown out"). Read-only evidence
+    # gathered against the live store before this gate was wired (2026-09,
+    # #849 PR body): windows 21-29 around the production window=25 give
+    # Sharpe 0.7555-0.8117 (min_retention_ratio=0.969, cv=0.021) -- a
+    # comfortable plateau, so this gate's HARD ABORT default (see
+    # check_param_neighbourhood()'s roxygen, #849 item 2) does not
+    # currently fire. OLMAR-1 is one of only two strategies (#726) whose
+    # current sample clears hd_detection_power() -- i.e. a strategy where
+    # a sharp overfit peak would otherwise be easy to mistake for genuine,
+    # statistically-detectable edge -- making it exactly the "few,
+    # interpretable parameters" case #849 item 3 asks this stricter check
+    # to target first.
+    targets::tar_target(qa_olmar_window_neighbourhood, {
+      sharpes <- compute_olmar_window_neighbourhood_sharpes(
+        olmar_prices, olmar_params, daily_rf
+      )
+      verdict <- check_param_neighbourhood(
+        windows        = as.integer(names(sharpes)),
+        sharpes        = unname(sharpes),
+        centre         = olmar_params$window,
+        strategy_label = "OLMAR-1"
+      )
+      cli::cli_inform(c("v" = paste0(
+        "qa_olmar_window_neighbourhood: S39 verdict=", verdict$verdict,
+        " (reason=", verdict$reason, ", centre=", verdict$centre,
+        " sharpe=", round(verdict$centre_metric, 3),
+        ", min_retention_ratio=", round(verdict$min_retention_ratio, 3),
+        ", cv=", round(verdict$cv, 3), ", n_neighbours=", verdict$n_neighbours,
+        ", #849)"
+      )))
+      verdict
+    }, cue = targets::tar_cue(mode = "always"))
   )
 }
