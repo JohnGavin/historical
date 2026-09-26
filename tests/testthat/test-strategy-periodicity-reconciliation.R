@@ -16,6 +16,15 @@ testthat::local_edition(3)
 
 source(here::here("R/utils_periodicity.R"))
 source(here::here("R/plan_qa_gates.R"))
+# R/plan_strategy_correlation.R and R/plan_strategy_names.R are sourced ONLY
+# for the two structural cross-checks below (STRAT_RETURNS_DAILY_NATIVE_CODES
+# coverage and hd_strategy_names_tbl() display-name parity) -- production
+# code in R/plan_qa_gates.R deliberately does NOT depend on either at source
+# time (see PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY's roxygen for why:
+# root _targets.R's tar_source("R/plan_qa_gates.R") and this file's own
+# source() calls above both source it standalone).
+source(here::here("R/plan_strategy_correlation.R"))
+source(here::here("R/plan_strategy_names.R"))
 
 # ── Fixtures ──────────────────────────────────────────────────────────────
 
@@ -30,17 +39,18 @@ good_daily_ret <- function(dates) tibble::tibble(date = dates, ret = stats::rnor
 
 good_daily_native <- function() {
   list(
-    cmr         = good_daily_ret(biz_days("2010-01-04", 400L)),
-    olmar_1     = good_daily_ret(biz_days("2010-01-04", 400L)),
-    tom         = good_daily_ret(biz_days("2010-01-04", 400L)),
-    risk_state  = good_daily_ret(biz_days("2010-01-04", 400L)),
-    avoid_worst = good_daily_ret(biz_days("2010-01-04", 400L))
+    cmr             = good_daily_ret(biz_days("2010-01-04", 400L)),
+    cmr_conditioned = good_daily_ret(biz_days("2010-01-04", 400L)),
+    olmar_1         = good_daily_ret(biz_days("2010-01-04", 400L)),
+    tom             = good_daily_ret(biz_days("2010-01-04", 400L)),
+    risk_state      = good_daily_ret(biz_days("2010-01-04", 400L)),
+    avoid_worst     = good_daily_ret(biz_days("2010-01-04", 400L))
   )
 }
 
 good_obs_ann_factor <- tibble::tibble(
-  strategy = c("CMR", "OLMAR-1", "TOM", "Risk State", "Avoid Worst"),
-  obs_ann_factor = c(252L, 252L, 252L, 252L, 252L),
+  strategy = c("CMR", "CMR Conditioned", "OLMAR-1", "TOM", "Risk State", "Avoid Worst"),
+  obs_ann_factor = c(252L, 252L, 252L, 252L, 252L, 252L),
   obs_ann_factor_source = "test fixture"
 )
 
@@ -138,11 +148,55 @@ test_that("obs_ann_factor_tbl missing required columns aborts", {
   )
 })
 
-test_that("PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY covers every strat_returns_daily_native code_name (#733)", {
-  # Pins the bridge table against the STRAT_RETURNS_WIDE_CODES daily cohort
-  # (R/plan_strategy_correlation.R) so the two cannot silently drift apart.
+test_that("PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY covers every strat_returns_daily_native code_name (#733/#751)", {
+  # Pins the bridge table against STRAT_RETURNS_DAILY_NATIVE_CODES
+  # (R/plan_strategy_correlation.R) -- the SAME named constant
+  # strat_returns_daily_native's own list() and STRAT_RETURNS_WIDE_CODES's
+  # daily cohort are built from -- rather than a hand-typed literal
+  # duplicated a third time in this test. #901 added "cmr_conditioned" to
+  # STRAT_RETURNS_WIDE_CODES and strat_returns_daily_native's list() but NOT
+  # to PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY; the OLD version of this
+  # test (a hand-typed `c("cmr", "olmar_1", "tom", "risk_state",
+  # "avoid_worst")`) went stale in lockstep with the very map it was meant
+  # to protect and did not catch the omission -- only a real
+  # scripts/build.sh run did, 40 minutes into a live build. Deriving the
+  # expected set from STRAT_RETURNS_DAILY_NATIVE_CODES means the next such
+  # omission fails here, in scripts/verify.sh, instead.
   expect_setequal(
     names(PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY),
-    c("cmr", "olmar_1", "tom", "risk_state", "avoid_worst")
+    STRAT_RETURNS_DAILY_NATIVE_CODES
   )
+})
+
+test_that("PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY's display names match hd_strategy_names_tbl()'s short_name, not a hand-guessed string", {
+  # PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY cannot call
+  # hd_strategy_names_tbl() directly at source time without breaking root
+  # _targets.R's tar_source("R/plan_qa_gates.R") (which never sources
+  # R/plan_strategy_names.R) -- see that constant's roxygen. This test is
+  # the substitute guarantee: every RHS literal is checked here against the
+  # single strategy_names source, so a typo or future rename still fails
+  # loudly even though the production vector stays a static literal.
+  st <- hd_strategy_names_tbl()
+  # strat_returns_daily_native's code_name vocabulary diverges from
+  # strategy_names' code_name for three of the six ("olmar_1" vs "olmar",
+  # "risk_state" vs "rsc", "avoid_worst" vs "avoid_worst" -- coincidentally
+  # equal) -- see PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY's own roxygen.
+  daily_native_to_strategy_names_code <- c(
+    cmr             = "cmr",
+    cmr_conditioned = "cmr_conditioned",
+    olmar_1         = "olmar",
+    tom             = "tom",
+    risk_state      = "rsc",
+    avoid_worst     = "avoid_worst"
+  )
+  for (nm in names(PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY)) {
+    strategy_names_code <- daily_native_to_strategy_names_code[[nm]]
+    expected <- st$short_name[st$code_name == strategy_names_code]
+    expect_length(expected, 1L)
+    expect_equal(
+      PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY[[nm]],
+      expected,
+      info = sprintf("code_name '%s'", nm)
+    )
+  }
 })
