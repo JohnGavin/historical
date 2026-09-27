@@ -616,9 +616,10 @@ plan_strategy_correlation <- function() {
     # .norm_cmr()/.norm_olmar()/.norm_tom()/.norm_rsc()/.norm_aw() so the
     # series feeding K_eff is the SAME series the leaderboard's own row is
     # scored on, not a lookalike):
-    #   cmr:         best-Sharpe lookback among cmr_returns_1m/3m/6m, chosen
-    #                the same way .norm_cmr() picks cmr_summary's best row
-    #                (R/plan_commodities_mean_reversion.R).
+    #   cmr:         the lookback chosen PRE-OOS by cmr_selection$chosen
+    #                (S41/#910 item 1, #917; R/plan_commodities_mean_
+    #                reversion.R's .cmr_select_pre_oos_lookback()) -- the
+    #                SAME target .norm_cmr() reads, not a re-derivation.
     #   olmar_1:     olmar_portfolio$net_ret (R/plan_olmar.R).
     #   tom:         tom_portfolio$ret_net (R/plan_turn_of_month.R).
     #   risk_state:  rsc_portfolio$ret_strategy -- the SPY_overlay series
@@ -637,43 +638,36 @@ plan_strategy_correlation <- function() {
     targets::tar_target(strat_returns_daily_native, {
       library(dplyr)
 
-      best_lookback <- cmr_summary |>
-        filter(!is.na(sharpe)) |>
-        arrange(desc(sharpe)) |>
-        slice(1) |>
-        pull(lookback)
+      best_lookback <- cmr_selection$chosen
       cmr_source <- switch(best_lookback,
         "1m" = cmr_returns_1m,
         "3m" = cmr_returns_3m,
         "6m" = cmr_returns_6m,
         cli::cli_abort(c(
-          "x" = "Unrecognised CMR lookback {.val {best_lookback}} from cmr_summary.",
+          "x" = "Unrecognised CMR lookback {.val {best_lookback}} from cmr_selection.",
           "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
         ))
       )
       cmr_daily <- cmr_source |>
         transmute(date = as.Date(date), ret = strategy_ret)
 
-      # #751 (owner decision 2026-09-24): same best-lookback selection
-      # pattern as cmr_daily above, but over cmr_summary_conditioned's OWN
-      # Sharpe ranking (which lookback wins conditioned may differ from
-      # which wins unconditioned) -- so the series feeding K_eff/deflated
-      # Sharpe for "CMR Conditioned" is the SAME one .norm_cmr_conditioned()
-      # (R/plan_leaderboard.R) selects for that leaderboard row, not a
-      # lookalike. net_ret_conditioned (not net_ret) is the CONDITIONED
-      # column -- see R/plan_commodities_mean_reversion.R's
-      # cmr_metrics_*_conditioned targets for the same rename rationale.
-      best_lookback_conditioned <- cmr_summary_conditioned |>
-        filter(!is.na(sharpe)) |>
-        arrange(desc(sharpe)) |>
-        slice(1) |>
-        pull(lookback)
+      # #751 (owner decision 2026-09-24): same pre-OOS selection pattern as
+      # cmr_daily above, but reading cmr_selection_conditioned$chosen --
+      # ITS OWN pre-OOS pick (which lookback wins conditioned may differ
+      # from which wins unconditioned, S41/#910 item 1, #917) -- so the
+      # series feeding K_eff/deflated Sharpe for "CMR Conditioned" is the
+      # SAME one .norm_cmr_conditioned() (R/plan_leaderboard.R) selects for
+      # that leaderboard row, not a lookalike. net_ret_conditioned (not
+      # net_ret) is the CONDITIONED column -- see R/plan_commodities_mean_
+      # reversion.R's cmr_metrics_*_conditioned targets for the same rename
+      # rationale.
+      best_lookback_conditioned <- cmr_selection_conditioned$chosen
       cmr_conditioned_source <- switch(best_lookback_conditioned,
         "1m" = cmr_portfolio_1m_conditioned,
         "3m" = cmr_portfolio_3m_conditioned,
         "6m" = cmr_portfolio_6m_conditioned,
         cli::cli_abort(c(
-          "x" = "Unrecognised CMR lookback {.val {best_lookback_conditioned}} from cmr_summary_conditioned.",
+          "x" = "Unrecognised CMR lookback {.val {best_lookback_conditioned}} from cmr_selection_conditioned.",
           "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
         ))
       )

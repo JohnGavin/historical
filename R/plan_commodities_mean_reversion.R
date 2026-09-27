@@ -394,14 +394,71 @@ plan_commodities_mean_reversion <- function() {
     # ── Summary: comparison across lookbacks, CONDITIONED (#751) ───────────
     # SAME shape as cmr_summary above (built by the SAME .compute_cmr_metrics()
     # function) -- feeds the leaderboard's "CMR Conditioned" row
-    # (R/plan_leaderboard.R's .norm_cmr_conditioned(), which reuses
-    # .norm_cmr()'s best-lookback selection unchanged).
+    # (R/plan_leaderboard.R's .norm_cmr_conditioned(), which now reads
+    # cmr_selection_conditioned$chosen -- see the selection targets below).
 
     targets::tar_target(cmr_summary_conditioned, {
       dplyr::bind_rows(
         cmr_metrics_1m_conditioned, cmr_metrics_3m_conditioned, cmr_metrics_6m_conditioned
       ) |>
         dplyr::arrange(lookback)
+    }),
+
+
+    # ── Best-lookback selection, PRE-OOS ONLY (S41, #910 item 1; #917) ──────
+    # #917/S41 found the pre-#917 "best lookback" pick (`cmr_summary$lookback[
+    # which.max(cmr_summary$sharpe)]`, replicated independently at FOUR call
+    # sites: R/plan_leaderboard.R's .norm_cmr()/.norm_cmr_conditioned(),
+    # R/plan_cost_convention.R's borrow_sensitivity_sweep, and
+    # R/plan_strategy_correlation.R's strat_returns_daily_native) violates
+    # the selection-before-OOS discipline (look-ahead-bias-prevention.md):
+    # cmr_summary's sharpe is computed by .compute_cmr_metrics() over the
+    # FULL, unsplit series -- there is no train/test split at all, so the
+    # winner is chosen using data at and after the project's canonical OOS
+    # start (bt_partitions$macro$test_start, 2020-01-01, R/plan_partitions.R).
+    #
+    # Owner decision 2026-09-27: pick the lookback using ONLY data strictly
+    # before that date. .cmr_select_pre_oos_lookback() (below) is now the
+    # SINGLE shared selection function -- every one of the four call sites
+    # above reads cmr_selection$chosen / cmr_selection_conditioned$chosen
+    # instead of re-deriving its own full-sample pick. cmr_summary /
+    # cmr_summary_conditioned themselves are UNCHANGED (still full-sample
+    # metrics for all 3 lookbacks, still feed the leaderboard's Sharpe/CAGR/
+    # vol figures for whichever lookback wins) -- only WHICH ROW gets picked
+    # as "best" changes.
+    #
+    # See qa_selection_before_oos (S41, R/plan_qa_gates.R) for the gate this
+    # fixes, and tests/testthat/test-cmr-pre-oos-selection.R for the RED
+    # tests that pin the fix (a fixture where the full-sample winner and the
+    # pre-OOS winner provably differ).
+
+    targets::tar_target(cmr_selection, {
+      .cmr_select_pre_oos_lookback(
+        portfolios = list(`1m` = cmr_portfolio_1m, `3m` = cmr_portfolio_3m, `6m` = cmr_portfolio_6m),
+        oos_start  = bt_partitions$macro$test_start,
+        daily_rf   = daily_rf,
+        return_col = "net_ret",
+        ann_factor = 252L,
+        label      = "CMR"
+      )
+    }),
+
+    # Same fix applied to the regime-conditioning overlay (#751/#901) -- the
+    # conditioned series can win a DIFFERENT lookback than the unconditioned
+    # one, so it needs its OWN pre-OOS selection, not a copy of cmr_selection.
+    targets::tar_target(cmr_selection_conditioned, {
+      .cmr_select_pre_oos_lookback(
+        portfolios = list(
+          `1m` = cmr_portfolio_1m_conditioned,
+          `3m` = cmr_portfolio_3m_conditioned,
+          `6m` = cmr_portfolio_6m_conditioned
+        ),
+        oos_start  = bt_partitions$macro$test_start,
+        daily_rf   = daily_rf,
+        return_col = "net_ret_conditioned",
+        ann_factor = 252L,
+        label      = "CMR Conditioned"
+      )
     }),
 
 
@@ -1245,6 +1302,149 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
     max_dd          = round(max_dd, 4),
     avg_dd_duration = dd_stats$avg_dd_duration,
     max_dd_duration = dd_stats$max_dd_duration
+  )
+}
+
+#' Select the best CMR lookback using ONLY data strictly before the OOS
+#' start (S41, #910 item 1; #917)
+#'
+#' #917/S41 (\code{qa_selection_before_oos}, R/plan_qa_gates.R) found the
+#' pre-existing "best lookback" selection -- \code{cmr_summary$lookback[
+#' which.max(cmr_summary$sharpe)]}, independently re-derived at four call
+#' sites (\code{.norm_cmr()}/\code{.norm_cmr_conditioned()} in
+#' R/plan_leaderboard.R, \code{borrow_sensitivity_sweep} in
+#' R/plan_cost_convention.R, \code{strat_returns_daily_native} in
+#' R/plan_strategy_correlation.R) -- picks the max-Sharpe lookback over the
+#' FULL, unsplit \code{cmr_portfolio_{1m,3m,6m}} series. There is no
+#' train/test split at all, so the winner is chosen using data at and after
+#' the project's canonical out-of-sample start
+#' (\code{bt_partitions$macro$test_start}, 2020-01-01,
+#' R/plan_partitions.R) -- exactly the "full-sample selection trap"
+#' \code{.claude/rules/look-ahead-bias-prevention.md} forbids.
+#'
+#' This function is the ONE shared fix: for each candidate lookback, it
+#' recomputes Sharpe (via \code{\link{.compute_cmr_metrics}}, so the exact
+#' same rf-join / periodicity-check / geometric-Sharpe machinery applies)
+#' on the subset of rows STRICTLY before \code{oos_start}, then picks the
+#' lookback with the highest PRE-OOS Sharpe. The full-sample metrics
+#' (\code{cmr_summary}/\code{cmr_summary_conditioned}) are unchanged and
+#' still published for whichever lookback wins -- only WHICH lookback wins
+#' changes.
+#'
+#' Failure behaviour (fail-loud-not-null.md Required Pattern 5): a candidate
+#' with fewer than 12 non-NA pre-OOS observations (the same minimum
+#' \code{\link{.compute_cmr_metrics}} already enforces -- see its own
+#' \code{n < 12L} short-circuit) returns \code{NA} Sharpe and is reported,
+#' via \code{cli_inform()}, as excluded from selection -- it is NEVER
+#' silently dropped from the returned \code{diagnostics} table (S41/#910's
+#' "don't hide the losers" requirement -- see
+#' \code{strategy-combination-modes.md}'s per-leg attribution discipline,
+#' applied here to per-lookback attribution). If EVERY candidate is
+#' unscored, this function aborts rather than falling back to full-sample
+#' selection -- see \code{.claude/rules/fail-loud-not-null.md}.
+#'
+#' @param portfolios Named list (names \code{"1m"}/\code{"3m"}/\code{"6m"})
+#'   of portfolio tibbles, each with a \code{date} column and the return
+#'   column named by \code{return_col}.
+#' @param oos_start Date (or coercible). The first out-of-sample bar --
+#'   pass \code{bt_partitions$macro$test_start} at call sites.
+#' @param daily_rf Daily risk-free tibble, as consumed by
+#'   \code{\link{.compute_cmr_metrics}}.
+#' @param return_col Character. Column in each portfolio tibble holding the
+#'   daily net return. Default \code{"net_ret"}; conditioned callers pass
+#'   \code{"net_ret_conditioned"}.
+#' @param ann_factor Integer, default \code{252L}, matching CMR's daily
+#'   frequency (#717/#720/#738).
+#' @param label Character, used only in messages/abort text to identify the
+#'   caller (e.g. \code{"CMR"} or \code{"CMR Conditioned"}).
+#' @return A list: \code{chosen} (character, the winning lookback),
+#'   \code{pre_oos_sharpe}/\code{pre_oos_n_days} (the winner's own pre-OOS
+#'   Sharpe and observation count), \code{cutoff_date} (the max date
+#'   actually used across every candidate's pre-OOS window -- always
+#'   \code{< first_oos_date} by construction, feeding
+#'   \code{qa_selection_before_oos} (S41) directly), \code{first_oos_date}
+#'   (\code{= oos_start}), and \code{diagnostics} (a tibble with one row per
+#'   candidate lookback: \code{lookback}, \code{n_days}, \code{sharpe},
+#'   \code{scored} -- ALL candidates, including losers and unscored ones).
+#' @noRd
+.cmr_select_pre_oos_lookback <- function(portfolios, oos_start, daily_rf,
+                                         return_col = "net_ret",
+                                         ann_factor = 252L, label = "CMR") {
+  oos_start  <- as.Date(oos_start)
+  lookbacks  <- names(portfolios)
+
+  if (is.null(lookbacks) || length(lookbacks) == 0L) {
+    cli::cli_abort(c(
+      "x" = "{label}: {.arg portfolios} must be a NAMED list of lookback tibbles.",
+      "i" = ".cmr_select_pre_oos_lookback() (S41, #910 item 1) needs at least one candidate."
+    ))
+  }
+
+  pre_oos <- lapply(portfolios, function(port) {
+    port |>
+      dplyr::mutate(date = as.Date(.data$date)) |>
+      dplyr::filter(.data$date < oos_start) |>
+      dplyr::select(date, net_ret = dplyr::all_of(return_col))
+  })
+
+  # Max date actually used ACROSS every candidate's pre-OOS window -- this is
+  # the "selection cutoff" reported to qa_selection_before_oos (S41): a
+  # property of the whole selection procedure, not just the eventual winner.
+  pre_oos_dates <- do.call(c, lapply(pre_oos, function(p) {
+    if (nrow(p) > 0L) p$date else as.Date(character(0))
+  }))
+  max_pre_oos_date <- if (length(pre_oos_dates) > 0L) {
+    max(pre_oos_dates)
+  } else {
+    as.Date(NA)
+  }
+
+  diag_tbl <- dplyr::bind_rows(lapply(lookbacks, function(lb) {
+    .compute_cmr_metrics(pre_oos[[lb]], lookback = lb, daily_rf = daily_rf,
+                         ann_factor = ann_factor, periodicity_check = "warn")
+  })) |>
+    dplyr::mutate(scored = !is.na(.data$sharpe))
+
+  scored <- diag_tbl[diag_tbl$scored, , drop = FALSE]
+
+  if (nrow(scored) == 0L) {
+    cli::cli_abort(c(
+      "x" = paste0(
+        label, ": no lookback (", paste(lookbacks, collapse = "/"),
+        ") could be scored on data strictly before the OOS start (",
+        oos_start, ")."
+      ),
+      "i" = paste0(
+        "Every candidate had fewer than 12 non-NA observations before ",
+        oos_start, " (.compute_cmr_metrics()'s minimum)."
+      ),
+      "i" = paste0(
+        "Refusing to fall back to full-sample selection -- see ",
+        ".claude/rules/fail-loud-not-null.md and ",
+        ".claude/rules/look-ahead-bias-prevention.md (S41, #910)."
+      )
+    ))
+  }
+
+  unscored <- diag_tbl[!diag_tbl$scored, , drop = FALSE]
+  if (nrow(unscored) > 0L) {
+    cli::cli_inform(c("!" = paste0(
+      label, ": lookback", if (nrow(unscored) > 1L) "s " else " ",
+      paste(unscored$lookback, collapse = ", "),
+      " could not be scored on pre-OOS data (", paste(unscored$n_days, collapse = "/"),
+      " obs each, need >= 12) -- excluded from selection."
+    )))
+  }
+
+  best <- scored[which.max(scored$sharpe), , drop = FALSE]
+
+  list(
+    chosen         = best$lookback[[1]],
+    pre_oos_sharpe = best$sharpe[[1]],
+    pre_oos_n_days = best$n_days[[1]],
+    cutoff_date    = max_pre_oos_date,
+    first_oos_date = oos_start,
+    diagnostics    = diag_tbl
   )
 }
 

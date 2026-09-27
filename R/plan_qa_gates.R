@@ -5369,23 +5369,29 @@ plan_qa_gates <- function() {
     #
     # Single-shot strategies (selected ONCE, not re-selected every step)
     # are checked LIVE against the current store:
-    #   - CMR best-lookback selection: cmr_summary (R/plan_commodities_
-    #     mean_reversion.R:349-352) picks the max-Sharpe lookback (1m/3m/6m)
-    #     over the FULL cmr_portfolio_{1m,3m,6m} series -- there is no
-    #     train/test split at all, so the "selection cutoff" is effectively
-    #     the series' own max date, which is always at or after the
-    #     project's canonical OOS start. This is a genuine instance of the
-    #     article's "full-sample selection trap" (#910 gap map row 4), NOT
-    #     a false positive: it live-verifies as a FAIL below every build.
-    #     The SAME best-lookback pick is replicated (not re-derived
-    #     independently) in three downstream consumers -- .norm_cmr()
-    #     (R/plan_leaderboard.R:328-338), borrow_sensitivity_sweep
-    #     (R/plan_cost_convention.R:603), and strat_returns_daily_native
-    #     (R/plan_strategy_correlation.R:635-664) -- so fixing the root
-    #     cause (e.g. picking the lookback on a train-only window, or
-    #     reporting all three lookbacks rather than "best") fixes all four
-    #     call sites at once; only the root cause is registered here to
-    #     avoid quadruple-counting one design decision as four findings.
+    #   - CMR best-lookback selection: FIXED 2026-09-27 (S41's own first
+    #     landing found this FAIL -- see git history for the pre-fix
+    #     comment). cmr_summary's max-Sharpe pick over the FULL, unsplit
+    #     cmr_portfolio_{1m,3m,6m} series was a genuine instance of the
+    #     article's "full-sample selection trap" (#910 gap map row 4),
+    #     replicated (not re-derived independently) at FOUR call sites --
+    #     .norm_cmr()/.norm_cmr_conditioned() (R/plan_leaderboard.R),
+    #     borrow_sensitivity_sweep (R/plan_cost_convention.R), and
+    #     strat_returns_daily_native (R/plan_strategy_correlation.R, both
+    #     the plain and conditioned CMR series). Owner decision 2026-09-27:
+    #     R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback()
+    #     is now the ONE shared selection function -- it recomputes Sharpe
+    #     per lookback using ONLY rows strictly before
+    #     bt_partitions$macro$test_start, so cutoff_date below (the max date
+    #     actually used across all three candidates' pre-OOS windows) is
+    #     ALWAYS < first_oos_date BY CONSTRUCTION. All four call sites above
+    #     now read cmr_selection$chosen / cmr_selection_conditioned$chosen
+    #     instead of re-deriving their own full-sample pick, so fixing the
+    #     root cause fixes all four at once; only the root cause is
+    #     registered here (both the plain and conditioned variant, since
+    #     #751/#901 added the SAME full-sample trap to the conditioned
+    #     path) to avoid multiply-counting one design decision as separate
+    #     findings.
     #   - Portfolio combination weights (PSO and HRP, R/plan_portfolio_
     #     opt.R): both already correctly restrict to
     #     `port_returns |> filter(date <= stk_params$is_end)` before
@@ -5393,25 +5399,24 @@ plan_qa_gates <- function() {
     #     alongside the walk-forward registry, not because either was
     #     suspected of a violation.
     targets::tar_target(qa_selection_before_oos, {
-      cmr_cutoff <- max(
-        as.Date(cmr_portfolio_1m$date), as.Date(cmr_portfolio_3m$date),
-        as.Date(cmr_portfolio_6m$date)
-      )
-
       single_shot <- tibble::tibble(
         strategy = c(
-          "CMR best-lookback selection (cmr_summary -> .norm_cmr / borrow_sensitivity_sweep / strat_returns_daily_native)",
+          "CMR best-lookback selection (cmr_selection -> .norm_cmr / borrow_sensitivity_sweep / strat_returns_daily_native)",
+          "CMR Conditioned best-lookback selection (cmr_selection_conditioned -> .norm_cmr_conditioned / strat_returns_daily_native)",
           "Portfolio combination weights, PSO (port_optimal_weights)",
           "Portfolio combination weights, HRP (port_hrp_weights)"
         ),
         cutoff_date = as.Date(c(
-          cmr_cutoff, stk_params$is_end, stk_params$is_end
+          cmr_selection$cutoff_date, cmr_selection_conditioned$cutoff_date,
+          stk_params$is_end, stk_params$is_end
         )),
         first_oos_date = as.Date(c(
-          bt_partitions$macro$test_start, stk_params$test_start, stk_params$test_start
+          cmr_selection$first_oos_date, cmr_selection_conditioned$first_oos_date,
+          stk_params$test_start, stk_params$test_start
         )),
         evidence = c(
-          "R/plan_commodities_mean_reversion.R:349-352 -- cmr_summary picks the max-Sharpe lookback over the FULL, unsplit cmr_portfolio_{1m,3m,6m} series (no train/test window at all)",
+          "R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback() (cmr_selection target, S41/#910/#917 fix, 2026-09-27) picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} rows strictly before bt_partitions$macro$test_start",
+          "R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback() (cmr_selection_conditioned target), the SAME pre-OOS fix applied to the regime-conditioned CMR variant (#751/#901)",
           "R/plan_portfolio_opt.R:84-85 -- train <- port_returns |> filter(date <= stk_params$is_end); PSO optimises on train only",
           "R/plan_portfolio_opt.R:183-184 -- train <- port_returns |> filter(date <= stk_params$is_end); HRP weights computed on train only"
         )

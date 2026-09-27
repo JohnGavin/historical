@@ -596,17 +596,19 @@ plan_cost_convention <- function() {
     #     ls_ret_net + borrow for LTR's pre-computed parquet columns).
     #
     # CMR reports 3 lookback variants (1m/3m/6m); the leaderboard displays
-    # whichever has the best Sharpe (.norm_cmr(), R/plan_leaderboard.R) --
-    # the same "best lookback" selection is replicated here from cmr_summary
-    # so the swept strategy matches what is actually published.
+    # whichever the pipeline chose PRE-OOS (.norm_cmr(), R/plan_leaderboard.R
+    # -- reading cmr_selection$chosen, S41/#910 item 1, #917) -- the SAME
+    # selection is read here (not re-derived from cmr_summary's full-sample
+    # sharpe, which is exactly the trap #917 found) so the swept strategy
+    # matches what is actually published.
     targets::tar_target(borrow_sensitivity_sweep, {
-      cmr_best <- cmr_summary$lookback[which.max(cmr_summary$sharpe)]
+      cmr_best <- cmr_selection$chosen
       cmr_port <- switch(cmr_best,
         "1m" = cmr_portfolio_1m,
         "3m" = cmr_portfolio_3m,
         "6m" = cmr_portfolio_6m,
         cli::cli_abort(c(
-          "x" = "borrow_sensitivity_sweep: unrecognised CMR lookback {.val {cmr_best}} selected by cmr_summary.",
+          "x" = "borrow_sensitivity_sweep: unrecognised CMR lookback {.val {cmr_best}} selected by cmr_selection.",
           "i" = "Allowed values: 1m, 3m, 6m (R/plan_commodities_mean_reversion.R)."
         ))
       )
