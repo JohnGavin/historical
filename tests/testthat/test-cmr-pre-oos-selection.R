@@ -142,6 +142,18 @@ test_that(".cmr_select_pre_oos_lookback reports (but excludes) a lookback with t
   expect_false(result$diagnostics$scored[result$diagnostics$lookback == "1m"])
 })
 
+test_that(".cmr_select_pre_oos_lookback's exclusion message is stable (snapshot-test-policy.md)", {
+  thin_1m <- .cmr_fixture_1m[.cmr_fixture_1m$date >= as.Date("2020-05-01"), ]
+  portfolios_thin <- list(`1m` = thin_1m, `3m` = .cmr_fixture_3m, `6m` = .cmr_fixture_6m)
+
+  expect_snapshot({
+    invisible(.cmr_select_pre_oos_lookback(
+      portfolios = portfolios_thin, oos_start = .oos_start,
+      daily_rf = .cmr_fixture_daily_rf, ann_factor = 12L, label = "CMR"
+    ))
+  })
+})
+
 # ── Fail loud, never fall back to full-sample selection ─────────────────────
 
 test_that(".cmr_select_pre_oos_lookback aborts when NO lookback can be scored pre-OOS, never falling back to full-sample selection", {
