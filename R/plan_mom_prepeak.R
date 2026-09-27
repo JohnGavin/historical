@@ -65,7 +65,7 @@ plan_mom_prepeak <- function() {
     # pre_peak_return, post_peak_return, total_return.
 
     targets::tar_target(mom_prepeak_signal_raw, {
-      historicaldata::hd_mom_prepeak_signal(
+      hd_mom_prepeak_signal(
         daily_prices          = ltr_universe,
         as_of_dates           = mom_prepeak_as_of_dates,
         lookback_months_start = mom_prepeak_params$lookback_months_start,
@@ -534,9 +534,9 @@ plan_mom_prepeak <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   code_names <- c("mom_prepeak", "mom_postpeak", "mom_combined")
@@ -564,9 +564,9 @@ plan_mom_prepeak <- function() {
         research_paper_doi = .data$research_paper_doi
       )
 
-    historicaldata::hd_strategy_upsert(con, strat_row)
+    hd_strategy_upsert(con, strat_row)
 
-    uu <- historicaldata::hd_run_upsert(
+    uu <- hd_run_upsert(
       con,
       strategy_id      = cn,
       partition        = "phase1",
@@ -595,14 +595,14 @@ plan_mom_prepeak <- function() {
         max_dd_days = "days", max_cons_losses = "count",
         ann_rf = "percent"
       )
-      historicaldata::hd_metric_record(con, uu, wide, units = mom_prepeak_units)
+      hd_metric_record(con, uu, wide, units = mom_prepeak_units)
     }
 
     # Record SSR + top5pct stability metrics (#400 PR 5/6).
     # Monthly series: w = 36 rolling windows, ann_factor = 12.
     rets <- returns_list[[cn]]
     if (!is.null(rets) && length(rets) > 0L) {
-      historicaldata::hd_record_stability_metrics(
+      hd_record_stability_metrics(
         con        = con,
         run_uuid   = uu,
         returns    = rets,

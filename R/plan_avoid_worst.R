@@ -1351,9 +1351,9 @@ plan_avoid_worst <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   strat_row <- strategy_names |>
@@ -1374,9 +1374,9 @@ plan_avoid_worst <- function() {
       research_paper_doi = .data$research_paper_doi
     )
 
-  historicaldata::hd_strategy_upsert(con, strat_row)
+  hd_strategy_upsert(con, strat_row)
 
-  uu <- historicaldata::hd_run_upsert(
+  uu <- hd_run_upsert(
     con,
     strategy_id      = "avoid_worst",
     partition        = "phase1",
@@ -1409,7 +1409,7 @@ plan_avoid_worst <- function() {
       vol = "percent", max_dd = "percent", sharpe = "ratio",
       ann_rf = "percent"
     )
-    historicaldata::hd_metric_record(
+    hd_metric_record(
       con, uu, full_row, units = aw_units
     )
   }
@@ -1418,7 +1418,7 @@ plan_avoid_worst <- function() {
   rets <- aw_practical_backtest$ret_strategy
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
-    historicaldata::hd_record_stability_metrics(
+    hd_record_stability_metrics(
       con        = con,
       run_uuid   = uu,
       returns    = rets,

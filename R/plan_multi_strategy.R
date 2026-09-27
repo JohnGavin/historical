@@ -75,7 +75,7 @@ plan_multi_strategy <- function() {
           # flips the exponent so a larger drawdown always ranks worse. Uses
           # the FRACTION-scale drawdown (not max_dd_pct above) to match the
           # fraction-scale cagr computed here.
-          calmar = round(historicaldata::hd_cdap(
+          calmar = round(hd_cdap(
             prod(1 + ret)^(12 / n) - 1,
             min((cumprod(1 + ret) - cummax(cumprod(1 + ret))) /
                   cummax(cumprod(1 + ret)))

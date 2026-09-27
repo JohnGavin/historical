@@ -1474,9 +1474,9 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   cmr_row <- strategy_names |>
@@ -1496,13 +1496,13 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
       tags              = .data$tags,
       research_paper_doi = .data$research_paper_doi
     )
-  historicaldata::hd_strategy_upsert(con, cmr_row)
+  hd_strategy_upsert(con, cmr_row)
 
   partitions <- unique(cmr_summary$lookback)
   uuids <- character(length(partitions))
   for (i in seq_along(partitions)) {
     p <- partitions[i]
-    uu <- historicaldata::hd_run_upsert(
+    uu <- hd_run_upsert(
       con,
       strategy_id      = strategy_id,
       partition        = p,
@@ -1533,7 +1533,7 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
         avg_dd_duration = "count", max_dd_duration = "count",
         ann_rf = "fraction"
       )
-      historicaldata::hd_metric_record(con, uu, wide, units = cmr_units)
+      hd_metric_record(con, uu, wide, units = cmr_units)
     }
 
     # Record SSR + top5pct stability metrics (#400 PR 5/6).
@@ -1549,7 +1549,7 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
     if (!is.null(port) && is.data.frame(port) && "net_ret" %in% names(port)) {
       rets <- port$net_ret
       if (length(rets) > 0L) {
-        historicaldata::hd_record_stability_metrics(
+        hd_record_stability_metrics(
           con        = con,
           run_uuid   = uu,
           returns    = rets,

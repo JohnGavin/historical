@@ -73,7 +73,7 @@ plan_strategy_digest <- function() {
     # Depends on `leaderboard` (from plan_leaderboard) and `digest_prior`.
     targets::tar_target(
       strategy_digest_delta,
-      historicaldata::hd_digest_delta(leaderboard, digest_prior)
+      hd_digest_delta(leaderboard, digest_prior)
     ),
 
     # ── Attention lines ───────────────────────────────────────────────────────
@@ -81,7 +81,7 @@ plan_strategy_digest <- function() {
     # Structural flags only; Sharpe drops are NOT flagged (resulting-prohibition).
     targets::tar_target(
       strategy_digest_attention,
-      historicaldata::hd_digest_attention(strategy_digest_delta)
+      hd_digest_attention(strategy_digest_delta)
     ),
 
     # ── Dynamic narrative caption ─────────────────────────────────────────────
@@ -123,7 +123,7 @@ plan_strategy_digest <- function() {
     targets::tar_target(
       strategy_digest_email,
       {
-        html <- historicaldata::hd_digest_html(
+        html <- hd_digest_html(
           strategy_digest_delta,
           strategy_digest_attention,
           strategy_digest_caption

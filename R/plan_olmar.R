@@ -96,7 +96,7 @@ plan_olmar <- function() {
       library(dplyr)
 
       # olmar_backtest expects rows=dates, cols=assets; date column is stripped
-      result <- historicaldata::olmar_backtest(
+      result <- olmar_backtest(
         prices   = olmar_prices,
         window   = olmar_params$window,
         epsilon  = olmar_params$epsilon,
@@ -189,7 +189,7 @@ plan_olmar <- function() {
     targets::tar_target(olmar_research_log, {
       # Guard: report clearly on DB write failure, do not silently swallow
       tryCatch({
-        base_dir <- historicaldata::hd_rlog_path()
+        base_dir <- hd_rlog_path()
 
         # Pull full-period metrics for logging
         m_full <- olmar_metrics |> dplyr::filter(period == "Full Period")
@@ -198,12 +198,12 @@ plan_olmar <- function() {
         n_tkr   <- ncol(olmar_prices) - 1L
 
         # Pre-generate ids to enable parent-child lineage chaining
-        hyp_id  <- historicaldata::hd_rlog_uuid()
-        impl_id <- historicaldata::hd_rlog_uuid()
-        res_id  <- historicaldata::hd_rlog_uuid()
+        hyp_id  <- hd_rlog_uuid()
+        impl_id <- hd_rlog_uuid()
+        res_id  <- hd_rlog_uuid()
 
         # 1. Hypothesis
-        historicaldata::hd_rlog_append("hypotheses",
+        hd_rlog_append("hypotheses",
           tibble::tibble(
             uuid            = hyp_id,
             economic_claim  = paste0(
@@ -227,7 +227,7 @@ plan_olmar <- function() {
         )
 
         # 2. Implementation
-        historicaldata::hd_rlog_append("implementations",
+        hd_rlog_append("implementations",
           tibble::tibble(
             uuid          = impl_id,
             parent_uuid   = hyp_id,
@@ -249,7 +249,7 @@ plan_olmar <- function() {
 
         # 3. Results (full period)
         n_obs_full <- as.integer(m_full$days)
-        historicaldata::hd_rlog_append("results",
+        hd_rlog_append("results",
           tibble::tibble(
             uuid                = res_id,
             parent_uuid         = impl_id,
@@ -268,10 +268,10 @@ plan_olmar <- function() {
 
         # 4. Critiques: document the two highest-catch-rate Kinlay defect classes
         critique_ids <- c(
-          historicaldata::hd_rlog_uuid(),
-          historicaldata::hd_rlog_uuid()
+          hd_rlog_uuid(),
+          hd_rlog_uuid()
         )
-        historicaldata::hd_rlog_append("critiques",
+        hd_rlog_append("critiques",
           tibble::tibble(
             uuid         = critique_ids,
             parent_uuid  = res_id,
@@ -303,12 +303,12 @@ plan_olmar <- function() {
 
         # 5. Robustness: one row per partition
         rob_ids <- c(
-          historicaldata::hd_rlog_uuid(),
-          historicaldata::hd_rlog_uuid()
+          hd_rlog_uuid(),
+          hd_rlog_uuid()
         )
         sharpe_train <- as.double(m_train$sharpe)
         sharpe_test  <- as.double(m_test$sharpe)
-        historicaldata::hd_rlog_append("robustness",
+        hd_rlog_append("robustness",
           tibble::tibble(
             uuid         = rob_ids,
             parent_uuid  = res_id,
@@ -361,7 +361,7 @@ plan_olmar <- function() {
 
       vapply(seq_len(params$n_reps), function(i) {
         seed_i <- params$seed_base + i
-        port <- historicaldata::olmar_backtest(
+        port <- olmar_backtest(
           prices      = olmar_prices,
           window      = olmar_params$window,
           epsilon     = olmar_params$epsilon,
@@ -388,7 +388,7 @@ plan_olmar <- function() {
         dplyr::filter(.data$period == "Full Period") |>
         dplyr::pull(.data$sharpe)
 
-      rank <- historicaldata::hd_signal_null_rank(
+      rank <- hd_signal_null_rank(
         actual_metric = actual_sharpe,
         null_metrics  = olmar_signal_null_sharpes
       )
@@ -477,9 +477,9 @@ plan_olmar <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   strat_row <- strategy_names |>
@@ -500,9 +500,9 @@ plan_olmar <- function() {
       research_paper_doi = .data$research_paper_doi
     )
 
-  historicaldata::hd_strategy_upsert(con, strat_row)
+  hd_strategy_upsert(con, strat_row)
 
-  uu <- historicaldata::hd_run_upsert(
+  uu <- hd_run_upsert(
     con,
     strategy_id      = "olmar",
     partition        = "phase1",
@@ -526,7 +526,7 @@ plan_olmar <- function() {
       sharpe = "ratio", ann_rf = "percent", max_dd = "percent",
       avg_turnover_daily = "fraction"
     )
-    historicaldata::hd_metric_record(
+    hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = olmar_units
     )
   }
@@ -535,7 +535,7 @@ plan_olmar <- function() {
   rets <- olmar_portfolio$net_ret
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
-    historicaldata::hd_record_stability_metrics(
+    hd_record_stability_metrics(
       con        = con,
       run_uuid   = uu,
       returns    = rets,

@@ -59,9 +59,9 @@ plan_artefact_registry <- function() {
   # Skip Quarto partials (filenames starting with "_").
   qmds <- qmds[!grepl("^_", basename(qmds))]
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   # ── Pass 1: qmd-backed vignettes ─────────────────────────────────────
@@ -80,7 +80,7 @@ plan_artefact_registry <- function() {
     qmd_rel <- paste0("docs/", basename(qmds))
 
     for (i in seq_along(basenames)) {
-      historicaldata::hd_art_vignette_upsert(con, list(
+      hd_art_vignette_upsert(con, list(
         vignette_id = basenames[i],
         qmd_path    = qmd_rel[i],
         html_path   = htmls[i],
@@ -104,7 +104,7 @@ plan_artefact_registry <- function() {
   static_results <- lapply(known_static_htmls, function(name) {
     html_file <- paste0(name, ".html")
     present   <- file.exists(file.path(docs_dir, html_file))
-    historicaldata::hd_art_vignette_upsert(con, list(
+    hd_art_vignette_upsert(con, list(
       vignette_id = name,
       qmd_path    = NA_character_,
       html_path   = html_file,
@@ -170,13 +170,13 @@ plan_artefact_registry <- function() {
     )
   )
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   for (row in seed_rows) {
-    historicaldata::hd_art_diagram_upsert(con, row)
+    hd_art_diagram_upsert(con, row)
   }
 
   tibble::tibble(
@@ -201,13 +201,13 @@ plan_artefact_registry <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  con <- historicaldata::hd_registry_open(path, read_only = TRUE)
+  path <- hd_registry_path()
+  con <- hd_registry_open(path, read_only = TRUE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   # strict = TRUE in CI / pipeline → abort on any missing artefact.
   # The empty-issues tibble is returned for tar_read inspection.
-  historicaldata::check_artefact_registry(con,
+  check_artefact_registry(con,
                                           docs_dir = docs_dir,
                                           strict   = TRUE)
 }
@@ -232,11 +232,11 @@ plan_artefact_registry <- function() {
     return(empty)
   }
 
-  path <- historicaldata::hd_registry_path()
+  path <- hd_registry_path()
   if (!file.exists(path)) return(empty)
 
   con <- tryCatch(
-    historicaldata::hd_registry_open(path, read_only = TRUE),
+    hd_registry_open(path, read_only = TRUE),
     error = function(e) NULL
   )
   if (is.null(con)) return(empty)

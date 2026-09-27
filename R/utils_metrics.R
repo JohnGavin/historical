@@ -80,7 +80,7 @@ annualise_returns <- function(ret, periods_per_year = 12L, na.rm = TRUE) {
   # drawdown magnitude then divides toward a LESS negative (better-ranked)
   # ratio. hd_cdap() flips the exponent for negative returns so a larger
   # drawdown always ranks worse. See #588 and hd_cdap()'s roxygen.
-  calmar <- historicaldata::hd_cdap(cagr, max_dd)
+  calmar <- hd_cdap(cagr, max_dd)
 
   list(
     cagr   = cagr,

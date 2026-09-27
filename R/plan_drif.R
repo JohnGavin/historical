@@ -194,7 +194,7 @@ plan_drif <- function() {
 
       # Shared selection logic: rank-all-then-filter-benchmark-then-top_n.
       # Delegates to hd_drif_select_topn() so plan_drif_v2.R uses the same path.
-      signal <- historicaldata::hd_drif_select_topn(
+      signal <- hd_drif_select_topn(
         drif_signal, drif_params, drif_params$top_n
       )
 
@@ -606,9 +606,9 @@ plan_drif <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   strat_row <- strategy_names |>
@@ -629,9 +629,9 @@ plan_drif <- function() {
       research_paper_doi = .data$research_paper_doi
     )
 
-  historicaldata::hd_strategy_upsert(con, strat_row)
+  hd_strategy_upsert(con, strat_row)
 
-  uu <- historicaldata::hd_run_upsert(
+  uu <- hd_run_upsert(
     con,
     strategy_id      = "drif",
     partition        = "phase1",
@@ -653,7 +653,7 @@ plan_drif <- function() {
       bench_cagr = "fraction", bench_vol = "fraction", bench_sharpe = "ratio",
       ann_rf = "fraction"
     )
-    historicaldata::hd_metric_record(
+    hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = drif_units
     )
   }
@@ -662,7 +662,7 @@ plan_drif <- function() {
   rets <- drif_portfolio$portfolio_ret
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
-    historicaldata::hd_record_stability_metrics(
+    hd_record_stability_metrics(
       con        = con,
       run_uuid   = uu,
       returns    = rets,

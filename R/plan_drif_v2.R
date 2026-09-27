@@ -128,7 +128,7 @@ plan_drif_v2 <- function() {
         # Delegates to hd_drif_select_topn() so this multiverse path uses
         # the identical rank-all-then-filter-benchmark-then-top_n logic as
         # the production target in plan_drif.R (#r4371).
-        selected_preds <- historicaldata::hd_drif_select_topn(
+        selected_preds <- hd_drif_select_topn(
           all_preds, params, params$top_n
         )
         port <- selected_preds |>
@@ -207,7 +207,7 @@ plan_drif_v2 <- function() {
     # leaderboard-wide K_trials (k_eff_lb), which spans a different,
     # larger strategy set than this 16-spec DRIF-only population.
     targets::tar_target(drif_multiverse_trial_var, {
-      v <- historicaldata::hd_trial_sharpe_var(
+      v <- hd_trial_sharpe_var(
         sharpe = drif_multiverse$oos_sharpe,
         n_obs  = drif_multiverse$n_months
       )

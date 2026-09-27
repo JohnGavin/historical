@@ -341,9 +341,9 @@ plan_ev_ebit <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   strat_row <- strategy_names |>
@@ -364,9 +364,9 @@ plan_ev_ebit <- function() {
       research_paper_doi = .data$research_paper_doi
     )
 
-  historicaldata::hd_strategy_upsert(con, strat_row)
+  hd_strategy_upsert(con, strat_row)
 
-  uu <- historicaldata::hd_run_upsert(
+  uu <- hd_run_upsert(
     con,
     strategy_id      = "ev_ebit",
     partition        = "phase1",
@@ -391,7 +391,7 @@ plan_ev_ebit <- function() {
       sharpe = "ratio", ann_rf = "percent", max_dd = "percent",
       calmar = "ratio"
     )
-    historicaldata::hd_metric_record(
+    hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = ev_units
     )
   }
@@ -400,7 +400,7 @@ plan_ev_ebit <- function() {
   rets <- ev_portfolios$ret_value_hml
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
-    historicaldata::hd_record_stability_metrics(
+    hd_record_stability_metrics(
       con        = con,
       run_uuid   = uu,
       returns    = rets,

@@ -299,9 +299,9 @@ plan_xgb_signal <- function() {
     ))
   }
 
-  path <- historicaldata::hd_registry_path()
-  historicaldata::hd_registry_init(path)
-  con <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  hd_registry_init(path)
+  con <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   strat_row <- strategy_names |>
@@ -322,9 +322,9 @@ plan_xgb_signal <- function() {
       research_paper_doi = .data$research_paper_doi
     )
 
-  historicaldata::hd_strategy_upsert(con, strat_row)
+  hd_strategy_upsert(con, strat_row)
 
-  uu <- historicaldata::hd_run_upsert(
+  uu <- hd_run_upsert(
     con,
     strategy_id      = "xgb_drif",
     partition        = "phase1",
@@ -346,14 +346,14 @@ plan_xgb_signal <- function() {
       sharpe = "ratio", max_dd = "fraction",
       avg_long = "count", avg_short = "count", ann_rf = "fraction"
     )
-    historicaldata::hd_metric_record(
+    hd_metric_record(
       con, uu, full_row[, metric_cols, drop = FALSE], units = xgb_units
     )
   }
 
   # Record survivorship_biased as a diagnostic (#442).
   if ("survivorship_biased" %in% names(xgb_drif_metrics)) {
-    historicaldata::hd_diagnostic_record(con, uu, tibble::tibble(
+    hd_diagnostic_record(con, uu, tibble::tibble(
       diagnostic_name = "survivorship_biased",
       value_num  = as.numeric(any(xgb_drif_metrics$survivorship_biased)),
       value_text = as.character(any(xgb_drif_metrics$survivorship_biased))
@@ -364,7 +364,7 @@ plan_xgb_signal <- function() {
   rets <- xgb_drif_portfolio$port_ret
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
-    historicaldata::hd_record_stability_metrics(
+    hd_record_stability_metrics(
       con        = con,
       run_uuid   = uu,
       returns    = rets,
