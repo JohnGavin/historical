@@ -26,6 +26,9 @@ suppressMessages(pkgload::load_all(pkg_path, quiet = TRUE))
 
 source(here::here("R/utils_metrics.R"))
 source(here::here("R/plan_commodities_mean_reversion.R"))
+# build_selection_before_oos_table() / check_selection_before_oos() -- for
+# the S41-falsification test at the bottom of this file.
+source(here::here("R/plan_qa_gates.R"))
 
 # ── Fixtures ────────────────────────────────────────────────────────────────
 # 24 pre-OOS months (2019-01 .. 2020-12) + 12 post-OOS months (2021-01 ..
@@ -168,4 +171,58 @@ test_that(".cmr_select_pre_oos_lookback's cutoff_date is strictly before first_o
   expect_true(result$cutoff_date < result$first_oos_date)
   # The max date actually used is the last pre-OOS observation (2020-12-01).
   expect_identical(result$cutoff_date, as.Date("2020-12-01"))
+})
+
+# ── S41 falsification: the gate genuinely re-evaluates ─────────────────────
+# check_selection_before_oos() (S41) is not a rubber stamp: feed it the
+# FIXED cutoff/first_oos pair from .cmr_select_pre_oos_lookback() and it
+# PASSes; feed it a cutoff constructed the PRE-FIX way (the series' own
+# full-sample max date, which sits at/after oos_start) and it FAILs. This is
+# the falsification #910/#917's fix requires: proof the gate would have
+# caught the bug it was written to catch, not just proof it currently says
+# PASS.
+
+test_that("S41 (build_selection_before_oos_table) PASSes on the fixed cmr_selection cutoff, and FAILs on a simulated pre-fix full-sample cutoff", {
+  wf <- tibble::tibble(strategy = "fake walk-forward", evidence = "fake evidence")
+
+  fixed_result <- .cmr_select_pre_oos_lookback(
+    portfolios = .cmr_fixture_portfolios, oos_start = .oos_start,
+    daily_rf = .cmr_fixture_daily_rf, ann_factor = 12L, label = "CMR"
+  )
+
+  fixed_ss <- tibble::tibble(
+    strategy       = "CMR best-lookback selection",
+    cutoff_date    = fixed_result$cutoff_date,
+    first_oos_date = fixed_result$first_oos_date,
+    evidence       = "post-fix (cmr_selection)"
+  )
+  fixed_tbl <- build_selection_before_oos_table(fixed_ss, walk_forward = wf)
+  expect_identical(
+    fixed_tbl$verdict[fixed_tbl$strategy == "CMR best-lookback selection"],
+    "PASS"
+  )
+  expect_no_warning(check_selection_before_oos(fixed_tbl, enforce = FALSE))
+
+  # Simulate the PRE-FIX behaviour: cutoff = the series' own FULL-sample max
+  # date (i.e. what `max(cmr_portfolio_1m$date, cmr_portfolio_3m$date,
+  # cmr_portfolio_6m$date)` produced before this fix), always >= oos_start
+  # for any series whose history extends into/past the OOS window.
+  full_sample_max_date <- max(.cmr_fixture_1m$date, .cmr_fixture_3m$date, .cmr_fixture_6m$date)
+  expect_true(full_sample_max_date >= .oos_start)  # sanity: the bug's precondition holds
+
+  buggy_ss <- tibble::tibble(
+    strategy       = "CMR best-lookback selection (pre-fix simulation)",
+    cutoff_date    = full_sample_max_date,
+    first_oos_date = .oos_start,
+    evidence       = "pre-fix simulation (full-sample max date as cutoff)"
+  )
+  buggy_tbl <- build_selection_before_oos_table(buggy_ss, walk_forward = wf)
+  expect_identical(
+    buggy_tbl$verdict[buggy_tbl$strategy == "CMR best-lookback selection (pre-fix simulation)"],
+    "FAIL"
+  )
+  expect_warning(
+    check_selection_before_oos(buggy_tbl, enforce = FALSE),
+    "FAILED or are INDETERMINATE"
+  )
 })
