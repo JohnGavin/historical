@@ -28,7 +28,13 @@
 # Minimum observations required before including a series in the correlation.
 CORR_MIN_OBS  <- 12L
 # Redundancy threshold: |r| >= this with a better-Sharpe peer → flag as redundant
-REDUNDANCY_THRESH <- 0.80
+#
+# Single home for this value is historicaldata::HD_REDUNDANCY_THRESH
+# (packages/historicaldata/R/strategy_value_gate.R) -- hd_strategy_value_gate()'s
+# corr_threshold default reads the SAME constant, so the two similarity
+# thresholds (leaderboard redundancy flag vs. new-strategy admission gate,
+# #496) can never silently drift apart. See #496 review, 2026-09-26.
+REDUNDANCY_THRESH <- historicaldata::HD_REDUNDANCY_THRESH
 
 # ── Leaderboard-wide return alignment (#728 items 1+2, widened by #733) ─────
 #
