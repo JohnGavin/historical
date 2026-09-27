@@ -18,7 +18,7 @@
 # R/plan_commodities_mean_reversion.R:210-214 and used natively by
 # R/plan_factormax.R, R/plan_drif.R, R/plan_stock_backtest.R, and
 # R/plan_portfolio_opt.R. Several source metrics targets (ltr_metrics,
-# olmar_metrics, tom_metrics, rsc_metrics, aw_metrics, mom_prepeak_metrics /
+# olmar_metrics, tom_metrics, rsc_metrics, aw_strategy_metrics, mom_prepeak_metrics /
 # mom_postpeak_metrics / mom_combined_metrics, mf_metrics, ev_metrics) store
 # these columns as PERCENT (x * 100) natively -- their `.norm_*` helpers below
 # divide by 100 at the point where the source convention is known, so every
@@ -422,15 +422,26 @@ plan_leaderboard <- function() {
           )
       }
 
-      # aw_metrics has scenario × period; keep the "Remove 10 Worst" rows
-      # (the protection scenario) and drop the extra scenario column.
-      # Source: R/plan_avoid_worst.R:440-444 (metrics_for) stores
+      # aw_strategy_metrics (#813 follow-up) is Training/Testing/Full Period
+      # rows for the ACTUAL VIX-timed protection strategy (aw_practical_
+      # backtest's ret_strategy column) -- ONE strategy, no scenario column
+      # to filter. This REPLACES the previous source, aw_metrics, which is
+      # SPY buy-and-hold under three hindsight scenarios ("All Days" /
+      # "Remove 10 Worst" / "Remove 10 Best") -- the leaderboard's Avoid
+      # Worst row was silently sourced from aw_metrics' "Remove 10 Worst"
+      # scenario for a period (never the strategy #813's registry fix
+      # already corrected the bt.* registry to use), which is why the
+      # published Full Period sharpe/cagr/vol looked identical to plain
+      # SPY-minus-its-worst-10-days rather than to aw_practical_backtest's
+      # own metrics. aw_metrics is kept ONLY for avoid-worst-days.qmd's
+      # illustrative asymmetry table -- it must never feed a leaderboard row
+      # again (see R/plan_qa_gates.R's S42,
+      # qa_leaderboard_strategy_traceability, Refs #813).
+      # Source: .aw_strategy_period_metrics() (R/plan_avoid_worst.R) stores
       # cagr/vol/max_dd as PERCENT (round(x * 100, 1)) -- convert to fraction.
       .norm_aw <- function(m) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
         m |>
-          filter(scenario == "Remove 10 Worst") |>
-          select(-scenario) |>
           rename(months = n_days) |>
           mutate(cagr = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
                  ann_rf = ann_rf / 100)
@@ -522,8 +533,8 @@ plan_leaderboard <- function() {
         add_meta(.norm_rsc(rsc_metrics), "Risk State", "Overlay",
                  "VIX regime overlay on SPY",
                  "leaderboard.html"),
-        add_meta(.norm_aw(aw_metrics), "Avoid Worst", "Overlay",
-                 "VIX protection: remove 10 worst days",
+        add_meta(.norm_aw(aw_strategy_metrics), "Avoid Worst", "Overlay",
+                 "VIX protection: exit on shock or elevated VIX",
                  "avoid-worst-days.html"),
         add_meta(.norm_mom_sibling(mom_prepeak_metrics), "Mom Pre-Peak", "Equity",
                  "Pre-peak 12-2 momentum (Büsing 2022)",

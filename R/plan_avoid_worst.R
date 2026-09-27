@@ -7,8 +7,22 @@
 # Source: Morningstar, "You Can Beat the Stock Market by Avoiding
 # Its Worst Days. You Won't."
 #
-# NOTE (#677 slice 3): aw_metrics (via avoid_worst_register_runs) is the
-# only target in this file published to the bt.* registry/leaderboard.
+# NOTE (#677 slice 3, updated #813 follow-up): aw_metrics (via
+# avoid_worst_register_runs) used to be the only target in this file
+# published to the bt.* registry/leaderboard. It is NOT any more: aw_metrics
+# is plain SPY buy-and-hold under three hindsight scenarios ("All Days" /
+# "Remove 10 Worst" / "Remove 10 Best") -- useful for the avoid-worst-days.qmd
+# dashboard's illustrative asymmetry table, but NOT a tradeable strategy and
+# NOT what "Avoid Worst" means on the leaderboard. The leaderboard (and every
+# other Avoid-Worst-strategy consumer: strat_returns_daily_native in
+# R/plan_strategy_correlation.R, deflated Sharpe, K_eff, detection power, the
+# allocator) is sourced from aw_strategy_metrics, computed from
+# aw_practical_backtest's ret_strategy column -- the VIX-triggered protection
+# strategy's OWN daily returns -- via the shared .aw_strategy_period_metrics()
+# helper below, the SAME helper avoid_worst_register_runs() calls for its
+# Full Period registry row. See #813 (registry writer fix) and its follow-up
+# (this fix: the leaderboard assembly, K_eff/correlation, and allocator
+# inputs, which #813 itself did not touch).
 # aw_practical_sensitivity, aw_walkforward, and aw_alpha_decay are
 # exploratory sensitivity tables, migrated for consistency with aw_metrics.
 # aw_cross_market and aw_bootstrap_ci still use the OLD arithmetic, no-rf,
@@ -78,6 +92,56 @@
 #' @noRd
 .aw_sharpe_rf <- function(dates, rets, aw_daily_rf, ann_factor = 252L) {
   .aw_sharpe_rf_full(dates, rets, aw_daily_rf, ann_factor)$sharpe
+}
+
+#' Canonical metrics for ONE period slice of the VIX-timed Avoid Worst
+#' strategy's OWN returns (#813 follow-up)
+#'
+#' Shared by the `aw_strategy_metrics` target (leaderboard-facing --
+#' Training/Testing/Full Period) and `.avoid_worst_register_runs()`
+#' (registry-facing -- Full Period only) so the two published surfaces can
+#' never independently drift from each other, or from
+#' `aw_practical_backtest`'s `ret_strategy` column -- the strategy's ACTUAL
+#' VIX-triggered protection returns, never `aw_metrics`' SPY buy-and-hold
+#' hindsight scenarios (see this file's `aw_metrics` target and #813: the
+#' registry writer was fixed to source from here; the leaderboard assembly
+#' was not, until this follow-up).
+#'
+#' @param dts Date vector for this period's slice, already filtered to the
+#'   period boundary and to non-NA rows.
+#' @param ret Numeric vector, `ret_strategy` for this period's slice,
+#'   position-aligned with `dts`, already filtered to non-NA rows.
+#' @param aw_daily_rf Tibble from the `aw_daily_rf` target (date, rf_ret).
+#' @param label Character period label ("Training"/"Testing"/"Full Period").
+#' @param ann_factor Integer annualisation factor (252L, daily -- matches
+#'   `.aw_sharpe_rf_full()`'s own default and `aw_metrics`' `calc()`).
+#' @return A one-row tibble (`period`, `years`, `n_days`, `cagr`, `vol`,
+#'   `max_dd`, `sharpe`, `ann_rf`, `window_start`, `window_end`; `cagr`/
+#'   `vol`/`max_dd`/`ann_rf` as PERCENT, matching `aw_metrics`' own
+#'   convention so `R/plan_leaderboard.R`'s `.norm_aw()` divide-by-100 stays
+#'   correct), or `NULL` if `ret` has fewer than 20 observations (the same
+#'   floor `aw_metrics`' `calc()` uses).
+#' @noRd
+.aw_strategy_period_metrics <- function(dts, ret, aw_daily_rf, label,
+                                        ann_factor = 252L) {
+  if (length(ret) < 20L) return(NULL)
+
+  years <- length(ret) / ann_factor
+  cum   <- cumprod(1 + ret)
+  sr    <- .aw_sharpe_rf_full(dts, ret, aw_daily_rf, ann_factor = ann_factor)
+
+  tibble::tibble(
+    period       = label,
+    years        = round(years, 1),
+    n_days       = length(ret),
+    cagr         = round((cum[length(cum)]^(1 / years) - 1) * 100, 1),
+    vol          = round(stats::sd(ret) * sqrt(ann_factor) * 100, 1),
+    max_dd       = round(min((cum - cummax(cum)) / cummax(cum)) * 100, 1),
+    sharpe       = round(sr$sharpe, 2),
+    ann_rf       = round(sr$ann_rf * 100, 2),
+    window_start = min(dts),
+    window_end   = max(dts)
+  )
 }
 
 plan_avoid_worst <- function() {
@@ -677,6 +741,43 @@ plan_avoid_worst <- function() {
       )
 
       result
+    }),
+
+    # ── Leaderboard-facing metrics for the ACTUAL VIX-timed strategy (#813
+    # follow-up) ──────────────────────────────────────────────────────────
+    # Training/Testing/Full Period metrics computed from
+    # aw_practical_backtest's ret_strategy column via the SAME
+    # .aw_strategy_period_metrics() helper .avoid_worst_register_runs() uses
+    # for its Full Period registry row, so the two can never drift apart.
+    # R/plan_leaderboard.R's .norm_aw() reads THIS target -- never aw_metrics,
+    # which is SPY buy-and-hold under three hindsight scenarios ("All Days" /
+    # "Remove 10 Worst" / "Remove 10 Best"), kept only for the
+    # avoid-worst-days.qmd dashboard's illustrative asymmetry table. Same
+    # Training/Testing boundary as aw_metrics' own calc() (aw_params$oos_start
+    # / test_end, itself bounded by bt_partitions$equity, #667).
+    targets::tar_target(aw_strategy_metrics, {
+      library(dplyr)
+
+      d    <- aw_practical_backtest
+      dts  <- as.Date(d$date)
+      ret  <- d$ret_strategy
+      keep <- !is.na(ret) & !is.na(dts)
+      dts  <- dts[keep]
+      ret  <- ret[keep]
+
+      oos      <- as.Date(aw_params$oos_start)
+      test_end <- as.Date(aw_params$test_end)
+
+      training_idx <- dts < oos
+      testing_idx  <- dts >= oos & dts <= test_end
+
+      bind_rows(
+        .aw_strategy_period_metrics(dts[training_idx], ret[training_idx],
+                                     aw_daily_rf, "Training"),
+        .aw_strategy_period_metrics(dts[testing_idx], ret[testing_idx],
+                                     aw_daily_rf, "Testing"),
+        .aw_strategy_period_metrics(dts, ret, aw_daily_rf, "Full Period")
+      )
     }),
 
     # ── Practical: equity curve plot ────────────────────────────
@@ -1287,6 +1388,12 @@ plan_avoid_worst <- function() {
   # aw_metrics own convention so the leaderboard normaliser divide-by-100
   # stays correct; sharpe is a scale-free ratio; ann_rf (#677 slice 4,
   # #691) is PERCENT, same convention as cagr.
+  #
+  # #813 follow-up: the arithmetic below used to be inlined here. It is now
+  # .aw_strategy_period_metrics() (module level, above plan_avoid_worst()),
+  # shared with the aw_strategy_metrics target so the leaderboard's Full
+  # Period row and this registry's Full Period row can never independently
+  # drift apart -- same formula, same rounding, one definition.
   d    <- aw_practical_backtest
   dts  <- as.Date(d$date)
   ret  <- d$ret_strategy
@@ -1294,23 +1401,9 @@ plan_avoid_worst <- function() {
   ret  <- ret[keep]
   dts  <- dts[keep]
 
-  if (length(ret) >= 20L) {
-    years <- length(ret) / 252
-    cum   <- cumprod(1 + ret)
-    sr    <- .aw_sharpe_rf_full(dts, ret, aw_daily_rf, ann_factor = 252L)
+  full_row <- .aw_strategy_period_metrics(dts, ret, aw_daily_rf, "Full Period")
 
-    full_row <- tibble::tibble(
-      years        = round(years, 1),
-      n_days       = length(ret),
-      cagr         = round((cum[length(cum)]^(1 / years) - 1) * 100, 1),
-      vol          = round(sd(ret) * sqrt(252) * 100, 1),
-      max_dd       = round(min((cum - cummax(cum)) / cummax(cum)) * 100, 1),
-      sharpe       = round(sr$sharpe, 2),
-      ann_rf       = round(sr$ann_rf * 100, 2),
-      window_start = min(dts),
-      window_end   = max(dts)
-    )
-
+  if (!is.null(full_row)) {
     aw_units <- c(
       years = "years", n_days = "count", cagr = "percent",
       vol = "percent", max_dd = "percent", sharpe = "ratio",

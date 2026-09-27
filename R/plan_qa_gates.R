@@ -1386,17 +1386,20 @@ check_lending_status_registry <- function(strategy_cost_convention) {
 #' \code{tol} defaults to 0.02 (2 Sharpe-ratio "points"). This is not a slack
 #' number picked to make the check pass -- it is sized to the single
 #' coarsest ACTUAL rounding combination among the ~13 source metrics targets
-#' that feed this gate: \code{aw_metrics} (R/plan_avoid_worst.R) and
-#' \code{ltr_metrics} (R/plan_ltr_momentum.R) both round
-#' \code{cagr}/\code{vol}/\code{ann_rf} to ONE decimal place of PERCENT (a
-#' rounding half-width of 0.05 percentage points = 0.0005 as a fraction,
+#' that feed this gate: \code{aw_strategy_metrics} (R/plan_avoid_worst.R,
+#' #813 follow-up -- replaces the pre-fix \code{aw_metrics} source, same
+#' rounding convention) and \code{ltr_metrics} (R/plan_ltr_momentum.R) both
+#' round \code{cagr}/\code{vol}/\code{ann_rf} to ONE decimal place of PERCENT
+#' (a rounding half-width of 0.05 percentage points = 0.0005 as a fraction,
 #' applied independently to \code{cagr}, \code{vol}, AND \code{ann_rf}) and
 #' round \code{sharpe} itself to only TWO decimal places (a rounding
 #' half-width of 0.005). Propagating those three independent 0.0005-fraction
 #' errors through \code{(cagr - ann_rf) / vol} at their smallest observed
-#' \code{vol} (Avoid Worst's ~0.18, LTR's ~0.17) bounds the coherence gap at
-#' ~0.012 in the worst case; \code{tol = 0.02} keeps a margin above that
-#' bound. Every other source target
+#' \code{vol} (Avoid Worst's ~0.12 post-#813-follow-up -- the VIX-timed
+#' strategy's own vol is LOWER than the SPY-buy-and-hold-minus-worst-10-days
+#' decoy's ~0.18 was; LTR's ~0.17) bounds the coherence gap at ~0.013 in the
+#' worst case; \code{tol = 0.02} keeps a margin above that bound. Every
+#' other source target
 #' (fm_metrics/drif_metrics/stk_max_metrics/stk_drif_metrics/xgb_drif_metrics:
 #' unrounded floats; cmr_summary: 4-decimal fractions;
 #' tom_metrics/rsc_metrics/mf_metrics/ev_metrics/mom_prepeak siblings:
@@ -4330,6 +4333,143 @@ check_selection_before_oos <- function(
   invisible(verdict_tbl)
 }
 
+#' Registry of leaderboard strategies whose row must trace to a specific,
+#' named return-series target, plus the decoy series a mis-wiring would
+#' silently fall back to (S42, Refs #813)
+#'
+#' One entry today: "Avoid Worst" (#813 -- the leaderboard's Avoid Worst row
+#' was, for a period, sourced from `aw_metrics`' "Remove 10 Worst" hindsight
+#' scenario -- plain SPY buy-and-hold with its worst 10 days deleted after
+#' the fact -- rather than from `aw_practical_backtest`'s `ret_strategy`,
+#' the VIX-triggered protection strategy's own returns; #813 itself fixed
+#' only the bt.* registry writer, `.avoid_worst_register_runs()`, not the
+#' leaderboard assembly).
+#'
+#' @section Why a scoped registry, not a fully generic mechanism:
+#' A fully generic version -- every leaderboard row declares its own source
+#' target, and this gate recomputes it automatically for all ~18 strategies
+#' -- would need a source-target column threaded through every `.norm_*()`
+#' helper in `R/plan_leaderboard.R` (`.norm_ltr()`, `.norm_olmar()`,
+#' `.norm_tom()`, `.norm_cmr()`, `.norm_rsc()`, `.norm_mom_sibling()`,
+#' `.norm_mf()`, `.norm_value()`, and the 6 direct `add_meta()` calls with
+#' no `.norm_*()` at all) -- a materially larger schema change than this
+#' fix's scope. This registry is instead extensible one entry at a time:
+#' add a row here, plus the matching recompute branch in
+#' `build_leaderboard_traceability_table()`.
+#' @noRd
+S42_TRACEABILITY_REGISTRY <- c("Avoid Worst")
+
+#' Build the S42 verdict table: does the leaderboard's Avoid Worst Full
+#' Period row trace to the strategy's OWN return series? (Refs #813)
+#'
+#' Recomputes Avoid Worst's Full Period sharpe/cagr directly from
+#' `aw_practical_backtest$ret_strategy` via `.aw_strategy_period_metrics()`
+#' (R/plan_avoid_worst.R) -- the SAME helper both the `aw_strategy_metrics`
+#' target (leaderboard source) and `.avoid_worst_register_runs()` (registry
+#' writer) call -- and compares the result against the value the
+#' leaderboard actually publishes. Also compares against `aw_metrics`'
+#' "Remove 10 Worst" / "Full Period" row -- the decoy series #813's bug
+#' silently fell back to -- so a future re-wiring mistake that lands on
+#' that scenario again is caught even if, by coincidence, it were ever
+#' numerically close to the correct value.
+#'
+#' @param leaderboard Tibble from the `leaderboard` target.
+#' @param aw_practical_backtest Tibble from the `aw_practical_backtest`
+#'   target (the VIX-timed strategy's own returns).
+#' @param aw_daily_rf Tibble from the `aw_daily_rf` target (date, rf_ret).
+#' @param aw_metrics Tibble from the `aw_metrics` target (the decoy source
+#'   -- SPY buy-and-hold hindsight scenarios).
+#' @param tol Numeric. Absolute tolerance for the sharpe/cagr match
+#'   (default 0.02, matching S17's coherence-gate tolerance derivation --
+#'   see `check_leaderboard_sharpe_coherence()`'s roxygen "Tolerance"
+#'   section -- both compare a rounded, published figure against a
+#'   recomputed one).
+#' @return Tibble: strategy, metric, published, recomputed, decoy, verdict
+#'   ("PASS"/"FAIL").
+#' @noRd
+build_leaderboard_traceability_table <- function(leaderboard, aw_practical_backtest,
+                                                  aw_daily_rf, aw_metrics,
+                                                  tol = 0.02) {
+  d    <- aw_practical_backtest
+  dts  <- as.Date(d$date)
+  ret  <- d$ret_strategy
+  keep <- !is.na(ret) & !is.na(dts)
+
+  recomputed <- .aw_strategy_period_metrics(dts[keep], ret[keep], aw_daily_rf, "Full Period")
+  if (is.null(recomputed)) {
+    cli::cli_abort(c(
+      "x" = "build_leaderboard_traceability_table() (S42): could not recompute Avoid Worst's Full Period metrics from aw_practical_backtest.",
+      "i" = "aw_practical_backtest$ret_strategy has fewer than 20 non-NA observations -- check upstream targets (Refs #813)."
+    ))
+  }
+
+  published <- leaderboard[leaderboard$strategy == "Avoid Worst" &
+                              leaderboard$period == "Full Period", , drop = FALSE]
+  if (nrow(published) != 1L) {
+    cli::cli_abort(c(
+      "x" = "build_leaderboard_traceability_table() (S42): expected exactly one Avoid Worst / Full Period leaderboard row, found {nrow(published)}.",
+      "i" = "Check R/plan_leaderboard.R's .norm_aw() / aw_strategy_metrics wiring (Refs #813)."
+    ))
+  }
+
+  decoy <- aw_metrics[aw_metrics$scenario == "Remove 10 Worst" &
+                         aw_metrics$period == "Full Period", , drop = FALSE]
+  if (nrow(decoy) != 1L) {
+    cli::cli_abort(c(
+      "x" = "build_leaderboard_traceability_table() (S42): expected exactly one aw_metrics 'Remove 10 Worst' / Full Period row, found {nrow(decoy)}.",
+      "i" = "Check R/plan_avoid_worst.R's aw_metrics target (Refs #813)."
+    ))
+  }
+
+  tbl <- tibble::tibble(
+    strategy   = "Avoid Worst",
+    metric     = c("sharpe", "cagr"),
+    published  = c(published$sharpe, published$cagr),
+    recomputed = c(recomputed$sharpe, recomputed$cagr / 100),
+    decoy      = c(decoy$sharpe, decoy$cagr / 100)
+  )
+  tbl$matches_recomputed <- abs(tbl$published - tbl$recomputed) < tol
+  tbl$matches_decoy      <- abs(tbl$published - tbl$decoy) < tol
+  tbl$verdict <- ifelse(tbl$matches_recomputed & !tbl$matches_decoy, "PASS", "FAIL")
+  tbl
+}
+
+#' Abort if any S42 leaderboard-traceability row is not PASS (Refs #813)
+#'
+#' @param verdict_tbl Output of `build_leaderboard_traceability_table()`.
+#' @return Invisibly, `verdict_tbl`.
+#' @noRd
+check_leaderboard_strategy_traceability <- function(verdict_tbl) {
+  required_cols <- c("strategy", "metric", "published", "recomputed", "decoy", "verdict")
+  missing_cols <- setdiff(required_cols, names(verdict_tbl))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "check_leaderboard_strategy_traceability() (S42) received a table missing {length(missing_cols)} required column{?s}: {.field {missing_cols}}.",
+      "i" = "Expected the output of build_leaderboard_traceability_table()."
+    ))
+  }
+
+  bad <- verdict_tbl[verdict_tbl$verdict != "PASS", , drop = FALSE]
+  if (nrow(bad) > 0L) {
+    decoy_hit <- abs(bad$published - bad$decoy) < 0.02
+    detail <- sprintf(
+      "  %s / %s -- published=%.4f, recomputed=%.4f, decoy=%.4f%s",
+      bad$strategy, bad$metric, bad$published, bad$recomputed, bad$decoy,
+      ifelse(decoy_hit, " (MATCHES THE DECOY -- #813 regression)", "")
+    )
+    cli::cli_abort(c(
+      "x" = "qa_leaderboard_strategy_traceability (S42): {nrow(bad)} leaderboard metric{?s} failed to trace to the strategy's own return series.",
+      stats::setNames(detail, rep("i", length(detail))),
+      "i" = paste0(
+        "Refs #813 -- a leaderboard strategy row must be computed from that ",
+        "strategy's own tradeable return series, never from another ",
+        "target's illustrative/hindsight scenario."
+      )
+    ))
+  }
+  invisible(verdict_tbl)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -5286,6 +5426,25 @@ plan_qa_gates <- function() {
         sum(verdict_tbl$verdict == "FAIL"), " FAIL / ",
         sum(verdict_tbl$verdict == "INDETERMINATE"), " INDETERMINATE ",
         "of ", nrow(verdict_tbl), " (#910 item 1)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: leaderboard strategy source traceability (S42, Refs #813) --
+    # a leaderboard row's published metrics must trace to that strategy's
+    # OWN return series, never to a lookalike/hindsight scenario computed
+    # by a different target. See S42_TRACEABILITY_REGISTRY's roxygen for
+    # scope and why this is a targeted, extensible registry rather than a
+    # fully generic per-row source-declaration mechanism.
+    targets::tar_target(qa_leaderboard_strategy_traceability, {
+      verdict_tbl <- build_leaderboard_traceability_table(
+        leaderboard, aw_practical_backtest, aw_daily_rf, aw_metrics
+      )
+      check_leaderboard_strategy_traceability(verdict_tbl)
+      cli::cli_inform(c("v" = paste0(
+        "qa_leaderboard_strategy_traceability: S42 passed -- ",
+        nrow(verdict_tbl), " metric(s) traced to Avoid Worst's own return ",
+        "series, none matching the aw_metrics hindsight decoy (Refs #813)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always"))
