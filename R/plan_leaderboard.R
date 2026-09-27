@@ -339,16 +339,20 @@ plan_leaderboard <- function() {
       }
 
       # cmr_summary has lookback (1m/3m/6m) instead of period; no period column.
-      # Pick the best-Sharpe lookback for the leaderboard row.
-      # We create one synthetic "Full Period" row = the best lookback.
+      # Pick the lookback the pipeline already chose PRE-OOS (S41/#910 item 1,
+      # #917 -- see R/plan_commodities_mean_reversion.R's cmr_selection target
+      # and .cmr_select_pre_oos_lookback()'s roxygen). We create one
+      # synthetic "Full Period" row = the chosen lookback's FULL-sample
+      # metrics (cmr_summary is unchanged -- only WHICH row gets picked
+      # changed, not how its own Sharpe/CAGR/vol were computed).
       # Source: R/plan_commodities_mean_reversion.R:210-221 already stores
       # cagr/vol/max_dd as FRACTION (documented convention, #336) -- no
       # conversion needed here. Column is n_days, not n_months (#717: CMR's
       # data is daily, not monthly -- same explicit-rename pattern as
       # .norm_tom/.norm_aw below, which map their own n_days into `months`).
-      .norm_cmr <- function(m) {
+      .norm_cmr <- function(m, chosen_lookback) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
-        best <- m |> filter(!is.na(sharpe)) |> arrange(desc(sharpe)) |> slice(1)
+        best <- m |> filter(lookback == chosen_lookback)
         if (nrow(best) == 0L) return(NULL)
         best |> transmute(
           period = "Full Period",
@@ -370,10 +374,12 @@ plan_leaderboard <- function() {
       # leaderboard ALONGSIDE the base "cmr" row, never replacing it -- see
       # that file's header comment for the TIME/exposure-scaling
       # combination mode this overlay implements
-      # (.claude/rules/strategy-combination-modes.md).
-      .norm_cmr_conditioned <- function(m) {
+      # (.claude/rules/strategy-combination-modes.md). chosen_lookback here
+      # is cmr_selection_conditioned$chosen -- its OWN pre-OOS pick, which
+      # may differ from the unconditioned cmr_selection$chosen (#917/S41).
+      .norm_cmr_conditioned <- function(m, chosen_lookback) {
         if (is.null(m) || nrow(m) == 0) return(NULL)
-        .norm_cmr(m)
+        .norm_cmr(m, chosen_lookback)
       }
 
       # rsc_metrics contains multiple internal strategy variants (SPY_overlay,
@@ -508,16 +514,22 @@ plan_leaderboard <- function() {
         add_meta(.norm_tom(tom_metrics), "TOM", "Overlay",
                  "Turn-of-the-month calendar effect",
                  "turn-of-month.html"),
-        add_meta(.norm_cmr(cmr_summary), "CMR", "Commodities",
-                 "Commodities mean reversion (best lookback)",
+        # chosen_lookback = cmr_selection$chosen -- picked PRE-OOS only
+        # (S41/#910 item 1, #917; R/plan_commodities_mean_reversion.R's
+        # cmr_selection target), not the full-sample max-Sharpe pick this
+        # used to re-derive independently.
+        add_meta(.norm_cmr(cmr_summary, cmr_selection$chosen), "CMR", "Commodities",
+                 "Commodities mean reversion (best lookback, selected pre-OOS)",
                  "commodities-mean-reversion.html"),
         # ── #751 (owner decision 2026-09-24): CMR regime-conditioning
         # overlay -- ALONGSIDE the base "CMR" row above, not replacing it.
         # cmr_summary_conditioned (R/plan_commodities_mean_reversion.R) is
         # diagnostic-only no longer as of this wiring; see that target's
-        # header comment.
-        add_meta(.norm_cmr_conditioned(cmr_summary_conditioned), "CMR Conditioned", "Commodities",
-                 "Commodities mean reversion, regime-conditioning exposure overlay (best lookback)",
+        # header comment. chosen_lookback = cmr_selection_conditioned$chosen
+        # -- its OWN pre-OOS pick (S41/#910 item 1, #917), which may differ
+        # from cmr_selection$chosen above.
+        add_meta(.norm_cmr_conditioned(cmr_summary_conditioned, cmr_selection_conditioned$chosen), "CMR Conditioned", "Commodities",
+                 "Commodities mean reversion, regime-conditioning exposure overlay (best lookback, selected pre-OOS)",
                  "commodities-mean-reversion.html"),
         add_meta(.norm_rsc(rsc_metrics), "Risk State", "Overlay",
                  "VIX regime overlay on SPY",
