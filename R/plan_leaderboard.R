@@ -168,6 +168,27 @@ STRATEGY_OBS_ANN_FACTOR <- .build_strategy_obs_ann_factor(
   .strategy_obs_ann_factor_source
 )
 
+#' Decision threshold for the leaderboard's P(true Sharpe > 0) verdict (#851)
+#'
+#' The StratProof article that motivated #851 ("I built the paper-spec
+#' crypto momentum strategy on 5.8 years of data. It has lost money every
+#' year since 2024.") uses 95% as its own accept/reject bar: "Probability
+#' the true Sharpe is greater than zero: 81% (need 95%+ to call this signal,
+#' not noise)". This repo adopts that SAME 95% figure rather than deriving
+#' its own, for the same reason historicaldata::hd_detection_power() adopts
+#' Cohen's (1988) alpha = 0.05 / target_power = 0.80 textbook conventions
+#' rather than fitting a bespoke value to this leaderboard's current
+#' numbers: per .claude/rules/resulting-prohibition.md, choosing a threshold
+#' BECAUSE it flatters or damns a specific strategy's current
+#' prob_sharpe_positive is exactly the "resulting" failure mode that rule
+#' prohibits. A strategy whose prob_sharpe_positive (or, wherever
+#' k_eff_leaderboard is usable, prob_sharpe_positive_mt) falls below this
+#' bar is flagged via prob_sharpe_positive_insufficient(_mt) in the
+#' leaderboard target below, the same way detection_underpowered flags an
+#' inadequately-sampled row (R/plan_qa_gates.R S40 asserts coverage of these
+#' columns for every positive-Sharpe row).
+HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
+
 # ── #778: turnover-aware cost basis, per strategy code_name ────────────────
 # Feeds the `leaderboard` target's cost_rows-extension block (see the "#778:
 # extend cost_rows" comment inside that target below) -- the flat
@@ -1191,6 +1212,109 @@ plan_leaderboard <- function() {
 
       all_metrics <- all_metrics |>
         dplyr::bind_cols(detection_diag)
+
+      # ── Probabilistic Sharpe Ratio diagnostic: P(true Sharpe > 0) (#851) ───
+      # Computed ADJACENT to the detection-power diagnostic above, following
+      # the SAME shape: one row-wise helper, one purrr::pmap_dfr() call over
+      # the same four inputs (sharpe, months, obs_ann_factor,
+      # k_eff_leaderboard), the same tryCatch-to-NA discipline, and the same
+      # keff_usable escape hatch for the multiple-testing-corrected column.
+      # This is a DIFFERENT statistical question from detection power --
+      # "given the sample we have, how confident are we the true Sharpe is
+      # positive" (retrospective) vs. "is the sample long enough to detect
+      # this effect if it's real" (prospective) -- see
+      # historicaldata::hd_prob_sharpe_positive()'s own roxygen and
+      # .claude/rules/detection-power-required.md for the full relationship.
+      # A strategy can be adequately POWERED (detection_underpowered = FALSE)
+      # while still having a LOW prob_sharpe_positive if the point estimate
+      # is weak, and vice versa -- #851 proposed work item 1's own framing.
+      #
+      # Like the detection-power diagnostic, this uses the NORMAL-returns
+      # simplification (skewness = 0, kurtosis = 0) -- all_metrics has no
+      # raw return series or per-row sample moments at this point (only
+      # summary statistics), the same reason hd_detection_power() itself
+      # defaults to the normal case. A caller with the real sample moments
+      # (e.g. strat_deflated_sharpe's raw-return-derived skewness/kurtosis,
+      # available only for the Full-Period row of strategies covered by
+      # STRAT_RETURNS_WIDE_CODES) would get a more precise estimate by
+      # passing those directly to hd_prob_sharpe_positive() -- not done here
+      # to keep this diagnostic uniform across every period row, matching
+      # detection_diag's own scope.
+      #
+      # Restricted to sharpe > 0 rows, matching detection_diag's domain
+      # exactly (not because hd_prob_sharpe_positive() itself requires a
+      # positive Sharpe -- it doesn't, unlike hd_detection_power() -- but so
+      # the two diagnostics are directly comparable one-to-one per row, and
+      # because a negative-Sharpe strategy is not the "is this a real edge"
+      # question this leaderboard currently reports on for that row).
+      #
+      # n_tests/correction reuse the SAME k_eff_leaderboard used by the
+      # detection-power block, via the Bonferroni p-value adjustment
+      # documented in hd_prob_sharpe_positive()'s "Multiple-testing
+      # correction" roxygen section -- a DIFFERENT mechanism from
+      # strat_deflated_sharpe's dsr_pvalue (which already applies
+      # hd_deflated_sharpe()'s trial-count benchmark-shift correction to the
+      # SAME underlying question for the Full-Period row, using real sample
+      # moments). The two are complementary cross-checks, not duplicates:
+      # `1 - dsr_pvalue` (joined above) is the Full-Period, real-moment,
+      # benchmark-shift-corrected estimate; `prob_sharpe_positive_mt` below
+      # is the per-row, normal-approximation, Bonferroni-corrected estimate.
+      .prob_sharpe_positive_row <- function(sr, n, af, keff) {
+        na_row <- tibble::tibble(
+          prob_sharpe_positive    = NA_real_,
+          prob_sharpe_positive_mt = NA_real_
+        )
+
+        if (is.na(sr) || is.na(n) || is.na(af) || sr <= 0 || n < 2) {
+          return(na_row)
+        }
+
+        keff_usable <- !is.na(keff) && keff >= 1
+
+        psr <- tryCatch(
+          historicaldata::hd_prob_sharpe_positive(
+            sharpe_annual = sr, n_obs = n, ann_factor = af,
+            n_tests    = if (keff_usable) keff else 1,
+            correction = if (keff_usable) "bonferroni" else "none"
+          ),
+          error = function(e) NULL
+        )
+
+        if (is.null(psr)) {
+          return(na_row)
+        }
+
+        tibble::tibble(
+          prob_sharpe_positive    = psr$prob_sharpe_positive,
+          prob_sharpe_positive_mt = if (keff_usable) psr$prob_sharpe_positive_corrected else NA_real_
+        )
+      }
+
+      prob_sharpe_diag <- purrr::pmap_dfr(
+        list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor,
+             all_metrics$k_eff_leaderboard),
+        .prob_sharpe_positive_row
+      )
+
+      all_metrics <- all_metrics |>
+        dplyr::bind_cols(prob_sharpe_diag) |>
+        dplyr::mutate(
+          # TRUE where the probability the true Sharpe is positive falls
+          # below HD_PROB_SHARPE_POSITIVE_THRESHOLD -- the SAME accept/reject
+          # bar the StratProof article that motivated #851 uses ("need 95%+
+          # to call this signal, not noise"), flagged the same way
+          # detection_underpowered flags an inadequately-sampled row. NA
+          # wherever prob_sharpe_positive itself is NA (never coerced to
+          # FALSE, which would silently assert "passes the bar").
+          prob_sharpe_positive_insufficient    = dplyr::if_else(
+            is.na(prob_sharpe_positive), NA,
+            prob_sharpe_positive < HD_PROB_SHARPE_POSITIVE_THRESHOLD
+          ),
+          prob_sharpe_positive_insufficient_mt = dplyr::if_else(
+            is.na(prob_sharpe_positive_mt), NA,
+            prob_sharpe_positive_mt < HD_PROB_SHARPE_POSITIVE_THRESHOLD
+          )
+        )
 
       # ── First-passage breach-probability diagnostic (#586 G1) ─────────────
       # "What is the probability this strategy's cumulative return path

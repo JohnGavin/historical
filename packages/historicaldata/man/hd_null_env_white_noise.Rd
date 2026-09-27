@@ -41,6 +41,7 @@ Other falsification:
 \code{\link{hd_null_env_regime_vol}()},
 \code{\link{hd_null_rejection_rate}()},
 \code{\link{hd_param_neighbourhood}()},
+\code{\link{hd_prob_sharpe_positive}()},
 \code{\link{hd_rolling_sharpe}()},
 \code{\link{hd_sharpe_haircut}()},
 \code{\link{hd_sharpe_stability_ratio}()},

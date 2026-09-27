@@ -1858,6 +1858,189 @@ check_leaderboard_detection_power_correction <- function(leaderboard, exemptions
 }
 
 
+#' Assert P(true Sharpe > 0) coverage and single-test/corrected monotonicity
+#' on the leaderboard (S40, #851)
+#'
+#' Companion to S20 (\code{check_leaderboard_detection_power_values()}) and
+#' S37 (\code{check_leaderboard_detection_power_correction()}) above, applied
+#' to the DIFFERENT statistical object \code{historicaldata::hd_prob_sharpe_positive()}
+#' computes -- see that function's roxygen and
+#' \code{.claude/rules/detection-power-required.md} for why "is the sample
+#' long enough to detect this effect" (detection power) and "how confident
+#' are we the sign is positive" (the Probabilistic Sharpe Ratio, this gate)
+#' are complementary, not redundant, questions.
+#'
+#' Unlike S20 (a hard abort with no exemption escape for the single-test
+#' verdict), THIS gate grants a documented-reason exemption
+#' (\code{DEFLATED_SHARPE_EXEMPTIONS}, the SAME table S21/S37 use -- a
+#' strategy excluded from \code{STRAT_RETURNS_WIDE_CODES}/
+#' \code{k_eff_leaderboard} for a documented reason is exempt from every
+#' K_eff-derived diagnostic for the same reason, not a second,
+#' independently-maintained list) for BOTH the single-test
+#' \code{prob_sharpe_positive} coverage and the multiple-testing-corrected
+#' \code{prob_sharpe_positive_mt} coverage -- #851's own proposed-work
+#' wording ("every positive-Sharpe row has a non-NA P(SR>0) verdict... or
+#' documented exemption") explicitly allows the escape hatch at BOTH levels,
+#' not only the corrected one.
+#'
+#' \enumerate{
+#'   \item \strong{Coverage.} Every positive-Sharpe row either has a non-NA
+#'     \code{prob_sharpe_positive}, OR the strategy has a written reason in
+#'     \code{exemptions}. Wherever \code{k_eff_leaderboard} is itself usable
+#'     (non-NA, \code{>= 1}), the SAME requirement applies to
+#'     \code{prob_sharpe_positive_mt}.
+#'   \item \strong{Monotonicity (falsification: \code{n_tests = 1}
+#'     reproduces the uncorrected value exactly).} Wherever BOTH
+#'     \code{prob_sharpe_positive} and \code{prob_sharpe_positive_mt} are
+#'     non-NA, the corrected figure must be \code{<=} the uncorrected one
+#'     (within a tiny floating-point tolerance) -- the Bonferroni p-value
+#'     adjustment inside \code{hd_prob_sharpe_positive()} can only WEAKLY
+#'     INCREASE the p-value, which can only WEAKLY DECREASE the reported
+#'     probability (that function's own roxygen states this property
+#'     explicitly, and \code{test-hd-prob-sharpe-positive.R} verifies
+#'     \code{n_tests = 1} reproduces the uncorrected figure exactly for
+#'     either \code{correction} value -- the SAME falsification property
+#'     S37 asserts for \code{detection_min_n_years}/
+#'     \code{detection_min_n_years_mt}, mirrored here in the opposite
+#'     direction because a probability, unlike a required sample size,
+#'     DECREASES under a stricter multiple-testing bar).
+#' }
+#'
+#' @param leaderboard Tibble with at least \code{strategy}, \code{period},
+#'   \code{sharpe}, \code{prob_sharpe_positive}, \code{prob_sharpe_positive_mt},
+#'   \code{k_eff_leaderboard} columns (the output of the \code{leaderboard}
+#'   target).
+#' @param exemptions Tibble with \code{strategy}/\code{reason} columns.
+#'   Default \code{DEFLATED_SHARPE_EXEMPTIONS} above.
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_prob_sharpe_positive <- function(leaderboard, exemptions = DEFLATED_SHARPE_EXEMPTIONS) {
+  required_cols <- c(
+    "strategy", "period", "sharpe",
+    "prob_sharpe_positive", "prob_sharpe_positive_mt", "k_eff_leaderboard"
+  )
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_leaderboard_prob_sharpe_positive() (S40) requires strategy, ",
+        "period, sharpe, prob_sharpe_positive, prob_sharpe_positive_mt, ",
+        "k_eff_leaderboard."
+      )
+    ))
+  }
+  if (!all(c("strategy", "reason") %in% names(exemptions))) {
+    cli::cli_abort(c(
+      "x" = "exemptions table is missing required column(s): strategy, reason.",
+      "i" = "check_leaderboard_prob_sharpe_positive() (S40) requires DEFLATED_SHARPE_EXEMPTIONS' strategy/reason columns."
+    ))
+  }
+
+  positive <- !is.na(leaderboard$sharpe) & leaderboard$sharpe > 0
+
+  # ── Check 1a: single-test coverage, with a documented-reason escape hatch ──
+  single_missing <- positive & is.na(leaderboard$prob_sharpe_positive)
+  if (any(single_missing)) {
+    idx <- which(single_missing)
+    exempted <- leaderboard$strategy[idx] %in% exemptions$strategy
+    offender_idx <- idx[!exempted]
+
+    if (length(offender_idx) > 0L) {
+      offenders <- sprintf(
+        "  %s / %s -- sharpe = %s (no declared exemption)",
+        leaderboard$strategy[offender_idx], leaderboard$period[offender_idx],
+        format(leaderboard$sharpe[offender_idx], digits = 3)
+      )
+      cli::cli_abort(c(
+        "x" = paste0(
+          "Leaderboard has ", length(offender_idx),
+          " row(s) with sharpe > 0 but no prob_sharpe_positive verdict AND ",
+          "no declared exemption (#851):"
+        ),
+        setNames(offenders, rep("i", length(offenders))),
+        "i" = paste0(
+          "check_leaderboard_prob_sharpe_positive() (S40) requires ",
+          "prob_sharpe_positive to be non-NA for every positive-Sharpe row, ",
+          "or a written reason in DEFLATED_SHARPE_EXEMPTIONS (R/plan_qa_gates.R)."
+        )
+      ))
+    }
+  }
+
+  # ── Check 1b: multiple-testing-corrected coverage, wherever k_eff_leaderboard
+  # is itself usable -- SAME escape hatch (#851, mirroring S37's check 1).
+  mt_applicable <- positive & !is.na(leaderboard$k_eff_leaderboard) & leaderboard$k_eff_leaderboard >= 1
+  mt_missing <- mt_applicable & is.na(leaderboard$prob_sharpe_positive_mt)
+  if (any(mt_missing)) {
+    idx <- which(mt_missing)
+    exempted <- leaderboard$strategy[idx] %in% exemptions$strategy
+    offender_idx <- idx[!exempted]
+
+    if (length(offender_idx) > 0L) {
+      offenders <- sprintf(
+        "  %s / %s -- sharpe = %s, k_eff_leaderboard = %s (no declared exemption)",
+        leaderboard$strategy[offender_idx], leaderboard$period[offender_idx],
+        format(leaderboard$sharpe[offender_idx], digits = 3),
+        format(leaderboard$k_eff_leaderboard[offender_idx], digits = 4)
+      )
+      cli::cli_abort(c(
+        "x" = paste0(
+          "Leaderboard has ", length(offender_idx),
+          " row(s) with sharpe > 0 and a usable k_eff_leaderboard but no ",
+          "multiple-testing-corrected prob_sharpe_positive_mt verdict AND ",
+          "no declared exemption (#851):"
+        ),
+        setNames(offenders, rep("i", length(offenders))),
+        "i" = paste0(
+          "check_leaderboard_prob_sharpe_positive() (S40) requires ",
+          "prob_sharpe_positive_mt to be non-NA whenever k_eff_leaderboard ",
+          "is usable, or a written reason in DEFLATED_SHARPE_EXEMPTIONS ",
+          "(R/plan_qa_gates.R)."
+        )
+      ))
+    }
+  }
+
+  # ── Check 2: monotonicity -- corrected probability must never be GREATER
+  # than the uncorrected one, wherever both are non-NA. Falsification:
+  # k_eff_leaderboard = 1 makes them equal exactly (see roxygen above).
+  both_present <- !is.na(leaderboard$prob_sharpe_positive) & !is.na(leaderboard$prob_sharpe_positive_mt)
+  tol <- 1e-6
+  greater_than <- both_present &
+    (leaderboard$prob_sharpe_positive_mt > leaderboard$prob_sharpe_positive + tol)
+
+  if (any(greater_than)) {
+    idx <- which(greater_than)
+    offenders <- sprintf(
+      "  %s / %s -- prob_sharpe_positive = %s, prob_sharpe_positive_mt = %s (corrected > uncorrected)",
+      leaderboard$strategy[idx], leaderboard$period[idx],
+      format(leaderboard$prob_sharpe_positive[idx], digits = 4),
+      format(leaderboard$prob_sharpe_positive_mt[idx], digits = 4)
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) where the multiple-testing-corrected P(true Sharpe > 0) is ",
+        "GREATER than the uncorrected one (#851):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_prob_sharpe_positive() (S40) requires ",
+        "prob_sharpe_positive_mt <= prob_sharpe_positive for every row -- a ",
+        "Bonferroni p-value correction can only WEAKLY INCREASE the ",
+        "p-value, which can only WEAKLY DECREASE the reported probability. ",
+        "Check for an inverted n_tests/correction, or a k_eff_leaderboard ",
+        "< 1 reaching the correction in R/plan_leaderboard.R's ",
+        ".prob_sharpe_positive_row()."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Declared exemptions from deflated-Sharpe / K_eff coverage (S21, #728 item
 #' 4, narrowed by #733)
 #'
@@ -4781,6 +4964,22 @@ plan_qa_gates <- function() {
         " (#558)"
       )))
       funnel
-    }, cue = targets::tar_cue(mode = "always"))
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: P(true Sharpe > 0) coverage (or documented exemption) and
+    # single-test/corrected monotonicity (S40, #851). See
+    # check_leaderboard_prob_sharpe_positive() roxygen above for the full
+    # rationale and how this complements (not duplicates) S20/S37's
+    # detection-power gates for the DIFFERENT hd_prob_sharpe_positive()
+    # statistic.
+    targets::tar_target(
+      qa_leaderboard_prob_sharpe_positive,
+      command = {
+        check_leaderboard_prob_sharpe_positive(leaderboard, DEFLATED_SHARPE_EXEMPTIONS)
+        cli::cli_inform(c("v" = "qa_leaderboard_prob_sharpe_positive: S40 passed (P(true Sharpe > 0) verdict complete and single-test/corrected values are monotone)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    )
   )
 }
