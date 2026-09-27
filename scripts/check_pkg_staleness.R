@@ -45,21 +45,47 @@
 # "guard the guard" sanity check that DOES live in the pipeline, and why it
 # is a narrower, different property than what this script checks.
 #
-# HOW THE CHECK WORKS (avoiding the same-run-scheduling-order trap): a
-# naive "is target X's tar_meta() build time older than pkg_source_digest's
-# build time" comparison produces FALSE POSITIVES on a fresh/full rebuild,
-# where every target (including pkg_source_digest) builds in the same
-# invocation and `targets`' scheduler is free to run them in any relative
-# order — a target that legitimately built moments BEFORE pkg_source_digest
-# in the very same run would wrongly read as "older". This script instead
-# combines tar_meta() (time) with tar_progress() (this run's outcome per
-# target — "completed" vs "skipped" vs "errored"): a target is only flagged
-# stale when it was SKIPPED in the current run (progress != "completed")
-# AND its recorded build time predates pkg_source_digest's — i.e. its
-# cached value was computed before the package's last recorded content
-# change, and this run gave it no chance to catch up either. A target that
-# DID rebuild this run is always current, regardless of exact timestamp
-# ordering against pkg_source_digest within the same invocation.
+# HOW THE CHECK WORKS (avoiding both the same-run AND the cross-run
+# scheduling-order trap -- #911 flaw 2): comparing a candidate target's
+# tar_meta() build time against pkg_source_digest's OWN tar_meta() build
+# time is unsound, because pkg_source_digest is itself just another target
+# in the same DAG, scheduled by `targets` at whatever moment its own
+# dependency (pkg_source_files) happens to be evaluated. Two real builds
+# (2026-09-26, issue #911) reproduce this at two different scopes:
+#   - SAME-RUN scheduling order: on a run where the package changed, an
+#     unrelated target that also rebuilds this run (for its own, unrelated
+#     reasons) may complete a fraction of a second BEFORE pkg_source_digest
+#     finishes -- both see the identical, current package state (loaded
+#     ONCE via pkgload::load_all() before the whole tar_make() invocation
+#     begins), so this ordering is never actually meaningful.
+#   - CROSS-RUN scheduling order (the flaw this script previously missed):
+#     once that run is over, `tar_progress()` no longer distinguishes it --
+#     the NEXT invocation reports the target as "skipped" (correctly -- it
+#     has nothing new to do), and the ONLY remaining signal is the two raw
+#     tar_meta() times, which can still disagree by a couple of seconds
+#     purely because of the earlier run's internal scheduling order. This is
+#     exactly what happened to `art_vignette_seed` (built 11:13:30) and
+#     `qa_legacy_leaderboard_sentinel` (11:13:32), both moments BEFORE
+#     `pkg_source_digest` (11:13:32.135217) completed in that SAME run --
+#     the next build's tar_progress() showed them "skipped" and a naive
+#     time comparison flagged them stale, though both were computed from
+#     the already-current package.
+#
+# The fix: stop comparing against pkg_source_digest's build time at all.
+# Compare instead against the moment the package source *content* actually
+# changed on disk -- the maximum on-disk mtime across the exact file paths
+# `pkg_source_files` (the #753 format="file" target) recorded, read via
+# .cps_pkg_source_changed_at(). That moment necessarily PRECEDES the entire
+# tar_make() invocation that reacts to it (the files must already be on
+# disk before `tar_make()` can even start evaluating the DAG), so it can
+# never race against any target's build time from within that invocation --
+# eliminating the same-run trap -- and, because it is read fresh from disk
+# rather than from another target's stored metadata, it is unaffected by
+# which run produced the LAST current value of `pkg_source_digest` --
+# eliminating the cross-run trap. See .cps_pkg_source_changed_at() below.
+# `tar_progress()` is still read for the human-readable annotation in a
+# [STALE-PKG] line (was it skipped or did it complete this run) but is no
+# longer part of the correctness decision -- see .cps_evaluate_staleness().
 #
 # WHICH TARGETS ARE CHECKED (the registry, target-level attribution, and its
 # honest limits):
@@ -132,12 +158,15 @@
 #
 # Exit codes:
 #   0  no stale package-consuming target found (or none discovered at all)
-#   1  one or more known package-consuming targets were skipped in a run
-#      where pkg_source_digest's recorded build time is newer than theirs
+#   1  one or more known package-consuming targets have a recorded build
+#      time older than the package source's last on-disk change (#911:
+#      compared against max(file.mtime(pkg_source_files)), never against
+#      pkg_source_digest's own build time)
 #   2  could not run the check at all (no store, pkg_source_digest not yet
-#      built in this store, tar_meta()/tar_progress() failed or returned a
-#      truncated read — see #730) — this is NOT a pass, never treat it as
-#      one
+#      built in this store, pkg_source_files unreadable or none of its
+#      recorded paths exist on disk, tar_meta()/tar_progress() failed or
+#      returned a truncated read — see #730) — this is NOT a pass, never
+#      treat it as one
 
 suppressPackageStartupMessages({
   library(targets)
@@ -188,6 +217,95 @@ suppressPackageStartupMessages({
   .cps_promote_truncation_warning(
     targets::tar_progress(store = store_path)
   )
+}
+
+# ---------------------------------------------------------------------------
+# #911 flaw 2 fix: derive "when did the package source last change" from the
+# on-disk files themselves, never from another target's tar_meta() build
+# time (see header comment "HOW THE CHECK WORKS" for the full same-run /
+# cross-run rationale this replaces).
+# ---------------------------------------------------------------------------
+
+# .cps_source_files_paths(store_path, pkg_files_target) -- the exact file
+# paths tracked by the #753 file-hash mechanism, read from the STORE'S OWN
+# recorded value for `pkg_files_target` (default "pkg_source_files") via
+# tar_read_raw() -- never re-derived by re-globbing
+# packages/historicaldata/R here, which would silently drift from whatever
+# docs/_targets.R actually defines that target as. Returns NULL (not an
+# error) if the target has never been built in this store, or if reading it
+# fails for any reason -- callers decide how to report that (see
+# .cps_pkg_source_changed_at(), which treats NULL the same as "no paths").
+.cps_source_files_paths <- function(store_path, pkg_files_target = "pkg_source_files") {
+  tryCatch(
+    targets::tar_read_raw(pkg_files_target, store = store_path),
+    error = function(e) NULL
+  )
+}
+
+# .cps_pkg_source_changed_at(paths) -- the TRUE moment the package source
+# last changed, independent of any `targets` scheduling: the maximum
+# on-disk mtime among `paths`. This is the ground truth this script
+# compares candidate targets' build times against. It necessarily precedes
+# the entire tar_make() invocation that reacts to a source change (the
+# files must already be on disk before that invocation can even start
+# evaluating the DAG), so it never races against any target's build time
+# from within that invocation, and it is read fresh from disk each time
+# this script runs rather than from another target's stored metadata -- so
+# it is unaffected by which specific run last updated pkg_source_digest.
+#
+# Returns a length-1 POSIXct. If `paths` is NULL/empty, or every path is
+# missing/moved (file.mtime() returns NA for each), returns an NA POSIXct --
+# callers MUST treat that as INDETERMINATE, never as "no change" (silently
+# treating NA as "the source never changed" would pass every candidate
+# target as current regardless of its actual age -- the exact silent-pass
+# failure mode this repo's checks-must-distinguish-unknown rule forbids).
+.cps_pkg_source_changed_at <- function(paths) {
+  na_time <- as.POSIXct(NA_real_, origin = "1970-01-01", tz = "UTC")
+  if (is.null(paths) || length(paths) == 0L) {
+    return(na_time)
+  }
+  mtimes <- file.mtime(paths)
+  if (all(is.na(mtimes))) {
+    return(na_time)
+  }
+  max(mtimes, na.rm = TRUE)
+}
+
+# .cps_evaluate_staleness(meta, known_names, pkg_source_changed_at, progress)
+# -- the sole home of the STALE/NOT-STALE decision rule, factored out as a
+# pure function of already-read data so it can be exercised directly with
+# SYNTHETIC tar_meta()-shaped data in tests (#911 regression tests), with no
+# real store or real tar_make() scheduling race required. `progress` is
+# optional (may be NULL) and is used ONLY for the human-readable annotation
+# in each [STALE-PKG] line -- it plays no role in the stale/not-stale
+# decision itself (see header comment for why: a target's own build time
+# compared against the package source's on-disk change time is sufficient
+# and immune to both the same-run and cross-run scheduling traps that made
+# tar_progress() necessary in the pre-#911 version of this check).
+# Returns list(stale = character(), stale_detail = character()).
+.cps_evaluate_staleness <- function(meta, known_names, pkg_source_changed_at, progress = NULL) {
+  stale <- character(0)
+  stale_detail <- character(0)
+  for (nm in known_names) {
+    t <- meta$time[match(nm, meta$name)]
+    if (is.na(t) || t >= pkg_source_changed_at) {
+      next
+    }
+    prog_val <- NA_character_
+    if (!is.null(progress)) {
+      prog_row <- match(nm, progress$name)
+      if (!is.na(prog_row)) {
+        prog_val <- progress$progress[prog_row]
+      }
+    }
+    stale <- c(stale, nm)
+    stale_detail <- c(stale_detail, sprintf(
+      "  [STALE-PKG] %s -- last built %s (progress this run: %s), predates the package source's last on-disk change (%s)",
+      nm, format(t, tz = "UTC"), if (is.na(prog_val)) "<unknown>" else prog_val,
+      format(pkg_source_changed_at, tz = "UTC")
+    ))
+  }
+  list(stale = stale, stale_detail = stale_detail)
 }
 
 # ---------------------------------------------------------------------------
@@ -433,7 +551,8 @@ suppressPackageStartupMessages({
 # RETURNING (not quit()-ing) an exit-status integer -- same testable-without-
 # terminating-the-session pattern as .cpe_main()/.cdf_main().
 .cps_main <- function(store_path = here::here("docs", "_targets"),
-                       r_dir = here::here("R")) {
+                       r_dir = here::here("R"),
+                       pkg_files_target = "pkg_source_files") {
   if (!dir.exists(store_path)) {
     message("!!! No targets store found at '", store_path, "' !!!")
     message("!!! This script only READS an existing store -- run tar_make() first. !!!")
@@ -450,14 +569,18 @@ suppressPackageStartupMessages({
     return(2L)
   }
 
+  # tar_progress() is read only for the human-readable annotation on each
+  # [STALE-PKG] line (#911: it is no longer part of the stale/not-stale
+  # decision -- see .cps_evaluate_staleness()). A read failure is therefore
+  # non-fatal here: fall back to NULL and let the annotation read
+  # "<unknown>" rather than turning an unrelated progress-file hiccup into a
+  # spurious INDETERMINATE for a check that no longer needs that file to be
+  # correct.
   progress <- tryCatch(.cps_read_progress(store_path), error = function(e) {
-    message("!!! tar_progress() failed: ", conditionMessage(e), " !!!")
+    message("!!! tar_progress() failed (non-fatal -- used only for the this-run ")
+    message("!!! annotation, not the stale/not-stale decision): ", conditionMessage(e), " !!!")
     NULL
   })
-  if (is.null(progress)) {
-    message("!!! VERIFICATION DID NOT RUN. This is NOT a pass. !!!")
-    return(2L)
-  }
 
   digest_row <- match("pkg_source_digest", meta$name)
   if (is.na(digest_row)) {
@@ -467,10 +590,23 @@ suppressPackageStartupMessages({
     message("!!! VERIFICATION DID NOT RUN. This is NOT a pass. !!!")
     return(2L)
   }
-  pkg_digest_time <- meta$time[digest_row]
+
+  source_paths <- .cps_source_files_paths(store_path, pkg_files_target)
+  pkg_source_changed_at <- .cps_pkg_source_changed_at(source_paths)
+  if (is.na(pkg_source_changed_at)) {
+    message("!!! Could not determine when packages/historicaldata source last ")
+    message("!!! changed -- '", pkg_files_target, "' has never been built in this ")
+    message("!!! store, or none of its recorded file paths currently exist on ")
+    message("!!! disk. !!!")
+    message("!!! VERIFICATION DID NOT RUN. This is NOT a pass. !!!")
+    return(2L)
+  }
 
   cat(sprintf("Store: %s\n", store_path))
-  cat(sprintf("pkg_source_digest last recorded change: %s\n", format(pkg_digest_time, tz = "UTC")))
+  cat(sprintf(
+    "packages/historicaldata source last changed (max on-disk mtime of %s): %s\n",
+    pkg_files_target, format(pkg_source_changed_at, tz = "UTC")
+  ))
 
   registry <- .cps_discover_consuming_targets(r_dir)
   registry_names <- unique(registry$target_name)
@@ -489,35 +625,24 @@ suppressPackageStartupMessages({
   }
 
   known <- registry_names[present]
-  stale <- character(0)
-  stale_detail <- character(0)
-  for (nm in known) {
-    t <- meta$time[match(nm, meta$name)]
-    prog_row <- match(nm, progress$name)
-    prog_val <- if (is.na(prog_row)) NA_character_ else progress$progress[prog_row]
-    completed_this_run <- identical(prog_val, "completed")
-    if (!is.na(t) && t < pkg_digest_time && !completed_this_run) {
-      stale <- c(stale, nm)
-      stale_detail <- c(stale_detail, sprintf(
-        "  [STALE-PKG] %s -- last built %s (progress this run: %s), predates pkg_source_digest (%s)",
-        nm, format(t, tz = "UTC"), if (is.na(prog_val)) "<unknown>" else prog_val,
-        format(pkg_digest_time, tz = "UTC")
-      ))
-    }
-  }
+  result <- .cps_evaluate_staleness(meta, known, pkg_source_changed_at, progress = progress)
+  stale <- result$stale
+  stale_detail <- result$stale_detail
 
   if (length(stale) == 0L) {
-    cat(sprintf("PASS: no known package-consuming target is stale relative to pkg_source_digest (%d checked)\n", length(known)))
+    cat(sprintf(
+      "PASS: no known package-consuming target is stale relative to the package source's last on-disk change (%d checked)\n",
+      length(known)
+    ))
     return(0L)
   }
 
-  cat(sprintf("FAIL: %d target(s) were skipped in a run where the package source changed:\n", length(stale)))
+  cat(sprintf("FAIL: %d target(s) predate the package source's last on-disk change:\n", length(stale)))
   cat(paste(stale_detail, collapse = "\n"), "\n", sep = "")
   cat(paste0(
-    "!!! packages/historicaldata/R changed (pkg_source_digest is newer than the target(s)\n",
-    "!!! above) but these targets were SKIPPED, not rebuilt -- they are serving values\n",
-    "!!! computed by an OLDER version of the package (#753). Force an invalidation and\n",
-    "!!! rebuild, e.g.:\n",
+    "!!! packages/historicaldata/R changed (the package source's last on-disk change is\n",
+    "!!! newer than the target(s) above) but these targets are serving values computed\n",
+    "!!! by an OLDER version of the package (#753). Force an invalidation and rebuild, e.g.:\n",
     "!!!   nix develop --command Rscript -e \\\n",
     "!!!     'targets::tar_invalidate(any_of(c(", paste(sprintf('\"%s\"', stale), collapse = ", "), ")), store = \"docs/_targets\", script = \"docs/_targets.R\")'\n",
     "!!! then re-run scripts/build.sh. If this keeps recurring for the same target(s),\n",

@@ -17,11 +17,13 @@ source(here::here("scripts", "check_pkg_staleness.R"))
 
 # .make_pkg_toy_store() -- builds a throwaway pipeline that mirrors the
 # SHAPE of docs/_targets.R's #753 mechanism: a format = "file" target
-# tracking one real file (`pkg_file`), a digest target depending on it
-# (`pkg_source_digest` -- named to match what .cps_main() looks for), and a
-# `consumer` target that does NOT reference the digest -- i.e. the exact
-# "unwired, namespaced-call-style" shape #753 is about. Returns the store
-# path; `pkg_file_path` is the file callers mutate to trigger a rebuild.
+# tracking one real file (`pkg_source_files` -- named to match production
+# and what .cps_source_files_paths() looks for by default), a digest target
+# depending on it (`pkg_source_digest` -- named to match what .cps_main()
+# looks for), and a `consumer` target that does NOT reference the digest --
+# i.e. the exact "unwired, namespaced-call-style" shape #753 is about.
+# Returns the store path; `pkg_file_path` is the file callers mutate to
+# trigger a rebuild.
 .make_pkg_toy_store <- function(dir) {
   pkg_dir <- file.path(dir, "pkg_src")
   dir.create(pkg_dir)
@@ -33,8 +35,8 @@ source(here::here("scripts", "check_pkg_staleness.R"))
   writeLines(c(
     'targets::tar_option_set(error = "continue")',
     "list(",
-    sprintf('  targets::tar_target(pkg_file, "%s", format = "file"),', pkg_file_path),
-    "  targets::tar_target(pkg_source_digest, tools::md5sum(pkg_file)[[1]]),",
+    sprintf('  targets::tar_target(pkg_source_files, "%s", format = "file"),', pkg_file_path),
+    "  targets::tar_target(pkg_source_digest, tools::md5sum(pkg_source_files)[[1]]),",
     "  targets::tar_target(consumer, \"unwired-value\")",
     ")"
   ), script_path)
@@ -277,7 +279,7 @@ test_that(".cps_main returns 1 and names the stale target when a skipped consume
   utils::capture.output(status0 <- .cps_main(store_path = built$store_path, r_dir = r_dir))
   expect_equal(status0, 0L)
 
-  # Mutate the tracked package file and rebuild -- `pkg_file`/`pkg_source_digest`
+  # Mutate the tracked package file and rebuild -- `pkg_source_files`/`pkg_source_digest`
   # rebuild (format = "file" content-hash cue), but `consumer` does not
   # reference pkg_source_digest at all, so it is SKIPPED -- reproducing #753's
   # exact defect shape (confirmed empirically against this same toy-pipeline
@@ -297,6 +299,148 @@ test_that(".cps_main returns 1 and names the stale target when a skipped consume
   expect_match(txt, "FAIL: 1 target")
 })
 
+# ── #911 flaw 2 regression: cross-run false positives from comparing a
+# candidate target's build time against pkg_source_digest's OWN build time,
+# rather than against the package source's actual on-disk change time ──────
+#
+# See scripts/check_pkg_staleness.R's header comment ("HOW THE CHECK WORKS")
+# for the full incident: on 2026-09-26, `art_vignette_seed` (built 11:13:30)
+# and `qa_legacy_leaderboard_sentinel` (11:13:32) were rebuilt AFTER the
+# package source changed but a couple of seconds BEFORE `pkg_source_digest`
+# itself completed in that SAME tar_make() run -- the NEXT run's
+# tar_progress() correctly showed them "skipped" (nothing left to do), but a
+# naive `t < pkg_source_digest_time` comparison read that as "stale" even
+# though both were computed from the already-current package.
+#
+# These tests exercise .cps_evaluate_staleness() directly with SYNTHETIC
+# tar_meta()-shaped data (per the #911 dispatch spec) -- no real store or
+# real tar_make() scheduling race is needed to prove the decision rule
+# itself is correct, now that the rule is a pure function of (meta,
+# known_names, pkg_source_changed_at).
+
+test_that("#911 (a): a target built after the real source change but BEFORE pkg_source_digest's own build time in the same historical run is NOT stale", {
+  # Reproduces the exact 2026-09-26 ordering read from the real store
+  # (docs/_targets/meta/meta, confirmed via targets::tar_meta() against the
+  # main checkout's store while investigating this issue):
+  #   packages/historicaldata source last on-disk change: 2026-09-26 11:12:16.669267
+  #   pkg_source_digest's OWN tar_meta() build time:      2026-09-26 11:13:32.135217
+  #   art_vignette_seed's tar_meta() build time (that run): ~2026-09-26 11:13:30
+  #   qa_legacy_leaderboard_sentinel's build time (that run): ~2026-09-26 11:13:32
+  # Both targets built AFTER the true source change (11:12:16) but BEFORE
+  # pkg_source_digest's own recorded build time (11:13:32.135217) in that
+  # same run -- the exact ordering that produced the false positive.
+  pkg_source_changed_at <- as.POSIXct("2026-09-26 11:12:16.669267", tz = "UTC")
+  meta <- tibble::tibble(
+    name = c("art_vignette_seed", "qa_legacy_leaderboard_sentinel"),
+    time = as.POSIXct(c("2026-09-26 11:13:30.500000", "2026-09-26 11:13:32.000000"), tz = "UTC")
+  )
+  # Both build times are BEFORE what pkg_source_digest itself recorded as
+  # its own build time, demonstrating the fix does not merely get lucky --
+  # it never consults pkg_source_digest's time at all.
+  pkg_digest_time <- as.POSIXct("2026-09-26 11:13:32.135217", tz = "UTC")
+  expect_true(all(meta$time < pkg_digest_time))
+
+  result <- .cps_evaluate_staleness(meta, meta$name, pkg_source_changed_at)
+  expect_equal(result$stale, character(0))
+  expect_equal(result$stale_detail, character(0))
+})
+
+test_that("#911 (b): a target built BEFORE the real source change, skipped this run, IS stale", {
+  pkg_source_changed_at <- as.POSIXct("2026-09-26 11:12:16.669267", tz = "UTC")
+  meta <- tibble::tibble(
+    name = "cmr_conditioned",
+    time = as.POSIXct("2026-09-25 09:00:00", tz = "UTC")
+  )
+  progress <- tibble::tibble(name = "cmr_conditioned", progress = "skipped")
+
+  result <- .cps_evaluate_staleness(meta, meta$name, pkg_source_changed_at, progress = progress)
+  expect_equal(result$stale, "cmr_conditioned")
+  expect_match(result$stale_detail, "\\[STALE-PKG\\] cmr_conditioned", all = FALSE)
+  expect_match(result$stale_detail, "progress this run: skipped", all = FALSE)
+})
+
+test_that("#911 (c): .cps_pkg_source_changed_at() returns NA (indeterminate) when no tracked path exists on disk", {
+  dir <- withr::local_tempdir()
+  missing_path <- file.path(dir, "does-not-exist.R")
+  expect_true(is.na(.cps_pkg_source_changed_at(missing_path)))
+  expect_true(is.na(.cps_pkg_source_changed_at(character(0))))
+  expect_true(is.na(.cps_pkg_source_changed_at(NULL)))
+})
+
+test_that("#911 (c): .cps_main returns 2 (indeterminate) when pkg_source_files' recorded paths no longer exist on disk", {
+  dir <- withr::local_tempdir()
+  built <- .make_pkg_toy_store(dir)
+  r_dir <- .make_registry_r_dir(dir)
+
+  # Confirm PASS first (same shape as the standard PASS test).
+  status0 <- NA_integer_
+  utils::capture.output(status0 <- .cps_main(store_path = built$store_path, r_dir = r_dir))
+  expect_equal(status0, 0L)
+
+  # Delete the tracked file AFTER the build -- pkg_source_files' recorded
+  # path now points nowhere, so the source-changed-at moment cannot be
+  # determined from disk.
+  file.remove(built$pkg_file_path)
+
+  status <- NA_integer_
+  msgs <- character(0)
+  withCallingHandlers(
+    status <- .cps_main(store_path = built$store_path, r_dir = r_dir),
+    message = function(m) {
+      msgs <<- c(msgs, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+  expect_equal(status, 2L)
+  expect_true(any(grepl("Could not determine when packages/historicaldata source last", msgs)))
+  expect_true(any(grepl("VERIFICATION DID NOT RUN", msgs)))
+})
+
+test_that("#911 falsification: reverting to the pre-fix pkg_source_digest-time comparison DOES flag scenario (a) as stale", {
+  # This is the falsification step required by #911's dispatch spec: prove
+  # the NEW test would have caught the OLD bug, by re-implementing the
+  # pre-fix decision rule inline (comparing against pkg_source_digest's own
+  # build time, gated only by "completed this run") and showing it produces
+  # exactly the false positive the issue reported, on the same synthetic
+  # data test (a) uses.
+  old_buggy_decision <- function(meta, known_names, pkg_digest_time, progress) {
+    stale <- character(0)
+    for (nm in known_names) {
+      t <- meta$time[match(nm, meta$name)]
+      prog_row <- match(nm, progress$name)
+      prog_val <- if (is.na(prog_row)) NA_character_ else progress$progress[prog_row]
+      completed_this_run <- identical(prog_val, "completed")
+      if (!is.na(t) && t < pkg_digest_time && !completed_this_run) {
+        stale <- c(stale, nm)
+      }
+    }
+    stale
+  }
+
+  meta <- tibble::tibble(
+    name = c("art_vignette_seed", "qa_legacy_leaderboard_sentinel"),
+    time = as.POSIXct(c("2026-09-26 11:13:30.500000", "2026-09-26 11:13:32.000000"), tz = "UTC")
+  )
+  pkg_digest_time <- as.POSIXct("2026-09-26 11:13:32.135217", tz = "UTC")
+  # A LATER run's tar_progress() correctly reports both as "skipped" --
+  # nothing about them changed since the run in which they (and the digest)
+  # were actually built.
+  progress <- tibble::tibble(
+    name = c("art_vignette_seed", "qa_legacy_leaderboard_sentinel"),
+    progress = c("skipped", "skipped")
+  )
+
+  old_result <- old_buggy_decision(meta, meta$name, pkg_digest_time, progress)
+  expect_equal(old_result, meta$name) # OLD algorithm: both wrongly flagged stale
+
+  new_result <- .cps_evaluate_staleness(
+    meta, meta$name,
+    pkg_source_changed_at = as.POSIXct("2026-09-26 11:12:16.669267", tz = "UTC"),
+    progress = progress
+  )
+  expect_equal(new_result$stale, character(0)) # NEW algorithm: correctly not stale
+})
+
 # ── Function signature stability (catches API drift, snapshot-test-policy.md) ──
 
 test_that("key .cps_* function signatures are stable", {
@@ -305,6 +449,9 @@ test_that("key .cps_* function signatures are stable", {
   expect_snapshot(args(.cps_contains_pkg_call))
   expect_snapshot(args(.cps_target_touches_pkg))
   expect_snapshot(args(.cps_helper_touches_pkg))
+  expect_snapshot(args(.cps_pkg_source_changed_at))
+  expect_snapshot(args(.cps_evaluate_staleness))
+  expect_snapshot(args(.cps_source_files_paths))
 })
 
 # ── Direct unit tests for the lowest-level AST primitives ──────────────────
