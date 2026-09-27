@@ -1,6 +1,14 @@
 # Tests for plan_drif.R (factor-level) and plan_drif_v2.R (multiverse)
 testthat::local_edition(3)
 
+# compute_drif_selected_features() / compute_drif_selection_jaccard() /
+# summarise_drif_selection_stability() (#910 item 2) live in R/plan_drif.R
+# and are not otherwise loaded when tests run via test_dir() -- mirrors the
+# source() pattern in test-qa-search-funnel.R (R/plan_qa_gates.R). Safe to
+# source unconditionally: plan_drif() itself is a function definition with
+# no side effects until called.
+source(here::here("R/plan_drif.R"))
+
 test_that("plan_drif cumprod survives scattered NA in returns", {
   df <- tibble::tibble(
     ym = c("2024-01", "2024-02", "2024-03"),
@@ -137,4 +145,161 @@ test_that("run_spec helper computes OOS Sharpe from a toy dataset", {
   expect_lte(result$oos_max_dd, 0)
   # annualised vol must be positive
   expect_gt(result$oos_vol, 0)
+})
+
+# ── Selection-stability diagnostic (#910 item 2) ──────────────────────────────
+# compute_drif_selected_features() / compute_drif_selection_jaccard() /
+# summarise_drif_selection_stability() -- see R/plan_drif.R.
+
+test_that("compute_drif_selection_jaccard computes known overlaps for consecutive pairs", {
+  selected <- list(
+    "2020-01" = c("c1", "c2", "r1"),
+    "2020-02" = c("c1", "c2", "r1"),       # identical -> jaccard 1
+    "2020-03" = c("r5", "r6"),             # disjoint from prior -> jaccard 0
+    "2020-04" = character(0),              # empty
+    "2020-05" = character(0)               # empty vs empty -> NA (undefined)
+  )
+  result <- compute_drif_selection_jaccard(selected)
+
+  expect_equal(nrow(result), 4L)
+  expect_equal(result$ym_from, c("2020-01", "2020-02", "2020-03", "2020-04"))
+  expect_equal(result$ym_to,   c("2020-02", "2020-03", "2020-04", "2020-05"))
+  expect_equal(result$jaccard[1], 1)
+  expect_equal(result$jaccard[2], 0)
+  expect_equal(result$jaccard[3], 0)       # {r5,r6} vs {} -> intersect 0 / union 2 = 0
+  expect_true(is.na(result$jaccard[4]))    # {} vs {} -> undefined, not zero
+})
+
+test_that("compute_drif_selection_jaccard computes a known partial-overlap fraction", {
+  selected <- list(
+    "2020-01" = c("c1", "c2", "c3", "r1"),
+    "2020-02" = c("c1", "c2", "r5")
+  )
+  result <- compute_drif_selection_jaccard(selected)
+  # intersect = {c1, c2} (2), union = {c1,c2,c3,r1,r5} (5) -> 2/5
+  expect_equal(result$jaccard, 2 / 5)
+})
+
+test_that("compute_drif_selection_jaccard aborts with fewer than 2 months", {
+  expect_snapshot(
+    error = TRUE,
+    compute_drif_selection_jaccard(list("2020-01" = c("c1")))
+  )
+})
+
+test_that("summarise_drif_selection_stability computes median/mean/share-below-0.5", {
+  jaccard_tbl <- tibble::tibble(
+    ym_from = c("2020-01", "2020-02", "2020-03", "2020-04"),
+    ym_to   = c("2020-02", "2020-03", "2020-04", "2020-05"),
+    jaccard = c(1, 0, 0.4, 0.6)
+  )
+  result <- summarise_drif_selection_stability(jaccard_tbl)
+
+  expect_equal(result$n_pairs, 4L)
+  expect_equal(result$n_undefined, 0L)
+  expect_equal(result$median_jaccard, 0.5)
+  expect_equal(result$mean_jaccard, mean(c(1, 0, 0.4, 0.6)))
+  expect_equal(result$`share_below_0.5`, 0.5)  # {0, 0.4} of {1, 0, 0.4, 0.6}
+  expect_equal(result$min_jaccard, 0)
+  expect_equal(result$max_jaccard, 1)
+})
+
+test_that("summarise_drif_selection_stability handles all-NA (undefined) input without erroring", {
+  jaccard_tbl <- tibble::tibble(
+    ym_from = c("2020-01", "2020-02"),
+    ym_to   = c("2020-02", "2020-03"),
+    jaccard = c(NA_real_, NA_real_)
+  )
+  result <- summarise_drif_selection_stability(jaccard_tbl)
+
+  expect_equal(result$n_pairs, 2L)
+  expect_equal(result$n_undefined, 2L)
+  expect_true(is.na(result$median_jaccard))
+  expect_true(is.na(result$mean_jaccard))
+})
+
+test_that("summarise_drif_selection_stability aborts on a malformed input tibble", {
+  expect_snapshot(
+    error = TRUE,
+    summarise_drif_selection_stability(tibble::tibble(wrong_col = 1))
+  )
+})
+
+test_that("compute_drif_selected_features returns a per-month selected feature set on a tiny synthetic dataset", {
+  # Small enough to run real glmnet::cv.glmnet fast: 6 factor-months' worth
+  # of rows per month clears the >= 50-complete-row internal guard once
+  # min_train_months' worth of months are pooled (9 * 6 = 54 rows).
+  skip_if_not_installed("glmnet")
+  set.seed(910L)
+
+  factors    <- paste0("F", 1:5)
+  benchmark  <- "F6"
+  all_factors <- c(factors, benchmark)
+  lb <- 2L
+  n_months <- 12L
+  yms <- format(seq.Date(as.Date("2019-01-01"), by = "month", length.out = n_months), "%Y-%m")
+
+  chrono_cols <- paste0("c", seq_len(lb))
+  rank_cols   <- paste0("r", seq_len(lb))
+
+  features <- tidyr::expand_grid(factor_name = all_factors, ym = yms) |>
+    dplyr::mutate(target_ret = stats::rnorm(dplyr::n(), 0, 0.02))
+  for (col in c(chrono_cols, rank_cols)) {
+    features[[col]] <- stats::rnorm(nrow(features), 0, 0.01)
+  }
+
+  params <- list(
+    factors = factors, benchmark_factor = benchmark,
+    lookback_days = lb, alpha = 0.5, min_train_months = 9L
+  )
+
+  selected <- compute_drif_selected_features(features, params)
+
+  # trade_months = months[(9+1):12] = last 3 months
+  expect_true(length(selected) >= 1L)
+  expect_true(all(names(selected) %in% yms[10:12]))
+  # No selected set should ever include the intercept term
+  expect_false(any(vapply(selected, function(s) "(Intercept)" %in% s, logical(1))))
+  # Every element is a character vector, possibly empty (glmnet may select
+  # zero features on tiny synthetic noise -- that is a valid, real outcome)
+  expect_true(all(vapply(selected, is.character, logical(1))))
+
+  # Chains cleanly into the jaccard + summary functions (#910 item 2 full path)
+  if (length(selected) >= 2L) {
+    jaccard_tbl <- compute_drif_selection_jaccard(selected)
+    summary_tbl <- summarise_drif_selection_stability(jaccard_tbl)
+    expect_equal(summary_tbl$n_pairs, length(selected) - 1L)
+  }
+})
+
+test_that("compute_drif_selected_features aborts when every month is skipped", {
+  # min_train_months so large relative to n_months that trade_months is
+  # empty, or every train pool is below the 50-row floor -- either way,
+  # zero fitted months should abort loudly rather than return an empty
+  # list silently (fail-loud-not-null.md Pattern 5).
+  factors    <- paste0("F", 1:5)
+  benchmark  <- "F6"
+  all_factors <- c(factors, benchmark)
+  lb <- 2L
+  n_months <- 6L
+  yms <- format(seq.Date(as.Date("2019-01-01"), by = "month", length.out = n_months), "%Y-%m")
+  chrono_cols <- paste0("c", seq_len(lb))
+  rank_cols   <- paste0("r", seq_len(lb))
+
+  features <- tidyr::expand_grid(factor_name = all_factors, ym = yms) |>
+    dplyr::mutate(target_ret = stats::rnorm(dplyr::n(), 0, 0.02))
+  for (col in c(chrono_cols, rank_cols)) {
+    features[[col]] <- stats::rnorm(nrow(features), 0, 0.01)
+  }
+
+  params <- list(
+    factors = factors, benchmark_factor = benchmark,
+    lookback_days = lb, alpha = 0.5, min_train_months = 5L
+  )
+  # trade_months = months[6:6] = 1 month; train pool = 5 months * 6 factors
+  # = 30 rows < 50 -- every trade month is skipped by the internal guard.
+  expect_snapshot(
+    error = TRUE,
+    compute_drif_selected_features(features, params)
+  )
 })

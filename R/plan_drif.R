@@ -548,6 +548,35 @@ plan_drif <- function() {
         drif_metrics   = drif_metrics,
         drif_portfolio = drif_portfolio
       )
+    }),
+
+    # ── Selection-stability diagnostic (#910 item 2) ────────────────
+    # "From Alpha Signals to Portfolio" (#910) flags full-sample re-
+    # selection as a warning sign: recomputing an IC/feature filter every
+    # window and finding low overlap between consecutive selections means
+    # the marginal features are churning noise, not signal. DRIF's monthly
+    # cv.glmnet already re-fits at every step (walk-forward, S41 PASS -- see
+    # R/plan_qa_gates.R), but until now nothing recorded WHICH of the 42
+    # chrono/rank features it actually kept (non-zero coefficient at
+    # lambda.min) from one month to the next -- drif_signal (above) only
+    # ever kept the resulting PREDICTION, not the selected set that
+    # produced it.
+    targets::tar_target(drif_selected_features, {
+      compute_drif_selected_features(drif_features, drif_params)
+    }),
+
+    targets::tar_target(drif_selection_stability, {
+      jaccard_tbl <- compute_drif_selection_jaccard(drif_selected_features)
+      summary_tbl <- summarise_drif_selection_stability(jaccard_tbl)
+      cli::cli_inform(c("i" = paste0(
+        "drif_selection_stability: median Jaccard=", round(summary_tbl$median_jaccard, 3),
+        " (n_pairs=", summary_tbl$n_pairs, ", n_undefined=", summary_tbl$n_undefined,
+        ", share_below_0.5=", round(summary_tbl$`share_below_0.5`, 3),
+        ", range=[", round(summary_tbl$min_jaccard, 3), ", ",
+        round(summary_tbl$max_jaccard, 3), "]) across consecutive monthly ",
+        "cv.glmnet refits (#910 item 2)"
+      )))
+      list(pairs = jaccard_tbl, summary = summary_tbl)
     })
 
   )
@@ -643,4 +672,183 @@ plan_drif <- function() {
   }
 
   tibble::tibble(strategy_id = "drif", run_uuid = uu)
+}
+
+# ── Selection-stability diagnostic helpers (#910 item 2) ────────────────────
+# Not prefixed .drif_* like .drif_register_runs() above: these mirror the
+# compute_*()/check_*() naming already used for other QA/diagnostic helpers
+# in this codebase (e.g. compute_olmar_window_neighbourhood_sharpes(),
+# R/plan_qa_gates.R) rather than the registry-sentinel-specific .drif_*
+# prefix, since these are referenced from R/plan_qa_gates.R-adjacent
+# reporting as well as from this file's own targets.
+
+#' Extract DRIF's monthly cv.glmnet selected (non-zero-coefficient) feature
+#' set, per walk-forward refit (#910 item 2)
+#'
+#' Mirrors the \code{drif_signal} target's walk-forward loop (this file,
+#' above) EXACTLY -- same \code{train_months} construction
+#' (\code{months[1:(m_idx - 1)]}), same \code{feat_cols}, same
+#' \code{alpha}/\code{nfolds} -- but returns, per trade month, the names of
+#' the features whose fitted coefficient at \code{s = "lambda.min"} is
+#' non-zero, instead of (or alongside) a prediction. This is the "selected
+#' set" the article ("From Alpha Signals to Portfolio", #910) asks to track
+#' for a selection-stability diagnostic: how much does the elastic net's
+#' chosen feature subset change from one monthly refit to the next?
+#'
+#' A month is OMITTED from the result (not recorded as an empty set) when
+#' the same skip conditions \code{drif_signal} itself uses apply (too few
+#' training rows, no test rows, \code{cv.glmnet} error) -- this is
+#' deliberate: an omitted month means "no model was fit", which is a
+#' different fact from "a model was fit and selected zero features"
+#' (fail-loud-not-null.md Pattern 5 -- collapsing the two into the same
+#' NULL/empty-vector representation would silently launder a fit failure
+#' into a data point in the stability summary). If EVERY trade month is
+#' skipped, this aborts rather than returning an empty list silently (same
+#' rule, applied at the whole-result level).
+#'
+#' @param features \code{drif_features} target.
+#' @param params \code{drif_params} target (or an equivalent list with
+#'   \code{factors}, \code{benchmark_factor}, \code{lookback_days},
+#'   \code{alpha}, \code{min_train_months}).
+#' @return Named list, one element per trade month that fit successfully
+#'   (name = \code{ym}, value = character vector of selected feature names,
+#'   possibly \code{character(0)} when the fit converged but selected
+#'   nothing). Months where no model was fit are absent from the list
+#'   entirely.
+#' @noRd
+compute_drif_selected_features <- function(features, params) {
+  rlang::check_installed("glmnet")
+
+  all_factors <- c(params$factors, params$benchmark_factor)
+  months      <- sort(unique(features$ym))
+  min_train   <- params$min_train_months
+  lb          <- params$lookback_days
+  chrono_cols <- paste0("c", seq_len(lb))
+  rank_cols   <- paste0("r", seq_len(lb))
+  feat_cols   <- c(chrono_cols, rank_cols)
+
+  trade_months <- months[(min_train + 1):length(months)]
+
+  selected <- lapply(trade_months, function(m) {
+    m_idx        <- which(months == m)
+    train_months <- months[1:(m_idx - 1)]
+
+    train <- features[features$ym %in% train_months, , drop = FALSE]
+    test  <- features[features$ym == m, , drop = FALSE]
+
+    if (nrow(train) < min_train * length(all_factors) * 0.5) return(NULL)
+    if (nrow(test) == 0) return(NULL)
+
+    X_train <- as.matrix(train[, feat_cols])
+    y_train <- train$target_ret
+    complete <- stats::complete.cases(X_train, y_train)
+    X_train  <- X_train[complete, , drop = FALSE]
+    y_train  <- y_train[complete]
+    if (length(y_train) < 50) return(NULL)
+
+    fit <- tryCatch({
+      glmnet::cv.glmnet(X_train, y_train, alpha = params$alpha,
+                        nfolds = 5, type.measure = "mse")
+    }, error = function(e) {
+      cli::cli_warn("compute_drif_selected_features: cv.glmnet failed for month {.val {m}}: {conditionMessage(e)}")
+      NULL
+    })
+    if (is.null(fit)) return(NULL)
+
+    co <- as.matrix(stats::coef(fit, s = "lambda.min"))
+    nz <- rownames(co)[co[, 1] != 0]
+    setdiff(nz, "(Intercept)")
+  })
+  names(selected) <- trade_months
+  selected <- Filter(Negate(is.null), selected)
+
+  if (length(selected) == 0L) {
+    cli::cli_abort(c(
+      "x" = "compute_drif_selected_features(): no trade month produced a fitted model.",
+      "i" = paste0(
+        "Every one of the ", length(trade_months), " trade month(s) was ",
+        "skipped by the same min-training-rows / min-test-rows guard ",
+        "drif_signal itself uses -- check drif_features / drif_params (#910 item 2)."
+      )
+    ))
+  }
+  selected
+}
+
+#' Jaccard overlap of DRIF's selected feature set between CONSECUTIVE
+#' monthly refits (#910 item 2)
+#'
+#' @param selected_sets Named list as returned by
+#'   \code{\link{compute_drif_selected_features}} -- names are \code{ym}, in
+#'   any order (sorted internally before pairing).
+#' @return Tibble with one row per consecutive PRESENT pair: \code{ym_from},
+#'   \code{ym_to}, \code{jaccard} (\code{NA_real_} when BOTH sets are empty
+#'   -- undefined, not zero; two months that each selected nothing have no
+#'   overlap to measure, which is a different fact from two DISJOINT
+#'   non-empty sets, which correctly score 0 -- fail-loud-not-null.md).
+#'   "Consecutive" means adjacent in the sorted key sequence of
+#'   \code{selected_sets}, which may skip a month that had no fitted model
+#'   (see \code{\link{compute_drif_selected_features}}) -- such a gap is a
+#'   fact about the input, not itself flagged here.
+#' @noRd
+compute_drif_selection_jaccard <- function(selected_sets) {
+  if (length(selected_sets) < 2L) {
+    cli::cli_abort(c(
+      "x" = "compute_drif_selection_jaccard() needs at least 2 months of selected features to form a consecutive pair.",
+      "i" = "Got {length(selected_sets)}."
+    ))
+  }
+
+  ms <- sort(names(selected_sets))
+  jaccard_one <- function(a, b) {
+    if (length(a) == 0L && length(b) == 0L) return(NA_real_)
+    length(intersect(a, b)) / length(union(a, b))
+  }
+  j <- vapply(seq_len(length(ms) - 1L), function(i) {
+    jaccard_one(selected_sets[[ms[i]]], selected_sets[[ms[i + 1L]]])
+  }, numeric(1))
+
+  tibble::tibble(
+    ym_from = ms[seq_len(length(ms) - 1L)],
+    ym_to   = ms[seq(2L, length(ms))],
+    jaccard = j
+  )
+}
+
+#' Summarise DRIF's monthly selection-stability Jaccard series (#910 item 2)
+#'
+#' @param jaccard_tbl Tibble as returned by
+#'   \code{\link{compute_drif_selection_jaccard}}.
+#' @return Single-row tibble: \code{n_pairs}, \code{n_undefined} (pairs
+#'   where both sets were empty -- excluded from every statistic below),
+#'   \code{median_jaccard}, \code{mean_jaccard}, \code{share_below_0.5}
+#'   (computed over non-undefined pairs only), \code{min_jaccard},
+#'   \code{max_jaccard}. All statistic columns are \code{NA_real_} when
+#'   every pair is undefined (\code{n_pairs == n_undefined}) -- an honest
+#'   "cannot summarise" rather than a manufactured 0
+#'   (fail-loud-not-null.md).
+#' @noRd
+summarise_drif_selection_stability <- function(jaccard_tbl) {
+  if (!all(c("ym_from", "ym_to", "jaccard") %in% names(jaccard_tbl))) {
+    cli::cli_abort(c(
+      "x" = "summarise_drif_selection_stability(): jaccard_tbl is missing required column(s): ym_from, ym_to, jaccard.",
+      "i" = "Expected the tibble returned by compute_drif_selection_jaccard()."
+    ))
+  }
+
+  j       <- jaccard_tbl$jaccard
+  n_na    <- sum(is.na(j))
+  n_pairs <- length(j)
+  j_valid <- j[!is.na(j)]
+  has_valid <- length(j_valid) > 0L
+
+  tibble::tibble(
+    n_pairs           = n_pairs,
+    n_undefined       = n_na,
+    median_jaccard    = if (has_valid) stats::median(j_valid) else NA_real_,
+    mean_jaccard       = if (has_valid) mean(j_valid) else NA_real_,
+    `share_below_0.5` = if (has_valid) mean(j_valid < 0.5) else NA_real_,
+    min_jaccard        = if (has_valid) min(j_valid) else NA_real_,
+    max_jaccard        = if (has_valid) max(j_valid) else NA_real_
+  )
 }

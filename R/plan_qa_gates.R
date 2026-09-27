@@ -4094,6 +4094,242 @@ check_search_funnel <- function(funnel) {
   invisible(TRUE)
 }
 
+#' Walk-forward strategies verified PASS-by-construction for the selection-
+#' before-OOS gate (S41, #910 item 1)
+#'
+#' "From Alpha Signals to Portfolio" (#910)'s single most important rule:
+#' a feature/factor/parameter set must be selected on data that STRICTLY
+#' PREDATES the first out-of-sample bar. A walk-forward refit that re-selects
+#' at every step using only data before that step's own OOS bar satisfies
+#' this by construction -- there is no fixed "selection cutoff date" to
+#' compare against a fixed "first OOS date" because the cutoff moves with
+#' every refit and is, by the loop's own construction, always one step
+#' behind the bar it predicts.
+#'
+#' Each row below is verified by READING the cited training-window
+#' construction, not by re-executing it inside this gate: every citation
+#' shows a `train <- filter(ym/date < <the value being predicted>)` (or the
+#' `months[1:(m_idx - 1)]` equivalent) immediately followed by
+#' `test <- filter(ym/date == <that same value>)`. Re-deriving this
+#' generically from the live store (e.g. by re-running each walk-forward
+#' loop and checking every step's date arithmetic) is not attempted here --
+#' #910 item 1 itself frames the requirement as "knowable from the code/store",
+#' and a walk-forward loop's strict-precedence property is a structural fact
+#' about its code, not a data-dependent one. If a future edit to any of the
+#' cited files changes the training-window construction, this registry's
+#' PASS verdict becomes stale until a human updates it -- there is no
+#' automated re-verification of the code shape itself, only of the
+#' single-shot cutoff/first-OOS DATES for the strategies in
+#' \code{single_shot} passed to \code{\link{build_selection_before_oos_table}}.
+#' @noRd
+SELECTION_WALK_FORWARD_REGISTRY <- tibble::tibble(
+  strategy = c(
+    "DRIF factor rotation (drif_signal)",
+    "DRIF multiverse (drif_multiverse, 16 specs)",
+    "DRIF stock-level (stk_drif_signal)",
+    "ETF replication elastic-net signal (etf_a_signal)",
+    "Avoid Worst walk-forward VIX threshold (aw_walkforward)",
+    "LTR cross-sectional momentum XGBoost (scripts/compute_ltr_model.R, offline precompute)"
+  ),
+  evidence = c(
+    "R/plan_drif.R:143-148 -- train_months <- months[1:(m_idx - 1)]; test <- filter(ym == m)",
+    "R/plan_drif_v2.R:83-90 -- train_yms <- months[seq_len(m_idx - 1L)]; test <- filter(ym == m)",
+    "R/plan_stock_backtest.R:1210-1213 -- train_months <- months[1:(m_idx - 1)]; test <- filter(ym == m)",
+    "R/plan_etf_replication.R:144-147 -- train <- filter(ym %in% months[1:(m_idx - 1)]); test <- filter(ym == m)",
+    "R/plan_avoid_worst.R:848-850 -- train <- filter(date < paste0(yr, \"-01-01\")); test <- filter(date in [yr-01-01, (yr+1)-01-01))",
+    "scripts/compute_ltr_model.R:77-79 -- train_cutoff <- paste0(yr, \"-01\"); train_data <- filter(ym < train_cutoff); predicts months in year yr. Runs OUTSIDE targets (offline precompute, not re-verified by tar_make) -- see check_selection_before_oos()'s roxygen note on this residual provenance gap."
+  )
+)
+
+#' Strategies exempted from S41's hard-abort consequence, with a documented
+#' reason (S41, #910)
+#'
+#' Empty by design, mirroring \code{HD_S39_ACKNOWLEDGED_PEAKS}'s own
+#' empty-by-design rationale (see that constant's roxygen above): add a
+#' strategy label here ONLY after a human has looked at its actual verdict
+#' and detail (printed by \code{\link{check_selection_before_oos}}) and made
+#' an explicit, documented Class C decision
+#' (\code{human-in-the-loop-decision-points.md}) to ship it anyway.
+#' @noRd
+SELECTION_BEFORE_OOS_ACKNOWLEDGED <- character(0)
+
+#' Build the selection-before-OOS verdict table (S41, #910 item 1)
+#'
+#' Combines two evidence sources into one three-state verdict table:
+#' \enumerate{
+#'   \item \strong{Walk-forward strategies} (\code{walk_forward}, default
+#'     \code{\link{SELECTION_WALK_FORWARD_REGISTRY}}): PASS by construction --
+#'     see that constant's roxygen for why these are verified via static
+#'     code citation rather than live re-computation.
+#'   \item \strong{Single-shot strategies} (\code{single_shot}): a caller-
+#'     supplied tibble of strategies that select ONCE from data (not
+#'     re-selected at every step), each with a LIVE
+#'     \code{cutoff_date}/\code{first_oos_date} pair read from the current
+#'     store by the calling target.
+#' }
+#'
+#' Verdict logic per checks-must-distinguish-unknown.md's three-state
+#' discipline -- INDETERMINATE is NEVER folded into PASS:
+#' \itemize{
+#'   \item \code{cutoff_date} or \code{first_oos_date} is \code{NA} ->
+#'     \strong{INDETERMINATE} (the cutoff could not be established at all).
+#'   \item \code{cutoff_date < first_oos_date} -> \strong{PASS} (selection
+#'     strictly predates the first OOS bar).
+#'   \item otherwise -> \strong{FAIL} (selection used data at or after the
+#'     first OOS bar -- the article's "full-sample selection trap", #910).
+#' }
+#'
+#' @param single_shot Tibble with columns \code{strategy} (character),
+#'   \code{cutoff_date} (Date or \code{NA}), \code{first_oos_date} (Date or
+#'   \code{NA}), \code{evidence} (character).
+#' @param walk_forward Tibble as \code{\link{SELECTION_WALK_FORWARD_REGISTRY}}.
+#' @return Tibble: \code{strategy}, \code{mechanism}
+#'   (\code{"walk_forward"}|\code{"single_shot"}), \code{verdict}
+#'   (\code{"PASS"}|\code{"FAIL"}|\code{"INDETERMINATE"}), \code{detail}
+#'   (character, includes the evidence citation and the compared dates).
+#' @noRd
+build_selection_before_oos_table <- function(
+    single_shot, walk_forward = SELECTION_WALK_FORWARD_REGISTRY) {
+
+  if (!all(c("strategy", "evidence") %in% names(walk_forward)) ||
+      nrow(walk_forward) == 0L) {
+    cli::cli_abort(c(
+      "x" = "SELECTION_WALK_FORWARD_REGISTRY (or the {.arg walk_forward} override) is empty or malformed.",
+      "i" = "build_selection_before_oos_table() (S41) needs at least one registered walk-forward strategy."
+    ))
+  }
+  if (!all(c("strategy", "cutoff_date", "first_oos_date", "evidence") %in% names(single_shot))) {
+    cli::cli_abort(c(
+      "x" = "{.arg single_shot} is missing required column(s): strategy, cutoff_date, first_oos_date, evidence.",
+      "i" = "build_selection_before_oos_table() (S41, #910 item 1)."
+    ))
+  }
+
+  wf_rows <- tibble::tibble(
+    strategy  = walk_forward$strategy,
+    mechanism = "walk_forward",
+    verdict   = "PASS",
+    detail    = paste0(
+      "Walk-forward: each refit trains only on data strictly before the ",
+      "step's own OOS bar, verified from source (", walk_forward$evidence, ")."
+    )
+  )
+
+  n <- nrow(single_shot)
+  ss_verdict <- character(n)
+  for (i in seq_len(n)) {
+    cd <- single_shot$cutoff_date[[i]]
+    fo <- single_shot$first_oos_date[[i]]
+    ss_verdict[i] <- if (is.na(cd) || is.na(fo)) {
+      "INDETERMINATE"
+    } else if (cd < fo) {
+      "PASS"
+    } else {
+      "FAIL"
+    }
+  }
+
+  ss_rows <- tibble::tibble(
+    strategy  = single_shot$strategy,
+    mechanism = "single_shot",
+    verdict   = ss_verdict,
+    detail    = paste0(
+      single_shot$evidence,
+      " [selection_cutoff=", ifelse(is.na(single_shot$cutoff_date), "NA",
+                                     as.character(single_shot$cutoff_date)),
+      ", first_oos=", ifelse(is.na(single_shot$first_oos_date), "NA",
+                              as.character(single_shot$first_oos_date)), "]."
+    )
+  )
+
+  dplyr::bind_rows(wf_rows, ss_rows)
+}
+
+#' Assert (or report) selection-before-OOS status for every registered
+#' strategy (S41, #910 item 1)
+#'
+#' STAGED, report-only by default (mirrors S30's
+#' \code{HD_ENFORCE_PLAUSIBILITY_AMBER} precedent, see
+#' \code{check_leaderboard_plausibility_amber()}'s roxygen above): this is
+#' the FIRST run of this gate against the real pipeline, and #910's CMR
+#' finding (a genuine full-sample selection trap -- see the
+#' \code{qa_selection_before_oos} target's own comment) is a design decision
+#' that needs human review before it hard-aborts \code{main} for every
+#' contributor. A FAIL or INDETERMINATE verdict is ALWAYS reported loudly via
+#' \code{cli_warn()} (STAGED) or \code{cli_abort()} (enforced) -- never
+#' silently folded into a passing build (checks-must-distinguish-unknown.md).
+#' Set \code{HD_ENFORCE_SELECTION_BEFORE_OOS=1} to escalate to a hard abort
+#' once the flagged strategies have been triaged.
+#'
+#' @param verdict_tbl Tibble as returned by
+#'   \code{\link{build_selection_before_oos_table}}.
+#' @param acknowledged Character vector of strategy labels with a written
+#'   human override. Default \code{\link{SELECTION_BEFORE_OOS_ACKNOWLEDGED}}.
+#' @param enforce Logical. Default reads \code{HD_ENFORCE_SELECTION_BEFORE_OOS}.
+#' @return \code{verdict_tbl}, invisibly, on every non-aborting path.
+#' @noRd
+check_selection_before_oos <- function(
+    verdict_tbl, acknowledged = SELECTION_BEFORE_OOS_ACKNOWLEDGED,
+    enforce = Sys.getenv("HD_ENFORCE_SELECTION_BEFORE_OOS", "0") == "1") {
+
+  if (nrow(verdict_tbl) == 0L) {
+    cli::cli_abort(c(
+      "x" = "check_selection_before_oos() (S41) received a zero-row verdict table.",
+      "i" = "build_selection_before_oos_table() already aborts on an empty registry -- this should be unreachable."
+    ))
+  }
+
+  msgs <- sprintf("  %s [%s] -- %s: %s",
+                  verdict_tbl$strategy, verdict_tbl$mechanism,
+                  verdict_tbl$verdict, verdict_tbl$detail)
+  cli::cli_inform(c(
+    "i" = paste0(
+      "qa_selection_before_oos: ", nrow(verdict_tbl), " strategy/mechanism ",
+      "row(s) checked (S41, #910 item 1):"
+    ),
+    stats::setNames(msgs, rep("i", length(msgs)))
+  ))
+
+  bad <- verdict_tbl[verdict_tbl$verdict %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad <- bad[!(bad$strategy %in% acknowledged), , drop = FALSE]
+
+  if (nrow(bad) > 0L) {
+    bad_msgs <- sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail)
+    if (isTRUE(enforce)) {
+      cli::cli_abort(c(
+        "x" = paste0(
+          nrow(bad), " strategy/mechanism row(s) FAILED or are INDETERMINATE ",
+          "on the selection-before-OOS gate (S41, #910 item 1, ",
+          "HD_ENFORCE_SELECTION_BEFORE_OOS=1):"
+        ),
+        stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+        "i" = paste0(
+          "A selection procedure must use only data strictly before the ",
+          "first OOS bar (look-ahead-bias-prevention.md, #910). FAIL means ",
+          "it did not; INDETERMINATE means the cutoff/first-OOS date could ",
+          "not be established -- never treated as a pass ",
+          "(checks-must-distinguish-unknown.md). Fix the underlying ",
+          "selection, or add the strategy to ",
+          "SELECTION_BEFORE_OOS_ACKNOWLEDGED (R/plan_qa_gates.R) with a ",
+          "written reason after an explicit human review."
+        )
+      ))
+    } else {
+      cli::cli_warn(c(
+        "!" = paste0(
+          nrow(bad), " strategy/mechanism row(s) FAILED or are INDETERMINATE ",
+          "on the selection-before-OOS gate (S41, #910 item 1) -- STAGED ",
+          "(report-only): set HD_ENFORCE_SELECTION_BEFORE_OOS=1 to make ",
+          "this abort the pipeline."
+        ),
+        stats::setNames(bad_msgs, rep("i", length(bad_msgs)))
+      ))
+    }
+  }
+
+  invisible(verdict_tbl)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -4980,6 +5216,78 @@ plan_qa_gates <- function() {
         TRUE
       },
       cue = targets::tar_cue(mode = "always")
-    )
+    ),
+
+    # QA gate: selection-before-OOS (S41, #910 item 1) -- "From Alpha
+    # Signals to Portfolio"'s single most important rule: a feature/factor/
+    # parameter set must be selected on data that STRICTLY PREDATES the
+    # first out-of-sample bar. See SELECTION_WALK_FORWARD_REGISTRY's roxygen
+    # for why the six walk-forward strategies there are PASS by
+    # construction (verified from source, not re-executed here), and
+    # check_selection_before_oos()'s roxygen for why this gate is STAGED
+    # (report-only) rather than a hard abort on its first landing.
+    #
+    # Single-shot strategies (selected ONCE, not re-selected every step)
+    # are checked LIVE against the current store:
+    #   - CMR best-lookback selection: cmr_summary (R/plan_commodities_
+    #     mean_reversion.R:349-352) picks the max-Sharpe lookback (1m/3m/6m)
+    #     over the FULL cmr_portfolio_{1m,3m,6m} series -- there is no
+    #     train/test split at all, so the "selection cutoff" is effectively
+    #     the series' own max date, which is always at or after the
+    #     project's canonical OOS start. This is a genuine instance of the
+    #     article's "full-sample selection trap" (#910 gap map row 4), NOT
+    #     a false positive: it live-verifies as a FAIL below every build.
+    #     The SAME best-lookback pick is replicated (not re-derived
+    #     independently) in three downstream consumers -- .norm_cmr()
+    #     (R/plan_leaderboard.R:328-338), borrow_sensitivity_sweep
+    #     (R/plan_cost_convention.R:603), and strat_returns_daily_native
+    #     (R/plan_strategy_correlation.R:635-664) -- so fixing the root
+    #     cause (e.g. picking the lookback on a train-only window, or
+    #     reporting all three lookbacks rather than "best") fixes all four
+    #     call sites at once; only the root cause is registered here to
+    #     avoid quadruple-counting one design decision as four findings.
+    #   - Portfolio combination weights (PSO and HRP, R/plan_portfolio_
+    #     opt.R): both already correctly restrict to
+    #     `port_returns |> filter(date <= stk_params$is_end)` before
+    #     optimising -- included here as live-verified PASS examples
+    #     alongside the walk-forward registry, not because either was
+    #     suspected of a violation.
+    targets::tar_target(qa_selection_before_oos, {
+      cmr_cutoff <- max(
+        as.Date(cmr_portfolio_1m$date), as.Date(cmr_portfolio_3m$date),
+        as.Date(cmr_portfolio_6m$date)
+      )
+
+      single_shot <- tibble::tibble(
+        strategy = c(
+          "CMR best-lookback selection (cmr_summary -> .norm_cmr / borrow_sensitivity_sweep / strat_returns_daily_native)",
+          "Portfolio combination weights, PSO (port_optimal_weights)",
+          "Portfolio combination weights, HRP (port_hrp_weights)"
+        ),
+        cutoff_date = as.Date(c(
+          cmr_cutoff, stk_params$is_end, stk_params$is_end
+        )),
+        first_oos_date = as.Date(c(
+          bt_partitions$macro$test_start, stk_params$test_start, stk_params$test_start
+        )),
+        evidence = c(
+          "R/plan_commodities_mean_reversion.R:349-352 -- cmr_summary picks the max-Sharpe lookback over the FULL, unsplit cmr_portfolio_{1m,3m,6m} series (no train/test window at all)",
+          "R/plan_portfolio_opt.R:84-85 -- train <- port_returns |> filter(date <= stk_params$is_end); PSO optimises on train only",
+          "R/plan_portfolio_opt.R:183-184 -- train <- port_returns |> filter(date <= stk_params$is_end); HRP weights computed on train only"
+        )
+      )
+
+      verdict_tbl <- build_selection_before_oos_table(single_shot)
+      check_selection_before_oos(verdict_tbl)
+      cli::cli_inform(c("i" = paste0(
+        "qa_selection_before_oos: S41 ran (STAGED report-only unless ",
+        "HD_ENFORCE_SELECTION_BEFORE_OOS=1) -- ",
+        sum(verdict_tbl$verdict == "PASS"), " PASS / ",
+        sum(verdict_tbl$verdict == "FAIL"), " FAIL / ",
+        sum(verdict_tbl$verdict == "INDETERMINATE"), " INDETERMINATE ",
+        "of ", nrow(verdict_tbl), " (#910 item 1)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always"))
   )
 }
