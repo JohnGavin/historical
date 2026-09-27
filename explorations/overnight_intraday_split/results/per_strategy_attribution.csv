@@ -1,0 +1,3 @@
+strategy,underlying,execution_note,n_days,n_days_in_market,dollar_grows_overnight_leg_only,dollar_grows_intraday_leg_only,dollar_grows_actual_strategy,n_recompound_mismatches
+Avoid Worst (Days) / VIX Protection,SPY,"Full-day in/out switch decided from prior-day close info; both legs captured together when in market, neither when out -- no leg is unreachable by this execution.",8353,6673,10.744531442585503,0.5097054210858611,5.476545923313291,0
+Risk State (VIX Overlay),SPY,Fractional daily exposure (0.10-1.00) applied uniformly to the whole day's SPY return; both legs partially captured every day in proportion to exposure -- no leg is unreachable.,8355,NA,12.463385956973733,0.9370986844127753,7.230226583876283,NA

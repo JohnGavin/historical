@@ -1122,6 +1122,17 @@ arguments:
 returns: Tibble with one row per (ticker, as_of_date) that had >= min_obs_days observations in the formation window.
 ---
 kind: function
+name: hd_return_legs
+exported: true
+signature: hd_return_legs(data, unadjusted_ok = FALSE, tolerance = 1e-6,quiet = FALSE)
+arguments:
+  data: A data frame with one row per (ticker, date), containing at minimum date, ticker, open, close.
+  quiet: Logical scalar, default FALSE.
+  tolerance: Numeric scalar > 0, default 1e-6.
+  unadjusted_ok: Logical scalar, default FALSE.
+returns: 'A tibble with one row per retained (ticker, date): Date.'
+---
+kind: function
 name: hd_registry_path
 exported: true
 signature: hd_registry_path()
