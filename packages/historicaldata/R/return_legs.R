@@ -152,6 +152,20 @@
 #' @export
 hd_return_legs <- function(data, unadjusted_ok = FALSE, tolerance = 1e-6,
                             quiet = FALSE) {
+  # Threshold for flagging `corp_action_adjusted` (a detected split/dividend
+  # day, i.e. a day where adj_ratio genuinely changed vs the previous day).
+  # NOT 0 or a floating-point epsilon: adjusted_close/close carries real
+  # day-to-day rounding noise even absent any corporate action -- measured
+  # empirically on SPY 1993-2026 (explorations/overnight_intraday_split/,
+  # issue #914 Gap 1): 90th percentile |ratio change| ~= 5.0e-7, while every
+  # one of SPY's 134 real quarterly ex-dividend days over that period showed
+  # a ratio change >= 4.0e-3 -- a three-order-of-magnitude gap with nothing
+  # in between (count > 1e-4 == count > 1e-3 == 134 exactly). 1e-4 sits
+  # cleanly in that gap. Using 1e-9 (a bare "any nonzero change") instead
+  # flagged 8253 of 8355 SPY days (99% of the whole series) as a "detected"
+  # corporate action, which made the diagnostic meaningless -- discovered by
+  # actually running this function on SPY, not assumed.
+  .HD_CORP_ACTION_RATIO_EPS <- 1e-4
   if (!is.data.frame(data)) {
     cli::cli_abort(c(
       "x" = "{.arg data} must be a data frame.",
@@ -296,7 +310,7 @@ hd_return_legs <- function(data, unadjusted_ok = FALSE, tolerance = 1e-6,
 
   if (has_adjusted) {
     corp_action_adjusted <- !is.na(out$prev_adj_ratio) &
-      abs(out$adj_ratio / out$prev_adj_ratio - 1) > 1e-9
+      abs(out$adj_ratio / out$prev_adj_ratio - 1) > .HD_CORP_ACTION_RATIO_EPS
   } else {
     corp_action_adjusted <- rep(NA, nrow(out))
   }
