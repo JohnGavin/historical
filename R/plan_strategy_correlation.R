@@ -624,11 +624,16 @@ plan_strategy_correlation <- function() {
     #   risk_state:  rsc_portfolio$ret_strategy -- the SPY_overlay series
     #                (R/plan_risk_state.R; .norm_rsc() filters rsc_metrics
     #                to this same variant).
-    #   avoid_worst: SPY daily returns with the worst 10 days (by return,
-    #                over the WHOLE series) removed -- replicates aw_metrics'
-    #                own "Remove 10 Worst" / "Full Period" construction
-    #                (R/plan_avoid_worst.R's calc()) rather than
-    #                re-deriving a different selection.
+    #   avoid_worst: aw_practical_backtest$ret_strategy -- the VIX-triggered
+    #                protection strategy's OWN daily returns
+    #                (R/plan_avoid_worst.R; matches .norm_aw()'s source,
+    #                aw_strategy_metrics, both keyed off ret_strategy).
+    #                Previously (#813 follow-up) this replicated aw_metrics'
+    #                "Remove 10 Worst" hindsight scenario -- plain SPY
+    #                buy-and-hold with its worst 10 days deleted after the
+    #                fact -- which fed K_eff/deflated Sharpe/SSR/cost
+    #                sensitivity for a series the leaderboard never actually
+    #                held.
     targets::tar_target(strat_returns_daily_native, {
       library(dplyr)
 
@@ -684,14 +689,13 @@ plan_strategy_correlation <- function() {
       risk_state_daily <- rsc_portfolio |>
         transmute(date = as.Date(date), ret = ret_strategy)
 
-      # Avoid Worst: worst-10-day removal over the full SPY series, same
-      # selection as aw_metrics' calc(period = "Full Period", scenario =
-      # "Remove 10 Worst") in R/plan_avoid_worst.R.
-      spy <- aw_daily_returns |> filter(ticker == "SPY") |> arrange(date)
-      ord <- order(spy$ret)
-      worst_10 <- ord[seq_len(min(10L, nrow(spy) - 1L))]
-      avoid_worst_daily <- spy[-worst_10, ] |>
-        transmute(date = as.Date(date), ret = ret)
+      # Avoid Worst (#813 follow-up): the VIX-triggered protection
+      # strategy's OWN daily returns (aw_practical_backtest$ret_strategy),
+      # never aw_metrics' SPY-minus-worst-10-days hindsight scenario -- see
+      # this target's header comment above.
+      avoid_worst_daily <- aw_practical_backtest |>
+        filter(!is.na(ret_strategy)) |>
+        transmute(date = as.Date(date), ret = ret_strategy)
 
       list(
         cmr             = cmr_daily,
