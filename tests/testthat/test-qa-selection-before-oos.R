@@ -160,6 +160,73 @@ test_that("check_selection_before_oos aborts on a zero-row verdict table", {
   expect_snapshot(error = TRUE, check_selection_before_oos(empty))
 })
 
+# ── Regression: literal curly braces in evidence/detail text must not break
+# cli formatting (real scripts/build.sh failure on main b16ff1e, #910/#917) ──
+#
+# cli::cli_inform()/cli_warn()/cli_abort() treat every character element
+# they are handed as a glue-style format string and re-parse any `{...}`
+# inside it as R code to evaluate. check_selection_before_oos() builds its
+# bullet text with sprintf()/paste0() from data-derived `detail`/`evidence`
+# fields -- and the real S41 CMR evidence text
+# ("...cmr_portfolio_{1m,3m,6m} rows...") contains a literal brace pair.
+# Before the fix, this aborted every `tar_make()` with:
+#   "Could not parse cli `{}` expression: `1m,3m,6m`."
+# because `1m` is not valid R syntax (and even a syntactically valid
+# expression would have been evaluated, not printed literally). None of the
+# fixtures above ever contained a brace, so `devtools::test()` never caught
+# it -- this is the fixture gap being closed here.
+
+test_that("check_selection_before_oos: literal curly braces in detail/strategy text do not break cli formatting in STAGED (warn) mode", {
+  tbl <- tibble::tibble(
+    strategy = "CMR {x}",
+    mechanism = "single_shot",
+    verdict = "FAIL",
+    detail = "picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} rows strictly before test_start"
+  )
+
+  w <- testthat::capture_warnings(
+    result <- check_selection_before_oos(tbl, enforce = FALSE)
+  )
+  expect_length(w, 1L)
+  # The brace text must appear VERBATIM (single braces, not doubled/escaped
+  # and not evaluated as R code) in the rendered warning.
+  expect_match(w, "cmr_portfolio_{1m,3m,6m}", fixed = TRUE)
+  expect_match(w, "CMR {x}", fixed = TRUE)
+  expect_identical(result, tbl)
+})
+
+test_that("check_selection_before_oos: literal curly braces survive verbatim into the enforced abort message", {
+  tbl <- tibble::tibble(
+    strategy = "CMR {x}",
+    mechanism = "single_shot",
+    verdict = "FAIL",
+    detail = "picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} rows strictly before test_start"
+  )
+  expect_snapshot(error = TRUE, check_selection_before_oos(tbl, enforce = TRUE))
+})
+
+test_that("build_selection_before_oos_table -> check_selection_before_oos: end-to-end with brace-bearing evidence text does not error (reproduces the real b16ff1e build failure)", {
+  wf <- tibble::tibble(strategy = "fake walk-forward", evidence = "fake evidence")
+  ss <- tibble::tibble(
+    strategy = "CMR best-lookback selection",
+    # Deliberately a FAIL verdict (cutoff >= first_oos) so the offending
+    # `bad_msgs` cli_warn() path -- not just the always-run cli_inform()
+    # summary path -- is exercised too.
+    cutoff_date = as.Date("2026-01-01"),
+    first_oos_date = as.Date("2020-01-01"),
+    evidence = paste0(
+      "R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback() ",
+      "picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} ",
+      "rows strictly before bt_partitions$macro$test_start"
+    )
+  )
+  tbl <- build_selection_before_oos_table(ss, walk_forward = wf)
+
+  w <- testthat::capture_warnings(check_selection_before_oos(tbl, enforce = FALSE))
+  expect_length(w, 1L)
+  expect_match(w, "cmr_portfolio_{1m,3m,6m}", fixed = TRUE)
+})
+
 test_that("SELECTION_WALK_FORWARD_REGISTRY is non-empty and every row lands as PASS", {
   ss <- tibble::tibble(
     strategy = character(0), cutoff_date = as.Date(character(0)),

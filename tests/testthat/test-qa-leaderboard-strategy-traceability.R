@@ -161,6 +161,18 @@ test_that("build_leaderboard_traceability_table: aborts when the leaderboard has
   )
 })
 
+# ── Regression: literal curly braces in a strategy/metric label must not
+# break cli formatting (same defect class as S41's #910/#917 CMR fix). ──
+
+test_that("check_leaderboard_strategy_traceability: a strategy label containing literal curly braces does not break the abort message", {
+  tbl <- tibble::tibble(
+    strategy = "Avoid Worst {x,y}", metric = "sharpe",
+    published = 0.5, recomputed = 0.9, decoy = 0.5, verdict = "FAIL"
+  )
+  err <- testthat::capture_error(check_leaderboard_strategy_traceability(tbl))
+  expect_match(conditionMessage(err), "Avoid Worst {x,y}", fixed = TRUE)
+})
+
 test_that("build_leaderboard_traceability_table: aborts when aw_metrics has no matching decoy row", {
   fx <- .make_s42_fixture()
   leaderboard <- .make_leaderboard_row(sharpe = fx$correct$sharpe, cagr = fx$correct$cagr / 100)

@@ -39,3 +39,16 @@
       x check_selection_before_oos() (S41) received a zero-row verdict table.
       i build_selection_before_oos_table() already aborts on an empty registry -- this should be unreachable.
 
+# check_selection_before_oos: literal curly braces survive verbatim into the enforced abort message
+
+    Code
+      check_selection_before_oos(tbl, enforce = TRUE)
+    Message
+      i qa_selection_before_oos: 1 strategy/mechanism row(s) checked (S41, #910 item 1):
+      i  CMR {x} [single_shot] -- FAIL: picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} rows strictly before test_start
+    Condition
+      Error in `check_selection_before_oos()`:
+      x 1 strategy/mechanism row(s) FAILED or are INDETERMINATE on the selection-before-OOS gate (S41, #910 item 1, HD_ENFORCE_SELECTION_BEFORE_OOS=1):
+      i  CMR {x} -- FAIL: picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} rows strictly before test_start
+      i A selection procedure must use only data strictly before the first OOS bar (look-ahead-bias-prevention.md, #910). FAIL means it did not; INDETERMINATE means the cutoff/first-OOS date could not be established -- never treated as a pass (checks-must-distinguish-unknown.md). Fix the underlying selection, or add the strategy to SELECTION_BEFORE_OOS_ACKNOWLEDGED (R/plan_qa_gates.R) with a written reason after an explicit human review.
+

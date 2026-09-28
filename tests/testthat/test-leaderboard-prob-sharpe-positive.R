@@ -199,3 +199,23 @@ test_that("check_leaderboard_prob_sharpe_positive throws when exemptions table i
     regexp = "reason"
   )
 })
+
+# ── Regression: literal curly braces in a strategy label must not break cli
+# formatting (same defect class as S41's #910/#917 CMR fix -- cli treats
+# every bullet element as a glue format string and re-parses literal `{}`
+# as R code). None of the fixtures above ever contained a brace. ──
+
+test_that("check_leaderboard_prob_sharpe_positive: a strategy label containing literal curly braces does not break the single-test coverage abort", {
+  brace_offender <- tibble::tibble(
+    strategy                = c("OLMAR-1", "Factor {x,y}"),
+    period                  = c("Full Period", "Full Period"),
+    sharpe                  = c(0.78, 0.40),
+    prob_sharpe_positive    = c(0.90, NA_real_),
+    prob_sharpe_positive_mt = c(0.85, NA_real_),
+    k_eff_leaderboard       = c(4.847, NA_real_)
+  )
+  err <- testthat::capture_error(
+    check_leaderboard_prob_sharpe_positive(brace_offender, test_exemptions)
+  )
+  expect_match(conditionMessage(err), "Factor {x,y}", fixed = TRUE)
+})
