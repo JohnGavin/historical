@@ -10,6 +10,37 @@
 
 # ---- helpers ----
 
+#' Escape literal curly braces before splicing arbitrary data into a cli
+#' message (S40/S41/S42, #910/#917)
+#'
+#' \code{cli::cli_inform()}/\code{cli_warn()}/\code{cli_abort()} treat every
+#' character element handed to them as a glue-style format string and
+#' re-parse any \code{\{...\}} inside it as R code to evaluate. A gate that
+#' builds its bullet text with \code{sprintf()}/\code{paste0()} from
+#' data-derived content (an evidence citation, a free-text detail column, a
+#' strategy label) is therefore only safe as long as that content never
+#' contains a literal brace -- and #910/#917's own evidence text
+#' (\verb{cmr_portfolio_\{1m,3m,6m\}}) shows it can. \code{devtools::test()}
+#' fixtures with no braces cannot catch this: \code{parse("{}" expression:
+#' `1m,3m,6m`)} only fires against real evidence text, never a
+#' hand-written fixture that happens not to contain one.
+#'
+#' Doubling \code{\{}/\code{\}} is glue's own documented escape convention
+#' (a doubled brace renders as one literal brace and is never re-parsed), so
+#' this is applied to the FINAL, already-assembled message string -- not to
+#' the individual data fields before assembly -- immediately before handing
+#' it to any \code{cli_*()} call. Fixed template text (e.g. \code{"  %s -- "})
+#' never itself contains a brace, so escaping the whole string cannot corrupt
+#' the intended layout.
+#'
+#' @param x Character vector of already-assembled message text.
+#' @return Character vector, same length, with every \code{{}/}} doubled.
+#' @noRd
+.qa_cli_escape <- function(x) {
+  x <- gsub("{", "{{", x, fixed = TRUE)
+  gsub("}", "}}", x, fixed = TRUE)
+}
+
 #' Scan files for lead(ym) used for month-key construction (S1)
 #'
 #' @param files Character vector of absolute .R file paths to scan.
@@ -1950,11 +1981,11 @@ check_leaderboard_prob_sharpe_positive <- function(leaderboard, exemptions = DEF
     offender_idx <- idx[!exempted]
 
     if (length(offender_idx) > 0L) {
-      offenders <- sprintf(
+      offenders <- .qa_cli_escape(sprintf(
         "  %s / %s -- sharpe = %s (no declared exemption)",
         leaderboard$strategy[offender_idx], leaderboard$period[offender_idx],
         format(leaderboard$sharpe[offender_idx], digits = 3)
-      )
+      ))
       cli::cli_abort(c(
         "x" = paste0(
           "Leaderboard has ", length(offender_idx),
@@ -1981,12 +2012,12 @@ check_leaderboard_prob_sharpe_positive <- function(leaderboard, exemptions = DEF
     offender_idx <- idx[!exempted]
 
     if (length(offender_idx) > 0L) {
-      offenders <- sprintf(
+      offenders <- .qa_cli_escape(sprintf(
         "  %s / %s -- sharpe = %s, k_eff_leaderboard = %s (no declared exemption)",
         leaderboard$strategy[offender_idx], leaderboard$period[offender_idx],
         format(leaderboard$sharpe[offender_idx], digits = 3),
         format(leaderboard$k_eff_leaderboard[offender_idx], digits = 4)
-      )
+      ))
       cli::cli_abort(c(
         "x" = paste0(
           "Leaderboard has ", length(offender_idx),
@@ -2015,12 +2046,12 @@ check_leaderboard_prob_sharpe_positive <- function(leaderboard, exemptions = DEF
 
   if (any(greater_than)) {
     idx <- which(greater_than)
-    offenders <- sprintf(
+    offenders <- .qa_cli_escape(sprintf(
       "  %s / %s -- prob_sharpe_positive = %s, prob_sharpe_positive_mt = %s (corrected > uncorrected)",
       leaderboard$strategy[idx], leaderboard$period[idx],
       format(leaderboard$prob_sharpe_positive[idx], digits = 4),
       format(leaderboard$prob_sharpe_positive_mt[idx], digits = 4)
-    )
+    ))
     cli::cli_abort(c(
       "x" = paste0(
         "Leaderboard has ", length(idx),
@@ -2811,7 +2842,7 @@ PERIODICITY_RECONCILIATION_CODE_TO_STRATEGY <- c(
 #' `cmr_conditioned` (#751/#901) was checked empirically against the main
 #' store when its mapping was added to `PERIODICITY_RECONCILIATION_CODE_TO_
 #' STRATEGY` above and deliberately NOT added here: unlike the base `cmr`
-#' row, `cmr_portfolio_{1m,3m,6m}_conditioned` has NO pre-2000 data at all
+#' row, `cmr_portfolio_1m/3m/6m_conditioned` has NO pre-2000 data at all
 #' (its regime-conditioning signal only exists from 2000-07-06 onward) and
 #' is uniformly business-daily (~250-255 obs/year every calendar year,
 #' 2000-2026) throughout its entire history -- the #738 mixed-frequency
@@ -4282,9 +4313,9 @@ check_selection_before_oos <- function(
     ))
   }
 
-  msgs <- sprintf("  %s [%s] -- %s: %s",
+  msgs <- .qa_cli_escape(sprintf("  %s [%s] -- %s: %s",
                   verdict_tbl$strategy, verdict_tbl$mechanism,
-                  verdict_tbl$verdict, verdict_tbl$detail)
+                  verdict_tbl$verdict, verdict_tbl$detail))
   cli::cli_inform(c(
     "i" = paste0(
       "qa_selection_before_oos: ", nrow(verdict_tbl), " strategy/mechanism ",
@@ -4297,7 +4328,7 @@ check_selection_before_oos <- function(
   bad <- bad[!(bad$strategy %in% acknowledged), , drop = FALSE]
 
   if (nrow(bad) > 0L) {
-    bad_msgs <- sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail)
+    bad_msgs <- .qa_cli_escape(sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail))
     if (isTRUE(enforce)) {
       cli::cli_abort(c(
         "x" = paste0(
@@ -4452,11 +4483,11 @@ check_leaderboard_strategy_traceability <- function(verdict_tbl) {
   bad <- verdict_tbl[verdict_tbl$verdict != "PASS", , drop = FALSE]
   if (nrow(bad) > 0L) {
     decoy_hit <- abs(bad$published - bad$decoy) < 0.02
-    detail <- sprintf(
+    detail <- .qa_cli_escape(sprintf(
       "  %s / %s -- published=%.4f, recomputed=%.4f, decoy=%.4f%s",
       bad$strategy, bad$metric, bad$published, bad$recomputed, bad$decoy,
       ifelse(decoy_hit, " (MATCHES THE DECOY -- #813 regression)", "")
-    )
+    ))
     cli::cli_abort(c(
       "x" = "qa_leaderboard_strategy_traceability (S42): {nrow(bad)} leaderboard metric{?s} failed to trace to the strategy's own return series.",
       stats::setNames(detail, rep("i", length(detail))),
@@ -5372,7 +5403,7 @@ plan_qa_gates <- function() {
     #   - CMR best-lookback selection: FIXED 2026-09-27 (S41's own first
     #     landing found this FAIL -- see git history for the pre-fix
     #     comment). cmr_summary's max-Sharpe pick over the FULL, unsplit
-    #     cmr_portfolio_{1m,3m,6m} series was a genuine instance of the
+    #     cmr_portfolio_1m/3m/6m series was a genuine instance of the
     #     article's "full-sample selection trap" (#910 gap map row 4),
     #     replicated (not re-derived independently) at FOUR call sites --
     #     .norm_cmr()/.norm_cmr_conditioned() (R/plan_leaderboard.R),
@@ -5415,7 +5446,7 @@ plan_qa_gates <- function() {
           stk_params$test_start, stk_params$test_start
         )),
         evidence = c(
-          "R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback() (cmr_selection target, S41/#910/#917 fix, 2026-09-27) picks the max-Sharpe lookback using ONLY cmr_portfolio_{1m,3m,6m} rows strictly before bt_partitions$macro$test_start",
+          "R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback() (cmr_selection target, S41/#910/#917 fix, 2026-09-27) picks the max-Sharpe lookback using ONLY cmr_portfolio_1m/3m/6m rows strictly before bt_partitions$macro$test_start",
           "R/plan_commodities_mean_reversion.R's .cmr_select_pre_oos_lookback() (cmr_selection_conditioned target), the SAME pre-OOS fix applied to the regime-conditioned CMR variant (#751/#901)",
           "R/plan_portfolio_opt.R:84-85 -- train <- port_returns |> filter(date <= stk_params$is_end); PSO optimises on train only",
           "R/plan_portfolio_opt.R:183-184 -- train <- port_returns |> filter(date <= stk_params$is_end); HRP weights computed on train only"
