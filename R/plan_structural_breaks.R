@@ -200,7 +200,7 @@ plan_structural_breaks <- function() {
           }
 
           result <- tryCatch(
-            historicaldata::hd_structural_breaks(
+            hd_structural_breaks(
               returns          = r,
               alpha            = sb_params$alpha,
               min_years        = sb_params$min_years,

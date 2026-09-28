@@ -3543,7 +3543,7 @@ check_registry_leg_count_calibration <- function(status) {
 #' @return `TRUE` invisibly.
 #' @noRd
 .run_qa_registry_leg_count_calibration <- function() {
-  path <- historicaldata::hd_registry_path()
+  path <- hd_registry_path()
   if (!file.exists(path)) {
     cli::cli_inform(c(
       "i" = paste0(
@@ -3558,12 +3558,12 @@ check_registry_leg_count_calibration <- function(status) {
   # written before leg_count existed would otherwise be read read-only with
   # a stale schema ("Binder Error: ... no column named leg_count").
   # hd_registry_init() is a no-op on an up-to-date file.
-  historicaldata::hd_registry_init(path)
+  hd_registry_init(path)
 
-  con <- historicaldata::hd_registry_open(path, read_only = TRUE)
+  con <- hd_registry_open(path, read_only = TRUE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
-  status <- historicaldata::hd_registry_leg_count_status(con)
+  status <- hd_registry_leg_count_status(con)
   check_registry_leg_count_calibration(status)
   invisible(TRUE)
 }
@@ -3787,7 +3787,7 @@ compute_olmar_window_neighbourhood_sharpes <- function(
   windows <- (params$window - half_width):(params$window + half_width)
 
   sharpes <- vapply(windows, function(w) {
-    port <- historicaldata::olmar_backtest(
+    port <- olmar_backtest(
       prices   = prices,
       window   = w,
       epsilon  = params$epsilon,
@@ -3837,7 +3837,7 @@ compute_olmar_window_neighbourhood_sharpes <- function(
 check_param_neighbourhood <- function(windows, sharpes, centre, strategy_label,
                                        acknowledged = HD_S39_ACKNOWLEDGED_PEAKS) {
 
-  verdict <- historicaldata::hd_param_neighbourhood(
+  verdict <- hd_param_neighbourhood(
     param_values = windows, metric_values = sharpes, centre = centre
   )
 
@@ -4015,7 +4015,7 @@ build_search_funnel_table <- function(trial_tables,
     sharpe <- tbl[[cfg$sharpe_col]]
     n_obs  <- tbl[[cfg$n_obs_col]]
 
-    v <- historicaldata::hd_trial_sharpe_var(sharpe = sharpe, n_obs = n_obs)
+    v <- hd_trial_sharpe_var(sharpe = sharpe, n_obs = n_obs)
     n_tried           <- v$n_total
     n_min_trades_pass <- v$n_included
 
@@ -5193,7 +5193,7 @@ plan_qa_gates <- function() {
           dplyr::arrange(time) |>
           dplyr::mutate(log_ret = log(close / dplyr::lag(close))) |>
           dplyr::select(time, log_ret)
-        result <- historicaldata::bdbb_tail_predict(bdbb_sol_fit, returns_df)
+        result <- bdbb_tail_predict(bdbb_sol_fit, returns_df)
         scored <- attr(result, "bdbb_scored_windows")
         check_bdbb_no_lookahead(scored)
         n_scored <- sum(!is.na(scored$next_time))

@@ -34,7 +34,7 @@ CORR_MIN_OBS  <- 12L
 # corr_threshold default reads the SAME constant, so the two similarity
 # thresholds (leaderboard redundancy flag vs. new-strategy admission gate,
 # #496) can never silently drift apart. See #496 review, 2026-09-26.
-REDUNDANCY_THRESH <- historicaldata::HD_REDUNDANCY_THRESH
+REDUNDANCY_THRESH <- HD_REDUNDANCY_THRESH
 
 # ── Leaderboard-wide return alignment (#728 items 1+2, widened by #733) ─────
 #
@@ -825,7 +825,7 @@ plan_strategy_correlation <- function() {
     # leaderboard" (#728's core finding). seed = 160 matches
     # strat_keff_vertox above for reproducibility (issue #160).
     targets::tar_target(strat_keff_vertox_leaderboard, {
-      historicaldata::hd_strat_keff_vertox(
+      hd_strat_keff_vertox(
         strat_corr_matrix_leaderboard, n_sim = 20000L, seed = 160L
       )
     })

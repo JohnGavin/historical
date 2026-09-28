@@ -48,7 +48,7 @@ plan_bdbb_sol <- function() {
     }),
 
     targets::tar_target(bdbb_sol_fit, {
-      historicaldata::bdbb_fit(
+      bdbb_fit(
         bdbb_sol_data,
         window_days = bdbb_sol_params$window_days,
         min_frac    = bdbb_sol_params$min_frac
@@ -61,7 +61,7 @@ plan_bdbb_sol <- function() {
         dplyr::mutate(log_ret = log(close / dplyr::lag(close))) |>
         dplyr::select(time, log_ret)
 
-      historicaldata::bdbb_tail_predict(bdbb_sol_fit, returns_df)
+      bdbb_tail_predict(bdbb_sol_fit, returns_df)
     }),
 
     targets::tar_target(bdbb_sol_metrics, {

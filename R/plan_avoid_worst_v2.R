@@ -197,7 +197,7 @@ plan_avoid_worst_v2 <- function() {
     # comment (R/plan_drif_v2.R) for the identical reconciliation-with-
     # k_eff_lb rationale.
     targets::tar_target(aw_multiverse_trial_var, {
-      v <- historicaldata::hd_trial_sharpe_var(
+      v <- hd_trial_sharpe_var(
         sharpe = aw_multiverse$oos_sharpe,
         n_obs  = aw_multiverse$n_switches
       )

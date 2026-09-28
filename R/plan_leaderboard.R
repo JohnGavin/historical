@@ -890,7 +890,7 @@ plan_leaderboard <- function() {
           r <- r[!is.na(r)]
           if (length(r) < 38L) return(NA_real_)
           tryCatch(
-            historicaldata::hd_sharpe_stability_ratio(r, w = 36L, ann_factor = 12L)$ssr,
+            hd_sharpe_stability_ratio(r, w = 36L, ann_factor = 12L)$ssr,
             error = function(e) {
               cli::cli_warn(c(
                 "!" = "SSR computation errored for {.val {label}} -- returning NA.",
@@ -905,7 +905,7 @@ plan_leaderboard <- function() {
           r <- r[!is.na(r)]
           if (length(r) == 0L) return(NA_real_)
           tryCatch(
-            historicaldata::hd_top5pct_share(r)$top_share,
+            hd_top5pct_share(r)$top_share,
             error = function(e) NA_real_
           )
         }
@@ -1207,7 +1207,7 @@ plan_leaderboard <- function() {
         keff_usable <- !is.na(keff) && keff >= 1
 
         dp <- tryCatch(
-          historicaldata::hd_detection_power(
+          hd_detection_power(
             sharpe_annual = sr, n_obs = n, ann_factor = af,
             n_tests    = if (keff_usable) keff else 1,
             correction = if (keff_usable) "bonferroni" else "none"
@@ -1295,7 +1295,7 @@ plan_leaderboard <- function() {
         keff_usable <- !is.na(keff) && keff >= 1
 
         psr <- tryCatch(
-          historicaldata::hd_prob_sharpe_positive(
+          hd_prob_sharpe_positive(
             sharpe_annual = sr, n_obs = n, ann_factor = af,
             n_tests    = if (keff_usable) keff else 1,
             correction = if (keff_usable) "bonferroni" else "none"
@@ -1382,7 +1382,7 @@ plan_leaderboard <- function() {
         mu_period    <- (1 + cagr)^(1 / af) - 1
         sigma_period <- vol / sqrt(af)
         fp <- tryCatch(
-          historicaldata::hd_first_passage(
+          hd_first_passage(
             mu = mu_period, sigma = sigma_period,
             upper = FIRST_PASSAGE_BARRIER, lower = FIRST_PASSAGE_BARRIER
           ),
@@ -1455,7 +1455,7 @@ plan_leaderboard <- function() {
         mu_period    <- (1 + cagr)^(1 / af) - 1
         sigma_period <- vol / sqrt(af)
         fp <- tryCatch(
-          historicaldata::hd_first_passage(
+          hd_first_passage(
             mu = mu_period, sigma = sigma_period, upper = target, lower = floor
           ),
           error = function(e) NULL
@@ -1516,7 +1516,7 @@ plan_leaderboard <- function() {
     # k_eff_family is kept only as informational context for the family
     # subset.
     targets::tar_target(strat_keff_vertox, {
-      historicaldata::hd_strat_keff_vertox(strat_corr_matrix, n_sim = 20000L, seed = 160L)
+      hd_strat_keff_vertox(strat_corr_matrix, n_sim = 20000L, seed = 160L)
     }),
 
     # ── Deflated Sharpe per strategy (#160, widened by #728 items 1+2, #733) ─
@@ -1611,7 +1611,7 @@ plan_leaderboard <- function() {
 
       .dsr_row <- function(strategy_label, r, ann_factor, is_family = FALSE) {
         r <- r[!is.na(r)]
-        d <- historicaldata::hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
+        d <- hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
 
         # ── Harvey-Liu Sharpe haircut (#490 Gap 1) ─────────────────────────
         # n_tests = k_eff_lb (the SAME correlation-aware K_eff used for DSR
@@ -1627,7 +1627,7 @@ plan_leaderboard <- function() {
         # too few observations to form a t-statistic -- those are legitimate
         # "not enough data" states, not caller errors (fail-loud-not-null).
         hc <- if (!is.na(d$naive_sharpe) && length(r) >= 2L) {
-          historicaldata::hd_sharpe_haircut(
+          hd_sharpe_haircut(
             sharpe = d$naive_sharpe, n_tests = k_eff_lb, rho = 0,
             T_obs = length(r), ann_factor = ann_factor, method = "bhy"
           )

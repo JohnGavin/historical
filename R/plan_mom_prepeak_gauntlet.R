@@ -223,7 +223,7 @@ plan_mom_prepeak_gauntlet <- function() {
     targets::tar_target(mom_prepeak_random_peak_test, {
       actual_sharpe <- mom_prepeak_metrics$sharpe
       random_sharpe <- mom_prepeak_random_peak_metrics$sharpe
-      rank <- historicaldata::hd_signal_null_rank(actual_sharpe, random_sharpe)
+      rank <- hd_signal_null_rank(actual_sharpe, random_sharpe)
       tibble::tibble(
         actual_sharpe  = actual_sharpe,
         random_sharpe  = random_sharpe,
@@ -616,8 +616,8 @@ plan_mom_prepeak_gauntlet <- function() {
   }
   uu <- reg_row$run_uuid[[1L]]
 
-  path <- historicaldata::hd_registry_path()
-  con  <- historicaldata::hd_registry_open(path, read_only = FALSE)
+  path <- hd_registry_path()
+  con  <- hd_registry_open(path, read_only = FALSE)
   on.exit(DBI::dbDisconnect(con, shutdown = TRUE), add = TRUE)
 
   # Build gauntlet metric row (wide format: one column per metric)
@@ -667,7 +667,7 @@ plan_mom_prepeak_gauntlet <- function() {
     ssr = "ratio", ssr_mean_sr = "ratio", ssr_n_windows = "count",
     top5pct_share = "fraction"
   )
-  historicaldata::hd_metric_record(con, uu, gauntlet_wide, units = gauntlet_units)
+  hd_metric_record(con, uu, gauntlet_wide, units = gauntlet_units)
 
   tibble::tibble(run_uuid = uu, metric_rows = 1L)
 }
