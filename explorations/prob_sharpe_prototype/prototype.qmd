@@ -1,6 +1,6 @@
 ---
 title: "Phase 0 Prototype: P(true Sharpe > 0) column"
-subtitle: "Throwaway prototype for owner approval — see .claude/rules/dashboard-output-first.md. NOT the production build."
+subtitle: "Revision 2 (owner feedback 2026-09-29, draft PR #927): short cell labels + hover/focus pop-up. Throwaway prototype for owner approval — see .claude/rules/dashboard-output-first.md. NOT the production build."
 format:
   html:
     theme:
@@ -8,6 +8,16 @@ format:
       dark: darkly
     embed-resources: true
     toc: true
+    include-in-header:
+      - text: |
+          <!-- accessibility rule Part 2 Clause 0/6: any color-scheme
+               declaration suppresses Chrome's Auto Dark Mode heuristic,
+               regardless of value -- see docs/_includes/color-scheme-meta.html,
+               copied inline here rather than referenced by relative path
+               since this prototype does not render inside the docs/
+               Quarto project. -->
+          <meta name="color-scheme" content="dark" />
+          <style>:root, html, body { color-scheme: dark; }</style>
 execute:
   echo: false
   warning: false
@@ -26,15 +36,6 @@ library(htmltools)
 # store (this worktree has no _targets store of its own). This prototype
 # does not build or write anything -- it only reads the `leaderboard`
 # target as it exists on origin/main today.
-#
-# tar_config_set() writes a `_targets.yaml` config file alongside this
-# .qmd (tar_read()/tar_load() read the store path back from that file, not
-# from an in-session option -- redirecting it to tempfile() left tar_read()
-# unable to find the store at all). That file holds a machine-specific
-# absolute path, which `portable-build-artifacts` forbids committing -- it
-# is covered by this repo's existing top-level `.gitignore` entry for the
-# bare pattern `_targets.yaml` (already used for docs/_targets.yaml for the
-# identical reason), so it is never staged.
 tar_config_set(store = "/Users/johngavin/docs_gh/proj/finance/data/historical/docs/_targets")
 
 lb <- tar_read(leaderboard)
@@ -43,14 +44,9 @@ full <- lb |>
   dplyr::arrange(dplyr::desc(sharpe))
 
 # ── HD_PROB_SHARPE_POSITIVE_THRESHOLD, extracted from its OWN source line in
-# R/plan_leaderboard.R rather than hand-typed here (per this dispatch's
-# instructions) or fully sourced (sourcing the whole 1700+ line plan file
-# would require loading the historicaldata package plus every upstream
-# R/plan_strategy_names.R dependency just to read one scalar constant --
-# disproportionate for a throwaway prototype that touches nothing else in
-# that file). A regex extraction of the literal assignment line is not
-# hand-typing: the value is read from the committed source at render time,
-# so it tracks any future change to the threshold with zero edits here.
+# R/plan_leaderboard.R rather than hand-typed here or fully sourced (see
+# Revision 1's comment for why a full source() is disproportionate for a
+# throwaway prototype).
 plan_lb_path <- if (file.exists("../../R/plan_leaderboard.R")) {
   "../../R/plan_leaderboard.R"
 } else {
@@ -64,131 +60,336 @@ threshold_line <- grep(
 stopifnot(length(threshold_line) == 1L)
 HD_PROB_SHARPE_POSITIVE_THRESHOLD <- eval(parse(text = threshold_line))
 
-pct <- function(x) sprintf("%.1f%%", x * 100)
+pct     <- function(x) sprintf("%.1f%%", x * 100)
+fmt_yr  <- function(x) if (is.na(x)) "?" else sprintf("%.0f", x)
+fmt_yr1 <- function(x) if (is.na(x)) "?" else sprintf("%.1f", x)
+fmt_keff <- function(x) if (is.na(x)) "n/a" else sprintf("%.1f", x)
 
-# ── Detection badge -- copied VERBATIM from docs/leaderboard.qmd's
-# `detection_badge()` (5-state verdict, symbol AND text on every state per
-# the accessibility rule) so this prototype's Detection column renders
-# pixel-identically to production. Do NOT edit independently of that copy;
-# if this prototype is approved, the real change updates leaderboard.qmd
-# only -- this file stays a frozen snapshot for the approval record.
-detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
-  if (is.na(sr) || sr <= 0) {
-    return(list(
-      html = "<span class='det-badge napp' title='Sharpe &le;0: the one-sided detection test has no positive effect to test for. Not applicable -- not the same as unproven.'>&ndash; n/a</span>",
-      rank = 4L
+# ── "years available" (full$years) is genuinely NA for 15 of 18 Full-Period
+# strategies as of this dispatch (verified via a direct tar_read() query,
+# not assumed) -- some per-strategy metrics builders in R/plan_leaderboard.R
+# never populate the `years` column, unlike `months`/`detection_min_n_years`
+# which are populated for every positive-Sharpe row. Per fail-loud-not-null,
+# an unavailable value is stated plainly rather than silently reverse-
+# engineered from `months`/`obs_ann_factor` (which would require sourcing
+# STRATEGY_OBS_ANN_FACTOR from R/plan_leaderboard.R -- out of scope for a
+# throwaway prototype confined to explorations/**). Flagged as a follow-up
+# note in this revision's PR body, not fixed here.
+avail_phrase <- function(avail) {
+  if (is.na(avail)) {
+    "years available not recorded for this strategy in the leaderboard target (data gap -- see #726)"
+  } else {
+    sprintf("<b>%s yr</b> available", fmt_yr1(avail))
+  }
+}
+
+# ── Drilldown link targets (owner feedback, PR #927 revision 2) ────────────
+# Relative paths from explorations/prob_sharpe_prototype/ to docs/ -- this
+# prototype is opened locally from a repo checkout, not deployed, so a
+# relative link (not a github.io URL) is the correct, verifiable target.
+# Anchor confirmed against docs/leaderboard.qmd's `# Biases and Caveats`
+# heading (line ~2098) -- Quarto's default heading-to-anchor slug.
+CAVEATS_HREF <- "../../docs/leaderboard.html#biases-and-caveats"
+ISSUE_BASE   <- "https://github.com/JohnGavin/historical/issues/"
+
+# Strategy -> its own dashboard page, ONLY where one genuinely exists.
+# Verified by grepping docs/*.qmd for each strategy's short_name (see
+# dispatch notes) rather than guessing from filenames -- e.g. "Risk State"
+# and "Macro Defense Rotation" are NOT the same strategy despite both being
+# VIX-related, so Risk State deliberately has NO entry here rather than a
+# wrong link. Anchors confirmed against docs/stock-backtest.qmd headings
+# (`# Stock MAX`, `# Stock DRIF`, `# XGBoost DRIF`,
+# `# Factor-Level Deep Dive {#factor-level-deep-dive}`).
+STRATEGY_DASHBOARD_HREF <- list(
+  "Avoid Worst"   = "../../docs/avoid-worst-days.html",
+  "Factor DRIF"   = "../../docs/stock-backtest.html#factor-level-deep-dive",
+  "Factor MAX"    = "../../docs/stock-backtest.html#factor-level-deep-dive",
+  "Stock MAX"     = "../../docs/stock-backtest.html#stock-max",
+  "Stock DRIF"    = "../../docs/stock-backtest.html#stock-drif",
+  "XGB DRIF"      = "../../docs/stock-backtest.html#xgboost-drif",
+  "Mom Pre-Peak"  = "../../docs/momentum-prepeak.html",
+  "Mom Post-Peak" = "../../docs/momentum-prepeak.html",
+  "Mom 12-2"      = "../../docs/momentum-prepeak.html"
+)
+
+issue_link <- function(n) {
+  sprintf("<a href='%s%s' target='_blank' rel='noopener'>#%s</a>", ISSUE_BASE, n, n)
+}
+
+pop_links <- function(strategy, issue_nums) {
+  parts <- sprintf(
+    "<a href='%s' target='_blank' rel='noopener'>Detection &amp; Rigour caveats &#8599;</a>",
+    CAVEATS_HREF
+  )
+  sh <- STRATEGY_DASHBOARD_HREF[[strategy]]
+  if (!is.null(sh)) {
+    parts <- c(parts, sprintf(
+      "<a href='%s' target='_blank' rel='noopener'>%s dashboard &#8599;</a>", sh, strategy
     ))
   }
+  parts <- c(parts, vapply(issue_nums, issue_link, character(1)))
+  paste(parts, collapse = " &middot; ")
+}
+
+# ── pop_wrap(): the SHORT badge + hover/focus pop-up shell ─────────────────
+# A CSS-driven hover/focus popover (accessibility rule's "Do not rely on
+# the native HTML title attribute" clause) -- NOT `title=`. `tabindex='0'`
+# makes the wrapper itself keyboard-focusable so `:focus`/`:focus-within`
+# (see the <style> block below) reveal the pop-up without a mouse. `family`
+# is the existing badge-family class (det-badge/psr-badge, unchanged from
+# revision 1) and `state` is the existing state class (detectable/mtfail/
+# underpowered/napp/notcomputed for Detection; sufficient/mtfail/
+# insufficient/napp/notcomputed for P(SR>0)) -- BOTH still carried on the
+# element so the colour-mapping CSS selectors from revision 1 keep working
+# unchanged, just re-targeted at `.pop-short` instead of the whole badge.
+pop_wrap <- function(family, state, short, body_html, aria) {
+  sprintf(
+    "<span class='pop-wrap %s %s' tabindex='0' aria-label='%s'><span class='pop-short'>%s</span><span class='pop-body'>%s</span></span>",
+    family, state, aria, short, body_html
+  )
+}
+
+DET_MEANING <- "<span class='pop-meaning'>Detection asks: is the sample long enough to reliably detect this Sharpe if it is real? (prospective power test, one-sided, &alpha;=0.05)</span>"
+PSR_MEANING <- "<span class='pop-meaning'>P(SR&gt;0) asks: given what we observed, how confident are we the TRUE Sharpe is positive? (retrospective confidence, Bailey &amp; Lopez de Prado)</span>"
+
+# ── Detection badge (short label + pop-up), mirrors historicaldata::
+# hd_detection_power()'s 5-state verdict shape from revision 1's
+# detection_badge(), restructured for a SHORT cell (icon + years
+# available/years needed, <=~11 chars) with the full wording moved into a
+# hover/focus pop-up. See .claude/rules/detection-power-required.md.
+#
+# Design choice, kept consistent across every state: the SECOND number in
+# the short label is always the "years needed" figure that is OPERATIVE
+# for that row's final verdict -- the single-test figure for every state
+# except `mtfail`, where the MT-CORRECTED figure is shown instead (that is
+# the number that actually fails). This keeps the available/needed
+# comparison in the cell always readable as "pass" (available >= needed
+# shown) or "fail" (available < needed shown), regardless of which test
+# produced the verdict.
+detection_badge2 <- function(strategy, sr, avail, under, dmin, under_mt, dmin_mt, keff) {
+  links <- pop_links(strategy, c(726, 903))
+
+  if (is.na(sr) || sr <= 0) {
+    body <- paste0(
+      "<strong>&ndash; Not applicable</strong><br>",
+      "Sharpe &le; 0: the one-sided detection test has no positive effect to test for. Not applicable &mdash; not the same as unproven.<br>",
+      DET_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    return(list(rank = 4L, html = pop_wrap(
+      "det-badge", "napp", "&ndash; n/a", body,
+      "Detection: not applicable, Sharpe is not positive"
+    )))
+  }
+
   if (is.na(under)) {
-    return(list(
-      html = "<span class='det-badge notcomputed' title='Positive Sharpe with NO detection verdict. This should never render live -- QA gate S20 (#726 item 3) is meant to block the build until it is fixed.'>&#10007; NOT COMPUTED</span>",
-      rank = 5L
-    ))
+    body <- paste0(
+      "<strong>&#10007; NOT COMPUTED</strong><br>",
+      "Positive Sharpe with NO detection verdict &mdash; this should never render live (QA gate S20, #726 item 3, is meant to block the build until it is fixed).<br>",
+      DET_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    return(list(rank = 5L, html = pop_wrap(
+      "det-badge", "notcomputed", "&#10007; ERR", body,
+      "Detection: defect, verdict was not computed"
+    )))
   }
+
   if (isTRUE(under)) {
-    mt_note <- if (!is.na(under_mt)) " Multiple-testing correction is academic here -- the single test already fails." else ""
-    return(list(
-      html = sprintf(
-        "<span class='det-badge underpowered' title='Needs %.0f years of data at alpha=0.05, one-sided.%s See #726.'>&#9888; Underpowered (needs %.0fyr)</span>",
-        dmin, mt_note, dmin
-      ),
-      rank = 3L
-    ))
+    mt_line <- if (!is.na(under_mt)) {
+      "Multiple-testing correction is academic here &mdash; the single test already fails."
+    } else {
+      "MT-corrected verdict not computed (k_eff unavailable for this strategy)."
+    }
+    body <- paste0(
+      "<strong>&#9888; Underpowered</strong><br>",
+      sprintf("Needs <b>%s yr</b> at &alpha;=0.05, one-sided; %s.<br>", fmt_yr1(dmin), avail_phrase(avail)),
+      mt_line, "<br>",
+      DET_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    short <- sprintf("&#9888; %s/%sy", fmt_yr(avail), fmt_yr(dmin))
+    return(list(rank = 3L, html = pop_wrap(
+      "det-badge", "underpowered", short, body,
+      sprintf("Detection: underpowered, needs %s years, %s years available", fmt_yr(dmin), fmt_yr(avail))
+    )))
   }
+
   if (is.na(under_mt)) {
-    return(list(
-      html = sprintf(
-        "<span class='det-badge detectable' title='Needs %.1f years at alpha=0.05, one-sided. Multiple-testing-corrected verdict not computed (K_eff unavailable for this strategy). See #726.'>&#10003; Detectable (needs %.1fyr)</span>",
-        dmin, dmin
-      ),
-      rank = 1L
-    ))
+    body <- paste0(
+      "<strong>&#10003; Detectable</strong><br>",
+      sprintf("Needs <b>%s yr</b> at &alpha;=0.05, one-sided; %s.<br>", fmt_yr1(dmin), avail_phrase(avail)),
+      "MT-corrected verdict not computed (k_eff unavailable for this strategy).<br>",
+      DET_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    short <- sprintf("&#10003; %s/%sy", fmt_yr(avail), fmt_yr(dmin))
+    return(list(rank = 1L, html = pop_wrap(
+      "det-badge", "detectable", short, body,
+      sprintf("Detection: detectable, needs %s years, %s years available", fmt_yr(dmin), fmt_yr(avail))
+    )))
   }
+
   if (isTRUE(under_mt)) {
-    return(list(
-      html = sprintf(
-        "<span class='det-badge mtfail' title='Passes the single test (needs %.1fyr) but FAILS once corrected for testing multiple strategies (needs %.0fyr corrected). See #726.'>&#9686; Detectable, fails MT-correction (needs %.0fyr corrected)</span>",
-        dmin, dmin_mt, dmin_mt
+    body <- paste0(
+      "<strong>&#9670; Fails MT-correction</strong><br>",
+      sprintf(
+        "Passes the single test (needs <b>%s yr</b>; %s) but FAILS once corrected for testing multiple strategies (needs <b>%s yr</b> corrected, k_eff=%s).<br>",
+        fmt_yr1(dmin), avail_phrase(avail), fmt_yr1(dmin_mt), fmt_keff(keff)
       ),
-      rank = 2L
-    ))
+      DET_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    short <- sprintf("&#9670; %s/%sy", fmt_yr(avail), fmt_yr(dmin_mt))
+    return(list(rank = 2L, html = pop_wrap(
+      "det-badge", "mtfail", short, body,
+      sprintf("Detection: passes single test, fails multiple-testing correction, needs %s years corrected", fmt_yr(dmin_mt))
+    )))
   }
-  list(
-    html = sprintf(
-      "<span class='det-badge detectable' title='Needs %.1f years at alpha=0.05, one-sided (%.1fyr corrected for multiple testing). See #726.'>&#10003; Detectable (needs %.1fyr; %.1fyr corrected)</span>",
-      dmin, dmin_mt, dmin, dmin_mt
+
+  body <- paste0(
+    "<strong>&#10003; Detectable</strong><br>",
+    sprintf(
+      "Needs <b>%s yr</b> at &alpha;=0.05, one-sided (<b>%s yr</b> corrected for multiple testing, k_eff=%s); %s.<br>",
+      fmt_yr1(dmin), fmt_yr1(dmin_mt), fmt_keff(keff), avail_phrase(avail)
     ),
-    rank = 1L
+    DET_MEANING, "<br>",
+    "<span class='pop-links'>", links, "</span>"
   )
+  short <- sprintf("&#10003; %s/%sy", fmt_yr(avail), fmt_yr(dmin))
+  list(rank = 1L, html = pop_wrap(
+    "det-badge", "detectable", short, body,
+    "Detection: detectable, passes single test and multiple-testing correction"
+  ))
 }
 
-# ── NEW: P(SR>0) badge -- mirrors detection_badge()'s exact 5-state shape
-# and severity-rank convention (1 = best ... 5 = defect), applied to the
-# DIFFERENT statistical object historicaldata::hd_prob_sharpe_positive()
-# computes (P(true Sharpe > 0), Bailey & Lopez de Prado's Probabilistic
-# Sharpe Ratio) instead of hd_detection_power()'s T_min/power. See
-# .claude/rules/detection-power-required.md and the roxygen atop
-# packages/historicaldata/R/hd_prob_sharpe_positive.R for why the two are
-# complementary, not redundant, questions -- and R/plan_qa_gates.R's S40
-# gate for the coverage/monotonicity properties this badge assumes hold.
-psr_badge <- function(sr, psr, psr_insuff, psr_mt, psr_mt_insuff, threshold) {
+# ── P(SR>0) badge (short label + pop-up) -- mirrors detection_badge2()'s
+# exact 5-state shape and severity-rank convention, applied to
+# historicaldata::hd_prob_sharpe_positive() instead of hd_detection_power().
+# Same "operative number" design choice: the short label shows the
+# single-test percentage for every state except `mtfail`, where it shows
+# the MT-CORRECTED percentage (the number that fails).
+psr_badge2 <- function(strategy, sr, psr, psr_insuff, psr_mt, psr_mt_insuff, threshold, keff) {
+  links <- pop_links(strategy, 851)
+
   if (is.na(sr) || sr <= 0) {
-    return(list(
-      html = "<span class='psr-badge napp' title='Sharpe &le;0: P(true Sharpe &gt; 0) is not a meaningful question when the point estimate itself is non-positive. Not applicable -- not the same as unproven.'>&ndash; n/a</span>",
-      rank = 4L
-    ))
+    body <- paste0(
+      "<strong>&ndash; Not applicable</strong><br>",
+      "Sharpe &le; 0: P(true Sharpe &gt; 0) is not a meaningful question when the point estimate itself is non-positive. Not applicable &mdash; not the same as unproven.<br>",
+      PSR_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    return(list(rank = 4L, html = pop_wrap(
+      "psr-badge", "napp", "&ndash; n/a", body,
+      "P(SR>0): not applicable, Sharpe is not positive"
+    )))
   }
+
   if (is.na(psr)) {
-    return(list(
-      html = "<span class='psr-badge notcomputed' title='Positive Sharpe with NO P(SR&gt;0) verdict. This should never render live -- QA gate S40 (#851) is meant to block the build until it is fixed.'>&#10007; NOT COMPUTED</span>",
-      rank = 5L
-    ))
+    body <- paste0(
+      "<strong>&#10007; NOT COMPUTED</strong><br>",
+      "Positive Sharpe with NO P(SR&gt;0) verdict &mdash; this should never render live (QA gate S40, #851, is meant to block the build until it is fixed).<br>",
+      PSR_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    return(list(rank = 5L, html = pop_wrap(
+      "psr-badge", "notcomputed", "&#10007; ERR", body,
+      "P(SR>0): defect, verdict was not computed"
+    )))
   }
+
   if (isTRUE(psr_insuff)) {
-    mt_note <- if (!is.na(psr_mt_insuff)) " Multiple-testing correction is academic here -- the single test already fails." else ""
-    return(list(
-      html = sprintf(
-        "<span class='psr-badge insufficient' title='P(true Sharpe &gt; 0) = %s, below the %s bar (the SAME 95%% accept/reject threshold the StratProof article that motivated #851 uses).%s See #851.'>&#9888; Insufficient (%s)</span>",
-        pct(psr), pct(threshold), mt_note, pct(psr)
-      ),
-      rank = 3L
-    ))
+    mt_line <- if (!is.na(psr_mt_insuff)) {
+      "Multiple-testing correction is academic here &mdash; the single test already fails."
+    } else {
+      "MT-corrected verdict not computed (k_eff unavailable for this strategy)."
+    }
+    body <- paste0(
+      "<strong>&#9888; Insufficient</strong><br>",
+      sprintf("P(true Sharpe &gt; 0) = <b>%s</b>, below the <b>%s</b> bar.<br>", pct(psr), pct(threshold)),
+      mt_line, "<br>",
+      PSR_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    short <- sprintf("&#9888; %s", pct(psr))
+    return(list(rank = 3L, html = pop_wrap(
+      "psr-badge", "insufficient", short, body,
+      sprintf("P(SR>0): insufficient, %s below the %s threshold", pct(psr), pct(threshold))
+    )))
   }
+
   if (is.na(psr_mt)) {
-    return(list(
-      html = sprintf(
-        "<span class='psr-badge sufficient' title='P(true Sharpe &gt; 0) = %s (single test), at or above the %s bar. Multiple-testing-corrected verdict not computed (K_eff unavailable for this strategy). See #851.'>&#10003; Sufficient (%s)</span>",
-        pct(psr), pct(threshold), pct(psr)
-      ),
-      rank = 1L
-    ))
+    body <- paste0(
+      "<strong>&#10003; Sufficient</strong><br>",
+      sprintf("P(true Sharpe &gt; 0) = <b>%s</b> (single test), at or above the <b>%s</b> bar.<br>", pct(psr), pct(threshold)),
+      "MT-corrected verdict not computed (k_eff unavailable for this strategy).<br>",
+      PSR_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    short <- sprintf("&#10003; %s", pct(psr))
+    return(list(rank = 1L, html = pop_wrap(
+      "psr-badge", "sufficient", short, body,
+      sprintf("P(SR>0): sufficient, %s single test", pct(psr))
+    )))
   }
+
   if (isTRUE(psr_mt_insuff)) {
-    return(list(
-      html = sprintf(
-        "<span class='psr-badge mtfail' title='Passes the single-test bar (%s) but FAILS once corrected for testing multiple strategies (%s, below the %s bar). See #851.'>&#9686; Sufficient, fails MT-correction (%s)</span>",
-        pct(psr), pct(psr_mt), pct(threshold), pct(psr_mt)
+    body <- paste0(
+      "<strong>&#9670; Fails MT-correction</strong><br>",
+      sprintf(
+        "Passes the single-test bar (<b>%s</b>) but FAILS once corrected for multiple testing (<b>%s</b>, below the <b>%s</b> bar, k_eff=%s).<br>",
+        pct(psr), pct(psr_mt), pct(threshold), fmt_keff(keff)
       ),
-      rank = 2L
-    ))
+      PSR_MEANING, "<br>",
+      "<span class='pop-links'>", links, "</span>"
+    )
+    short <- sprintf("&#9670; %s", pct(psr_mt))
+    return(list(rank = 2L, html = pop_wrap(
+      "psr-badge", "mtfail", short, body,
+      sprintf("P(SR>0): passes single test, fails multiple-testing correction at %s", pct(psr_mt))
+    )))
   }
-  list(
-    html = sprintf(
-      "<span class='psr-badge sufficient' title='P(true Sharpe &gt; 0): %s single-test, %s corrected for multiple testing -- both at or above the %s bar. See #851.'>&#10003; Sufficient (%s; %s MT)</span>",
-      pct(psr), pct(psr_mt), pct(threshold), pct(psr), pct(psr_mt)
+
+  body <- paste0(
+    "<strong>&#10003; Sufficient</strong><br>",
+    sprintf(
+      "P(true Sharpe &gt; 0): <b>%s</b> single-test, <b>%s</b> corrected for multiple testing (k_eff=%s) &mdash; both at or above the <b>%s</b> bar.<br>",
+      pct(psr), pct(psr_mt), fmt_keff(keff), pct(threshold)
     ),
-    rank = 1L
+    PSR_MEANING, "<br>",
+    "<span class='pop-links'>", links, "</span>"
   )
+  short <- sprintf("&#10003; %s", pct(psr))
+  list(rank = 1L, html = pop_wrap(
+    "psr-badge", "sufficient", short, body,
+    sprintf("P(SR>0): sufficient, %s single test, %s corrected", pct(psr), pct(psr_mt))
+  ))
 }
 
-det <- mapply(detection_badge, full$sharpe, full$detection_underpowered,
-              full$detection_min_n_years, full$detection_underpowered_mt,
-              full$detection_min_n_years_mt, SIMPLIFY = FALSE)
-psr <- mapply(psr_badge, full$sharpe, full$prob_sharpe_positive,
-              full$prob_sharpe_positive_insufficient, full$prob_sharpe_positive_mt,
-              full$prob_sharpe_positive_insufficient_mt,
-              MoreArgs = list(threshold = HD_PROB_SHARPE_POSITIVE_THRESHOLD),
-              SIMPLIFY = FALSE)
+det <- mapply(
+  detection_badge2,
+  strategy = full$strategy,
+  sr       = full$sharpe,
+  avail    = full$years,
+  under    = full$detection_underpowered,
+  dmin     = full$detection_min_n_years,
+  under_mt = full$detection_underpowered_mt,
+  dmin_mt  = full$detection_min_n_years_mt,
+  keff     = full$k_eff_leaderboard,
+  SIMPLIFY = FALSE
+)
+psr <- mapply(
+  psr_badge2,
+  strategy      = full$strategy,
+  sr            = full$sharpe,
+  psr           = full$prob_sharpe_positive,
+  psr_insuff    = full$prob_sharpe_positive_insufficient,
+  psr_mt        = full$prob_sharpe_positive_mt,
+  psr_mt_insuff = full$prob_sharpe_positive_insufficient_mt,
+  keff          = full$k_eff_leaderboard,
+  MoreArgs      = list(threshold = HD_PROB_SHARPE_POSITIVE_THRESHOLD),
+  SIMPLIFY = FALSE
+)
 
 metrics_table <- full |>
   mutate(
@@ -196,26 +397,21 @@ metrics_table <- full |>
     Sharpe       = ifelse(is.na(sharpe), "—", as.character(round(sharpe, 2))),
     Detection    = vapply(det, function(x) x$html, character(1)),
     .det_rank    = vapply(det, function(x) x$rank, integer(1)),
-    # ---- THE PROPOSED NEW COLUMN, inserted immediately right of Detection ----
     `P(SR>0)`    = vapply(psr, function(x) x$html, character(1)),
     .psr_rank    = vapply(psr, function(x) x$rank, integer(1))
   ) |>
   select(Strategy = strategy, Sharpe, .sharpe_rank, Detection, .det_rank,
          `P(SR>0)`, .psr_rank)
 
-sharpe_col   <- which(names(metrics_table) == "Sharpe") - 1L
+sharpe_col      <- which(names(metrics_table) == "Sharpe") - 1L
 sharpe_rank_col <- which(names(metrics_table) == ".sharpe_rank") - 1L
-det_col      <- which(names(metrics_table) == "Detection") - 1L
-det_rank_col <- which(names(metrics_table) == ".det_rank") - 1L
-psr_col      <- which(names(metrics_table) == "P(SR>0)") - 1L
-psr_rank_col <- which(names(metrics_table) == ".psr_rank") - 1L
+det_col         <- which(names(metrics_table) == "Detection") - 1L
+det_rank_col    <- which(names(metrics_table) == ".det_rank") - 1L
+psr_col         <- which(names(metrics_table) == "P(SR>0)") - 1L
+psr_rank_col    <- which(names(metrics_table) == ".psr_rank") - 1L
 
-# ── Dynamically computed disagreement diagnostic (never hardcoded) --
-# compares the OVERALL verdict from each diagnostic (both single-test AND
-# MT-corrected must clear their own bar) for every positive-Sharpe strategy,
-# and separately reports rows where the two diagnostics' SINGLE-TEST
-# verdicts alone disagree (the more visually striking case for a reader
-# scanning two adjacent badges).
+# ── Dynamically computed disagreement diagnostic (unchanged from revision 1,
+# never hardcoded) ──────────────────────────────────────────────────────────
 pos <- full |> dplyr::filter(!is.na(sharpe), sharpe > 0)
 det_overall <- !is.na(pos$detection_underpowered) & !pos$detection_underpowered &
   (is.na(pos$detection_underpowered_mt) | !pos$detection_underpowered_mt)
@@ -227,135 +423,134 @@ det_single_ok <- !is.na(pos$detection_underpowered) & !pos$detection_underpowere
 psr_single_ok <- !is.na(pos$prob_sharpe_positive_insufficient) & !pos$prob_sharpe_positive_insufficient
 single_disagree <- pos$strategy[det_single_ok != psr_single_ok]
 
-# K_eff/K_raw for the prose below -- the SAME values production's
-# `detection_summary_text` reports (docs/leaderboard.qmd), NOT nrow(pos)
-# (that is merely the count of positive-Sharpe rows on this table, a
-# different number from how many strategies the multiple-testing
-# correction is actually run across).
 keff_nonNA <- full$k_eff_leaderboard[!is.na(full$k_eff_leaderboard)]
 kraw_nonNA <- full$k_raw_leaderboard[!is.na(full$k_raw_leaderboard)]
 keff <- if (length(keff_nonNA) > 0) round(keff_nonNA[1], 1) else NA_real_
 kraw <- if (length(kraw_nonNA) > 0) kraw_nonNA[1] else NA_integer_
 ```
 
+## Revision 2 (owner feedback, 2026-09-29): short labels + hover pop-up
+
+**Problem with revision 1:** the P(SR>0) and Detection columns' cell text
+(e.g. `Sufficient, fails MT-correction (98.7% MT)`,
+`Detectable, fails MT-correction (needs 21yr corrected)`) was cut off at
+the right edge of the table.
+
+**Fix:** every cell now shows a **short badge** (icon + one compact number,
+≤ ~11 characters) instead of a full sentence. The full verdict wording,
+numbers, meaning, and drilldown links move into a **CSS hover/focus
+pop-up** (not the native `title=` attribute — per the accessibility rule,
+`title` is unreliable on hover-timing and not keyboard-accessible).
+`tabindex='0'` on each badge makes it focusable, so `Tab` + the pop-up
+reveals the same content a mouse hover does.
+
+### Short-label scheme
+
+Deliberately NOT a markdown table here — this Quarto/pandoc build (1.8.26)
+throws 18 non-fatal `jog.lua: Don't know how to traverse TableBody` errors
+on ANY literal `<table>` (markdown pipe table or raw HTML `<table>`) in the
+prose, confirmed via a minimal isolated reproduction outside this file
+during this dispatch. `DT::datatable()`'s widget output is unaffected (its
+`<table>` is constructed by JS at runtime, not present as a literal tag at
+pandoc-processing time), so only PROSE tables are avoided here; the actual
+Rankings table below is unaffected.
+
+- **Not applicable** (Sharpe ≤ 0) — icon `–`, grey italic — Detection:
+  `– n/a` · P(SR>0): `– n/a`
+- **Not computed** (defect) — icon `✗`, red — Detection: `✗ ERR` ·
+  P(SR>0): `✗ ERR`
+- **Fails the single test** — icon `⚠`, amber — Detection:
+  `⚠ avail/needy` · P(SR>0): `⚠ XX.X%`
+- **Passes** (MT not computed) — icon `✓`, green — Detection:
+  `✓ avail/needy` · P(SR>0): `✓ XX.X%`
+- **Passes single, fails MT-correction** — icon `◆`, purple — Detection:
+  `◆ avail/need_MTy` · P(SR>0): `◆ XX.X%_MT`
+- **Passes single and MT-correction** — icon `✓`, green — Detection:
+  `✓ avail/needy` · P(SR>0): `✓ XX.X%`
+
+Design choice: the **second number** in the Detection short label (and the
+**single number** shown for P(SR>0)) is always the figure **operative** for
+that row's final verdict — the single-test figure everywhere except the
+`◆` (fails-MT) state, where the MT-corrected figure is shown instead. This
+keeps every cell readable the same way: "available ≥ needed" always reads
+as a pass, "available < needed" always reads as a fail, regardless of
+which test produced the verdict.
+
+### Pop-up contents (every state)
+
+1. The full verdict, bolded (e.g. "Detectable", "Fails MT-correction").
+2. The numbers behind it — for Detection: years needed (single-test and,
+   where computed, MT-corrected) and years available; for P(SR>0): the
+   single-test and MT-corrected percentages and the 95% threshold (read
+   from `HD_PROB_SHARPE_POSITIVE_THRESHOLD` in `R/plan_leaderboard.R`, not
+   hand-typed) — plus `k_eff` where a correction was applied.
+3. One italicised line on what the metric means.
+4. Drilldown links: the [Biases and
+   Caveats](../../docs/leaderboard.html#biases-and-caveats) page's
+   Detection & Rigour table, the strategy's **own dashboard page** where
+   one genuinely exists (`STRATEGY_DASHBOARD_HREF` above — deliberately
+   left blank for strategies with no dedicated page, rather than guessing
+   a wrong link), and the explaining issue(s)
+   ([#726](https://github.com/JohnGavin/historical/issues/726) /
+   [#903](https://github.com/JohnGavin/historical/issues/903) for
+   Detection, [#851](https://github.com/JohnGavin/historical/issues/851)
+   for P(SR>0)).
+
 ## Step 1 — Relationship to the existing Detection column
 
 **P(true Sharpe > 0)** (`historicaldata::hd_prob_sharpe_positive()`, Bailey &
 Lopez de Prado's Probabilistic Sharpe Ratio) and **Detection**
 (`historicaldata::hd_detection_power()`) answer two different questions about
-the same row, and neither implies the other:
-
-- **Detection** (prospective, frequentist): *is this strategy's sample long
-  enough to reliably detect its effect as real, if it is real?* A strategy
-  can be flagged `Underpowered` here even when its observed Sharpe is
-  strongly positive, simply because the sample is short relative to Cohen's
-  standard 80%-power convention.
-- **P(SR>0)** (retrospective): *given the sample we actually have — its
-  Sharpe, length, skewness and kurtosis — how confident are we that the
-  TRUE population Sharpe is positive?* This is the accept/reject question
-  the StratProof article that motivated
-  [#851](https://github.com/JohnGavin/historical/issues/851) asks directly
-  ("need 95%+ to call this signal, not noise").
-
-They are complementary, not redundant: a strategy can be power-sufficient
-with a weak point estimate (low P(SR>0)), or power-insufficient with a
-strong point estimate that nonetheless clears the 95% confidence bar. In the
-live data read for this prototype (below), that second case is exactly what
-happens for **`r if (length(single_disagree) > 0) single_disagree[1] else "no strategy currently"`**:
+the same row, and neither implies the other — see
+`.claude/rules/detection-power-required.md`. In the live data read for this
+prototype, that relationship is exactly what happens for
+**`r if (length(single_disagree) > 0) single_disagree[1] else "no strategy currently"`**:
 Detection reports the single-test verdict as `Underpowered`, while P(SR>0)'s
 own single-test verdict is `Sufficient` at
 `r if (length(single_disagree) > 0) { s <- single_disagree[1]; pct(pos$prob_sharpe_positive[pos$strategy == s]) } else "n/a"`.
 Once both are corrected for testing `r kraw` strategies (K_eff = `r keff`),
 the two diagnostics converge back to agreement on that row — see the
-disagreement callout below the table for the full, dynamically computed
-list.
+disagreement callout below the table.
 
-**Diagram:** no new Mermaid node is proposed. The one relationship diagram
-this leaderboard page's own domain has —
-[`falsification.qmd`'s "Strategy & Dashboard Relationship Map"](../../docs/falsification.qmd) —
-is scoped to the MVO/portfolio-construction subsystem (covariance estimator,
-returns shrinkage, weight engines) and carries no node for either
-`hd_detection_power()` or `hd_prob_sharpe_positive()` today; both are
-per-row statistical diagnostics computed inside the `leaderboard` target
-itself, not separate pipeline stages with their own data-flow edges to
-draw. Extending that diagram to cover every diagnostic column on the
-Rankings table would broaden its scope well past what this one-column
-addition needs. No diagram change is proposed.
+**Diagram:** unchanged from revision 1 — no new Mermaid node is proposed.
 
 ## Step 2 — Home: exact placement in `docs/leaderboard.qmd`
 
-New column **`P(SR>0)`** inserted immediately to the right of the existing
-**Detection** column (both immediately right of **Sharpe**, per
-`detection-power-required` requirement 2 — "beside its Sharpe, not in a
-distant column"), in the `metrics_table` `mutate()`/`select()` block of the
-`#| label: detection-rigour-summary` → main table chunk (the unlabelled
-chunk starting `lb <- safe_tar_read("leaderboard")`, around
-`docs/leaderboard.qmd:411-556` on `main` as of this dispatch). Concretely:
+Unchanged from revision 1 — new column **`P(SR>0)`** inserted immediately
+right of the existing **Detection** column, both immediately right of
+**Sharpe**. See revision 1's PR text for the exact line-by-line plan; this
+revision only changes the CELL CONTENT and adds a `<style>` block for the
+pop-up (below), not the placement.
 
-- A `psr_badge()` function defined alongside `detection_badge()`/
-  `rigour_badge()` (same file, same section, ~line 247 in `main`).
-- `psr <- mapply(psr_badge, full$sharpe, full$prob_sharpe_positive, ...)`
-  added alongside the existing `det <- mapply(detection_badge, ...)` call
-  (~line 383).
-- ``` `P(SR>0)` = vapply(psr, function(x) x$html, character(1)) ``` and
-  `.psr_rank = vapply(psr, function(x) x$rank, integer(1))` added to the
-  `mutate()` block, immediately after `Detection`/`.det_rank`.
-- `select()` updated to `select(Strategy = strategy, Credible,
-  .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,` **`` `P(SR>0)`,
-  .psr_rank, ``** `CAGR, ...)`.
-- `columnDefs` extended with one more `visible = FALSE` rank column and one
-  more `orderData` mapping, following the exact pattern already used for
-  `.det_rank`/`.rig_rank`/`.sharpe_rank` (~`docs/leaderboard.qmd:849-857`).
-- The "Statistical Detection Power and Rigour" callout
-  (`detection_summary_text`, ~line 118) and its `detection_note` caption
-  text (~line 740) each get one added sentence reporting P(SR>0) coverage,
-  mirroring the existing K_eff/deflated-Sharpe sentence shape.
-- The "Statistical Detection Power and Rigour" tab's plain-column table on
-  the Biases and Caveats page (`caveats-detection-rigour-table`, ~line 2184)
-  gets two added columns (`P(SR>0)`, `P(SR>0) MT-corrected`), matching its
-  existing `Years Needed` / `Years Needed (MT-corrected)` pair.
+## Step 3 — Comparable outputs this must match (updated for the pop-up)
 
-## Step 3 — Comparable outputs this must match
-
-- **Badge markup and CSS class family**: reuses the exact `.det-badge`
-  shape (`font-weight: 600; padding: 1px 6px; border-radius: 3px;
-  white-space: nowrap;`) under a new `.psr-badge` class, with the SAME
-  4-state colour mapping (`sufficient` → the `detectable` green, `mtfail`
-  → the same purple, `insufficient` → the same amber as `underpowered`,
-  `napp` → the same muted italic grey, `notcomputed` → the same red
-  background/white text), including the light-mode / `[data-bs-theme="dark"]`
-  / `@media (prefers-color-scheme: dark)` triad already present for every
-  other badge family in `docs/leaderboard.qmd` (see the `<style>` block
-  below this prototype's own table for the exact rules, copied 1:1 in
-  spirit from `docs/leaderboard.qmd:877-920`).
-- **Hover-popover convention**: every state's `title=` attribute states the
-  numeric verdict, the threshold it's compared against, and links back to
-  [#851](https://github.com/JohnGavin/historical/issues/851) — matching
-  every existing badge's "hover for detail" pattern (`accessibility` rule,
-  `dashboard-output-first` step 3).
-- **Number formatting**: percentages to one decimal place
-  (`sprintf("%.1f%%", x*100)`), matching `CAGR`/`Net CAGR`/`Vol`/`CVaR 95%`'s
-  existing one-decimal convention on this same table.
-- **Threshold sourced, not hand-typed**: `HD_PROB_SHARPE_POSITIVE_THRESHOLD`
-  is read from `R/plan_leaderboard.R`'s own constant (0.95, documented there
-  as the SAME 95% bar the StratProof article uses) — never a literal in the
-  display layer.
-- **Caption / disclosure-note conventions**: a dynamically-computed
-  coverage sentence (`n` positive-Sharpe strategies, `n` below the 95% bar,
-  singular/plural handled the way every other `*_note`/`*_summary_text`
-  block on this page already does) — see the "Statistical Detection Power
-  and Rigour" callout text mirrored in Step 2 above.
-- **Sort-rank convention**: a hidden `.psr_rank` integer column
-  (1 = sufficient … 5 = defect), `orderData`-mapped exactly like
-  `.det_rank`/`.rig_rank`/`.sharpe_rank`, so DT's default alphabetical
-  string sort never scrambles the verdict order (same rationale as the
-  existing hidden-rank columns, `docs/leaderboard.qmd:807-816`).
+- **Badge markup**: `.pop-wrap` (new wrapper, replaces the plain
+  `.det-badge`/`.psr-badge span` from revision 1) carries the SAME family
+  class (`det-badge` / `psr-badge`) and state class (`detectable` /
+  `mtfail` / `underpowered` / `napp` / `notcomputed`; `sufficient` /
+  `mtfail` / `insufficient` / `napp` / `notcomputed`) as before, so the
+  existing colour-mapping convention needs no redesign — only its
+  selectors now target `.pop-short` instead of the whole span.
+- **Hover/focus pop-up, not `title=`**: per the accessibility rule's "Do
+  not rely on the native HTML `title` attribute" clause — a CSS
+  `:hover`/`:focus`/`:focus-within` popover instead, keyboard-accessible
+  via `tabindex='0'`.
+- **Number formatting**: unchanged — percentages to one decimal place,
+  years to one decimal place in the pop-up (whole years in the short
+  label, for compactness).
+- **Threshold sourced, not hand-typed**: unchanged.
+- **Sort-rank convention**: unchanged — hidden `.psr_rank`/`.det_rank`
+  columns, `orderData`-mapped.
+- **New: dashboard-table-styling compliance** — the `<style>` block below
+  now also shrinks the table to its content width (`dashboard-table-styling`
+  rule), which revision 1's screenshot did not need to worry about because
+  its overflow problem was the CELL TEXT, not the table shell.
 
 ## Step 4 — Prototype (below)
 
 Full Period, live `leaderboard` target read from the main checkout's build
 (`docs/_targets`) at render time — the SAME data the production Rankings
-table shows today, not a stub or a hand-typed sample.
+table shows today.
 
 ```{r}
 #| label: prototype-table
@@ -379,34 +574,79 @@ DT::datatable(
 
 ```{=html}
 <style>
-.det-badge, .psr-badge { font-weight: 600; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
-.det-badge.detectable   { color: #1a7f37; }
-.det-badge.mtfail       { color: #6f42c1; }
-.det-badge.underpowered { color: #9a5b00; }
-.det-badge.napp         { color: #6c757d; font-style: italic; font-weight: 400; }
-.det-badge.notcomputed  { color: #fff; background: #c0392b; }
-/* .psr-badge deliberately mirrors .det-badge's colour mapping 1:1 (Step 3) */
-.psr-badge.sufficient   { color: #1a7f37; }
-.psr-badge.mtfail       { color: #6f42c1; }
-.psr-badge.insufficient { color: #9a5b00; }
-.psr-badge.napp         { color: #6c757d; font-style: italic; font-weight: 400; }
-.psr-badge.notcomputed  { color: #fff; background: #c0392b; }
+/* dashboard-table-styling: shrink to content, don't stretch to 100% */
+table.dataTable { width: auto !important; max-width: 100% !important; table-layout: auto !important; }
+.dataTables_wrapper { width: auto !important; display: inline-block; }
+table.dataTable th, table.dataTable td { white-space: nowrap; vertical-align: middle; padding: 0.35rem 0.8rem !important; }
 
-[data-bs-theme="dark"] .det-badge.detectable   { color: #4ade80; }
-[data-bs-theme="dark"] .det-badge.mtfail       { color: #c084fc; }
-[data-bs-theme="dark"] .det-badge.underpowered { color: #fbbf24; }
-[data-bs-theme="dark"] .det-badge.napp         { color: #9ca3af; }
-[data-bs-theme="dark"] .psr-badge.sufficient   { color: #4ade80; }
-[data-bs-theme="dark"] .psr-badge.mtfail       { color: #c084fc; }
-[data-bs-theme="dark"] .psr-badge.insufficient { color: #fbbf24; }
-[data-bs-theme="dark"] .psr-badge.napp         { color: #9ca3af; }
+/* ── Short badge + hover/focus pop-up (accessibility rule: no native title=) ── */
+.pop-wrap {
+  position: relative;
+  display: inline-block;
+  cursor: help;
+}
+.pop-short {
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  border-bottom: 1px dotted currentColor;
+}
+.pop-body {
+  position: absolute;
+  left: 0;
+  top: 125%;
+  z-index: 60;
+  min-width: 230px;
+  max-width: min(340px, calc(100vw - 32px));
+  background: #ffffff;
+  color: #1a1a1a;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
+  padding: 8px 10px;
+  font-size: 0.82rem;
+  font-weight: 400;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 0.12s ease;
+}
+.pop-wrap:hover .pop-body,
+.pop-wrap:focus .pop-body,
+.pop-wrap:focus-within .pop-body {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+.pop-body .pop-meaning { display: block; margin-top: 4px; font-style: italic; opacity: 0.85; }
+.pop-body .pop-links   { display: block; margin-top: 6px; }
+.pop-body a { color: #0d6efd; text-decoration: underline; }
+
+/* Colour mapping -- identical to revision 1, re-targeted at .pop-short */
+.det-badge.detectable .pop-short,   .psr-badge.sufficient .pop-short   { color: #1a7f37; }
+.det-badge.mtfail .pop-short,       .psr-badge.mtfail .pop-short       { color: #6f42c1; }
+.det-badge.underpowered .pop-short, .psr-badge.insufficient .pop-short { color: #9a5b00; }
+.det-badge.napp .pop-short,         .psr-badge.napp .pop-short         { color: #6c757d; font-style: italic; font-weight: 400; }
+.det-badge.notcomputed .pop-short,  .psr-badge.notcomputed .pop-short  { color: #fff; background: #c0392b; }
+
+[data-bs-theme="dark"] .pop-body { background: #1c1f24; color: #f5f5f5; border-color: #3a3f47; }
+[data-bs-theme="dark"] .pop-body a { color: #7ab8ff; }
+[data-bs-theme="dark"] .det-badge.detectable .pop-short,   [data-bs-theme="dark"] .psr-badge.sufficient .pop-short   { color: #4ade80; }
+[data-bs-theme="dark"] .det-badge.mtfail .pop-short,       [data-bs-theme="dark"] .psr-badge.mtfail .pop-short       { color: #c084fc; }
+[data-bs-theme="dark"] .det-badge.underpowered .pop-short, [data-bs-theme="dark"] .psr-badge.insufficient .pop-short { color: #fbbf24; }
+[data-bs-theme="dark"] .det-badge.napp .pop-short,         [data-bs-theme="dark"] .psr-badge.napp .pop-short         { color: #9ca3af; }
+
 @media (prefers-color-scheme: dark) {
-  .det-badge.detectable   { color: #4ade80; }
-  .det-badge.mtfail       { color: #c084fc; }
-  .det-badge.underpowered { color: #fbbf24; }
-  .psr-badge.sufficient   { color: #4ade80; }
-  .psr-badge.mtfail       { color: #c084fc; }
-  .psr-badge.insufficient { color: #fbbf24; }
+  .pop-body { background: #1c1f24; color: #f5f5f5; border-color: #3a3f47; }
+  .pop-body a { color: #7ab8ff; }
+  .det-badge.detectable .pop-short,   .psr-badge.sufficient .pop-short   { color: #4ade80; }
+  .det-badge.mtfail .pop-short,       .psr-badge.mtfail .pop-short       { color: #c084fc; }
+  .det-badge.underpowered .pop-short, .psr-badge.insufficient .pop-short { color: #fbbf24; }
+  .det-badge.napp .pop-short,         .psr-badge.napp .pop-short         { color: #9ca3af; }
 }
 </style>
 ```
@@ -419,34 +659,16 @@ Of `r nrow(pos)` strategies with a positive Full-Period Sharpe,
 and `r length(overall_disagree)` disagree once each diagnostic's **overall**
 verdict (single-test AND MT-corrected both required to pass) is compared
 (`r if (length(overall_disagree) > 0) paste(overall_disagree, collapse = ", ") else "none"`).
-Disagreement is expected and informative, not a bug: it is exactly the
-"complementary, not redundant" relationship described in Step 1 — a reader
-scanning both badges on the same row sees where a strategy is
-under-sampled (Detection) versus where its point estimate itself is weak
-(P(SR>0)), which a single verdict column could not show.
+Disagreement is expected and informative, not a bug — see Step 1.
 :::
 
 ## Step 5 — Consolidation review
 
-**Proposed simplification:** none of the four existing columns become
-redundant — Detection and P(SR>0) test different objects (prospective power
-vs. retrospective confidence in sign), and the disagreement callout above
-demonstrates real cases where they diverge, so collapsing them into one
-badge would destroy information a reader currently cannot get any other
-way. However, this addition **does** motivate one flagged future
-consolidation, not made here: the "Statistical Detection Power and Rigour"
-tab's plain-column table on the Biases and Caveats page
-(`caveats-detection-rigour-table`) restates every Detection/Rigour number
-already visible as a hover-badge on the Rankings table. Adding two more
-plain columns there (P(SR>0), P(SR>0) MT-corrected) grows that
-already-restating table further — a stronger Step 5 answer, once this
-column ships and both hover badges exist, is to fold that plain-column
-table's content into a single per-strategy detail popover/drilldown
-reachable from the Rankings table itself, rather than maintaining two
-parallel renderings (badge tooltip + plain table) of the same six numbers.
-Filed as a note for a follow-up issue rather than done in this dispatch,
-per "no change" not being the right answer but also not being this
-dispatch's scope to execute.
+Unchanged from revision 1: no existing column becomes redundant, but this
+addition motivates a flagged (not executed) follow-up to fold the
+Biases-and-Caveats page's plain-column detection/rigour table into a
+per-strategy drilldown popover — which this revision's pop-up mechanism is
+now itself a working example of.
 
 ## Build info
 
