@@ -131,6 +131,113 @@ test_that("check_no_published_validation_reads names every offending file:line",
   expect_equal(hits$line[hits$file == tmp2], 2L)
 })
 
+# ── Regression: a flagged source line containing literal curly braces must
+# not crash the qa_no_published_validation_reads gate's cli_abort (roborev
+# #10641, same defect class as S40/S41's #851/#910/#917 fixes -- cli treats
+# every bullet element as a glue format string and re-parses literal `{}`
+# as R code). `code` here is a raw SOURCE LINE flagged by
+# check_no_published_validation_reads()'s lexical scan of published
+# .qmd/.R files, so a brace is near-certain (an inline `r { ... }`
+# expression chunk, an if-block, etc.) -- unlike S40/S41's data fields,
+# none of the fixtures above ever exercised this. Before the fix, splicing
+# an unescaped brace into cli_abort() crashed with a cli/glue parse error
+# instead of reporting the violation. ──
+
+          # NOTE: `qa10641_undefined_probe` is a deliberately never-defined
+          # symbol (not a real project function like safe_tar_read()) so this
+          # fixture's cli-evaluation behaviour cannot depend on whether some
+          # OTHER test file has already sourced a file that happens to define
+          # a same-named helper into the shared test-session globalenv.
+test_that(".qa_validation_reads_msgs escapes literal braces in a flagged source line", {
+  hits <- tibble::tibble(
+    file = "docs/stock-backtest.qmd",
+    line = 7L,
+    code = '`r { qa10641_undefined_probe(); m$period=="Validation" }`'
+  )
+  msgs <- .qa_validation_reads_msgs(hits)
+  expect_length(msgs, 1L)
+  expect_true(grepl("{{", msgs, fixed = TRUE))
+  expect_true(grepl("}}", msgs, fixed = TRUE))
+})
+
+test_that("qa_no_published_validation_reads's cli_abort does not crash on a source line with literal braces (fixed)", {
+  hits <- tibble::tibble(
+    file = "docs/stock-backtest.qmd",
+    line = 7L,
+    code = '`r { qa10641_undefined_probe(); m$period=="Validation" }`'
+  )
+  # Reproduces the qa_no_published_validation_reads target's own abort call
+  # (R/plan_qa_gates.R) exactly, using the fixed message-building helper,
+  # without needing tar_make().
+  err <- testthat::capture_error({
+    msgs <- .qa_validation_reads_msgs(hits)
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Published document(s) read the sealed Validation partition in ",
+        nrow(hits), " place(s), #660:"
+      ),
+      setNames(msgs, rep("i", length(msgs))),
+      "i" = paste0(
+        "Validation is sealed for display AND reasoning ",
+        "(.claude/rules/backtest-partitions.md) -- remove the read, or use ",
+        "scripts/evaluate_validation.R for the sanctioned one-shot evaluation."
+      )
+    ))
+  })
+  expect_false(is.null(err))
+  expect_match(
+    conditionMessage(err),
+    "Published document(s) read the sealed Validation partition in 1 place(s), #660",
+    fixed = TRUE
+  )
+  expect_match(
+    conditionMessage(err),
+    'r { qa10641_undefined_probe(); m$period=="Validation" }',
+    fixed = TRUE
+  )
+})
+
+test_that("falsification: the PRE-fix (unescaped) message-building crashes cli_abort instead of reporting the violation", {
+  # Reproduces the pre-fix code path (no .qa_cli_escape) to prove the two
+  # tests above are real regression tests, not vacuous ones -- per
+  # verification-before-completion. Uses the same deliberately never-defined
+  # `qa10641_undefined_probe` symbol as above so the crash is guaranteed
+  # regardless of what other test files have sourced into globalenv by the
+  # time this file runs (see NOTE above) -- the earlier version of this test
+  # used the real safe_tar_read() function name and was order-dependent:
+  # it passed in isolation but failed inside the full root suite once
+  # test-vignette-utils.R had already sourced docs/vignette_utils.R (which
+  # defines safe_tar_read() to return NULL, rather than error, for a
+  # missing target), so the unescaped `{}` evaluated to NULL instead of
+  # throwing.
+  hits <- tibble::tibble(
+    file = "docs/stock-backtest.qmd",
+    line = 7L,
+    code = '`r { qa10641_undefined_probe(); m$period=="Validation" }`'
+  )
+  err <- testthat::capture_error({
+    msgs_unescaped <- purrr::pmap_chr(
+      hits[, c("file", "line", "code")],
+      function(file, line, code) {
+        sprintf("  %s:%d -- %s", basename(file), line, trimws(code))
+      }
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Published document(s) read the sealed Validation partition in ",
+        nrow(hits), " place(s), #660:"
+      ),
+      setNames(msgs_unescaped, rep("i", length(msgs_unescaped)))
+    ))
+  })
+  expect_false(is.null(err))
+  expect_false(grepl(
+    "Published document(s) read the sealed Validation partition",
+    conditionMessage(err),
+    fixed = TRUE
+  ))
+})
+
 # ── Live tripwire: current docs/R/scripts tree must pass (same scan as S15) ──
 
 test_that("qa_no_published_validation_reads scanner function signature is stable (catches API drift)", {
