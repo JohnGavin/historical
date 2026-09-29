@@ -4554,6 +4554,149 @@ check_leaderboard_strategy_traceability <- function(verdict_tbl) {
   invisible(verdict_tbl)
 }
 
+#' Assert `years` (years of data backing this row) is present and consistent
+#' with the sample length `hd_detection_power()` uses (S43, #726/#851/#927)
+#'
+#' The #927 Phase-0 prototype for #851 (P(true Sharpe > 0) leaderboard column)
+#' found `leaderboard$years` \code{NA} for 15 of 18 Full-Period strategies,
+#' verified via a direct \code{tar_read()} query. Most \code{.norm_*()}
+#' helpers in R/plan_leaderboard.R never carried a \code{years} column
+#' through at all (their source metrics target never computed one), and
+#' three (\code{.norm_tom()}, \code{.norm_cmr()}, \code{.norm_mom_sibling()})
+#' use \code{transmute()}, which silently DROPS any \code{years} their source
+#' target did compute (TOM's own \code{tom_metrics} computes one --
+#' R/plan_turn_of_month.R -- but it never reached the leaderboard). Only
+#' OLMAR-1 and Avoid Worst's own metrics builders populated it directly by
+#' surviving through a \code{rename()}/\code{mutate()} boundary instead. Per
+#' \code{fail-loud-not-null.md}, this was a silent NA-as-absence defect, not
+#' a genuine data gap -- the fact is fully determined by two columns every
+#' row already carries.
+#'
+#' `years` is now derived ONCE, centrally, in R/plan_leaderboard.R
+#' immediately after the \code{STRATEGY_OBS_ANN_FACTOR} join --
+#' \code{years = round(months / obs_ann_factor, 1)} -- REPLACING any value an
+#' upstream \code{.norm_*()} helper carried through. This is the SAME
+#' \code{n_obs / ann_factor} relationship
+#' \code{historicaldata::hd_detection_power()}'s own
+#' \code{underpowered <- n_obs < min_n_periods} comparison is built on -- not
+#' a second, independently-derived figure that could drift from it.
+#'
+#' `obs_ann_factor` itself is dropped from the final `leaderboard` target
+#' (R/plan_leaderboard.R, after the first-passage diagnostic uses it), so
+#' this gate re-derives it by joining \code{obs_ann_factor_tbl}
+#' (\code{STRATEGY_OBS_ANN_FACTOR}) by \code{strategy} -- the SAME
+#' dependency-injection pattern S19
+#' (\code{check_leaderboard_detection_power_coverage()}) already uses, so
+#' this gate does not need to widen the leaderboard's own schema just to
+#' verify a derivation that happens upstream of where that column is
+#' dropped.
+#'
+#' Two assertions, so a future regression that reintroduces a second,
+#' competing `years` source (e.g. a `.norm_*()` helper merging one back in
+#' after the central derivation) fails loudly instead of silently
+#' disagreeing with the Detection column's own sample-length figure:
+#'
+#' 1. Every row with a positive `sharpe` has a non-NA, strictly positive
+#'    `years` -- mirrors S20's own scope exactly (`sharpe > 0`).
+#' 2. `years` agrees with `months / obs_ann_factor` (rounded to 1 decimal
+#'    place, matching the derivation's own rounding) for every row where
+#'    both inputs are available -- not scoped to `sharpe > 0`, since how much
+#'    data a row has does not depend on the sign of its Sharpe.
+#'
+#' @param leaderboard Tibble with at least `strategy`, `period`, `sharpe`,
+#'   `months`, `years` columns (the output of the `leaderboard` target).
+#' @param obs_ann_factor_tbl `STRATEGY_OBS_ANN_FACTOR` (R/plan_leaderboard.R)
+#'   -- must have `strategy`, `obs_ann_factor` columns.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_leaderboard_years_available <- function(leaderboard, obs_ann_factor_tbl) {
+  required_cols <- c("strategy", "period", "sharpe", "months", "years")
+  missing_cols <- setdiff(required_cols, names(leaderboard))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Leaderboard is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = paste0(
+        "check_leaderboard_years_available() (S43) requires strategy, period, ",
+        "sharpe, months, years."
+      )
+    ))
+  }
+  if (!all(c("strategy", "obs_ann_factor") %in% names(obs_ann_factor_tbl))) {
+    cli::cli_abort(c(
+      "x" = "obs_ann_factor_tbl is missing required column(s): strategy, obs_ann_factor.",
+      "i" = "check_leaderboard_years_available() (S43) requires STRATEGY_OBS_ANN_FACTOR's strategy/obs_ann_factor columns."
+    ))
+  }
+
+  positive <- !is.na(leaderboard$sharpe) & leaderboard$sharpe > 0
+
+  # ── Assertion 1: non-NA, strictly positive `years` for every positive- ────
+  # Sharpe row (mirrors S20's own scope).
+  bad_avail <- positive & (is.na(leaderboard$years) | leaderboard$years <= 0)
+  if (any(bad_avail)) {
+    idx <- which(bad_avail)
+    offenders <- sprintf(
+      "  %s / %s -- sharpe = %s, months = %s, years = %s",
+      leaderboard$strategy[idx], leaderboard$period[idx],
+      format(leaderboard$sharpe[idx], digits = 3),
+      ifelse(is.na(leaderboard$months[idx]), "NA", format(leaderboard$months[idx], digits = 4)),
+      ifelse(is.na(leaderboard$years[idx]), "NA", format(leaderboard$years[idx], digits = 4))
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) with sharpe > 0 but no usable years-available figure (#726, #927):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_years_available() (S43) requires every positive-Sharpe ",
+        "row to have a non-NA, strictly positive years -- fix the offending ",
+        "strategy's months/obs_ann_factor source (STRATEGY_OBS_ANN_FACTOR, ",
+        "R/plan_leaderboard.R) rather than adding a per-strategy years column."
+      )
+    ))
+  }
+
+  # ── Assertion 2: `years` agrees with months / obs_ann_factor -- the SAME ──
+  # sample length hd_detection_power() uses -- for every row where both
+  # inputs are available (not scoped to sharpe > 0: the fact does not depend
+  # on the sign of sharpe).
+  joined <- dplyr::left_join(
+    leaderboard, obs_ann_factor_tbl[, c("strategy", "obs_ann_factor")],
+    by = "strategy"
+  )
+  checkable <- !is.na(joined$months) & !is.na(joined$obs_ann_factor) & !is.na(joined$years)
+  expected <- round(joined$months / joined$obs_ann_factor, 1)
+  drifted <- checkable & abs(joined$years - expected) > 0.05
+  if (any(drifted)) {
+    idx <- which(drifted)
+    offenders <- sprintf(
+      "  %s / %s -- years = %s, months / obs_ann_factor = %s",
+      joined$strategy[idx], joined$period[idx],
+      format(joined$years[idx], digits = 4),
+      format(expected[idx], digits = 4)
+    )
+    cli::cli_abort(c(
+      "x" = paste0(
+        "Leaderboard has ", length(idx),
+        " row(s) where years disagrees with months / obs_ann_factor -- the ",
+        "SAME sample length hd_detection_power() uses (#726, #927):"
+      ),
+      setNames(offenders, rep("i", length(offenders))),
+      "i" = paste0(
+        "check_leaderboard_years_available() (S43) requires years to be ",
+        "derived from months / obs_ann_factor in ONE place (R/plan_leaderboard.R, ",
+        "immediately after the STRATEGY_OBS_ANN_FACTOR join) -- a second, ",
+        "independently-computed years column (e.g. reintroduced by a ",
+        "`.norm_*()` helper) can silently drift from the Detection column's ",
+        "own sample-length figure."
+      )
+    ))
+  }
+
+  invisible(TRUE)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -5526,6 +5669,23 @@ plan_qa_gates <- function() {
         "series, none matching the aw_metrics hindsight decoy (Refs #813)"
       )))
       verdict_tbl
-    }, cue = targets::tar_cue(mode = "always"))
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: `years` (years of data backing this row) is present and
+    # agrees with the SAME sample length hd_detection_power() uses (S43,
+    # #726/#851/#927). See check_leaderboard_years_available() roxygen for
+    # the full rationale -- the #927 Phase-0 prototype for #851 found
+    # `years` NA for 15 of 18 Full-Period strategies before
+    # R/plan_leaderboard.R started deriving it centrally, once, from
+    # months / obs_ann_factor.
+    targets::tar_target(
+      qa_leaderboard_years_available,
+      command = {
+        check_leaderboard_years_available(leaderboard, STRATEGY_OBS_ANN_FACTOR)
+        cli::cli_inform(c("v" = "qa_leaderboard_years_available: S43 passed (years present, positive, and consistent with months / obs_ann_factor for every positive-Sharpe row)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    )
   )
 }
