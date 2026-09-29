@@ -41,6 +41,59 @@
   gsub("}", "}}", x, fixed = TRUE)
 }
 
+#' Build escaped cli_abort() bullet lines for qa_look_ahead_bias (S1-S4)
+#'
+#' Extracted from the \code{qa_look_ahead_bias} target body (which is a
+#' \code{tar_target()} command, not a callable function) so the
+#' message-building step is directly unit-testable without running
+#' \code{tar_make()}. \code{code} here is a raw \strong{source line} from the
+#' scanned R files (S1-S4 are lexical scans -- see \code{check_no_lead_ym()}
+#' et al.) and is therefore near-certain to contain a literal \code{{}/}} at
+#' some point (any R code with a block, a function call inside braces, glue
+#' syntax, etc.) -- exactly the roborev #10641 defect class already fixed
+#' for S40/S41/S42 by \code{.qa_cli_escape()} (see that function's roxygen).
+#'
+#' @param all_hits Tibble with columns check, file, line, code -- the
+#'   `bind_rows()` of check_no_lead_ym()/check_no_unleaded_slider()/
+#'   check_no_na_approx()/check_no_forward_cumulative(), each with a `check`
+#'   label column added, as built by the qa_look_ahead_bias target.
+#' @return Character vector, same length as `nrow(all_hits)`, with every
+#'   literal `{`/`}` doubled (glue-safe).
+#' @noRd
+.qa_look_ahead_bias_msgs <- function(all_hits) {
+  msgs <- purrr::pmap_chr(
+    all_hits[, c("check", "file", "line", "code")],
+    function(check, file, line, code) {
+      sprintf("  %s -- %s:%d -- %s", check, basename(file), line, trimws(code))
+    }
+  )
+  .qa_cli_escape(msgs)
+}
+
+#' Build escaped cli_abort() bullet lines for qa_no_published_validation_reads (S15)
+#'
+#' Same rationale as \code{.qa_look_ahead_bias_msgs()} above: \code{code} is a
+#' raw source line from \code{check_no_published_validation_reads()}'s lexical
+#' scan of published \code{.qmd}/\code{.R} files and must be escaped before
+#' splicing into \code{cli_abort()}, or a flagged line containing a literal
+#' brace crashes the gate with "Could not parse cli {} expression" instead of
+#' reporting the violation (roborev #10641).
+#'
+#' @param hits Tibble with columns file, line, code, as returned by
+#'   check_no_published_validation_reads().
+#' @return Character vector, same length as `nrow(hits)`, with every literal
+#'   `{`/`}` doubled (glue-safe).
+#' @noRd
+.qa_validation_reads_msgs <- function(hits) {
+  msgs <- purrr::pmap_chr(
+    hits[, c("file", "line", "code")],
+    function(file, line, code) {
+      sprintf("  %s:%d -- %s", basename(file), line, trimws(code))
+    }
+  )
+  .qa_cli_escape(msgs)
+}
+
 #' Scan files for lead(ym) used for month-key construction (S1)
 #'
 #' @param files Character vector of absolute .R file paths to scan.
@@ -3737,9 +3790,9 @@ check_mom_prepeak_gauntlet_borrow_consistency <- function(file) {
   })
 
   if (nrow(offenders) > 0L) {
-    msgs <- purrr::pmap_chr(offenders, function(file, line, code) {
+    msgs <- .qa_cli_escape(purrr::pmap_chr(offenders, function(file, line, code) {
       sprintf("  %s:%d -- %s", basename(file), line, code)
-    })
+    }))
     cli::cli_abort(c(
       "x" = paste0(
         nrow(offenders), " .mom_prepeak_compute_returns() call(s) in ",
@@ -4543,12 +4596,7 @@ plan_qa_gates <- function() {
         )
 
         if (nrow(all_hits) > 0L) {
-          msgs <- purrr::pmap_chr(
-            all_hits[, c("check", "file", "line", "code")],
-            function(check, file, line, code) {
-              sprintf("  %s -- %s:%d -- %s", check, basename(file), line, trimws(code))
-            }
-          )
+          msgs <- .qa_look_ahead_bias_msgs(all_hits)
           cli::cli_abort(c(
             "x" = "Look-ahead bias patterns detected in {nrow(all_hits)} place(s):",
             setNames(msgs, rep("i", length(msgs)))
@@ -4809,12 +4857,7 @@ plan_qa_gates <- function() {
 
         hits <- check_no_published_validation_reads(files)
         if (nrow(hits) > 0L) {
-          msgs <- purrr::pmap_chr(
-            hits[, c("file", "line", "code")],
-            function(file, line, code) {
-              sprintf("  %s:%d -- %s", basename(file), line, trimws(code))
-            }
-          )
+          msgs <- .qa_validation_reads_msgs(hits)
           cli::cli_abort(c(
             "x" = paste0(
               "Published document(s) read the sealed Validation partition in ",
