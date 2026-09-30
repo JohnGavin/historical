@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-09-30 (session: issue triage groups 1–2, rigour gates, Avoid Worst leaderboard correction)
+
+### Completed
+- **Avoid Worst leaderboard row was a hindsight scenario (#813, reopened; fixed #921, republished #924).** The row published Sharpe 0.62 / CAGR 13.6% from `aw_metrics`' "SPY, Remove 10 Worst" scenario; `strat_returns_daily_native` fed the same series into correlations and `k_eff_leaderboard`. Now sourced from `aw_practical_backtest$ret_strategy` via `aw_strategy_metrics`: Sharpe 0.25, CAGR 5.3%, underpowered (needs 99 years). Gate S42 guards the source. Live page verified 2026-09-29.
+- **CMR best lookback chosen on the full sample (#920).** Now chosen pre-2020 only (`cmr_selection`); 6m before and after, so published figures unchanged. Found by new gate S41.
+- **New rigour machinery:** corrected detection threshold as package API + S37 (#905); P(true Sharpe > 0) + S40 (#916); dense parameter neighbourhood + S39 (#906, OLMAR-1 window is a plateau); min-trades screen + search funnel + S38 (#907, DRIF and Avoid Worst multiverses: 0 of 16 variants each survive deflation); selection-before-OOS + S41 and DRIF selection stability (#917, median Jaccard 0.75); all-NA gate over metrics-registry targets S36 (#898); gauntlet borrow-cost consistency S35 (#897).
+- **Build reliability:** 168 `historicaldata::` calls converted to bare calls so targets track package changes (#922); `check_pkg_staleness.R` false positives fixed (#915). The next build was clean on the first pass with no manual `tar_invalidate()`.
+- **Data / exploration:** OSAP (Chen-Zimmermann) portfolio-return loader + survivorship-gap exploration (#900; a one-month date misalignment caught and fixed before merge, correlation −0.051 → 0.578); overnight/intraday return legs `hd_return_legs()` (#918); CMR conditioned portfolios on the leaderboard (#901, #904); value-gate scorer with sealed research-log pre-registration (#913, supersedes #511).
+- **Other fixes:** data-poll concurrent push race (#908); cli brace escaping in S40–S42 (#923) and S1–S4/S15/S35 (#926); snapshot-ratio audit script (#895, #896); `hd_rlog_path()` docs (#895).
+- **Issues filed:** #902, #903 (closed after correction), #910, #911, #914, #919.
+- **Open at session end:** #928 (P(SR>0) + Detection short badges with hover pop-ups, years-available fix + S43) — approved, merge blocked by an unstable network (author-guard lookup fails closed); then build → render → republish.
+
+### Failed Approaches
+- Closed #813 on the strength of a registry-writer commit without reading the published leaderboard number; the row stayed wrong for five days. Now a memory: read the built leaderboard before closing any metric issue.
+- Filed #903 claiming the corrected detection threshold was unimplemented; it already existed inline in `plan_leaderboard.R`, and my Bonferroni table used 18 strategies instead of k_eff 14.23.
+- `rsync --relative` with `/./` does not honour the marker on this macOS rsync — it recreated the full source path inside the worktree (stray `Users/` dir, still untracked; `rm` was denied).
+- Two agents stalled after ~20 min of uncommitted work (#751, #816 first attempts); fixed by requiring commit+push after every step.
+- Parallel PRs picked the same gate number (S35 twice); fixed by pre-assigning gate numbers in every dispatch.
+
+### Accuracy / Metrics
+- Root suite 1,187 tests (3 known baseline failures), package suite 1,044 (1 known failure, 16 known skips).
+- Leaderboard: only OLMAR-1 passes single-test detection; none passes after multiple-testing correction. k_eff 14.45.
+
+### Known Limitations
+- #919: deflated-Sharpe probability exceeds uncorrected P(SR>0) for HML and Mom Pre-Peak — different input series; also possible V-units mismatch in the #907 funnel path.
+- Avoid Worst VIX signal uses the 4:15pm VIX close for a 4pm trade (economically immaterial; lag one extra day as follow-up on #813).
+- CMR's three lookbacks are not yet in the S38 search funnel's multiplicity count.
+- `check_pkg_staleness.R` still uses exit 2 for "could not run" (repo convention is 3); coupled to `build.sh`.
+
 ## 2026-09-23 (plan_avoid_worst.R: registered leaderboard metrics now source from the VIX-timed strategy, refs #813)
 
 - **Wrong return series (#813):** `avoid_worst_register_runs`'s bt.metric
