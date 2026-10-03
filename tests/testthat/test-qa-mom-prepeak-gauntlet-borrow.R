@@ -108,3 +108,25 @@ test_that("check_mom_prepeak_gauntlet_borrow_consistency: the real gauntlet file
 test_that("qa_mom_prepeak_gauntlet_borrow_consistency scanner function signature is stable (catches API drift)", {
   expect_snapshot(args(check_mom_prepeak_gauntlet_borrow_consistency))
 })
+
+# ── Regression: a flagged call line containing literal curly braces must not
+# break cli formatting (roborev #10641, same defect class as S41's #910/#917
+# CMR fix and S40's #851 fix -- cli treats every bullet element as a glue
+# format string and re-parses literal `{}` as R code). `code` here is a raw
+# SOURCE LINE, so unlike S40/S41's data fields, a brace is near-certain --
+# any call wrapped in a `{...}` block, or itself containing a lambda/glue
+# call, would previously crash this gate with "Could not parse cli {}
+# expression" instead of reporting the missing borrow_rate_annual. ──
+
+test_that("check_mom_prepeak_gauntlet_borrow_consistency: a call line containing literal curly braces does not break the abort", {
+  tmp <- fixture_path("gauntlet_fixture_brace_missing.R")
+  writeLines(c(
+    "if (use_alt) { ret <- .mom_prepeak_compute_returns(port, ltr_universe, 0.001) }"
+  ), tmp)
+  on.exit(unlink(tmp))
+  err <- testthat::capture_error(
+    check_mom_prepeak_gauntlet_borrow_consistency(tmp)
+  )
+  expect_false(is.null(err))
+  expect_match(conditionMessage(err), "if (use_alt) { ret <-", fixed = TRUE)
+})

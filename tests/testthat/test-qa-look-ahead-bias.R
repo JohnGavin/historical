@@ -163,6 +163,87 @@ test_that("qa look-ahead-bias scanner function signatures are stable (catches AP
   expect_snapshot(args(check_no_forward_cumulative))
 })
 
+# ── Regression: a flagged source line containing literal curly braces must
+# not crash the qa_look_ahead_bias gate's cli_abort (roborev #10641, same
+# defect class as S40/S41's #851/#910/#917 fixes -- cli treats every bullet
+# element as a glue format string and re-parses literal `{}` as R code).
+# `code` here is a raw SOURCE LINE flagged by S1-S4's lexical scans, so a
+# brace is near-certain (any hit inside a function body, an if-block, a
+# glue call, etc.) -- unlike S40/S41's data fields, none of the fixtures
+# above ever exercised this. Before the fix, splicing an unescaped brace
+# into cli_abort() crashed with a cli/glue parse error instead of reporting
+# the violation. ──
+
+test_that(".qa_look_ahead_bias_msgs escapes literal braces in a flagged source line", {
+  all_hits <- tibble::tibble(
+    check = "S1: lead(ym)",
+    file  = "R/plan_foo.R",
+    line  = 42L,
+    code  = "if (x) { mutate(next_ym = lead(ym)) }"
+  )
+  msgs <- .qa_look_ahead_bias_msgs(all_hits)
+  expect_length(msgs, 1L)
+  # Doubled braces are glue's own escape convention -- a single literal
+  # brace in the source line must become a doubled brace in the escaped
+  # message, never a bare one that glue would re-parse.
+  expect_true(grepl("{{", msgs, fixed = TRUE))
+  expect_true(grepl("}}", msgs, fixed = TRUE))
+})
+
+          # NOTE: `qa10641_undefined_probe` is a deliberately never-defined
+          # symbol (not a real dplyr/project call like mutate()/lead()) so
+          # this fixture's cli-evaluation behaviour cannot depend on what
+          # some OTHER test file has already attached/sourced into the
+          # shared test-session globalenv by the time this file runs.
+test_that("qa_look_ahead_bias's cli_abort does not crash on a source line with literal braces (fixed)", {
+  all_hits <- tibble::tibble(
+    check = "S1: lead(ym)",
+    file  = "R/plan_foo.R",
+    line  = 42L,
+    code  = "if (x) { qa10641_undefined_probe(next_ym = lead(ym)) }"
+  )
+  # Reproduces the qa_look_ahead_bias target's own abort call (R/plan_qa_gates.R)
+  # exactly, using the fixed message-building helper, without needing tar_make().
+  err <- testthat::capture_error({
+    msgs <- .qa_look_ahead_bias_msgs(all_hits)
+    cli::cli_abort(c(
+      "x" = "Look-ahead bias patterns detected in {nrow(all_hits)} place(s):",
+      setNames(msgs, rep("i", length(msgs)))
+    ))
+  })
+  expect_false(is.null(err))
+  expect_match(conditionMessage(err), "Look-ahead bias patterns detected in 1 place", fixed = TRUE)
+  expect_match(conditionMessage(err), "if (x) { qa10641_undefined_probe(next_ym = lead(ym)) }", fixed = TRUE)
+})
+
+test_that("falsification: the PRE-fix (unescaped) message-building crashes cli_abort instead of reporting the violation", {
+  # Reproduces the pre-fix code path (no .qa_cli_escape) to prove the two
+  # tests above are real regression tests, not vacuous ones -- per
+  # verification-before-completion. See NOTE above re: qa10641_undefined_probe.
+  all_hits <- tibble::tibble(
+    check = "S1: lead(ym)",
+    file  = "R/plan_foo.R",
+    line  = 42L,
+    code  = "if (x) { qa10641_undefined_probe(next_ym = lead(ym)) }"
+  )
+  err <- testthat::capture_error({
+    msgs_unescaped <- purrr::pmap_chr(
+      all_hits[, c("check", "file", "line", "code")],
+      function(check, file, line, code) {
+        sprintf("  %s -- %s:%d -- %s", check, basename(file), line, trimws(code))
+      }
+    )
+    cli::cli_abort(c(
+      "x" = "Look-ahead bias patterns detected in {nrow(all_hits)} place(s):",
+      setNames(msgs_unescaped, rep("i", length(msgs_unescaped)))
+    ))
+  })
+  expect_false(is.null(err))
+  # The pre-fix crash is a cli/glue PARSE error, not the intended violation
+  # message -- exactly the bug roborev #10641 reported.
+  expect_false(grepl("Look-ahead bias patterns detected", conditionMessage(err), fixed = TRUE))
+})
+
 test_that("qa_look_ahead_bias passes on current R/ tree", {
   files <- list.files(here::here("R"), pattern = "\\.R$",
                       full.names = TRUE, recursive = TRUE)
