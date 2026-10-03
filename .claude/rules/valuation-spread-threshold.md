@@ -2,6 +2,19 @@
 name: valuation-spread-threshold
 description: Only deviate from policy weights when valuation spreads exceed 2-3 standard deviations from historical mean, capped at 5-10 percent of portfolio
 type: rule
+paths:
+  - "R/plan_portfolio_opt.R"
+  - "R/plan_regime*.R"
+  - "R/plan_risk_state.R"
+  - "R/plan_vix_macro_overlay.R"
+  - "R/plan_zakamulin_allocation.R"
+  - "R/zakamulin_allocation.R"
+  - "R/plan_leverage.R"
+  - "R/plan_exposure.R"
+  - "R/plan_multi_strategy.R"
+  - "R/regime*.R"
+  - "packages/historicaldata/R/exposure.R"
+  - "docs/macro-defense-rotation.qmd"
 ---
 
 # Rule: Valuation-Spread Deviation Threshold with Position Cap

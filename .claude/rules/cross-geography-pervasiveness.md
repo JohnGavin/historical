@@ -2,6 +2,26 @@
 name: cross-geography-pervasiveness
 description: Require evidence of factor premiums across independent geographies before adopting systematic strategies
 type: rule
+paths:
+  - "R/plan_factormax.R"
+  - "R/plan_drif*.R"
+  - "R/plan_add_signal.R"
+  - "R/plan_european_overlay.R"
+  - "R/plan_jst*.R"
+  - "R/plan_rafi.R"
+  - "R/plan_xgb_signal.R"
+  - "R/plan_stock_backtest.R"
+  - "R/plan_*momentum*.R"
+  - "R/plan_mean_reversion.R"
+  - "R/plan_commodities_*.R"
+  - "packages/historicaldata/R/add_signal.R"
+  - "packages/historicaldata/R/osap.R"
+  - "packages/historicaldata/R/drif_selection.R"
+  - "docs/evidence.qmd"
+  - "docs/factor-max.qmd"
+  - "docs/drif.qmd"
+  - "docs/european-overlay.qmd"
+  - "explorations/**"
 ---
 
 # Rule: Require Cross-Geography Pervasiveness for Factor Adoption

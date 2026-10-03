@@ -2,6 +2,14 @@
 name: strategy-name-consistency
 description: Maintain a single source of truth for strategy names across tables, plots, captions, and prose with code/short/long variants
 type: rule
+paths:
+  - "R/plan_strategy_names.R"
+  - "R/plan_leaderboard.R"
+  - "R/plan_vignette.R"
+  - "R/plan_*vignette*.R"
+  - "R/glossary.R"
+  - "docs/*.qmd"
+  - "docs/vignette_utils.R"
 ---
 
 # Rule: Strategy Name Consistency (Single Source of Truth)
