@@ -1,25 +1,21 @@
+---
+paths:
+  - "R/**/*.R"
+  - "packages/*/R/**/*.R"
+  - "scripts/**/*.R"
+  - "docs/_targets.R"
+---
+
 # Rule: Fail Loud, Never Null — Unrecognised Values Must Abort, Not Coerce
 
-## Source
-
-Generalised from the same defect recurring three times in two days (2026-08-03 → 2026-08-05), each time in a different vocabulary, each time discovered by accident rather than by a gate:
-
-| Issue | The unexpected value | What it was silently coerced to | How it surfaced |
-|---|---|---|---|
-| [#637](https://github.com/JohnGavin/historical/issues/637) | a metric in percent where fractions were assumed | a number 100× wrong, ranked against its peers as if comparable | a reader noticed a vol of 6.82 next to a vol of 0.18 |
-| [#643](https://github.com/JohnGavin/historical/issues/643) | period label `"Full"` where `"Full Period"` was assumed | a dropped row — the strategy vanished from the ranking | someone counted the leaderboard rows |
-| [#640](https://github.com/JohnGavin/historical/issues/640) | absent `metric_unit` | `NA_character_`, written to the registry as a bare unitless number | found while fixing #637, not by any check |
-| [#641](https://github.com/JohnGavin/historical/issues/641) | a month missing from one of four constituents | the month deleted from the portfolio for **all** constituents | someone asked why the heatmap had no March |
-
-Earlier instances of the identical shape, recorded before it was named: `as.logical("1")` returning `NA` and silently disabling `VIGNETTE_STRICT`; a `Date`/`POSIXct` mismatch making `full_join` produce zero matches; NAs cascading through `roll_mean`/`roll_sd`.
+Origin incidents (#637, #640, #641, #643, #693, #710, #691) and the worked
+evidence tables live in [`fail-loud-not-null-details.md`](fail-loud-not-null-details.md).
 
 ## The defect shape
 
 > An unexpected value is silently coerced to a null-ish state — `NA`, `NULL`, a dropped row, a zero-row join, a skipped test — instead of raising an error.
 
-Null-ish states are indistinguishable from *legitimately absent* data. That is what makes this class expensive: the failure produces output that looks exactly like a correct answer to a smaller question. Nobody sees a stack trace. The number just quietly becomes wrong, gets published, and is then used as an input somewhere else — #641's truncated PSO Optimal vol was about to be adopted as the book-level risk anchor in [#635](https://github.com/JohnGavin/historical/issues/635).
-
-The three carriers seen so far are **units**, **vocabularies**, and **factor levels / join keys**. Expect a fourth.
+Null-ish states are indistinguishable from *legitimately absent* data, so the failure produces output that looks exactly like a correct answer to a smaller question. The three carriers seen so far are **units**, **vocabularies**, and **factor levels / join keys**. Expect a fourth.
 
 ## When This Applies
 
@@ -47,7 +43,7 @@ Every controlled vocabulary gets a single exported constant that is the sole sou
 
 ### 2. Validate at every boundary, in both directions
 
-Validate on **write** (reject the bad value before it is stored) *and* on **read** (reject or normalise it before it is used). #640 is the cautionary case: `bt.metric` correctly *recorded* `metric_unit` but validated it on neither side, so the column was decoration.
+Validate on **write** (reject the bad value before it is stored) *and* on **read** (reject or normalise it before it is used).
 
 ### 3. Normalise on read, and say what you normalised to
 
@@ -65,60 +61,19 @@ if (nrow(x) < n_before) {
 }
 ```
 
-A silent `return(NULL)` inside an `lapply()` is the single most common instance of this in `R/` — it removes a whole period from a series and leaves no trace.
-
 ### 5. Guard where the value ENTERS, not only where it is used
 
-A correct guard on the wrong code path is silent. Validate at the point a value is
-**supplied**, not only at the point it is **consumed** — because the consuming path
-is frequently the harder one to reach, and a value supplied on a path that never
-consumes it escapes validation entirely.
+A correct guard on the wrong code path is silent. Validate at the point a value is **supplied**, not only at the point it is **consumed** — the consuming path is frequently the harder one to reach, and a value supplied on a path that never consumes it escapes validation entirely.
 
-The tell: the guard lives inside an `if`, a mode flag, a command-line branch, or a
-target that only some runs build. Ask **"on which invocations does my guard not
-run, and can a bad value arrive on one of those?"** If yes, the guard is
-mis-placed, however correct its logic.
+The tell: the guard lives inside an `if`, a mode flag, a command-line branch, or a target that only some runs build. Ask **"on which invocations does my guard not run, and can a bad value arrive on one of those?"** If yes, the guard is mis-placed, however correct its logic.
 
-| instance | guard was correct, but ran only… | so what escaped |
-|---|---|---|
-| #693/#694 | when the extractor found a `tibble()` | a refactor to `data.frame()` returned `character(0)`, so `required` was empty and the coverage check passed vacuously |
-| #710 | in `--data-staleness` mode, which needs a store | a malformed `HD_STALE_DASHBOARD_DATA_THRESHOLD_DAYS` is silently ignored in default mode *and in the weekly CI job* |
+A related but distinct failure is **the guard fires and nobody sees it** (e.g. `error = "continue"` in `docs/_targets.R` lets `tar_make()` exit 0). A mis-placed guard is fixed by moving it; an unseen guard is fixed by making its output reachable (`scripts/build.sh`, `scripts/check_pipeline_errors.R`). When a guard fails to protect you, ask **which** of the two it was before reaching for a fix.
 
-Both were written to satisfy **this rule**, by someone who had read it, and both
-left a hole one level up. That is the evidence that "add a guard" is not sufficient
-guidance on its own — placement is a separate decision from existence, and it is
-the one that keeps going wrong.
-
-**A related but distinct failure — the guard fires and nobody sees it.** #691 is
-often cited alongside the two above and it is not the same thing:
-`hd_metric_record()`'s unit guard was correctly placed and *did* fire, erroring
-eleven registry writers. What failed is that `error = "continue"` in
-`docs/_targets.R` made `tar_make()` exit 0 anyway, so the guard's output was
-invisible for four commits.
-
-Keep the two apart, because the fixes differ. A mis-placed guard is fixed by moving
-it; an unseen guard is fixed by making its output reachable — which is why
-`scripts/build.sh` and `scripts/check_pipeline_errors.R` exist. Both defeat the
-same intent, so when a guard fails to protect you, ask **which** of the two it was
-before reaching for a fix.
-
-Corollary for configuration: **if a variable is set, validate it — even if this
-code path ignores it.** Setting an environment variable is an expression of intent;
-silently ignoring a malformed one is the null-coercion this rule prohibits, applied
-to config instead of data.
+Corollary for configuration: **if a variable is set, validate it — even if this code path ignores it.** Setting an environment variable is an expression of intent; silently ignoring a malformed one is the null-coercion this rule prohibits, applied to config instead of data.
 
 ### 6. Add a QA gate, not just a test
 
-Every instance of this class that we fix gets a gate target in `R/plan_qa_gates.R` so it runs on every `tar_make()`, not only under `testthat`. A test proves the fix once; a gate stops the next occurrence. The gate must abort, and its `cli_abort` message needs `expect_snapshot(error = TRUE, ...)` coverage per `snapshot-test-policy`.
-
-Gates in this family so far:
-
-| Gate | Guards | Introduced |
-|---|---|---|
-| S9 `qa_leaderboard_metric_ranges` | units — cagr/vol/max_dd within fractional range | #637 |
-| S10 `qa_leaderboard_period_vocab` | vocabulary — canonical `period` labels | #643 |
-
-The gap this rule closes: **#640 (registry units) and #641 (join-key coverage) had no gate**, which is exactly why they survived the session that fixed the first two.
+Every instance of this class that we fix gets a gate target in `R/plan_qa_gates.R` so it runs on every `tar_make()`, not only under `testthat`. A test proves the fix once; a gate stops the next occurrence. The gate must abort, and its `cli_abort` message needs `expect_snapshot(error = TRUE, ...)` coverage per `snapshot-test-policy`. Existing gates (S9 units, S10 period vocabulary) are listed in the details file.
 
 ## Forbidden Patterns
 
@@ -141,16 +96,11 @@ Before merging any code that reads a value from another target, a database, an e
 
 > If this value arrives with an unexpected spelling, scale, or type, does my code **stop**, or does it produce a plausible-looking number?
 
-If the answer is "produces a number", it is not finished.
+If the answer is "produces a number", it is not finished. Then a second question, about the guard you just wrote:
 
-Then a second question, about the guard you just wrote:
+> On which invocations does this guard **not** run — and can a bad value arrive on one of those?
 
-> On which invocations does this guard **not** run — and can a bad value arrive on
-> one of those?
-
-If it can, the guard is mis-placed however correct its logic. This second question
-is the one that keeps being skipped: #694 and #710 both passed the first test and
-failed the second, in code written by people who had read this rule.
+If it can, the guard is mis-placed however correct its logic. This second question is the one that keeps being skipped.
 
 ## Related
 
@@ -159,6 +109,3 @@ failed the second, in code written by people who had read this rule.
 - `.claude/rules/snapshot-test-policy.md` — new `cli_abort` messages require snapshot coverage
 - `data-glossary-and-entity-resolution` (global) — canonical units and canonical entity names are the same problem
 - `data-validation-timeseries` (global) — temporal-coverage checks belong in the pipeline as targets, not only in tests
-- [#637](https://github.com/JohnGavin/historical/issues/637), [#640](https://github.com/JohnGavin/historical/issues/640), [#641](https://github.com/JohnGavin/historical/issues/641), [#643](https://github.com/JohnGavin/historical/issues/643) — the four instances that motivated this rule
-- [#693](https://github.com/JohnGavin/historical/issues/693), [#710](https://github.com/JohnGavin/historical/issues/710) — the two instances that motivated Required Pattern 5 (guard placement). Both post-date the rule and were written in compliance with it, which is the point: existence and placement are separate decisions, and the rule previously governed only the first.
-- [#691](https://github.com/JohnGavin/historical/issues/691) — the adjacent failure named in Pattern 5: a correctly-placed guard whose output was invisible because `error = "continue"` let `tar_make()` exit 0. Fixed by [#693](https://github.com/JohnGavin/historical/issues/693)'s `scripts/build.sh`, not by moving any guard.

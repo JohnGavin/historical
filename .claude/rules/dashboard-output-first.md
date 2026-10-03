@@ -1,3 +1,14 @@
+---
+paths:
+  - "docs/*.qmd"
+  - "docs/DASHBOARDS.md"
+  - "docs/_quarto.yml"
+  - "docs/_targets.R"
+  - "R/plan_*vignette*.R"
+  - "R/diagram_node_links.R"
+  - "plans/**"
+---
+
 # Rule: Output-First ("Dashboard-First") Planning — Phase 0
 
 ## Source
