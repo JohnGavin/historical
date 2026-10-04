@@ -2,6 +2,15 @@
 name: earnings-mean-reversion
 description: Apply 40-percent-per-year mean-reversion decay to abnormal earnings growth features to avoid overstating persistence
 type: rule
+paths:
+  - "R/plan_ev_ebit.R"
+  - "R/plan_qa_fundamentals.R"
+  - "R/plan_rafi.R"
+  - "R/plan_xgb_signal.R"
+  - "R/plan_ltr_momentum.R"
+  - "scripts/compute_ltr_features.R"
+  - "scripts/fetch_fundamentals_edgar.R"
+  - "packages/historicaldata/R/fundamentals.R"
 ---
 
 # Rule: Earnings Mean-Reversion Rate in Feature Construction

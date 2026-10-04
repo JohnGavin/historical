@@ -1,3 +1,11 @@
+---
+paths:
+  - "tests/testthat/**"
+  - "packages/historicaldata/tests/testthat/**"
+  - "scripts/audit_snapshot_ratio.R"
+  - "audits/snapshot_ratio_*.md"
+---
+
 # Rule: Snapshot Test Policy (historical project)
 
 ## Global rule reference
