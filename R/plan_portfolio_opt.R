@@ -287,7 +287,12 @@ plan_portfolio_opt <- function() {
       calc_port_metrics <- function(df, label) {
         n <- nrow(df)
         if (n < 12) return(NULL)
-        rf_ann <- mean(df$rf_ret, na.rm = TRUE) * 12
+        # #919: PSO Optimal is a normalised weighted average of four EXCESS
+        # series (stk_max/stk_drif/fac_max/fac_drif), hence itself excess --
+        # no rf deducted (hd_return_basis(): "excess"; ann_rf is exactly 0).
+        # The hrp/eq columns share the SAME constituents and so share the
+        # same rf_ann (one rate per period, not per weighting scheme).
+        rf_ann <- mean(hd_rf_for_basis(df$rf_ret, "PSO Optimal"), na.rm = TRUE) * 12
         tibble(
           period = label, months = n,
           opt_cagr   = cagr_of(df$optimal_ret),

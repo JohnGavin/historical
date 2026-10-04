@@ -1604,12 +1604,68 @@ plan_leaderboard <- function() {
       )
       family_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr")
 
+      # rf series for the TOTAL-basis rows only (#919) -- the SAME rf each
+      # row's own leaderboard Sharpe deducted (one home per value), keyed
+      # to match `key` in .dsr_row() below. Excess/indeterminate rows need
+      # none. A total-basis row with no entry here aborts in .dsr_row().
+      rf_monthly <- list(
+        value_hml = tibble::tibble(
+          key = format(as.Date(ev_portfolios$date), "%Y-%m"), rf = ev_portfolios$RF
+        ),
+        managed_futures = tibble::tibble(
+          key = format(as.Date(mf_portfolios$date), "%Y-%m"), rf = mf_portfolios$RF
+        )
+      )
+      rf_daily_src <- list(
+        olmar_1     = tibble::tibble(key = as.Date(olmar_portfolio$date), rf = olmar_portfolio$rf_ret),
+        tom         = tibble::tibble(key = as.Date(tom_portfolio$date), rf = tom_portfolio$rf_ret),
+        risk_state  = tibble::tibble(key = as.Date(rsc_portfolio$date), rf = rsc_portfolio$rf_daily),
+        avoid_worst = tibble::tibble(key = as.Date(aw_daily_rf$date), rf = aw_daily_rf$rf_ret)
+      )
+
       k_eff_lb  <- max(1, round(strat_keff_vertox_leaderboard))
       k_raw_lb  <- nrow(strat_corr_matrix_leaderboard)
       k_eff_fam <- max(1L, round(strat_keff_vertox))
       k_raw_fam <- nrow(strat_corr_matrix)
 
-      .dsr_row <- function(strategy_label, r, ann_factor, is_family = FALSE) {
+      # ── Return basis (#919) ────────────────────────────────────────────
+      # The leaderboard `sharpe` is on an EXCESS-return basis (rf deducted
+      # iff the series is a TOTAL return; a dollar-neutral spread is
+      # already excess) -- see historicaldata::hd_return_basis(), the ONE
+      # home of that classification. This DSR path used to feed
+      # hd_deflated_sharpe() the RAW series, so a total-return series
+      # (HML = RF + HML - cost) was scored with its cash component inside
+      # the numerator (naive_sharpe 0.528 vs the leaderboard's 0.068).
+      # `key` aligns `r` to `rf_tbl` (columns key, rf); only "total"
+      # strategies need an rf series. Positions with no rf are DROPPED
+      # and counted (fail-loud-not-null.md pattern 4), never treated as 0.
+      #
+      # SHARPE CONVENTION (stated, not papered over): hd_deflated_sharpe()
+      # uses the per-period ARITHMETIC mean/sd of this excess series,
+      # annualised by sqrt(ann_factor); the leaderboard `sharpe` uses
+      # (GEOMETRIC CAGR - arithmetic ann_rf) / vol. The two differ by the
+      # variance drag (~sigma^2/2 / sigma = sigma/2 in Sharpe units) --
+      # a pre-existing, intentional difference, NOT removed by #919.
+      .dsr_row <- function(strategy_label, r, key, rf_tbl, ann_factor,
+                           is_family = FALSE) {
+        basis <- hd_return_basis_of(strategy_label)
+        if (identical(basis, "total")) {
+          if (is.null(rf_tbl)) {
+            cli::cli_abort(c(
+              "x" = "{.val {strategy_label}} is total-basis but no rf series was supplied to strat_deflated_sharpe.",
+              "i" = "Add it to {.code rf_monthly}/{.code rf_daily_src} in this target (R/plan_leaderboard.R)."
+            ))
+          }
+          rf   <- rf_tbl$rf[match(key, rf_tbl$key)]
+          drop <- !is.na(r) & is.na(rf)
+          if (any(drop)) {
+            cli::cli_warn(c("!" = "{strategy_label}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf in strat_deflated_sharpe."))
+          }
+          keep <- !is.na(r) & !is.na(rf)
+          r    <- hd_excess_returns(r[keep], rf[keep], strategy_label)
+        } else {
+          r <- hd_excess_returns(r, rep(0, length(r)), strategy_label)
+        }
         r <- r[!is.na(r)]
         d <- hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
 
@@ -1654,6 +1710,8 @@ plan_leaderboard <- function() {
         .dsr_row(
           unname(col_map_monthly[[col]]),
           strat_returns_wide[[col]],
+          key        = strat_returns_wide$ym,
+          rf_tbl     = rf_monthly[[col]],
           ann_factor = 12L,
           is_family  = col %in% family_cols
         )
@@ -1663,6 +1721,8 @@ plan_leaderboard <- function() {
         .dsr_row(
           unname(col_map_daily[[nm]]),
           strat_returns_daily_native[[nm]]$ret,
+          key        = strat_returns_daily_native[[nm]]$date,
+          rf_tbl     = rf_daily_src[[nm]],
           ann_factor = 252L
         )
       }))

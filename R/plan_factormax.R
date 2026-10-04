@@ -188,7 +188,10 @@ plan_factormax <- function() {
         # published alongside sharpe -- QA gate S17
         # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
         # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
-        ann_rf <- mean(df$rf_ret) * 12
+        # #919: Factor MAX is an equal-weight of Fama-French factor SPREADS
+        # (HML/SMB/RMW/CMA/Mom), i.e. an EXCESS return -- no rf deducted
+        # (hd_return_basis(): "excess"; ann_rf is therefore exactly 0).
+        ann_rf <- mean(hd_rf_for_basis(df$rf_ret, "Factor MAX")) * 12
         sharpe <- (ann_ret - ann_rf) / ann_vol
         cum <- cumprod(1 + df$portfolio_ret)
         dd <- cum / cummax(cum) - 1

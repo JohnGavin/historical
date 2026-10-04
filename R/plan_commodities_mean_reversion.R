@@ -330,17 +330,17 @@ plan_commodities_mean_reversion <- function() {
 
     targets::tar_target(cmr_metrics_1m, {
       .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
-                           periodicity_check = "warn")
+                           periodicity_check = "warn", basis_strategy = "CMR")
     }),
 
     targets::tar_target(cmr_metrics_3m, {
       .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", daily_rf = daily_rf, ann_factor = 252L,
-                           periodicity_check = "warn")
+                           periodicity_check = "warn", basis_strategy = "CMR")
     }),
 
     targets::tar_target(cmr_metrics_6m, {
       .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", daily_rf = daily_rf, ann_factor = 252L,
-                           periodicity_check = "warn")
+                           periodicity_check = "warn", basis_strategy = "CMR")
     }),
 
 
@@ -1223,8 +1223,15 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   invisible(NULL)
 }
 
+# basis_strategy (#919): optional leaderboard strategy label registered in
+# hd_return_basis(). When supplied ("CMR": a dollar-neutral tercile spread,
+# i.e. EXCESS) the rf deducted from the Sharpe follows the registry
+# (ann_rf == 0). NULL keeps the legacy rf-deducted behaviour -- used by the
+# conditioned overlay, whose basis is registered "indeterminate" (an excess
+# spread blended with cash), and by non-leaderboard callers.
 .compute_cmr_metrics <- function(portfolio_tbl, lookback, daily_rf, ann_factor = 252L,
-                                 periodicity_check = c("abort", "warn")) {
+                                 periodicity_check = c("abort", "warn"),
+                                 basis_strategy = NULL) {
   library(dplyr)
   periodicity_check <- match.arg(periodicity_check)
 
@@ -1274,6 +1281,7 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
 
   # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R::sharpe_ratio_rf()),
   # replacing the arithmetic-mean numerator + hardcoded rf formula.
+  if (!is.null(basis_strategy)) rf <- hd_rf_for_basis(rf, basis_strategy)
   sr     <- sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)
   sharpe <- sr$sharpe
 
