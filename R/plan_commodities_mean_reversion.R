@@ -1238,18 +1238,21 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   invisible(NULL)
 }
 
-# basis_strategy (#919): optional leaderboard strategy label registered in
-# hd_return_basis(). When supplied ("CMR": a dollar-neutral tercile spread,
-# i.e. EXCESS) the rf deducted from the Sharpe follows the registry
-# (ann_rf == 0). The conditioned overlay is registered "blend" (an excess
-# spread blended with cash): its input tibble must carry `cash_weight`.
-# NULL keeps the legacy rf-deducted behaviour (made an error by the next
-# commit of #919's follow-up).
+# basis_strategy (#919): REQUIRED leaderboard strategy label registered in
+# hd_return_basis(); a NULL/missing/unregistered label aborts. The rf
+# deducted from the Sharpe follows the registry: "CMR" (a dollar-neutral
+# tercile spread, i.e. EXCESS) has ann_rf == 0; "CMR Conditioned" is
+# "blend" (an excess spread blended with cash), so its input tibble must
+# carry `cash_weight`.
 .compute_cmr_metrics <- function(portfolio_tbl, lookback, daily_rf, ann_factor = 252L,
                                  periodicity_check = c("abort", "warn"),
                                  basis_strategy = NULL) {
   library(dplyr)
   periodicity_check <- match.arg(periodicity_check)
+  # Required (#919): a NULL label used to silently keep the legacy
+  # rf-deducted Sharpe. Checked before the n < 12 early return below so the
+  # label is validated on every invocation, not only the ones that compute.
+  .require_basis_label(basis_strategy, ".compute_cmr_metrics", "basis_strategy")
 
   df <- portfolio_tbl |>
     dplyr::filter(!is.na(.data$net_ret)) |>
@@ -1300,9 +1303,7 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   # "blend" basis (CMR Conditioned): rf is deducted only on the cash leg's
   # per-observation weight, read from the `cash_weight` column of
   # portfolio_tbl (derived from exposure_mult by the overlay, #919).
-  if (!is.null(basis_strategy)) {
-    rf <- hd_rf_for_basis(rf, basis_strategy, cash_weight = df[["cash_weight"]])
-  }
+  rf <- hd_rf_for_basis(rf, basis_strategy, cash_weight = df[["cash_weight"]])
   sr     <- sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)
   sharpe <- sr$sharpe
 

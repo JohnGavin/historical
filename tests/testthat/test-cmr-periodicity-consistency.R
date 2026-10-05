@@ -180,7 +180,8 @@ test_that(".compute_cmr_metrics defaults periodicity_check to 'abort' -- never i
   daily_rf <- tibble::tibble(date = d, rf_ret = rep(0.00005, length(d)))
 
   expect_error(
-    .compute_cmr_metrics(portfolio, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L),
+    .compute_cmr_metrics(portfolio, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
+                         basis_strategy = "CMR"),
     "NOT consistent with a single declared periodicity"
   )
 })
@@ -200,7 +201,7 @@ test_that(".compute_cmr_metrics(periodicity_check = 'warn') warns with the full 
     metrics <- .compute_cmr_metrics(
       portfolio,
       lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
-      periodicity_check = "warn"
+      periodicity_check = "warn", basis_strategy = "CMR"
     )
   )
 
