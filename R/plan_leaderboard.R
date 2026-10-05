@@ -122,6 +122,41 @@
   )
 )
 
+#' Sharpe fed to the probabilistic-Sharpe diagnostic, per leaderboard row (#919)
+#'
+#' \code{hd_prob_sharpe_positive()} assumes the ARITHMETIC per-period
+#' mean/sd; the leaderboard \code{sharpe} is GEOMETRIC. For the Full-Period
+#' row of a strategy covered by \code{strat_deflated_sharpe}, the arithmetic
+#' EXCESS Sharpe that target computes via the \code{hd_return_basis()}
+#' registry (\code{naive_sharpe}) is used, so \code{1 - dsr_pvalue <=
+#' prob_sharpe_positive} compares like with like. Every other row keeps the
+#' geometric \code{sharpe} (no arithmetic series exists for it here). A
+#' covered Full-Period row whose \code{naive_sharpe} is NA stays NA -- it is
+#' never silently replaced by the geometric figure. The domain is unchanged:
+#' only rows with a positive, non-NA leaderboard \code{sharpe} get a value.
+#'
+#' @param period Character vector of leaderboard period labels.
+#' @param sharpe Numeric; the (geometric) leaderboard Sharpe.
+#' @param arith_sharpe Numeric; \code{strat_deflated_sharpe$naive_sharpe}
+#'   joined to each row (NA where the strategy has no DSR row).
+#' @param dsr_covered Logical; TRUE where the row's strategy has a row in
+#'   \code{strat_deflated_sharpe}.
+#' @return Numeric vector the same length as \code{sharpe}.
+#' @noRd
+.prob_sharpe_input_sharpe <- function(period, sharpe, arith_sharpe, dsr_covered) {
+  n <- length(sharpe)
+  if (length(period) != n || length(arith_sharpe) != n || length(dsr_covered) != n) {
+    cli::cli_abort(c(
+      "x" = ".prob_sharpe_input_sharpe(): all inputs must have the same length.",
+      "i" = "Got period {length(period)}, sharpe {n}, arith_sharpe {length(arith_sharpe)}, dsr_covered {length(dsr_covered)}."
+    ))
+  }
+  use_arith <- (period %in% "Full Period") & dsr_covered
+  out <- ifelse(use_arith, arith_sharpe, sharpe)
+  out[is.na(sharpe) | sharpe <= 0] <- NA_real_
+  out
+}
+
 #' Build STRATEGY_OBS_ANN_FACTOR from strategy_names + its provenance table
 #'
 #' Exposed as a function (rather than inlined at source() time) so tests can
@@ -838,7 +873,11 @@ plan_leaderboard <- function() {
             strat_deflated_sharpe |>
               select(strategy, deflated_sharpe, dsr_pvalue,
                      k_eff_leaderboard, k_raw_leaderboard,
-                     k_eff_family, k_raw_family),
+                     k_eff_family, k_raw_family,
+                     # #919: the ARITHMETIC per-period EXCESS Sharpe (registry
+                     # basis) -- the input prob_sharpe_positive needs below.
+                     # Temporary column, dropped after prob_sharpe_diag.
+                     .dsr_naive_sharpe = naive_sharpe),
             by = "strategy"
           )
       }
@@ -1313,13 +1352,41 @@ plan_leaderboard <- function() {
         )
       }
 
+      # SHARPE INPUT (#919): the probabilistic-Sharpe formula (Lo 2002 /
+      # Mertens 2002 variance) assumes the ARITHMETIC per-period mean/sd,
+      # which is what strat_deflated_sharpe's `naive_sharpe` is -- on the
+      # registry's EXCESS basis (hd_return_basis()). The leaderboard
+      # `sharpe` is GEOMETRIC ((CAGR - rf) / vol) and understates it by the
+      # variance drag, so feeding it here made `1 - dsr_pvalue <=
+      # prob_sharpe_positive` an apples-to-oranges comparison. For the
+      # Full-Period row of every strategy strat_deflated_sharpe covers, the
+      # arithmetic excess Sharpe is therefore used; every other row (the
+      # sub-period rows, and PSO Optimal which has no DSR) has no
+      # arithmetic series available in this target and keeps the geometric
+      # `sharpe` -- see .prob_sharpe_input_sharpe(). The headline `sharpe`
+      # column itself is NOT touched.
+      dsr_covered <- if (!is.null(strat_deflated_sharpe)) {
+        all_metrics$strategy %in% strat_deflated_sharpe$strategy
+      } else {
+        rep(FALSE, nrow(all_metrics))
+      }
+      dsr_naive <- if (".dsr_naive_sharpe" %in% names(all_metrics)) {
+        all_metrics$.dsr_naive_sharpe
+      } else {
+        rep(NA_real_, nrow(all_metrics))
+      }
+      prob_sharpe_in <- .prob_sharpe_input_sharpe(
+        all_metrics$period, all_metrics$sharpe, dsr_naive, dsr_covered
+      )
+
       prob_sharpe_diag <- purrr::pmap_dfr(
-        list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor,
+        list(prob_sharpe_in, all_metrics$months, all_metrics$obs_ann_factor,
              all_metrics$k_eff_leaderboard),
         .prob_sharpe_positive_row
       )
 
       all_metrics <- all_metrics |>
+        dplyr::select(-dplyr::any_of(".dsr_naive_sharpe")) |>
         dplyr::bind_cols(prob_sharpe_diag) |>
         dplyr::mutate(
           # TRUE where the probability the true Sharpe is positive falls
