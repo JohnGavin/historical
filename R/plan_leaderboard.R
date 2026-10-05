@@ -1620,7 +1620,15 @@ plan_leaderboard <- function() {
         olmar_1     = tibble::tibble(key = as.Date(olmar_portfolio$date), rf = olmar_portfolio$rf_ret),
         tom         = tibble::tibble(key = as.Date(tom_portfolio$date), rf = tom_portfolio$rf_ret),
         risk_state  = tibble::tibble(key = as.Date(rsc_portfolio$date), rf = rsc_portfolio$rf_daily),
-        avoid_worst = tibble::tibble(key = as.Date(aw_daily_rf$date), rf = aw_daily_rf$rf_ret)
+        avoid_worst = tibble::tibble(key = as.Date(aw_daily_rf$date), rf = aw_daily_rf$rf_ret),
+        # "blend" basis (#919): the cash leg's rf, carried by the overlay
+        # itself (NA where unknown, never 0-filled) -- see
+        # .cmr_apply_conditioning_overlay() in
+        # R/plan_commodities_mean_reversion.R.
+        cmr_conditioned = tibble::tibble(
+          key = as.Date(strat_returns_daily_native[["cmr_conditioned"]][["date"]]),
+          rf  = strat_returns_daily_native[["cmr_conditioned"]][["rf_ret"]]
+        )
       )
 
       k_eff_lb  <- max(1, round(strat_keff_vertox_leaderboard))
@@ -1647,7 +1655,7 @@ plan_leaderboard <- function() {
       # variance drag (~sigma^2/2 / sigma = sigma/2 in Sharpe units) --
       # a pre-existing, intentional difference, NOT removed by #919.
       .dsr_row <- function(strategy_label, r, key, rf_tbl, ann_factor,
-                           is_family = FALSE) {
+                           is_family = FALSE, cash_weight = NULL) {
         basis <- hd_return_basis_of(strategy_label)
         if (identical(basis, "total")) {
           if (is.null(rf_tbl)) {
@@ -1663,6 +1671,25 @@ plan_leaderboard <- function() {
           }
           keep <- !is.na(r) & !is.na(rf)
           r    <- hd_excess_returns(r[keep], rf[keep], strategy_label)
+        } else if (identical(basis, "blend")) {
+          # rf is deducted only on the cash leg's per-observation weight
+          # (excess = ret - cash_weight * rf). An observation with no rf (or
+          # no cash weight) is DROPPED and counted, never 0-filled: a
+          # 0-filled cash-leg rf would bias the excess return upward.
+          if (is.null(rf_tbl) || is.null(cash_weight)) {
+            cli::cli_abort(c(
+              "x" = "{.val {strategy_label}} is blend-basis but no rf series / cash_weight was supplied to strat_deflated_sharpe.",
+              "i" = "Both come from strat_returns_daily_native (R/plan_strategy_correlation.R)."
+            ))
+          }
+          rf   <- rf_tbl$rf[match(key, rf_tbl$key)]
+          drop <- !is.na(r) & (is.na(rf) | is.na(cash_weight))
+          if (any(drop)) {
+            cli::cli_warn(c("!" = "{strategy_label}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf / cash weight in strat_deflated_sharpe."))
+          }
+          keep <- !is.na(r) & !is.na(rf) & !is.na(cash_weight)
+          r    <- hd_excess_returns(r[keep], rf[keep], strategy_label,
+                                    cash_weight = cash_weight[keep])
         } else {
           r <- hd_excess_returns(r, rep(0, length(r)), strategy_label)
         }
@@ -1723,7 +1750,8 @@ plan_leaderboard <- function() {
           strat_returns_daily_native[[nm]]$ret,
           key        = strat_returns_daily_native[[nm]]$date,
           rf_tbl     = rf_daily_src[[nm]],
-          ann_factor = 252L
+          ann_factor = 252L,
+          cash_weight = strat_returns_daily_native[[nm]][["cash_weight"]]
         )
       }))
 

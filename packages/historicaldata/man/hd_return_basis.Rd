@@ -8,9 +8,11 @@ hd_return_basis()
 }
 \value{
 A tibble with columns \code{strategy} (leaderboard label),
-\code{basis} (one of \code{"total"}, \code{"excess"},
-\code{"indeterminate"}) and \code{evidence} (file:line of the
-constructing code that justifies the classification).
+\code{basis} (one of \code{"total"}, \code{"excess"}, \code{"blend"},
+\code{"indeterminate"}), \code{cash_weight_col} (name of the
+cash-weight column for a \code{"blend"} row, \code{NA} otherwise) and
+\code{evidence} (file:line of the constructing code that justifies the
+classification).
 }
 \description{
 The single source of truth for whether a strategy's published return
@@ -36,11 +38,20 @@ MANUAL). That residual is NOT modelled here.
 \item{\code{"total"}}{Series contains a cash / risk-free component;
 deduct rf before computing a Sharpe.}
 \item{\code{"excess"}}{Dollar-neutral spread; deduct NO rf.}
+\item{\code{"blend"}}{An excess spread blended with cash:
+\code{ret = w * spread + (1 - w) * rf - cost}. The spread leg is
+already excess; only the cash leg is a total return. rf is deducted
+PER OBSERVATION on the cash weight \code{cash_weight = 1 - w} only,
+so the excess series is \code{ret - cash_weight * rf}
+(\code{= w * spread - cost}). The registry row names the column that
+carries the cash weight in \code{cash_weight_col}; that column is
+derived from the constructing code's own exposure column, never typed
+here.}
 \item{\code{"indeterminate"}}{The constructing code could not be
 classified under the rule (see \code{evidence}). Behaviour is left
 UNCHANGED on both paths: the leaderboard path keeps deducting rf, the
 deflated-Sharpe path keeps using the raw series. Flagged, never
-guessed.}
+guessed. (No strategy is currently indeterminate.)}
 }
 }
 \examples{

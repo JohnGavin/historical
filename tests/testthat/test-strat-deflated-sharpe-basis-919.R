@@ -35,11 +35,21 @@ source(here::here("R/plan_leaderboard.R"))
   }
   wide$value_hml <- rf_m + hml_spread        # TOTAL return: RF + spread
   daily <- function() tibble::tibble(date = dts, ret = stats::rnorm(400L, 0.0004, 0.01))
+  # "blend" basis (#919): CMR Conditioned carries its own cash weight and the
+  # cash leg's rf. ret = w * spread + cash_weight * rf (spread leg excess).
+  cw     <- rep(c(0, 0.5, 1, 0.25), length.out = 400L)
+  spread <- stats::rnorm(400L, 0.0004, 0.01)
+  cmr_cond <- tibble::tibble(
+    date = dts, ret = (1 - cw) * spread + cw * rf_d,
+    cash_weight = cw, rf_ret = rf_d
+  )
   list(
+    cmr_cond_spread = (1 - cw) * spread,
+    cmr_cond_cw = cw,
     strat_returns_wide = wide,
     hml_spread = hml_spread,
     strat_returns_daily_native = list(
-      cmr = daily(), cmr_conditioned = daily(), olmar_1 = daily(),
+      cmr = daily(), cmr_conditioned = cmr_cond, olmar_1 = daily(),
       tom = daily(), risk_state = daily(), avoid_worst = daily()
     ),
     ev_portfolios = tibble::tibble(date = as.Date(paste0(yms, "-15")), RF = rf_m),
@@ -110,4 +120,37 @@ test_that("a total-basis row with no rf coverage drops AND reports the observati
   toy$ev_portfolios <- toy$ev_portfolios[1:200, ]  # rf ends 40 months early
   expect_warning(out <- .run(toy), regexp = "dropped 40 of 240")
   expect_false(is.na(out$naive_sharpe[out$strategy == "Value (HML)"]))
+})
+
+# ── "blend" basis: CMR Conditioned (#919 follow-up) ─────────────────────────
+test_that("a BLEND row (CMR Conditioned) is scored on ret - cash_weight * rf = the spread leg", {
+  toy <- .toy()
+  out <- .run(toy)
+  cc  <- out[out$strategy == "CMR Conditioned", ]
+  expected <- hd_deflated_sharpe(toy$cmr_cond_spread, K_trials = 5L, ann_factor = 252L)
+  expect_equal(cc$naive_sharpe, expected$naive_sharpe, tolerance = 1e-8)
+  expect_equal(cc$dsr_pvalue,   expected$dsr_pvalue,   tolerance = 1e-8)
+})
+
+test_that("FALSIFICATION: the blend row is NOT scored on its raw (cash-inclusive) series", {
+  toy <- .toy(rf_d = 0.0008)
+  out <- .run(toy)
+  raw <- hd_deflated_sharpe(toy$strat_returns_daily_native$cmr_conditioned$ret,
+                            K_trials = 5L, ann_factor = 252L)
+  cc <- out[out$strategy == "CMR Conditioned", ]
+  expect_gt(abs(raw$naive_sharpe - cc$naive_sharpe), 0.05)
+})
+
+test_that("blend: rf-free spread leg is unchanged by rf (cash leg cancels exactly)", {
+  lo <- .run(.toy(rf_d = 0))
+  hi <- .run(.toy(rf_d = 0.0004))
+  rs <- function(o) o$naive_sharpe[o$strategy == "CMR Conditioned"]
+  expect_equal(rs(lo), rs(hi), tolerance = 1e-8)
+})
+
+test_that("blend: observations with no rf are DROPPED and reported, never 0-filled", {
+  toy <- .toy()
+  toy$strat_returns_daily_native$cmr_conditioned$rf_ret[1:30] <- NA_real_
+  expect_warning(out <- .run(toy), regexp = "CMR Conditioned: dropped 30 of 400")
+  expect_false(is.na(out$naive_sharpe[out$strategy == "CMR Conditioned"]))
 })
