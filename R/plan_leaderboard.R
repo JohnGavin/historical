@@ -1195,6 +1195,40 @@ plan_leaderboard <- function() {
       all_metrics <- all_metrics |>
         dplyr::left_join(STRATEGY_OBS_ANN_FACTOR, by = "strategy")
 
+      # ── years (#851/#927 Phase 0 prototype finding) ────────────────────────
+      # ONE HOME for "years of data backing this row" -- derived HERE, once,
+      # for every row, from the SAME two columns
+      # (`months`, `obs_ann_factor`) that `.detection_diag_row()` below feeds
+      # into `hd_detection_power(n_obs = months, ann_factor = obs_ann_factor)`.
+      # That function's own `underpowered <- n_obs < min_n_periods` comparison
+      # (packages/historicaldata/R/hd_detection_power.R) is exactly
+      # `months < detection_min_n_years * obs_ann_factor`, i.e. this row's
+      # years-available IS `months / obs_ann_factor` by construction -- not a
+      # second, independently-derived figure that could drift from the
+      # Detection column's own sample-length figure.
+      #
+      # This REPLACES (via mutate() on the existing column name, not a fresh
+      # column) any `years` that survived an upstream `.norm_*()` helper --
+      # .aw_strategy_period_metrics() and olmar_metrics both already compute
+      # `n / their_own_daily_ann_factor` (252 for both, matching
+      # STRATEGY_OBS_ANN_FACTOR), so this is consistent with, not a change
+      # to, their published values. It closes a real gap the #927 Phase-0
+      # prototype for #851 found: `full$years` was NA for 15 of 18
+      # Full-Period strategies (verified via a direct tar_read() query) --
+      # `.norm_tom()`/`.norm_cmr()`/`.norm_mom_sibling()`'s `transmute()`
+      # silently DROPS any `years` present in their source (TOM's own
+      # `tom_metrics` computes one -- see R/plan_turn_of_month.R -- but it
+      # never reached the leaderboard), and most other `.norm_*()` helpers'
+      # source metrics targets never computed a `years` column at all. Per
+      # fail-loud-not-null.md, this was a silent NA-as-absence defect, not a
+      # genuine data gap -- the fact is fully determined by columns every row
+      # already carries. NA only where `months` or `obs_ann_factor` are
+      # themselves genuinely unavailable for this row (never silently
+      # coerced). Verified by qa_leaderboard_years_available (S43,
+      # R/plan_qa_gates.R).
+      all_metrics <- all_metrics |>
+        dplyr::mutate(years = round(months / obs_ann_factor, 1))
+
       # Defensive: strat_deflated_sharpe's join above is itself guarded by
       # `!is.null(strat_deflated_sharpe) && nrow(strat_deflated_sharpe) > 0`,
       # so k_eff_leaderboard may not exist as a column at all (e.g. in a
