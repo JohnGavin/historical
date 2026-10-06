@@ -130,10 +130,14 @@ plan_structural_breaks <- function() {
           # LTR is monthly
           LTR             = extract_series(fals_ltr_input),
           # Avoid Worst and RSC are daily
-          `Avoid Worst`   = extract_series(fals_avoid_worst_input),
-          `Risk State`    = extract_series(fals_rsc_input),
-          # TOM is daily (fals_tom_input: date + strategy_ret)
-          TOM             = extract_series(fals_tom_input),
+          # #937: these three are TOTAL-basis (hd_return_basis()), so the
+          # Sharpe inputs are the EXCESS bridges (rf deducted); the others
+          # here are already excess spreads (OLMAR-1 is total too but is
+          # owned by a separate #937 phase).
+          `Avoid Worst`   = extract_series(fals_avoid_worst_excess),
+          `Risk State`    = extract_series(fals_rsc_excess),
+          # TOM is daily (fals_tom_excess: date + strategy_ret, rf deducted)
+          TOM             = extract_series(fals_tom_excess),
           # CMR is daily (#717; fals_cmr_input = cmr_returns_3m: date + strategy_ret,
           # the raw net_ret series -- no monthly resampling despite the name)
           CMR             = extract_series(fals_cmr_input),

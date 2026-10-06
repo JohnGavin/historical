@@ -31,16 +31,19 @@
 # oversight (fail-loud-not-null.md: a documented limitation, not a silent
 # gap).
 #
-# rf = NULL throughout (cash while stopped out) -- an explicit, documented
-# simplifying assumption (see hd_stop_rule_backtest()'s @param rf), not a
-# silent default. Using each strategy's own risk-free series would require
-# joining stk_rf per date/ym onto each of the five series; deferred as
-# follow-up since it does not change the ARM COMPARISON (all three arms use
-# the same rf convention, so the comparison's conclusion is robust to this
-# choice even though absolute Sharpe levels would shift slightly).
+# rf = NULL throughout (cash while stopped out earns 0) -- an explicit,
+# documented assumption (see hd_stop_rule_backtest()'s @param rf), not a
+# silent default. #937: that is exact on an EXCESS basis (cash's excess
+# return is 0), so the two TOTAL-basis daily series (avoid_worst, rsc) are fed
+# in as their EXCESS series (fals_avoid_worst_excess / fals_rsc_excess; rf
+# already deducted, hd_return_basis()), and the three excess spreads (drif,
+# fac_max, ltr) are unchanged. Side effect, stated: the drawdown stop now
+# triggers on the excess-return equity curve, not the total-return one.
+# The engine's Sharpe stays cagr/vol (geometric cagr), unchanged.
 #
-# Consumes: fals_avoid_worst_input, fals_drif_input, fals_fac_max_input,
-#           fals_rsc_input, fals_ltr_input (R/plan_falsification.R),
+# Consumes: fals_avoid_worst_excess, fals_rsc_excess (#937),
+#           fals_drif_input, fals_fac_max_input,
+#           fals_ltr_input (R/plan_falsification.R),
 #           regime_classification (R/plan_regime.R)
 # Produces: stop_params, stop_arms_avoid_worst, stop_arms_drif,
 #           stop_arms_fac_max, stop_arms_rsc, stop_arms_ltr,
@@ -62,7 +65,10 @@ plan_stop_rule_test <- function() {
 
     targets::tar_target(stop_arms_avoid_worst, {
       library(historicaldata)
-      ret <- fals_avoid_worst_input$strategy_ret
+      # #937: avoid_worst is TOTAL-basis; run the engine on its EXCESS series
+      # (fals_avoid_worst_excess). Cash while stopped out then earns 0
+      # (rf = NULL), which IS the correct excess return of cash.
+      ret <- fals_avoid_worst_excess$strategy_ret
       ret <- ret[!is.na(ret)]
       out <- hd_stop_rule_compare_arms(
         ret,
@@ -79,7 +85,8 @@ plan_stop_rule_test <- function() {
 
     targets::tar_target(stop_arms_rsc, {
       library(historicaldata)
-      ret <- fals_rsc_input$strategy_ret
+      # #937: rsc is TOTAL-basis; engine runs on the EXCESS series (see above).
+      ret <- fals_rsc_excess$strategy_ret
       ret <- ret[!is.na(ret)]
       out <- hd_stop_rule_compare_arms(
         ret,
