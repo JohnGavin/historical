@@ -331,6 +331,121 @@ STRAT_RETURNS_WIDE_CODES <- c(
   invisible(dropped_ym)
 }
 
+#' rf sources for the TOTAL- and BLEND-basis columns of strat_returns_wide (#937)
+#'
+#' Mirrors the rf series strat_deflated_sharpe (R/plan_leaderboard.R) uses
+#' for the SAME columns -- the same target columns, so both Sharpe paths
+#' deduct the same rf. Monthly-native columns are keyed by `"YYYY-MM"`;
+#' daily-native columns by `Date`. Excess-basis columns need none.
+#'
+#' @return `list(monthly = <named list of tibble(key, rf)>, daily = <same>)`
+#'   keyed by strat_returns_wide code_name.
+#' @noRd
+.strat_rf_sources <- function(ev_portfolios, mf_portfolios, olmar_portfolio,
+                              tom_portfolio, rsc_portfolio, aw_daily_rf,
+                              daily_native) {
+  list(
+    monthly = list(
+      value_hml = tibble::tibble(
+        key = format(as.Date(ev_portfolios$date), "%Y-%m"), rf = ev_portfolios$RF
+      ),
+      managed_futures = tibble::tibble(
+        key = format(as.Date(mf_portfolios$date), "%Y-%m"), rf = mf_portfolios$RF
+      )
+    ),
+    daily = list(
+      olmar_1     = tibble::tibble(key = as.Date(olmar_portfolio$date), rf = olmar_portfolio$rf_ret),
+      tom         = tibble::tibble(key = as.Date(tom_portfolio$date), rf = tom_portfolio$rf_ret),
+      risk_state  = tibble::tibble(key = as.Date(rsc_portfolio$date), rf = rsc_portfolio$rf_daily),
+      avoid_worst = tibble::tibble(key = as.Date(aw_daily_rf$date), rf = aw_daily_rf$rf_ret),
+      cmr_conditioned = tibble::tibble(
+        key = as.Date(daily_native[["cmr_conditioned"]][["date"]]),
+        rf  = daily_native[["cmr_conditioned"]][["rf_ret"]]
+      )
+    )
+  )
+}
+
+#' Excess-return series for one column, via the return-basis registry (#937)
+#'
+#' Returns a vector the same length as `r`. A "total"/"blend" observation with
+#' no matching rf (or cash weight) is set to NA and COUNTED in a warning --
+#' never 0-filled (fail-loud-not-null.md).
+#' @noRd
+.strat_excess_one <- function(r, key, rf_tbl, label, cash_weight = NULL) {
+  basis <- hd_return_basis_of(label)
+  n <- length(r)
+  if (identical(basis, "total") || identical(basis, "blend")) {
+    if (is.null(rf_tbl) || (identical(basis, "blend") && is.null(cash_weight))) {
+      cli::cli_abort(c(
+        "x" = "{.val {label}} is {basis}-basis but no rf series{if (identical(basis, 'blend')) ' / cash weight' else ''} was supplied to strat_corr_augment.",
+        "i" = "Add it to {.fn .strat_rf_sources} (R/plan_strategy_correlation.R)."
+      ))
+    }
+    rf   <- rf_tbl$rf[match(key, rf_tbl$key)]
+    cw_na <- if (identical(basis, "blend")) is.na(cash_weight) else FALSE
+    miss <- is.na(rf) | cw_na
+    drop <- !is.na(r) & miss
+    if (any(drop)) {
+      cli::cli_warn(c("!" = "{label}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf / cash weight in strat_corr_augment."))
+    }
+    keep <- !is.na(r) & !miss
+    out  <- rep(NA_real_, n)
+    out[keep] <- hd_excess_returns(
+      r[keep], rf[keep], label,
+      cash_weight = if (identical(basis, "blend")) cash_weight[keep] else NULL
+    )
+    return(out)
+  }
+  hd_excess_returns(r, rep(0, n), label)
+}
+
+#' Put every strat_returns_wide column on the EXCESS basis (#937, refs #919)
+#'
+#' The Sharpe panel in strat_corr_augment must compare like with like: rf is
+#' deducted iff a series is a TOTAL return, only on the cash weight for a
+#' BLEND, and not at all for a dollar-neutral EXCESS spread -- all decided by
+#' \code{historicaldata::hd_return_basis()}, the single home of that
+#' classification. Daily-native columns (the five daily strategies and CMR
+#' Conditioned) have rf deducted at their native DAILY frequency and are THEN
+#' compounded to monthly by \code{.resample_daily_to_monthly()} (same
+#' min_days rule as strat_returns_wide), so the monthly excess is the
+#' compounded daily excess; monthly-native columns are adjusted per `ym`.
+#'
+#' @param wide strat_returns_wide (a `ym` column plus one column per code_name).
+#' @param cols code_names to convert.
+#' @param label_map Named character vector code_name -> leaderboard label
+#'   (the registry key). A column absent from it aborts.
+#' @param daily_native strat_returns_daily_native (list of tibbles `date`,
+#'   `ret`, optional `cash_weight`).
+#' @param rf_src Output of \code{.strat_rf_sources()}.
+#' @return `wide` with the `cols` columns replaced by excess returns (NA where
+#'   rf was unavailable for a total/blend observation).
+#' @noRd
+.strat_excess_wide <- function(wide, cols, label_map, daily_native, rf_src,
+                               min_days = 15L) {
+  unmapped <- setdiff(cols, names(label_map))
+  if (length(unmapped) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(unmapped)} strategy code_name{?s} ha{?s/ve} no label for the return-basis registry: {.val {unmapped}}.",
+      "i" = "Add the code_name -> leaderboard label mapping to name_map in strat_corr_augment; the label must be registered in {.fn hd_return_basis}."
+    ))
+  }
+  for (col in cols) {
+    label <- unname(label_map[[col]])
+    if (col %in% names(daily_native)) {
+      d  <- daily_native[[col]]
+      ex <- .strat_excess_one(d$ret, as.Date(d$date), rf_src$daily[[col]], label,
+                              cash_weight = d[["cash_weight"]])
+      mo <- .resample_daily_to_monthly(d$date, ex, min_days = min_days, label = col)
+      wide[[col]] <- mo$ret[match(wide$ym, mo$ym)]
+    } else {
+      wide[[col]] <- .strat_excess_one(wide[[col]], wide$ym, rf_src$monthly[[col]], label)
+    }
+  }
+  wide
+}
+
 plan_strategy_correlation <- function() {
   list(
 
@@ -476,8 +591,32 @@ plan_strategy_correlation <- function() {
       strat_cols <- rownames(strat_corr_matrix_leaderboard)
       n_strat <- length(strat_cols)
 
+      # ── EXCESS basis (#937, refs #919) ─────────────────────────────────────
+      # strat_returns_wide mixes TOTAL (Value HML, Managed Futures, OLMAR-1,
+      # TOM, Risk State, Avoid Worst), EXCESS and BLEND (CMR Conditioned)
+      # columns; annualise_returns() below applies no rf, so a total column
+      # would carry its cash component into its Sharpe and flatter the
+      # incremental-Sharpe / redundant flag. Every column goes through
+      # hd_excess_returns() (via .strat_excess_wide()) using its registered
+      # label -- name_map above is the code_name -> label mapping (same
+      # vocabulary as col_map_monthly/col_map_daily in R/plan_leaderboard.R);
+      # an unmapped column aborts. Correlations (strat_corr_matrix_leaderboard)
+      # are unchanged. Sharpe CONVENTION is unchanged: annualise_returns() =
+      # geometric CAGR / vol on a shared complete-case monthly window; rows
+      # with no rf for a total/blend column are dropped and counted (warning),
+      # never 0-filled.
+      excess_wide <- .strat_excess_wide(
+        strat_returns_wide, strat_cols,
+        label_map    = stats::setNames(name_map$strategy_label, name_map$code_name),
+        daily_native = strat_returns_daily_native,
+        rf_src       = .strat_rf_sources(
+          ev_portfolios, mf_portfolios, olmar_portfolio, tom_portfolio,
+          rsc_portfolio, aw_daily_rf, strat_returns_daily_native
+        )
+      )
+
       # ── Full-period Sharpe per strategy, on a SHARED complete-case window ──
-      full_rets <- strat_returns_wide |>
+      full_rets <- excess_wide |>
         select(all_of(strat_cols)) |>
         filter(if_all(everything(), ~ !is.na(.x)))
 
