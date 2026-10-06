@@ -19,6 +19,16 @@ testthat::local_edition(3)
 # implementation of `calc_metrics()`, which could silently drift from the
 # source).
 
+# #919: calc_backtest_metrics() requires a registered return-basis label
+# (hd_return_basis_of(), historicaldata) and .require_basis_label()
+# (R/utils_metrics.R).
+.pkg_path <- if (dir.exists(here::here("packages/historicaldata"))) {
+  here::here("packages/historicaldata")
+} else {
+  file.path(dirname(here::here()), "packages/historicaldata")
+}
+suppressMessages(pkgload::load_all(.pkg_path, quiet = TRUE))
+source(here::here("R/utils_metrics.R"))
 source(here::here("R/glossary.R"))  # #668: PERIOD_LABELS_ALLOWED derives from this
 source(here::here("R/plan_partitions.R"))
 source(here::here("R/plan_factormax.R"))
@@ -76,7 +86,7 @@ test_that("calc_backtest_metrics returns NULL (not a spurious row) for an empty 
     date = as.Date(character()), port_ret = numeric(),
     rf_ret = numeric(), n_long = integer(), n_short = integer()
   )
-  expect_null(calc_backtest_metrics(empty_df, "Validation"))
+  expect_null(calc_backtest_metrics(empty_df, "Validation", strategy = "Stock MAX"))
 })
 
 test_that("calc_backtest_metrics returns NULL below the 12-observation minimum", {
@@ -84,7 +94,7 @@ test_that("calc_backtest_metrics returns NULL below the 12-observation minimum",
     date = as.Date("2026-05-01") + 0:5 * 30, port_ret = rep(0.01, 6),
     rf_ret = rep(0.001, 6), n_long = rep(10L, 6), n_short = rep(10L, 6)
   )
-  expect_null(calc_backtest_metrics(short_df, "Validation"))
+  expect_null(calc_backtest_metrics(short_df, "Validation", strategy = "Stock MAX"))
 })
 
 test_that("calc_backtest_metrics returns a row when the window has >= 12 observations", {
@@ -93,7 +103,7 @@ test_that("calc_backtest_metrics returns a row when the window has >= 12 observa
     port_ret = rep(0.01, 12), rf_ret = rep(0.001, 12),
     n_long = rep(10L, 12), n_short = rep(10L, 12)
   )
-  result <- calc_backtest_metrics(ok_df, "Testing")
+  result <- calc_backtest_metrics(ok_df, "Testing", strategy = "Stock MAX")
   expect_false(is.null(result))
   expect_equal(result$period, "Testing")
   expect_equal(result$months, 12L)

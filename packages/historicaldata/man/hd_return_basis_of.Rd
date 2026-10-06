@@ -11,7 +11,7 @@ hd_return_basis_of(strategy)
 \code{\link{hd_return_basis}}.}
 }
 \value{
-Single string: \code{"total"}, \code{"excess"} or
+Single string: \code{"total"}, \code{"excess"}, \code{"blend"} or
 \code{"indeterminate"}.
 }
 \description{

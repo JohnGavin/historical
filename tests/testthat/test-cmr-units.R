@@ -52,14 +52,14 @@ toy_daily_rf <- tibble::tibble(
 )
 
 test_that(".compute_cmr_metrics returns max_dd as decimal fraction (#336)", {
-  metrics <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L)
+  metrics <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L, basis_strategy = "CMR")
   expect_true(is.finite(metrics$max_dd))
   expect_gte(metrics$max_dd, -1)    # canonical decimal: in [-1, 0]
   expect_lte(metrics$max_dd, 0)
 })
 
 test_that(".compute_cmr_metrics returns cagr/vol as decimal fractions (#336)", {
-  metrics <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L)
+  metrics <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L, basis_strategy = "CMR")
   # Decimal CAGR for monthly returns near ±5% sits in (-1, 1); under the old
   # percent convention this would land in the (-100, 100) band.
   expect_gt(metrics$cagr, -1)
@@ -70,7 +70,7 @@ test_that(".compute_cmr_metrics returns cagr/vol as decimal fractions (#336)", {
 })
 
 test_that(".compute_cmr_metrics never returns the old percent magnitude (#336 regression)", {
-  metrics <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L)
+  metrics <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L, basis_strategy = "CMR")
   # Specific anti-regression: -100 was the old percent output for this kind
   # of monotone-loss path; the decimal equivalent is around -0.45.
   expect_false(metrics$max_dd < -1.0)
@@ -81,7 +81,7 @@ test_that(".compute_cmr_metrics never returns the old percent magnitude (#336 re
 # ── #677: geometric numerator, rf-deducted ──────────────────────────────────
 
 test_that(".compute_cmr_metrics sharpe matches sharpe_ratio_rf() exactly", {
-  metrics  <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L)
+  metrics  <- .compute_cmr_metrics(toy_portfolio, lookback = "test", daily_rf = toy_daily_rf, ann_factor = 12L, basis_strategy = "Value (HML)")
   expected <- round(
     sharpe_ratio_rf(toy_portfolio$net_ret, toy_daily_rf$rf_ret, periods_per_year = 12L)$sharpe,
     3
@@ -101,7 +101,7 @@ test_that(".compute_cmr_metrics sharpe differs from the old arithmetic/hardcoded
     rf_ret = rep((1.02)^(1 / 12) - 1, 30L)
   )
 
-  new_sharpe <- .compute_cmr_metrics(vol_portfolio, lookback = "test", daily_rf = vol_daily_rf, ann_factor = 12L)$sharpe
+  new_sharpe <- .compute_cmr_metrics(vol_portfolio, lookback = "test", daily_rf = vol_daily_rf, ann_factor = 12L, basis_strategy = "Value (HML)")$sharpe
 
   monthly_rf_old <- (1.02)^(1 / 12) - 1
   old_sharpe <- round((mean(vol_ret) - monthly_rf_old) / sd(vol_ret) * sqrt(12), 3)

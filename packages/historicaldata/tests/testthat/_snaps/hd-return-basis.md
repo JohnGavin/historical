@@ -1,14 +1,16 @@
 # registry schema is stable
 
-    list(names = c("strategy", "basis", "evidence"), classes = c(strategy = "character", 
-    basis = "character", evidence = "character"), strategy = c("Value (HML)", 
-    "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", 
-    "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", 
+    list(names = c("strategy", "basis", "cash_weight_col", "evidence"
+    ), classes = c(strategy = "character", basis = "character", cash_weight_col = "character", 
+    evidence = "character"), strategy = c("Value (HML)", "Managed Futures", 
+    "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", 
+    "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", 
     "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", 
     "PSO Optimal"), basis = c("total", "total", "total", "total", 
     "total", "total", "excess", "excess", "excess", "excess", "excess", 
-    "indeterminate", "excess", "excess", "excess", "excess", "excess", 
-    "excess"))
+    "blend", "excess", "excess", "excess", "excess", "excess", "excess"
+    ), cash_weight_col = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
+    NA, "cash_weight", NA, NA, NA, NA, NA, NA))
 
 # an unregistered strategy aborts (never a silent default)
 
@@ -28,6 +30,35 @@
       Error in `hd_return_basis_of()`:
       x `strategy` must be a single non-NA string.
       i Got <character> of length 1.
+
+# blend without a valid cash_weight aborts
+
+    Code
+      hd_rf_for_basis(c(0.1, 0.2), "CMR Conditioned")
+    Condition
+      Error in `.hd_check_cash_weight()`:
+      x `hd_rf_for_basis()`: "CMR Conditioned" is a "blend" strategy, so `cash_weight` must be a numeric vector (never NULL).
+      i Got <NULL>.
+      i The registry names the column: `hd_return_basis()$cash_weight_col`.
+
+---
+
+    Code
+      hd_excess_returns(c(0.1, 0.2), c(0.1, 0.2), "CMR Conditioned", cash_weight = 0.5)
+    Condition
+      Error in `.hd_check_cash_weight()`:
+      x `cash_weight` must be the same length as the return series.
+      i Got length 1 and 2.
+
+---
+
+    Code
+      hd_excess_returns(c(0.1, 0.2), c(0.1, 0.2), "CMR Conditioned", cash_weight = c(
+        0.5, 1.5))
+    Condition
+      Error in `.hd_check_cash_weight()`:
+      x `cash_weight` must lie in [0, 1].
+      i Got range [0.5, 1.5].
 
 # invalid inputs abort with cli errors
 
@@ -69,7 +100,7 @@
     Code
       args(hd_rf_for_basis)
     Output
-      function (rf, strategy) 
+      function (rf, strategy, cash_weight = NULL) 
       NULL
 
 ---
@@ -77,6 +108,6 @@
     Code
       args(hd_excess_returns)
     Output
-      function (ret, rf, strategy) 
+      function (ret, rf, strategy, cash_weight = NULL) 
       NULL
 

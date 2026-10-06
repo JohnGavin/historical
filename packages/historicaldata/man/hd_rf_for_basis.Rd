@@ -4,7 +4,7 @@
 \alias{hd_rf_for_basis}
 \title{Risk-free series to deduct for a strategy's Sharpe (#919)}
 \usage{
-hd_rf_for_basis(rf, strategy)
+hd_rf_for_basis(rf, strategy, cash_weight = NULL)
 }
 \arguments{
 \item{rf}{Numeric vector of periodic risk-free returns. NAs are preserved
@@ -12,14 +12,19 @@ hd_rf_for_basis(rf, strategy)
 excess strategy the zero vector is NA-free by design).}
 
 \item{strategy}{Single string; see \code{\link{hd_return_basis_of}}.}
+
+\item{cash_weight}{Numeric vector between 0 and 1, same length as \code{rf}:
+weight on the cash leg. REQUIRED (and only used) for a \code{"blend"}
+strategy.}
 }
 \value{
 Numeric vector, same length as \code{rf}.
 }
 \description{
 Returns \code{rf} unchanged for a \code{"total"} (or \code{"indeterminate"},
-legacy behaviour) strategy and an all-zero vector of the same length for an
-\code{"excess"} one. Pass the result as the \code{rf} argument of a Sharpe
+legacy behaviour) strategy, an all-zero vector of the same length for an
+\code{"excess"} one, and \code{cash_weight * rf} for a \code{"blend"} one
+(rf earned only on the cash leg). Pass the result as the \code{rf} argument of a Sharpe
 helper such as \code{sharpe_ratio_rf()}, so \code{ann_rf} is \code{0} and
 \code{sharpe == (cagr - ann_rf) / vol} still holds.
 }

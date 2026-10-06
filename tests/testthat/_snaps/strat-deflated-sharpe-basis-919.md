@@ -13,6 +13,6 @@
     Code
       args(hd_rf_for_basis)
     Output
-      function (rf, strategy) 
+      function (rf, strategy, cash_weight = NULL) 
       NULL
 
