@@ -294,7 +294,10 @@ plan_drif <- function() {
         # published alongside sharpe -- QA gate S17
         # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
         # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
-        ann_rf <- mean(df$rf_ret, na.rm = TRUE) * 12
+        # #919: Factor DRIF is a selection over Fama-French factor SPREADS,
+        # i.e. an EXCESS return -- no rf deducted (hd_return_basis():
+        # "excess"; ann_rf is therefore exactly 0).
+        ann_rf <- mean(hd_rf_for_basis(df$rf_ret, "Factor DRIF"), na.rm = TRUE) * 12
         sharpe <- (ann_ret - ann_rf) / ann_vol
         cum <- cumprod(1 + df$portfolio_ret)
         max_dd <- min(cum / cummax(cum) - 1)

@@ -149,28 +149,28 @@ plan_mom_prepeak <- function() {
     targets::tar_target(mom_prepeak_metrics, {
       rets <- .mom_prepeak_join_rf(mom_prepeak_returns, stk_rf)
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_prepeak")
-      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom Pre-Peak"), 3)
       # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
       # convention as cagr/vol (.mom_prepeak_compute_metrics(), packages/
       # historicaldata/R/utils_mom_prepeak_metrics.R stores them as
       # round(x * 100, 1)).
-      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m) * 100, 2)
+      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m, strategy = "Mom Pre-Peak") * 100, 2)
       m
     }),
 
     targets::tar_target(mom_postpeak_metrics, {
       rets <- .mom_prepeak_join_rf(mom_postpeak_returns, stk_rf)
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_postpeak")
-      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
-      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m) * 100, 2)
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom Post-Peak"), 3)
+      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m, strategy = "Mom Post-Peak") * 100, 2)
       m
     }),
 
     targets::tar_target(mom_combined_metrics, {
       rets <- .mom_prepeak_join_rf(mom_combined_returns, stk_rf)
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_combined")
-      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
-      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m) * 100, 2)
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom 12-2"), 3)
+      m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m, strategy = "Mom 12-2") * 100, 2)
       m
     }),
 
@@ -448,9 +448,17 @@ plan_mom_prepeak <- function() {
 #' @param metrics_row One-row tibble from \code{.mom_prepeak_compute_metrics()}
 #'   (needs `blown_up`, `bankrupt_month`).
 #' @param ann_factor Integer. Annualisation factor (12 for monthly).
+#' @param strategy Leaderboard strategy label registered in
+#'   \code{hd_return_basis()} (#919). The three siblings are dollar-neutral
+#'   long-short spreads, i.e. EXCESS returns, so \code{hd_rf_for_basis()}
+#'   zeroes the rf series and \code{ann_rf} is 0. Required (no default): an
+#'   unregistered label aborts rather than silently picking a basis.
+#'   Approximation: long funding and short rebate are assumed to cancel; the
+#'   residual funding/rebate spread is modelled only by the constant
+#'   \code{borrow_rate_annual} (MANUAL) -- see \code{hd_return_basis()}.
 #' @return A list with `sharpe` and `ann_rf` (either may be NA_real_).
 #' @noRd
-.mom_prepeak_sr <- function(returns_tbl, metrics_row, ann_factor = 12L) {
+.mom_prepeak_sr <- function(returns_tbl, metrics_row, ann_factor = 12L, strategy) {
   if (!"rf_ret" %in% names(returns_tbl)) {
     cli::cli_abort(c(
       "x" = ".mom_prepeak_sharpe(): {.arg returns_tbl} has no {.field rf_ret} column.",
@@ -473,15 +481,19 @@ plan_mom_prepeak <- function() {
     rf <- rf[seq_len(bankrupt_month - 1L)]
   }
 
+  # #919: excess-basis strategy -> NO rf deducted (ann_rf == 0).
+  rf <- hd_rf_for_basis(rf, strategy)
+
   sr <- sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)
   list(sharpe = sr$sharpe, ann_rf = sr$ann_rf)
 }
 
 #' Thin wrapper over .mom_prepeak_sr() returning just the Sharpe ratio
+#' @inheritParams .mom_prepeak_sr
 #' @return Numeric scalar Sharpe (may be NA_real_).
 #' @noRd
-.mom_prepeak_sharpe <- function(returns_tbl, metrics_row, ann_factor = 12L) {
-  .mom_prepeak_sr(returns_tbl, metrics_row, ann_factor)$sharpe
+.mom_prepeak_sharpe <- function(returns_tbl, metrics_row, ann_factor = 12L, strategy) {
+  .mom_prepeak_sr(returns_tbl, metrics_row, ann_factor, strategy)$sharpe
 }
 
 #' Companion accessor to \code{.mom_prepeak_sharpe()}: the annualised
@@ -492,10 +504,11 @@ plan_mom_prepeak <- function() {
 #' (\code{check_leaderboard_sharpe_coherence()}, R/plan_qa_gates.R) can
 #' assert \code{sharpe == (cagr - ann_rf) / vol} for every leaderboard row.
 #'
+#' @inheritParams .mom_prepeak_sr
 #' @return Numeric scalar annualised risk-free rate (may be NA_real_).
 #' @noRd
-.mom_prepeak_ann_rf <- function(returns_tbl, metrics_row, ann_factor = 12L) {
-  .mom_prepeak_sr(returns_tbl, metrics_row, ann_factor)$ann_rf
+.mom_prepeak_ann_rf <- function(returns_tbl, metrics_row, ann_factor = 12L, strategy) {
+  .mom_prepeak_sr(returns_tbl, metrics_row, ann_factor, strategy)$ann_rf
 }
 
 

@@ -598,12 +598,23 @@ market_impact_sensitivity <- function(df, returns_wide, eta_grid,
 }
 
 #' Standard backtest metrics
-calc_backtest_metrics <- function(df, label, rf_col = "rf_ret") {
+#'
+#' @param strategy REQUIRED leaderboard strategy label registered in
+#'   \code{hd_return_basis()} (#919). The rf deducted from the Sharpe
+#'   follows the registry: an EXCESS-basis strategy (every long-short decile
+#'   strategy here) gets \code{ann_rf == 0}. A \code{NULL}, missing or
+#'   unregistered label aborts (it used to silently keep the legacy
+#'   rf-deducted behaviour). EW/HRP weighting variants of a strategy pass
+#'   that strategy's label.
+calc_backtest_metrics <- function(df, label, rf_col = "rf_ret", strategy = NULL) {
+  .require_basis_label(strategy, "calc_backtest_metrics")
   n <- nrow(df)
   if (n < 12) return(NULL)
   ann_ret <- prod(1 + df$port_ret)^(12/n) - 1
   ann_vol <- sd(df$port_ret) * sqrt(12)
-  rf_ann <- if (rf_col %in% names(df)) mean(df[[rf_col]], na.rm = TRUE) * 12 else 0
+  rf_vec <- if (rf_col %in% names(df)) df[[rf_col]] else NULL
+  if (!is.null(rf_vec)) rf_vec <- hd_rf_for_basis(rf_vec, strategy)
+  rf_ann <- if (!is.null(rf_vec)) mean(rf_vec, na.rm = TRUE) * 12 else 0
   sharpe <- (ann_ret - rf_ann) / ann_vol
   cum <- cumprod(1 + df$port_ret)
   max_dd <- min(cum / cummax(cum) - 1)
@@ -1037,11 +1048,11 @@ plan_stock_backtest <- function() {
       # finds a matching base row here and survives the left_join instead of
       # being silently dropped (the #660 KNOWN GAP).
       bind_rows(
-        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
-        calc_backtest_metrics(p, "Full Period")
+        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training", strategy = "Stock MAX"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing", strategy = "Stock MAX"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout", strategy = "Stock MAX"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation", strategy = "Stock MAX"),
+        calc_backtest_metrics(p, "Full Period", strategy = "Stock MAX")
       ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
     }),
 
@@ -1053,12 +1064,16 @@ plan_stock_backtest <- function() {
       hrp <- stk_max_portfolio_hrp
       adv <- stk_max_portfolio_hrp_adv
 
+      # strategy = "Stock MAX" (#919): EW / HRP / HRP+ADV are weighting
+      # variants of the SAME dollar-neutral decile long-short (EXCESS
+      # basis), so no rf is deducted. This changes these panels' published
+      # Sharpe (they used to deduct rf).
       add_cost_cols <- function(port, label) {
         bind_rows(
-          calc_backtest_metrics(port |> filter(date <= stk_params$is_end), "Training"),
-          calc_backtest_metrics(port |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
-          calc_backtest_metrics(port |> filter(date >= stk_params$val_start), "Validation"),
-          calc_backtest_metrics(port, "Full Period")
+          calc_backtest_metrics(port |> filter(date <= stk_params$is_end), "Training", strategy = "Stock MAX"),
+          calc_backtest_metrics(port |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing", strategy = "Stock MAX"),
+          calc_backtest_metrics(port |> filter(date >= stk_params$val_start), "Validation", strategy = "Stock MAX"),
+          calc_backtest_metrics(port, "Full Period", strategy = "Stock MAX")
         ) |>
           mutate(
             weighting    = label,
@@ -1359,11 +1374,11 @@ plan_stock_backtest <- function() {
       # finds a matching base row here and survives the left_join instead of
       # being silently dropped (the #660 KNOWN GAP).
       bind_rows(
-        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout"),
-        calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation"),
-        calc_backtest_metrics(p, "Full Period")
+        calc_backtest_metrics(p |> filter(date <= stk_params$is_end), "Training", strategy = "Stock DRIF"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$test_start, date <= stk_params$test_end), "Testing", strategy = "Stock DRIF"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$holdout_start, date <= stk_params$holdout_end), "Holdout", strategy = "Stock DRIF"),
+        calc_backtest_metrics(p |> filter(date >= stk_params$val_start), "Validation", strategy = "Stock DRIF"),
+        calc_backtest_metrics(p, "Full Period", strategy = "Stock DRIF")
       ) |> mutate(survivorship_biased = TRUE)  # stk_universe is survivorship-biased; see #150
     }),
 

@@ -330,17 +330,17 @@ plan_commodities_mean_reversion <- function() {
 
     targets::tar_target(cmr_metrics_1m, {
       .compute_cmr_metrics(cmr_portfolio_1m, lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
-                           periodicity_check = "warn")
+                           periodicity_check = "warn", basis_strategy = "CMR")
     }),
 
     targets::tar_target(cmr_metrics_3m, {
       .compute_cmr_metrics(cmr_portfolio_3m, lookback = "3m", daily_rf = daily_rf, ann_factor = 252L,
-                           periodicity_check = "warn")
+                           periodicity_check = "warn", basis_strategy = "CMR")
     }),
 
     targets::tar_target(cmr_metrics_6m, {
       .compute_cmr_metrics(cmr_portfolio_6m, lookback = "6m", daily_rf = daily_rf, ann_factor = 252L,
-                           periodicity_check = "warn")
+                           periodicity_check = "warn", basis_strategy = "CMR")
     }),
 
 
@@ -368,25 +368,28 @@ plan_commodities_mean_reversion <- function() {
 
     targets::tar_target(cmr_metrics_1m_conditioned, {
       .compute_cmr_metrics(
-        cmr_portfolio_1m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+        cmr_portfolio_1m_conditioned |>
+          dplyr::select(date, net_ret = net_ret_conditioned, cash_weight),
         lookback = "1m", daily_rf = daily_rf, ann_factor = 252L,
-        periodicity_check = "warn"
+        periodicity_check = "warn", basis_strategy = "CMR Conditioned"
       )
     }),
 
     targets::tar_target(cmr_metrics_3m_conditioned, {
       .compute_cmr_metrics(
-        cmr_portfolio_3m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+        cmr_portfolio_3m_conditioned |>
+          dplyr::select(date, net_ret = net_ret_conditioned, cash_weight),
         lookback = "3m", daily_rf = daily_rf, ann_factor = 252L,
-        periodicity_check = "warn"
+        periodicity_check = "warn", basis_strategy = "CMR Conditioned"
       )
     }),
 
     targets::tar_target(cmr_metrics_6m_conditioned, {
       .compute_cmr_metrics(
-        cmr_portfolio_6m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
+        cmr_portfolio_6m_conditioned |>
+          dplyr::select(date, net_ret = net_ret_conditioned, cash_weight),
         lookback = "6m", daily_rf = daily_rf, ann_factor = 252L,
-        periodicity_check = "warn"
+        periodicity_check = "warn", basis_strategy = "CMR Conditioned"
       )
     }),
 
@@ -945,7 +948,9 @@ plan_commodities_mean_reversion <- function() {
 #'   \code{\link{.HD_CMR_COND_SWITCH_COST}}.
 #' @return Tibble with columns \code{date}, \code{net_ret} (unconditioned,
 #'   passed through), \code{regime}, \code{exposure_mult},
-#'   \code{switch_cost}, \code{net_ret_conditioned}.
+#'   \code{switch_cost}, \code{net_ret_conditioned}, \code{cash_weight}
+#'   (\code{= 1 - exposure_mult}, the \code{"blend"} basis cash weight, #919)
+#'   and \code{rf_ret} (the daily rf of the cash leg, NA where unknown).
 #' @noRd
 .cmr_apply_conditioning_overlay <- function(portfolio_tbl, cond_regime_tbl, daily_rf,
                                              lookback, cost_per_switch = .HD_CMR_COND_SWITCH_COST) {
@@ -974,9 +979,19 @@ plan_commodities_mean_reversion <- function() {
       .exposure_delta = abs(exposure_mult - dplyr::lag(exposure_mult, default = exposure_mult[1])),
       switch_cost     = cost_per_switch * .exposure_delta * 2.0,
       net_ret_conditioned = exposure_mult * net_ret +
-        (1 - exposure_mult) * .rf_filled - switch_cost
+        (1 - exposure_mult) * .rf_filled - switch_cost,
+      # #919: "blend" return basis (hd_return_basis()). The cash leg's
+      # weight, DERIVED from exposure_mult (never typed), is the only part
+      # of net_ret_conditioned that is a total return; the excess return is
+      # net_ret_conditioned - cash_weight * rf_ret. rf_ret is carried with
+      # its NA preserved (NOT the 0-filled .rf_filled above, which only
+      # feeds the published net_ret_conditioned): hd_excess_returns() /
+      # hd_rf_for_basis() then yield NA where rf is unknown and callers
+      # drop-and-report those periods rather than deducting a fabricated 0.
+      cash_weight = 1 - exposure_mult
     ) |>
-    dplyr::select(date, net_ret, regime, exposure_mult, switch_cost, net_ret_conditioned)
+    dplyr::select(date, net_ret, regime, exposure_mult, switch_cost, net_ret_conditioned,
+                  cash_weight, rf_ret)
 }
 
 #' Per-periodicity gap tolerances for the CMR periodicity guard (#738)
@@ -1223,10 +1238,21 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   invisible(NULL)
 }
 
+# basis_strategy (#919): REQUIRED leaderboard strategy label registered in
+# hd_return_basis(); a NULL/missing/unregistered label aborts. The rf
+# deducted from the Sharpe follows the registry: "CMR" (a dollar-neutral
+# tercile spread, i.e. EXCESS) has ann_rf == 0; "CMR Conditioned" is
+# "blend" (an excess spread blended with cash), so its input tibble must
+# carry `cash_weight`.
 .compute_cmr_metrics <- function(portfolio_tbl, lookback, daily_rf, ann_factor = 252L,
-                                 periodicity_check = c("abort", "warn")) {
+                                 periodicity_check = c("abort", "warn"),
+                                 basis_strategy = NULL) {
   library(dplyr)
   periodicity_check <- match.arg(periodicity_check)
+  # Required (#919): a NULL label used to silently keep the legacy
+  # rf-deducted Sharpe. Checked before the n < 12 early return below so the
+  # label is validated on every invocation, not only the ones that compute.
+  .require_basis_label(basis_strategy, ".compute_cmr_metrics", "basis_strategy")
 
   df <- portfolio_tbl |>
     dplyr::filter(!is.na(.data$net_ret)) |>
@@ -1274,6 +1300,10 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
 
   # #677: canonical rf-adjusted geometric Sharpe (R/utils_metrics.R::sharpe_ratio_rf()),
   # replacing the arithmetic-mean numerator + hardcoded rf formula.
+  # "blend" basis (CMR Conditioned): rf is deducted only on the cash leg's
+  # per-observation weight, read from the `cash_weight` column of
+  # portfolio_tbl (derived from exposure_mult by the overlay, #919).
+  rf <- hd_rf_for_basis(rf, basis_strategy, cash_weight = df[["cash_weight"]])
   sr     <- sharpe_ratio_rf(r, rf, periods_per_year = ann_factor)
   sharpe <- sr$sharpe
 
@@ -1355,8 +1385,9 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
 #'   \code{"net_ret_conditioned"}.
 #' @param ann_factor Integer, default \code{252L}, matching CMR's daily
 #'   frequency (#717/#720/#738).
-#' @param label Character, used only in messages/abort text to identify the
-#'   caller (e.g. \code{"CMR"} or \code{"CMR Conditioned"}).
+#' @param label Character, identifies the caller in messages/abort text AND
+#'   is the \code{\link{hd_return_basis}} strategy whose basis the pre-OOS
+#'   Sharpe is computed on (\code{"CMR"} or \code{"CMR Conditioned"}, #919).
 #' @return A list: \code{chosen} (character, the winning lookback),
 #'   \code{pre_oos_sharpe}/\code{pre_oos_n_days} (the winner's own pre-OOS
 #'   Sharpe and observation count), \code{cutoff_date} (the max date
@@ -1384,7 +1415,8 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
     port |>
       dplyr::mutate(date = as.Date(.data$date)) |>
       dplyr::filter(.data$date < oos_start) |>
-      dplyr::select(date, net_ret = dplyr::all_of(return_col))
+      dplyr::select(date, net_ret = dplyr::all_of(return_col),
+                    dplyr::any_of("cash_weight"))   # "blend" basis (#919)
   })
 
   # Max date actually used ACROSS every candidate's pre-OOS window -- this is
@@ -1400,8 +1432,12 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   }
 
   diag_tbl <- dplyr::bind_rows(lapply(lookbacks, function(lb) {
+    # basis_strategy = label (#919): the pre-OOS selection Sharpe must be on
+    # the SAME return basis as the published row it selects (`label` is a
+    # hd_return_basis() strategy: "CMR" excess, "CMR Conditioned" blend).
     .compute_cmr_metrics(pre_oos[[lb]], lookback = lb, daily_rf = daily_rf,
-                         ann_factor = ann_factor, periodicity_check = "warn")
+                         ann_factor = ann_factor, periodicity_check = "warn",
+                         basis_strategy = label)
   })) |>
     dplyr::mutate(scored = !is.na(.data$sharpe))
 

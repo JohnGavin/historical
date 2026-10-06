@@ -189,10 +189,20 @@ plan_bootstrap_ci <- function() {
       # poisoning ITS OWN cagr/vol/max_dd while leaving the other three
       # strategies' draws for that same block untouched (each uses its own,
       # independently-paired ret/rf columns).
-      calc_boot_metrics <- function(ret, rf) {
+      #
+      # #919: the rf paired in must follow the SAME return-basis registry as
+      # the leaderboard point estimate (hd_return_basis()) -- all four
+      # strategies here are EXCESS-basis spreads, so rf is zeroed and the CI
+      # is built on the same basis as the published `sharpe` it brackets.
+      # An unregistered column aborts (fail-loud-not-null.md).
+      boot_labels <- c(
+        stk_max = "Stock MAX", stk_drif = "Stock DRIF",
+        fac_max = "Factor MAX", fac_drif = "Factor DRIF"
+      )
+      calc_boot_metrics <- function(ret, rf, strategy) {
         keep <- !is.na(ret) & !is.na(rf)
         ret <- ret[keep]
-        rf  <- rf[keep]
+        rf  <- hd_rf_for_basis(rf[keep], boot_labels[[strategy]])
         n <- length(ret)
         if (n < 2L) {
           return(c(sharpe = NA_real_, cagr = NA_real_, max_dd = NA_real_))
@@ -209,7 +219,7 @@ plan_bootstrap_ci <- function() {
       results <- lapply(seq_along(boot_draws), function(i) {
         mat <- boot_draws[[i]]
         lapply(seq_along(strat_names), function(j) {
-          m <- calc_boot_metrics(mat[, strat_names[j]], mat[, rf_names[j]])
+          m <- calc_boot_metrics(mat[, strat_names[j]], mat[, rf_names[j]], strat_names[j])
           tibble(
             draw = i,
             strategy = strat_names[j],

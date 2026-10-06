@@ -672,7 +672,13 @@ plan_strategy_correlation <- function() {
         ))
       )
       cmr_conditioned_daily <- cmr_conditioned_source |>
-        transmute(date = as.Date(date), ret = net_ret_conditioned)
+        # cash_weight / rf_ret (#919, "blend" basis): carried with the series
+        # so strat_deflated_sharpe can form the SAME excess series as the
+        # leaderboard path (net_ret_conditioned - cash_weight * rf_ret).
+        # Extra columns are ignored by every other consumer (they read
+        # $date / $ret only).
+        transmute(date = as.Date(date), ret = net_ret_conditioned,
+                  cash_weight = cash_weight, rf_ret = rf_ret)
 
       olmar_daily <- olmar_portfolio |>
         transmute(date = as.Date(date), ret = net_ret)

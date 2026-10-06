@@ -209,6 +209,33 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
   )
 }
 
+#' Require a registered return-basis label (#919)
+#'
+#' A Sharpe helper that deducts rf per \code{hd_return_basis()} must be told
+#' WHICH strategy it is scoring. A missing/\code{NULL} label used to fall
+#' through to the legacy rf-deducted behaviour, which is silently wrong for
+#' an excess-basis (dollar-neutral) series -- the \code{fail-loud-not-null}
+#' defect. This aborts on a missing, non-string or unregistered label,
+#' naming the calling function, the argument and the registered strategies.
+#'
+#' @param strategy The label to check.
+#' @param fn,arg Character; the calling function and argument names, used
+#'   only in the error message.
+#' @return \code{strategy}, invisibly.
+#' @noRd
+.require_basis_label <- function(strategy, fn, arg = "strategy") {
+  if (is.null(strategy) || !is.character(strategy) || length(strategy) != 1L ||
+      is.na(strategy)) {
+    cli::cli_abort(c(
+      "x" = "{.fn {fn}}: {.arg {arg}} is required and must be one registered return-basis label (got {.cls {class(strategy)}}).",
+      "i" = "Registered strategies: {.val {hd_return_basis()$strategy}}.",
+      "i" = "A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null)."
+    ))
+  }
+  hd_return_basis_of(strategy)  # aborts on an unregistered label
+  invisible(strategy)
+}
+
 #' Join a risk-free series onto a return series by a shared key (#677 slice 3b)
 #'
 #' Canonical THREE-CASE risk-free coverage policy, shared by every strategy

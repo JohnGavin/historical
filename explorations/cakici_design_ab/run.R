@@ -34,6 +34,8 @@ suppressMessages({
   )
   # Source the project-level plan helpers so assign_decile / portfolio_longshort
   # / calc_backtest_metrics are available in this session.
+  # utils_metrics.R: .require_basis_label() used by calc_backtest_metrics() (#919)
+  source(file.path(MAIN_REPO_EARLY, "R/utils_metrics.R"))
   source(file.path(MAIN_REPO_EARLY, "R/plan_stock_backtest.R"))
 })
 
@@ -190,10 +192,10 @@ message("[cakici_ab] Computing metrics by partition...")
 
 compute_metrics_all_partitions <- function(port, label) {
   dplyr::bind_rows(
-    calc_backtest_metrics(port |> dplyr::filter(date >= train_start, date <= train_end), "Training"),
-    calc_backtest_metrics(port |> dplyr::filter(date >= test_start,  date <= test_end),  "Testing"),
-    calc_backtest_metrics(port |> dplyr::filter(date >= val_start),                     "Validation"),
-    calc_backtest_metrics(port, "Full")
+    calc_backtest_metrics(port |> dplyr::filter(date >= train_start, date <= train_end), "Training", strategy = "Stock DRIF"),
+    calc_backtest_metrics(port |> dplyr::filter(date >= test_start,  date <= test_end),  "Testing", strategy = "Stock DRIF"),
+    calc_backtest_metrics(port |> dplyr::filter(date >= val_start),                     "Validation", strategy = "Stock DRIF"),
+    calc_backtest_metrics(port, "Full", strategy = "Stock DRIF")
   ) |>
     dplyr::mutate(variant = label)
 }

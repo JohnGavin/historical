@@ -75,7 +75,14 @@ test_that("boot_monthly_returns: carries each strategy's own return AND rf_ret c
   list(mat)  # single "draw" is enough to exercise calc_boot_metrics()
 }
 
-test_that("boot_metrics: sharpe is rf-adjusted, positive rf lowers sharpe vs zero-rf", {
+# #919: all four strategies in the bootstrap are EXCESS-basis spreads
+# (hd_return_basis()), so the paired rf is zeroed before sharpe_ratio_rf() --
+# a non-zero rf must NOT move the bootstrap Sharpe, keeping the CI on the same
+# basis as the published point estimate. (Before #919 this test pinned the
+# opposite: positive rf LOWERED the Sharpe.) FALSIFICATION: if the registry
+# wiring were removed, sharpe_pos would be strictly lower than sharpe_zero and
+# expect_equal() below would fail.
+test_that("boot_metrics: excess-basis strategies ignore the paired rf (#919)", {
   cmd <- .target_command(plan_bootstrap_ci(), "boot_metrics")
 
   res_zero <- .eval_command(
@@ -93,7 +100,7 @@ test_that("boot_metrics: sharpe is rf-adjusted, positive rf lowers sharpe vs zer
   for (strat in c("stk_max", "stk_drif", "fac_max", "fac_drif")) {
     sharpe_zero <- res_zero$sharpe[res_zero$strategy == strat]
     sharpe_pos  <- res_pos$sharpe[res_pos$strategy == strat]
-    expect_lt(sharpe_pos, sharpe_zero)
+    expect_equal(sharpe_pos, sharpe_zero)
   }
 })
 

@@ -183,6 +183,9 @@ plan_ltr_momentum <- function() {
         cum     <- cumprod(1 + df$port_ret)
         max_dd  <- min(cum / cummax(cum) - 1)
 
+        # #919: LTR is a decile long-short (ls_ret_net = long - short -
+        # cost - borrow, scripts/compute_ltr_model.R), i.e. an EXCESS
+        # return: hd_rf_for_basis() zeroes rf below, so ann_rf == 0.
         # #677: canonical, risk-free-adjusted Sharpe -- see
         # R/utils_metrics.R::sharpe_ratio_rf(). This is the statistic used
         # for cross-strategy leaderboard ranking (R/plan_leaderboard.R).
@@ -190,7 +193,7 @@ plan_ltr_momentum <- function() {
         # statistic -- both are kept as distinct columns; do not conflate
         # them. `df$rf_ret` is guaranteed present and fully covered by the
         # `ltr_portfolio` target's join + coverage check above.
-        sr <- sharpe_ratio_rf(df$port_ret, df$rf_ret, periods_per_year = 12L)
+        sr <- sharpe_ratio_rf(df$port_ret, hd_rf_for_basis(df$rf_ret, "LTR"), periods_per_year = 12L)
 
         hac <- tryCatch(hd_hac_sharpe(df$port_ret),
                         error = function(e) list(hac_tstat = NA_real_, naive_sharpe = NA_real_))
@@ -405,7 +408,7 @@ plan_ltr_momentum <- function() {
         # NA, so `sharpe` below was NA for every subperiod. `df$rf_ret` is
         # now guaranteed present (ltr_portfolio's join + coverage check in
         # this file), and sharpe_ratio_rf() aborts loud if it ever isn't.
-        sr      <- sharpe_ratio_rf(df$port_ret, df$rf_ret, periods_per_year = 12L)
+        sr      <- sharpe_ratio_rf(df$port_ret, hd_rf_for_basis(df$rf_ret, "LTR"), periods_per_year = 12L)
         ann_vol <- sr$ann_vol
         sharpe  <- sr$sharpe
 

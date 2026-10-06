@@ -198,7 +198,9 @@ plan_mom_prepeak_gauntlet <- function() {
         rets,
         strategy = "mom_prepeak_random_peak"
       )
-      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      # #919: the null must be scored on the SAME (excess) basis as the real
+      # Mom Pre-Peak row it is compared against (mom_prepeak_metrics$sharpe).
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom Pre-Peak"), 3)
       if (is.na(m$sharpe)) {
         cli::cli_abort(c(
           "x" = "mom_prepeak_random_peak_metrics: sharpe is NA after .mom_prepeak_sharpe().",

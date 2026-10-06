@@ -88,18 +88,41 @@ test_that(".mom_prepeak_join_rf aborts when returns_tbl has no exec_date column"
   expect_snapshot(error = TRUE, .mom_prepeak_join_rf(bad_rets, rf))
 })
 
-# ── .mom_prepeak_sharpe(): geometric numerator, rf-deducted ─────────────────
+# ── .mom_prepeak_sharpe(): geometric numerator, EXCESS basis (#919) ──────────
+# The siblings are dollar-neutral long-short spreads = excess returns, so NO
+# rf is deducted (hd_return_basis(): "excess"). Before #919 these tests pinned
+# the rf-deducted value, which understated the published Sharpe.
 
-test_that(".mom_prepeak_sharpe matches sharpe_ratio_rf() directly (normal case)", {
+test_that(".mom_prepeak_sharpe matches sharpe_ratio_rf() with rf = 0 (excess basis)", {
   set.seed(1)
   r    <- rnorm(36, mean = 0.01, sd = 0.06)  # deliberately volatile fixture
   rets <- .mom_prepeak_join_rf(make_returns_tbl_exec(r), make_stk_rf(36))
   metrics_row <- historicaldata:::.mom_prepeak_compute_metrics(rets, strategy = "test")
 
-  result   <- .mom_prepeak_sharpe(rets, metrics_row)
-  expected <- sharpe_ratio_rf(rets$ret_ls, rets$rf_ret, periods_per_year = 12L)$sharpe
+  result   <- .mom_prepeak_sharpe(rets, metrics_row, strategy = "Mom Pre-Peak")
+  expected <- sharpe_ratio_rf(rets$ret_ls, rep(0, nrow(rets)), periods_per_year = 12L)$sharpe
 
   expect_equal(result, expected)
+})
+
+test_that("FALSIFICATION (#919): an excess-basis sibling has NO rf deducted", {
+  set.seed(1)
+  r    <- rnorm(36, mean = 0.01, sd = 0.06)
+  rets <- .mom_prepeak_join_rf(make_returns_tbl_exec(r), make_stk_rf(36, rf_ret = 0.004))
+  metrics_row <- historicaldata:::.mom_prepeak_compute_metrics(rets, strategy = "test")
+
+  # ann_rf is exactly 0 -- the S17 identity sharpe == (cagr - ann_rf)/vol holds
+  expect_identical(.mom_prepeak_ann_rf(rets, metrics_row, strategy = "Mom Pre-Peak"), 0)
+
+  # and the Sharpe is strictly larger than the old rf-deducted one
+  rf_deducted <- sharpe_ratio_rf(rets$ret_ls, rets$rf_ret, periods_per_year = 12L)$sharpe
+  expect_gt(.mom_prepeak_sharpe(rets, metrics_row, strategy = "Mom Pre-Peak"), rf_deducted)
+})
+
+test_that(".mom_prepeak_sharpe aborts on an unregistered strategy", {
+  rets <- .mom_prepeak_join_rf(make_returns_tbl_exec(rep(c(0.02, -0.01), 12)), make_stk_rf(24))
+  metrics_row <- historicaldata:::.mom_prepeak_compute_metrics(rets, strategy = "test")
+  expect_snapshot(error = TRUE, .mom_prepeak_sharpe(rets, metrics_row, strategy = "Nope"))
 })
 
 test_that(".mom_prepeak_sharpe differs from the old arithmetic formula on a volatile fixture", {
@@ -108,7 +131,7 @@ test_that(".mom_prepeak_sharpe differs from the old arithmetic formula on a vola
   rets <- .mom_prepeak_join_rf(make_returns_tbl_exec(r), make_stk_rf(36))
   metrics_row <- historicaldata:::.mom_prepeak_compute_metrics(rets, strategy = "test")
 
-  new_sharpe <- .mom_prepeak_sharpe(rets, metrics_row)
+  new_sharpe <- .mom_prepeak_sharpe(rets, metrics_row, strategy = "Mom Pre-Peak")
 
   # Old (pre-#677) formula: arithmetic mean numerator, hardcoded 2%/yr rf.
   monthly_rf_old <- (1.02)^(1 / 12) - 1
@@ -124,14 +147,14 @@ test_that(".mom_prepeak_sharpe stays finite when blown_up (pre-bankruptcy slice)
   metrics_row <- historicaldata:::.mom_prepeak_compute_metrics(rets, strategy = "test")
 
   expect_true(metrics_row$blown_up)
-  result <- .mom_prepeak_sharpe(rets, metrics_row)
+  result <- .mom_prepeak_sharpe(rets, metrics_row, strategy = "Mom Pre-Peak")
 
   expect_false(is.na(result))
   expect_true(is.finite(result))
 
   # Must match sharpe_ratio_rf() on the pre-bankruptcy slice only (months 1-12).
   expected <- sharpe_ratio_rf(
-    rets$ret_ls[1:12], rets$rf_ret[1:12], periods_per_year = 12L
+    rets$ret_ls[1:12], rep(0, 12), periods_per_year = 12L
   )$sharpe
   expect_equal(result, expected)
 })
@@ -140,7 +163,7 @@ test_that(".mom_prepeak_sharpe aborts when rf_ret column is missing", {
   rets <- make_returns_tbl_exec(rep(0.01, 24))  # no rf_ret column -- not joined
   metrics_row <- tibble::tibble(blown_up = FALSE, bankrupt_month = NA_integer_)
 
-  expect_snapshot(error = TRUE, .mom_prepeak_sharpe(rets, metrics_row))
+  expect_snapshot(error = TRUE, .mom_prepeak_sharpe(rets, metrics_row, strategy = "Mom Pre-Peak"))
 })
 
 # ── Every caller of .mom_prepeak_compute_metrics() must overwrite sharpe ────
