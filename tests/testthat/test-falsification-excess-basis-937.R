@@ -136,6 +136,45 @@ test_that("the three excess bridge targets deduct their OWN strategy's rf (one h
 })
 
 # ── structural breaks ───────────────────────────────────────────────────────
+.olmar_toy <- function(rf = .rf) {
+  x <- .toy(seed = 7L)
+  tibble::tibble(date = x$date, net_ret = x$strategy_ret, rf_ret = rf)
+}
+.sb_env <- function(olmar, excess = .toy(), raw = .toy(seed = 1L)) {
+  list(
+    port_returns = NULL, xgb_drif_portfolio = NULL, olmar_portfolio = olmar,
+    fals_ltr_input = raw, fals_cmr_input = NULL,
+    mom_prepeak_returns = NULL, mom_postpeak_returns = NULL, mom_combined_returns = NULL,
+    fals_avoid_worst_excess = excess, fals_rsc_excess = excess, fals_tom_excess = excess
+  )
+}
+
+test_that("sb_strategy_returns: OLMAR-1 is on the excess series (net_ret - its own rf_ret)", {
+  ol  <- .olmar_toy(rf = stats::runif(600L, 0.0001, 0.0006))
+  out <- .run_target(plan_structural_breaks(), "sb_strategy_returns", .sb_env(ol))
+  expect_equal(out[["OLMAR-1"]]$returns, ol$net_ret - ol$rf_ret)
+  expect_equal(out[["OLMAR-1"]]$dates, ol$date)
+  expect_equal(out[["OLMAR-1"]]$ppy, 252L)
+})
+
+test_that("FALSIFICATION: an rf change moves OLMAR-1 but not an excess-spread row", {
+  plan <- plan_structural_breaks()
+  lo <- .run_target(plan, "sb_strategy_returns", .sb_env(.olmar_toy(rf = 0)))
+  hi <- .run_target(plan, "sb_strategy_returns", .sb_env(.olmar_toy(rf = 0.001)))
+  expect_equal(lo[["OLMAR-1"]]$returns - hi[["OLMAR-1"]]$returns, rep(0.001, 600L))
+  expect_equal(lo[["LTR"]]$returns, hi[["LTR"]]$returns)
+  # direction: rf removal can only lower the structural-break Sharpe input
+  expect_lt(mean(hi[["OLMAR-1"]]$returns), mean(lo[["OLMAR-1"]]$returns))
+})
+
+test_that("OLMAR-1 with no rf for some dates drops and counts them, never 0-fills", {
+  ol <- .olmar_toy(); ol$rf_ret[1:50] <- NA_real_
+  expect_warning(
+    out <- .run_target(plan_structural_breaks(), "sb_strategy_returns", .sb_env(ol)),
+    regexp = "dropped 50 of 600")
+  expect_length(out[["OLMAR-1"]]$returns, 550L)
+})
+
 test_that("sb_strategy_returns: only Avoid Worst / Risk State / TOM are on the excess series", {
   excess <- .toy(); raw <- .toy(seed = 1L)
   env <- list(
