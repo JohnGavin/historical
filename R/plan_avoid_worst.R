@@ -25,11 +25,12 @@
 # inputs, which #813 itself did not touch).
 # aw_practical_sensitivity, aw_walkforward, and aw_alpha_decay are
 # exploratory sensitivity tables, migrated for consistency with aw_metrics.
-# aw_cross_market and aw_bootstrap_ci still use the OLD arithmetic, no-rf,
-# daily formula (mean(r)/sd(r)*sqrt(252)) -- NOT migrated in this slice; see
-# the PR body for why (bootstrap CI resamples returns in blocks, requiring
-# the daily rf series to be resampled in lockstep, which needs more care
-# than this slice's time budget allowed -- flagged as a follow-up).
+# aw_cross_market and aw_bootstrap_ci keep the arithmetic daily formula
+# (mean(r)/sd(r)*sqrt(252)) but, since #937 (origin #919), apply it to the
+# EXCESS series (rf deducted per the hd_return_basis() registry, via
+# .aw_excess_series()) instead of the TOTAL series they previously used.
+# Excess is formed BEFORE resampling, so the bootstrap needs no lockstep rf
+# resampling.
 
 #' Canonical rf-adjusted geometric Sharpe for a dated daily return vector (#677)
 #'
@@ -92,6 +93,63 @@
 #' @noRd
 .aw_sharpe_rf <- function(dates, rets, aw_daily_rf, ann_factor = 252L) {
   .aw_sharpe_rf_full(dates, rets, aw_daily_rf, ann_factor)$sharpe
+}
+
+#' EXCESS-return series for a dated daily return vector (#937, origin #919)
+#'
+#' Joins `dates`/`ret` to `aw_daily_rf` and deducts rf according to the
+#' return-basis registry, `hd_return_basis()`: rf is deducted iff the series
+#' is a TOTAL return. Used by the arithmetic (mean/sd * sqrt(252)) Sharpe
+#' paths -- `aw_cross_market`, `aw_bootstrap_ci` -- which previously applied
+#' no rf at all to a TOTAL series (SPY or cash), biasing Sharpe up.
+#'
+#' Coverage handling matches `.aw_sharpe_rf_full()`: aborts on an INTERIOR hole
+#' in the daily rf series' own span; drops (never 0-fills) TRAILING days with
+#' no rf yet (Fama-French publication lag) with a counted `cli_warn`.
+#'
+#' @param dates Date vector, position-aligned with `ret`.
+#' @param ret Numeric vector of daily returns.
+#' @param aw_daily_rf Tibble with columns `date`, `rf_ret`.
+#' @param strategy Single string, a registered `hd_return_basis()` strategy
+#'   label (an unregistered label aborts), or `NA_character_` for a
+#'   non-strategy total-return benchmark (e.g. SPY), which has no registry
+#'   label yet -- vocabulary for benchmarks is tracked in #937 Phase 3.
+#' @return Tibble `date`, `ret` (the EXCESS return), rows with no rf dropped.
+#' @noRd
+.aw_excess_series <- function(dates, ret, aw_daily_rf, strategy) {
+  if (!is.na(strategy)) hd_return_basis_of(strategy)  # abort early if unregistered
+
+  df <- tibble::tibble(date = as.Date(dates), ret = ret) |>
+    dplyr::filter(!is.na(.data$ret)) |>
+    dplyr::left_join(aw_daily_rf, by = "date")
+
+  missing_rf_dates <- sort(df$date[is.na(df$rf_ret)])
+  if (length(missing_rf_dates) > 0L) {
+    rf_max   <- max(aw_daily_rf$date)
+    interior <- missing_rf_dates[missing_rf_dates <= rf_max]
+    if (length(interior) > 0L) {
+      cli::cli_abort(c(
+        "x" = "{length(interior)} day{?s} inside the daily risk-free series' own span have no rate.",
+        "i" = "Missing dates: {.val {format(utils::head(interior, 5), '%Y-%m-%d')}}.",
+        "i" = "Fama-French daily RF spans {min(aw_daily_rf$date)}..{rf_max}, so this is a HOLE, not a publication lag.",
+        "i" = "Investigate hd_factors() (factor_name == \"RF\", frequency == \"daily\") before trusting this Sharpe."
+      ))
+    }
+    n_before <- nrow(df)
+    df <- dplyr::filter(df, !is.na(.data$rf_ret))
+    cli::cli_warn(c(
+      "!" = "Dropped {n_before - nrow(df)} trailing day{?s} with no risk-free rate yet.",
+      "i" = "Daily RF ends {rf_max} (Fama-French publication lag)."
+    ))
+  }
+
+  df$ret <- if (is.na(strategy)) {
+    # basis: total (SPY benchmark); registry vocabulary for benchmarks tracked in #937 Phase 3
+    df$ret - df$rf_ret
+  } else {
+    hd_excess_returns(df$ret, df$rf_ret, strategy)
+  }
+  df[c("date", "ret")]
 }
 
 #' Canonical metrics for ONE period slice of the VIX-timed Avoid Worst
@@ -1145,6 +1203,8 @@ plan_avoid_worst <- function() {
         dplyr::mutate(date = as.Date(date)) |>
         arrange(date)
 
+      arith_sharpe <- function(x) round(mean(x) / sd(x) * sqrt(252), 2)
+
       purrr::map_dfr(c("SPY", "QQQ", "IWM", "DIA"), function(tkr) {
         d <- aw_daily_returns |>
           filter(ticker == tkr) |>
@@ -1189,8 +1249,14 @@ plan_avoid_worst <- function() {
                                   cummax(cum_dd_b)) * 100, 1),
           max_dd_strat = round(min((cum_dd_s - cummax(cum_dd_s)) /
                                      cummax(cum_dd_s)) * 100, 1),
-          sharpe_bh = round(mean(d$ret) / sd(d$ret) * sqrt(252), 2),
-          sharpe_strat = round(mean(sr) / sd(sr) * sqrt(252), 2),
+          # #937: arithmetic Sharpe (mean/sd * sqrt(252), convention kept) on
+          # the EXCESS series. Buy-and-hold is a total-return asset series
+          # (SPY/QQQ/IWM/DIA benchmarks; no registry label yet -- #937 Phase 3);
+          # the VIX-timed strategy is "Avoid Worst" (total: asset or 0/cash).
+          sharpe_bh = arith_sharpe(
+            .aw_excess_series(d$date, d$ret, aw_daily_rf, NA_character_)$ret),
+          sharpe_strat = arith_sharpe(
+            .aw_excess_series(d$date, sr, aw_daily_rf, "Avoid Worst")$ret),
           pct_cash = round(sum(!in_mkt) / n * 100, 1)
         )
       })
@@ -1201,8 +1267,17 @@ plan_avoid_worst <- function() {
       library(dplyr)
 
       d <- aw_practical_backtest
-      strat_ret <- d$ret_strategy
-      mkt_ret <- d$ret_market
+      # #937: both series are TOTAL returns (strategy = SPY or 0/cash;
+      # market = SPY), so the arithmetic Sharpe (mean/sd * sqrt(252),
+      # convention kept) is taken on the EXCESS series. The point estimate
+      # and the bootstrap interval resample the SAME excess series, so they
+      # share one basis. Rows with no rf yet are dropped with a counted
+      # warning, identically for both series (same dates).
+      strat_ret <- .aw_excess_series(d$date, d$ret_strategy, aw_daily_rf,
+                                     "Avoid Worst")$ret
+      # basis: total (SPY benchmark); registry vocabulary for benchmarks tracked in #937 Phase 3
+      mkt_ret <- .aw_excess_series(d$date, d$ret_market, aw_daily_rf,
+                                   NA_character_)$ret
       n <- length(strat_ret)
       block_size <- 63L  # ~3 months
       n_boot <- 1000L
