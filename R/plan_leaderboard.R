@@ -157,6 +157,35 @@
   out
 }
 
+#' Observation count paired with the probabilistic-Sharpe input (#937)
+#'
+#' Companion to \code{.prob_sharpe_input_sharpe()}: where that helper swaps in
+#' the DSR path's arithmetic Sharpe for covered Full-Period rows, this one
+#' swaps in the SAME path's \code{T_obs} so the Sharpe and the n it is paired
+#' with come from one place. A covered Full-Period row whose \code{T_obs} is
+#' NA stays NA -- it is never silently replaced by the leaderboard
+#' \code{months}. Every other row (sub-periods, PSO Optimal) keeps
+#' \code{months}, unchanged.
+#'
+#' @param period Character vector of leaderboard period labels.
+#' @param months Numeric; the leaderboard observation count per row.
+#' @param dsr_T_obs Numeric; \code{strat_deflated_sharpe$T_obs} joined to each
+#'   row (NA where the strategy has no DSR row).
+#' @param dsr_covered Logical; TRUE where the row's strategy has a DSR row.
+#' @return Numeric vector the same length as \code{months}.
+#' @noRd
+.prob_sharpe_input_n <- function(period, months, dsr_T_obs, dsr_covered) {
+  n <- length(months)
+  if (length(period) != n || length(dsr_T_obs) != n || length(dsr_covered) != n) {
+    cli::cli_abort(c(
+      "x" = ".prob_sharpe_input_n(): all inputs must have the same length.",
+      "i" = "Got period {length(period)}, months {n}, dsr_T_obs {length(dsr_T_obs)}, dsr_covered {length(dsr_covered)}."
+    ))
+  }
+  use_dsr <- (period %in% "Full Period") & dsr_covered
+  as.numeric(ifelse(use_dsr, dsr_T_obs, months))
+}
+
 #' Build STRATEGY_OBS_ANN_FACTOR from strategy_names + its provenance table
 #'
 #' Exposed as a function (rather than inlined at source() time) so tests can
@@ -877,7 +906,10 @@ plan_leaderboard <- function() {
                      # #919: the ARITHMETIC per-period EXCESS Sharpe (registry
                      # basis) -- the input prob_sharpe_positive needs below.
                      # Temporary column, dropped after prob_sharpe_diag.
-                     .dsr_naive_sharpe = naive_sharpe),
+                     .dsr_naive_sharpe = naive_sharpe,
+                     # #937: the n that Sharpe was computed over (same
+                     # target, same row), paired with it below.
+                     .dsr_T_obs = T_obs),
             by = "strategy"
           )
       }
@@ -1379,14 +1411,28 @@ plan_leaderboard <- function() {
         all_metrics$period, all_metrics$sharpe, dsr_naive, dsr_covered
       )
 
+      # N INPUT (#937): a Sharpe measured over T observations must be paired
+      # with that same T. For covered Full-Period rows n is the DSR path's own
+      # T_obs (strat_deflated_sharpe), not the leaderboard `months`; every
+      # other row keeps `months` (unchanged -- sub-period rows and PSO
+      # Optimal still use the geometric `sharpe` they are scored on).
+      dsr_T_obs <- if (".dsr_T_obs" %in% names(all_metrics)) {
+        all_metrics$.dsr_T_obs
+      } else {
+        rep(NA_real_, nrow(all_metrics))
+      }
+      prob_sharpe_n <- .prob_sharpe_input_n(
+        all_metrics$period, all_metrics$months, dsr_T_obs, dsr_covered
+      )
+
       prob_sharpe_diag <- purrr::pmap_dfr(
-        list(prob_sharpe_in, all_metrics$months, all_metrics$obs_ann_factor,
+        list(prob_sharpe_in, prob_sharpe_n, all_metrics$obs_ann_factor,
              all_metrics$k_eff_leaderboard),
         .prob_sharpe_positive_row
       )
 
       all_metrics <- all_metrics |>
-        dplyr::select(-dplyr::any_of(".dsr_naive_sharpe")) |>
+        dplyr::select(-dplyr::any_of(c(".dsr_naive_sharpe", ".dsr_T_obs"))) |>
         dplyr::bind_cols(prob_sharpe_diag) |>
         dplyr::mutate(
           # TRUE where the probability the true Sharpe is positive falls
@@ -1788,6 +1834,12 @@ plan_leaderboard <- function() {
         tibble::tibble(
           strategy           = strategy_label,
           naive_sharpe       = d$naive_sharpe,
+          # #937: the observation count hd_deflated_sharpe() above was
+          # actually given (after rf drops and NA removal) -- the ONE home of
+          # "how many observations is naive_sharpe over". The leaderboard's
+          # prob_sharpe_positive reads it from here rather than re-deriving n
+          # from the leaderboard `months`.
+          T_obs              = length(r),
           deflated_sharpe    = d$dsr,
           dsr_pvalue         = d$dsr_pvalue,
           dsr_haircut_pct    = d$haircut_pct,
