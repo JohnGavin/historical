@@ -52,6 +52,13 @@ jobs:
       # wait-time=5 with max-retries=3 guarantees a floor of ~15s spent
       # retrying a failing link before it's given up on (possibly more, if
       # lychee backs off further — --help is silent on that).
+      # --accept includes 503 (both steps). Trade-off: a 503 means "the
+      # server could not answer right now", not "the link is broken". Scheduled
+      # runs failed on 2026-10-02 and 2026-10-10 solely on [503] from
+      # github.com/.../blob/... during a GitHub burst that ~15s of retries does
+      # not outlast; a genuinely broken blob link returns 404. A 404, a
+      # DNS/connection failure and a timeout still FAIL. The cost: a host that
+      # is permanently 503 would go unnoticed.
       - name: Lychee — in-repo HTML pre-deploy check
         if: github.event_name == 'push'
         run: |
@@ -62,7 +69,7 @@ jobs:
             --max-concurrency 8 \
             --max-retries 3 \
             --retry-wait-time 5 \
-            --accept 200,206,403,429 \
+            --accept 200,206,403,429,503 \
             --output ./lychee-out.md \
             --format markdown \
             './docs/**/*.html' \
@@ -88,7 +95,7 @@ jobs:
             --max-concurrency 2 \
             --max-retries 3 \
             --retry-wait-time 5 \
-            --accept 200,206,403,429 \
+            --accept 200,206,403,429,503 \
             --output ./lychee-out.md \
             --format markdown \
             --base-url 'https://johngavin.github.io/historical/' \

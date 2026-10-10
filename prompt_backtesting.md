@@ -37,9 +37,9 @@
 	+ pairs well with Shiny
 		+ data updates stream in without re-rendering the chart
 	+ to leverage the duckdb and market view examples
-		+ https://perspective.finos.org/examples/
-		+ https://perspective.finos.org/block/?example=duckdb
-		+ https://perspective.finos.org/block/?example=market
+		+ https://perspective-dev.github.io/gallery/index.html
+		+ https://perspective-dev.github.io/guide/use_cases/database_ui.html
+		+ https://perspective-dev.github.io/gallery/market-trading-desk.html
 		+ https://eydlinilya.github.io/perspectiveR/articles/introduction.html
 
 # Risk
