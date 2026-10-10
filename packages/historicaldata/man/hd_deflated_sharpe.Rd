@@ -62,12 +62,13 @@ even though \code{K_trials} is identical. Bailey, Borwein, Lopez de Prado &
 Zhu (2014) write this as
 \eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where \eqn{E[\max Z]} is
 the expected maximum of \code{K_trials} unit-variance (V = 1) trial
-Z-scores. This implementation keeps the asymptotic Euler-Mascheroni
-approximation to \eqn{E[\max Z]} already used here (a form of the same
-extreme-value-theory result the LdP papers derive) and multiplies it by
-\eqn{\sqrt{V}}. \code{trial_sharpe_var = 1} (the default) reproduces the
-pre-#558 output for every \code{K_trials} exactly, so existing callers are
-unaffected unless they opt in.
+Z-scores. This implementation computes \eqn{E[\max Z]} exactly by
+quadrature (\code{\link{hd_expected_max_normal}}) and multiplies it by
+\eqn{\sqrt{V}}. (Before #931 it used the asymptotic Euler-Mascheroni
+approximation, which overstated \eqn{E[\max Z]} by 9-31\\% for
+\code{K_trials} in 2..5000, so the hurdle was too strict.)
+\code{trial_sharpe_var = 1} (the default) reproduces the pre-#558
+variance-unaware scaling.
 
 When the caller has (or can estimate) the population of trial Sharpe
 ratios that produced \code{K_trials}, pass
@@ -92,6 +93,7 @@ Other falsification:
 \code{\link{hd_delta_z}()},
 \code{\link{hd_detection_power}()},
 \code{\link{hd_drawdown_overlap}()},
+\code{\link{hd_expected_max_normal}()},
 \code{\link{hd_factor_null_test}()},
 \code{\link{hd_hac_sharpe}()},
 \code{\link{hd_hac_tstat}()},
