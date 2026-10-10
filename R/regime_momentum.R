@@ -90,7 +90,13 @@ partition_returns_by_regime <- function(returns, vix_regimes) {
 #'
 #' @param strategy_returns Tibble with columns: date, scheme, net_ret, regime
 #' @param regime_filter Character. Which regime to analyze: "calm", "elevated", "spike", or "all"
-#' @param annual_rf Numeric. Annual risk-free rate (default 0.02)
+#' @param annual_rf Numeric. Annual risk-free rate (default 0.02). Deducted
+#'   only when \code{strategy}'s registered basis is \code{"total"}; the
+#'   momentum long-short spread is an excess return, so for the registered
+#'   label \code{"Regime Momentum"} it is ignored (Refs #937).
+#' @param strategy Single string; a label registered in
+#'   \code{hd_return_basis()} (use \code{"Regime Momentum"}). REQUIRED: an
+#'   omitted or unregistered label aborts.
 #'
 #' @return Tibble with one row per strategy and regime:
 #'   - scheme: Strategy name
@@ -106,10 +112,13 @@ partition_returns_by_regime <- function(returns, vix_regimes) {
 #' @export
 regime_conditional_performance <- function(strategy_returns,
                                           regime_filter = "all",
-                                          annual_rf = 0.02) {
+                                          annual_rf = 0.02,
+                                          strategy = NULL) {
   library(dplyr)
 
-  monthly_rf <- (1 + annual_rf)^(1/12) - 1
+  .require_basis_label(strategy, "regime_conditional_performance")
+  # #937: net_ret is a dollar-neutral spread => excess; registry returns 0.
+  monthly_rf <- hd_rf_for_basis((1 + annual_rf)^(1/12) - 1, strategy)
 
   # Filter to regime if specified
   if (regime_filter != "all") {
@@ -161,6 +170,11 @@ regime_conditional_performance <- function(strategy_returns,
 #' @param regimes Character vector. Which regimes to use for binary (default: "calm")
 #' @param vix_min Numeric. VIX level for 100% exposure (continuous)
 #' @param vix_max Numeric. VIX level for 0% exposure (continuous)
+#' @param strategy Single string; a label registered in
+#'   \code{hd_return_basis()} (use \code{"Regime Momentum"}). REQUIRED: an
+#'   omitted or unregistered label aborts. The allocated return is
+#'   \code{exposure * net_ret} of an excess spread with a zero-return cash
+#'   leg, so no rf is deducted for an excess label (Refs #937).
 #'
 #' @return Tibble with columns:
 #'   - scheme: Strategy name
@@ -175,8 +189,11 @@ regime_conditional_performance <- function(strategy_returns,
 compare_regime_allocation <- function(returns,
                                      regimes = c("calm"),
                                      vix_min = 15,
-                                     vix_max = 40) {
+                                     vix_max = 40,
+                                     strategy = NULL) {
   library(dplyr)
+
+  .require_basis_label(strategy, "compare_regime_allocation")
 
   # Binary allocation: 100% in specified regimes, 0% otherwise
   binary <- returns |>
@@ -203,7 +220,9 @@ compare_regime_allocation <- function(returns,
 
   # Compute metrics for both
   calc_metrics <- function(df) {
-    monthly_rf <- (1.02)^(1/12) - 1
+    # #937: was a hardcoded 2%/yr deducted (scaled by mean_exposure) from an
+    # exposure-scaled excess spread. The registry returns 0 for an excess label.
+    monthly_rf <- hd_rf_for_basis((1.02)^(1/12) - 1, strategy)
 
     df |>
       group_by(scheme, allocation_type) |>

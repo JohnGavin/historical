@@ -216,7 +216,8 @@ plan_zakamulin_allocation <- function() {
         # function still carries for standalone/test callers.
         summarize_regime_allocation(
           zak_all_backtests,
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         ) |>
           mutate(
             allocation_label = recode(
@@ -474,7 +475,8 @@ plan_zakamulin_allocation <- function() {
         # zak_performance_table above for the full rationale.
         perf <- summarize_regime_allocation(
           zak_all_backtests,
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
 
         best <- perf |>

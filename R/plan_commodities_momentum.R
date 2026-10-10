@@ -79,7 +79,8 @@ plan_commodities_momentum <- function() {
       # function still carries for standalone/test callers.
       summarize_commodity_performance(
         backtest_results = commodities_backtest,
-        annual_rf = mean(stk_rf$rf_ret) * 12
+        annual_rf = mean(stk_rf$rf_ret) * 12,
+        strategy = "Commodity Momentum L/S"  # excess spread: rf not deducted (#937)
       )
     }),
 
@@ -186,7 +187,8 @@ plan_commodities_momentum <- function() {
             net_ret,
             ~{
               if (length(.x) < 36) return(NA_real_)
-              monthly_rf <- (1.02)^(1/12) - 1
+              # #937: long-short spread is an excess return; registry => 0
+              monthly_rf <- hd_rf_for_basis((1.02)^(1/12) - 1, "Commodity Momentum L/S")
               mean_ret <- mean(.x, na.rm = TRUE)
               sd_ret <- sd(.x, na.rm = TRUE)
               if (sd_ret == 0) return(NA_real_)
