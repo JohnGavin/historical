@@ -83,6 +83,38 @@ test_that("cmr_selection_conditioned scores the BLEND basis: rf deducted on the 
   expect_equal(sel$diagnostics$sharpe[1], .cmr_sharpe(pre, "CMR Conditioned"))
 })
 
+# ── Registry writer: SSR is scored on the excess series (#937) ──────────────
+.rf_daily <- 0.0002
+.ssr_port <- function(n = 60L) {
+  set.seed(9379)
+  tibble::tibble(
+    date = seq.Date(as.Date("2020-01-01"), by = "day", length.out = n),
+    net_ret = 0.5 * stats::rnorm(n, 0.001, 0.01) + 0.5 * .rf_daily,
+    cash_weight = rep(0.5, n)
+  )
+}
+.ssr_rf <- tibble::tibble(
+  date = seq.Date(as.Date("2019-12-01"), by = "day", length.out = 200L),
+  rf_ret = .rf_daily
+)
+
+test_that(".cmr_ssr_returns: CMR (excess spread) is unchanged; CMR Conditioned (blend) loses rf on the cash weight only", {
+  port <- .ssr_port()
+  expect_identical(.cmr_ssr_returns(port, "cmr", NULL, "1m"), port$net_ret)
+  out <- .cmr_ssr_returns(port, "cmr_conditioned", .ssr_rf, "1m")
+  expect_equal(out, port$net_ret - 0.5 * .rf_daily)
+  # FALSIFICATION: neither the raw series nor a full-rf deduction is returned
+  expect_false(isTRUE(all.equal(out, port$net_ret)))
+  expect_false(isTRUE(all.equal(out, port$net_ret - .rf_daily)))
+})
+
+test_that(".cmr_ssr_returns aborts on an unknown strategy_id and on a blend without rf / cash weight", {
+  port <- .ssr_port()
+  expect_snapshot(error = TRUE, .cmr_ssr_returns(port, "cmr_other", .ssr_rf, "1m"))
+  expect_snapshot(error = TRUE, .cmr_ssr_returns(port, "cmr_conditioned", NULL, "1m"))
+  expect_snapshot(error = TRUE, .cmr_ssr_returns(port[, c("date", "net_ret")], "cmr_conditioned", .ssr_rf, "1m"))
+})
+
 test_that("an unregistered selection label aborts (no silent default basis)", {
   portfolios <- list(`1m` = .mk(.A_pre, .post), `3m` = .mk(.B_pre, .post))
   expect_error(

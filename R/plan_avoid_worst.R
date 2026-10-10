@@ -1490,7 +1490,14 @@ plan_avoid_worst <- function() {
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.
-  rets <- aw_practical_backtest$ret_strategy
+  # #937: Avoid Worst is a TOTAL-basis series (SPY or cash), so SSR is
+  # computed on the EXCESS series (rf from aw_daily_rf matched by date;
+  # an unmatched day is NA + counted in a warning, never 0-filled).
+  rets <- .ssr_excess_returns(
+    aw_practical_backtest$ret_strategy,
+    aw_daily_rf$rf_ret[match(as.Date(aw_practical_backtest$date), as.Date(aw_daily_rf$date))],
+    "Avoid Worst", ".avoid_worst_register_runs"
+  )
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
     hd_record_stability_metrics(

@@ -163,7 +163,11 @@ test_that("the six total-basis registry recorders feed SSR an EXCESS series", {
   find_calls <- function(expr, name, acc = list()) {
     if (is.call(expr)) {
       if (identical(expr[[1]], as.name(name))) acc <- c(acc, list(expr))
-      for (e in as.list(expr)) acc <- find_calls(e, name, acc)
+      parts <- as.list(expr)
+      for (i in seq_along(parts)) {
+        if (identical(parts[[i]], quote(expr = ))) next   # empty arg, e.g. x[, 1]
+        acc <- find_calls(parts[[i]], name, acc)
+      }
     }
     acc
   }
@@ -184,7 +188,7 @@ test_that("the six total-basis registry recorders feed SSR an EXCESS series", {
 })
 
 # ── Leaderboard SSR: excess for the SSR numerator, published series for top5 ─
-test_that(".ssr_ext_entries scores SSR on the excess column and top5 on the published column", {
+test_that(".ssr_ext_entries scores SSR and top5 on the excess column (one basis, like the registry writer)", {
   set.seed(9377)
   n <- 120L
   rf <- rep(0.003, n)
@@ -198,8 +202,9 @@ test_that(".ssr_ext_entries scores SSR on the excess column and top5 on the publ
   out <- .ssr_ext_entries(wide, wide_ex, c(value_hml = "Value (HML)", cmr = "CMR"), ssr, top5)
   expect_named(out, c("Value (HML)", "CMR"))
   expect_equal(out[["Value (HML)"]]$ssr, ssr(wide_ex$value_hml))
-  expect_equal(out[["Value (HML)"]]$top5, top5(wide$value_hml))        # published series
+  expect_equal(out[["Value (HML)"]]$top5, top5(wide_ex$value_hml))
   expect_gt(abs(out[["Value (HML)"]]$ssr - ssr(wide$value_hml)), 0.05)  # FALSIFICATION
+  expect_false(isTRUE(all.equal(out[["Value (HML)"]]$top5, top5(wide$value_hml))))
   expect_equal(out[["CMR"]]$ssr, ssr(wide$cmr))                         # excess spread: unchanged
 })
 
@@ -232,7 +237,8 @@ test_that("strat_returns_wide_excess puts total-basis columns on the excess basi
     rsc_portfolio = tibble::tibble(date = dts, rf_daily = rf / 20),
     aw_daily_rf = tibble::tibble(date = dts, rf_ret = rf / 20)
   )
-  out <- do.call(.run, c(list(.target_command(plan_strategy_correlation(), "strat_returns_wide_excess")), toy))
+  cmd <- .target_command(plan_strategy_correlation(), "strat_returns_wide_excess")
+  out <- eval(cmd, envir = list2env(toy, envir = new.env(parent = globalenv())))
   expect_equal(out$stk_max, s)                      # excess spread: unchanged
   expect_equal(out$value_hml, s - 0.002)            # total: rf removed
   expect_equal(out$ym, yms)

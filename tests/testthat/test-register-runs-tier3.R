@@ -325,6 +325,9 @@ test_that(".tom_register_runs schema and row counts are stable", {
     prev_in_tom  = FALSE,
     is_switch    = FALSE,
     ret_gross    = rnorm(n_days, 0.0004, 0.01),
+    # #937: .tom_register_runs() scores SSR on the excess series, so the
+    # portfolio must carry the daily rf (the real tom_portfolio does).
+    rf_ret       = 0.0001,
     cost_daily   = 0,
     ret_net      = rnorm(n_days, 0.0003, 0.009),
     cum_bh       = cumprod(1 + rnorm(n_days, 0.0004, 0.01)),
