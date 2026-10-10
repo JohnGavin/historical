@@ -24,16 +24,16 @@ requirement). Dated evidence, not a maintained table:
 
 | strategy | sharpe | have | need | need (mt) | single-test verdict |
 |---|---:|---:|---:|---:|---|
-| Mom 12-2 | 0.040 | 53.1 | 3864.2 | 7840.3 | 72.8× short |
+| Mom 12-2 | 0.049 | 53.2 | 2575.1 | 5224.7 | 48.4× short |
 | Value (HML) | 0.068 | 62.7 | 1337.1 | 2713.0 | 21.3× short |
 | PSO Optimal | 0.130 | 16.3 | 367.3 | NA | 22.6× short |
-| CMR | 0.230 | 25.7 | 116.9 | 237.1 | 4.6× short |
+| CMR | 0.250 | 25.9 | 98.9 | 200.7 | 3.8× short |
 | Avoid Worst | 0.250 | 33.1 | 98.9 | 200.7 | 3.0× short |
 | Risk State | 0.252 | 33.2 | 97.4 | 197.5 | 2.9× short |
 | CMR Conditioned | 0.352 | 25.7 | 49.9 | 101.3 | 1.9× short |
 | Factor MAX | 0.391 | 61.7 | 40.5 | 82.1 | powered |
 | LTR | 0.430 | 21.2 | 33.5 | 68.0 | 1.6× short |
-| Mom Pre-Peak | 0.443 | 53.1 | 31.6 | 64.0 | powered |
+| Mom Pre-Peak | 0.452 | 53.2 | 30.3 | 61.5 | powered |
 | Managed Futures | 0.477 | 18.9 | 27.3 | 55.3 | 1.4× short |
 | Factor DRIF | 0.499 | 57.6 | 24.9 | 50.5 | powered |
 | OLMAR-1 | 0.780 | 16.1 | 10.2 | 20.6 | powered |
@@ -43,9 +43,11 @@ Factor DRIF also passes the multiple-testing-corrected bar (needs 50.5, has 57.6
 Factor MAX, Mom Pre-Peak and OLMAR-1 do not. `have` for the daily strategies (CMR,
 CMR Conditioned, Avoid Worst, Risk State, OLMAR-1) is observations / 252; the
 store's own `detection_underpowered` flag agrees with have-versus-need on all 13
-rows. Two rows will move again: the Mom Pre-Peak and CMR samples are missing their
-trailing months (the rf join drops them even though no rf is used), so their
-`have`, Sharpe and verdict are provisional until that is fixed.
+rows. This snapshot is taken after [#946](https://github.com/JohnGavin/historical/pull/946),
+which stopped the rf join dropping trailing observations from the excess-basis
+Mom and CMR series (their `have` now equals the deflated-Sharpe path's `T_obs`);
+no verdict changed. CMR Conditioned is a blend basis and still loses its trailing
+rows to the rf trim, so its `have` is shorter than CMR's.
 
 Risk State is the row worth remembering. It first appeared as *not computable* — its
 `months` arrived NA because `calc_metrics()` computed `n_obs` and discarded it one
