@@ -776,16 +776,23 @@ plan_commodities_mean_reversion <- function() {
 #' @param daily_rf Tibble with columns `date`, `rf_ret` (the `daily_rf`
 #'   target, R/plan_stock_backtest.R).
 #' @param lookback Character. Lookback label, used only for error/warning text.
-#' @return `df` with `rf_ret` joined, trailing uncovered dates removed.
+#' @param basis_strategy Leaderboard label registered in
+#'   \code{hd_return_basis()}, or \code{NULL}. An EXCESS-basis label ("CMR")
+#'   never uses rf, so no trailing date is trimmed for lacking one (Refs
+#'   #937). \code{NULL}, "total" and "blend" ("CMR Conditioned") labels get
+#'   the full coverage policy.
+#' @return `df` with `rf_ret` joined; trailing uncovered dates removed
+#'   unless `basis_strategy` is on an excess basis.
 #' @noRd
-.cmr_join_rf <- function(df, daily_rf, lookback) {
+.cmr_join_rf <- function(df, daily_rf, lookback, basis_strategy = NULL) {
   .join_rf_series(
     df = df, rf = daily_rf, key = "date",
     label = ".cmr_join_rf", rf_label = "daily_rf",
     rf_source = "the daily_rf target, R/plan_stock_backtest.R",
     df_label = paste0("CMR ", lookback, " portfolio"),
     strategy_label = paste0("CMR ", lookback),
-    period_noun = "date"
+    period_noun = "date",
+    basis_strategy = basis_strategy
   )
 }
 
@@ -1286,8 +1293,9 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   # closures). Pre-fill short (<=7 calendar day) non-trading gaps via LOCF
   # before the shared #679 guard runs -- genuine interior holes still abort.
   daily_rf_filled <- .cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = lookback)
-  df <- .cmr_join_rf(df, daily_rf_filled, lookback = lookback)
-  n  <- nrow(df)  # may shrink if a trailing rf gap was trimmed above
+  df <- .cmr_join_rf(df, daily_rf_filled, lookback = lookback,
+                     basis_strategy = basis_strategy)
+  n  <- nrow(df)  # may shrink if a trailing rf gap was trimmed above (never for an excess-basis label, #937)
 
   r  <- df$net_ret
   rf <- df$rf_ret

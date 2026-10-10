@@ -20,7 +20,7 @@ source(here::here("R/plan_commodities_mean_reversion.R"))
 source(here::here("R/plan_qa_gates.R"))
 
 # ── Mom path (monthly, joined on ym derived from exec_date) ─────────────────
-.mdates <- function(n) seq.Date(as.Date("2020-01-31"), by = "month", length.out = n)
+.mdates <- function(n) seq.Date(as.Date("2020-01-01"), by = "month", length.out = n)
 .mom_rets <- function(n) {
   tibble::tibble(exec_date = .mdates(n), ret_ls = rep(c(0.02, -0.01, 0.015), length.out = n))
 }

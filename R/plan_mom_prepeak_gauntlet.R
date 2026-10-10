@@ -193,7 +193,7 @@ plan_mom_prepeak_gauntlet <- function() {
     # stopped testing anything. Same defect class as #677 defect B
     # (fail-loud-not-null.md), inside a falsification battery.
     targets::tar_target(mom_prepeak_random_peak_metrics, {
-      rets <- .mom_prepeak_join_rf(mom_prepeak_random_peak_returns, stk_rf)
+      rets <- .mom_prepeak_join_rf(mom_prepeak_random_peak_returns, stk_rf, strategy = "Mom Pre-Peak")
       m <- .mom_prepeak_compute_metrics(
         rets,
         strategy = "mom_prepeak_random_peak"

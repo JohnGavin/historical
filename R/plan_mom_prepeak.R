@@ -147,7 +147,7 @@ plan_mom_prepeak <- function() {
     # ── Performance metrics (one row per sibling) ────────────────────────────
 
     targets::tar_target(mom_prepeak_metrics, {
-      rets <- .mom_prepeak_join_rf(mom_prepeak_returns, stk_rf)
+      rets <- .mom_prepeak_join_rf(mom_prepeak_returns, stk_rf, strategy = "Mom Pre-Peak")
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_prepeak")
       m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom Pre-Peak"), 3)
       # ann_rf published alongside sharpe (#677 slice 4), same PERCENT
@@ -159,7 +159,7 @@ plan_mom_prepeak <- function() {
     }),
 
     targets::tar_target(mom_postpeak_metrics, {
-      rets <- .mom_prepeak_join_rf(mom_postpeak_returns, stk_rf)
+      rets <- .mom_prepeak_join_rf(mom_postpeak_returns, stk_rf, strategy = "Mom Post-Peak")
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_postpeak")
       m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom Post-Peak"), 3)
       m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m, strategy = "Mom Post-Peak") * 100, 2)
@@ -167,7 +167,7 @@ plan_mom_prepeak <- function() {
     }),
 
     targets::tar_target(mom_combined_metrics, {
-      rets <- .mom_prepeak_join_rf(mom_combined_returns, stk_rf)
+      rets <- .mom_prepeak_join_rf(mom_combined_returns, stk_rf, strategy = "Mom 12-2")
       m <- .mom_prepeak_compute_metrics(rets, strategy = "mom_combined")
       m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom 12-2"), 3)
       m$ann_rf <- round(.mom_prepeak_ann_rf(rets, m, strategy = "Mom 12-2") * 100, 2)
@@ -407,9 +407,14 @@ plan_mom_prepeak <- function() {
 #' @param returns_tbl Tibble with an `exec_date` column (mom_prepeak_returns
 #'   / mom_postpeak_returns / mom_combined_returns).
 #' @param stk_rf Tibble with columns `ym`, `rf_ret` (R/plan_stock_backtest.R).
-#' @return `returns_tbl` with `rf_ret` joined, trailing uncovered months removed.
+#' @param strategy Leaderboard label registered in \code{hd_return_basis()}
+#'   (#919). The three siblings are EXCESS basis, so rf is never used and no
+#'   month is trimmed for lacking one (Refs #937). \code{NULL} applies the
+#'   full coverage policy (trim / abort); an unregistered label aborts.
+#' @return `returns_tbl` with `rf_ret` joined; trailing uncovered months
+#'   removed unless `strategy` is on an excess basis.
 #' @noRd
-.mom_prepeak_join_rf <- function(returns_tbl, stk_rf) {
+.mom_prepeak_join_rf <- function(returns_tbl, stk_rf, strategy = NULL) {
   if (!"exec_date" %in% names(returns_tbl)) {
     cli::cli_abort(c("x" = ".mom_prepeak_join_rf(): returns_tbl has no {.field exec_date} column to join on."))
   }
@@ -421,7 +426,8 @@ plan_mom_prepeak <- function() {
     label = ".mom_prepeak_join_rf", rf_label = "stk_rf",
     rf_source = "R/plan_stock_backtest.R",
     df_label = "mom_prepeak returns", strategy_label = "mom_prepeak",
-    period_noun = "month", check_key_col = FALSE
+    period_noun = "month", check_key_col = FALSE,
+    basis_strategy = strategy
   )
 }
 

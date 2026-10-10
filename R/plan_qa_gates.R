@@ -4571,22 +4571,24 @@ QA_DSR_EXCLUDED_STRATEGIES <- c("PSO Optimal")
 #'
 #' Derived from a read-only simulation against the rebuilt store (2026-10-08):
 #' with Stock MAX / Factor MAX / Factor DRIF sourced from their own series, 12
-#' of 17 strategies match EXACTLY (tolerance 0), and these 5 do not. Every
+#' of 17 strategies matched EXACTLY (tolerance 0) and 5 did not; since #937
+#' only the TOTAL-basis row (Avoid Worst) remains. Every
 #' entry states why and carries a relative bound (|T_obs - months| / months),
 #' so drift BEYOND the observed offset still FAILs; an entry whose strategy
 #' now matches exactly is reported as STALE.
 #' @noRd
 S43_DSR_WINDOW_ALLOWLIST <- tibble::tibble(
-  strategy = c("Avoid Worst", "CMR", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2"),
-  max_rel_diff = c(0.005, 0.01, 0.0025, 0.0025, 0.0025),
+  strategy = c("Avoid Worst"),
+  max_rel_diff = c(0.005),
   reason = c(
-    "TOTAL-basis row: strat_deflated_sharpe drops observations with no matching rf (29 of 8353 on 2026-10-08, warned in-target); the leaderboard months counts all of them. Offset -29 (0.35%).",
-    "Observed offset +53 (0.82%): T_obs 6516 vs leaderboard months 6463 (same pre-OOS lookback, EXCESS basis so DSR drops nothing). Root cause not established here -- allow-listed pending a trace of how the leaderboard CMR row counts months.",
-    "Observed offset +1 month (T_obs 638 vs months 637); EXCESS basis so no rf drop explains it. Root cause not established here -- allow-listed pending a trace of how the Mom rows count months.",
-    "Same +1 month offset as Mom Pre-Peak (T_obs 638 vs months 637).",
-    "Same +1 month offset as Mom Pre-Peak (T_obs 638 vs months 637)."
+    "TOTAL-basis row: strat_deflated_sharpe drops observations with no matching rf (29 of 8353 on 2026-10-08, warned in-target); the leaderboard months counts all of them. Offset -29 (0.35%)."
   )
 )
+# Mom Pre-Peak / Mom Post-Peak / Mom 12-2 / CMR were allow-listed here
+# (+1 month, +53 days) until #937: the leaderboard path trimmed their trailing
+# rows for lack of an rf that an EXCESS-basis strategy never uses. They are
+# no longer trimmed (.join_rf_series(basis_strategy=)), so they must now match
+# T_obs exactly -- no exemption.
 
 .s43_check_allowlist <- function(allowlist) {
   req <- c("strategy", "max_rel_diff", "reason")
