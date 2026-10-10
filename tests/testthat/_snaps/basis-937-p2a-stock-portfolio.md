@@ -20,3 +20,27 @@
       i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", and "PSO Regime-Adjusted".
       i A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null).
 
+# .port_neg_sharpe signature is stable
+
+    Code
+      args(.port_neg_sharpe)
+    Output
+      function (w, ret_matrix, rf_vec) 
+      NULL
+
+# .drif_mv_perf signature is stable
+
+    Code
+      args(.drif_mv_perf)
+    Output
+      function (port) 
+      NULL
+
+# .decay_metrics_row signature is stable
+
+    Code
+      args(.decay_metrics_row)
+    Output
+      function (port, strategy_name, delay_d) 
+      NULL
+

@@ -158,11 +158,12 @@ test_that(".decay_metrics_row: an unmapped strategy name aborts (never a silent 
 
 test_that("market_impact_sensitivity: a decile long-short spread is EXCESS -- rf not deducted (#937)", {
   fx <- .impact_fixture()
-  out <- local_env_stk$market_impact_sensitivity(
+  # the 2-month fixture always triggers HRP's equal-weight fallback warning
+  out <- suppressWarnings(local_env_stk$market_impact_sensitivity(
     fx$df, fx$returns_wide, eta_grid = c(0.5, 1), lookback_months = 1L,
     adv_monthly = fx$adv_monthly, adv_pct_cap = 1, impact_aum = 1e7,
     impact_sigma = 0.02, rf = fx$rf, strategy = "Stock MAX"
-  )
+  ))
   expect_equal(out$sharpe, out$cagr / out$vol, tolerance = 1e-10)
 })
 
@@ -237,4 +238,17 @@ test_that("regime_metrics: base row is EXCESS, regime-adjusted row is a BLEND (#
   # falsification: deducting the FULL rf (the old behaviour) is materially different
   old <- (cagr_of(regime_ret) - mean(i$rf) * 12) / vol_of(regime_ret)
   expect_gt(abs(g$sharpe - old), 0.2)
+})
+
+# ── API stability ───────────────────────────────────────────────────────────
+test_that(".port_neg_sharpe signature is stable", {
+  expect_snapshot(args(.port_neg_sharpe))
+})
+
+test_that(".drif_mv_perf signature is stable", {
+  expect_snapshot(args(.drif_mv_perf))
+})
+
+test_that(".decay_metrics_row signature is stable", {
+  expect_snapshot(args(.decay_metrics_row))
 })
