@@ -287,7 +287,8 @@ plan_momentum_decomposition <- function() {
         # function still carries for standalone/test callers.
         summarize_backtest_performance(
           backtest_results,
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Momentum Decomposition L/S"  # excess spread: rf not deducted (#937)
         ) |>
           mutate(
             scheme_label = recode(
@@ -351,7 +352,8 @@ plan_momentum_decomposition <- function() {
     tar_target(
       rolling_sharpe_plot,
       {
-        monthly_rf <- (1.02)^(1/12) - 1
+        # #937: long-short spread is an excess return; registry => 0
+        monthly_rf <- hd_rf_for_basis((1.02)^(1/12) - 1, "Momentum Decomposition L/S")
 
         rolling <- backtest_results |>
           arrange(scheme, date) |>

@@ -6,6 +6,15 @@
 # lambda args to .scheme / .signal_type / .allocation_fn so no pronoun is needed.
 testthat::local_edition(3)
 
+# #937: summarize_regime_allocation() routes rf through the return-basis
+# registry, so the package and .require_basis_label() must be available.
+pkg_path <- if (dir.exists(here::here("packages/historicaldata"))) {
+  here::here("packages/historicaldata")
+} else {
+  file.path(dirname(here::here()), "packages/historicaldata")
+}
+suppressMessages(pkgload::load_all(pkg_path, quiet = TRUE))
+source(here::here("R/utils_metrics.R"))
 source(here::here("R/zakamulin_allocation.R"))
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -51,7 +60,7 @@ test_that(
   "summarize_regime_allocation() returns one row per group without .env$ error (#489 Cluster D)",
   {
     br     <- .make_backtest_results()
-    result <- summarize_regime_allocation(br, annual_rf = 0.02)
+    result <- summarize_regime_allocation(br, annual_rf = 0.02, strategy = "Regime Momentum")
 
     # Should have exactly 2 rows (one per scheme)
     expect_equal(nrow(result), 2L)
@@ -90,7 +99,7 @@ test_that(
       stringsAsFactors = FALSE
     )
 
-    result <- summarize_regime_allocation(br_c, annual_rf = 0.02)
+    result <- summarize_regime_allocation(br_c, annual_rf = 0.02, strategy = "Regime Momentum")
 
     expect_equal(nrow(result), 1L)
     # Peak after month 1: 1.10; valley after month 2: 1.10*0.80 = 0.88
