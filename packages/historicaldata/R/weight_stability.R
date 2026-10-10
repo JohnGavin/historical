@@ -46,7 +46,11 @@
 #'   order** and one column per asset. If a data frame, a column named `"date"`
 #'   (case-insensitive) is silently dropped. All remaining columns must be
 #'   numeric. Incomplete rows within each training window are dropped before
-#'   estimation.
+#'   estimation. Pass **excess** returns (risk-free rate already deducted from
+#'   total-return series): this function deducts no risk-free rate itself, so
+#'   `oos_sharpe` is a Sharpe ratio only if `returns` are excess returns, and
+#'   the mu-driven methods (`raw_mvo`, `shrunk_mu`) build their weights from
+#'   the mean of the matrix, so total returns change those weights too.
 #' @param methods Character vector of weight methods to compare. Must be a
 #'   non-empty subset of
 #'   `c("raw_mvo", "gmv", "shrunk_mu", "black_litterman", "equal_weight", "hrp")`.
