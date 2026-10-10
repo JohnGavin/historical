@@ -125,16 +125,7 @@ plan_portfolio_opt <- function() {
       rf_vec <- rf_vec[complete]
 
       # Objective: maximise Sharpe ratio
-      neg_sharpe <- function(w) {
-        w <- w / sum(w)  # normalise to sum=1
-        port_ret <- as.numeric(ret_matrix %*% w)
-        n <- length(port_ret)
-        ann_ret <- prod(1 + port_ret)^(12/n) - 1
-        ann_vol <- sd(port_ret) * sqrt(12)
-        rf_ann <- mean(rf_vec, na.rm = TRUE) * 12
-        if (ann_vol < 1e-8) return(1e6)
-        -((ann_ret - rf_ann) / ann_vol)
-      }
+      neg_sharpe <- function(w) .port_neg_sharpe(w, ret_matrix, rf_vec)
 
       # PSO or grid search (PSO needs pso package, fallback to grid)
       if (requireNamespace("pso", quietly = TRUE)) {
@@ -481,6 +472,27 @@ plan_portfolio_opt <- function() {
   })
 }
 
+
+#' Negative Sharpe objective minimised by the PSO / grid search
+#'
+#' Pure-function extraction of the `neg_sharpe` closure that lived inside the
+#' `port_optimal_weights` target (so the objective can be unit-tested).
+#'
+#' @param w Numeric weight vector (normalised to sum 1 inside).
+#' @param ret_matrix Numeric matrix of monthly strategy returns.
+#' @param rf_vec Numeric vector of monthly risk-free returns, one per row.
+#' @return Single number: minus the annualised Sharpe (1e6 if vol ~ 0).
+#' @noRd
+.port_neg_sharpe <- function(w, ret_matrix, rf_vec) {
+  w <- w / sum(w)  # normalise to sum=1
+  port_ret <- as.numeric(ret_matrix %*% w)
+  n <- length(port_ret)
+  ann_ret <- prod(1 + port_ret)^(12/n) - 1
+  ann_vol <- sd(port_ret) * sqrt(12)
+  rf_ann <- mean(rf_vec, na.rm = TRUE) * 12
+  if (ann_vol < 1e-8) return(1e6)
+  -((ann_ret - rf_ann) / ann_vol)
+}
 
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Prefixed .pso_optimal_* (private; not exported from the package).
