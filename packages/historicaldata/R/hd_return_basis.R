@@ -104,7 +104,10 @@ hd_return_basis <- function() {
     "Factor DRIF", "excess",
     "R/plan_drif.R:243 equal-weight of Fama-French factor spreads (no Mkt-RF, no RF)",
     "PSO Optimal", "excess",
-    "R/plan_portfolio_opt.R:226-241 normalised weighted average of the four excess series stk_max/stk_drif/fac_max/fac_drif"
+    "R/plan_portfolio_opt.R:226-241 normalised weighted average of the four excess series stk_max/stk_drif/fac_max/fac_drif",
+    # --- #937 phase 2 group A (stock / portfolio / regime / risk-state sites) ---
+    "PSO Regime-Adjusted", "blend",
+    "R/plan_regime.R:159 regime_ret = exposure * base_ret + (1 - exposure) * rf_ret: the PSO Optimal excess spread blended with a cash leg that IS rf; cash_weight = 1 - exposure (regime_portfolio column `cash_weight`)"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure
@@ -113,6 +116,7 @@ hd_return_basis <- function() {
   # it is NOT a hand-typed series.
   reg$cash_weight_col <- NA_character_
   reg$cash_weight_col[reg$strategy == "CMR Conditioned"] <- "cash_weight"
+  reg$cash_weight_col[reg$strategy == "PSO Regime-Adjusted"] <- "cash_weight"  # #937 phase 2 group A
   reg[c("strategy", "basis", "cash_weight_col", "evidence")]
 }
 

@@ -489,7 +489,14 @@ plan_portfolio_opt <- function() {
   n <- length(port_ret)
   ann_ret <- prod(1 + port_ret)^(12/n) - 1
   ann_vol <- sd(port_ret) * sqrt(12)
-  rf_ann <- mean(rf_vec, na.rm = TRUE) * 12
+  # #937 (origin #919): the four constituents are dollar-neutral long-short
+  # SPREADS, so the weighted series is itself an EXCESS return
+  # (hd_return_basis(): "PSO Optimal") and NO rf is deducted. Deducting it
+  # here shifted the numerator by a constant, which changes WHICH weights
+  # maximise the ratio (this objective picks the PSO weights). Approximation:
+  # funding and short-rebate rates are assumed to cancel; the residual is the
+  # constant borrow_rate_annual.
+  rf_ann <- mean(hd_rf_for_basis(rf_vec, "PSO Optimal"), na.rm = TRUE) * 12
   if (ann_vol < 1e-8) return(1e6)
   -((ann_ret - rf_ann) / ann_vol)
 }

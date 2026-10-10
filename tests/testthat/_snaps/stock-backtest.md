@@ -138,6 +138,6 @@
       function (df, returns_wide, eta_grid, long_decile = 1L, short_decile = 10L, 
           lookback_months = 36L, cost_per_trade = 0.005, borrow_rate_annual = 0.03, 
           max_monthly_ret = 0.2, adv_monthly, adv_pct_cap = 0.1, impact_aum, 
-          impact_sigma, rf = NULL, rf_col = "rf_ret") 
+          impact_sigma, rf = NULL, rf_col = "rf_ret", strategy = NULL) 
       NULL
 

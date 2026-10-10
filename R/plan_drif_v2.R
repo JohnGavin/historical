@@ -32,7 +32,15 @@
   if (n < 12L) return(NULL)
   ret  <- port$port_ret
   rfv  <- port$rf
-  xret <- ret - dplyr::coalesce(rfv, 0)
+  # #937 (origin #919): every spec's portfolio is an equal-weight average of
+  # the top-N Fama-French factor SPREADS (HML/SMB/RMW/CMA/Mom; the Mkt-RF
+  # benchmark is excluded by hd_drif_select_topn()), i.e. an EXCESS return --
+  # the same basis as the production "Factor DRIF" row (R/plan_drif.R). So NO
+  # rf is deducted. It used to be, with `coalesce(rf, 0)` silently zero-filling
+  # missing rf months; the registry route has no such fill. This Sharpe feeds
+  # hd_trial_sharpe_var() (the DSR trial variance), so the bias was in the
+  # variance input as well.
+  xret <- hd_excess_returns(ret, as.numeric(rfv), "Factor DRIF")
 
   ann_ret <- prod(1 + ret)^(12 / n) - 1
   ann_vol <- sd(ret) * sqrt(12)
