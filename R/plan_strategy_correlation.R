@@ -554,12 +554,13 @@ plan_strategy_correlation <- function() {
     # target's own comment), so periods_per_year = 12L below is correct for
     # every one of the 16 columns, unlike a naive mix of native frequencies.
     # A live-store check (2026, docs/_targets) found 193 rows with non-NA
-    # data across all 16 STRAT_RETURNS_WIDE_CODES columns simultaneously --
-    # NOT a further-shrunk window: 193 equals Factor MAX/Factor DRIF's own
-    # individual non-NA count (193), i.e. the complete-case window is bounded
-    # by the tightest-history strategy already on the leaderboard, not by
-    # requiring 16-way agreement beyond what that strategy's own "Full
-    # Period" Sharpe is already computed over. A shared common window (not
+    # data across all 16 STRAT_RETURNS_WIDE_CODES columns simultaneously,
+    # when Factor MAX/Factor DRIF were still cut to port_returns' stock
+    # window. Since #937 those columns carry their own full history, so the
+    # complete-case window is bounded by the shortest-history strategy that
+    # remains (Stock DRIF / XGB DRIF / OLMAR-1, ~195 months), which is applied
+    # HERE, visibly, by the full_rets filter below -- not by truncating the
+    # source columns. A shared common window (not
     # each strategy's own full individual history, unlike
     # strat_deflated_sharpe's naive_sharpe) is deliberate here: comparing two
     # strategies' Sharpe to decide which is "better" for the redundancy flag
@@ -866,9 +867,32 @@ plan_strategy_correlation <- function() {
     targets::tar_target(strat_returns_wide, {
       library(dplyr)
 
-      base <- port_returns |>
-        select(ym, stk_max, stk_drif, fac_max, fac_drif) |>
-        filter(if_any(c(stk_max, stk_drif, fac_max, fac_drif), ~ !is.na(.x)))
+      # #937 (refs #919): Stock MAX, Factor MAX and Factor DRIF enter through
+      # their OWN full-length portfolio series (the same objects the
+      # leaderboard's Full-Period rows are scored on), NOT through
+      # port_returns. port_returns' monthly spine is bounded to the overlap of
+      # the two STOCK series (R/plan_portfolio_opt.R) -- right for the
+      # covariance/PSO/optimiser code that needs a common window, wrong here:
+      # it cut Factor MAX 740 -> 193 months, Factor DRIF 691 -> 193 and Stock
+      # MAX 255 -> 195, so strat_deflated_sharpe scored a different window
+      # from the leaderboard row it sits beside. Consumers that need a common
+      # window restrict it themselves, visibly (strat_corr_augment's
+      # complete-case full_rets; .build_wide_corr_matrix is pairwise).
+      # Stock DRIF is deliberately still read from port_returns: its own
+      # series defines the spine start and ends with the spine, so it is not
+      # truncated (checked on the store: 195 months either way).
+      stk_max_col <- stk_max_portfolio |>
+        filter(!is.na(port_ret)) |>
+        select(ym, stk_max = port_ret)
+      stk_drif_col <- port_returns |>
+        filter(!is.na(stk_drif)) |>
+        select(ym, stk_drif)
+      fac_max_col <- fm_portfolio |>
+        filter(!is.na(portfolio_ret)) |>
+        select(ym, fac_max = portfolio_ret)
+      fac_drif_col <- drif_portfolio |>
+        filter(!is.na(portfolio_ret)) |>
+        select(ym, fac_drif = portfolio_ret)
 
       # LTR: same ym-from-date derivation as strat_returns_aligned above.
       ltr_col <- ltr_portfolio |>
@@ -940,7 +964,8 @@ plan_strategy_correlation <- function() {
 
       parts <- c(
         list(
-          base, ltr_col, xgb_col, mom_prepeak_col, mom_postpeak_col,
+          stk_max_col, stk_drif_col, fac_max_col, fac_drif_col,
+          ltr_col, xgb_col, mom_prepeak_col, mom_postpeak_col,
           mom_combined_col, value_hml_col, managed_futures_col
         ),
         daily_monthly_cols

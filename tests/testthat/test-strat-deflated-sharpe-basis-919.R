@@ -154,3 +154,26 @@ test_that("blend: observations with no rf are DROPPED and reported, never 0-fill
   expect_warning(out <- .run(toy), regexp = "CMR Conditioned: dropped 30 of 400")
   expect_false(is.na(out$naive_sharpe[out$strategy == "CMR Conditioned"]))
 })
+
+# ── T_obs: the observation count the DSR actually used (#937, refs #919) ────
+test_that("strat_deflated_sharpe exposes T_obs = observations hd_deflated_sharpe() was given", {
+  toy <- .toy()
+  out <- .run(toy)
+  expect_true("T_obs" %in% names(out))
+  expect_equal(out$T_obs[out$strategy == "Stock MAX"], 240L)
+  expect_equal(out$T_obs[out$strategy == "CMR"], 400L)
+})
+
+test_that("T_obs counts AFTER rf drops (the n the Sharpe was really computed on)", {
+  toy <- .toy()
+  toy$ev_portfolios <- toy$ev_portfolios[1:200, ]
+  expect_warning(out <- .run(toy), regexp = "dropped 40 of 240")
+  expect_equal(out$T_obs[out$strategy == "Value (HML)"], 200L)
+})
+
+test_that("FALSIFICATION: T_obs follows a truncated source series (Factor MAX 193-vs-240 shape)", {
+  toy <- .toy()
+  toy$strat_returns_wide$fac_max[1:47] <- NA_real_   # 240 -> 193 months
+  out <- .run(toy)
+  expect_equal(out$T_obs[out$strategy == "Factor MAX"], 193L)
+})

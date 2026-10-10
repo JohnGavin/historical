@@ -66,5 +66,6 @@ test_that("WIRING: the leaderboard target feeds prob_sharpe_positive through the
   expect_match(body, ".dsr_naive_sharpe = naive_sharpe", fixed = TRUE)
   # ... and the PSR pmap reads the helper's output, not the raw `sharpe` column
   expect_match(body, ".prob_sharpe_input_sharpe(", fixed = TRUE)
-  expect_match(body, "list(prob_sharpe_in, all_metrics$months", fixed = TRUE)
+  # (#937: the n is now the DSR path's T_obs via prob_sharpe_n, not raw months)
+  expect_match(body, "list(prob_sharpe_in, prob_sharpe_n", fixed = TRUE)
 })
