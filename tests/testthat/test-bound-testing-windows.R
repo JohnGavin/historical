@@ -34,6 +34,14 @@ testthat::local_edition(3)
 # test_end -- full behavioural re-derivation for all eight targets was
 # judged not to add proportionate signal over these two layers together.
 
+# #937: rsc_subperiod/rsc_metrics now route rf through the return-basis
+# registry (hd_excess_returns()/hd_rf_for_basis()), so load the package.
+pkg_path <- if (dir.exists(here::here("packages/historicaldata"))) {
+  here::here("packages/historicaldata")
+} else {
+  file.path(dirname(here::here()), "packages/historicaldata")
+}
+suppressMessages(pkgload::load_all(pkg_path, quiet = TRUE))
 source(here::here("R/utils_metrics.R"))
 source(here::here("R/plan_qa_gates.R"))
 source(here::here("R/plan_risk_state.R"))
@@ -288,6 +296,7 @@ test_that("rsc_subperiod's trailing window stops at holdout_end, not the data's 
     date         = days,
     ret_strategy = stats::rnorm(length(days), 0.0004, 0.01),
     ret_buyhold  = stats::rnorm(length(days), 0.0004, 0.012),
+    rf_daily     = rep(0.0001, length(days)),   # #937: rsc_portfolio's own rf column
     regime       = rep_len(c("benign", "cautious", "hostile"), length(days))
   )
 

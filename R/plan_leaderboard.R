@@ -122,6 +122,70 @@
   )
 )
 
+#' Sharpe fed to the probabilistic-Sharpe diagnostic, per leaderboard row (#919)
+#'
+#' \code{hd_prob_sharpe_positive()} assumes the ARITHMETIC per-period
+#' mean/sd; the leaderboard \code{sharpe} is GEOMETRIC. For the Full-Period
+#' row of a strategy covered by \code{strat_deflated_sharpe}, the arithmetic
+#' EXCESS Sharpe that target computes via the \code{hd_return_basis()}
+#' registry (\code{naive_sharpe}) is used, so \code{1 - dsr_pvalue <=
+#' prob_sharpe_positive} compares like with like. Every other row keeps the
+#' geometric \code{sharpe} (no arithmetic series exists for it here). A
+#' covered Full-Period row whose \code{naive_sharpe} is NA stays NA -- it is
+#' never silently replaced by the geometric figure. The domain is unchanged:
+#' only rows with a positive, non-NA leaderboard \code{sharpe} get a value.
+#'
+#' @param period Character vector of leaderboard period labels.
+#' @param sharpe Numeric; the (geometric) leaderboard Sharpe.
+#' @param arith_sharpe Numeric; \code{strat_deflated_sharpe$naive_sharpe}
+#'   joined to each row (NA where the strategy has no DSR row).
+#' @param dsr_covered Logical; TRUE where the row's strategy has a row in
+#'   \code{strat_deflated_sharpe}.
+#' @return Numeric vector the same length as \code{sharpe}.
+#' @noRd
+.prob_sharpe_input_sharpe <- function(period, sharpe, arith_sharpe, dsr_covered) {
+  n <- length(sharpe)
+  if (length(period) != n || length(arith_sharpe) != n || length(dsr_covered) != n) {
+    cli::cli_abort(c(
+      "x" = ".prob_sharpe_input_sharpe(): all inputs must have the same length.",
+      "i" = "Got period {length(period)}, sharpe {n}, arith_sharpe {length(arith_sharpe)}, dsr_covered {length(dsr_covered)}."
+    ))
+  }
+  use_arith <- (period %in% "Full Period") & dsr_covered
+  out <- ifelse(use_arith, arith_sharpe, sharpe)
+  out[is.na(sharpe) | sharpe <= 0] <- NA_real_
+  out
+}
+
+#' Observation count paired with the probabilistic-Sharpe input (#937)
+#'
+#' Companion to \code{.prob_sharpe_input_sharpe()}: where that helper swaps in
+#' the DSR path's arithmetic Sharpe for covered Full-Period rows, this one
+#' swaps in the SAME path's \code{T_obs} so the Sharpe and the n it is paired
+#' with come from one place. A covered Full-Period row whose \code{T_obs} is
+#' NA stays NA -- it is never silently replaced by the leaderboard
+#' \code{months}. Every other row (sub-periods, PSO Optimal) keeps
+#' \code{months}, unchanged.
+#'
+#' @param period Character vector of leaderboard period labels.
+#' @param months Numeric; the leaderboard observation count per row.
+#' @param dsr_T_obs Numeric; \code{strat_deflated_sharpe$T_obs} joined to each
+#'   row (NA where the strategy has no DSR row).
+#' @param dsr_covered Logical; TRUE where the row's strategy has a DSR row.
+#' @return Numeric vector the same length as \code{months}.
+#' @noRd
+.prob_sharpe_input_n <- function(period, months, dsr_T_obs, dsr_covered) {
+  n <- length(months)
+  if (length(period) != n || length(dsr_T_obs) != n || length(dsr_covered) != n) {
+    cli::cli_abort(c(
+      "x" = ".prob_sharpe_input_n(): all inputs must have the same length.",
+      "i" = "Got period {length(period)}, months {n}, dsr_T_obs {length(dsr_T_obs)}, dsr_covered {length(dsr_covered)}."
+    ))
+  }
+  use_dsr <- (period %in% "Full Period") & dsr_covered
+  as.numeric(ifelse(use_dsr, dsr_T_obs, months))
+}
+
 #' Build STRATEGY_OBS_ANN_FACTOR from strategy_names + its provenance table
 #'
 #' Exposed as a function (rather than inlined at source() time) so tests can
@@ -838,7 +902,14 @@ plan_leaderboard <- function() {
             strat_deflated_sharpe |>
               select(strategy, deflated_sharpe, dsr_pvalue,
                      k_eff_leaderboard, k_raw_leaderboard,
-                     k_eff_family, k_raw_family),
+                     k_eff_family, k_raw_family,
+                     # #919: the ARITHMETIC per-period EXCESS Sharpe (registry
+                     # basis) -- the input prob_sharpe_positive needs below.
+                     # Temporary column, dropped after prob_sharpe_diag.
+                     .dsr_naive_sharpe = naive_sharpe,
+                     # #937: the n that Sharpe was computed over (same
+                     # target, same row), paired with it below.
+                     .dsr_T_obs = T_obs),
             by = "strategy"
           )
       }
@@ -1313,13 +1384,55 @@ plan_leaderboard <- function() {
         )
       }
 
+      # SHARPE INPUT (#919): the probabilistic-Sharpe formula (Lo 2002 /
+      # Mertens 2002 variance) assumes the ARITHMETIC per-period mean/sd,
+      # which is what strat_deflated_sharpe's `naive_sharpe` is -- on the
+      # registry's EXCESS basis (hd_return_basis()). The leaderboard
+      # `sharpe` is GEOMETRIC ((CAGR - rf) / vol) and understates it by the
+      # variance drag, so feeding it here made `1 - dsr_pvalue <=
+      # prob_sharpe_positive` an apples-to-oranges comparison. For the
+      # Full-Period row of every strategy strat_deflated_sharpe covers, the
+      # arithmetic excess Sharpe is therefore used; every other row (the
+      # sub-period rows, and PSO Optimal which has no DSR) has no
+      # arithmetic series available in this target and keeps the geometric
+      # `sharpe` -- see .prob_sharpe_input_sharpe(). The headline `sharpe`
+      # column itself is NOT touched.
+      dsr_covered <- if (!is.null(strat_deflated_sharpe)) {
+        all_metrics$strategy %in% strat_deflated_sharpe$strategy
+      } else {
+        rep(FALSE, nrow(all_metrics))
+      }
+      dsr_naive <- if (".dsr_naive_sharpe" %in% names(all_metrics)) {
+        all_metrics$.dsr_naive_sharpe
+      } else {
+        rep(NA_real_, nrow(all_metrics))
+      }
+      prob_sharpe_in <- .prob_sharpe_input_sharpe(
+        all_metrics$period, all_metrics$sharpe, dsr_naive, dsr_covered
+      )
+
+      # N INPUT (#937): a Sharpe measured over T observations must be paired
+      # with that same T. For covered Full-Period rows n is the DSR path's own
+      # T_obs (strat_deflated_sharpe), not the leaderboard `months`; every
+      # other row keeps `months` (unchanged -- sub-period rows and PSO
+      # Optimal still use the geometric `sharpe` they are scored on).
+      dsr_T_obs <- if (".dsr_T_obs" %in% names(all_metrics)) {
+        all_metrics$.dsr_T_obs
+      } else {
+        rep(NA_real_, nrow(all_metrics))
+      }
+      prob_sharpe_n <- .prob_sharpe_input_n(
+        all_metrics$period, all_metrics$months, dsr_T_obs, dsr_covered
+      )
+
       prob_sharpe_diag <- purrr::pmap_dfr(
-        list(all_metrics$sharpe, all_metrics$months, all_metrics$obs_ann_factor,
+        list(prob_sharpe_in, prob_sharpe_n, all_metrics$obs_ann_factor,
              all_metrics$k_eff_leaderboard),
         .prob_sharpe_positive_row
       )
 
       all_metrics <- all_metrics |>
+        dplyr::select(-dplyr::any_of(c(".dsr_naive_sharpe", ".dsr_T_obs"))) |>
         dplyr::bind_cols(prob_sharpe_diag) |>
         dplyr::mutate(
           # TRUE where the probability the true Sharpe is positive falls
@@ -1604,12 +1717,95 @@ plan_leaderboard <- function() {
       )
       family_cols <- c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr")
 
+      # rf series for the TOTAL-basis rows only (#919) -- the SAME rf each
+      # row's own leaderboard Sharpe deducted (one home per value), keyed
+      # to match `key` in .dsr_row() below. Excess/indeterminate rows need
+      # none. A total-basis row with no entry here aborts in .dsr_row().
+      rf_monthly <- list(
+        value_hml = tibble::tibble(
+          key = format(as.Date(ev_portfolios$date), "%Y-%m"), rf = ev_portfolios$RF
+        ),
+        managed_futures = tibble::tibble(
+          key = format(as.Date(mf_portfolios$date), "%Y-%m"), rf = mf_portfolios$RF
+        )
+      )
+      rf_daily_src <- list(
+        olmar_1     = tibble::tibble(key = as.Date(olmar_portfolio$date), rf = olmar_portfolio$rf_ret),
+        tom         = tibble::tibble(key = as.Date(tom_portfolio$date), rf = tom_portfolio$rf_ret),
+        risk_state  = tibble::tibble(key = as.Date(rsc_portfolio$date), rf = rsc_portfolio$rf_daily),
+        avoid_worst = tibble::tibble(key = as.Date(aw_daily_rf$date), rf = aw_daily_rf$rf_ret),
+        # "blend" basis (#919): the cash leg's rf, carried by the overlay
+        # itself (NA where unknown, never 0-filled) -- see
+        # .cmr_apply_conditioning_overlay() in
+        # R/plan_commodities_mean_reversion.R.
+        cmr_conditioned = tibble::tibble(
+          key = as.Date(strat_returns_daily_native[["cmr_conditioned"]][["date"]]),
+          rf  = strat_returns_daily_native[["cmr_conditioned"]][["rf_ret"]]
+        )
+      )
+
       k_eff_lb  <- max(1, round(strat_keff_vertox_leaderboard))
       k_raw_lb  <- nrow(strat_corr_matrix_leaderboard)
       k_eff_fam <- max(1L, round(strat_keff_vertox))
       k_raw_fam <- nrow(strat_corr_matrix)
 
-      .dsr_row <- function(strategy_label, r, ann_factor, is_family = FALSE) {
+      # ── Return basis (#919) ────────────────────────────────────────────
+      # The leaderboard `sharpe` is on an EXCESS-return basis (rf deducted
+      # iff the series is a TOTAL return; a dollar-neutral spread is
+      # already excess) -- see historicaldata::hd_return_basis(), the ONE
+      # home of that classification. This DSR path used to feed
+      # hd_deflated_sharpe() the RAW series, so a total-return series
+      # (HML = RF + HML - cost) was scored with its cash component inside
+      # the numerator (naive_sharpe 0.528 vs the leaderboard's 0.068).
+      # `key` aligns `r` to `rf_tbl` (columns key, rf); only "total"
+      # strategies need an rf series. Positions with no rf are DROPPED
+      # and counted (fail-loud-not-null.md pattern 4), never treated as 0.
+      #
+      # SHARPE CONVENTION (stated, not papered over): hd_deflated_sharpe()
+      # uses the per-period ARITHMETIC mean/sd of this excess series,
+      # annualised by sqrt(ann_factor); the leaderboard `sharpe` uses
+      # (GEOMETRIC CAGR - arithmetic ann_rf) / vol. The two differ by the
+      # variance drag (~sigma^2/2 / sigma = sigma/2 in Sharpe units) --
+      # a pre-existing, intentional difference, NOT removed by #919.
+      .dsr_row <- function(strategy_label, r, key, rf_tbl, ann_factor,
+                           is_family = FALSE, cash_weight = NULL) {
+        basis <- hd_return_basis_of(strategy_label)
+        if (identical(basis, "total")) {
+          if (is.null(rf_tbl)) {
+            cli::cli_abort(c(
+              "x" = "{.val {strategy_label}} is total-basis but no rf series was supplied to strat_deflated_sharpe.",
+              "i" = "Add it to {.code rf_monthly}/{.code rf_daily_src} in this target (R/plan_leaderboard.R)."
+            ))
+          }
+          rf   <- rf_tbl$rf[match(key, rf_tbl$key)]
+          drop <- !is.na(r) & is.na(rf)
+          if (any(drop)) {
+            cli::cli_warn(c("!" = "{strategy_label}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf in strat_deflated_sharpe."))
+          }
+          keep <- !is.na(r) & !is.na(rf)
+          r    <- hd_excess_returns(r[keep], rf[keep], strategy_label)
+        } else if (identical(basis, "blend")) {
+          # rf is deducted only on the cash leg's per-observation weight
+          # (excess = ret - cash_weight * rf). An observation with no rf (or
+          # no cash weight) is DROPPED and counted, never 0-filled: a
+          # 0-filled cash-leg rf would bias the excess return upward.
+          if (is.null(rf_tbl) || is.null(cash_weight)) {
+            cli::cli_abort(c(
+              "x" = "{.val {strategy_label}} is blend-basis but no rf series / cash_weight was supplied to strat_deflated_sharpe.",
+              "i" = "Both come from strat_returns_daily_native (R/plan_strategy_correlation.R)."
+            ))
+          }
+          rf   <- rf_tbl$rf[match(key, rf_tbl$key)]
+          drop <- !is.na(r) & (is.na(rf) | is.na(cash_weight))
+          if (any(drop)) {
+            cli::cli_warn(c("!" = "{strategy_label}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf / cash weight in strat_deflated_sharpe."))
+          }
+          keep <- !is.na(r) & !is.na(rf) & !is.na(cash_weight)
+          r    <- hd_excess_returns(r[keep], rf[keep], strategy_label,
+                                    cash_weight = cash_weight[keep])
+        } else {
+          r <- hd_excess_returns(r, rep(0, length(r)), strategy_label)
+        }
         r <- r[!is.na(r)]
         d <- hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
 
@@ -1638,6 +1834,12 @@ plan_leaderboard <- function() {
         tibble::tibble(
           strategy           = strategy_label,
           naive_sharpe       = d$naive_sharpe,
+          # #937: the observation count hd_deflated_sharpe() above was
+          # actually given (after rf drops and NA removal) -- the ONE home of
+          # "how many observations is naive_sharpe over". The leaderboard's
+          # prob_sharpe_positive reads it from here rather than re-deriving n
+          # from the leaderboard `months`.
+          T_obs              = length(r),
           deflated_sharpe    = d$dsr,
           dsr_pvalue         = d$dsr_pvalue,
           dsr_haircut_pct    = d$haircut_pct,
@@ -1654,6 +1856,8 @@ plan_leaderboard <- function() {
         .dsr_row(
           unname(col_map_monthly[[col]]),
           strat_returns_wide[[col]],
+          key        = strat_returns_wide$ym,
+          rf_tbl     = rf_monthly[[col]],
           ann_factor = 12L,
           is_family  = col %in% family_cols
         )
@@ -1663,7 +1867,10 @@ plan_leaderboard <- function() {
         .dsr_row(
           unname(col_map_daily[[nm]]),
           strat_returns_daily_native[[nm]]$ret,
-          ann_factor = 252L
+          key        = strat_returns_daily_native[[nm]]$date,
+          rf_tbl     = rf_daily_src[[nm]],
+          ann_factor = 252L,
+          cash_weight = strat_returns_daily_native[[nm]][["cash_weight"]]
         )
       }))
 

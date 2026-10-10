@@ -13,6 +13,62 @@
 #
 # Reference: Harvey, Liu & Zhu (2016), Lopez de Prado (2018).
 
+# ── Return basis (#937 Phase 1, Refs #919) ───────────────────────────────────
+# A Sharpe-type statistic is on an EXCESS-return basis: rf is deducted iff the
+# series is a TOTAL return (hd_return_basis(), the ONE home of that
+# classification). avoid_worst, rsc (Risk State) and tom are TOTAL (SPY-or-cash)
+# series, so their HAC / DSR / structural-break / stop-rule evidence is computed
+# on fals_excess_input()'s output. drif / fac_max / ltr / CMR are
+# dollar-neutral spreads (already excess) and are NOT routed through it.
+# Approximation kept: "excess, no rf" for a spread ignores the funding vs
+# short-rebate rate difference (residual = constant borrow_rate_annual).
+# CONVENTION: HAC / DSR / structural-break Sharpes use the ARITHMETIC
+# per-period mean/sd of the excess series; unchanged by this fix.
+#
+# input  : tibble(date, strategy_ret)
+# rf_tbl : tibble(date, rf) -- the SAME per-strategy rf the leaderboard deducts
+# Observations with no matching rf are DROPPED and counted (never 0-filled);
+# an unregistered strategy aborts (fail-loud-not-null.md).
+fals_excess_input <- function(input, rf_tbl, strategy) {
+  need_in <- setdiff(c("date", "strategy_ret"), names(input))
+  if (length(need_in) > 0L) {
+    cli::cli_abort(c(
+      "x" = "fals_excess_input(): {.arg input} is missing {length(need_in)} required column{?s}: {.field {need_in}}.",
+      "i" = "Expected the fals_*_input bridge shape: date, strategy_ret."
+    ))
+  }
+  basis <- hd_return_basis_of(strategy)
+  if (!identical(basis, "total")) {
+    # excess: already excess, nothing to deduct. blend / indeterminate are not
+    # falsification-bridge shapes -- abort rather than guess a cash weight.
+    if (identical(basis, "excess")) return(input[c("date", "strategy_ret")])
+    cli::cli_abort(c(
+      "x" = "fals_excess_input(): {.val {strategy}} has basis {.val {basis}}; only {.val total} and {.val excess} are supported here.",
+      "i" = "A blend needs a per-observation cash weight; route it through hd_excess_returns() with {.arg cash_weight}."
+    ))
+  }
+  need_rf <- setdiff(c("date", "rf"), names(rf_tbl))
+  if (length(need_rf) > 0L) {
+    cli::cli_abort(c(
+      "x" = "fals_excess_input(): {.arg rf_tbl} is missing {length(need_rf)} required column{?s}: {.field {need_rf}}.",
+      "i" = "Expected tibble(date, rf) for {.val {strategy}}."
+    ))
+  }
+  d_in <- as.Date(input$date, tz = "UTC")
+  d_rf <- as.Date(rf_tbl$date, tz = "UTC")
+  rf   <- rf_tbl$rf[match(d_in, d_rf)]
+  r    <- input$strategy_ret
+  drop <- !is.na(r) & is.na(rf)
+  if (any(drop)) {
+    cli::cli_warn(c("!" = "{strategy}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf in fals_excess_input."))
+  }
+  keep <- !is.na(r) & !is.na(rf)
+  tibble::tibble(
+    date         = d_in[keep],
+    strategy_ret = hd_excess_returns(r[keep], rf[keep], strategy)
+  )
+}
+
 plan_falsification <- function() {
   list(
 
@@ -69,6 +125,35 @@ plan_falsification <- function() {
     }),
 
 
+    # ── Excess-basis bridges for the three TOTAL-basis strategies (#937) ──
+    # Each deducts the rf its own leaderboard Sharpe deducts (one home per
+    # value): aw_daily_rf, rsc_portfolio$rf_daily (lagged t+1, as constructed),
+    # tom_portfolio$rf_ret. HAC, DSR, structural-break and stop-rule evidence
+    # read THESE, not the raw fals_*_input. (fals_ff_* keep the raw input:
+    # hd_factor_null_test() deducts rf itself.)
+    targets::tar_target(fals_avoid_worst_excess, {
+      fals_excess_input(
+        fals_avoid_worst_input,
+        tibble::tibble(date = aw_daily_rf$date, rf = aw_daily_rf$rf_ret),
+        "Avoid Worst"
+      )
+    }),
+    targets::tar_target(fals_rsc_excess, {
+      fals_excess_input(
+        fals_rsc_input,
+        tibble::tibble(date = rsc_portfolio$date, rf = rsc_portfolio$rf_daily),
+        "Risk State"
+      )
+    }),
+    targets::tar_target(fals_tom_excess, {
+      fals_excess_input(
+        fals_tom_input,
+        tibble::tibble(date = tom_portfolio$date, rf = tom_portfolio$rf_ret),
+        "TOM"
+      )
+    }),
+
+
     # ═══════════════════════════════════════════════════════════════════
     # Shared data: factors and risk-free rate (fetched once)
     # ═══════════════════════════════════════════════════════════════════
@@ -99,7 +184,7 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_avoid_worst, {
-      hd_hac_sharpe(fals_avoid_worst_input$strategy_ret)
+      hd_hac_sharpe(fals_avoid_worst_excess$strategy_ret)  # #937: excess basis
     }),
 
     targets::tar_target(fals_wn_avoid_worst, {
@@ -348,7 +433,7 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_rsc, {
-      hd_hac_sharpe(fals_rsc_input$strategy_ret)
+      hd_hac_sharpe(fals_rsc_excess$strategy_ret)  # #937: excess basis
     }),
 
     targets::tar_target(fals_wn_rsc, {
@@ -516,7 +601,7 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_hac_tom, {
-      hd_hac_sharpe(fals_tom_input$strategy_ret)
+      hd_hac_sharpe(fals_tom_excess$strategy_ret)  # #937: excess basis
     }),
 
     targets::tar_target(fals_wn_tom, {
@@ -988,7 +1073,7 @@ plan_falsification <- function() {
     # ═══════════════════════════════════════════════════════════════════
 
     targets::tar_target(fals_dsr_avoid_worst, {
-      hd_deflated_sharpe(fals_avoid_worst_input$strategy_ret, K_trials = 5L, ann_factor = 252L)
+      hd_deflated_sharpe(fals_avoid_worst_excess$strategy_ret, K_trials = 5L, ann_factor = 252L)
     }),
     targets::tar_target(fals_dsr_drif, {
       hd_deflated_sharpe(fals_drif_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
@@ -997,13 +1082,13 @@ plan_falsification <- function() {
       hd_deflated_sharpe(fals_fac_max_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
     }),
     targets::tar_target(fals_dsr_rsc, {
-      hd_deflated_sharpe(fals_rsc_input$strategy_ret, K_trials = 5L, ann_factor = 252L)
+      hd_deflated_sharpe(fals_rsc_excess$strategy_ret, K_trials = 5L, ann_factor = 252L)
     }),
     targets::tar_target(fals_dsr_ltr, {
       hd_deflated_sharpe(fals_ltr_input$strategy_ret, K_trials = 5L, ann_factor = 12L)
     }),
     targets::tar_target(fals_dsr_tom, {
-      hd_deflated_sharpe(fals_tom_input$strategy_ret, K_trials = 6L, ann_factor = 252L)
+      hd_deflated_sharpe(fals_tom_excess$strategy_ret, K_trials = 6L, ann_factor = 252L)
     }),
 
 

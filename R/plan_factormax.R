@@ -188,7 +188,10 @@ plan_factormax <- function() {
         # published alongside sharpe -- QA gate S17
         # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
         # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
-        ann_rf <- mean(df$rf_ret) * 12
+        # #919: Factor MAX is an equal-weight of Fama-French factor SPREADS
+        # (HML/SMB/RMW/CMA/Mom), i.e. an EXCESS return -- no rf deducted
+        # (hd_return_basis(): "excess"; ann_rf is therefore exactly 0).
+        ann_rf <- mean(hd_rf_for_basis(df$rf_ret, "Factor MAX")) * 12
         sharpe <- (ann_ret - ann_rf) / ann_vol
         cum <- cumprod(1 + df$portfolio_ret)
         dd <- cum / cummax(cum) - 1
@@ -197,7 +200,10 @@ plan_factormax <- function() {
 
         bench_ann <- prod(1 + df$benchmark_ret)^(12/n) - 1
         bench_vol <- sd(df$benchmark_ret) * sqrt(12)
-        bench_sharpe <- (bench_ann - mean(df$rf_ret) * 12) / bench_vol
+        # basis: excess (Mkt-RF); registry vocabulary for benchmarks tracked in #937 Phase 3
+        # Mkt-RF is ALREADY an excess return, so NO rf is deducted (#937,
+        # refs #919); deducting it again understated the benchmark.
+        bench_sharpe <- bench_ann / bench_vol
 
         tibble(
           period = label,

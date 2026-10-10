@@ -331,6 +331,121 @@ STRAT_RETURNS_WIDE_CODES <- c(
   invisible(dropped_ym)
 }
 
+#' rf sources for the TOTAL- and BLEND-basis columns of strat_returns_wide (#937)
+#'
+#' Mirrors the rf series strat_deflated_sharpe (R/plan_leaderboard.R) uses
+#' for the SAME columns -- the same target columns, so both Sharpe paths
+#' deduct the same rf. Monthly-native columns are keyed by `"YYYY-MM"`;
+#' daily-native columns by `Date`. Excess-basis columns need none.
+#'
+#' @return `list(monthly = <named list of tibble(key, rf)>, daily = <same>)`
+#'   keyed by strat_returns_wide code_name.
+#' @noRd
+.strat_rf_sources <- function(ev_portfolios, mf_portfolios, olmar_portfolio,
+                              tom_portfolio, rsc_portfolio, aw_daily_rf,
+                              daily_native) {
+  list(
+    monthly = list(
+      value_hml = tibble::tibble(
+        key = format(as.Date(ev_portfolios$date), "%Y-%m"), rf = ev_portfolios$RF
+      ),
+      managed_futures = tibble::tibble(
+        key = format(as.Date(mf_portfolios$date), "%Y-%m"), rf = mf_portfolios$RF
+      )
+    ),
+    daily = list(
+      olmar_1     = tibble::tibble(key = as.Date(olmar_portfolio$date), rf = olmar_portfolio$rf_ret),
+      tom         = tibble::tibble(key = as.Date(tom_portfolio$date), rf = tom_portfolio$rf_ret),
+      risk_state  = tibble::tibble(key = as.Date(rsc_portfolio$date), rf = rsc_portfolio$rf_daily),
+      avoid_worst = tibble::tibble(key = as.Date(aw_daily_rf$date), rf = aw_daily_rf$rf_ret),
+      cmr_conditioned = tibble::tibble(
+        key = as.Date(daily_native[["cmr_conditioned"]][["date"]]),
+        rf  = daily_native[["cmr_conditioned"]][["rf_ret"]]
+      )
+    )
+  )
+}
+
+#' Excess-return series for one column, via the return-basis registry (#937)
+#'
+#' Returns a vector the same length as `r`. A "total"/"blend" observation with
+#' no matching rf (or cash weight) is set to NA and COUNTED in a warning --
+#' never 0-filled (fail-loud-not-null.md).
+#' @noRd
+.strat_excess_one <- function(r, key, rf_tbl, label, cash_weight = NULL) {
+  basis <- hd_return_basis_of(label)
+  n <- length(r)
+  if (identical(basis, "total") || identical(basis, "blend")) {
+    if (is.null(rf_tbl) || (identical(basis, "blend") && is.null(cash_weight))) {
+      cli::cli_abort(c(
+        "x" = "{.val {label}} is {basis}-basis but no rf series{if (identical(basis, 'blend')) ' / cash weight' else ''} was supplied to strat_corr_augment.",
+        "i" = "Add it to {.fn .strat_rf_sources} (R/plan_strategy_correlation.R)."
+      ))
+    }
+    rf   <- rf_tbl$rf[match(key, rf_tbl$key)]
+    cw_na <- if (identical(basis, "blend")) is.na(cash_weight) else FALSE
+    miss <- is.na(rf) | cw_na
+    drop <- !is.na(r) & miss
+    if (any(drop)) {
+      cli::cli_warn(c("!" = "{label}: dropped {sum(drop)} of {sum(!is.na(r))} observation{?s} with no matching rf / cash weight in strat_corr_augment."))
+    }
+    keep <- !is.na(r) & !miss
+    out  <- rep(NA_real_, n)
+    out[keep] <- hd_excess_returns(
+      r[keep], rf[keep], label,
+      cash_weight = if (identical(basis, "blend")) cash_weight[keep] else NULL
+    )
+    return(out)
+  }
+  hd_excess_returns(r, rep(0, n), label)
+}
+
+#' Put every strat_returns_wide column on the EXCESS basis (#937, refs #919)
+#'
+#' The Sharpe panel in strat_corr_augment must compare like with like: rf is
+#' deducted iff a series is a TOTAL return, only on the cash weight for a
+#' BLEND, and not at all for a dollar-neutral EXCESS spread -- all decided by
+#' \code{historicaldata::hd_return_basis()}, the single home of that
+#' classification. Daily-native columns (the five daily strategies and CMR
+#' Conditioned) have rf deducted at their native DAILY frequency and are THEN
+#' compounded to monthly by \code{.resample_daily_to_monthly()} (same
+#' min_days rule as strat_returns_wide), so the monthly excess is the
+#' compounded daily excess; monthly-native columns are adjusted per `ym`.
+#'
+#' @param wide strat_returns_wide (a `ym` column plus one column per code_name).
+#' @param cols code_names to convert.
+#' @param label_map Named character vector code_name -> leaderboard label
+#'   (the registry key). A column absent from it aborts.
+#' @param daily_native strat_returns_daily_native (list of tibbles `date`,
+#'   `ret`, optional `cash_weight`).
+#' @param rf_src Output of \code{.strat_rf_sources()}.
+#' @return `wide` with the `cols` columns replaced by excess returns (NA where
+#'   rf was unavailable for a total/blend observation).
+#' @noRd
+.strat_excess_wide <- function(wide, cols, label_map, daily_native, rf_src,
+                               min_days = 15L) {
+  unmapped <- setdiff(cols, names(label_map))
+  if (length(unmapped) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(unmapped)} strategy code_name{?s} ha{?s/ve} no label for the return-basis registry: {.val {unmapped}}.",
+      "i" = "Add the code_name -> leaderboard label mapping to name_map in strat_corr_augment; the label must be registered in {.fn hd_return_basis}."
+    ))
+  }
+  for (col in cols) {
+    label <- unname(label_map[[col]])
+    if (col %in% names(daily_native)) {
+      d  <- daily_native[[col]]
+      ex <- .strat_excess_one(d$ret, as.Date(d$date), rf_src$daily[[col]], label,
+                              cash_weight = d[["cash_weight"]])
+      mo <- .resample_daily_to_monthly(d$date, ex, min_days = min_days, label = col)
+      wide[[col]] <- mo$ret[match(wide$ym, mo$ym)]
+    } else {
+      wide[[col]] <- .strat_excess_one(wide[[col]], wide$ym, rf_src$monthly[[col]], label)
+    }
+  }
+  wide
+}
+
 plan_strategy_correlation <- function() {
   list(
 
@@ -439,12 +554,13 @@ plan_strategy_correlation <- function() {
     # target's own comment), so periods_per_year = 12L below is correct for
     # every one of the 16 columns, unlike a naive mix of native frequencies.
     # A live-store check (2026, docs/_targets) found 193 rows with non-NA
-    # data across all 16 STRAT_RETURNS_WIDE_CODES columns simultaneously --
-    # NOT a further-shrunk window: 193 equals Factor MAX/Factor DRIF's own
-    # individual non-NA count (193), i.e. the complete-case window is bounded
-    # by the tightest-history strategy already on the leaderboard, not by
-    # requiring 16-way agreement beyond what that strategy's own "Full
-    # Period" Sharpe is already computed over. A shared common window (not
+    # data across all 16 STRAT_RETURNS_WIDE_CODES columns simultaneously,
+    # when Factor MAX/Factor DRIF were still cut to port_returns' stock
+    # window. Since #937 those columns carry their own full history, so the
+    # complete-case window is bounded by the shortest-history strategy that
+    # remains (Stock DRIF / XGB DRIF / OLMAR-1, ~195 months), which is applied
+    # HERE, visibly, by the full_rets filter below -- not by truncating the
+    # source columns. A shared common window (not
     # each strategy's own full individual history, unlike
     # strat_deflated_sharpe's naive_sharpe) is deliberate here: comparing two
     # strategies' Sharpe to decide which is "better" for the redundancy flag
@@ -476,8 +592,32 @@ plan_strategy_correlation <- function() {
       strat_cols <- rownames(strat_corr_matrix_leaderboard)
       n_strat <- length(strat_cols)
 
+      # ── EXCESS basis (#937, refs #919) ─────────────────────────────────────
+      # strat_returns_wide mixes TOTAL (Value HML, Managed Futures, OLMAR-1,
+      # TOM, Risk State, Avoid Worst), EXCESS and BLEND (CMR Conditioned)
+      # columns; annualise_returns() below applies no rf, so a total column
+      # would carry its cash component into its Sharpe and flatter the
+      # incremental-Sharpe / redundant flag. Every column goes through
+      # hd_excess_returns() (via .strat_excess_wide()) using its registered
+      # label -- name_map above is the code_name -> label mapping (same
+      # vocabulary as col_map_monthly/col_map_daily in R/plan_leaderboard.R);
+      # an unmapped column aborts. Correlations (strat_corr_matrix_leaderboard)
+      # are unchanged. Sharpe CONVENTION is unchanged: annualise_returns() =
+      # geometric CAGR / vol on a shared complete-case monthly window; rows
+      # with no rf for a total/blend column are dropped and counted (warning),
+      # never 0-filled.
+      excess_wide <- .strat_excess_wide(
+        strat_returns_wide, strat_cols,
+        label_map    = stats::setNames(name_map$strategy_label, name_map$code_name),
+        daily_native = strat_returns_daily_native,
+        rf_src       = .strat_rf_sources(
+          ev_portfolios, mf_portfolios, olmar_portfolio, tom_portfolio,
+          rsc_portfolio, aw_daily_rf, strat_returns_daily_native
+        )
+      )
+
       # ── Full-period Sharpe per strategy, on a SHARED complete-case window ──
-      full_rets <- strat_returns_wide |>
+      full_rets <- excess_wide |>
         select(all_of(strat_cols)) |>
         filter(if_all(everything(), ~ !is.na(.x)))
 
@@ -672,7 +812,13 @@ plan_strategy_correlation <- function() {
         ))
       )
       cmr_conditioned_daily <- cmr_conditioned_source |>
-        transmute(date = as.Date(date), ret = net_ret_conditioned)
+        # cash_weight / rf_ret (#919, "blend" basis): carried with the series
+        # so strat_deflated_sharpe can form the SAME excess series as the
+        # leaderboard path (net_ret_conditioned - cash_weight * rf_ret).
+        # Extra columns are ignored by every other consumer (they read
+        # $date / $ret only).
+        transmute(date = as.Date(date), ret = net_ret_conditioned,
+                  cash_weight = cash_weight, rf_ret = rf_ret)
 
       olmar_daily <- olmar_portfolio |>
         transmute(date = as.Date(date), ret = net_ret)
@@ -721,9 +867,32 @@ plan_strategy_correlation <- function() {
     targets::tar_target(strat_returns_wide, {
       library(dplyr)
 
-      base <- port_returns |>
-        select(ym, stk_max, stk_drif, fac_max, fac_drif) |>
-        filter(if_any(c(stk_max, stk_drif, fac_max, fac_drif), ~ !is.na(.x)))
+      # #937 (refs #919): Stock MAX, Factor MAX and Factor DRIF enter through
+      # their OWN full-length portfolio series (the same objects the
+      # leaderboard's Full-Period rows are scored on), NOT through
+      # port_returns. port_returns' monthly spine is bounded to the overlap of
+      # the two STOCK series (R/plan_portfolio_opt.R) -- right for the
+      # covariance/PSO/optimiser code that needs a common window, wrong here:
+      # it cut Factor MAX 740 -> 193 months, Factor DRIF 691 -> 193 and Stock
+      # MAX 255 -> 195, so strat_deflated_sharpe scored a different window
+      # from the leaderboard row it sits beside. Consumers that need a common
+      # window restrict it themselves, visibly (strat_corr_augment's
+      # complete-case full_rets; .build_wide_corr_matrix is pairwise).
+      # Stock DRIF is deliberately still read from port_returns: its own
+      # series defines the spine start and ends with the spine, so it is not
+      # truncated (checked on the store: 195 months either way).
+      stk_max_col <- stk_max_portfolio |>
+        filter(!is.na(port_ret)) |>
+        select(ym, stk_max = port_ret)
+      stk_drif_col <- port_returns |>
+        filter(!is.na(stk_drif)) |>
+        select(ym, stk_drif)
+      fac_max_col <- fm_portfolio |>
+        filter(!is.na(portfolio_ret)) |>
+        select(ym, fac_max = portfolio_ret)
+      fac_drif_col <- drif_portfolio |>
+        filter(!is.na(portfolio_ret)) |>
+        select(ym, fac_drif = portfolio_ret)
 
       # LTR: same ym-from-date derivation as strat_returns_aligned above.
       ltr_col <- ltr_portfolio |>
@@ -795,7 +964,8 @@ plan_strategy_correlation <- function() {
 
       parts <- c(
         list(
-          base, ltr_col, xgb_col, mom_prepeak_col, mom_postpeak_col,
+          stk_max_col, stk_drif_col, fac_max_col, fac_drif_col,
+          ltr_col, xgb_col, mom_prepeak_col, mom_postpeak_col,
           mom_combined_col, value_hml_col, managed_futures_col
         ),
         daily_monthly_cols

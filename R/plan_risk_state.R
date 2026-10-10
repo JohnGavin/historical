@@ -313,8 +313,17 @@ plan_risk_state <- function() {
       # wiring rather than left for a future session to discover by
       # accident. Every other calc_metrics() call site in this file passes
       # daily data and is unaffected (periods_per_year defaults to 252L).
-      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, rf_vec = NULL,
-                                periods_per_year = 252L) {
+      # #937 (origin #919): every Sharpe is on an EXCESS basis. `registry_label`
+      # is the hd_return_basis() row naming the series' basis -- rf is deducted
+      # iff the series is a TOTAL return. It is REQUIRED (no default): an
+      # unregistered label aborts inside hd_rf_for_basis(), never a silent
+      # guess. NA_character_ marks a non-strategy benchmark (SPY_buyhold),
+      # which is a total-return asset series with no registry label yet
+      # (vocabulary for benchmarks: #937 Phase 3) and is treated as total.
+      # Convention: sharpe = geometric (sharpe_ratio_rf); hac_sharpe/hac_tstat
+      # = arithmetic (hd_hac_sharpe) -- both now on the same excess series.
+      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, registry_label,
+                                rf_vec = NULL, periods_per_year = 252L) {
         keep     <- !is.na(ret_vec)
         ret_vec  <- ret_vec[keep]
         date_vec <- date_vec[keep]
@@ -323,11 +332,34 @@ plan_risk_state <- function() {
         years <- length(ret_vec) / periods_per_year
         cum <- prod(1 + ret_vec)
         cum_dd <- cumprod(1 + ret_vec)
-        hac <- hd_hac_sharpe(ret_vec, ann_factor = periods_per_year)
+        # rf actually deducted: rf for a total series, 0 for an excess one.
+        rf_eff <- if (is.null(rf_vec)) {
+          NULL
+        } else if (is.na(registry_label)) {
+          # basis: total (SPY benchmark); registry vocabulary for benchmarks tracked in #937 Phase 3
+          rf_vec
+        } else {
+          hd_rf_for_basis(rf_vec, registry_label)
+        }
+        # HAC statistics on the EXCESS series (ret - rf deducted). Dropped
+        # (never 0-filled) where rf is missing, with a counted warning. With
+        # no rf series at all the excess series cannot be formed -> NA.
+        hac <- if (is.null(rf_eff)) {
+          list(hac_tstat = NA_real_, naive_sharpe = NA_real_)
+        } else {
+          ex <- ret_vec - rf_eff
+          ok <- !is.na(ex)
+          if (!all(ok)) {
+            cli::cli_warn(c(
+              "!" = "calc_metrics({strategy_name}, {label}): Dropped {sum(!ok)} observation{?s} with no risk-free rate from the HAC series."
+            ))
+          }
+          hd_hac_sharpe(ex[ok], ann_factor = periods_per_year)
+        }
         # Canonical, risk-free-adjusted Sharpe (#677) -- see
         # R/utils_metrics.R::sharpe_ratio_rf(). Distinct from hac_sharpe.
-        sr_result <- if (!is.null(rf_vec)) {
-          sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = periods_per_year)
+        sr_result <- if (!is.null(rf_eff)) {
+          sharpe_ratio_rf(ret_vec, rf_eff, periods_per_year = periods_per_year)
         } else {
           list(sharpe = NA_real_, ann_rf = NA_real_)
         }
@@ -389,33 +421,47 @@ plan_risk_state <- function() {
       # zero-filled for leading NAs at rsc_portfolio construction time
       # (R/plan_risk_state.R rsc_portfolio target) -- safe to pass directly.
       spy_bh_full  <- calc_metrics(port$ret_buyhold,  port$date,  "Full Period", "SPY_buyhold",
-                                   rf_vec = port$rf_daily)
+                                   registry_label = NA_character_, rf_vec = port$rf_daily)
       spy_ov_full  <- calc_metrics(port$ret_strategy, port$date,  "Full Period", "SPY_overlay",
-                                   rf_vec = port$rf_daily)
+                                   registry_label = "Risk State", rf_vec = port$rf_daily)
       spy_bh_train <- calc_metrics(port$ret_buyhold[is_train],  port$date[is_train],
-                                   "Training", "SPY_buyhold", rf_vec = port$rf_daily[is_train])
+                                   "Training", "SPY_buyhold",
+                                   registry_label = NA_character_, rf_vec = port$rf_daily[is_train])
       spy_ov_train <- calc_metrics(port$ret_strategy[is_train], port$date[is_train],
-                                   "Training", "SPY_overlay", rf_vec = port$rf_daily[is_train])
+                                   "Training", "SPY_overlay",
+                                   registry_label = "Risk State", rf_vec = port$rf_daily[is_train])
       spy_bh_test  <- calc_metrics(port$ret_buyhold[is_test],  port$date[is_test],
-                                   "Testing", "SPY_buyhold", rf_vec = port$rf_daily[is_test])
+                                   "Testing", "SPY_buyhold",
+                                   registry_label = NA_character_, rf_vec = port$rf_daily[is_test])
       spy_ov_test  <- calc_metrics(port$ret_strategy[is_test], port$date[is_test],
-                                   "Testing", "SPY_overlay", rf_vec = port$rf_daily[is_test])
+                                   "Testing", "SPY_overlay",
+                                   registry_label = "Risk State", rf_vec = port$rf_daily[is_test])
 
+      # #937: DRIF/FacMAX are dollar-neutral factor SPREADS (EXCESS returns,
+      # hd_return_basis()); the overlay is exposure * spread with NO cash leg
+      # (rsc_overlay_drif / rsc_overlay_fac_max above), so it stays excess and
+      # NO rf is deducted (previously deducted, biasing their Sharpe down).
+      # Approximation: funding vs short-rebate rates are assumed to cancel.
+      #
       # DRIF raw vs overlaid (#677 slice 2: rf_vec = drif$rf_ret, monthly FF5+
       # Mom RF already joined onto drif_portfolio -- see rsc_overlay_drif
       # above; periods_per_year = 12L because this is a monthly series, not
       # daily -- see the calc_metrics() comment above)
       drif_raw_full <- calc_metrics(drif$ret_raw,     drif$date, "Full Period", "DRIF_raw",
+                                    registry_label = "Factor DRIF",
                                     rf_vec = drif$rf_ret, periods_per_year = 12L)
       drif_ov_full  <- calc_metrics(drif$ret_overlay, drif$date, "Full Period", "DRIF_overlay",
+                                    registry_label = "Factor DRIF",
                                     rf_vec = drif$rf_ret, periods_per_year = 12L)
 
       # FacMAX raw vs overlaid (#677 slice 2: rf_vec = facmx$rf_ret, monthly
       # FF5+Mom RF already joined onto fm_portfolio -- see
       # rsc_overlay_fac_max above; periods_per_year = 12L, same reasoning)
       fm_raw_full   <- calc_metrics(facmx$ret_raw,     facmx$date, "Full Period", "FacMAX_raw",
+                                    registry_label = "Factor MAX",
                                     rf_vec = facmx$rf_ret, periods_per_year = 12L)
       fm_ov_full    <- calc_metrics(facmx$ret_overlay, facmx$date, "Full Period", "FacMAX_overlay",
+                                    registry_label = "Factor MAX",
                                     rf_vec = facmx$rf_ret, periods_per_year = 12L)
 
       dplyr::bind_rows(
@@ -682,7 +728,9 @@ plan_risk_state <- function() {
         years <- length(ret) / 252
         cum <- prod(1 + ret)
         cum_dd <- cumprod(1 + ret)
-        hac <- hd_hac_sharpe(ret)
+        # #937: ret is a TOTAL series (exposure*SPY + (1-exposure)*rf), so the
+        # HAC statistics (arithmetic, no rf) are taken on the EXCESS series.
+        hac <- hd_hac_sharpe(hd_excess_returns(ret, sig$rf_use, "Risk State"))
         tibble::tibble(
           delay_days = d,
           cagr       = round((cum^(1 / years) - 1) * 100, 1),
@@ -749,7 +797,14 @@ plan_risk_state <- function() {
         ret <- data$ret_strategy
         ret_bh <- data$ret_buyhold
         if (length(ret[!is.na(ret)]) < 20) return(NULL)
-        hac <- hd_hac_sharpe(ret[!is.na(ret)])
+        # #937: ret_strategy is a TOTAL series (SPY plus cash earning rf), so
+        # the HAC t-stat is taken on the EXCESS series; rf_daily is the rf
+        # column rsc_portfolio carries alongside it (a missing column aborts
+        # inside hd_excess_returns -- never a silent raw-series fallback).
+        ok_ret <- !is.na(ret)
+        hac <- hd_hac_sharpe(
+          hd_excess_returns(ret[ok_ret], data$rf_daily[ok_ret], "Risk State")
+        )
         years <- sum(!is.na(ret)) / 252
         cum_s <- prod(1 + ret[!is.na(ret)])
         cum_b <- prod(1 + ret_bh[!is.na(ret_bh)])

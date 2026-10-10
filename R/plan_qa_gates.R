@@ -41,6 +41,59 @@
   gsub("}", "}}", x, fixed = TRUE)
 }
 
+#' Build escaped cli_abort() bullet lines for qa_look_ahead_bias (S1-S4)
+#'
+#' Extracted from the \code{qa_look_ahead_bias} target body (which is a
+#' \code{tar_target()} command, not a callable function) so the
+#' message-building step is directly unit-testable without running
+#' \code{tar_make()}. \code{code} here is a raw \strong{source line} from the
+#' scanned R files (S1-S4 are lexical scans -- see \code{check_no_lead_ym()}
+#' et al.) and is therefore near-certain to contain a literal \code{{}/}} at
+#' some point (any R code with a block, a function call inside braces, glue
+#' syntax, etc.) -- exactly the roborev #10641 defect class already fixed
+#' for S40/S41/S42 by \code{.qa_cli_escape()} (see that function's roxygen).
+#'
+#' @param all_hits Tibble with columns check, file, line, code -- the
+#'   `bind_rows()` of check_no_lead_ym()/check_no_unleaded_slider()/
+#'   check_no_na_approx()/check_no_forward_cumulative(), each with a `check`
+#'   label column added, as built by the qa_look_ahead_bias target.
+#' @return Character vector, same length as `nrow(all_hits)`, with every
+#'   literal `{`/`}` doubled (glue-safe).
+#' @noRd
+.qa_look_ahead_bias_msgs <- function(all_hits) {
+  msgs <- purrr::pmap_chr(
+    all_hits[, c("check", "file", "line", "code")],
+    function(check, file, line, code) {
+      sprintf("  %s -- %s:%d -- %s", check, basename(file), line, trimws(code))
+    }
+  )
+  .qa_cli_escape(msgs)
+}
+
+#' Build escaped cli_abort() bullet lines for qa_no_published_validation_reads (S15)
+#'
+#' Same rationale as \code{.qa_look_ahead_bias_msgs()} above: \code{code} is a
+#' raw source line from \code{check_no_published_validation_reads()}'s lexical
+#' scan of published \code{.qmd}/\code{.R} files and must be escaped before
+#' splicing into \code{cli_abort()}, or a flagged line containing a literal
+#' brace crashes the gate with "Could not parse cli {} expression" instead of
+#' reporting the violation (roborev #10641).
+#'
+#' @param hits Tibble with columns file, line, code, as returned by
+#'   check_no_published_validation_reads().
+#' @return Character vector, same length as `nrow(hits)`, with every literal
+#'   `{`/`}` doubled (glue-safe).
+#' @noRd
+.qa_validation_reads_msgs <- function(hits) {
+  msgs <- purrr::pmap_chr(
+    hits[, c("file", "line", "code")],
+    function(file, line, code) {
+      sprintf("  %s:%d -- %s", basename(file), line, trimws(code))
+    }
+  )
+  .qa_cli_escape(msgs)
+}
+
 #' Scan files for lead(ym) used for month-key construction (S1)
 #'
 #' @param files Character vector of absolute .R file paths to scan.
@@ -3737,9 +3790,9 @@ check_mom_prepeak_gauntlet_borrow_consistency <- function(file) {
   })
 
   if (nrow(offenders) > 0L) {
-    msgs <- purrr::pmap_chr(offenders, function(file, line, code) {
+    msgs <- .qa_cli_escape(purrr::pmap_chr(offenders, function(file, line, code) {
       sprintf("  %s:%d -- %s", basename(file), line, code)
-    })
+    }))
     cli::cli_abort(c(
       "x" = paste0(
         nrow(offenders), " .mom_prepeak_compute_returns() call(s) in ",
@@ -4501,6 +4554,268 @@ check_leaderboard_strategy_traceability <- function(verdict_tbl) {
   invisible(verdict_tbl)
 }
 
+# ---- S43 / S44: DSR path vs leaderboard consistency (Refs #937, #919) ------
+
+#' Leaderboard strategies with NO strat_deflated_sharpe row, by design
+#'
+#' PSO Optimal is a linear combination of the other strategies' series, so a
+#' deflated Sharpe for it would be circular (documented at
+#' STRAT_RETURNS_WIDE_CODES in R/plan_strategy_correlation.R). It has no DSR
+#' row, hence no \code{dsr_pvalue} and no \code{T_obs}: for S43/S44 it is
+#' EXCLUDED (and the exclusion is a visible argument, not a silent NA pass).
+#' @noRd
+QA_DSR_EXCLUDED_STRATEGIES <- c("PSO Optimal")
+
+#' S43 allow-list: strategies whose DSR \code{T_obs} legitimately differs
+#' from the leaderboard Full-Period \code{months}
+#'
+#' Derived from a read-only simulation against the rebuilt store (2026-10-08):
+#' with Stock MAX / Factor MAX / Factor DRIF sourced from their own series, 12
+#' of 17 strategies matched EXACTLY (tolerance 0) and 5 did not; since #937
+#' only the TOTAL-basis row (Avoid Worst) remains. Every
+#' entry states why and carries a relative bound (|T_obs - months| / months),
+#' so drift BEYOND the observed offset still FAILs; an entry whose strategy
+#' now matches exactly is reported as STALE.
+#' @noRd
+S43_DSR_WINDOW_ALLOWLIST <- tibble::tibble(
+  strategy = c("Avoid Worst"),
+  max_rel_diff = c(0.005),
+  reason = c(
+    "TOTAL-basis row: strat_deflated_sharpe drops observations with no matching rf (29 of 8353 on 2026-10-08, warned in-target); the leaderboard months counts all of them. Offset -29 (0.35%)."
+  )
+)
+# Mom Pre-Peak / Mom Post-Peak / Mom 12-2 / CMR were allow-listed here
+# (+1 month, +53 days) until #937: the leaderboard path trimmed their trailing
+# rows for lack of an rf that an EXCESS-basis strategy never uses. They are
+# no longer trimmed (.join_rf_series(basis_strategy=)), so they must now match
+# T_obs exactly -- no exemption.
+
+.s43_check_allowlist <- function(allowlist) {
+  req <- c("strategy", "max_rel_diff", "reason")
+  miss <- setdiff(req, names(allowlist))
+  if (length(miss) > 0L) {
+    cli::cli_abort(c(
+      "x" = "S43 allow-list is missing required column{?s}: {.field {miss}}.",
+      "i" = "Every entry needs strategy, max_rel_diff and a written reason."
+    ))
+  }
+  blank <- is.na(allowlist$reason) | !nzchar(trimws(allowlist$reason))
+  if (any(blank)) {
+    cli::cli_abort(c(
+      "x" = "S43 allow-list entr{?y/ies} without a written reason: {.val {allowlist$strategy[blank]}}.",
+      "i" = "An exemption without a reason is indistinguishable from an oversight (Refs #937)."
+    ))
+  }
+  invisible(allowlist)
+}
+
+#' S43: per-strategy comparison of the DSR path's T_obs with the leaderboard
+#' Full-Period months (Refs #937)
+#'
+#' @param leaderboard Tibble with \code{strategy}, \code{period}, \code{months}.
+#' @param dsr \code{strat_deflated_sharpe}: \code{strategy}, \code{T_obs}.
+#' @param allowlist See \code{S43_DSR_WINDOW_ALLOWLIST}.
+#' @param excluded Strategies with no DSR row by design.
+#' @param tol_abs Absolute tolerance on |T_obs - months| for a plain PASS.
+#'   Default 0: 12 of 17 strategies match exactly, so no slack is needed and
+#'   any new offset is visible.
+#' @return Tibble: strategy, months, T_obs, diff, verdict (PASS,
+#'   PASS_ALLOWLISTED, FAIL, INDETERMINATE), detail.
+#' @noRd
+build_dsr_coverage_table <- function(leaderboard, dsr,
+                                     allowlist = S43_DSR_WINDOW_ALLOWLIST,
+                                     excluded = QA_DSR_EXCLUDED_STRATEGIES,
+                                     tol_abs = 0) {
+  .s43_check_allowlist(allowlist)
+  need_lb  <- setdiff(c("strategy", "period", "months"), names(leaderboard))
+  need_dsr <- setdiff(c("strategy", "T_obs"), names(dsr))
+  if (length(need_lb) > 0L || length(need_dsr) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_dsr_coverage_table() (S43): input is missing required column(s).",
+      "i" = "leaderboard needs strategy/period/months (missing: {paste(need_lb, collapse = ', ')}); strat_deflated_sharpe needs strategy/T_obs (missing: {paste(need_dsr, collapse = ', ')})."
+    ))
+  }
+
+  fp  <- leaderboard[leaderboard$period %in% "Full Period" &
+                       !(leaderboard$strategy %in% excluded), , drop = FALSE]
+  dsr <- dsr[!(dsr$strategy %in% excluded), , drop = FALSE]
+  strategies <- unique(c(fp$strategy, dsr$strategy))
+
+  rows <- lapply(strategies, function(s) {
+    n_lb  <- sum(fp$strategy == s)
+    n_dsr <- sum(dsr$strategy == s)
+    months <- if (n_lb == 1L) as.numeric(fp$months[fp$strategy == s]) else NA_real_
+    t_obs  <- if (n_dsr == 1L) as.numeric(dsr$T_obs[dsr$strategy == s]) else NA_real_
+    out <- function(verdict, detail) {
+      tibble::tibble(strategy = s, months = months, T_obs = t_obs,
+                     diff = t_obs - months, verdict = verdict, detail = detail)
+    }
+    if (n_lb == 0L)  return(out("INDETERMINATE", "missing_in_leaderboard: no Full Period row for this strategy"))
+    if (n_dsr == 0L) return(out("INDETERMINATE", "missing_in_dsr: no strat_deflated_sharpe row for this strategy"))
+    if (n_lb > 1L || n_dsr > 1L) return(out("INDETERMINATE", "duplicate: more than one row for this strategy"))
+    if (is.na(months) || is.na(t_obs)) return(out("INDETERMINATE", "na_value: months or T_obs is NA"))
+    d <- t_obs - months
+    if (abs(d) <= tol_abs) return(out("PASS", "T_obs equals leaderboard months"))
+    al <- allowlist[allowlist$strategy == s, , drop = FALSE]
+    if (nrow(al) == 1L && abs(d) / months <= al$max_rel_diff) {
+      return(out("PASS_ALLOWLISTED", sprintf("offset %+g (%.2f%%) within allow-list bound %.2f%%: %s",
+                                             d, 100 * abs(d) / months, 100 * al$max_rel_diff, al$reason)))
+    }
+    out("FAIL", sprintf("DSR path scored %g observations, leaderboard row %g (offset %+g)", t_obs, months, d))
+  })
+  if (length(rows) == 0L) {
+    return(tibble::tibble(strategy = character(0), months = numeric(0), T_obs = numeric(0),
+                          diff = numeric(0), verdict = character(0), detail = character(0)))
+  }
+  dplyr::bind_rows(rows)
+}
+
+#' S43: abort unless every strategy's DSR window matches its leaderboard row
+#'
+#' Three outcomes, never collapsed: FAIL (counts differ beyond tolerance /
+#' allow-list), INDETERMINATE (a count or a row is missing, or nothing was
+#' examined) and PASS. FAIL aborts with class \code{qa_s43_fail}; with no FAIL
+#' but any INDETERMINATE, abort with class \code{qa_s43_indeterminate}.
+#'
+#' @param verdict_tbl Output of \code{build_dsr_coverage_table()}.
+#' @param allowlist Same allow-list given to the builder (for stale detection).
+#' @return \code{verdict_tbl} with attribute \code{summary} (named integer:
+#'   pass, fail, indeterminate, examined, stale).
+#' @noRd
+check_dsr_coverage <- function(verdict_tbl, allowlist = S43_DSR_WINDOW_ALLOWLIST) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v %in% c("PASS", "PASS_ALLOWLISTED"))
+  n_fail <- sum(v == "FAIL")
+  n_ind  <- sum(v == "INDETERMINATE")
+  stale  <- allowlist$strategy[vapply(allowlist$strategy, function(s) {
+    !any(verdict_tbl$strategy == s & verdict_tbl$verdict %in% c("PASS_ALLOWLISTED", "FAIL", "INDETERMINATE"))
+  }, logical(1))]
+  summary <- c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+               examined = n_pass + n_fail, stale = length(stale))
+  summary <- vapply(summary, as.integer, integer(1))
+
+  if (length(stale) > 0L && nrow(verdict_tbl) > 0L) {
+    cli::cli_warn(c(
+      "!" = "S43: {length(stale)} stale allow-list entr{?y/ies} (no offset any more, or strategy absent): {.val {stale}}.",
+      "i" = "Remove the stale entries from S43_DSR_WINDOW_ALLOWLIST (R/plan_qa_gates.R)."
+    ))
+  }
+
+  head_line <- sprintf("%d fail, %d indeterminate, %d pass of %d row(s)", n_fail, n_ind, n_pass, nrow(verdict_tbl))
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail))
+
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_dsr_window_coverage (S43) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "strat_deflated_sharpe must score each strategy over the SAME observations as its leaderboard Full-Period row (Refs #937, #919)."
+    ), class = "qa_s43_fail")
+  }
+  if (nrow(verdict_tbl) == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_dsr_window_coverage (S43) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = if (nrow(verdict_tbl) == 0L) "Zero rows were examined -- a gate that checked nothing cannot report a pass." else
+        "A row or count could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s43_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
+#' S44: compare 1 - dsr_pvalue with prob_sharpe_positive per Full-Period row
+#'
+#' The deflated Sharpe benchmarks against the best of K trials (>= 0), so
+#' \code{1 - dsr_pvalue} can never exceed the plain probabilistic Sharpe
+#' \code{prob_sharpe_positive} computed on the same Sharpe and n (#919
+#' symptom). Verdicts: PASS, FAIL (ordering violated), NOT_COMPUTED (NA prob
+#' on a positive-Sharpe row: a defect per detection-power-required.md req. 3),
+#' NOT_APPLICABLE (NA prob on a non-positive-Sharpe row), INDETERMINATE
+#' (dsr_pvalue or sharpe missing, or duplicate rows).
+#'
+#' @param leaderboard Tibble with strategy, period, sharpe, dsr_pvalue,
+#'   prob_sharpe_positive.
+#' @param excluded Strategies with no DSR row by design.
+#' @param eps Numeric tolerance on the ordering.
+#' @return Tibble: strategy, sharpe, dsr_pvalue, prob_sharpe_positive,
+#'   verdict, detail.
+#' @noRd
+build_psr_vs_dsr_table <- function(leaderboard, excluded = QA_DSR_EXCLUDED_STRATEGIES,
+                                   eps = 1e-6) {
+  need <- setdiff(c("strategy", "period", "sharpe", "dsr_pvalue", "prob_sharpe_positive"),
+                  names(leaderboard))
+  if (length(need) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_psr_vs_dsr_table() (S44): leaderboard is missing column{?s}: {.field {need}}."
+    ))
+  }
+  fp <- leaderboard[leaderboard$period %in% "Full Period" &
+                      !(leaderboard$strategy %in% excluded), , drop = FALSE]
+  if (nrow(fp) == 0L) {
+    return(tibble::tibble(strategy = character(0), sharpe = numeric(0), dsr_pvalue = numeric(0),
+                          prob_sharpe_positive = numeric(0), verdict = character(0),
+                          detail = character(0)))
+  }
+  n_per <- table(fp$strategy)
+  rows <- lapply(seq_len(nrow(fp)), function(i) {
+    s <- fp$strategy[i]; sh <- fp$sharpe[i]; p <- fp$dsr_pvalue[i]; q <- fp$prob_sharpe_positive[i]
+    out <- function(verdict, detail) {
+      tibble::tibble(strategy = s, sharpe = sh, dsr_pvalue = p, prob_sharpe_positive = q,
+                     verdict = verdict, detail = detail)
+    }
+    if (n_per[[s]] > 1L) return(out("INDETERMINATE", "duplicate: more than one Full Period row"))
+    if (is.na(p))  return(out("INDETERMINATE", "dsr_pvalue_missing: no DSR p-value to compare against"))
+    if (is.na(sh)) return(out("INDETERMINATE", "sharpe_missing: cannot tell whether prob_sharpe_positive applies"))
+    if (is.na(q)) {
+      if (sh <= 0) return(out("NOT_APPLICABLE", "non-positive Sharpe: prob_sharpe_positive is NA by design"))
+      return(out("NOT_COMPUTED", "positive Sharpe but prob_sharpe_positive is NA (not computed)"))
+    }
+    if ((1 - p) <= q + eps) return(out("PASS", "1 - dsr_pvalue <= prob_sharpe_positive"))
+    out("FAIL", sprintf("1 - dsr_pvalue = %.4f exceeds prob_sharpe_positive = %.4f", 1 - p, q))
+  })
+  dplyr::bind_rows(rows)
+}
+
+#' S44: abort on an ordering violation, an uncomputed value, or nothing examined
+#'
+#' @param verdict_tbl Output of \code{build_psr_vs_dsr_table()}.
+#' @return \code{verdict_tbl} with attribute \code{summary} (named integer:
+#'   pass, fail, not_computed, not_applicable, indeterminate, examined).
+#'   FAIL/NOT_COMPUTED abort with class \code{qa_s44_fail}; otherwise
+#'   INDETERMINATE (or zero rows examined) aborts with
+#'   \code{qa_s44_indeterminate}.
+#' @noRd
+check_psr_vs_dsr <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL")
+  n_nc <- sum(v == "NOT_COMPUTED"); n_na <- sum(v == "NOT_APPLICABLE")
+  n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail + n_nc
+  summary <- vapply(c(pass = n_pass, fail = n_fail, not_computed = n_nc, not_applicable = n_na,
+                      indeterminate = n_ind, examined = examined), as.integer, integer(1))
+  head_line <- sprintf("%d pass, %d fail, %d NOT_COMPUTED, %d not applicable, %d indeterminate; %d row(s) examined",
+                       n_pass, n_fail, n_nc, n_na, n_ind, examined)
+  bad <- verdict_tbl[v %in% c("FAIL", "NOT_COMPUTED", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail))
+
+  if (n_fail + n_nc > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_psr_vs_dsr (S44) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The DSR can never be more confident than the plain probabilistic Sharpe on the same Sharpe and n (Refs #919, #937)."
+    ), class = "qa_s44_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_psr_vs_dsr (S44) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = if (examined == 0L) "Zero Full-Period rows were examined -- a gate that checked nothing cannot report a pass." else
+        "A row could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s44_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -4543,12 +4858,7 @@ plan_qa_gates <- function() {
         )
 
         if (nrow(all_hits) > 0L) {
-          msgs <- purrr::pmap_chr(
-            all_hits[, c("check", "file", "line", "code")],
-            function(check, file, line, code) {
-              sprintf("  %s -- %s:%d -- %s", check, basename(file), line, trimws(code))
-            }
-          )
+          msgs <- .qa_look_ahead_bias_msgs(all_hits)
           cli::cli_abort(c(
             "x" = "Look-ahead bias patterns detected in {nrow(all_hits)} place(s):",
             setNames(msgs, rep("i", length(msgs)))
@@ -4809,12 +5119,7 @@ plan_qa_gates <- function() {
 
         hits <- check_no_published_validation_reads(files)
         if (nrow(hits) > 0L) {
-          msgs <- purrr::pmap_chr(
-            hits[, c("file", "line", "code")],
-            function(file, line, code) {
-              sprintf("  %s:%d -- %s", basename(file), line, trimws(code))
-            }
-          )
+          msgs <- .qa_validation_reads_msgs(hits)
           cli::cli_abort(c(
             "x" = paste0(
               "Published document(s) read the sealed Validation partition in ",
@@ -5481,6 +5786,45 @@ plan_qa_gates <- function() {
         "qa_leaderboard_strategy_traceability: S42 passed -- ",
         nrow(verdict_tbl), " metric(s) traced to Avoid Worst's own return ",
         "series, none matching the aw_metrics hindsight decoy (Refs #813)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: DSR window coverage (S43, Refs #937, #919) -- the observation
+    # count strat_deflated_sharpe scored each strategy over (T_obs) must equal
+    # the leaderboard's Full-Period `months` for that strategy, or be on
+    # S43_DSR_WINDOW_ALLOWLIST with a written reason. Origin: Factor MAX was
+    # scored over 193 months by the DSR path and 740 by the leaderboard
+    # because strat_returns_wide inherited port_returns' stock-bounded spine.
+    # FAIL, INDETERMINATE and PASS are distinct outcomes (own abort classes);
+    # the summary line carries all three counts and the number examined.
+    targets::tar_target(qa_dsr_window_coverage, {
+      verdict_tbl <- check_dsr_coverage(
+        build_dsr_coverage_table(leaderboard, strat_deflated_sharpe)
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_dsr_window_coverage: S43 passed -- ", s[["pass"]], " pass / ",
+        s[["fail"]], " fail / ", s[["indeterminate"]], " indeterminate; ",
+        s[["examined"]], " strateg", ifelse(s[["examined"]] == 1L, "y", "ies"),
+        " examined, ", s[["stale"]], " stale allow-list entr",
+        ifelse(s[["stale"]] == 1L, "y", "ies"), " (Refs #937, #919)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: DSR p-value vs prob_sharpe_positive (S44, Refs #919, #937) --
+    # per Full-Period row, 1 - dsr_pvalue <= prob_sharpe_positive. NA prob on
+    # a negative-Sharpe row is "not applicable"; NA on a positive-Sharpe row
+    # is "not computed" (a defect); a missing dsr_pvalue is INDETERMINATE.
+    targets::tar_target(qa_psr_vs_dsr, {
+      verdict_tbl <- check_psr_vs_dsr(build_psr_vs_dsr_table(leaderboard))
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_psr_vs_dsr: S44 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        " fail / ", s[["not_computed"]], " not computed / ", s[["not_applicable"]],
+        " not applicable / ", s[["indeterminate"]], " indeterminate; ",
+        s[["examined"]], " row(s) examined (Refs #919, #937)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always"))

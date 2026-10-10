@@ -124,16 +124,37 @@ plan_structural_breaks <- function() {
           `XGB DRIF`      = extract_series(xgb_drif_portfolio,
                                            ret_col = "port_ret"),
           # ── OLMAR-1 (daily, net_ret column) ───────────────────────────
-          `OLMAR-1`       = extract_series(olmar_portfolio,
-                                           ret_col = "net_ret"),
+          # #937: OLMAR-1 is TOTAL-basis (long-only ETF weights), so the
+          # Sharpe input is net_ret - rf_ret via fals_excess_input(), using
+          # the SAME daily rf column olmar_metrics' sharpe_ratio_rf() deducts
+          # (olmar_portfolio$rf_ret, joined by .olmar_join_rf; daily, same
+          # 252 ppy and same dates as net_ret, so no frequency/alignment
+          # change). Rows with no rf are dropped + warned, never 0-filled.
+          `OLMAR-1`       = if (is.null(olmar_portfolio) || nrow(olmar_portfolio) == 0L) {
+            NULL
+          } else {
+            extract_series(
+              fals_excess_input(
+                tibble::tibble(date = olmar_portfolio$date,
+                               strategy_ret = olmar_portfolio$net_ret),
+                tibble::tibble(date = olmar_portfolio$date,
+                               rf   = olmar_portfolio$rf_ret),
+                "OLMAR-1"
+              )
+            )
+          },
           # ── Other strategies via fals bridge targets ───────────────────
           # LTR is monthly
           LTR             = extract_series(fals_ltr_input),
           # Avoid Worst and RSC are daily
-          `Avoid Worst`   = extract_series(fals_avoid_worst_input),
-          `Risk State`    = extract_series(fals_rsc_input),
-          # TOM is daily (fals_tom_input: date + strategy_ret)
-          TOM             = extract_series(fals_tom_input),
+          # #937: these three are TOTAL-basis (hd_return_basis()), so the
+          # Sharpe inputs are the EXCESS bridges (rf deducted); the others
+          # here are already excess spreads (OLMAR-1, also total, is put on
+          # the excess basis above).
+          `Avoid Worst`   = extract_series(fals_avoid_worst_excess),
+          `Risk State`    = extract_series(fals_rsc_excess),
+          # TOM is daily (fals_tom_excess: date + strategy_ret, rf deducted)
+          TOM             = extract_series(fals_tom_excess),
           # CMR is daily (#717; fals_cmr_input = cmr_returns_3m: date + strategy_ret,
           # the raw net_ret series -- no monthly resampling despite the name)
           CMR             = extract_series(fals_cmr_input),

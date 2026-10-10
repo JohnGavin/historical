@@ -193,12 +193,14 @@ plan_mom_prepeak_gauntlet <- function() {
     # stopped testing anything. Same defect class as #677 defect B
     # (fail-loud-not-null.md), inside a falsification battery.
     targets::tar_target(mom_prepeak_random_peak_metrics, {
-      rets <- .mom_prepeak_join_rf(mom_prepeak_random_peak_returns, stk_rf)
+      rets <- .mom_prepeak_join_rf(mom_prepeak_random_peak_returns, stk_rf, strategy = "Mom Pre-Peak")
       m <- .mom_prepeak_compute_metrics(
         rets,
         strategy = "mom_prepeak_random_peak"
       )
-      m$sharpe <- round(.mom_prepeak_sharpe(rets, m), 3)
+      # #919: the null must be scored on the SAME (excess) basis as the real
+      # Mom Pre-Peak row it is compared against (mom_prepeak_metrics$sharpe).
+      m$sharpe <- round(.mom_prepeak_sharpe(rets, m, strategy = "Mom Pre-Peak"), 3)
       if (is.na(m$sharpe)) {
         cli::cli_abort(c(
           "x" = "mom_prepeak_random_peak_metrics: sharpe is NA after .mom_prepeak_sharpe().",

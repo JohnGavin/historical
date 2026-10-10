@@ -294,7 +294,10 @@ plan_drif <- function() {
         # published alongside sharpe -- QA gate S17
         # (check_leaderboard_sharpe_coherence(), R/plan_qa_gates.R) asserts
         # sharpe == (cagr - ann_rf) / vol for every leaderboard row.
-        ann_rf <- mean(df$rf_ret, na.rm = TRUE) * 12
+        # #919: Factor DRIF is a selection over Fama-French factor SPREADS,
+        # i.e. an EXCESS return -- no rf deducted (hd_return_basis():
+        # "excess"; ann_rf is therefore exactly 0).
+        ann_rf <- mean(hd_rf_for_basis(df$rf_ret, "Factor DRIF"), na.rm = TRUE) * 12
         sharpe <- (ann_ret - ann_rf) / ann_vol
         cum <- cumprod(1 + df$portfolio_ret)
         max_dd <- min(cum / cummax(cum) - 1)
@@ -302,7 +305,10 @@ plan_drif <- function() {
 
         bench_ann <- prod(1 + df$benchmark_ret, na.rm = TRUE)^(12/n) - 1
         bench_vol <- sd(df$benchmark_ret, na.rm = TRUE) * sqrt(12)
-        bench_sharpe <- (bench_ann - mean(df$rf_ret, na.rm = TRUE) * 12) / bench_vol
+        # basis: excess (Mkt-RF); registry vocabulary for benchmarks tracked in #937 Phase 3
+        # Mkt-RF is ALREADY an excess return, so NO rf is deducted (#937,
+        # refs #919) -- same as drif_pbo's benchmark scoring below.
+        bench_sharpe <- bench_ann / bench_vol
 
         tibble(
           period = label, months = n,

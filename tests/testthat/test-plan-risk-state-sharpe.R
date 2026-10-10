@@ -7,6 +7,14 @@ testthat::local_edition(3)
 # #667's synthetic `port` tibble does not include one (and does not need
 # to: it doesn't assert on sharpe).
 
+# #937: rsc_metrics now routes rf through the return-basis registry
+# (hd_rf_for_basis()), so the package must be loaded for these tests.
+pkg_path <- if (dir.exists(here::here("packages/historicaldata"))) {
+  here::here("packages/historicaldata")
+} else {
+  file.path(dirname(here::here()), "packages/historicaldata")
+}
+suppressMessages(pkgload::load_all(pkg_path, quiet = TRUE))
 source(here::here("R/plan_risk_state.R"))
 source(here::here("R/utils_metrics.R"))
 

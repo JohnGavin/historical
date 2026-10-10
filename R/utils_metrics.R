@@ -209,6 +209,33 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
   )
 }
 
+#' Require a registered return-basis label (#919)
+#'
+#' A Sharpe helper that deducts rf per \code{hd_return_basis()} must be told
+#' WHICH strategy it is scoring. A missing/\code{NULL} label used to fall
+#' through to the legacy rf-deducted behaviour, which is silently wrong for
+#' an excess-basis (dollar-neutral) series -- the \code{fail-loud-not-null}
+#' defect. This aborts on a missing, non-string or unregistered label,
+#' naming the calling function, the argument and the registered strategies.
+#'
+#' @param strategy The label to check.
+#' @param fn,arg Character; the calling function and argument names, used
+#'   only in the error message.
+#' @return \code{strategy}, invisibly.
+#' @noRd
+.require_basis_label <- function(strategy, fn, arg = "strategy") {
+  if (is.null(strategy) || !is.character(strategy) || length(strategy) != 1L ||
+      is.na(strategy)) {
+    cli::cli_abort(c(
+      "x" = "{.fn {fn}}: {.arg {arg}} is required and must be one registered return-basis label (got {.cls {class(strategy)}}).",
+      "i" = "Registered strategies: {.val {hd_return_basis()$strategy}}.",
+      "i" = "A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null)."
+    ))
+  }
+  hd_return_basis_of(strategy)  # aborts on an unregistered label
+  invisible(strategy)
+}
+
 #' Join a risk-free series onto a return series by a shared key (#677 slice 3b)
 #'
 #' Canonical THREE-CASE risk-free coverage policy, shared by every strategy
@@ -279,13 +306,22 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
 #'   `date` column, since #722) leave it at the default `TRUE`.
 #' @param df_arg_name Character. Word used for `df` in the
 #'   missing-key-column message, e.g. \code{"port"}.
+#' @param basis_strategy Character or \code{NULL}. A leaderboard label
+#'   registered in \code{hd_return_basis()}. When its basis is
+#'   \code{"excess"}, rf is never used downstream, so the leading / trailing
+#'   / interior coverage policy is NOT applied and every row of `df` is kept
+#'   (Refs #937, #919). \code{"total"}, \code{"blend"} and
+#'   \code{"indeterminate"} labels, and \code{NULL}, get the full policy
+#'   above. An unregistered label aborts.
 #'
-#' @return `df` with `rf_ret` joined; trailing uncovered periods removed.
+#' @return `df` with `rf_ret` joined; trailing uncovered periods removed
+#'   (unless `basis_strategy` is on an excess basis).
 #' @noRd
 .join_rf_series <- function(df, rf, key,
                              label, rf_label, rf_source, df_label,
                              strategy_label, period_noun = "month",
-                             check_key_col = TRUE, df_arg_name = "df") {
+                             check_key_col = TRUE, df_arg_name = "df",
+                             basis_strategy = NULL) {
   required <- c(key, "rf_ret")
   missing_cols <- setdiff(required, names(rf))
   if (length(missing_cols) > 0L) {
@@ -304,6 +340,18 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
 
   df_key_range <- range(df[[key]])
   joined <- dplyr::left_join(df, rf, by = key)
+
+  # Refs #937/#919: an EXCESS-basis strategy never uses rf -- hd_rf_for_basis()
+  # replaces it with zeros -- so the coverage policy below would only discard
+  # valid trailing returns (and make the leaderboard's observation count
+  # disagree with the deflated-Sharpe path's T_obs). Nothing is dropped, so
+  # there is nothing to report; rf_ret stays NA on uncovered rows rather than
+  # being zero-filled. The label is looked up in the registry, which aborts on
+  # an unregistered one: there is no silent default.
+  if (!is.null(basis_strategy) &&
+      identical(hd_return_basis_of(basis_strategy), "excess")) {
+    return(joined)
+  }
 
   missing_key <- sort(joined[[key]][is.na(joined$rf_ret)])
   if (length(missing_key) == 0L) return(joined)

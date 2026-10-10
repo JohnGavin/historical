@@ -2,6 +2,23 @@
 name: priced-in-prohibition
 description: Require evidence of incremental predictive power before using signals derived from publicly available information
 type: rule
+paths:
+  - "R/plan_add_signal.R"
+  - "R/plan_add_crowding.R"
+  - "R/plan_nyt_sentiment.R"
+  - "R/plan_kalshi.R"
+  - "R/plan_vix_macro_overlay.R"
+  - "R/plan_ecb.R"
+  - "R/plan_regime*.R"
+  - "R/plan_turn_of_month.R"
+  - "R/plan_xgb_signal.R"
+  - "R/plan_ltr_momentum.R"
+  - "R/plan_guardian.R"
+  - "packages/historicaldata/R/add_signal.R"
+  - "packages/historicaldata/R/ecb.R"
+  - "packages/historicaldata/R/guardian.R"
+  - "packages/historicaldata/R/osap.R"
+  - "scripts/parse_nyt_tedalcorn.R"
 ---
 
 # Rule: Prohibit Acting on Priced-In Information

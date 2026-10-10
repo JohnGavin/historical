@@ -32,6 +32,8 @@ suppressMessages({
     file.path(MAIN_REPO, "packages/historicaldata"),
     quiet = TRUE, warn_conflicts = FALSE
   )
+  # utils_metrics.R: .require_basis_label() used by calc_backtest_metrics() (#919)
+  source(file.path(MAIN_REPO, "R/utils_metrics.R"))
   source(file.path(MAIN_REPO, "R/plan_stock_backtest.R"))
 })
 
@@ -153,10 +155,10 @@ message("[xgb_ab] Computing metrics by partition...")
 
 compute_metrics <- function(port, label) {
   dplyr::bind_rows(
-    calc_backtest_metrics(port |> dplyr::filter(date >= train_start, date <= train_end), "Training"),
-    calc_backtest_metrics(port |> dplyr::filter(date >= test_start,  date <= test_end),  "Testing"),
-    calc_backtest_metrics(port |> dplyr::filter(date >= val_start),                     "Validation"),
-    calc_backtest_metrics(port, "Full")
+    calc_backtest_metrics(port |> dplyr::filter(date >= train_start, date <= train_end), "Training", strategy = "XGB DRIF"),
+    calc_backtest_metrics(port |> dplyr::filter(date >= test_start,  date <= test_end),  "Testing", strategy = "XGB DRIF"),
+    calc_backtest_metrics(port |> dplyr::filter(date >= val_start),                     "Validation", strategy = "XGB DRIF"),
+    calc_backtest_metrics(port, "Full", strategy = "XGB DRIF")
   ) |>
     dplyr::mutate(variant = label)
 }

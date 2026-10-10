@@ -73,7 +73,7 @@ test_that(".cmr_select_pre_oos_lookback picks the PRE-OOS winner, not the full-s
   full_metrics <- dplyr::bind_rows(lapply(names(.cmr_fixture_portfolios), function(lb) {
     .compute_cmr_metrics(.cmr_fixture_portfolios[[lb]], lookback = lb,
                          daily_rf = .cmr_fixture_daily_rf, ann_factor = 12L,
-                         periodicity_check = "warn")
+                         periodicity_check = "warn", basis_strategy = "CMR")
   }))
   full_sample_winner <- full_metrics$lookback[which.max(full_metrics$sharpe)]
   expect_identical(full_sample_winner, "6m")

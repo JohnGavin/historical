@@ -2,6 +2,17 @@
 name: underperformance-prior
 description: Require evidence that current underperformance exceeds documented historical ranges before revising strategies
 type: rule
+paths:
+  - "R/plan_leaderboard.R"
+  - "R/plan_strategy_decay.R"
+  - "R/plan_alpha_decay.R"
+  - "R/plan_circuit_breaker.R"
+  - "R/plan_stop_rule_test.R"
+  - "R/plan_strategy_digest.R"
+  - "R/plan_regime*.R"
+  - "docs/leaderboard.qmd"
+  - "docs/negative-results.qmd"
+  - "docs/evidence.qmd"
 ---
 
 # Rule: Require Long-Underperformance Prior Before Strategy Revision
