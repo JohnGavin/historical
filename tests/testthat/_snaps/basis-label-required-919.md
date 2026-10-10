@@ -5,7 +5,7 @@
     Condition
       Error in `.require_basis_label()`:
       x `calc_backtest_metrics()`: `strategy` is required and must be one registered return-basis label (got <NULL>).
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null).
 
 ---
@@ -15,7 +15,7 @@
     Condition
       Error in `.require_basis_label()`:
       x `calc_backtest_metrics()`: `strategy` is required and must be one registered return-basis label (got <NULL>).
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null).
 
 # calc_backtest_metrics aborts on an unregistered / non-string label
@@ -25,7 +25,7 @@
     Condition
       Error in `hd_return_basis_of()`:
       x Strategy "Not A Strategy" is not registered in `hd_return_basis()`.
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i Add it to 'packages/historicaldata/R/hd_return_basis.R' with a file:line evidence string; a silent default would put its Sharpe on an unknown basis.
 
 ---
@@ -35,7 +35,7 @@
     Condition
       Error in `.require_basis_label()`:
       x `calc_backtest_metrics()`: `strategy` is required and must be one registered return-basis label (got <numeric>).
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null).
 
 # .compute_cmr_metrics aborts on a NULL / omitted label
@@ -45,7 +45,7 @@
     Condition
       Error in `.require_basis_label()`:
       x `.compute_cmr_metrics()`: `basis_strategy` is required and must be one registered return-basis label (got <NULL>).
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null).
 
 ---
@@ -55,7 +55,7 @@
     Condition
       Error in `.require_basis_label()`:
       x `.compute_cmr_metrics()`: `basis_strategy` is required and must be one registered return-basis label (got <NULL>).
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i A missing label would silently keep the legacy rf-deducted Sharpe, which is wrong for an excess-basis series (#919, fail-loud-not-null).
 
 # .compute_cmr_metrics aborts on an unregistered label
@@ -65,6 +65,6 @@
     Condition
       Error in `hd_return_basis_of()`:
       x Strategy "Not A Strategy" is not registered in `hd_return_basis()`.
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i Add it to 'packages/historicaldata/R/hd_return_basis.R' with a file:line evidence string; a silent default would put its Sharpe on an unknown basis.
 

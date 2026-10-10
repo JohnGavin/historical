@@ -392,3 +392,87 @@ sharpe_ratio_rf <- function(ret, rf, periods_per_year = 12L, na.rm = TRUE) {
   ))
   joined
 }
+
+#' Excess-return series for a stability (SSR) recorder (#937)
+#'
+#' The Sharpe Stability Ratio is the mean of a ROLLING Sharpe divided by its
+#' HAC standard error, so its numerator carries the same basis defect as any
+#' other Sharpe: for a TOTAL-return series the cash component inflates it.
+#' This puts `ret` on the basis the return-basis registry
+#' (\code{hd_return_basis()}) assigns to `label` -- rf deducted iff TOTAL, only
+#' on the cash weight for a BLEND (not supported here: no caller needs it) --
+#' and returns a vector the same length as `ret`. An observation with a return
+#' but no rf is returned as `NA` and COUNTED in a warning, never 0-filled
+#' (fail-loud-not-null.md); callers strip NAs afterwards as they already did.
+#'
+#' @param ret Numeric vector of periodic returns.
+#' @param rf Numeric vector of periodic risk-free returns, position-aligned
+#'   with `ret`. Must not be `NULL`.
+#' @param label A registered \code{hd_return_basis()} strategy label (an
+#'   unregistered one aborts).
+#' @param site Character; names the caller in the warning/abort text.
+#' @return Numeric vector, same length as `ret`.
+#' @noRd
+.ssr_excess_returns <- function(ret, rf, label, site) {
+  .require_basis_label(label, ".ssr_excess_returns", "label")
+  if (is.null(rf) || !is.numeric(rf) || length(rf) != length(ret)) {
+    cli::cli_abort(c(
+      "x" = "{site}: {.arg rf} must be a numeric vector the same length as the return series (never NULL).",
+      "i" = "Got {.cls {class(rf)}} of length {length(rf)} for {length(ret)} returns.",
+      "i" = "A missing rf must not be treated as zero: the SSR of a {.val {label}} series would silently stay on the total-return basis (#937)."
+    ))
+  }
+  ex <- hd_excess_returns(ret, rf, label)
+  n_lost <- sum(!is.na(ret) & is.na(ex))
+  if (n_lost > 0L) {
+    cli::cli_warn(c(
+      "!" = "{site}: {n_lost} observation{?s} of {.val {label}} had no risk-free rate and {?was/were} dropped from the stability metrics.",
+      "i" = "Not zero-filled: a zero rf would leave those months on the total-return basis."
+    ))
+  }
+  ex
+}
+
+#' Put an asset-return panel on the EXCESS basis (#937)
+#'
+#' \code{hd_cov_oos_diagnostic()} and \code{hd_weight_stability_diagnostic()}
+#' report \code{oos_sharpe = mean / sd * sqrt(12)} of whatever matrix they are
+#' given, and \code{raw_mvo} / \code{shrunk_mu} build their WEIGHTS from the
+#' mean of that matrix. For adjusted-close (TOTAL) asset returns that is a
+#' total-return Sharpe and total-return tangency weights. This subtracts each
+#' month's risk-free rate from every asset column, using the return-basis
+#' registry (\code{hd_return_basis()}) for the panel's `label`.
+#'
+#' The join to `rf` goes through \code{.join_rf_series()}: months before the
+#' rf series starts or inside a hole in it abort; trailing months with no rf
+#' yet (publication lag) are trimmed with a counted warning.
+#'
+#' @param wide Tibble with a Date column `date` (month's last trading day) and
+#'   one numeric return column per asset.
+#' @param rf Tibble with `ym` (`"YYYY-MM"`) and `rf_ret` (the `stk_rf`
+#'   target).
+#' @param label A registered \code{hd_return_basis()} label.
+#' @param df_label Character; names the panel in messages.
+#' @return Tibble `date` plus the asset columns, each an excess return.
+#' @noRd
+.excess_asset_panel <- function(wide, rf, label, df_label) {
+  .require_basis_label(label, ".excess_asset_panel", "label")
+  if (!is.data.frame(wide) || !"date" %in% names(wide)) {
+    cli::cli_abort(c(
+      "x" = "{df_label}: the asset panel must be a data frame with a {.field date} column.",
+      "i" = "Got columns {.val {names(wide)}}."
+    ))
+  }
+  assets <- setdiff(names(wide), "date")
+  joined <- wide |>
+    dplyr::mutate(ym = format(as.Date(.data$date), "%Y-%m")) |>
+    .join_rf_series(
+      rf, key = "ym", label = ".excess_asset_panel", rf_label = "stk_rf",
+      rf_source = "R/plan_stock_backtest.R", df_label = df_label,
+      strategy_label = df_label
+    )
+  for (a in assets) {
+    joined[[a]] <- hd_excess_returns(joined[[a]], joined$rf_ret, label)
+  }
+  joined[c("date", assets)]
+}

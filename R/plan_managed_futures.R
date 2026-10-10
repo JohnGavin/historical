@@ -589,7 +589,11 @@ plan_managed_futures <- function() {
   }
 
   # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
-  rets <- mf_portfolios$ret_ls
+  # #937: Managed Futures is a TOTAL-basis series (RF + spread), so SSR is
+  # computed on the EXCESS series (registry basis; rf = the portfolio's own RF).
+  rets <- .ssr_excess_returns(
+    mf_portfolios$ret_ls, mf_portfolios$RF, "Managed Futures", ".mf_register_runs"
+  )
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
     hd_record_stability_metrics(

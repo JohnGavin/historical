@@ -34,6 +34,11 @@
 #' (e.g. \code{borrow_rate_annual = 0.005}, R/plan_mom_prepeak.R, marked
 #' MANUAL). That residual is NOT modelled here.
 #'
+#' \strong{Research series.} Rows whose label starts with \code{"Research: "}
+#' are not leaderboard strategies: they classify the total-return series behind
+#' research tables (e.g. an ETF buy-and-hold, an equity/cash overlay, an asset
+#' panel) so their Sharpe is put on the same excess basis (#937).
+#'
 #' \strong{Values of \code{basis}.}
 #' \describe{
 #'   \item{\code{"total"}}{Series contains a cash / risk-free component;
@@ -104,7 +109,26 @@ hd_return_basis <- function() {
     "Factor DRIF", "excess",
     "R/plan_drif.R:243 equal-weight of Fama-French factor spreads (no Mkt-RF, no RF)",
     "PSO Optimal", "excess",
-    "R/plan_portfolio_opt.R:226-241 normalised weighted average of the four excess series stk_max/stk_drif/fac_max/fac_drif"
+    "R/plan_portfolio_opt.R:226-241 normalised weighted average of the four excess series stk_max/stk_drif/fac_max/fac_drif",
+    # ---- #937 phase 2 group C: research (non-leaderboard) series -----------
+    # Total-return research series whose Sharpe was computed with NO rf
+    # deducted (rafi, european overlay, VIX macro overlay, JST trend, covariance
+    # / weight-stability panels). They are not leaderboard strategies; the
+    # labels are the registry vocabulary for them (#937 phase 3 item 2).
+    "Research: RF + factor overlay", "total",
+    "R/plan_rafi.R:106,113,118 ret = RF + w * factor spread - cost (RF is a component)",
+    "Research: cap-weighted market (Mkt-RF + RF)", "total",
+    "R/plan_rafi.R:123 ret_market = Mkt_RF + RF (the repo's own total-market rebuild)",
+    "Research: ETF buy and hold", "total",
+    "R/plan_european_overlay.R:102 eu_ret = close / lag(close) - 1 on Yahoo adjusted close; R/plan_vix_macro_overlay.R:40 ret from hd_ohlcv adjusted_close; R/plan_risk_state.R:211 ret_buyhold = spy_ret (all dividend-inclusive, no rf subtracted)",
+    "Research: ETF/cash overlay", "total",
+    "R/plan_european_overlay.R:159 exposure * eu_ret + (1 - exposure) * rf_use; R/plan_risk_state.R:209-210 exposure * spy_ret + (1 - exposure) * rf_daily - cost; R/plan_vix_macro_overlay.R:72 ifelse(in_market, ret, 0) (cash leg earns 0, not rf, so the full rf is still the benchmark)",
+    "Research: JST equity total return", "total",
+    "R/plan_jst_trend.R:68 eq_idx = cumprod(1 + eq_tr / 100); eq_tr is the JST equity total return (dividends included)",
+    "Research: JST equity/bills trend", "total",
+    "R/plan_jst_trend.R:83 tf_ret = if_else(trend_sig == 1, eq_tr / 100, bill_rate / 100) (equity or the bill rate)",
+    "Research: asset panel (adjusted-close returns)", "total",
+    "R/plan_returns.R:61-76 monthly simple return on hd_ohlcv adjusted_close; R/plan_cov_diagnostic.R:75-82 same convention for the wide panel (no rf subtracted)"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure

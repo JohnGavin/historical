@@ -6,11 +6,15 @@
     "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", 
     "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", 
     "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", 
-    "PSO Optimal"), basis = c("total", "total", "total", "total", 
-    "total", "total", "excess", "excess", "excess", "excess", "excess", 
-    "blend", "excess", "excess", "excess", "excess", "excess", "excess"
-    ), cash_weight_col = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
-    NA, "cash_weight", NA, NA, NA, NA, NA, NA))
+    "PSO Optimal", "Research: RF + factor overlay", "Research: cap-weighted market (Mkt-RF + RF)", 
+    "Research: ETF buy and hold", "Research: ETF/cash overlay", "Research: JST equity total return", 
+    "Research: JST equity/bills trend", "Research: asset panel (adjusted-close returns)"
+    ), basis = c("total", "total", "total", "total", "total", "total", 
+    "excess", "excess", "excess", "excess", "excess", "blend", "excess", 
+    "excess", "excess", "excess", "excess", "excess", "total", "total", 
+    "total", "total", "total", "total", "total"), cash_weight_col = c(NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "cash_weight", NA, NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA))
 
 # an unregistered strategy aborts (never a silent default)
 
@@ -19,7 +23,7 @@
     Condition
       Error in `hd_return_basis_of()`:
       x Strategy "Not A Strategy" is not registered in `hd_return_basis()`.
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: JST equity/bills trend", and "Research: asset panel (adjusted-close returns)".
       i Add it to 'packages/historicaldata/R/hd_return_basis.R' with a file:line evidence string; a silent default would put its Sharpe on an unknown basis.
 
 ---

@@ -338,6 +338,47 @@ PROP_CONSTRAINED_SCENARIOS <- tibble::tibble(
   target = c(0.10, 0.10, 0.10)
 )
 
+#' SSR / top-5% entries for the strat_returns_wide-sourced strategies (#937)
+#'
+#' The Sharpe Stability Ratio is the mean of a rolling Sharpe over its HAC
+#' standard error, so it must be computed on the EXCESS basis: for a TOTAL
+#' series (Value HML, Managed Futures, OLMAR-1, TOM, Risk State, Avoid Worst)
+#' the cash component inflates the numerator. The SSR therefore reads the
+#' `strat_returns_wide_excess` column (rf deducted per \code{hd_return_basis()}).
+#' `top5pct_share` is read from the SAME column: it is not a Sharpe, but it
+#' measures how concentrated the strategy's EDGE is (\code{hd_top5pct_share()}),
+#' a cash component dilutes it, and \code{hd_record_stability_metrics()} (the
+#' registry writer) computes both from one return vector -- so the two surfaces
+#' stay on one basis. A column present in the wide table but missing from the
+#' excess table aborts (never a silent fall-back to the total-basis column).
+#'
+#' @param strat_returns_wide,strat_returns_wide_excess The two targets.
+#' @param ext_map Named character vector code_name -> leaderboard label.
+#' @param safe_ssr,safe_top5 The leaderboard target's own helpers.
+#' @return Named list (by label) of `list(ssr, top5)`.
+#' @noRd
+.ssr_ext_entries <- function(strat_returns_wide, strat_returns_wide_excess,
+                             ext_map, safe_ssr, safe_top5) {
+  out <- list()
+  for (col in names(ext_map)) {
+    if (!col %in% names(strat_returns_wide)) next
+    label <- ext_map[[col]]
+    if (is.null(strat_returns_wide_excess) ||
+        !col %in% names(strat_returns_wide_excess)) {
+      cli::cli_abort(c(
+        "x" = "SSR for {.val {label}}: column {.field {col}} is in strat_returns_wide but not in strat_returns_wide_excess.",
+        "i" = "A fall-back to the total-basis column would put its SSR on the wrong basis (#937).",
+        "i" = "Check STRAT_RETURNS_WIDE_CODES / STRAT_CODE_LABELS in R/plan_strategy_correlation.R."
+      ))
+    }
+    out[[label]] <- list(
+      ssr  = safe_ssr(strat_returns_wide_excess[[col]], label),
+      top5 = safe_top5(strat_returns_wide_excess[[col]])
+    )
+  }
+  out
+}
+
 plan_leaderboard <- function() {
   list(
     # Explicit deps — targets must be named as function args
@@ -1047,13 +1088,19 @@ plan_leaderboard <- function() {
             value_hml   = "Value (HML)",
             managed_futures = "Managed Futures"
           )
-          for (col in names(.ssr_ext_map)) {
-            if (col %in% names(strat_returns_wide)) {
-              label <- .ssr_ext_map[[col]]
-              r <- strat_returns_wide[[col]]
-              ssr_map[[label]] <- list(ssr = safe_ssr(r, label), top5 = safe_top5(r))
-            }
-          }
+          # #937 (refs #919): SSR is a Sharpe-derived statistic, so it reads
+          # the EXCESS table (strat_returns_wide_excess: rf deducted for the
+          # six total-basis strategies, cash-weight only for CMR Conditioned,
+          # nothing for the excess spreads). top5pct_share reads the same
+          # column so it matches the registry writer's single return vector.
+          # See .ssr_ext_entries().
+          ssr_map <- c(
+            ssr_map,
+            .ssr_ext_entries(
+              strat_returns_wide, strat_returns_wide_excess,
+              .ssr_ext_map, safe_ssr, safe_top5
+            )
+          )
         }
 
         # PSO Optimal: opt_returns_df is built earlier in this target (the
