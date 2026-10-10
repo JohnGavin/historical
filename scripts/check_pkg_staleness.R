@@ -157,7 +157,20 @@
 #   nix develop --command Rscript scripts/check_pkg_staleness.R
 #
 # Exit codes:
-#   0  no stale package-consuming target found (or none discovered at all)
+#   0  no stale package-consuming target found. Two DISTINCT, labelled forms
+#      (checks-must-distinguish-unknown -- "0 examined" must never read like
+#      "examined and clean"; every outcome prints a machine-readable
+#      `EXAMINED: <n>` line that build.sh surfaces in its summary):
+#        - `PASS: ... (N checked)`, N >= 1: N targets were examined, none stale.
+#        - `VACUOUS-PASS (0 examined)`: no target body calls
+#          historicaldata::/::: (all calls are bare since #922), so nothing was
+#          examined. Exit 0 ONLY because the mechanism covering the
+#          complementary population is verified in place on this run:
+#          tar_option_set(imports = "historicaldata") found by AST in
+#          docs/_targets.R (.cps_imports_declared()). Not evidence of freshness.
+#   3  INDETERMINATE: 0 targets examined AND the covering `imports=` declaration
+#      was not found (or discovered consumers had no build record), so nothing
+#      demonstrably covers the gap. NOT a pass; build.sh maps it to its exit 2.
 #   1  one or more known package-consuming targets have a recorded build
 #      time older than the package source's last on-disk change (#911:
 #      compared against max(file.mtime(pkg_source_files)), never against
@@ -547,12 +560,69 @@ suppressPackageStartupMessages({
   tibble::tibble(file = out_files, target_name = out_names)
 }
 
+# .cps_string_literals(expr) -- every character literal anywhere in `expr`
+# (so `"a"` and `c("a", "b")` both work).
+.cps_string_literals <- function(expr) {
+  if (is.character(expr)) {
+    return(expr)
+  }
+  out <- character(0)
+  if (is.call(expr)) {
+    parts <- as.list(expr)
+    for (i in seq_along(parts)) {
+      out <- c(out, .cps_string_literals(parts[[i]]))
+    }
+  }
+  out
+}
+
+# .cps_imports_declared(targets_script, pkg) -- TRUE iff the pipeline script
+# contains a real `tar_option_set(..., imports = <literal naming pkg>)` call
+# (AST, not text: a comment or a string mentioning it is not a declaration).
+# This is the mechanism that covers BARE-name package calls; the "0
+# examined" outcome below is only a legitimate (labelled) VACUOUS-PASS when
+# it is in place. A missing or unparsable script returns FALSE (the caller
+# turns that into INDETERMINATE), never an error.
+.cps_imports_declared <- function(targets_script = here::here("docs", "_targets.R"),
+                                  pkg = "historicaldata") {
+  exprs <- tryCatch(
+    as.list(parse(targets_script, keep.source = FALSE)),
+    error = function(e) NULL,
+    warning = function(w) NULL
+  )
+  if (is.null(exprs)) {
+    return(FALSE)
+  }
+  walk <- function(expr) {
+    if (is.call(expr)) {
+      if (identical(.cps_call_head_name(expr), "tar_option_set")) {
+        nms <- names(expr)
+        if (!is.null(nms) && "imports" %in% nms) {
+          val <- expr[[which(nms == "imports")[1]]]
+          if (pkg %in% .cps_string_literals(val)) {
+            return(TRUE)
+          }
+        }
+      }
+      parts <- as.list(expr)
+      for (i in seq_along(parts)) {
+        if (isTRUE(walk(parts[[i]]))) {
+          return(TRUE)
+        }
+      }
+    }
+    FALSE
+  }
+  any(vapply(exprs, walk, logical(1)))
+}
+
 # .cps_main() -- orchestrates the check, printing a human-readable report and
 # RETURNING (not quit()-ing) an exit-status integer -- same testable-without-
 # terminating-the-session pattern as .cpe_main()/.cdf_main().
 .cps_main <- function(store_path = here::here("docs", "_targets"),
                        r_dir = here::here("R"),
-                       pkg_files_target = "pkg_source_files") {
+                       pkg_files_target = "pkg_source_files",
+                       targets_script = here::here("docs", "_targets.R")) {
   if (!dir.exists(store_path)) {
     message("!!! No targets store found at '", store_path, "' !!!")
     message("!!! This script only READS an existing store -- run tar_make() first. !!!")
@@ -628,6 +698,42 @@ suppressPackageStartupMessages({
   result <- .cps_evaluate_staleness(meta, known, pkg_source_changed_at, progress = progress)
   stale <- result$stale
   stale_detail <- result$stale_detail
+
+  # Machine-readable count for scripts/build.sh's summary line. Printed on
+  # EVERY outcome that reaches this point so a reader can always see how many
+  # targets this run actually examined (0 is visible, never implied).
+  cat(sprintf("EXAMINED: %d\n", length(known)))
+
+  if (length(known) == 0L) {
+    # Nothing was examined. That is NOT evidence of cleanliness -- the check
+    # output would be identical whether discovery works or is broken.
+    # Determinate only when (a) discovery found no namespaced consumer at all
+    # AND (b) the mechanism covering the complementary population (bare
+    # calls: tar_option_set(imports=)) is verified in place right now.
+    if (length(registry_names) == 0L && .cps_imports_declared(targets_script)) {
+      cat(paste0(
+        "VACUOUS-PASS (0 examined): no target body calls historicaldata:: / ",
+        "historicaldata:::, so there was nothing for this backstop to check. ",
+        "This is NOT evidence that any target is fresh. Coverage rests on ",
+        "tar_option_set(imports = \"historicaldata\") in ", basename(targets_script),
+        " (verified present), which tracks bare-name calls. If a namespaced ",
+        "call is re-introduced this check examines it automatically.\n"
+      ))
+      return(0L)
+    }
+    cat(paste0(
+      "INDETERMINATE (0 examined): ",
+      if (length(registry_names) > 0L) {
+        sprintf("%d discovered consumer(s) have no build record, so none could be checked. ", length(registry_names))
+      } else {
+        paste0("no namespaced consumer was discovered AND tar_option_set(imports = ",
+               "\"historicaldata\") was not found in ", targets_script, ", so bare-name ",
+               "calls are not known to be tracked either. ")
+      },
+      "Nothing was verified. This is NOT a pass.\n"
+    ))
+    return(3L)
+  }
 
   if (length(stale) == 0L) {
     cat(sprintf(

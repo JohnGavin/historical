@@ -189,7 +189,11 @@
 #      check_pipeline_errors.R could not read a store at all (no store,
 #      tar_meta() failed, or a truncated/malformed meta file -- #730),
 #      check_pkg_staleness.R could not read the store or find
-#      pkg_source_digest built in it (#753), or check_dashboard_freshness.R
+#      pkg_source_digest built in it (#753), or it exited 3 (INDETERMINATE:
+#      examined 0 targets and nothing verified covers the gap -- its own exit 3
+#      is mapped to THIS exit 2, not to this script's render-only exit 3; a
+#      labelled VACUOUS-PASS, exit 0 with `targets examined: 0` in the summary,
+#      is NOT this case), or check_dashboard_freshness.R
 #      --data-staleness could not run its checks at all. Also returned
 #      immediately, before anything runs, for an unrecognised command-line
 #      flag. This is NOT a pass -- never treat it as one.
@@ -252,7 +256,9 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 LOCKDIR=""
 TARMAKE_LOG=""
 DASHBOARD_LOG=""
+PKGSTALE_LOG=""
 _cleanup() {
+  [[ -n "${PKGSTALE_LOG:-}" ]] && rm -f "$PKGSTALE_LOG"
   [[ -n "${LOCKDIR:-}" ]] && rm -rf "$LOCKDIR"
   [[ -n "${TARMAKE_LOG:-}" ]] && rm -f "$TARMAKE_LOG"
   [[ -n "${DASHBOARD_LOG:-}" ]] && rm -f "$DASHBOARD_LOG"
@@ -489,11 +495,17 @@ fi
 # other Rscript step in this file.
 # ---------------------------------------------------------------------------
 echo "--- Step 2c: scripts/check_pkg_staleness.R (#753) ---"
+PKGSTALE_LOG="$(mktemp)"
 set +e
-nix develop "$REPO_ROOT" --command Rscript scripts/check_pkg_staleness.R
-PKGSTALE_STATUS=$?
+nix develop "$REPO_ROOT" --command Rscript scripts/check_pkg_staleness.R 2>&1 | tee "$PKGSTALE_LOG"
+PKGSTALE_STATUS=${PIPESTATUS[0]}
 set -e
 echo "--- check_pkg_staleness.R exited $PKGSTALE_STATUS ---"
+# Number of targets the check actually examined (its `EXAMINED: <n>` line);
+# "unknown" if the script never got far enough to print one. 0 is not a clean
+# result -- see the script's header (VACUOUS-PASS / INDETERMINATE).
+PKGSTALE_EXAMINED="$(sed -n 's/^EXAMINED: \([0-9][0-9]*\)$/\1/p' "$PKGSTALE_LOG" | tail -n 1)"
+PKGSTALE_EXAMINED="${PKGSTALE_EXAMINED:-unknown}"
 echo ""
 
 # ---------------------------------------------------------------------------
@@ -562,7 +574,10 @@ echo "=== scripts/build.sh: summary ==="
 echo "tar_make() exit code:                              $TAR_MAKE_STATUS"
 echo "check_pipeline_errors.R exit code:                 $CHECK_STATUS"
 echo "cross-check status (tar_make() log vs Step 2, #730): $CROSSCHECK_STATUS"
-echo "check_pkg_staleness.R exit code (#753):            $PKGSTALE_STATUS"
+echo "check_pkg_staleness.R exit code (#753):            $PKGSTALE_STATUS (targets examined: $PKGSTALE_EXAMINED)"
+if [[ "$PKGSTALE_EXAMINED" == "0" ]]; then
+  echo "  ^ 0 examined: Step 2c checked NOTHING (see its VACUOUS-PASS / INDETERMINATE line). Not evidence of freshness."
+fi
 echo "write_targets_meta_snapshot.R exit code:           $SNAPSHOT_STATUS"
 echo "check_dashboard_freshness.R --data-staleness exit: $DASHBOARD_STATUS"
 echo ""
@@ -574,10 +589,12 @@ if [[ "$CHECK_STATUS" -eq 2 ]]; then
   exit 2
 fi
 
-if [[ "$PKGSTALE_STATUS" -eq 2 ]]; then
+if [[ "$PKGSTALE_STATUS" -eq 2 ]] || [[ "$PKGSTALE_STATUS" -eq 3 ]]; then
   echo "!!! check_pkg_staleness.R could not run the check at all (no store,"
   echo "!!! pkg_source_digest not yet built in this store, or tar_meta()/"
-  echo "!!! tar_progress() failed) -- see its output above (#753)."
+  echo "!!! tar_progress() failed), or it examined 0 targets with nothing"
+  echo "!!! demonstrably covering the gap (its exit 3, INDETERMINATE) -- see its"
+  echo "!!! output above (#753)."
   echo "!!! BUILD DID NOT RUN. This is NOT a pass.                                   !!!"
   exit 2
 fi
