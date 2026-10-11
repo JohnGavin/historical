@@ -310,9 +310,15 @@ derive_lending_status <- function(strategy, override = NA_character_) {
 #' cancel in `sharpe_delta` and is left out for simplicity (noted, not
 #' silently assumed away).
 #'
-#' @param monthly_ret_pre_borrow Numeric vector, monthly portfolio returns
-#'   BEFORE any borrow charge (trade costs already deducted). No NA allowed
+#' @param ret_pre_borrow Numeric vector, portfolio returns BEFORE any borrow
+#'   charge (trade costs already deducted), one per period. No NA allowed
 #'   -- filter upstream.
+#' @param ann_factor Single positive finite number: periods per year of
+#'   `ret_pre_borrow` (12 monthly, 252 daily). REQUIRED, never inferred from
+#'   `n` (#936: the daily CMR series was annualised as monthly). The annual
+#'   borrow rate is charged at `rate / ann_factor` per period, which equals
+#'   the `rate / 12` monthly convention above when `ann_factor = 12`.
+#' @param series_label Label used in error messages.
 #' @param borrow_rates_annual Numeric vector of annual borrow rates to sweep.
 #'   MUST include 0 (the baseline `sharpe_delta` is computed against).
 #' @param short_notional_frac Numeric scalar in `[0, 1]`. Fraction of NAV
@@ -321,18 +327,27 @@ derive_lending_status <- function(strategy, override = NA_character_) {
 #' @return Tibble: borrow_rate_annual, cagr, vol, sharpe, sharpe_delta
 #'   (sharpe at this rate minus sharpe at rate 0).
 #' @noRd
-compute_borrow_sensitivity <- function(monthly_ret_pre_borrow,
+compute_borrow_sensitivity <- function(ret_pre_borrow,
+                                        ann_factor,
                                         borrow_rates_annual = c(0, 0.03, 0.10, 0.25),
-                                        short_notional_frac = 1) {
-  if (!is.numeric(monthly_ret_pre_borrow) || length(monthly_ret_pre_borrow) < 12L) {
+                                        short_notional_frac = 1,
+                                        series_label = "series") {
+  if (missing(ann_factor) || !is.numeric(ann_factor) || length(ann_factor) != 1L ||
+      !is.finite(ann_factor) || ann_factor <= 0) {
     cli::cli_abort(c(
-      "x" = "compute_borrow_sensitivity() requires >= 12 monthly returns.",
-      "i" = "Got {length(monthly_ret_pre_borrow)}."
+      "x" = "compute_borrow_sensitivity(): {.arg ann_factor} for {.val {series_label}} must be a single positive finite number.",
+      "i" = "Pass the series' own periods per year (12 monthly, 252 daily); it is never guessed from n (#936)."
     ))
   }
-  if (anyNA(monthly_ret_pre_borrow)) {
+  if (!is.numeric(ret_pre_borrow) || length(ret_pre_borrow) < 12L) {
     cli::cli_abort(c(
-      "x" = "compute_borrow_sensitivity(): monthly_ret_pre_borrow contains NA.",
+      "x" = "compute_borrow_sensitivity() requires >= 12 returns.",
+      "i" = "Got {length(ret_pre_borrow)}."
+    ))
+  }
+  if (anyNA(ret_pre_borrow)) {
+    cli::cli_abort(c(
+      "x" = "compute_borrow_sensitivity(): ret_pre_borrow contains NA.",
       "i" = "Filter NA out before calling -- never coerced or dropped silently here."
     ))
   }
@@ -350,13 +365,13 @@ compute_borrow_sensitivity <- function(monthly_ret_pre_borrow,
     ))
   }
 
-  n <- length(monthly_ret_pre_borrow)
+  n <- length(ret_pre_borrow)
 
   rows <- purrr::map_dfr(borrow_rates_annual, function(rate) {
-    monthly_charge <- short_notional_frac * rate / 12
-    r       <- monthly_ret_pre_borrow - monthly_charge
-    ann_ret <- prod(1 + r)^(12 / n) - 1
-    ann_vol <- stats::sd(r) * sqrt(12)
+    period_charge <- short_notional_frac * rate / ann_factor
+    r       <- ret_pre_borrow - period_charge
+    ann_ret <- prod(1 + r)^(ann_factor / n) - 1
+    ann_vol <- stats::sd(r) * sqrt(ann_factor)
     sharpe  <- ann_ret / ann_vol
     tibble::tibble(
       borrow_rate_annual = rate, cagr = ann_ret, vol = ann_vol, sharpe = sharpe
@@ -371,11 +386,16 @@ compute_borrow_sensitivity <- function(monthly_ret_pre_borrow,
 #' Apply compute_borrow_sensitivity() across a named list of strategies (#665)
 #'
 #' @param returns_by_strategy Named list of numeric vectors: PRE-BORROW
-#'   monthly returns per strategy (may contain NA -- filtered per-strategy).
+#'   returns per strategy, one per period (may contain NA -- filtered
+#'   per-strategy).
+#' @param ann_factor_by_strategy Named numeric vector: periods per year for
+#'   EACH strategy in `returns_by_strategy` (see [compute_borrow_sensitivity()]).
+#'   Aborts naming any strategy without an entry (#936).
 #' @param borrow_rates_annual Numeric vector to sweep.
 #' @return Tibble: strategy, borrow_rate_annual, cagr, vol, sharpe, sharpe_delta.
 #' @noRd
 build_borrow_sensitivity_table <- function(returns_by_strategy,
+                                            ann_factor_by_strategy,
                                             borrow_rates_annual = c(0, 0.03, 0.10, 0.25)) {
   if (!is.list(returns_by_strategy) || length(returns_by_strategy) == 0L ||
       is.null(names(returns_by_strategy)) || any(!nzchar(names(returns_by_strategy)))) {
@@ -383,9 +403,26 @@ build_borrow_sensitivity_table <- function(returns_by_strategy,
       "x" = "build_borrow_sensitivity_table(): returns_by_strategy must be a non-empty NAMED list."
     ))
   }
+  if (missing(ann_factor_by_strategy) || !is.numeric(ann_factor_by_strategy) ||
+      is.null(names(ann_factor_by_strategy))) {
+    cli::cli_abort(c(
+      "x" = "build_borrow_sensitivity_table(): ann_factor_by_strategy must be a NAMED numeric vector.",
+      "i" = "One periods-per-year entry per strategy (#936)."
+    ))
+  }
+  no_af <- setdiff(names(returns_by_strategy), names(ann_factor_by_strategy))
+  if (length(no_af) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_borrow_sensitivity_table(): no ann_factor for {length(no_af)} strateg{?y/ies}: {.val {no_af}}.",
+      "i" = "Never guessed from series length (#936)."
+    ))
+  }
   purrr::imap_dfr(returns_by_strategy, function(r, strategy) {
     r <- r[!is.na(r)]
-    sweep <- compute_borrow_sensitivity(r, borrow_rates_annual)
+    sweep <- compute_borrow_sensitivity(
+      r, ann_factor = unname(ann_factor_by_strategy[[strategy]]),
+      borrow_rates_annual = borrow_rates_annual, series_label = strategy
+    )
     dplyr::mutate(sweep, strategy = strategy, .before = 1L)
   })
 }
@@ -583,7 +620,9 @@ plan_cost_convention <- function() {
     # wrong -- see the `# MANUAL: no source` markers in
     # R/plan_stock_backtest.R and R/plan_ltr_momentum.R).
     #
-    # Each series is reconstructed as the PRE-BORROW monthly return:
+    # Each series is reconstructed as the PRE-BORROW per-period return (CMR is
+    # DAILY, the other seven monthly -- each annualised on its own
+    # strategy_names$ann_factor, #936):
     #   - CMR: its return series has zero borrow charge (not_applicable, no
     #     rate was ever subtracted), so it is used as-is.
     #   - Mom Pre-Peak / Mom Post-Peak / Mom 12-2: the now-applied
@@ -629,7 +668,16 @@ plan_cost_convention <- function() {
         "LTR"           = ltr_portfolio$ls_ret_net + ltr_portfolio$borrow
       )
 
-      out <- build_borrow_sensitivity_table(returns_by_strategy)
+      # Periods per year come from strategy_names$ann_factor (the single
+      # home, R/plan_strategy_names.R), joined on short_name -- never guessed
+      # from n (#936: CMR is daily, 252; the other seven are monthly, 12).
+      ann_factor_by_strategy <- stats::setNames(
+        strategy_names$ann_factor[match(names(returns_by_strategy), strategy_names$short_name)],
+        names(returns_by_strategy)
+      )
+      ann_factor_by_strategy <- ann_factor_by_strategy[!is.na(ann_factor_by_strategy)]
+
+      out <- build_borrow_sensitivity_table(returns_by_strategy, ann_factor_by_strategy)
 
       cli::cli_inform(c("v" = paste0(
         "borrow_sensitivity_sweep: ", dplyr::n_distinct(out$strategy),

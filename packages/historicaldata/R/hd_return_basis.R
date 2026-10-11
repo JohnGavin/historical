@@ -107,7 +107,14 @@ hd_return_basis <- function() {
     "R/plan_portfolio_opt.R:226-241 normalised weighted average of the four excess series stk_max/stk_drif/fac_max/fac_drif",
     # --- #937 phase 2 group A (stock / portfolio / regime / risk-state sites) ---
     "PSO Regime-Adjusted", "blend",
-    "R/plan_regime.R:159 regime_ret = exposure * base_ret + (1 - exposure) * rf_ret: the PSO Optimal excess spread blended with a cash leg that IS rf; cash_weight = 1 - exposure (regime_portfolio column `cash_weight`)"
+    "R/plan_regime.R:159 regime_ret = exposure * base_ret + (1 - exposure) * rf_ret: the PSO Optimal excess spread blended with a cash leg that IS rf; cash_weight = 1 - exposure (regime_portfolio column `cash_weight`)",
+    # --- #937 phase 2 group B (commodity momentum / momentum decomposition / regime momentum) ---
+    "Commodity Momentum L/S", "excess",
+    "R/commodities_momentum.R:196-200,234 weight = +1/(2*n_long) top / -1/(2*n_short) bottom (sums to 0, dollar-neutral); net_ret = portfolio_ret - cost",
+    "Momentum Decomposition L/S", "excess",
+    "R/momentum_decomposition.R:624-627,675 weight = +leverage/(2*n_long) / -leverage/(2*n_short) (sums to 0, dollar-neutral); net_ret = portfolio_ret - cost",
+    "Regime Momentum", "excess",
+    "R/zakamulin_allocation.R:199 allocated_ret = net_ret * allocation: a dollar-neutral spread (R/momentum_decomposition.R:624-627) scaled by exposure in [0,1]; the cash leg earns 0 by construction (R/zakamulin_allocation.R:174), so no rf is in the series"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure

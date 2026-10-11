@@ -34,9 +34,15 @@ test_that("trial_sharpe_var = 1 reproduces the pre-#558 (unit-variance) hurdle e
     ek <- m4 - 3
     var_sr <- (1 - m3 * sr + (m4 - 1) / 4 * sr^2) / T_obs
     if (K_trials > 1L) {
-      z <- sqrt(2 * log(K_trials))
-      gamma <- 0.5772156649
-      e_max_sr <- (z - (gamma + log(pi / 2)) / (2 * z)) / sqrt(T_obs)
+      # #931: the benchmark E[max of K iid N(0,1)] is now the EXACT value,
+      # K * int x phi(x) Phi(x)^(K-1) dx, not the old closed-form
+      # approximation z - (gamma + log(pi/2)) / (2z), which overstated it by
+      # 9-31%. Computed here independently of hd_expected_max_normal().
+      emax <- stats::integrate(
+        function(x) K_trials * x * stats::dnorm(x) * stats::pnorm(x)^(K_trials - 1),
+        lower = -40, upper = 40, rel.tol = 1e-12, subdivisions = 2000L
+      )$value
+      e_max_sr <- emax / sqrt(T_obs)
     } else {
       e_max_sr <- 0
     }

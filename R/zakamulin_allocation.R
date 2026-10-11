@@ -290,7 +290,14 @@ backtest_regime_momentum <- function(signals,
 #' Compute performance metrics for regime-allocated strategies.
 #'
 #' @param backtest_results Tibble from backtest_regime_momentum()
-#' @param annual_rf Numeric. Annual risk-free rate (default 0.02)
+#' @param annual_rf Numeric. Annual risk-free rate (default 0.02). Deducted
+#'   only when \code{strategy}'s registered basis is \code{"total"}. Both the
+#'   unallocated spread and the exposure-scaled one (cash leg earns 0, see
+#'   \code{apply_regime_allocation()}) are excess returns, so for the
+#'   registered label \code{"Regime Momentum"} it is ignored (Refs #937).
+#' @param strategy Single string; a label registered in
+#'   \code{hd_return_basis()} (use \code{"Regime Momentum"}). REQUIRED: an
+#'   omitted or unregistered label aborts.
 #'
 #' @return Tibble with one row per strategy variant:
 #'   - scheme: Strategy name
@@ -306,10 +313,16 @@ backtest_regime_momentum <- function(signals,
 #'   - max_dd_allocated: Max drawdown after allocation
 #'
 #' @export
-summarize_regime_allocation <- function(backtest_results, annual_rf = 0.02) {
+summarize_regime_allocation <- function(backtest_results, annual_rf = 0.02,
+                                        strategy = NULL) {
   library(dplyr)
 
-  monthly_rf <- (1 + annual_rf)^(1/12) - 1
+  .require_basis_label(strategy, "summarize_regime_allocation")
+  # #937: net_ret is a dollar-neutral spread and allocated_ret = allocation *
+  # net_ret has a zero-return cash leg, so BOTH are excess. The old code
+  # deducted rf from `sharpe` and rf * mean_allocation from `sharpe_allocated`,
+  # which tilted the allocated-vs-baseline comparison toward allocation.
+  monthly_rf <- hd_rf_for_basis((1 + annual_rf)^(1/12) - 1, strategy)
 
   backtest_results |>
     group_by(scheme, signal_type, allocation_fn) |>
