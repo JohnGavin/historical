@@ -345,12 +345,15 @@ PROP_CONSTRAINED_SCENARIOS <- tibble::tibble(
 #' series (Value HML, Managed Futures, OLMAR-1, TOM, Risk State, Avoid Worst)
 #' the cash component inflates the numerator. The SSR therefore reads the
 #' `strat_returns_wide_excess` column (rf deducted per \code{hd_return_basis()}).
-#' `top5pct_share` is read from the SAME column: it is not a Sharpe, but it
-#' measures how concentrated the strategy's EDGE is (\code{hd_top5pct_share()}),
-#' a cash component dilutes it, and \code{hd_record_stability_metrics()} (the
-#' registry writer) computes both from one return vector -- so the two surfaces
-#' stay on one basis. A column present in the wide table but missing from the
-#' excess table aborts (never a silent fall-back to the total-basis column).
+#' `top5pct_share` is NOT a Sharpe and stays on the published (total-basis)
+#' `strat_returns_wide` column: \code{hd_top5pct_share()} is the top-5% months'
+#' return divided by the series' total return, and on an excess series with a
+#' near-zero or negative total that ratio leaves [0, 1] (Value HML 3.73, TOM
+#' -57.7 on the 2026-10-11 rebuild), so it no longer reads as a share. The
+#' registry writer (\code{hd_record_stability_metrics()}) still computes it from
+#' the excess vector; the two surfaces differ on this one statistic by design.
+#' A column present in the wide table but missing from the excess table aborts
+#' (never a silent fall-back to the total-basis column for the SSR).
 #'
 #' @param strat_returns_wide,strat_returns_wide_excess The two targets.
 #' @param ext_map Named character vector code_name -> leaderboard label.
@@ -373,7 +376,7 @@ PROP_CONSTRAINED_SCENARIOS <- tibble::tibble(
     }
     out[[label]] <- list(
       ssr  = safe_ssr(strat_returns_wide_excess[[col]], label),
-      top5 = safe_top5(strat_returns_wide_excess[[col]])
+      top5 = safe_top5(strat_returns_wide[[col]])
     )
   }
   out
@@ -1091,9 +1094,9 @@ plan_leaderboard <- function() {
           # #937 (refs #919): SSR is a Sharpe-derived statistic, so it reads
           # the EXCESS table (strat_returns_wide_excess: rf deducted for the
           # six total-basis strategies, cash-weight only for CMR Conditioned,
-          # nothing for the excess spreads). top5pct_share reads the same
-          # column so it matches the registry writer's single return vector.
-          # See .ssr_ext_entries().
+          # nothing for the excess spreads). top5pct_share stays on the
+          # published strat_returns_wide column (a share of a near-zero
+          # excess total leaves [0, 1]). See .ssr_ext_entries().
           ssr_map <- c(
             ssr_map,
             .ssr_ext_entries(
