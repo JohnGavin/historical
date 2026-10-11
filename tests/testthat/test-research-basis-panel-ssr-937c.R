@@ -188,7 +188,7 @@ test_that("the six total-basis registry recorders feed SSR an EXCESS series", {
 })
 
 # ── Leaderboard SSR: excess for the SSR numerator, published series for top5 ─
-test_that(".ssr_ext_entries scores SSR and top5 on the excess column (one basis, like the registry writer)", {
+test_that(".ssr_ext_entries scores SSR on the excess column and top5 on the published total column", {
   set.seed(9377)
   n <- 120L
   rf <- rep(0.003, n)
@@ -202,9 +202,9 @@ test_that(".ssr_ext_entries scores SSR and top5 on the excess column (one basis,
   out <- .ssr_ext_entries(wide, wide_ex, c(value_hml = "Value (HML)", cmr = "CMR"), ssr, top5)
   expect_named(out, c("Value (HML)", "CMR"))
   expect_equal(out[["Value (HML)"]]$ssr, ssr(wide_ex$value_hml))
-  expect_equal(out[["Value (HML)"]]$top5, top5(wide_ex$value_hml))
+  expect_equal(out[["Value (HML)"]]$top5, top5(wide$value_hml))
   expect_gt(abs(out[["Value (HML)"]]$ssr - ssr(wide$value_hml)), 0.05)  # FALSIFICATION
-  expect_false(isTRUE(all.equal(out[["Value (HML)"]]$top5, top5(wide$value_hml))))
+  expect_false(isTRUE(all.equal(out[["Value (HML)"]]$top5, top5(wide_ex$value_hml))))
   expect_equal(out[["CMR"]]$ssr, ssr(wide$cmr))                         # excess spread: unchanged
 })
 
