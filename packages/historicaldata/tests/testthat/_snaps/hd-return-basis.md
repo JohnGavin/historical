@@ -6,11 +6,13 @@
     "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", 
     "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", 
     "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", 
-    "PSO Optimal"), basis = c("total", "total", "total", "total", 
+    "PSO Optimal", "Commodity Momentum L/S", "Momentum Decomposition L/S", 
+    "Regime Momentum"), basis = c("total", "total", "total", "total", 
     "total", "total", "excess", "excess", "excess", "excess", "excess", 
-    "blend", "excess", "excess", "excess", "excess", "excess", "excess"
-    ), cash_weight_col = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
-    NA, "cash_weight", NA, NA, NA, NA, NA, NA))
+    "blend", "excess", "excess", "excess", "excess", "excess", "excess", 
+    "excess", "excess", "excess"), cash_weight_col = c(NA, NA, NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, "cash_weight", NA, NA, NA, NA, 
+    NA, NA, NA, NA, NA))
 
 # an unregistered strategy aborts (never a silent default)
 
@@ -19,7 +21,7 @@
     Condition
       Error in `hd_return_basis_of()`:
       x Strategy "Not A Strategy" is not registered in `hd_return_basis()`.
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", and "PSO Optimal".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Momentum Decomposition L/S", and "Regime Momentum".
       i Add it to 'packages/historicaldata/R/hd_return_basis.R' with a file:line evidence string; a silent default would put its Sharpe on an unknown basis.
 
 ---

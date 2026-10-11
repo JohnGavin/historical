@@ -685,14 +685,23 @@ backtest_momentum_signals <- function(signals,
 #' for backtested momentum signals.
 #'
 #' @param backtest_results Tibble from backtest_momentum_signals()
-#' @param annual_rf Numeric. Annual risk-free rate (default 0.02)
+#' @param annual_rf Numeric. Annual risk-free rate (default 0.02). Deducted
+#'   only when \code{strategy}'s registered basis is \code{"total"}; the
+#'   dollar-neutral long-short spread is an excess return, so for
+#'   \code{"Momentum Decomposition L/S"} it is ignored (Refs #937).
+#' @param strategy Single string; a label registered in
+#'   \code{hd_return_basis()} (use \code{"Momentum Decomposition L/S"}).
+#'   REQUIRED: an omitted or unregistered label aborts.
 #'
 #' @return Tibble with one row per scheme and performance metrics
 #'
 #' @export
-summarize_backtest_performance <- function(backtest_results, annual_rf = 0.02) {
+summarize_backtest_performance <- function(backtest_results, annual_rf = 0.02,
+                                           strategy = NULL) {
 
-  monthly_rf <- (1 + annual_rf)^(1/12) - 1
+  .require_basis_label(strategy, "summarize_backtest_performance")
+  # #937: weights +leverage/(2n) / -leverage/(2n) sum to zero => excess return.
+  monthly_rf <- hd_rf_for_basis((1 + annual_rf)^(1/12) - 1, strategy)
 
   backtest_results |>
     dplyr::group_by(scheme) |>
