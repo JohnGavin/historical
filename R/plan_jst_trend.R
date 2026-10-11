@@ -103,13 +103,21 @@ plan_jst_trend <- function() {
 
       oos <- jt_params$oos_start
 
-      calc_perf <- function(ret, period_label) {
-        ret <- ret[!is.na(ret)]
+      # #937 (refs #919): buy-and-hold (equity total return) and the trend
+      # strategy (equity or the bill rate) are both TOTAL returns, registered
+      # in hd_return_basis(). The Sharpe is (CAGR - mean(bill rate)) / vol on
+      # the ANNUAL series, i.e. on the excess basis; the bill rate deducted is
+      # the same country-year bill_rate the trend strategy earns in cash.
+      calc_perf <- function(ret, rf, period_label, basis_label) {
+        keep <- !is.na(ret) & !is.na(rf)
+        ret  <- ret[keep]
+        rf   <- rf[keep]
         if (length(ret) < 5L) return(NULL)
         n    <- length(ret)
         cagr <- (prod(1 + ret)^(1 / n) - 1) * 100
         vol  <- stats::sd(ret) * 100
-        sh   <- if (vol > 0) cagr / vol else NA_real_
+        sh   <- sharpe_ratio_rf(ret, hd_rf_for_basis(rf, basis_label),
+                                periods_per_year = 1L)$sharpe
         cum  <- cumprod(1 + ret)
         dd   <- (cum - cummax(cum)) / cummax(cum)
         mdd  <- min(dd) * 100
@@ -120,6 +128,9 @@ plan_jst_trend <- function() {
         )
       }
 
+      bh_lab <- "Research: JST equity total return"
+      tf_lab <- "Research: JST equity/bills trend"
+
       dplyr::bind_rows(lapply(unique(jt_data$iso), function(cc) {
         df     <- dplyr::filter(jt_data, .data$iso == cc)
         is_df  <- dplyr::filter(df, .data$year <  oos)
@@ -128,22 +139,22 @@ plan_jst_trend <- function() {
         dplyr::bind_rows(
           dplyr::bind_cols(
             tibble::tibble(iso = cc, strategy = "Buy-and-Hold"),
-            calc_perf(df$eq_tr     / 100, "Full")),
+            calc_perf(df$eq_tr     / 100, df$bill_rate     / 100, "Full",     bh_lab)),
           dplyr::bind_cols(
             tibble::tibble(iso = cc, strategy = "Buy-and-Hold"),
-            calc_perf(is_df$eq_tr  / 100, "Training")),
+            calc_perf(is_df$eq_tr  / 100, is_df$bill_rate  / 100, "Training", bh_lab)),
           dplyr::bind_cols(
             tibble::tibble(iso = cc, strategy = "Buy-and-Hold"),
-            calc_perf(oos_df$eq_tr / 100, "OOS")),
+            calc_perf(oos_df$eq_tr / 100, oos_df$bill_rate / 100, "OOS",      bh_lab)),
           dplyr::bind_cols(
             tibble::tibble(iso = cc, strategy = "Trend (MA-12y)"),
-            calc_perf(df$tf_ret,    "Full")),
+            calc_perf(df$tf_ret,     df$bill_rate     / 100, "Full",     tf_lab)),
           dplyr::bind_cols(
             tibble::tibble(iso = cc, strategy = "Trend (MA-12y)"),
-            calc_perf(is_df$tf_ret, "Training")),
+            calc_perf(is_df$tf_ret,  is_df$bill_rate  / 100, "Training", tf_lab)),
           dplyr::bind_cols(
             tibble::tibble(iso = cc, strategy = "Trend (MA-12y)"),
-            calc_perf(oos_df$tf_ret, "OOS"))
+            calc_perf(oos_df$tf_ret, oos_df$bill_rate / 100, "OOS",      tf_lab))
         )
       }))
     }),
@@ -162,17 +173,26 @@ plan_jst_trend <- function() {
           n_countries = sum(!is.na(.data$eq_tr)),
           bh_ret      = mean(.data$eq_tr / 100, na.rm = TRUE),
           tf_ret      = mean(.data$tf_ret,      na.rm = TRUE),
+          # #937: the pooled series is the cross-country mean of TOTAL
+          # returns, so the matching rf is the cross-country mean bill rate
+          # (mean of excess returns == mean return - mean rf).
+          rf_ret      = mean(.data$bill_rate / 100, na.rm = TRUE),
           .groups = "drop"
         ) |>
         dplyr::filter(.data$n_countries >= 5L)
 
-      calc_perf <- function(ret, period_label) {
-        ret <- ret[!is.na(ret)]
+      # Sharpe on the EXCESS basis through the return-basis registry (both
+      # pooled series are TOTAL returns; see jt_country_metrics).
+      calc_perf <- function(ret, rf, period_label, basis_label) {
+        keep <- !is.na(ret) & !is.na(rf)
+        ret  <- ret[keep]
+        rf   <- rf[keep]
         if (length(ret) < 5L) return(NULL)
         n    <- length(ret)
         cagr <- (prod(1 + ret)^(1 / n) - 1) * 100
         vol  <- stats::sd(ret) * 100
-        sh   <- if (vol > 0) cagr / vol else NA_real_
+        sh   <- sharpe_ratio_rf(ret, hd_rf_for_basis(rf, basis_label),
+                                periods_per_year = 1L)$sharpe
         cum  <- cumprod(1 + ret)
         dd   <- (cum - cummax(cum)) / cummax(cum)
         mdd  <- min(dd) * 100
@@ -186,25 +206,28 @@ plan_jst_trend <- function() {
       is_pool  <- dplyr::filter(pooled, .data$year <  oos)
       oos_pool <- dplyr::filter(pooled, .data$year >= oos)
 
+      bh_lab <- "Research: JST equity total return"
+      tf_lab <- "Research: JST equity/bills trend"
+
       dplyr::bind_rows(
         dplyr::bind_cols(
           tibble::tibble(strategy = "Pooled Buy-and-Hold"),
-          calc_perf(pooled$bh_ret,   "Full")),
+          calc_perf(pooled$bh_ret,   pooled$rf_ret,   "Full",     bh_lab)),
         dplyr::bind_cols(
           tibble::tibble(strategy = "Pooled Buy-and-Hold"),
-          calc_perf(is_pool$bh_ret,  "Training")),
+          calc_perf(is_pool$bh_ret,  is_pool$rf_ret,  "Training", bh_lab)),
         dplyr::bind_cols(
           tibble::tibble(strategy = "Pooled Buy-and-Hold"),
-          calc_perf(oos_pool$bh_ret, "OOS")),
+          calc_perf(oos_pool$bh_ret, oos_pool$rf_ret, "OOS",      bh_lab)),
         dplyr::bind_cols(
           tibble::tibble(strategy = "Pooled Trend (MA-12y)"),
-          calc_perf(pooled$tf_ret,   "Full")),
+          calc_perf(pooled$tf_ret,   pooled$rf_ret,   "Full",     tf_lab)),
         dplyr::bind_cols(
           tibble::tibble(strategy = "Pooled Trend (MA-12y)"),
-          calc_perf(is_pool$tf_ret,  "Training")),
+          calc_perf(is_pool$tf_ret,  is_pool$rf_ret,  "Training", tf_lab)),
         dplyr::bind_cols(
           tibble::tibble(strategy = "Pooled Trend (MA-12y)"),
-          calc_perf(oos_pool$tf_ret, "OOS"))
+          calc_perf(oos_pool$tf_ret, oos_pool$rf_ret, "OOS",      tf_lab))
       )
     }),
 
@@ -240,19 +263,33 @@ plan_jst_trend <- function() {
             n_c    = dplyr::n_distinct(.data$iso),
             tf_ret = mean(.data$tf_ret_lb, na.rm = TRUE),
             bh_ret = mean(.data$eq_tr / 100, na.rm = TRUE),
+            # #937: cross-country mean bill rate = the rf matching the pooled
+            # (mean of TOTAL returns) series.
+            rf_ret = mean(.data$bill_rate / 100, na.rm = TRUE),
             .groups = "drop"
           ) |>
           dplyr::filter(.data$n_c >= 5L)
 
-        tf <- pooled$tf_ret[!is.na(pooled$tf_ret)]
-        bh <- pooled$bh_ret[!is.na(pooled$bh_ret)]
+        ok_tf <- !is.na(pooled$tf_ret) & !is.na(pooled$rf_ret)
+        ok_bh <- !is.na(pooled$bh_ret) & !is.na(pooled$rf_ret)
+        tf <- pooled$tf_ret[ok_tf]
+        bh <- pooled$bh_ret[ok_bh]
+
+        # Sharpe on the EXCESS basis (annual): (CAGR - mean rf) / sd, through
+        # the return-basis registry (both series are TOTAL returns).
+        tf_sh <- sharpe_ratio_rf(
+          tf, hd_rf_for_basis(pooled$rf_ret[ok_tf], "Research: JST equity/bills trend"),
+          periods_per_year = 1L)$sharpe
+        bh_sh <- sharpe_ratio_rf(
+          bh, hd_rf_for_basis(pooled$rf_ret[ok_bh], "Research: JST equity total return"),
+          periods_per_year = 1L)$sharpe
 
         tibble::tibble(
           ma_years     = lb,
           tf_cagr      = round((prod(1 + tf)^(1 / length(tf)) - 1) * 100, 2),
-          tf_sharpe    = round((prod(1 + tf)^(1 / length(tf)) - 1) / stats::sd(tf), 3),
+          tf_sharpe    = round(tf_sh, 3),
           bh_cagr      = round((prod(1 + bh)^(1 / length(bh)) - 1) * 100, 2),
-          bh_sharpe    = round((prod(1 + bh)^(1 / length(bh)) - 1) / stats::sd(bh), 3),
+          bh_sharpe    = round(bh_sh, 3),
           n_years_pool = length(tf)
         )
       }))

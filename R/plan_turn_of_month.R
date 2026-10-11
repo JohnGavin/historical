@@ -462,7 +462,11 @@ plan_turn_of_month <- function() {
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.
-  rets <- tom_portfolio$ret_net
+  # #937: TOM is a TOTAL-basis series (SPY or cash), so SSR is computed on
+  # the EXCESS series (registry basis; rf = the portfolio's rf_ret).
+  rets <- .ssr_excess_returns(
+    tom_portfolio$ret_net, tom_portfolio$rf_ret, "TOM", ".tom_register_runs"
+  )
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
     hd_record_stability_metrics(

@@ -90,9 +90,17 @@ plan_cov_diagnostic <- function() {
     # ── 4-asset diagnostic ──────────────────────────────────────────────
     # Thin universe (p = 4 << train_window = 60): expected result is that
     # sample ≈ LW ≈ RMT in conditioning (n >> p, sample cov is well-conditioned).
+    # #937 (refs #919): the panel is adjusted-close (TOTAL) returns and
+    # hd_cov_oos_diagnostic()'s oos_sharpe is mean/sd*sqrt(12) of whatever it is
+    # given, so it is handed the EXCESS panel (monthly rf from stk_rf deducted
+    # through the return-basis registry). GMV weights depend on Sigma only, so
+    # they move negligibly; oos_mean / oos_sharpe are the quantities that change.
     targets::tar_target(cov_diag_4asset, {
       hd_cov_oos_diagnostic(
-        returns      = asset_monthly_returns_wide,
+        returns      = .excess_asset_panel(
+          asset_monthly_returns_wide, stk_rf,
+          "Research: asset panel (adjusted-close returns)", "cov_diag_4asset panel"
+        ),
         methods      = c("sample", "ledoit_wolf", "rmt_denoise"),
         train_window = 60L,
         lw_target    = COV_LW_TARGET
@@ -110,9 +118,13 @@ plan_cov_diagnostic <- function() {
     # Wide regime (p ≈ 20-30, train_window = 60): expected result is that
     # sample covariance has n_failed > 0 or enormous condition numbers, while
     # LW + RMT remain invertible with finite, lower condition numbers.
+    # #937: EXCESS panel, as for cov_diag_4asset above.
     targets::tar_target(cov_diag_wide, {
       hd_cov_oos_diagnostic(
-        returns      = cov_diag_wide_panel,
+        returns      = .excess_asset_panel(
+          cov_diag_wide_panel, stk_rf,
+          "Research: asset panel (adjusted-close returns)", "cov_diag_wide panel"
+        ),
         methods      = c("sample", "ledoit_wolf", "rmt_denoise"),
         train_window = 60L,
         lw_target    = COV_LW_TARGET

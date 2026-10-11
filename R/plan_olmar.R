@@ -532,7 +532,11 @@ plan_olmar <- function() {
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.
-  rets <- olmar_portfolio$net_ret
+  # #937: OLMAR-1 is a TOTAL-basis series (long-only ETF weights), so SSR is
+  # computed on the EXCESS series (registry basis; rf = the portfolio's rf_ret).
+  rets <- .ssr_excess_returns(
+    olmar_portfolio$net_ret, olmar_portfolio$rf_ret, "OLMAR-1", ".olmar_register_runs"
+  )
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
     hd_record_stability_metrics(

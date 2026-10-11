@@ -6,13 +6,17 @@
     "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", 
     "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", 
     "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", 
-    "PSO Optimal", "PSO Regime-Adjusted", "Commodity Momentum L/S", 
-    "Momentum Decomposition L/S", "Regime Momentum"), basis = c("total", 
-    "total", "total", "total", "total", "total", "excess", "excess", 
-    "excess", "excess", "excess", "blend", "excess", "excess", "excess", 
-    "excess", "excess", "excess", "blend", "excess", "excess", "excess"
-    ), cash_weight_col = c(NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, 
-    NA, "cash_weight", NA, NA, NA, NA, NA, NA, "cash_weight", NA, 
+    "PSO Optimal", "Research: RF + factor overlay", "Research: cap-weighted market (Mkt-RF + RF)", 
+    "Research: ETF buy and hold", "Research: ETF/cash overlay", "Research: JST equity total return", 
+    "Research: JST equity/bills trend", "Research: asset panel (adjusted-close returns)", 
+    "PSO Regime-Adjusted", "Commodity Momentum L/S", "Momentum Decomposition L/S", 
+    "Regime Momentum"), basis = c("total", "total", "total", "total", 
+    "total", "total", "excess", "excess", "excess", "excess", "excess", 
+    "blend", "excess", "excess", "excess", "excess", "excess", "excess", 
+    "total", "total", "total", "total", "total", "total", "total", 
+    "blend", "excess", "excess", "excess"), cash_weight_col = c(NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "cash_weight", NA, NA, 
+    NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "cash_weight", NA, 
     NA, NA))
 
 # an unregistered strategy aborts (never a silent default)

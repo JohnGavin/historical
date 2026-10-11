@@ -951,7 +951,12 @@ plan_risk_state <- function() {
   }
 
   # Record SSR + top5pct stability metrics (#400). Daily: w=252, ann_factor=252.
-  rets <- rsc_portfolio$ret_strategy
+  # #937: Risk State is a TOTAL-basis series (SPY plus cash), so SSR is
+  # computed on the EXCESS series (registry basis; rf = rsc_portfolio$rf_daily,
+  # the same rf its cash leg earned).
+  rets <- .ssr_excess_returns(
+    rsc_portfolio$ret_strategy, rsc_portfolio$rf_daily, "Risk State", ".rsc_register_runs"
+  )
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
     hd_record_stability_metrics(

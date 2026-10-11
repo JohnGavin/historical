@@ -604,6 +604,9 @@ test_that(".rsc_register_runs schema and row counts are stable", {
     date         = seq.Date(as.Date("2009-01-01"), by = "day", length.out = n_days),
     ret_strategy = rnorm(n_days, 0.0003, 0.009),
     ret_buyhold  = rnorm(n_days, 0.0004, 0.011),
+    # #937: .rsc_register_runs() scores SSR on the excess series, so the
+    # portfolio must carry the daily rf (the real rsc_portfolio does).
+    rf_daily     = 0.0001,
     regime       = sample(c("benign", "cautious", "hostile"), n_days,
                           replace = TRUE, prob = c(0.6, 0.25, 0.15)),
     cum_strategy = cumprod(1 + rnorm(n_days, 0.0003, 0.009)),

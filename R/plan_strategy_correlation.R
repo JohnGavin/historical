@@ -121,6 +121,21 @@ STRAT_RETURNS_WIDE_CODES <- c(
   STRAT_RETURNS_DAILY_NATIVE_CODES
 )
 
+# code_name -> leaderboard label (the hd_return_basis() registry key) for every
+# column strat_returns_wide can carry (PSO Optimal is deliberately absent). ONE home: both
+# strat_corr_augment and strat_returns_wide_excess read it (#937). It is the
+# same code_name -> label vocabulary as col_map_monthly/col_map_daily in
+# R/plan_leaderboard.R's strat_deflated_sharpe target.
+STRAT_CODE_LABELS <- c(
+  stk_max = "Stock MAX", stk_drif = "Stock DRIF", fac_max = "Factor MAX",
+  fac_drif = "Factor DRIF", ltr = "LTR", xgb_drif = "XGB DRIF",
+  mom_prepeak = "Mom Pre-Peak", mom_postpeak = "Mom Post-Peak",
+  mom_combined = "Mom 12-2", value_hml = "Value (HML)",
+  managed_futures = "Managed Futures", cmr = "CMR",
+  cmr_conditioned = "CMR Conditioned", olmar_1 = "OLMAR-1", tom = "TOM",
+  risk_state = "Risk State", avoid_worst = "Avoid Worst"
+)
+
 #' Full-join a list of per-strategy return tables onto a common `ym` spine
 #' (#728 items 1+2)
 #'
@@ -578,15 +593,11 @@ plan_strategy_correlation <- function() {
       # "olmar" -- is a DIFFERENT, pre-existing convention from
       # STRAT_RETURNS_WIDE_CODES's, an inconsistency out of scope to unify
       # here.)
+      # (#937: now read from the shared STRAT_CODE_LABELS constant -- the same
+      # map strat_returns_wide_excess uses -- instead of a second typed copy.)
       name_map <- tibble::tibble(
-        code_name      = c("stk_max", "stk_drif", "fac_max", "fac_drif", "ltr",
-                            "xgb_drif", "mom_prepeak", "mom_postpeak", "mom_combined",
-                            "value_hml", "managed_futures",
-                            "cmr", "cmr_conditioned", "olmar_1", "tom", "risk_state", "avoid_worst"),
-        strategy_label = c("Stock MAX", "Stock DRIF", "Factor MAX", "Factor DRIF", "LTR",
-                            "XGB DRIF", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2",
-                            "Value (HML)", "Managed Futures",
-                            "CMR", "CMR Conditioned", "OLMAR-1", "TOM", "Risk State", "Avoid Worst")
+        code_name      = names(STRAT_CODE_LABELS),
+        strategy_label = unname(STRAT_CODE_LABELS)
       )
 
       strat_cols <- rownames(strat_corr_matrix_leaderboard)
@@ -973,6 +984,27 @@ plan_strategy_correlation <- function() {
 
       .full_join_return_spine(parts) |>
         arrange(ym)
+    }),
+
+    # ── strat_returns_wide on the EXCESS basis (#937, refs #919) ─────────────
+    # strat_returns_wide mixes TOTAL (Value HML, Managed Futures, OLMAR-1, TOM,
+    # Risk State, Avoid Worst), EXCESS and BLEND (CMR Conditioned) columns. Any
+    # statistic that is a Sharpe (or built from one) must be computed on the
+    # excess basis: this puts every column there through the return-basis
+    # registry (hd_return_basis()) via .strat_excess_wide() -- the SAME routine
+    # and rf sources strat_corr_augment uses -- so the leaderboard's Sharpe
+    # Stability Ratio (SSR) reads it instead of the raw table. Rows with no rf
+    # for a total/blend column are NA and counted in a warning, never 0-filled.
+    targets::tar_target(strat_returns_wide_excess, {
+      .strat_excess_wide(
+        strat_returns_wide, STRAT_RETURNS_WIDE_CODES,
+        label_map    = STRAT_CODE_LABELS,
+        daily_native = strat_returns_daily_native,
+        rf_src       = .strat_rf_sources(
+          ev_portfolios, mf_portfolios, olmar_portfolio, tom_portfolio,
+          rsc_portfolio, aw_daily_rf, strat_returns_daily_native
+        )
+      )
     }),
 
     # ── Leaderboard-wide correlation matrix (#728 item 2 CONTRACT) ───────────

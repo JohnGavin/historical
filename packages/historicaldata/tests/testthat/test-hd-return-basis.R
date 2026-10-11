@@ -100,3 +100,17 @@ test_that("function signatures are stable", {
   expect_snapshot(args(hd_rf_for_basis))
   expect_snapshot(args(hd_excess_returns))
 })
+
+test_that("#937 group C: research-series rows are TOTAL and keep rf (not zeroed)", {
+  reg <- hd_return_basis()
+  res <- reg[startsWith(reg$strategy, "Research: "), ]
+  expect_gte(nrow(res), 7L)
+  expect_true(all(res$basis == "total"))
+  # evidence names a file:line (R/<file>.R:<digits>)
+  expect_true(all(grepl("R/[A-Za-z_]+\\.R:[0-9]", res$evidence)))
+  rf <- c(0.001, 0.002)
+  for (lab in res$strategy) {
+    expect_identical(hd_rf_for_basis(rf, lab), rf, info = lab)
+    expect_equal(hd_excess_returns(c(0.01, 0.02), rf, lab), c(0.01, 0.02) - rf, info = lab)
+  }
+})

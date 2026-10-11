@@ -397,7 +397,11 @@ plan_ev_ebit <- function() {
   }
 
   # Record SSR + top5pct stability metrics (#400). Monthly: w=36, ann_factor=12.
-  rets <- ev_portfolios$ret_value_hml
+  # #937: Value (HML) is a TOTAL-basis series (RF + HML - cost), so SSR is
+  # computed on the EXCESS series (registry basis; rf = the portfolio's own RF).
+  rets <- .ssr_excess_returns(
+    ev_portfolios$ret_value_hml, ev_portfolios$RF, "Value (HML)", ".ev_register_runs"
+  )
   rets <- rets[!is.na(rets)]
   if (length(rets) > 0L) {
     hd_record_stability_metrics(

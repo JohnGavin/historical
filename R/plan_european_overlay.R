@@ -122,15 +122,24 @@ plan_european_overlay <- function() {
     targets::tar_target(eur_results, {
       library(dplyr)
 
-      calc_metrics <- function(ret_vec, date_vec, label, strategy_name, ticker) {
-        keep     <- !is.na(ret_vec)
+      # #937 (refs #919): buy-and-hold (adjusted-close return) and the RSC
+      # overlay (exposure * ETF + (1 - exposure) * rf) are both TOTAL returns,
+      # registered as "Research: ETF buy and hold" / "Research: ETF/cash
+      # overlay" in hd_return_basis(). hac_sharpe / hac_tstat are therefore
+      # computed on the EXCESS series (rf deducted through the registry); cagr,
+      # vol and max_dd stay total-return statistics. rf_vec is the SAME rf_use
+      # the overlay's cash leg earned, so the cash leg cancels exactly.
+      calc_metrics <- function(ret_vec, rf_vec, date_vec, label, strategy_name,
+                               ticker, basis_label) {
+        keep     <- !is.na(ret_vec) & !is.na(rf_vec)
         ret_vec  <- ret_vec[keep]
+        rf_vec   <- rf_vec[keep]
         date_vec <- date_vec[keep]
         if (length(ret_vec) < 20) return(NULL)
         years  <- length(ret_vec) / 252
         cum    <- prod(1 + ret_vec)
         cum_dd <- cumprod(1 + ret_vec)
-        hac    <- hd_hac_sharpe(ret_vec)
+        hac    <- hd_hac_sharpe(hd_excess_returns(ret_vec, rf_vec, basis_label))
         tibble::tibble(
           ticker       = ticker,
           asset        = eur_params$eu_ticker_labels[ticker],
@@ -165,13 +174,17 @@ plan_european_overlay <- function() {
         is_train <- d$date < oos
         is_test  <- d$date >= oos & d$date <= test_end
 
+        bh <- "Research: ETF buy and hold"
+        ov <- "Research: ETF/cash overlay"
+        rf <- d$rf_use
+
         bind_rows(
-          calc_metrics(d$ret_buyhold, d$date,                   "Full",     "Buy & Hold", tkr),
-          calc_metrics(d$ret_overlay, d$date,                   "Full",     "RSC Overlay", tkr),
-          calc_metrics(d$ret_buyhold[is_train], d$date[is_train], "Training", "Buy & Hold", tkr),
-          calc_metrics(d$ret_overlay[is_train], d$date[is_train], "Training", "RSC Overlay", tkr),
-          calc_metrics(d$ret_buyhold[is_test],  d$date[is_test],  "OOS",      "Buy & Hold", tkr),
-          calc_metrics(d$ret_overlay[is_test],  d$date[is_test],  "OOS",      "RSC Overlay", tkr)
+          calc_metrics(d$ret_buyhold, rf, d$date,                   "Full",     "Buy & Hold", tkr, bh),
+          calc_metrics(d$ret_overlay, rf, d$date,                   "Full",     "RSC Overlay", tkr, ov),
+          calc_metrics(d$ret_buyhold[is_train], rf[is_train], d$date[is_train], "Training", "Buy & Hold", tkr, bh),
+          calc_metrics(d$ret_overlay[is_train], rf[is_train], d$date[is_train], "Training", "RSC Overlay", tkr, ov),
+          calc_metrics(d$ret_buyhold[is_test],  rf[is_test],  d$date[is_test],  "OOS",      "Buy & Hold", tkr, bh),
+          calc_metrics(d$ret_overlay[is_test],  rf[is_test],  d$date[is_test],  "OOS",      "RSC Overlay", tkr, ov)
         )
       })
     }),
@@ -243,6 +256,11 @@ plan_european_overlay <- function() {
                !is.na(ret_strategy), !is.na(ret_buyhold)) |>
         (function(d) {
           years <- nrow(d) / 252
+          # #937: both SPY series are TOTAL returns (registry labels below);
+          # the HAC Sharpe/t-stat are on the excess series, rf = rsc_portfolio's
+          # own rf_daily (the cash leg the overlay earned).
+          ex_bh <- hd_excess_returns(d$ret_buyhold,  d$rf_daily, "Research: ETF buy and hold")
+          ex_ov <- hd_excess_returns(d$ret_strategy, d$rf_daily, "Research: ETF/cash overlay")
           bind_rows(
             tibble::tibble(
               ticker = "SPY", asset = "S&P 500 (US)", strategy = "Buy & Hold",
@@ -251,8 +269,8 @@ plan_european_overlay <- function() {
               vol    = round(sd(d$ret_buyhold) * sqrt(252) * 100, 2),
               max_dd = round(min((cumprod(1 + d$ret_buyhold) - cummax(cumprod(1 + d$ret_buyhold))) /
                                    cummax(cumprod(1 + d$ret_buyhold))) * 100, 2),
-              hac_tstat  = round(hd_hac_sharpe(d$ret_buyhold)$hac_tstat, 3),
-              hac_sharpe = round(hd_hac_sharpe(d$ret_buyhold)$naive_sharpe, 3),
+              hac_tstat  = round(hd_hac_sharpe(ex_bh)$hac_tstat, 3),
+              hac_sharpe = round(hd_hac_sharpe(ex_bh)$naive_sharpe, 3),
               window_start = min(d$date),
               window_end   = max(d$date)
             ),
@@ -263,8 +281,8 @@ plan_european_overlay <- function() {
               vol    = round(sd(d$ret_strategy) * sqrt(252) * 100, 2),
               max_dd = round(min((cumprod(1 + d$ret_strategy) - cummax(cumprod(1 + d$ret_strategy))) /
                                    cummax(cumprod(1 + d$ret_strategy))) * 100, 2),
-              hac_tstat  = round(hd_hac_sharpe(d$ret_strategy)$hac_tstat, 3),
-              hac_sharpe = round(hd_hac_sharpe(d$ret_strategy)$naive_sharpe, 3),
+              hac_tstat  = round(hd_hac_sharpe(ex_ov)$hac_tstat, 3),
+              hac_sharpe = round(hd_hac_sharpe(ex_ov)$naive_sharpe, 3),
               window_start = min(d$date),
               window_end   = max(d$date)
             )
@@ -361,9 +379,11 @@ plan_european_overlay <- function() {
             min((bh_cum - cummax(bh_cum)) / cummax(bh_cum)) * 100,
             min((co_cum - cummax(co_cum)) / cummax(co_cum)) * 100
           ), 2),
+          # #937: both are TOTAL returns -> Sharpe on the excess series
+          # (registry labels; rf_use is the rf the overlay's cash leg earned).
           hac_sharpe = round(c(
-            hd_hac_sharpe(d$ret_buyhold)$naive_sharpe,
-            hd_hac_sharpe(d$ret_ciss_overlay)$naive_sharpe
+            hd_hac_sharpe(hd_excess_returns(d$ret_buyhold, d$rf_use, "Research: ETF buy and hold"))$naive_sharpe,
+            hd_hac_sharpe(hd_excess_returns(d$ret_ciss_overlay, d$rf_use, "Research: ETF/cash overlay"))$naive_sharpe
           ), 3),
           window_start = min(d$date),
           window_end   = max(d$date)

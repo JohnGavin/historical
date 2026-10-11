@@ -28,9 +28,19 @@ plan_weight_stability_vignette <- function() {
     # hd_weight_stability_diagnostic() silently drops the date column.
     # cov_method defaults to "ledoit_wolf" — regularised Sigma for gmv,
     # shrunk_mu, black_litterman, hrp.
+    #
+    # #937 (refs #919): the panel is adjusted-close (TOTAL) returns, and the
+    # mu-driven methods (raw_mvo, shrunk_mu) build their WEIGHTS from its mean,
+    # so rf changes their weights (turnover, concentration) as well as oos_sharpe.
+    # The diagnostic is therefore given the EXCESS panel (monthly rf from
+    # stk_rf deducted through the return-basis registry), not just a re-based
+    # Sharpe. gmv/hrp/equal_weight use Sigma or nothing, so they move little.
     targets::tar_target(ws_diag_raw, {
       hd_weight_stability_diagnostic(
-        returns      = asset_monthly_returns_wide,
+        returns      = .excess_asset_panel(
+          asset_monthly_returns_wide, stk_rf,
+          "Research: asset panel (adjusted-close returns)", "ws_diag_raw panel"
+        ),
         methods      = c(
           "raw_mvo", "gmv", "shrunk_mu", "black_litterman",
           "equal_weight", "hrp"
