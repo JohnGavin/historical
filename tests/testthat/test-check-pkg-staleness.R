@@ -479,3 +479,156 @@ test_that(".cps_is_pkg_call / .cps_contains_pkg_call distinguish direct vs neste
   # triple-colon internal-function access also counts
   expect_true(.cps_contains_pkg_call(quote(historicaldata:::internal_fn()), "historicaldata"))
 })
+
+# ── #753 / #693 follow-up: "0 checked" must be distinguishable from "checked
+# and clean" (checks-must-distinguish-unknown). After #922 converted every
+# `historicaldata::fn()` target-body call to a bare call, discovery legitimately
+# finds 0 namespaced consumers, and the old PASS line read identically to a
+# real clean result. Contract under test (script header documents it):
+#   0  examined >= 1 and none stale         -> "PASS ... (N checked)"
+#   0  examined == 0 AND imports= declared  -> "VACUOUS-PASS (0 examined)" (labelled)
+#   3  examined == 0 AND imports= NOT declared -> INDETERMINATE
+#   1  stale target found (positive control)
+# Every outcome prints a machine-readable "EXAMINED: <n>" line for build.sh.
+
+# .make_targets_script() -- a stand-in docs/_targets.R; `imports` NULL omits it.
+.make_targets_script <- function(dir, imports = "historicaldata") {
+  path <- file.path(dir, "fake_docs_targets.R")
+  opt <- if (is.null(imports)) {
+    "targets::tar_option_set(error = \"continue\")"
+  } else {
+    sprintf("targets::tar_option_set(error = \"continue\", imports = \"%s\")", imports)
+  }
+  writeLines(c(opt, "list()"), path)
+  path
+}
+
+# .make_vacuous_r_dir() -- plan file whose ONLY historicaldata mentions are a
+# comment and roxygen: no executable namespaced call.
+.make_vacuous_r_dir <- function(dir) {
+  r_dir <- file.path(dir, "R_vacuous")
+  dir.create(r_dir)
+  writeLines(c(
+    "# historicaldata::commented_out() must not count as a consumer",
+    "#' Docs mention historicaldata::roxy_fn() too",
+    "plan_vac <- function() {",
+    "  list(targets::tar_target(consumer, bare_call()))",
+    "}"
+  ), file.path(r_dir, "plan_vac.R"))
+  r_dir
+}
+
+test_that("positive control: stale namespaced consumer -> exit 1, [STALE-PKG] names it, EXAMINED: 1", {
+  dir <- withr::local_tempdir()
+  built <- .make_pkg_toy_store(dir)
+  r_dir <- .make_registry_r_dir(dir)
+  Sys.sleep(1.1)
+  writeLines("f <- function() 2", built$pkg_file_path)
+  targets::tar_make(
+    script = file.path(built$dir, "_targets.R"), store = built$store_path,
+    callr_function = NULL, reporter = "silent"
+  )
+  status <- NA_integer_
+  out <- utils::capture.output(status <- .cps_main(
+    store_path = built$store_path, r_dir = r_dir,
+    targets_script = .make_targets_script(dir)
+  ))
+  txt <- paste(out, collapse = "\n")
+  expect_equal(status, 1L)
+  expect_match(txt, "\\[STALE-PKG\\] consumer")
+  expect_match(txt, "EXAMINED: 1")
+})
+
+test_that("clean case: consumer rebuilt after the source change -> exit 0, '1 checked', EXAMINED: 1, not labelled vacuous", {
+  dir <- withr::local_tempdir()
+  built <- .make_pkg_toy_store(dir)
+  r_dir <- .make_registry_r_dir(dir)
+  status <- NA_integer_
+  out <- utils::capture.output(status <- .cps_main(
+    store_path = built$store_path, r_dir = r_dir,
+    targets_script = .make_targets_script(dir)
+  ))
+  txt <- paste(out, collapse = "\n")
+  expect_equal(status, 0L)
+  expect_match(txt, "PASS: .*\\(1 checked\\)")
+  expect_match(txt, "EXAMINED: 1")
+  expect_no_match(txt, "VACUOUS")
+})
+
+test_that("vacuous case: 0 namespaced consumers + imports= declared -> exit 0 but LABELLED VACUOUS-PASS, EXAMINED: 0, never 'PASS: ... (0 checked)'", {
+  dir <- withr::local_tempdir()
+  built <- .make_pkg_toy_store(dir)
+  r_dir <- .make_vacuous_r_dir(dir)
+  status <- NA_integer_
+  out <- utils::capture.output(status <- .cps_main(
+    store_path = built$store_path, r_dir = r_dir,
+    targets_script = .make_targets_script(dir)
+  ))
+  txt <- paste(out, collapse = "\n")
+  expect_equal(status, 0L)
+  expect_match(txt, "VACUOUS-PASS")
+  expect_match(txt, "0 examined")
+  expect_match(txt, "EXAMINED: 0")
+  expect_no_match(txt, "\\(0 checked\\)")
+  expect_snapshot(cat(grep("VACUOUS-PASS", out, value = TRUE), sep = "\n"))
+})
+
+test_that("indeterminate case: 0 namespaced consumers and imports= NOT declared -> exit 3, not a pass", {
+  dir <- withr::local_tempdir()
+  built <- .make_pkg_toy_store(dir)
+  r_dir <- .make_vacuous_r_dir(dir)
+  status <- NA_integer_
+  msgs <- character(0)
+  out <- character(0)
+  withCallingHandlers(
+    out <- utils::capture.output(status <- .cps_main(
+      store_path = built$store_path, r_dir = r_dir,
+      targets_script = .make_targets_script(dir, imports = NULL)
+    )),
+    message = function(m) {
+      msgs <<- c(msgs, conditionMessage(m))
+      invokeRestart("muffleMessage")
+    }
+  )
+  expect_equal(status, 3L)
+  expect_true(any(grepl("INDETERMINATE", c(out, msgs))))
+  expect_true(any(grepl("EXAMINED: 0", out)))
+  expect_false(any(grepl("PASS", out)))
+})
+
+test_that("indeterminate case: imports= names a DIFFERENT package -> exit 3 (declaration must be for historicaldata)", {
+  dir <- withr::local_tempdir()
+  built <- .make_pkg_toy_store(dir)
+  status <- NA_integer_
+  suppressMessages(utils::capture.output(status <- .cps_main(
+    store_path = built$store_path, r_dir = .make_vacuous_r_dir(dir),
+    targets_script = .make_targets_script(dir, imports = "otherpkg")
+  )))
+  expect_equal(status, 3L)
+})
+
+test_that(".cps_imports_declared() reads the AST: true only for tar_option_set(imports = ...historicaldata...)", {
+  dir <- withr::local_tempdir()
+  expect_true(.cps_imports_declared(.make_targets_script(dir)))
+  expect_false(.cps_imports_declared(.make_targets_script(dir, imports = NULL)))
+  expect_false(.cps_imports_declared(.make_targets_script(dir, imports = "otherpkg")))
+  # a comment or string mentioning it is not a declaration
+  p <- file.path(dir, "commented.R")
+  writeLines(c("# tar_option_set(imports = \"historicaldata\")", "x <- 'imports = historicaldata'"), p)
+  expect_false(.cps_imports_declared(p))
+  # missing / unparsable file is FALSE (indeterminate upstream), never an error
+  expect_false(.cps_imports_declared(file.path(dir, "nope.R")))
+})
+
+test_that("the REAL docs/_targets.R declares imports = \"historicaldata\" (the mechanism the vacuous-pass label relies on)", {
+  expect_true(.cps_imports_declared(here::here("docs", "_targets.R")))
+})
+
+test_that("discovery: a comment/roxygen mention of historicaldata:: is not a consumer", {
+  r_dir <- .make_vacuous_r_dir(withr::local_tempdir())
+  expect_equal(nrow(.cps_discover_consuming_targets(r_dir)), 0L)
+})
+
+test_that(".cps_imports_declared signature is stable", {
+  expect_snapshot(args(.cps_imports_declared))
+})
