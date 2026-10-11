@@ -1,19 +1,19 @@
 # compute_borrow_sensitivity requires >= 12 months
 
     Code
-      compute_borrow_sensitivity(rep(0.01, 6L))
+      compute_borrow_sensitivity(rep(0.01, 6L), ann_factor = 12)
     Condition
       Error in `compute_borrow_sensitivity()`:
-      x compute_borrow_sensitivity() requires >= 12 monthly returns.
+      x compute_borrow_sensitivity() requires >= 12 returns.
       i Got 6.
 
 # compute_borrow_sensitivity aborts on NA input rather than dropping it silently
 
     Code
-      compute_borrow_sensitivity(bad)
+      compute_borrow_sensitivity(bad, ann_factor = 12)
     Condition
       Error in `compute_borrow_sensitivity()`:
-      x compute_borrow_sensitivity(): monthly_ret_pre_borrow contains NA.
+      x compute_borrow_sensitivity(): ret_pre_borrow contains NA.
       i Filter NA out before calling -- never coerced or dropped silently here.
 
 # compute_borrow_sensitivity's cagr/vol match an independent formula recomputation
@@ -32,7 +32,7 @@
 # build_borrow_sensitivity_table requires a non-empty named list
 
     Code
-      build_borrow_sensitivity_table(list())
+      build_borrow_sensitivity_table(list(), af)
     Condition
       Error in `build_borrow_sensitivity_table()`:
       x build_borrow_sensitivity_table(): returns_by_strategy must be a non-empty NAMED list.

@@ -128,7 +128,17 @@ hd_return_basis <- function() {
     "Research: JST equity/bills trend", "total",
     "R/plan_jst_trend.R:83 tf_ret = if_else(trend_sig == 1, eq_tr / 100, bill_rate / 100) (equity or the bill rate)",
     "Research: asset panel (adjusted-close returns)", "total",
-    "R/plan_returns.R:61-76 monthly simple return on hd_ohlcv adjusted_close; R/plan_cov_diagnostic.R:75-82 same convention for the wide panel (no rf subtracted)"
+    "R/plan_returns.R:61-76 monthly simple return on hd_ohlcv adjusted_close; R/plan_cov_diagnostic.R:75-82 same convention for the wide panel (no rf subtracted)",
+    # --- #937 phase 2 group A (stock / portfolio / regime / risk-state sites) ---
+    "PSO Regime-Adjusted", "blend",
+    "R/plan_regime.R:159 regime_ret = exposure * base_ret + (1 - exposure) * rf_ret: the PSO Optimal excess spread blended with a cash leg that IS rf; cash_weight = 1 - exposure (regime_portfolio column `cash_weight`)",
+    # --- #937 phase 2 group B (commodity momentum / momentum decomposition / regime momentum) ---
+    "Commodity Momentum L/S", "excess",
+    "R/commodities_momentum.R:196-200,234 weight = +1/(2*n_long) top / -1/(2*n_short) bottom (sums to 0, dollar-neutral); net_ret = portfolio_ret - cost",
+    "Momentum Decomposition L/S", "excess",
+    "R/momentum_decomposition.R:624-627,675 weight = +leverage/(2*n_long) / -leverage/(2*n_short) (sums to 0, dollar-neutral); net_ret = portfolio_ret - cost",
+    "Regime Momentum", "excess",
+    "R/zakamulin_allocation.R:199 allocated_ret = net_ret * allocation: a dollar-neutral spread (R/momentum_decomposition.R:624-627) scaled by exposure in [0,1]; the cash leg earns 0 by construction (R/zakamulin_allocation.R:174), so no rf is in the series"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure
@@ -137,6 +147,7 @@ hd_return_basis <- function() {
   # it is NOT a hand-typed series.
   reg$cash_weight_col <- NA_character_
   reg$cash_weight_col[reg$strategy == "CMR Conditioned"] <- "cash_weight"
+  reg$cash_weight_col[reg$strategy == "PSO Regime-Adjusted"] <- "cash_weight"  # #937 phase 2 group A
   reg[c("strategy", "basis", "cash_weight_col", "evidence")]
 }
 

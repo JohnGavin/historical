@@ -14,6 +14,44 @@
 # Produces: decay_params, decay_delayed_returns, decay_metrics,
 #           decay_half_life, decay_plot
 
+# One strategy x delay metrics row (#937 phase 2). Pure extraction of the block
+# that lived inside `decay_metrics`' calc_decay_strategy().
+#
+# @param port tibble with `port_ret` and `rf_ret` (monthly).
+# @return one-row tibble.
+.decay_metrics_row <- function(port, strategy_name, delay_d) {
+  # #937 (origin #919): both strategies are dollar-neutral decile long-short
+  # spreads (portfolio_longshort(): long_ret - short_ret - costs), i.e. EXCESS
+  # returns, so no rf is deducted (hd_return_basis(): "Stock MAX"/"Stock DRIF").
+  # An unmapped name aborts rather than defaulting a basis.
+  label_map <- c(stk_max = "Stock MAX", stk_drif = "Stock DRIF")
+  if (!strategy_name %in% names(label_map)) {
+    cli::cli_abort(c(
+      "x" = "{.fn .decay_metrics_row}: {.arg strategy_name} {.val {strategy_name}} has no registered return-basis label.",
+      "i" = "Known: {.val {names(label_map)}}.",
+      "i" = "Map it to a {.fn hd_return_basis} strategy; a silent default would put its Sharpe on an unknown basis."
+    ))
+  }
+  n       <- nrow(port)
+  ann_ret <- prod(1 + port$port_ret)^(12/n) - 1
+  ann_vol <- sd(port$port_ret) * sqrt(12)
+  rf_ann  <- mean(hd_rf_for_basis(port$rf_ret, label_map[[strategy_name]]),
+                  na.rm = TRUE) * 12
+  sharpe  <- if (ann_vol < 1e-8) NA_real_ else (ann_ret - rf_ann) / ann_vol
+  cum     <- cumprod(1 + port$port_ret)
+  max_dd  <- min(cum / cummax(cum) - 1)
+
+  dplyr::tibble(
+    strategy = strategy_name,
+    delay    = delay_d,
+    months   = n,
+    cagr     = ann_ret,
+    vol      = ann_vol,
+    sharpe   = sharpe,
+    max_dd   = max_dd
+  )
+}
+
 plan_alpha_decay <- function() {
   list(
     # ── Parameters ────────────────────────────────────────────────
@@ -152,23 +190,7 @@ plan_alpha_decay <- function() {
 
         if (nrow(port) < decay_params$min_months) return(NULL)
 
-        n       <- nrow(port)
-        ann_ret <- prod(1 + port$port_ret)^(12/n) - 1
-        ann_vol <- sd(port$port_ret) * sqrt(12)
-        rf_ann  <- mean(port$rf_ret, na.rm = TRUE) * 12
-        sharpe  <- if (ann_vol < 1e-8) NA_real_ else (ann_ret - rf_ann) / ann_vol
-        cum     <- cumprod(1 + port$port_ret)
-        max_dd  <- min(cum / cummax(cum) - 1)
-
-        dplyr::tibble(
-          strategy = strategy_name,
-          delay    = delay_d,
-          months   = n,
-          cagr     = ann_ret,
-          vol      = ann_vol,
-          sharpe   = sharpe,
-          max_dd   = max_dd
-        )
+        .decay_metrics_row(port, strategy_name, delay_d)
       }
 
       # stk_max signal column is "max_ret"

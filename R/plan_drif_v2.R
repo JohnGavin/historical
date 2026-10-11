@@ -22,6 +22,44 @@
 # Issues:   #117 (paper impl), #118 (audit), #157 (multiverse spec)
 # Paper:    Cakici et al. 2024, SSRN 6005614
 
+# One multiverse specification's OOS performance row (#937 phase 2).
+# Pure extraction of the block that lived inside `drif_multiverse`'s run_spec().
+#
+# @param port tibble with `port_ret` (monthly) and `rf` (monthly, may be NA).
+# @return one-row tibble, or NULL when fewer than 12 months.
+.drif_mv_perf <- function(port) {
+  n  <- nrow(port)
+  if (n < 12L) return(NULL)
+  ret  <- port$port_ret
+  rfv  <- port$rf
+  # #937 (origin #919): every spec's portfolio is an equal-weight average of
+  # the top-N Fama-French factor SPREADS (HML/SMB/RMW/CMA/Mom; the Mkt-RF
+  # benchmark is excluded by hd_drif_select_topn()), i.e. an EXCESS return --
+  # the same basis as the production "Factor DRIF" row (R/plan_drif.R). So NO
+  # rf is deducted. It used to be, with `coalesce(rf, 0)` silently zero-filling
+  # missing rf months; the registry route has no such fill. This Sharpe feeds
+  # hd_trial_sharpe_var() (the DSR trial variance), so the bias was in the
+  # variance input as well.
+  xret <- hd_excess_returns(ret, as.numeric(rfv), "Factor DRIF")
+
+  ann_ret <- prod(1 + ret)^(12 / n) - 1
+  ann_vol <- sd(ret) * sqrt(12)
+  ann_xret <- prod(1 + xret)^(12 / n) - 1
+  sharpe  <- if (ann_vol > 0) ann_xret / ann_vol else NA_real_
+  cum     <- cumprod(1 + ret)
+  max_dd  <- min(cum / cummax(cum) - 1)
+  hit     <- mean(ret > 0, na.rm = TRUE)
+
+  tibble::tibble(
+    n_months  = n,
+    oos_cagr  = ann_ret,
+    oos_vol   = ann_vol,
+    oos_sharpe = sharpe,
+    oos_max_dd = max_dd,
+    oos_hit   = hit
+  )
+}
+
 plan_drif_v2 <- function() {
   list(
 
@@ -136,28 +174,7 @@ plan_drif_v2 <- function() {
           summarise(port_ret = mean(actual), .groups = "drop") |>
           left_join(rf_monthly, by = "ym")
 
-        n  <- nrow(port)
-        if (n < 12L) return(NULL)
-        ret  <- port$port_ret
-        rfv  <- port$rf
-        xret <- ret - coalesce(rfv, 0)
-
-        ann_ret <- prod(1 + ret)^(12 / n) - 1
-        ann_vol <- sd(ret) * sqrt(12)
-        ann_xret <- prod(1 + xret)^(12 / n) - 1
-        sharpe  <- if (ann_vol > 0) ann_xret / ann_vol else NA_real_
-        cum     <- cumprod(1 + ret)
-        max_dd  <- min(cum / cummax(cum) - 1)
-        hit     <- mean(ret > 0, na.rm = TRUE)
-
-        tibble(
-          n_months  = n,
-          oos_cagr  = ann_ret,
-          oos_vol   = ann_vol,
-          oos_sharpe = sharpe,
-          oos_max_dd = max_dd,
-          oos_hit   = hit
-        )
+        .drif_mv_perf(port)
       }
 
       # Iterate over grid rows

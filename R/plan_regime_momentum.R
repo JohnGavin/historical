@@ -46,7 +46,8 @@ plan_regime_momentum <- function() {
         regime_conditional_performance(
           momentum_by_regime |> filter(scheme == "baseline"),
           regime_filter = "all",
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
       }
     ),
@@ -63,7 +64,8 @@ plan_regime_momentum <- function() {
         regime_conditional_performance(
           momentum_by_regime |> filter(scheme != "baseline"),
           regime_filter = "all",
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
       }
     ),
@@ -81,7 +83,8 @@ plan_regime_momentum <- function() {
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
           regime_filter = "all",
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
 
         # Format for display
@@ -128,7 +131,8 @@ plan_regime_momentum <- function() {
           momentum_by_regime,
           regimes = c("calm"),        # Binary: 100% in calm, 0% otherwise
           vix_min = 15,               # Continuous: 100% at VIX=15
-          vix_max = 40                # Continuous: 0% at VIX=40
+          vix_max = 40,               # Continuous: 0% at VIX=40
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         ) |>
           mutate(
             scheme_label = recode(
@@ -173,7 +177,8 @@ plan_regime_momentum <- function() {
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
           regime_filter = "all",
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
 
         plot_regime_sharpe(all_performance)
@@ -228,7 +233,8 @@ plan_regime_momentum <- function() {
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
           regime_filter = "all",
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
 
         # For each strategy, find best and worst regime
@@ -274,7 +280,8 @@ plan_regime_momentum <- function() {
         all_performance <- regime_conditional_performance(
           momentum_by_regime,
           regime_filter = "all",
-          annual_rf = mean(stk_rf$rf_ret) * 12
+          annual_rf = mean(stk_rf$rf_ret) * 12,
+          strategy = "Regime Momentum"  # excess spread: rf not deducted (#937)
         )
 
         # Test: Are there any positive Sharpes in decomposed strategies?

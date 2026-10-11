@@ -808,12 +808,13 @@ hd_factor_null_test <- function(strategy_daily, rf_daily, factors_daily) {
 #' Zhu (2014) write this as
 #' \eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where \eqn{E[\max Z]} is
 #' the expected maximum of \code{K_trials} unit-variance (V = 1) trial
-#' Z-scores. This implementation keeps the asymptotic Euler-Mascheroni
-#' approximation to \eqn{E[\max Z]} already used here (a form of the same
-#' extreme-value-theory result the LdP papers derive) and multiplies it by
-#' \eqn{\sqrt{V}}. \code{trial_sharpe_var = 1} (the default) reproduces the
-#' pre-#558 output for every \code{K_trials} exactly, so existing callers are
-#' unaffected unless they opt in.
+#' Z-scores. This implementation computes \eqn{E[\max Z]} exactly by
+#' quadrature (\code{\link{hd_expected_max_normal}}) and multiplies it by
+#' \eqn{\sqrt{V}}. (Before #931 it used the asymptotic Euler-Mascheroni
+#' approximation, which overstated \eqn{E[\max Z]} by 9-31\% for
+#' \code{K_trials} in 2..5000, so the hurdle was too strict.)
+#' \code{trial_sharpe_var = 1} (the default) reproduces the pre-#558
+#' variance-unaware scaling.
 #'
 #' When the caller has (or can estimate) the population of trial Sharpe
 #' ratios that produced \code{K_trials}, pass
@@ -899,15 +900,15 @@ hd_deflated_sharpe <- function(r, K_trials = 1L, ann_factor = 252L,
   # Var(SR) ≈ (1 - m3*SR + (m4-1)/4 * SR^2) / T
   var_sr <- (1 - m3 * sr + (m4 - 1) / 4 * sr^2) / T_obs
 
-  # Expected maximum Sharpe under K independent trials (Euler-Mascheroni),
-  # scaled by sqrt(trial_sharpe_var) for a trial population that is not
-  # unit-variance (#558 -- see the "Variance-aware hurdle" roxygen section):
-  # E[max(SR)] ≈ sqrt(V) * [sqrt(2*log(K)) - (gamma + log(pi/2)) / (2*sqrt(2*log(K)))]
+  # Expected maximum Sharpe under K independent trials, scaled by
+  # sqrt(trial_sharpe_var) for a trial population that is not unit-variance
+  # (#558 -- see the "Variance-aware hurdle" roxygen section):
+  # E[max(SR)] = sqrt(V) * E[max of K iid N(0,1)], the latter computed exactly
+  # by quadrature in hd_expected_max_normal() (#931; the former closed-form
+  # approximation z - (gamma + log(pi/2)) / (2z) overstated it by 9-31%).
   # For K=1: E[max] = 0 regardless of V (no multiple-testing hurdle to widen)
   if (K_trials > 1L) {
-    z <- sqrt(2 * log(K_trials))
-    euler_mascheroni <- 0.5772156649
-    e_max_sr <- z - (euler_mascheroni + log(pi / 2)) / (2 * z)
+    e_max_sr <- hd_expected_max_normal(K_trials)
     e_max_sr <- e_max_sr * sqrt(trial_sharpe_var)
     # Scale to per-period SR (not annualised)
     e_max_sr <- e_max_sr / sqrt(T_obs)
