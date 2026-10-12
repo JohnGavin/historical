@@ -37,9 +37,9 @@ source(here::here("R/plan_qa_gates.R"))
   sr_period <- sharpe / sqrt(ann_factor)
   var_sr <- (1 + 0.5 * sr_period^2) / n_obs
   if (K > 1L) {
-    z <- sqrt(2 * log(K))
-    gamma <- 0.5772156649
-    e_max_sr <- (z - (gamma + log(pi / 2)) / (2 * z)) * sqrt(V) / sqrt(n_obs)
+    # V is the variance of the ANNUALISED trial Sharpes; the statistic is
+    # per-period, so V enters as V / ann_factor with no extra 1/sqrt(T) (#933).
+    e_max_sr <- hd_expected_max_normal(K) * sqrt(V / ann_factor)
   } else {
     e_max_sr <- 0
   }
@@ -67,6 +67,29 @@ test_that("build_search_funnel_table: all trials clear min_trades, funnel reprod
   v <- hd_trial_sharpe_var(sharpe, n_obs)
   want <- .expected_survivors(sharpe, n_obs, 12L, v$trial_sharpe_var, v$n_included)
   expect_identical(funnel$n_deflation_survivors, as.integer(want))
+})
+
+test_that("build_search_funnel_table: V is converted to per-period units (#933)", {
+  # 16 trials, monthly, T = 74, annual Sharpes 0.1..1.3. The pre-#933 hurdle
+  # (annual V over sqrt(T), inline E[max Z]) let 4 trials survive; the
+  # unit-consistent hurdle (V / ann_factor, exact E[max Z]) lets none.
+  sharpe <- seq(0.1, 1.3, length.out = 16)
+  n_obs  <- rep(74, 16)
+  fam <- list(fake_u = list(sharpe_col = "sr", n_obs_col = "n", ann_factor = 12L))
+  tbl <- list(fake_u = tibble::tibble(sr = sharpe, n = n_obs))
+
+  funnel <- build_search_funnel_table(tbl, families = fam)
+  expect_identical(funnel$n_deflation_survivors, 0L)
+
+  # Falsification: the old as-coded hurdle on the same inputs counts 4, so
+  # this test goes red if the unit mix is reintroduced.
+  V <- funnel$trial_sharpe_var
+  sr_period <- sharpe / sqrt(12)
+  old_e_max <- (sqrt(2 * log(16)) -
+    (0.5772156649 + log(pi / 2)) / (2 * sqrt(2 * log(16)))) * sqrt(V) / sqrt(74)
+  old_p <- 1 - stats::pnorm((sr_period - old_e_max) /
+                              sqrt((1 + 0.5 * sr_period^2) / 74))
+  expect_identical(sum(old_p < 0.05), 4L)
 })
 
 test_that("build_search_funnel_table: trials below min_trades are excluded from BOTH the min-trades and deflation stages", {

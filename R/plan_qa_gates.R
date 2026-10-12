@@ -4048,9 +4048,11 @@ QA_SEARCH_FUNNEL_FAMILIES <- list(
 #' already uses for the identical reason ("no data exists yet from which to
 #' estimate skew/kurtosis"):
 #' \eqn{Var(SR_{period}) \approx (1 + SR_{period}^2/2) / T}, combined with
-#' \code{\link{hd_deflated_sharpe}}'s own exact \eqn{E[\max SR]} formula
-#' (\code{K = n_min_trades_pass} survivors, \code{V = trial_sharpe_var} just
-#' computed by \code{\link{hd_trial_sharpe_var}}). This is a diagnostic
+#' the exact \eqn{E[\max Z]} from \code{\link{hd_expected_max_normal}}
+#' (\code{K = n_min_trades_pass} survivors) scaled by \eqn{\sqrt{V}}, with
+#' \code{V = trial_sharpe_var} just computed by
+#' \code{\link{hd_trial_sharpe_var}} on ANNUALISED Sharpes and converted to
+#' the per-period statistic's units (\code{V / ann_factor}, #933). This is a diagnostic
 #' approximation for funnel REPORTING ONLY -- it is not a substitute for a
 #' real \code{\link{hd_deflated_sharpe}} call against raw returns, which is
 #' left to a follow-up (#558 Gaps G3/G4).
@@ -4115,10 +4117,14 @@ build_search_funnel_table <- function(trial_tables,
       sr_period     <- sr_annual / sqrt(ann_factor)
       var_sr_period <- (1 + 0.5 * sr_period^2) / T_obs
       if (K > 1L) {
-        z <- sqrt(2 * log(K))
-        euler_mascheroni <- 0.5772156649
-        e_max_sr <- (z - (euler_mascheroni + log(pi / 2)) / (2 * z)) *
-          sqrt(v$trial_sharpe_var) / sqrt(T_obs)
+        # v$trial_sharpe_var is the variance of the ANNUALISED trial Sharpes,
+        # but sr_period is per period: convert V to the statistic's units
+        # (V / ann_factor) and scale E[max Z] by its sd (Bailey et al. 2014,
+        # E[max SR] = sqrt(V) * E[max Z]). No extra 1/sqrt(T): V already is
+        # the dispersion of the trials' estimated Sharpes (#933). E[max Z]
+        # comes from the one shared exact helper (#931).
+        e_max_sr <- hd_expected_max_normal(K) *
+          sqrt(v$trial_sharpe_var / ann_factor)
       } else {
         e_max_sr <- 0
       }
