@@ -3882,7 +3882,7 @@ compute_olmar_window_neighbourhood_sharpes <- function(
     joined <- dplyr::inner_join(port, rf, by = "date")
     keep   <- !is.na(joined$net_ret) & !is.na(joined$rf_ret)
     if (sum(keep) < 20L) return(NA_real_)
-    sr <- sharpe_ratio_rf(joined$net_ret[keep], joined$rf_ret[keep],
+    sr <- sharpe_ratio_rf(joined$net_ret[keep], joined$rf_ret[keep],  # basis: total (OLMAR-1)
                            periods_per_year = 252L, na.rm = TRUE)
     sr$sharpe
   }, numeric(1L))

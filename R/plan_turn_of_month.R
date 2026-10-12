@@ -149,7 +149,7 @@ plan_turn_of_month <- function() {
         cum_s     <- prod(1 + ret_s)
         cagr_s    <- cum_s^(1 / years) - 1
         vol_s     <- sd(ret_s) * sqrt(252)
-        sr_s      <- sharpe_ratio_rf(ret_s, rf_s, periods_per_year = 252L)
+        sr_s      <- sharpe_ratio_rf(ret_s, rf_s, periods_per_year = 252L)  # basis: total (TOM)
         sharpe_s  <- sr_s$sharpe
         eq_s      <- cumprod(1 + ret_s)
         max_dd_s  <- min(eq_s / cummax(eq_s) - 1)
@@ -161,7 +161,7 @@ plan_turn_of_month <- function() {
         cum_b  <- prod(1 + ret_b)
         cagr_b <- cum_b^(1 / years) - 1
         vol_b  <- sd(ret_b) * sqrt(252)
-        sr_b     <- sharpe_ratio_rf(ret_b, rf_b, periods_per_year = 252L)
+        sr_b     <- sharpe_ratio_rf(ret_b, rf_b, periods_per_year = 252L)  # basis: total (Research: ETF buy and hold)
         sharpe_b <- sr_b$sharpe
         eq_b   <- cumprod(1 + ret_b)
         max_dd_b <- min(eq_b / cummax(eq_b) - 1)
@@ -258,7 +258,7 @@ plan_turn_of_month <- function() {
         cum     <- prod(1 + ret_vec)
         cagr    <- cum^(1 / years) - 1
         vol     <- sd(ret_vec) * sqrt(252)
-        sr      <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 252L)
+        sr      <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 252L)  # basis: total (TOM)
         sharpe  <- sr$sharpe
         eq_c    <- cumprod(1 + ret_vec)
         max_dd  <- min(eq_c / cummax(eq_c) - 1)

@@ -133,7 +133,7 @@ plan_olmar <- function() {
         n      <- length(ret)
         if (n < 20L) return(NULL)
 
-        sr       <- sharpe_ratio_rf(ret, rf_ret, periods_per_year = 252L, na.rm = TRUE)
+        sr       <- sharpe_ratio_rf(ret, rf_ret, periods_per_year = 252L, na.rm = TRUE)  # basis: total (OLMAR-1)
         eq_curve <- cumprod(1 + ret)
         dd       <- (eq_curve - cummax(eq_curve)) / cummax(eq_curve)
         max_dd   <- min(dd)
@@ -378,7 +378,7 @@ plan_olmar <- function() {
         rf   <- port$rf_ret[keep]
         if (length(ret) < 20L) return(NA_real_)
 
-        sr <- sharpe_ratio_rf(ret, rf, periods_per_year = 252L, na.rm = TRUE)
+        sr <- sharpe_ratio_rf(ret, rf, periods_per_year = 252L, na.rm = TRUE)  # basis: total (OLMAR-1)
         sr$sharpe
       }, numeric(1L))
     }),
