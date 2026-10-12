@@ -543,7 +543,13 @@ validate_eta_grid <- function(eta_grid, adv_monthly) {
 sensitivity_panel_row <- function(eta, df, returns_wide, long_decile, short_decile,
                                    lookback_months, cost_per_trade, borrow_rate_annual,
                                    max_monthly_ret, adv_monthly, adv_pct_cap,
-                                   impact_aum, impact_sigma, rf, rf_col) {
+                                   impact_aum, impact_sigma, rf, rf_col,
+                                   strategy = NULL) {
+  # #937: the panel's series is a dollar-neutral decile long-short spread
+  # (EXCESS, hd_return_basis()), so the registry decides the rf deducted
+  # (0 for the registered excess labels). The label is only required when an
+  # rf series is supplied -- without one nothing is deducted at all.
+  if (!is.null(rf)) .require_basis_label(strategy, "market_impact_sensitivity")
   port <- portfolio_longshort_hrp(
     df, returns_wide, long_decile = long_decile, short_decile = short_decile,
     lookback_months = lookback_months, cost_per_trade = cost_per_trade,
@@ -562,7 +568,9 @@ sensitivity_panel_row <- function(eta, df, returns_wide, long_decile, short_deci
   ann_ret <- prod(1 + port$port_ret)^(12 / n) - 1
   ann_vol <- stats::sd(port$port_ret) * sqrt(12)
   have_rf <- !is.null(rf) && rf_col %in% names(port)
-  rf_ann  <- if (have_rf) mean(port[[rf_col]], na.rm = TRUE) * 12 else 0
+  rf_ann  <- if (have_rf) {
+    mean(hd_rf_for_basis(port[[rf_col]], strategy), na.rm = TRUE) * 12
+  } else 0
   sharpe  <- if (ann_vol > 0) (ann_ret - rf_ann) / ann_vol else NA_real_
 
   tibble::tibble(
@@ -575,6 +583,9 @@ sensitivity_panel_row <- function(eta, df, returns_wide, long_decile, short_deci
 #' @inheritParams portfolio_longshort_hrp
 #' @param eta_grid Numeric vector of eta values to sweep (each > 0).
 #' @param rf Optional tibble(ym, rf_col), joined before computing Sharpe.
+#' @param strategy Registered \code{hd_return_basis()} label (e.g.
+#'   \code{"Stock MAX"}); REQUIRED whenever \code{rf} is supplied (#937): the
+#'   registry decides how much rf is deducted (none for an excess spread).
 #' @return Tibble: eta, months, sharpe, cagr, vol, avg_impact_cost_frac.
 #' @noRd
 market_impact_sensitivity <- function(df, returns_wide, eta_grid,
@@ -585,13 +596,14 @@ market_impact_sensitivity <- function(df, returns_wide, eta_grid,
                                        max_monthly_ret = 0.20,
                                        adv_monthly, adv_pct_cap = 0.10,
                                        impact_aum, impact_sigma,
-                                       rf = NULL, rf_col = "rf_ret") {
+                                       rf = NULL, rf_col = "rf_ret",
+                                       strategy = NULL) {
   validate_eta_grid(eta_grid, adv_monthly)
   rows <- lapply(eta_grid, function(eta) {
     sensitivity_panel_row(
       eta, df, returns_wide, long_decile, short_decile, lookback_months,
       cost_per_trade, borrow_rate_annual, max_monthly_ret,
-      adv_monthly, adv_pct_cap, impact_aum, impact_sigma, rf, rf_col
+      adv_monthly, adv_pct_cap, impact_aum, impact_sigma, rf, rf_col, strategy
     )
   })
   dplyr::bind_rows(rows)

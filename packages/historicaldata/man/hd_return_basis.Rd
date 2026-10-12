@@ -33,6 +33,11 @@ funding/rebate spread, which this repo models only through a constant
 (e.g. \code{borrow_rate_annual = 0.005}, R/plan_mom_prepeak.R, marked
 MANUAL). That residual is NOT modelled here.
 
+\strong{Research series.} Rows whose label starts with \code{"Research: "}
+are not leaderboard strategies: they classify the total-return series behind
+research tables (e.g. an ETF buy-and-hold, an equity/cash overlay, an asset
+panel) so their Sharpe is put on the same excess basis (#937).
+
 \strong{Values of \code{basis}.}
 \describe{
 \item{\code{"total"}}{Series contains a cash / risk-free component;

@@ -539,11 +539,12 @@ plan_commodities_mean_reversion <- function() {
         strategy_names = strategy_names,
         cmr_summary    = cmr_summary_conditioned,
         portfolio_list = list(
-          `1m` = cmr_portfolio_1m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
-          `3m` = cmr_portfolio_3m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned),
-          `6m` = cmr_portfolio_6m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned)
+          `1m` = cmr_portfolio_1m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned, cash_weight),
+          `3m` = cmr_portfolio_3m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned, cash_weight),
+          `6m` = cmr_portfolio_6m_conditioned |> dplyr::select(date, net_ret = net_ret_conditioned, cash_weight)
         ),
-        strategy_id = "cmr_conditioned"
+        strategy_id = "cmr_conditioned",
+        daily_rf    = daily_rf   # #937: needed to put the blend's SSR on the excess basis
       )
     })
 
@@ -1493,6 +1494,54 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
 }
 
 
+#' Return vector the CMR registry writer scores SSR / top5pct on (#937)
+#'
+#' The Sharpe Stability Ratio is a Sharpe-derived statistic, so it must be
+#' scored on the strategy's EXCESS series (\code{hd_return_basis()}). "CMR" is
+#' a dollar-neutral spread (already excess) and is returned unchanged.
+#' "CMR Conditioned" is a BLEND (spread plus a cash leg that earns rf), so rf
+#' is deducted per day on its \code{cash_weight} only -- the same join and
+#' coverage policy as \code{.compute_cmr_metrics()} -- and its input must carry
+#' \code{cash_weight}. A missing rf series or cash weight aborts; it is never
+#' treated as zero.
+#'
+#' @param port Portfolio tibble with `date`, `net_ret` (and `cash_weight` for
+#'   the conditioned strategy).
+#' @param strategy_id `"cmr"` or `"cmr_conditioned"`; anything else aborts.
+#' @param daily_rf The `daily_rf` target (`date`, `rf_ret`); required for a
+#'   blend, unused for an excess strategy.
+#' @param lookback Partition label, used in messages.
+#' @return Numeric vector of returns (NAs in `net_ret` removed).
+#' @noRd
+.cmr_ssr_returns <- function(port, strategy_id, daily_rf, lookback) {
+  labels <- c(cmr = "CMR", cmr_conditioned = "CMR Conditioned")
+  if (!is.character(strategy_id) || length(strategy_id) != 1L ||
+      !strategy_id %in% names(labels)) {
+    cli::cli_abort(c(
+      "x" = ".cmr_ssr_returns(): {.arg strategy_id} must be one of {.val {names(labels)}}.",
+      "i" = "Got {.val {strategy_id}}. Add the code_name -> hd_return_basis() label mapping here before registering another CMR variant."
+    ))
+  }
+  label <- labels[[strategy_id]]
+  basis <- hd_return_basis_of(label)
+  df <- port[!is.na(port$net_ret), , drop = FALSE]
+
+  if (identical(basis, "excess")) return(df$net_ret)
+
+  if (is.null(daily_rf) || !"cash_weight" %in% names(df)) {
+    cli::cli_abort(c(
+      "x" = "{.val {label}} is a {basis}-basis strategy: its SSR needs {.arg daily_rf} and a {.field cash_weight} column.",
+      "i" = "Without them its SSR would silently stay on the total-return basis (#937)."
+    ))
+  }
+  df <- dplyr::mutate(df, date = as.Date(.data$date))
+  df <- .cmr_join_rf(
+    df, .cmr_fill_non_trading_rf_gaps(df, daily_rf, lookback = lookback),
+    lookback = lookback, basis_strategy = label
+  )
+  hd_excess_returns(df$net_ret, df$rf_ret, label, cash_weight = df$cash_weight)
+}
+
 # ── Registry sentinel helper (#347 PR 2/4; stability metrics #400 PR 5/6) ──
 # Initialises (idempotent) + upserts a CMR-family strategy + records one
 # bt.run row per lookback partition. Also records SSR + top5pct stability
@@ -1509,7 +1558,8 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
 # function; see cmr_registry_run / cmr_registry_run_conditioned above for
 # the two call sites.
 .cmr_register_runs <- function(strategy_names, cmr_summary,
-                               portfolio_list = list(), strategy_id = "cmr") {
+                               portfolio_list = list(), strategy_id = "cmr",
+                               daily_rf = NULL) {
   if (!requireNamespace("DBI", quietly = TRUE) ||
       !requireNamespace("duckdb", quietly = TRUE)) {
     return(tibble::tibble(
@@ -1591,7 +1641,10 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
     # (daily) or 36 (monthly)."
     port <- portfolio_list[[p]]
     if (!is.null(port) && is.data.frame(port) && "net_ret" %in% names(port)) {
-      rets <- port$net_ret
+      # #937: SSR / top5pct are computed on the strategy's EXCESS series per
+      # hd_return_basis(): "CMR" (excess spread) unchanged; "CMR Conditioned"
+      # (blend: spread + cash leg) has rf deducted on its cash weight only.
+      rets <- .cmr_ssr_returns(port, strategy_id, daily_rf, lookback = p)
       if (length(rets) > 0L) {
         hd_record_stability_metrics(
           con        = con,

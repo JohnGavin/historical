@@ -247,7 +247,14 @@ backtest_commodity_momentum <- function(signals,
 #' Compute performance metrics for backtested commodity momentum strategies.
 #'
 #' @param backtest_results Tibble from backtest_commodity_momentum()
-#' @param annual_rf Numeric. Annual risk-free rate (default 0.02)
+#' @param annual_rf Numeric. Annual risk-free rate (default 0.02). Deducted
+#'   only when \code{strategy}'s registered basis is \code{"total"}; the
+#'   long-short spread here is an excess return, so for the registered label
+#'   \code{"Commodity Momentum L/S"} it is ignored (Refs #937).
+#' @param strategy Single string; a label registered in
+#'   \code{hd_return_basis()} (use \code{"Commodity Momentum L/S"}). REQUIRED:
+#'   an omitted or unregistered label aborts rather than silently keeping an
+#'   rf-deducted Sharpe (fail-loud-not-null).
 #'
 #' @return Tibble with columns:
 #'   - strategy
@@ -256,11 +263,15 @@ backtest_commodity_momentum <- function(signals,
 #'   - gross_sharpe (before costs)
 #'
 #' @export
-summarize_commodity_performance <- function(backtest_results, annual_rf = 0.02) {
+summarize_commodity_performance <- function(backtest_results, annual_rf = 0.02,
+                                            strategy = NULL) {
   library(dplyr)
   library(purrr)
 
-  monthly_rf <- (1 + annual_rf)^(1/12) - 1
+  .require_basis_label(strategy, "summarize_commodity_performance")
+  # #937: the top-n / bottom-n weights sum to zero, so net_ret is already an
+  # excess return; the registry returns 0 for it (rf only for a "total" label).
+  monthly_rf <- hd_rf_for_basis((1 + annual_rf)^(1/12) - 1, strategy)
 
   backtest_results |>
     group_by(strategy) |>

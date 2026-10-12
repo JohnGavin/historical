@@ -157,6 +157,10 @@ plan_regime <- function() {
           # Scale risky exposure; remainder sits in cash (rf_ret)
           exposure     = dplyr::coalesce(exposure, 1.0),
           regime_ret   = exposure * base_ret + (1 - exposure) * rf_ret,
+          # #937: weight on the cash leg (which earns rf). Named by the
+          # "PSO Regime-Adjusted" blend row of hd_return_basis(); derived
+          # from the exposure column above, never typed.
+          cash_weight  = 1 - exposure,
           # Cumulative growth
           base_cum     = cumprod(1 + base_ret),
           regime_cum   = cumprod(1 + regime_ret)
@@ -175,13 +179,22 @@ plan_regime <- function() {
         n <- nrow(df)
         if (n < 12) return(NULL)
 
-        calc_one <- function(ret_col, name_prefix) {
+        # #937 (origin #919): every Sharpe is on an EXCESS basis. base_ret is
+        # the PSO-weighted average of four dollar-neutral spreads (excess,
+        # "PSO Optimal"); regime_ret = exposure * base_ret + (1 - exposure) *
+        # rf is a BLEND of that spread with a cash leg that IS rf
+        # ("PSO Regime-Adjusted"), so rf is deducted only on the cash weight.
+        # Both rows used to deduct the full rf. Approximation: funding and
+        # short-rebate rates are assumed to cancel in the spread leg.
+        calc_one <- function(ret_col, name_prefix, registry_label) {
           r  <- df[[ret_col]]
           rf <- if ("rf_ret" %in% names(df)) df$rf_ret else rep(0, n)
           rf[is.na(rf)] <- 0
+          cw <- if (identical(hd_return_basis_of(registry_label), "blend")) df$cash_weight else NULL
           ann_ret  <- prod(1 + r)^(12/n) - 1
           ann_vol  <- sd(r) * sqrt(12)
-          rf_ann   <- mean(rf, na.rm = TRUE) * 12
+          rf_ann   <- mean(hd_rf_for_basis(rf, registry_label, cash_weight = cw),
+                           na.rm = TRUE) * 12
           sharpe   <- if (ann_vol < 1e-8) NA_real_ else (ann_ret - rf_ann) / ann_vol
           cum      <- cumprod(1 + r)
           max_dd   <- min(cum / cummax(cum) - 1)
@@ -197,8 +210,8 @@ plan_regime <- function() {
         }
 
         bind_rows(
-          calc_one("regime_ret", "Regime-Adjusted"),
-          calc_one("base_ret",   "Base Portfolio")
+          calc_one("regime_ret", "Regime-Adjusted", "PSO Regime-Adjusted"),
+          calc_one("base_ret",   "Base Portfolio",  "PSO Optimal")
         )
       }
 

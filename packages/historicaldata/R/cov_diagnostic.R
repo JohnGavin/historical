@@ -28,7 +28,9 @@
 #'   order** and one column per asset. If a data frame, a `date` column (any
 #'   column whose name equals `"date"`, case-insensitively) is dropped before
 #'   estimation and retained only for output labelling. All remaining columns
-#'   must be numeric.
+#'   must be numeric. Pass **excess** returns (risk-free rate already deducted
+#'   from total-return series): this function deducts no risk-free rate itself,
+#'   so `oos_sharpe` is a Sharpe ratio only if `returns` are excess returns.
 #' @param methods Character vector of covariance methods to compare. Passed to
 #'   [hd_cov_estimate()]. Default `c("sample", "ledoit_wolf", "rmt_denoise")`.
 #' @param train_window Integer scalar. Number of periods in each rolling

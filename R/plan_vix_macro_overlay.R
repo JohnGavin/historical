@@ -80,14 +80,29 @@ plan_vix_macro_overlay <- function() {
 
         if (nrow(d) < 100) return(NULL)
 
+        # #937 (refs #919): the buy-and-hold series (adjusted-close return) and
+        # the overlay (asset when in market, 0 when out -- cash earns nothing
+        # here) are both TOTAL returns, registered in hd_return_basis(). The
+        # Sharpe below is on the EXCESS series, so the daily Fama-French rf is
+        # joined on. .join_rf_series() aborts on leading/interior coverage
+        # gaps and trims (with a counted warning) trailing days with no rf yet.
+        d <- .join_rf_series(
+          d, daily_rf, key = "date", label = "vmo_results",
+          rf_label = "daily_rf", rf_source = "R/plan_stock_backtest.R",
+          df_label = paste0("vmo ", tkr), strategy_label = paste0("VIX overlay ", tkr),
+          period_noun = "day"
+        )
+
         res <- run_overlay(d, vmo_params$vix_high, vmo_params$vix_reentry,
                             vmo_params$min_cooloff)
 
         n <- length(res$ret_bh)
         years <- n / 252
 
-        calc_metrics <- function(ret, label) {
-          ret <- ret[!is.na(ret)]
+        calc_metrics <- function(ret, label, basis_label) {
+          keep <- !is.na(ret) & !is.na(d$rf_ret)
+          ex   <- hd_excess_returns(ret[keep], d$rf_ret[keep], basis_label)
+          ret  <- ret[keep]
           if (length(ret) < 20) return(NULL)
           tibble(
             ticker = tkr,
@@ -95,7 +110,7 @@ plan_vix_macro_overlay <- function() {
             strategy = label,
             cagr_pct = round((prod(1 + ret)^(252/length(ret)) - 1) * 100, 1),
             vol_pct = round(sd(ret) * sqrt(252) * 100, 1),
-            sharpe = round(mean(ret) / sd(ret) * sqrt(252), 2),
+            sharpe = round(mean(ex) / sd(ex) * sqrt(252), 2),
             max_dd_pct = round(min((cumprod(1 + ret) - cummax(cumprod(1 + ret))) /
                                      cummax(cumprod(1 + ret))) * 100, 1),
             pct_in_market = round(mean(res$in_market) * 100, 1)
@@ -103,8 +118,8 @@ plan_vix_macro_overlay <- function() {
         }
 
         bind_rows(
-          calc_metrics(res$ret_bh, "Buy & Hold"),
-          calc_metrics(res$ret_overlay, "VIX Overlay")
+          calc_metrics(res$ret_bh, "Buy & Hold", "Research: ETF buy and hold"),
+          calc_metrics(res$ret_overlay, "VIX Overlay", "Research: ETF/cash overlay")
         )
       })
     }),

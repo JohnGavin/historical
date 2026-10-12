@@ -147,9 +147,25 @@ plan_rafi <- function() {
       oos      <- rafi_params$oos_start
       test_end <- rafi_params$test_end
 
-      calc_metrics <- function(ret_vec, date_vec, strategy_name, period_name) {
+      # #937 (refs #919): every series here is a TOTAL return (RF + factor
+      # overlay - cost, or Mkt-RF + RF), registered under a "Research: ..."
+      # label in hd_return_basis(). The Sharpe is on the EXCESS basis: rf is
+      # deducted through the registry (hd_rf_for_basis()) and the annualised
+      # rf is mean(rf) * 12, so sharpe == (cagr - ann_rf) / vol. A month with
+      # a return but no rf is dropped and COUNTED, never 0-filled.
+      calc_metrics <- function(ret_vec, rf_vec, date_vec, strategy_name,
+                               period_name, basis_label) {
         keep     <- !is.na(ret_vec)
+        n_no_rf  <- sum(keep & is.na(rf_vec))
+        if (n_no_rf > 0L) {
+          cli::cli_warn(c(
+            "!" = "{strategy_name} ({period_name}): dropped {n_no_rf} month{?s} with no risk-free rate.",
+            "i" = "Not zero-filled: a zero rf would leave them on the total-return basis (#937)."
+          ))
+        }
+        keep     <- keep & !is.na(rf_vec)
         ret_vec  <- ret_vec[keep]
+        rf_vec   <- rf_vec[keep]
         date_vec <- date_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
 
@@ -158,7 +174,9 @@ plan_rafi <- function() {
         cum_ret  <- prod(1 + ret_vec)
         cagr     <- (cum_ret^(1 / years) - 1) * 100
         vol      <- sd(ret_vec) * sqrt(12) * 100
-        sharpe   <- ifelse(vol > 0, (cagr / 100) / (vol / 100), NA_real_)
+        sharpe   <- sharpe_ratio_rf(
+          ret_vec, hd_rf_for_basis(rf_vec, basis_label), periods_per_year = 12L
+        )$sharpe
 
         cum_w    <- cumprod(1 + ret_vec)
         drawdown <- (cum_w - cummax(cum_w)) / cummax(cum_w)
@@ -196,7 +214,17 @@ plan_rafi <- function() {
         market  = "Benchmark (Cap-Weighted Market)"
       )
 
+      # Registry labels (hd_return_basis(), #937): the three RF + factor
+      # series share one; the cap-weighted market (Mkt-RF + RF) has its own.
+      basis_labels <- c(
+        rafi    = "Research: RF + factor overlay",
+        revenue = "Research: RF + factor overlay",
+        ew      = "Research: RF + factor overlay",
+        market  = "Research: cap-weighted market (Mkt-RF + RF)"
+      )
+
       dates    <- rafi_portfolios$date
+      rf_all   <- rafi_portfolios$RF
       is_train <- dates < oos
       is_oos   <- dates >= oos & dates <= test_end
 
@@ -205,11 +233,12 @@ plan_rafi <- function() {
         ret_full  <- strategies[[nm]]
         ret_train <- strategies[[nm]][is_train]
         ret_oos   <- strategies[[nm]][is_oos]
+        bl        <- basis_labels[[nm]]
 
         rows <- c(rows,
-          list(calc_metrics(ret_full,  dates,           labels[nm], "Full")),
-          list(calc_metrics(ret_train, dates[is_train],  labels[nm], "Training")),
-          list(calc_metrics(ret_oos,   dates[is_oos],    labels[nm], "OOS"))
+          list(calc_metrics(ret_full,  rf_all,           dates,           labels[nm], "Full",     bl)),
+          list(calc_metrics(ret_train, rf_all[is_train], dates[is_train], labels[nm], "Training", bl)),
+          list(calc_metrics(ret_oos,   rf_all[is_oos],   dates[is_oos],   labels[nm], "OOS",      bl))
         )
       }
 
@@ -281,13 +310,27 @@ plan_rafi <- function() {
       dates     <- rafi_portfolios$date
       split_date <- as.Date("2000-01-01")
 
-      calc_sharpe <- function(ret_vec, period_label, strategy_name) {
-        ret_vec <- ret_vec[!is.na(ret_vec)]
+      # #937: same EXCESS-basis Sharpe as rafi_metrics (all four series are
+      # TOTAL returns; labels registered in hd_return_basis()).
+      calc_sharpe <- function(ret_vec, rf_vec, period_label, strategy_name, basis_label) {
+        keep    <- !is.na(ret_vec)
+        n_no_rf <- sum(keep & is.na(rf_vec))
+        if (n_no_rf > 0L) {
+          cli::cli_warn(c(
+            "!" = "{strategy_name} ({period_label}): dropped {n_no_rf} month{?s} with no risk-free rate.",
+            "i" = "Not zero-filled: a zero rf would leave them on the total-return basis (#937)."
+          ))
+        }
+        keep    <- keep & !is.na(rf_vec)
+        ret_vec <- ret_vec[keep]
+        rf_vec  <- rf_vec[keep]
         if (length(ret_vec) < 12L) return(NULL)
         years  <- length(ret_vec) / 12
         cagr   <- (prod(1 + ret_vec)^(1 / years) - 1) * 100
         vol    <- sd(ret_vec) * sqrt(12) * 100
-        sharpe <- ifelse(vol > 0, cagr / vol, NA_real_)
+        sharpe <- sharpe_ratio_rf(
+          ret_vec, hd_rf_for_basis(rf_vec, basis_label), periods_per_year = 12L
+        )$sharpe
         tibble::tibble(
           strategy = strategy_name,
           period   = period_label,
@@ -301,15 +344,19 @@ plan_rafi <- function() {
       is_early <- dates < split_date
       is_late  <- dates >= split_date
 
+      rf_all <- rafi_portfolios$RF
+      fo <- "Research: RF + factor overlay"
+      mk <- "Research: cap-weighted market (Mkt-RF + RF)"
+
       dplyr::bind_rows(
-        calc_sharpe(rafi_portfolios$ret_rafi[is_early],    "Pre-2000",  "RAFI Composite"),
-        calc_sharpe(rafi_portfolios$ret_rafi[is_late],     "2000+",     "RAFI Composite"),
-        calc_sharpe(rafi_portfolios$ret_revenue[is_early], "Pre-2000",  "Revenue Proxy"),
-        calc_sharpe(rafi_portfolios$ret_revenue[is_late],  "2000+",     "Revenue Proxy"),
-        calc_sharpe(rafi_portfolios$ret_ew[is_early],      "Pre-2000",  "Equal-Weight Proxy"),
-        calc_sharpe(rafi_portfolios$ret_ew[is_late],       "2000+",     "Equal-Weight Proxy"),
-        calc_sharpe(rafi_portfolios$ret_market[is_early],  "Pre-2000",  "Benchmark"),
-        calc_sharpe(rafi_portfolios$ret_market[is_late],   "2000+",     "Benchmark")
+        calc_sharpe(rafi_portfolios$ret_rafi[is_early],    rf_all[is_early], "Pre-2000",  "RAFI Composite",     fo),
+        calc_sharpe(rafi_portfolios$ret_rafi[is_late],     rf_all[is_late],  "2000+",     "RAFI Composite",     fo),
+        calc_sharpe(rafi_portfolios$ret_revenue[is_early], rf_all[is_early], "Pre-2000",  "Revenue Proxy",      fo),
+        calc_sharpe(rafi_portfolios$ret_revenue[is_late],  rf_all[is_late],  "2000+",     "Revenue Proxy",      fo),
+        calc_sharpe(rafi_portfolios$ret_ew[is_early],      rf_all[is_early], "Pre-2000",  "Equal-Weight Proxy", fo),
+        calc_sharpe(rafi_portfolios$ret_ew[is_late],       rf_all[is_late],  "2000+",     "Equal-Weight Proxy", fo),
+        calc_sharpe(rafi_portfolios$ret_market[is_early],  rf_all[is_early], "Pre-2000",  "Benchmark",          mk),
+        calc_sharpe(rafi_portfolios$ret_market[is_late],   rf_all[is_late],  "2000+",     "Benchmark",          mk)
       )
     }),
 

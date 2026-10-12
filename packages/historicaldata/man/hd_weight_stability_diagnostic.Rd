@@ -17,7 +17,11 @@ hd_weight_stability_diagnostic(
 order} and one column per asset. If a data frame, a column named \code{"date"}
 (case-insensitive) is silently dropped. All remaining columns must be
 numeric. Incomplete rows within each training window are dropped before
-estimation.}
+estimation. Pass \strong{excess} returns (risk-free rate already deducted from
+total-return series): this function deducts no risk-free rate itself, so
+\code{oos_sharpe} is a Sharpe ratio only if \code{returns} are excess returns, and
+the mu-driven methods (\code{raw_mvo}, \code{shrunk_mu}) build their weights from
+the mean of the matrix, so total returns change those weights too.}
 
 \item{methods}{Character vector of weight methods to compare. Must be a
 non-empty subset of
