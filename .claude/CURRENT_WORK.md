@@ -1,80 +1,36 @@
-# Current Work — session 30 (2026-09-11 → 2026-09-12)
+# Current Work — rf return-basis programme (2026-10-12)
 
-**Ended 2026-09-12.** Branch `feat/cc-20260912-osap-verification` (fresh from
-`origin/main`; the previous branch was squash-merged as `0c68bf4`).
+Tracking issue [#937](https://github.com/JohnGavin/historical/issues/937).
+Every step is approved turn-by-turn by an explicit user verb.
 
 ## State
 
-Session 29's work is **merged** ([PR #858](https://github.com/JohnGavin/historical/pull/858)).
-This session's OSAP verification is on the new branch, pending a PR.
+Merged: [#949](https://github.com/JohnGavin/historical/pull/949) to
+[#954](https://github.com/JohnGavin/historical/pull/954),
+[#955](https://github.com/JohnGavin/historical/pull/955) (re-render),
+[#956](https://github.com/JohnGavin/historical/pull/956) (top5pct revert),
+[#957](https://github.com/JohnGavin/historical/pull/957) (re-render),
+[#958](https://github.com/JohnGavin/historical/pull/958) (funnel V units, #933).
+Closed: PR #932, issues #943, #929.
 
-## The headline
+## Next, in order
 
-**The survivorship blocker lifts, free — but not all the way.**
+1. Funnel counts: `scripts/build.sh` from the MAIN checkout, read the DRIF and
+   Avoid Worst rows of `qa_search_funnel`, re-render if pages change.
+2. File an issue: `hd_deflated_sharpe()` divides its hurdle by `sqrt(T)` while
+   treating V as dispersion (mismatch with the #958 convention).
+3. #937 phase 3: static test for unrouted `sharpe_ratio_rf(` calls; registry
+   vocabulary for benchmarks; INDETERMINATE sites `plan_mean_reversion.R:214`,
+   `plan_shadow_trades.R:75-79`, `capacity.R:286`,
+   `strategy_value_gate.R:54-66`; hoist duplicated rf wiring.
+4. `macro-defense-rotation` stale re-render (uncommitted in the main checkout,
+   diff is mostly embedded asset data, unrelated to #937).
 
-| | universe | returns |
-|---|---|---|
-| OSAP (Chen-Zimmermann) | **right** — 86.7% of 38,870 permnos exit >1yr before panel end | **none** |
-| `equity_daily` | wrong — 0 of 502 exit | yes |
+## Gotchas
 
-Complementary defects. Neither alone reproduces Zadeh's design. The full
-thing still needs returns joined to a delisting-inclusive panel — CRSP, or
-something supplying both. Norgate deprioritised on cost.
-
-## Added late in the session (2026-09-13)
-
-- **[#865](https://github.com/JohnGavin/historical/issues/865) — ticker
-  recycling.** A distinct problem from #816: not "which companies are
-  missing" but "which company did this symbol mean at the time".
-  `fetch_fundamentals_edgar.R` resolves ticker to CIK with no date check.
-  Latent today, wrong by construction.
-- **[#816](https://github.com/JohnGavin/historical/issues/816) — a free third
-  route.** Reconstruct S&P 500 membership from `fja05680/sp500` + SEC + CIK
-  overlap validation, then join to our own prices. Complements OSAP rather
-  than replacing it.
-- **[llm#1193](https://github.com/JohnGavin/llm/issues/1193) — Wikidata** as
-  a data-generation and cross-check stack. Travel is the best first candidate
-  (private project). Confirm-only, never refute.
-- **Fixed a High roborev finding in my own commit** (`79a8992`) — the OSAP
-  script's Drive confirm-token regex could never match. Caught by roborev,
-  not by me; verified by direct test before fixing.
-
-## Next session — pick one
-
-1. **Land the OSAP verification.** Branch is committed, `verify.sh --quick`
-   passes, no PR opened yet. Cheapest thing on the list.
-2. **#857 portfolio-level interaction test.** The custom double sort is dead
-   (no returns), but OSAP ships 212 pre-built long-short series and Ken
-   French momentum deciles are already ingested. Ask whether MAX and momentum
-   interact at portfolio level — a real test, a weaker claim, and the
-   write-up must say which.
-3. **#863 freshness split.** Needed before #862 ingestion lands, or a
-   ~10-month-lagged source fails a 14-day threshold every run forever. The
-   substance is *last-checked* vs *last-changed*, not a bigger number.
-4. **#862 open sub-tasks:** find or build a `permno` crosswalk (none free —
-   blocks joining OSAP to our ticker-keyed data), and decide how to handle
-   the un-filterable non-common-stock securities.
-5. **#861 pkgctx CI** — still red, still reporting nothing either way.
-
-## Housekeeping
-
-- **7.8 GB in `/tmp/osap_scratch`**, disk at 93% (60 GB free). Left
-  deliberately so a follow-up need not re-download 8.35 GB. Delete when done.
-
-## Carried forward from session 29, still unaddressed
-
-**Plain 12-2 momentum is underpowered on 52.8 years of `equity_daily`**
-(Sharpe 0.163, needs 231 years). That is the universe, not momentum, and it
-applies to every cross-sectional long/short on this panel — including the
-live `ltr_*` leaderboard strategy. Still deserves its own issue.
-
-## Two process notes worth keeping
-
-- **Search before filing.** Two near-misses in two sessions: nearly re-filed
-  #816, then actually did duplicate #804 as #861. One
-  `gh issue list --search` before writing would have caught both.
-- **Check a subagent's supporting argument, not just its verdict.** The OSAP
-  report's panel-shape corroboration was wrong (the 2024 count exceeds the
-  1998 peak, contradicting the US listing decline) even though its P1 verdict
-  was right. Withdrawn in `FINDINGS.md`. A correct conclusion can rest on a
-  bad argument, and the argument is what gets quoted onward.
+- Store lives only in the main checkout; one build at a time (`pgrep` first).
+- `verify.sh` can exceed 600 s: run in the background, wait for the notice.
+- No CI on root `R/`, `tests/`, `docs/`; `verify.sh` is the only gate.
+- Step 2c reports VACUOUS-PASS (0 targets); coverage rests on
+  `tar_option_set(imports = "historicaldata")`.
+- Main checkout: leave `.claude/CURRENT_WORK.md` and untracked files alone.

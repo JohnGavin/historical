@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-10-12 (rf return-basis programme: #949-#958 merged, leaderboard re-rendered, refs #937)
+
+### Completed
+- Merged [#949](https://github.com/JohnGavin/historical/pull/949) to
+  [#954](https://github.com/JohnGavin/historical/pull/954): exact
+  E[max of K normals] (`hd_expected_max_normal`), CMR annualisation, the
+  Step 2c label, return-basis phases 2A/2B/2C. One full build from the main
+  checkout (0 errored targets), re-render PR
+  [#955](https://github.com/JohnGavin/historical/pull/955).
+- [#956](https://github.com/JohnGavin/historical/pull/956): `top5pct_share`
+  back on the published total-basis series (SSR stays on excess), then
+  re-render [#957](https://github.com/JohnGavin/historical/pull/957). Live
+  leaderboard fetched with `curl`: no `-57.7` / `3.73`, HTML matches local.
+- [#958](https://github.com/JohnGavin/historical/pull/958) (#933): the search
+  funnel's deflation hurdle uses per-period V (`V / ann_factor`, no extra
+  `1/sqrt(T)`) and the shared exact E[max Z]. Test: 16 monthly trials,
+  T = 74 gives 0 survivors; the old hurdle gave 4.
+- Closed draft PR #932 (superseded by #949) and issues #943, #929 (link audit
+  green on `eea1785`).
+
+### Failed Approaches
+- Moving `top5pct_share` onto the excess basis (#954). A share of a
+  near-zero or negative excess total leaves [0, 1] (Value (HML) 3.73,
+  TOM -57.7). Reverted in #956. Registry writer
+  `hd_record_stability_metrics()` still uses the excess vector for top5, so
+  registry and leaderboard differ on that one statistic.
+
+### Accuracy / Metrics
+- Leaderboard: Sharpe, months, detection verdicts unchanged; DSR p-values
+  lower for every strategy (exact E[max]); SSR collapsed for TOM
+  (5.51 to 0.43) and Value (HML) (7.43 to 1.23).
+- `verify.sh` exit 0 on each branch; root suite 3 and package suite 1 known
+  baseline failures unchanged.
+
+### Known Limitations
+- Funnel survivor counts for DRIF / Avoid Worst after #958 are not yet
+  measured on the real trial tables (needs `build.sh` in the main checkout).
+- `hd_deflated_sharpe()` divides its hurdle by `sqrt(T)` while treating V as
+  dispersion; inconsistent with the #958 convention. Not yet filed.
+- #937 phase 3 not started. `macro-defense-rotation` re-render still
+  uncommitted in the main checkout. Step 2c reports VACUOUS-PASS (0 targets).
+
 ## 2026-09-23 (plan_avoid_worst.R: registered leaderboard metrics now source from the VIX-timed strategy, refs #813)
 
 - **Wrong return series (#813):** `avoid_worst_register_runs`'s bt.metric
