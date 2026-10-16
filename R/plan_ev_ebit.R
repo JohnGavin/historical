@@ -125,7 +125,7 @@ plan_ev_ebit <- function() {
         cum_ret  <- prod(1 + ret_vec)
         cagr     <- (cum_ret^(1 / years) - 1) * 100
         vol      <- sd(ret_vec) * sqrt(12) * 100
-        sr       <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 12L)
+        sr       <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 12L)  # basis: total (Value (HML))
         sharpe   <- sr$sharpe
         cum_w    <- cumprod(1 + ret_vec)
         drawdown <- (cum_w - cummax(cum_w)) / cummax(cum_w)
@@ -209,7 +209,7 @@ plan_ev_ebit <- function() {
         years  <- length(ret_vec) / 12
         cagr   <- (prod(1 + ret_vec)^(1 / years) - 1) * 100
         vol    <- sd(ret_vec) * sqrt(12) * 100
-        sr     <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 12L)
+        sr     <- sharpe_ratio_rf(ret_vec, rf_vec, periods_per_year = 12L)  # basis: total (Value (HML))
         tibble::tibble(
           strategy = strategy_name,
           period   = period_label,

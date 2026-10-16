@@ -85,7 +85,7 @@
     ))
   }
 
-  sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)
+  sharpe_ratio_rf(df$ret, df$rf_ret, periods_per_year = ann_factor)  # basis: total (Avoid Worst)
 }
 
 #' Thin wrapper over .aw_sharpe_rf_full() returning just the Sharpe ratio
