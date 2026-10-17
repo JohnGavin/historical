@@ -222,7 +222,10 @@ hd_strategy_idea_priorities <- function() {
 #' @param economic_claim Character. What the idea claims, in the source's own
 #'   terms. Do not invent a mechanism the source does not state.
 #' @param source Character. REQUIRED. URL or issue reference the idea came from.
-#' @param priority One of \code{hd_strategy_idea_priorities()$priority}.
+#' @param priority One of \code{hd_strategy_idea_priorities()$priority}, or
+#'   \code{NA_character_} when \code{status} is anything other than
+#'   \code{"proposed"} (a finished test has no queue position). A
+#'   \code{"proposed"} idea always needs a priority.
 #' @param asset_class Character. Asset class the idea trades.
 #' @param issue Optional. A single GitHub issue number.
 #' @param strategy_id Optional character. Links the idea to a
@@ -233,6 +236,12 @@ hd_strategy_idea_priorities <- function() {
 #'   follows up (a status/priority change).
 #' @param base_dir Override research-log base directory (see
 #'   \code{hd_rlog_path()}).
+#' @param seal_omitted_reason Optional character. Why the row is unsealed.
+#'   \code{NULL} (default) records the backlog-idea reason; a row written after
+#'   its outcome was known must say so here instead.
+#' @param extra Optional named list of additional \code{extra_json} fields (for
+#'   example \code{outcome_source}). Names must be unique, non-empty and must
+#'   not collide with the fields this function writes itself.
 #' @return Invisibly, the new row's \code{uuid}.
 #' @family research-log
 #' @export
@@ -255,7 +264,9 @@ hd_strategy_idea_append <- function(name,
                                     strategy_id = NULL,
                                     status      = "proposed",
                                     parent_uuid = NULL,
-                                    base_dir    = NULL) {
+                                    base_dir    = NULL,
+                                    seal_omitted_reason = NULL,
+                                    extra       = NULL) {
   .sl_scalar_string(name, "name")
   .sl_scalar_string(economic_claim, "economic_claim")
   if (missing(source)) {
@@ -267,16 +278,8 @@ hd_strategy_idea_append <- function(name,
   .sl_scalar_string(source, "source")
   .sl_scalar_string(asset_class, "asset_class")
 
-  allowed_priorities <- hd_strategy_idea_priorities()$priority
-  if (missing(priority) || !is.character(priority) || length(priority) != 1L ||
-      is.na(priority) || !priority %in% allowed_priorities) {
-    got <- if (missing(priority)) "<missing>" else priority
-    cli::cli_abort(c(
-      "x" = "Unknown idea {.arg priority}: {.val {got}}",
-      "i" = "Allowed values: {.val {allowed_priorities}}"
-    ))
-  }
-
+  # Status is validated BEFORE priority: whether a priority may be NA depends
+  # on it.
   allowed_statuses <- hd_rlog_statuses()$status
   if (!is.character(status) || length(status) != 1L || is.na(status) ||
       !status %in% allowed_statuses) {
@@ -292,6 +295,52 @@ hd_strategy_idea_append <- function(name,
     ))
   }
 
+  # A priority is a queue position. It is meaningless for a finished test, so
+  # NA is allowed there, but a proposed idea must still say where it queues.
+  allowed_priorities <- hd_strategy_idea_priorities()$priority
+  priority_is_na <- !missing(priority) && length(priority) == 1L &&
+    (is.character(priority) || is.logical(priority)) && is.na(priority)
+  if (priority_is_na && identical(status, "proposed")) {
+    cli::cli_abort(c(
+      "x" = "{.arg priority} is required when {.arg status} is {.val proposed}.",
+      "i" = "Allowed values: {.val {allowed_priorities}}",
+      "i" = "{.code NA} is accepted only for a non-proposed status."
+    ))
+  }
+  if (!priority_is_na &&
+      (missing(priority) || !is.character(priority) || length(priority) != 1L ||
+       !priority %in% allowed_priorities)) {
+    got <- if (missing(priority)) "<missing>" else priority
+    cli::cli_abort(c(
+      "x" = "Unknown idea {.arg priority}: {.val {got}}",
+      "i" = "Allowed values: {.val {allowed_priorities}}"
+    ))
+  }
+
+  if (!is.null(seal_omitted_reason)) {
+    .sl_scalar_string(seal_omitted_reason, "seal_omitted_reason")
+  }
+  reserved_extra <- c("kind", "name", "priority", "asset_class", "source",
+                      "issue", "strategy_id", "preregistered",
+                      "seal_omitted_reason")
+  if (!is.null(extra)) {
+    if (!is.list(extra) || length(extra) == 0L || is.null(names(extra)) ||
+        anyNA(names(extra)) || any(!nzchar(names(extra))) ||
+        anyDuplicated(names(extra)) > 0L) {
+      cli::cli_abort(c(
+        "x" = "{.arg extra} must be NULL or a non-empty list with unique, non-empty names.",
+        "i" = "Got {length(extra)} element{?s} with names {.val {as.character(names(extra))}}."
+      ))
+    }
+    clash <- intersect(names(extra), reserved_extra)
+    if (length(clash) > 0L) {
+      cli::cli_abort(c(
+        "x" = "{.arg extra} may not set fields the writer owns: {.val {clash}}",
+        "i" = "Use the matching argument instead (for example {.arg seal_omitted_reason})."
+      ))
+    }
+  }
+
   if (!is.null(issue)) {
     if (!is.numeric(issue) || length(issue) != 1L || is.na(issue) ||
         issue < 1 || issue != round(issue)) {
@@ -305,20 +354,25 @@ hd_strategy_idea_append <- function(name,
   if (!is.null(parent_uuid)) .sl_scalar_string(parent_uuid, "parent_uuid")
 
   rlang::check_installed("jsonlite")
-  extra <- list(
+  payload <- list(
     kind                = "strategy_idea",
     name                = name,
-    priority            = priority,
+    priority            = if (priority_is_na) NULL else priority,
     asset_class         = asset_class,
     source              = source,
     issue               = if (is.null(issue)) NULL else as.integer(issue),
     strategy_id         = strategy_id,
     preregistered       = FALSE,
-    seal_omitted_reason = paste0(
-      "backlog idea; pre-registration happens at admission ",
-      "(hd_admission_preregister)"
-    )
+    seal_omitted_reason = if (is.null(seal_omitted_reason)) {
+      paste0(
+        "backlog idea; pre-registration happens at admission ",
+        "(hd_admission_preregister)"
+      )
+    } else {
+      seal_omitted_reason
+    }
   )
+  if (!is.null(extra)) payload <- c(payload, extra)
 
   row <- tibble::tibble(
     uuid            = hd_rlog_uuid(),
@@ -330,7 +384,7 @@ hd_strategy_idea_append <- function(name,
     null_hypothesis = NA_character_,
     status          = status,
     extra_json      = as.character(
-      jsonlite::toJSON(extra, auto_unbox = TRUE, null = "null", na = "null")
+      jsonlite::toJSON(payload, auto_unbox = TRUE, null = "null", na = "null")
     )
   )
 
