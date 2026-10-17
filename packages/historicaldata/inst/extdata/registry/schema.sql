@@ -14,6 +14,7 @@
 
 CREATE SCHEMA IF NOT EXISTS bt;
 CREATE SCHEMA IF NOT EXISTS art;
+CREATE SCHEMA IF NOT EXISTS research;
 
 -- ─────────────────────────────────────────────────────────────────────
 -- bt.* — backtest library
