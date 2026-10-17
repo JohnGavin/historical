@@ -178,3 +178,10 @@ Chronological record of findings. Wiki pages synthesise these into structured kn
 - **Live consequence:** `plan_avoid_worst.R` triggers on absolute VIX levels — the mechanism under dispute. Not refuted, but tested for the first time (#611 N1)
 - **Rejected:** short-VX strategy — no futures data, source backtest in-sample with self-admitted arbitrary lookback
 - Analysis: `explorations/vix_spx_leadlag/` (reproducible). See [[spx-vix-lead-lag]]
+
+## 2026-10-17
+
+### Parked strategy ideas recorded (#962)
+- **Source:** AlgoAdvantage #057 show notes (Kris Longmore) and TradeQuantiX momentum series Parts 1 and 2, via the gap analysis in #962
+- **Not tested:** seven ideas (SPY/TLT month-end, bond end-of-month, stat arb, long volatility into earnings, cheap OTM puts, pullback momentum, low-volatility sleeve) recorded as low priority with their repo status
+- See [[parked-strategy-ideas]]
