@@ -23,6 +23,7 @@ Cross-cutting patterns live in `~/docs_gh/llm/knowledge/`.
 | Regime-Dependent Trend Following | [regime-trend-following.md](wiki/regime-trend-following.md) | Reference |
 | TAA Selection, Mid-Caps, Lazy Prices | [taa-selection-research.md](wiki/taa-selection-research.md) | Reference |
 | Cakici et al. (2024) Coverage Audit | [cakici-2024-coverage-audit.md](wiki/cakici-2024-coverage-audit.md) | Audit |
+| Parked Strategy Ideas (low priority, not tested) | [parked-strategy-ideas.md](wiki/parked-strategy-ideas.md) | Backlog |
 
 ### Backtest Methodology & Gap Analysis
 
