@@ -54,6 +54,11 @@ Other research-log:
 \code{\link{hd_rlog_seal_export}()},
 \code{\link{hd_rlog_seal_verify}()},
 \code{\link{hd_rlog_tables}()},
-\code{\link{hd_rlog_uuid}()}
+\code{\link{hd_rlog_uuid}()},
+\code{\link{hd_strategy_idea_append}()},
+\code{\link{hd_strategy_idea_priorities}()},
+\code{\link{hd_strategy_ledger}()},
+\code{\link{hd_strategy_ledger_register}()},
+\code{\link{hd_strategy_trial_count}()}
 }
 \concept{research-log}
