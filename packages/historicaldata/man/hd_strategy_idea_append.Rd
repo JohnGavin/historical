@@ -14,7 +14,9 @@ hd_strategy_idea_append(
   strategy_id = NULL,
   status = "proposed",
   parent_uuid = NULL,
-  base_dir = NULL
+  base_dir = NULL,
+  seal_omitted_reason = NULL,
+  extra = NULL
 )
 }
 \arguments{
@@ -26,7 +28,10 @@ terms. Do not invent a mechanism the source does not state.}
 
 \item{source}{Character. REQUIRED. URL or issue reference the idea came from.}
 
-\item{priority}{One of \code{hd_strategy_idea_priorities()$priority}.}
+\item{priority}{One of \code{hd_strategy_idea_priorities()$priority}, or
+\code{NA_character_} when \code{status} is anything other than
+\code{"proposed"} (a finished test has no queue position). A
+\code{"proposed"} idea always needs a priority.}
 
 \item{asset_class}{Character. Asset class the idea trades.}
 
@@ -43,6 +48,14 @@ follows up (a status/priority change).}
 
 \item{base_dir}{Override research-log base directory (see
 \code{hd_rlog_path()}).}
+
+\item{seal_omitted_reason}{Optional character. Why the row is unsealed.
+\code{NULL} (default) records the backlog-idea reason; a row written after
+its outcome was known must say so here instead.}
+
+\item{extra}{Optional named list of additional \code{extra_json} fields (for
+example \code{outcome_source}). Names must be unique, non-empty and must
+not collide with the fields this function writes itself.}
 }
 \value{
 Invisibly, the new row's \code{uuid}.

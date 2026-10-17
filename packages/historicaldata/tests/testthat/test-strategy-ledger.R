@@ -107,6 +107,64 @@ test_that("empty name aborts", {
   ))
 })
 
+test_that("a proposed idea with NA priority aborts", {
+  expect_snapshot(error = TRUE, hd_strategy_idea_append(
+    name = "a", economic_claim = "c", source = "s", priority = NA_character_,
+    asset_class = "equity", base_dir = .sl_tmp_dir()
+  ))
+})
+
+test_that("a missing priority still aborts for a non-proposed status", {
+  expect_snapshot(error = TRUE, hd_strategy_idea_append(
+    name = "a", economic_claim = "c", source = "s",
+    asset_class = "equity", status = "refuted", base_dir = .sl_tmp_dir()
+  ))
+})
+
+test_that("a non-proposed status accepts NA priority and logs no priority", {
+  d <- .sl_tmp_dir()
+  for (st in c("refuted", "supported", "inconclusive-underpowered",
+               "inconclusive-unmeasurable", "testing", "withdrawn")) {
+    expect_no_error(.sl_idea(d, name = paste0("done_", st),
+                             priority = NA_character_, status = st))
+  }
+  led <- hd_strategy_ledger(base_dir = d)
+  expect_equal(nrow(led), 6L)
+  expect_true(all(is.na(led$priority)))
+  rows <- suppressWarnings(hd_rlog_query("hypotheses", base_dir = d))
+  ex <- lapply(rows$extra_json, jsonlite::fromJSON)
+  expect_true(all(vapply(ex, function(e) is.null(e$priority), logical(1))))
+  expect_true(all(vapply(ex, function(e) identical(e$kind, "strategy_idea"),
+                         logical(1))))
+})
+
+test_that("seal_omitted_reason and extra land in extra_json; reserved keys refused", {
+  d <- .sl_tmp_dir()
+  .sl_idea(d, name = "backfilled", priority = NA_character_,
+           status = "refuted",
+           seal_omitted_reason = "backfilled after the outcome was known",
+           extra = list(outcome_source = "issue #1", status_basis = "reason",
+                        caveats = I(c("one", "two"))))
+  rows <- suppressWarnings(hd_rlog_query("hypotheses", base_dir = d))
+  ex <- jsonlite::fromJSON(rows$extra_json)
+  expect_false(ex$preregistered)
+  expect_equal(ex$seal_omitted_reason, "backfilled after the outcome was known")
+  expect_equal(ex$outcome_source, "issue #1")
+  expect_equal(ex$caveats, c("one", "two"))
+  expect_true(is.na(rows$commit_hash))
+
+  expect_snapshot(error = TRUE, hd_strategy_idea_append(
+    name = "a", economic_claim = "c", source = "s", priority = "low",
+    asset_class = "equity", extra = list(priority = "queued"),
+    base_dir = .sl_tmp_dir()
+  ))
+  expect_snapshot(error = TRUE, hd_strategy_idea_append(
+    name = "a", economic_claim = "c", source = "s", priority = "low",
+    asset_class = "equity", extra = list("unnamed"),
+    base_dir = .sl_tmp_dir()
+  ))
+})
+
 test_that("a refused call writes nothing", {
   d <- .sl_tmp_dir()
   expect_error(hd_strategy_idea_append(
@@ -236,6 +294,11 @@ test_that("absent registry file and registry without bt.strategy are reported", 
 test_that("research.strategy_ledger view matches hd_strategy_ledger()", {
   d <- .sl_tmp_dir()
   .sl_idea(d, name = "linked", strategy_id = "LIVE1", issue = 962)
+  # a finished test with NA priority and extra fields must also agree
+  .sl_idea(d, name = "backfilled", priority = NA_character_, status = "refuted",
+           issue = 962, seal_omitted_reason = "backfilled after the outcome was known",
+           extra = list(outcome_source = "issue #1", outcome_quote = "a short quote",
+                        status_basis = "reason", caveats = I("one caveat")))
   for (i in 1:2) .sl_hyp(d, "same", "OLMAR-1", "testing", sprintf("2026-01-0%d", i))
   .sl_hyp(d, "same", "OLMAR-1", "refuted", "2026-01-09")
   reg <- tempfile(fileext = ".duckdb")
@@ -261,6 +324,9 @@ test_that("research.strategy_ledger view matches hd_strategy_ledger()", {
   expect_equal(v$issue, r$issue)
   expect_equal(v$strategy_id, r$strategy_id)
   expect_equal(v$source, r$source)
+  expect_true(is.na(r$priority[r$name == "backfilled"]))
+  expect_true(is.na(v$priority[v$name == "backfilled"]))
+  expect_equal(r$latest_status[r$name == "backfilled"], "refuted")
 })
 
 test_that("schema.sql creates the research schema; registering with no log aborts", {

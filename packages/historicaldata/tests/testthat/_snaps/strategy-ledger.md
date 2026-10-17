@@ -60,6 +60,48 @@
       x `name` must be a single non-empty character string.
       i Got "".
 
+# a proposed idea with NA priority aborts
+
+    Code
+      hd_strategy_idea_append(name = "a", economic_claim = "c", source = "s",
+        priority = NA_character_, asset_class = "equity", base_dir = .sl_tmp_dir())
+    Condition
+      Error in `hd_strategy_idea_append()`:
+      x `priority` is required when `status` is "proposed".
+      i Allowed values: "low", "queued", and "active"
+      i `NA` is accepted only for a non-proposed status.
+
+# a missing priority still aborts for a non-proposed status
+
+    Code
+      hd_strategy_idea_append(name = "a", economic_claim = "c", source = "s",
+        asset_class = "equity", status = "refuted", base_dir = .sl_tmp_dir())
+    Condition
+      Error in `hd_strategy_idea_append()`:
+      x Unknown idea `priority`: "<missing>"
+      i Allowed values: "low", "queued", and "active"
+
+# seal_omitted_reason and extra land in extra_json; reserved keys refused
+
+    Code
+      hd_strategy_idea_append(name = "a", economic_claim = "c", source = "s",
+        priority = "low", asset_class = "equity", extra = list(priority = "queued"),
+        base_dir = .sl_tmp_dir())
+    Condition
+      Error in `hd_strategy_idea_append()`:
+      x `extra` may not set fields the writer owns: "priority"
+      i Use the matching argument instead (for example `seal_omitted_reason`).
+
+---
+
+    Code
+      hd_strategy_idea_append(name = "a", economic_claim = "c", source = "s",
+        priority = "low", asset_class = "equity", extra = list("unnamed"), base_dir = .sl_tmp_dir())
+    Condition
+      Error in `hd_strategy_idea_append()`:
+      x `extra` must be NULL or a non-empty list with unique, non-empty names.
+      i Got 1 element with names .
+
 # an out-of-vocabulary status already in the log aborts the ledger
 
     Code
@@ -99,7 +141,7 @@
     Output
       function (name, economic_claim, source, priority, asset_class, 
           issue = NULL, strategy_id = NULL, status = "proposed", parent_uuid = NULL, 
-          base_dir = NULL) 
+          base_dir = NULL, seal_omitted_reason = NULL, extra = NULL) 
       NULL
 
 ---
