@@ -25,12 +25,19 @@ source(here::here("R/plan_olmar.R"))
 .mk_prices <- function() {
   tibble::tibble(date = as.Date("2010-01-04") + 0:2, SPY = 1:3, QQQ = 1:3)
 }
-.mk_port <- function() {
-  tibble::tibble(date = as.Date("2010-01-04") + 0:2, turnover = c(0.1, 0.2, 0.3))
+# Autocorrelated excess returns (AR(1)) so the HAC Sharpe differs visibly from
+# any naive figure. net_ret/rf_ret are what .olmar_research_log_write() uses.
+.mk_port <- function(seed = 1L, n = 300L) {
+  set.seed(seed)
+  net <- 0.0004 + as.numeric(stats::arima.sim(list(ar = 0.3), n = n, sd = 0.01))
+  tibble::tibble(
+    date = as.Date("2010-01-04") + seq_len(n) - 1L,
+    turnover = rep(0.1, n), net_ret = net, rf_ret = rep(0.00005, n)
+  )
 }
-.run <- function(base_dir, sharpe = 0.78) {
+.run <- function(base_dir, sharpe = 0.78, port = .mk_port()) {
   suppressMessages(.olmar_research_log_write(
-    .mk_metrics(sharpe), .mk_params(), .mk_prices(), .mk_port(),
+    .mk_metrics(sharpe), .mk_params(), .mk_prices(), port,
     base_dir = base_dir
   ))
 }
@@ -70,7 +77,7 @@ test_that("an identical second run writes zero files", {
 test_that("changed metrics append exactly one results row, no new hypothesis", {
   d <- withr::local_tempdir()
   first <- .run(d)
-  second <- .run(d, sharpe = 0.5)
+  second <- .run(d, port = .mk_port(seed = 2L))
   expect_equal(
     vapply(hd_rlog_tables(), .n_rows, integer(1), base_dir = d),
     c(hypotheses = 1L, implementations = 1L, results = 2L,
@@ -96,11 +103,44 @@ test_that("a newer real status stays the ledger's latest after a re-run", {
   # append is newer than it (the ledger takes the newest row per claim).
   Sys.sleep(0.05)
   .run(d)
-  .run(d, sharpe = 0.5)
+  .run(d, port = .mk_port(seed = 2L))
   led <- hd_strategy_ledger(base_dir = d)
   expect_equal(nrow(led), 1L)
   expect_equal(led$latest_status, "inconclusive-unmeasurable")
   expect_equal(.n_rows(d, "hypotheses"), 2L)
+})
+
+test_that("sharpe_hac holds the HAC Sharpe, never the naive value (#975)", {
+  d <- withr::local_tempdir()
+  port <- .mk_port()
+  naive <- 0.78
+  .run(d, sharpe = naive, port = port)
+  res <- hd_rlog_query("results", base_dir = d)
+
+  excess <- port$net_ret - port$rf_ret
+  h <- hd_hac_sharpe(excess, 252)
+  expected <- h$hac_tstat * sqrt(252 / h$T)
+
+  # Guard against a vacuous test: HAC and naive must actually differ here.
+  expect_gt(abs(expected - naive), 0.05)
+  expect_equal(res$sharpe_hac, expected, tolerance = 1e-10)
+  expect_false(isTRUE(all.equal(res$sharpe_hac, naive)))
+
+  # The naive figure is kept under its own, labelled name.
+  extra <- jsonlite::fromJSON(res$extra_json)
+  expect_equal(extra$sharpe_naive_geometric_rf, naive)
+  expect_match(extra$sharpe_naive_geometric_rf_basis, "NOT HAC")
+})
+
+test_that("a portfolio without net_ret/rf_ret aborts instead of aliasing", {
+  d <- withr::local_tempdir()
+  bad <- tibble::tibble(date = as.Date("2010-01-04") + 0:2, turnover = 0.1)
+  expect_snapshot(
+    error = TRUE,
+    .olmar_research_log_write(.mk_metrics(), .mk_params(), .mk_prices(), bad,
+                              base_dir = d)
+  )
+  expect_equal(.n_files(d), 0L)  # validated before anything is appended
 })
 
 test_that("a missing Full Period row aborts", {
