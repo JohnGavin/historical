@@ -2,8 +2,8 @@
 #
 # User decision, 2026-10-18: OLMAR-1 is `inconclusive-unmeasurable` for now.
 # The writer in R/plan_olmar.R logged every build with the deprecated status
-# `tested`, which records no outcome, and the log holds no linked `results`
-# row for it, so no Sharpe, deflated Sharpe or sample size is recorded.
+# `tested`, which records no outcome. (The original claim that no `results` row
+# is linked was FALSE: see scripts/seed_olmar_status_correction.R.)
 #
 # Per .claude/rules/research-log-honesty.md and the append-only log, this
 # script APPENDS one status row. It never edits or deletes an existing row and
