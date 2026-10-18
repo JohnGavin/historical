@@ -364,6 +364,37 @@ plan_olmar <- function() {
   m_test  <- one_period("Testing")
   n_tkr   <- ncol(olmar_prices) - 1L
 
+  # #975: sharpe_hac must hold the HAC-adjusted Sharpe, never the naive
+  # geometric rf-adjusted Sharpe in olmar_metrics$sharpe (research-log-honesty).
+  # HAC figure = hac_tstat * sqrt(ann_factor / T) on the EXCESS series
+  # (net_ret - rf_ret, complete rows). The naive figure is kept, labelled,
+  # in extra_json.
+  missing_cols <- setdiff(c("net_ret", "rf_ret"), names(olmar_portfolio))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "olmar_research_log: {.arg olmar_portfolio} lacks column{?s} {.field {missing_cols}}.",
+      "i" = "Both are needed to derive the HAC Sharpe on the excess series."
+    ), call = NULL)
+  }
+  excess <- olmar_portfolio$net_ret - olmar_portfolio$rf_ret
+  excess <- excess[!is.na(excess)]
+  if (length(excess) < 20L) {
+    cli::cli_abort(c(
+      "x" = "olmar_research_log: only {length(excess)} complete excess-return observation{?s}; cannot derive a HAC Sharpe.",
+      "i" = "At least 20 are required."
+    ), call = NULL)
+  }
+  hac <- hd_hac_sharpe(excess, ann_factor = 252)
+  sharpe_hac_val <- as.double(hac$hac_tstat * sqrt(252 / hac$T))
+  results_extra <- as.character(jsonlite::toJSON(list(
+    sharpe_naive_geometric_rf       = as.double(m_full$sharpe),
+    sharpe_naive_geometric_rf_basis = paste0(
+      "(CAGR - mean rf) / vol, olmar_metrics Full Period; NOT HAC-adjusted"),
+    sharpe_hac_basis                = paste0(
+      "hac_tstat * sqrt(252 / T) on net_ret - rf_ret, ",
+      "Newey-West lag ", hac$lag_nw, ", T = ", hac$T)
+  ), auto_unbox = TRUE, digits = NA))
+
   claim <- paste0(
     "Equity prices mean-revert toward a short moving average ",
     "over daily horizons. The SMA/price ratio provides a ",
@@ -454,7 +485,7 @@ plan_olmar <- function() {
     strategy_id     = "olmar",
     partition       = "full",
     cagr            = as.double(m_full$cagr / 100),
-    sharpe_hac      = as.double(m_full$sharpe),
+    sharpe_hac      = sharpe_hac_val,
     max_dd          = as.double(m_full$max_dd / 100),
     turnover_annual = as.double(m_full$avg_turnover_daily * 252),
     n_obs           = as.integer(m_full$days)
@@ -480,7 +511,7 @@ plan_olmar <- function() {
       tibble::tibble(uuid = res_id, parent_uuid = impl_id),
       new_res,
       tibble::tibble(results_db_run_date = Sys.Date(),
-                     extra_json = NA_character_)
+                     extra_json = results_extra)
     ),
     base_dir = base_dir
   )
