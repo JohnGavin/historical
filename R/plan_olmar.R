@@ -186,159 +186,15 @@ plan_olmar <- function() {
     }),
 
     # ── Research-log lineage target (THE HEADLINE: #200 + #270) ─
+    # Idempotent (#968): see .olmar_research_log_write(). A failure aborts the
+    # target; nothing is swallowed.
     targets::tar_target(olmar_research_log, {
-      # Guard: report clearly on DB write failure, do not silently swallow
-      tryCatch({
-        base_dir <- hd_rlog_path()
-
-        # Pull full-period metrics for logging
-        m_full <- olmar_metrics |> dplyr::filter(period == "Full Period")
-        m_train <- olmar_metrics |> dplyr::filter(period == "Training")
-        m_test  <- olmar_metrics |> dplyr::filter(period == "Testing")
-        n_tkr   <- ncol(olmar_prices) - 1L
-
-        # Pre-generate ids to enable parent-child lineage chaining
-        hyp_id  <- hd_rlog_uuid()
-        impl_id <- hd_rlog_uuid()
-        res_id  <- hd_rlog_uuid()
-
-        # 1. Hypothesis
-        hd_rlog_append("hypotheses",
-          tibble::tibble(
-            uuid            = hyp_id,
-            economic_claim  = paste0(
-              "Equity prices mean-revert toward a short moving average ",
-              "over daily horizons. The SMA/price ratio provides a ",
-              "sufficient statistic for next-day expected return."
-            ),
-            dependent_var   = "next-day portfolio return",
-            predictor       = paste0(
-              "MA/price ratio (OLMAR-1): SMA(", olmar_params$window, "d) / p_t"
-            ),
-            sample_spec     = paste0(
-              n_tkr, " large-cap + ETF tickers, ",
-              olmar_params$start_date, " to ", max(olmar_portfolio$date)
-            ),
-            null_hypothesis = "No MA-reversion premium net of transaction costs",
-            status          = "tested",
-            extra_json      = NA_character_
-          ),
-          base_dir = base_dir
-        )
-
-        # 2. Implementation
-        hd_rlog_append("implementations",
-          tibble::tibble(
-            uuid          = impl_id,
-            parent_uuid   = hyp_id,
-            code_ref      = "R/plan_olmar.R + packages/historicaldata/R/olmar.R",
-            notebook_path = NA_character_,
-            params_json   = jsonlite::toJSON(
-              list(
-                window   = olmar_params$window,
-                epsilon  = olmar_params$epsilon,
-                leverage = olmar_params$leverage,
-                cost_bps = olmar_params$cost_bps
-              ),
-              auto_unbox = TRUE
-            ),
-            extra_json    = NA_character_
-          ),
-          base_dir = base_dir
-        )
-
-        # 3. Results (full period)
-        n_obs_full <- as.integer(m_full$days)
-        hd_rlog_append("results",
-          tibble::tibble(
-            uuid                = res_id,
-            parent_uuid         = impl_id,
-            strategy_id         = "olmar",
-            partition           = "full",
-            cagr                = as.double(m_full$cagr / 100),
-            sharpe_hac          = as.double(m_full$sharpe),
-            max_dd              = as.double(m_full$max_dd / 100),
-            turnover_annual     = as.double(m_full$avg_turnover_daily * 252),
-            n_obs               = n_obs_full,
-            results_db_run_date = Sys.Date(),
-            extra_json          = NA_character_
-          ),
-          base_dir = base_dir
-        )
-
-        # 4. Critiques: document the two highest-catch-rate Kinlay defect classes
-        critique_ids <- c(
-          hd_rlog_uuid(),
-          hd_rlog_uuid()
-        )
-        hd_rlog_append("critiques",
-          tibble::tibble(
-            uuid         = critique_ids,
-            parent_uuid  = res_id,
-            defect_class = c("look_ahead", "omitted_costs"),
-            severity     = c("critical", "major"),
-            finding      = c(
-              paste0(
-                "weights at t formed from prices[1:t, ] only; ",
-                "r_{t+1} (prices[t+1]) never used in b_next formation. ",
-                "Look-ahead guard test: perturbing only the last day's prices ",
-                "leaves all earlier weights unchanged."
-              ),
-              paste0(
-                olmar_params$cost_bps,
-                " bps one-way turnover cost applied per day; ",
-                "net_ret = gross_ret - (cost_bps/1e4) * turnover. ",
-                "Full-period avg daily turnover: ",
-                round(mean(olmar_portfolio$turnover, na.rm = TRUE), 4)
-              )
-            ),
-            cell_ref     = c(
-              "packages/historicaldata/R/olmar.R:olmar_backtest()",
-              "packages/historicaldata/R/olmar.R:olmar_backtest()"
-            ),
-            resolved     = c(TRUE, TRUE)
-          ),
-          base_dir = base_dir
-        )
-
-        # 5. Robustness: one row per partition
-        rob_ids <- c(
-          hd_rlog_uuid(),
-          hd_rlog_uuid()
-        )
-        sharpe_train <- as.double(m_train$sharpe)
-        sharpe_test  <- as.double(m_test$sharpe)
-        hd_rlog_append("robustness",
-          tibble::tibble(
-            uuid         = rob_ids,
-            parent_uuid  = res_id,
-            panel_name   = c("Training", "Testing"),
-            variation    = paste0("window=", olmar_params$window,
-                                  ", epsilon=", olmar_params$epsilon,
-                                  ", leverage=", olmar_params$leverage),
-            metric_name  = "sharpe",
-            metric_value = c(sharpe_train, sharpe_test),
-            passed       = c(
-              !is.na(sharpe_train) && abs(sharpe_train) < 5,
-              !is.na(sharpe_test)  && abs(sharpe_test)  < 5
-            ),
-            extra_json   = NA_character_
-          ),
-          base_dir = base_dir
-        )
-
-        tibble::tibble(
-          hyp_id  = hyp_id,
-          impl_id = impl_id,
-          res_id  = res_id
-        )
-
-      }, error = function(e) {
-        cli::cli_abort(c(
-          "x" = "olmar_research_log: DB write failed.",
-          "i" = conditionMessage(e)
-        ))
-      })
+      .olmar_research_log_write(
+        olmar_metrics  = olmar_metrics,
+        olmar_params    = olmar_params,
+        olmar_prices    = olmar_prices,
+        olmar_portfolio = olmar_portfolio
+      )
     }),
 
     # ── Signal null (#718) ───────────────────────────────────────
@@ -430,6 +286,257 @@ plan_olmar <- function() {
 
 # ── Internal helper ────────────────────────────────────────────────────────────
 # Prefixed .olmar_* (private; not exported from the package).
+
+# Read one research-log table. An absent table (no parquet files yet) is a
+# legitimate empty log; a table that EXISTS but cannot be read is an error,
+# never an empty result (fail-loud-not-null, #968).
+.olmar_rlog_read <- function(table, base_dir) {
+  files <- list.files(file.path(base_dir, table), pattern = "\\.parquet$")
+  if (length(files) == 0L) return(hd_rlog_schema(table))
+  tryCatch(
+    hd_rlog_query(table, base_dir = base_dir),
+    error = function(e) {
+      msg <- conditionMessage(e)
+      cli::cli_abort(c(
+        "x" = "olmar_research_log: cannot read research-log table {.val {table}}.",
+        "i" = "Underlying error: {msg}"
+      ), call = NULL)
+    }
+  )
+}
+
+# TRUE where two numeric vectors agree (both NA counts as agreeing). The
+# tolerance only absorbs parquet round-trip noise; it is far below any
+# reported precision.
+.olmar_same_num <- function(a, b) {
+  both_na <- is.na(a) & is.na(b)
+  both_na | (!is.na(a) & !is.na(b) & abs(a - b) <= 1e-12)
+}
+
+#' Write OLMAR-1's research-log lineage, idempotently (#968)
+#'
+#' The previous inline target body appended a full set of rows on every
+#' build, including a hypotheses row with the deprecated status "tested".
+#' Because the strategy ledger takes the NEWEST row per claim, each build
+#' reverted any real status recorded since. This function appends only what
+#' is new:
+#' \itemize{
+#'   \item hypotheses: only when no row has the identical economic_claim and
+#'     predictor. Otherwise the oldest such row (the ledger's `ledger_id`) is
+#'     the parent of everything below and no hypotheses row is written.
+#'   \item implementations: only when no row under a hypothesis of that group
+#'     has identical params_json and code_ref.
+#'   \item results: only when no results row under a matching implementation
+#'     has identical (strategy_id, partition, cagr, sharpe_hac, max_dd,
+#'     turnover_annual, n_obs). Critiques and robustness are appended only
+#'     together with a NEW results row, parented on it.
+#' }
+#' Re-running on unchanged output therefore writes nothing. If the numbers
+#' change, one results row (plus its critiques and robustness) is appended,
+#' which keeps the history of changes.
+#'
+#' Lineage of the reused rows is searched across the whole hypothesis group,
+#' not only the oldest row, because earlier builds parented implementations
+#' on their own (now duplicate) hypotheses rows.
+#'
+#' @param olmar_metrics,olmar_params,olmar_prices,olmar_portfolio The
+#'   same-named OLMAR targets.
+#' @param base_dir Research-log directory; `NULL` = the tracked log.
+#' @return Tibble with `hyp_id`, `impl_id`, `res_id` (reused or new).
+#' @noRd
+.olmar_research_log_write <- function(olmar_metrics, olmar_params,
+                                      olmar_prices, olmar_portfolio,
+                                      base_dir = NULL) {
+  base_dir <- hd_rlog_path(base_dir)
+
+  one_period <- function(label) {
+    m <- olmar_metrics[olmar_metrics$period == label, , drop = FALSE]
+    if (nrow(m) != 1L) {
+      cli::cli_abort(c(
+        "x" = "olmar_research_log: expected exactly one {.val {label}} row in {.arg olmar_metrics}, found {nrow(m)}.",
+        "i" = "Periods present: {.val {unique(olmar_metrics$period)}}"
+      ), call = NULL)
+    }
+    m
+  }
+  m_full  <- one_period("Full Period")
+  m_train <- one_period("Training")
+  m_test  <- one_period("Testing")
+  n_tkr   <- ncol(olmar_prices) - 1L
+
+  claim <- paste0(
+    "Equity prices mean-revert toward a short moving average ",
+    "over daily horizons. The SMA/price ratio provides a ",
+    "sufficient statistic for next-day expected return."
+  )
+  predictor <- paste0(
+    "MA/price ratio (OLMAR-1): SMA(", olmar_params$window, "d) / p_t"
+  )
+  code_ref <- "R/plan_olmar.R + packages/historicaldata/R/olmar.R"
+  params_json <- as.character(jsonlite::toJSON(
+    list(
+      window   = olmar_params$window,
+      epsilon  = olmar_params$epsilon,
+      leverage = olmar_params$leverage,
+      cost_bps = olmar_params$cost_bps
+    ),
+    auto_unbox = TRUE
+  ))
+
+  oldest_first <- function(d) d[order(d$timestamp, d$uuid), , drop = FALSE]
+
+  # 1. Hypothesis: reuse the claim's group if it exists.
+  hyps <- .olmar_rlog_read("hypotheses", base_dir)
+  in_group <- !is.na(hyps$economic_claim) & hyps$economic_claim == claim &
+    !is.na(hyps$predictor) & hyps$predictor == predictor
+  group <- oldest_first(hyps[in_group, , drop = FALSE])
+  if (nrow(group) > 0L) {
+    hyp_id <- group$uuid[1L]
+  } else {
+    hyp_id <- hd_rlog_uuid()
+    hd_rlog_append("hypotheses",
+      tibble::tibble(
+        uuid            = hyp_id,
+        economic_claim  = claim,
+        dependent_var   = "next-day portfolio return",
+        predictor       = predictor,
+        sample_spec     = paste0(
+          n_tkr, " large-cap + ETF tickers, ",
+          olmar_params$start_date, " to ", max(olmar_portfolio$date)
+        ),
+        null_hypothesis = "No MA-reversion premium net of transaction costs",
+        # "testing": the claim is taken from a paper and tested in this same
+        # run, so no verdict belongs here -- the outcome is a later,
+        # explicit status row (research-log-honesty). Never "tested"
+        # (deprecated, collapses supported/refuted/inconclusive).
+        status          = "testing",
+        # Unsealed on purpose: sealing after the result is known would
+        # fabricate a pre-registration (research-log-honesty).
+        extra_json      = as.character(jsonlite::toJSON(list(
+          preregistered       = FALSE,
+          seal_omitted_reason = paste0(
+            "claim taken from Li & Hoi (2012) and tested in the same run; ",
+            "sealing after the result is known commits to nothing"
+          )
+        ), auto_unbox = TRUE))
+      ),
+      base_dir = base_dir
+    )
+  }
+  group_ids <- unique(c(hyp_id, group$uuid))
+
+  # 2. Implementation: reuse one with identical params and code_ref.
+  impls <- .olmar_rlog_read("implementations", base_dir)
+  impl_match <- oldest_first(impls[
+    !is.na(impls$parent_uuid) & impls$parent_uuid %in% group_ids &
+      !is.na(impls$params_json) & impls$params_json == params_json &
+      !is.na(impls$code_ref) & impls$code_ref == code_ref, , drop = FALSE])
+  if (nrow(impl_match) > 0L) {
+    impl_id <- impl_match$uuid[1L]
+  } else {
+    impl_id <- hd_rlog_uuid()
+    hd_rlog_append("implementations",
+      tibble::tibble(
+        uuid          = impl_id,
+        parent_uuid   = hyp_id,
+        code_ref      = code_ref,
+        notebook_path = NA_character_,
+        params_json   = params_json,
+        extra_json    = NA_character_
+      ),
+      base_dir = base_dir
+    )
+  }
+  impl_ids <- unique(c(impl_id, impl_match$uuid))
+
+  # 3. Results: append only if no identical row exists under the impl(s).
+  new_res <- tibble::tibble(
+    strategy_id     = "olmar",
+    partition       = "full",
+    cagr            = as.double(m_full$cagr / 100),
+    sharpe_hac      = as.double(m_full$sharpe),
+    max_dd          = as.double(m_full$max_dd / 100),
+    turnover_annual = as.double(m_full$avg_turnover_daily * 252),
+    n_obs           = as.integer(m_full$days)
+  )
+  res <- .olmar_rlog_read("results", base_dir)
+  res <- res[!is.na(res$parent_uuid) & res$parent_uuid %in% impl_ids, ,
+             drop = FALSE]
+  same <- !is.na(res$strategy_id) & res$strategy_id == new_res$strategy_id &
+    !is.na(res$partition) & res$partition == new_res$partition &
+    .olmar_same_num(res$cagr, new_res$cagr) &
+    .olmar_same_num(res$sharpe_hac, new_res$sharpe_hac) &
+    .olmar_same_num(res$max_dd, new_res$max_dd) &
+    .olmar_same_num(res$turnover_annual, new_res$turnover_annual) &
+    .olmar_same_num(res$n_obs, new_res$n_obs)
+  if (any(same)) {
+    res_id <- oldest_first(res[same, , drop = FALSE])$uuid[1L]
+    return(tibble::tibble(hyp_id = hyp_id, impl_id = impl_id, res_id = res_id))
+  }
+
+  res_id <- hd_rlog_uuid()
+  hd_rlog_append("results",
+    dplyr::bind_cols(
+      tibble::tibble(uuid = res_id, parent_uuid = impl_id),
+      new_res,
+      tibble::tibble(results_db_run_date = Sys.Date(),
+                     extra_json = NA_character_)
+    ),
+    base_dir = base_dir
+  )
+
+  # 4. Critiques: the two highest-catch-rate Kinlay defect classes
+  hd_rlog_append("critiques",
+    tibble::tibble(
+      uuid         = c(hd_rlog_uuid(), hd_rlog_uuid()),
+      parent_uuid  = res_id,
+      defect_class = c("look_ahead", "omitted_costs"),
+      severity     = c("critical", "major"),
+      finding      = c(
+        paste0(
+          "weights at t formed from prices[1:t, ] only; ",
+          "r_{t+1} (prices[t+1]) never used in b_next formation. ",
+          "Look-ahead guard test: perturbing only the last day's prices ",
+          "leaves all earlier weights unchanged."
+        ),
+        paste0(
+          olmar_params$cost_bps,
+          " bps one-way turnover cost applied per day; ",
+          "net_ret = gross_ret - (cost_bps/1e4) * turnover. ",
+          "Full-period avg daily turnover: ",
+          round(mean(olmar_portfolio$turnover, na.rm = TRUE), 4)
+        )
+      ),
+      cell_ref     = rep("packages/historicaldata/R/olmar.R:olmar_backtest()", 2L),
+      resolved     = c(TRUE, TRUE)
+    ),
+    base_dir = base_dir
+  )
+
+  # 5. Robustness: one row per partition
+  sharpe_train <- as.double(m_train$sharpe)
+  sharpe_test  <- as.double(m_test$sharpe)
+  hd_rlog_append("robustness",
+    tibble::tibble(
+      uuid         = c(hd_rlog_uuid(), hd_rlog_uuid()),
+      parent_uuid  = res_id,
+      panel_name   = c("Training", "Testing"),
+      variation    = paste0("window=", olmar_params$window,
+                            ", epsilon=", olmar_params$epsilon,
+                            ", leverage=", olmar_params$leverage),
+      metric_name  = "sharpe",
+      metric_value = c(sharpe_train, sharpe_test),
+      passed       = c(
+        !is.na(sharpe_train) && abs(sharpe_train) < 5,
+        !is.na(sharpe_test)  && abs(sharpe_test)  < 5
+      ),
+      extra_json   = NA_character_
+    ),
+    base_dir = base_dir
+  )
+
+  tibble::tibble(hyp_id = hyp_id, impl_id = impl_id, res_id = res_id)
+}
 
 #' Join the shared daily risk-free series onto OLMAR's daily portfolio (#677)
 #'
