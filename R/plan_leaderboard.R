@@ -945,6 +945,7 @@ plan_leaderboard <- function() {
           left_join(
             strat_deflated_sharpe |>
               select(strategy, deflated_sharpe, dsr_pvalue,
+                     dsr_convention,  # #959/#788: labels dsr_pvalue's convention
                      k_eff_leaderboard, k_raw_leaderboard,
                      k_eff_family, k_raw_family,
                      # #919: the ARITHMETIC per-period EXCESS Sharpe (registry
@@ -1892,6 +1893,10 @@ plan_leaderboard <- function() {
           T_obs              = length(r),
           deflated_sharpe    = d$dsr,
           dsr_pvalue         = d$dsr_pvalue,
+          # #959/#788: which trial-Sharpe-variance convention produced
+          # dsr_pvalue, read from hd_deflated_sharpe() itself (never typed
+          # here) so a table header can label it.
+          dsr_convention     = d$hurdle_convention,
           dsr_haircut_pct    = d$haircut_pct,
           sharpe_haircut     = hc$haircut_sharpe,
           sharpe_haircut_pct = hc$haircut_pct,

@@ -297,3 +297,15 @@ details summary { cursor: pointer; color: #6c9bd2; }
   padding-left: 1.5em;
   padding-right: 1.5em;
 }
+
+/* Hover popovers built by R/column_popover.R (#788, #959). No colours here:
+   the popover itself takes Bootstrap theme variables, so it follows
+   data-bs-theme in light and dark. */
+.hd-popover {
+  cursor: help;
+  text-decoration: underline dotted;
+  text-underline-offset: 0.2em;
+}
+.popover.hd-popover-wide {
+  --bs-popover-max-width: min(32rem, 92vw);
+}

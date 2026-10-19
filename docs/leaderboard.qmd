@@ -62,6 +62,13 @@ glossary_path <- if (file.exists("../R/glossary.R")) "../R/glossary.R" else
   file.path(here::here(), "R/glossary.R")
 source(glossary_path)
 
+# Column-header hover popovers (#788, first use: DSR conventions #959). Needs
+# .repo_data_file() from R/glossary.R above; content comes from
+# data/column_glossary.yaml.
+col_popover_path <- if (file.exists("../R/column_popover.R")) "../R/column_popover.R" else
+  file.path(here::here(), "R/column_popover.R")
+source(col_popover_path)
+
 partitions_path <- if (file.exists("../R/plan_partitions.R")) "../R/plan_partitions.R" else
   file.path(here::here(), "R/plan_partitions.R")
 source(partitions_path)
@@ -247,7 +254,7 @@ if (!is.null(lb)) {
   }
 
   rigour_badge <- function(strategy, deflated, dsr_p, keff, kraw, sr, haircut,
-                            mt_haircut = NA_real_) {
+                            mt_haircut = NA_real_, dsr_conv = NA_character_) {
     # Rank: 1 = full coverage (best), 2 = partial (defect-in-progress),
     # 3 = documented exclusion (legitimate, not a defect), 4 = zero
     # coverage with no exemption (defect). Mirrors the .credible_rank /
@@ -273,10 +280,12 @@ if (!is.null(lb)) {
     if (present == 3L) {
       haircut_txt <- if (is.na(haircut)) "" else sprintf(" (%.1f%% haircut)", haircut)
       mt_txt <- if (is.na(mt_haircut)) "" else sprintf(" Harvey-Liu BHY haircut: %.1f%%.", mt_haircut)
+      # #959/#788: name the convention that produced this DSR p-value.
+      conv_txt <- if (is.na(dsr_conv)) "convention not recorded" else paste0(dsr_conv, " convention")
       return(list(
         html = sprintf(
-          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f. K_eff = %.1f of %s raw.%s'>&#10003; 3/3</span>",
-          deflated, sr, haircut_txt, dsr_p, keff, kraw, mt_txt
+          "<span class='rig-badge computed' title='Deflated Sharpe: %.2f (naive %.2f%s). DSR p-value: %.3f (%s; see the DSR p-value header in Biases and Caveats). K_eff = %.1f of %s raw.%s'>&#10003; 3/3</span>",
+          deflated, sr, haircut_txt, dsr_p, conv_txt, keff, kraw, mt_txt
         ),
         rank = 1L
       ))
@@ -385,7 +394,13 @@ if (!is.null(lb)) {
                 full$detection_min_n_years_mt, SIMPLIFY = FALSE)
   rig <- mapply(rigour_badge, full$strategy, full$deflated_sharpe, full$dsr_pvalue,
                 full$k_eff_leaderboard, full$k_raw_leaderboard, full$sharpe,
-                full$dsr_haircut_pct, full$sharpe_haircut_pct, SIMPLIFY = FALSE)
+                full$dsr_haircut_pct, full$sharpe_haircut_pct,
+                # #959/#788: the convention behind the DSR p-value in the
+                # tooltip. A store built before dsr_convention existed has no
+                # column; that is passed as NA and rendered as "not recorded",
+                # never guessed.
+                dsr_conv = if ("dsr_convention" %in% names(full)) full$dsr_convention else rep(NA_character_, nrow(full)),
+                SIMPLIFY = FALSE)
   gt <- mapply(gross_target_badge, full$G_capped, full$backstop_binds, full$backstop_used,
                full$detection_underpowered, SIMPLIFY = FALSE)
   fp_html <- if ("fp_breach_prob_20pct" %in% names(full)) {
@@ -2212,13 +2227,23 @@ if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHA
     select(Strategy = strategy, Sharpe, Verdict, `Years Needed`, `Years Needed (MT-corrected)`,
            K_eff, `Deflated Sharpe`, `DSR p-value`, `Rigour Coverage`)
 
+  # #959/#788: the DSR p-value header names its convention (multiplier vs
+  # statistic-units) and hovers to explain the difference. The convention is
+  # read from the data (hd_deflated_sharpe()$hurdle_convention carried through
+  # strat_deflated_sharpe -> leaderboard); a store without it, or a column
+  # mixing conventions, ABORTS here rather than guessing.
+  dsr_conv_vals <- if ("dsr_convention" %in% names(full)) full$dsr_convention else NA_character_
+  dsr_header_html <- hd_dsr_header_popover(dsr_conv_vals)
+
   hd_dt(det_rig_tbl, paste0(
     "Per-strategy statistical detection power and rigour, this build. Verdict/Years Needed follow ",
     "`hd_detection_power()` (`detection-power-required` rule); K_eff/Deflated Sharpe/DSR p-value are ",
-    "the deflated-Sharpe correction for testing multiple strategies. See ",
-    "[#726](https://github.com/JohnGavin/historical/issues/726) (detection power) and ",
-    "[#728](https://github.com/JohnGavin/historical/issues/728) (rigour coverage)."
-  ))
+    "the deflated-Sharpe correction for testing multiple strategies. The DSR p-value header names ",
+    "the convention used for the trial-Sharpe variance; hover it for both definitions. See ",
+    "[#726](https://github.com/JohnGavin/historical/issues/726) (detection power), ",
+    "[#728](https://github.com/JohnGavin/historical/issues/728) (rigour coverage) and ",
+    "[#959](https://github.com/JohnGavin/historical/issues/959) (DSR conventions)."
+  ), container = hd_dt_header_container(names(det_rig_tbl), list(`DSR p-value` = dsr_header_html)))
 } else {
   cat("*`leaderboard` target not available -- per-strategy detection/rigour table cannot be computed.*\n")
 }

@@ -180,3 +180,31 @@ document.addEventListener('click', function (e) {
   var target = document.querySelector(targetSel);
   if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
 });
+
+// Hover/focus popovers on elements built by R/column_popover.R (#788, #959).
+// ONE delegated listener instead of one Bootstrap Popover per element: the
+// popover is instantiated on first hover/focus and cached by Bootstrap's
+// getOrCreateInstance, so a page with hundreds of labelled headers pays only
+// for the ones actually touched. Content is built server-side and carries
+// data-bs-html="true"; links inside it survive Bootstrap's sanitizer (a[href]
+// https). Colours come from Bootstrap CSS variables, so the popover follows
+// data-bs-theme (light and dark) with nothing hardcoded here.
+(function () {
+  var seen = new WeakSet();
+  function onFirstTouch(e) {
+    if (typeof bootstrap === 'undefined' || !e.target || !e.target.closest) return;
+    var el = e.target.closest('.hd-popover[data-bs-toggle="popover"]');
+    if (!el || seen.has(el)) return;
+    seen.add(el);
+    var pop = bootstrap.Popover.getOrCreateInstance(el, {
+      container: 'body',
+      customClass: 'hd-popover-wide',
+      trigger: 'hover focus'
+    });
+    // This first event arrives before Bootstrap has attached its own
+    // listeners, so show it explicitly this once.
+    pop.show();
+  }
+  document.addEventListener('mouseover', onFirstTouch);
+  document.addEventListener('focusin', onFirstTouch);
+})();

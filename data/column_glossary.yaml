@@ -1,0 +1,64 @@
+# Column glossary for hover popovers (#788, first entries: #959)
+#
+# One definition per column, reused everywhere that column is shown. Read via
+# R/column_popover.R::load_column_glossary(). Text fields are PLAIN TEXT: the
+# builder HTML-escapes them, so "<", ">", "&" and quotes may be used freely.
+# Links are structured ({label, url}) and rendered as <a> by the builder.
+#
+# Kept separate from data/glossary.yaml on purpose: that file holds entity
+# vocabularies (canonical/description/values); this one holds reader-facing
+# column help (title/short/links). #788 asks to reconcile the two if the
+# shapes fit; they do not yet, so this file is deliberately the smallest one
+# that fits, containing only the DSR entry.
+#
+# Every number quoted below is from
+# explorations/dsr_conventions/results/analysis_output.txt (section 2 grid,
+# ann_factor 252) or from the roxygen section "Two conventions for V" of
+# hd_deflated_sharpe() (packages/historicaldata/R/falsification.R).
+
+columns:
+  dsr_pvalue:
+    title: "DSR p-value"
+    short: >-
+      One-sided p-value of the deflated Sharpe ratio: the chance of a Sharpe
+      this high from the best of K tried strategies when the true Sharpe is
+      zero. The same name covers two numbers, because the variance V of the
+      trial Sharpe ratios can be entered in two different units. The label
+      shows which convention produced the number.
+    difference: >-
+      The two conventions differ only in how V enters the hurdle that the
+      observed Sharpe must clear. A multiplier V is divided by sqrt(T); a
+      statistic-units V is not.
+    ratio: >-
+      With the same annual V (multiplier V set to V_annual, statistic-units
+      V set to V_annual / ann_factor), multiplier hurdle / standard hurdle =
+      sqrt(ann_factor / T). For daily data (ann_factor 252) the evidence run
+      gives 1.000 at T = 252, 0.502 at T = 1000, 0.249 at T = 4063 and 1.845
+      at T = 74, independent of K and V.
+    conventions:
+      multiplier:
+        label: "multiplier"
+        role: "internal calculations (the default, used by every published number so far)"
+        definition: >-
+          V is a dimensionless multiplier on the null spread of the
+          per-period Sharpe. V = 1 gives the null standard deviation
+          1/sqrt(T) exactly.
+        formula: "hurdle = E[max Z] * sqrt(V) / sqrt(T)"
+      statistic-units:
+        label: "statistic-units"
+        role: "external reporting (the Bailey et al. form as usually quoted)"
+        definition: >-
+          V is the variance of the trial Sharpe ratios in the same units as
+          the statistic tested, here the per-period Sharpe.
+        formula: "hurdle = E[max Z] * sqrt(V)"
+    links:
+      - label: "hd_deflated_sharpe() docs (api-historicaldata.md)"
+        url: "https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md"
+      - label: "roxygen source: Two conventions for V"
+        url: "https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R"
+      - label: "evidence: explorations/dsr_conventions/"
+        url: "https://github.com/JohnGavin/historical/tree/main/explorations/dsr_conventions"
+      - label: "PR 982"
+        url: "https://github.com/JohnGavin/historical/pull/982"
+      - label: "issue 959"
+        url: "https://github.com/JohnGavin/historical/issues/959"
