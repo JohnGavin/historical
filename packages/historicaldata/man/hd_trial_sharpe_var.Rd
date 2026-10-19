@@ -29,10 +29,13 @@ Default \code{HD_MIN_TRIAL_TRADES} (30) -- see that constant's roxygen
 \value{
 Named list:
 \describe{
-\item{trial_sharpe_var}{\code{var(sharpe[included])} -- pass this
-directly as \code{\link{hd_deflated_sharpe}}'s
-\code{trial_sharpe_var} argument. \code{NA_real_} when fewer than
-2 trials survive the screen (see Details).}
+\item{trial_sharpe_var}{\code{var(sharpe[included])}, in the units of
+\code{sharpe} (annualised if \code{sharpe} is). It is NOT passed
+as-is to \code{\link{hd_deflated_sharpe}}: for annualised
+\code{sharpe}, divide by \code{ann_factor} and pass the result as
+\code{trial_sharpe_var_stat}; see that function's "Two conventions
+for V" section. \code{NA_real_} when fewer than 2 trials survive
+the screen (see Details).}
 \item{min_trades}{Echoed input floor.}
 \item{n_total}{Number of trials passed in (\code{length(sharpe)}).}
 \item{n_included}{Number of trials that survived the screen.}
@@ -49,8 +52,7 @@ trial table for further reporting.}
 }
 \description{
 Bailey, Borwein, Lopez de Prado & Zhu (2014)'s variance-aware hurdle
-(implemented by \code{\link{hd_deflated_sharpe}}'s \code{trial_sharpe_var}
-argument) is calibrated from the DISPERSION of a trial population's
+(implemented by \code{\link{hd_deflated_sharpe}}) is calibrated from the DISPERSION of a trial population's
 Sharpe ratios. A trial that ran on too few trades or return observations
 cannot have produced a reliable Sharpe estimate -- its noise inflates
 that dispersion and therefore overstates (or understates, depending on

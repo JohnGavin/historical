@@ -117,3 +117,132 @@ test_that("short series (T < 10) returns NA list including trial_sharpe_var echo
 test_that("function signature is stable (catches API drift)", {
   expect_snapshot(args(hd_deflated_sharpe))
 })
+
+# ── #959: two named conventions for V, defaults unchanged ──────────────────
+
+# Independent reference: the DSR given an explicit per-period hurdle.
+ref_dsr_from_hurdle <- function(r, hurdle, ann_factor) {
+  T_obs <- length(r)
+  mu <- mean(r); sigma <- stats::sd(r)
+  sr <- mu / sigma
+  m3 <- sum((r - mu)^3) / T_obs / sigma^3
+  m4 <- sum((r - mu)^4) / T_obs / sigma^4
+  var_sr <- (1 - m3 * sr + (m4 - 1) / 4 * sr^2) / T_obs
+  (sr - hurdle) / sqrt(var_sr) * sqrt(ann_factor / T_obs)
+}
+
+test_that("default-call outputs are byte-identical to origin/main (#959 regression)", {
+  # Recorded by running the unmodified origin/main hd_deflated_sharpe() on
+  # this exact input (dc587cd), printed with %.17g so they round-trip exactly.
+  # Compared as 17-significant-digit strings: R's parser does not round-trip
+  # 17-digit literals, but sprintf("%.17g") does, so a string match is exact.
+  fmt17 <- function(x) sprintf("%.17g", x)
+  set.seed(959)
+  r <- stats::rnorm(500, mean = 0.0004, sd = 0.01)
+  cases <- list(
+    list(K = 1L,  ann = 252L, V = 1,   dsr = "0.71897876228969726",
+         p = "0.15559060655486756", naive = "0.71974263680213801",
+         haircut = "0.1061316189123751"),
+    list(K = 5L,  ann = 252L, V = 1,   dsr = "-0.10576786410487299",
+         p = "0.55921671331936518", naive = "0.71974263680213801",
+         haircut = "114.69523392067006"),
+    list(K = 50L, ann = 252L, V = 1,   dsr = "-0.87601053480007662",
+         p = "0.89138737809064728", naive = "0.71974263680213801",
+         haircut = "221.71163552186474"),
+    list(K = 5L,  ann = 252L, V = 9,   dsr = "-1.7552611168940133",
+         p = "0.99329036323451569", naive = "0.71974263680213801",
+         haircut = "343.87343852418542"),
+    list(K = 20L, ann = 12L,  V = 2.5, dsr = "-0.30005658741776464",
+         p = "0.97361858354097985", naive = "0.15706071971585267",
+         haircut = "291.04495889272238")
+  )
+  for (cs in cases) {
+    got <- hd_deflated_sharpe(r, K_trials = cs$K, ann_factor = cs$ann,
+                              trial_sharpe_var = cs$V)
+    expect_identical(fmt17(got$dsr), cs$dsr)
+    expect_identical(fmt17(got$dsr_pvalue), cs$p)
+    expect_identical(fmt17(got$naive_sharpe), cs$naive)
+    expect_identical(fmt17(got$haircut_pct), cs$haircut)
+    expect_identical(got$hurdle_convention, "multiplier")
+  }
+  # The default call (no V argument) equals the explicit V = 1 call.
+  keep <- c("dsr", "dsr_pvalue", "haircut_pct")
+  expect_identical(
+    hd_deflated_sharpe(r, K_trials = 5L)[keep],
+    hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var = 1)[keep]
+  )
+})
+
+test_that("trial_sharpe_var_stat: hurdle = E[max Z] * sqrt(V), hand-computed", {
+  set.seed(959)
+  r <- stats::rnorm(500, mean = 0.0004, sd = 0.01)
+  # K = 2: E[max of 2 iid N(0,1)] = 1/sqrt(pi) (closed form).
+  V <- 0.0004                         # per-period Sharpe variance (sd 0.02)
+  hurdle <- (1 / sqrt(pi)) * sqrt(V)  # 0.5641896 * 0.02 = 0.01128379
+  expect_equal(hurdle, 0.011283791670955126, tolerance = 1e-12)
+  got <- hd_deflated_sharpe(r, K_trials = 2L, ann_factor = 252L,
+                            trial_sharpe_var_stat = V)
+  expect_equal(got$dsr, ref_dsr_from_hurdle(r, hurdle, 252L), tolerance = 1e-8)
+  expect_identical(got$hurdle_convention, "statistic-units")
+  expect_identical(got$trial_sharpe_var_stat, V)
+  expect_identical(got$trial_sharpe_var, 1)
+})
+
+test_that("supplying both V arguments aborts with a classed error", {
+  r <- stats::rnorm(50)
+  expect_error(
+    hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var = 4,
+                       trial_sharpe_var_stat = 0.01),
+    class = "hd_deflated_sharpe_conflicting_v"
+  )
+  expect_snapshot(
+    error = TRUE,
+    hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var = 4,
+                       trial_sharpe_var_stat = 0.01)
+  )
+  # An explicit trial_sharpe_var = 1 is the default, so it is allowed.
+  expect_no_error(
+    hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var = 1,
+                       trial_sharpe_var_stat = 0.01)
+  )
+})
+
+test_that("trial_sharpe_var_stat input validation", {
+  r <- stats::rnorm(50)
+  expect_snapshot(error = TRUE, hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var_stat = 0))
+  expect_snapshot(error = TRUE, hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var_stat = NA_real_))
+  expect_snapshot(error = TRUE, hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var_stat = c(1, 2)))
+  expect_error(hd_deflated_sharpe(r, K_trials = 5L, trial_sharpe_var_stat = -1),
+               class = "hd_deflated_sharpe_bad_v_stat")
+})
+
+test_that("the two conventions agree exactly when V_stat = V_mult / T_obs, and differ otherwise", {
+  set.seed(959)
+  r <- stats::rnorm(500, mean = 0.0004, sd = 0.01)
+  T_obs <- length(r)
+  V_mult <- 9
+  a <- hd_deflated_sharpe(r, K_trials = 20L, ann_factor = 252L,
+                          trial_sharpe_var = V_mult)
+  b <- hd_deflated_sharpe(r, K_trials = 20L, ann_factor = 252L,
+                          trial_sharpe_var_stat = V_mult / T_obs)
+  expect_equal(b$dsr, a$dsr, tolerance = 1e-12)
+  expect_equal(b$dsr_pvalue, a$dsr_pvalue, tolerance = 1e-12)
+  expect_identical(a$hurdle_convention, "multiplier")
+  expect_identical(b$hurdle_convention, "statistic-units")
+  # The same number in the other slot is a different (much larger) hurdle.
+  same_number <- hd_deflated_sharpe(r, K_trials = 20L, ann_factor = 252L,
+                                    trial_sharpe_var_stat = V_mult)
+  expect_lt(same_number$dsr, a$dsr - 1)
+  # K = 1 keeps a zero hurdle under both conventions.
+  k1m <- hd_deflated_sharpe(r, K_trials = 1L, trial_sharpe_var = 9)
+  k1s <- hd_deflated_sharpe(r, K_trials = 1L, trial_sharpe_var_stat = 9)
+  expect_identical(k1s$dsr, k1m$dsr)
+})
+
+test_that("short series (T < 10) echoes the convention and V_stat, no error", {
+  out <- hd_deflated_sharpe(c(0.01, -0.02, 0.005), K_trials = 5L,
+                            trial_sharpe_var_stat = 0.01)
+  expect_true(is.na(out$dsr))
+  expect_identical(out$hurdle_convention, "statistic-units")
+  expect_identical(out$trial_sharpe_var_stat, 0.01)
+})
