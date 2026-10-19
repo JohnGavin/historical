@@ -191,7 +191,10 @@ hd_caption <- function(text, short = NULL, threshold = 300,
 }
 
 #' DT table with caption, sortable, human-readable formatting
-hd_dt <- function(df, caption_text) {
+#' @param container Optional `DT::datatable(container = )` table tag, e.g. from
+#'   `hd_dt_header_container()` (R/column_popover.R, #788) when a header
+#'   carries a popover. `NULL` (default) keeps DT's plain headers.
+hd_dt <- function(df, caption_text, container = NULL) {
   if (is.null(df)) return(invisible(NULL))
 
   # Format large numbers
@@ -216,7 +219,7 @@ hd_dt <- function(df, caption_text) {
   numeric_cols <- which(sapply(df, function(x) is.numeric(x) ||
                                    grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
-  DT::datatable(
+  dt_args <- list(
     df,
     caption = hd_caption(caption_text),
     rownames = FALSE,
@@ -243,6 +246,8 @@ hd_dt <- function(df, caption_text) {
       )
     )
   )
+  if (!is.null(container)) dt_args$container <- container
+  do.call(DT::datatable, dt_args)
 }
 
 #' DT table transposed: few rows + many columns → columns become rows
