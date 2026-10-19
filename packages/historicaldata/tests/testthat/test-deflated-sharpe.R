@@ -133,10 +133,16 @@ ref_dsr_from_hurdle <- function(r, hurdle, ann_factor) {
 
 test_that("default-call outputs are byte-identical to origin/main (#959 regression)", {
   # Recorded by running the unmodified origin/main hd_deflated_sharpe() on
-  # this exact input (dc587cd), printed with %.17g so they round-trip exactly.
-  # Compared as 17-significant-digit strings: R's parser does not round-trip
-  # 17-digit literals, but sprintf("%.17g") does, so a string match is exact.
-  fmt17 <- function(x) sprintf("%.17g", x)
+  # this exact input (dc587cd), printed with %.17g on macOS.
+  # Compared numerically with a RELATIVE tolerance of 1e-12, not as strings:
+  # the same code on Ubuntu CI differs in the 16th-17th digit (relative
+  # difference ~1e-15, even for naive_sharpe, which this change does not
+  # touch) - cross-platform libm/BLAS float noise. 1e-12 absorbs that and
+  # is still about 10 orders of magnitude tighter than any real change in
+  # the hurdle (a 1.0001 scaling moves dsr by ~1e-4 relative or more).
+  # testthat edition 3 expect_equal() uses waldo::compare(), where
+  # `tolerance` is relative (mean relative difference) for numerics.
+  num <- function(x) as.numeric(x)
   set.seed(959)
   r <- stats::rnorm(500, mean = 0.0004, sd = 0.01)
   cases <- list(
@@ -159,10 +165,10 @@ test_that("default-call outputs are byte-identical to origin/main (#959 regressi
   for (cs in cases) {
     got <- hd_deflated_sharpe(r, K_trials = cs$K, ann_factor = cs$ann,
                               trial_sharpe_var = cs$V)
-    expect_identical(fmt17(got$dsr), cs$dsr)
-    expect_identical(fmt17(got$dsr_pvalue), cs$p)
-    expect_identical(fmt17(got$naive_sharpe), cs$naive)
-    expect_identical(fmt17(got$haircut_pct), cs$haircut)
+    expect_equal(got$dsr, num(cs$dsr), tolerance = 1e-12)
+    expect_equal(got$dsr_pvalue, num(cs$p), tolerance = 1e-12)
+    expect_equal(got$naive_sharpe, num(cs$naive), tolerance = 1e-12)
+    expect_equal(got$haircut_pct, num(cs$haircut), tolerance = 1e-12)
     expect_identical(got$hurdle_convention, "multiplier")
   }
   # The default call (no V argument) equals the explicit V = 1 call.
