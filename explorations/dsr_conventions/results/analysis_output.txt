@@ -1,0 +1,284 @@
+Using saved setting for 'extra-substituters = https://rstats-on-nix.cachix.org' from ~/.local/share/nix/trusted-settings.json.
+Using saved setting for 'extra-trusted-public-keys = rstats-on-nix.cachix.org-1:vdiiVgocg6WeJrODIqdprZRUrhi1JzhBnXv7aWI6+F0=' from ~/.local/share/nix/trusted-settings.json.
+==================================================
+T Project: historical_data
+==================================================
+
+Available commands:
+  t repl              - Start T REPL
+  t run <file>        - Run a T file
+  t test              - Run tests
+
+To add dependencies:
+  * Add them to tproject.toml
+  * Run 't update' to sync flake.nix
+
+Quarto is enabled via [additional-tools]. Render {t} chunks with filters: [tlang].
+
+The duckplyr package is configured to fall back to dplyr when it encounters an incompatibility. Fallback events can be collected and
+uploaded for analysis to guide future development. By default, data will be collected but no data will be uploaded.
+ℹ Automatic fallback uploading is not controlled and therefore disabled, see `?duckplyr::fallback()`.
+✔ Number of reports ready for upload: 4838.
+→ Review with `duckplyr::fallback_review()`, upload with `duckplyr::fallback_upload()`.
+ℹ Configure automatic uploading with `duckplyr::fallback_config()`.
+== 0. Premise check and self-tests ==
+Premise: hd_deflated_sharpe() hurdle = hd_expected_max_normal(K) * sqrt(trial_sharpe_var) / sqrt(T_obs), compared with the per-period Sharpe (packages/historicaldata/R/falsification.R lines 910-914). CONFIRMED by reading the code.
+Parity: own DSR p-value reproduces hd_deflated_sharpe() to 1e-12 for 9 (K, V) cells.
+Ratio check, V_mult = T * V_stat      : GREEN (max |ratio-1| = 2.22e-16)
+FALSIFICATION, V_mult = V_stat (wrong units)        : RED (max |ratio-1| = 0.984)
+FALSIFICATION, V_mult = 252 * V_stat (annualised)   : RED (max |ratio-1| = 0.845)
+Restored: control GREEN, both deliberately broken variants RED, as required.
+
+== 1. Real inputs ==
+Input source: targets store (read-only): /Users/johngavin/docs_gh/proj/finance/data/historical/docs/_targets 
+Note: the store leaderboard passes trial_sharpe_var = 1 (default) to hd_deflated_sharpe(); no per-strategy V exists.
+Note: leaderboard column `months` is the native-frequency observation count (days for daily strategies).
+      ann_factor is inferred as 252 if T >= 2000 else 12 (checked against `years` where present).
+
+                             name  K    T  af sharpe_ann   V_ann hurdle_a1_ann hurdle_a_ann hurdle_b_ann
+       DRIF pool as filed in #933 16   74  12     0.3582 0.05687        0.7112      0.16959       0.4211
+         DRIF pool, current store 16   74  12     0.6485 0.02206        0.7112      0.10561       0.2623
+ Avoid Worst pool, T = n_switches 16   64 252     0.4752 0.01052        3.5043      0.35937       0.1811
+     Avoid Worst pool, T = n_days 16 1006 252     0.4752 0.01052        0.8839      0.09064       0.1811
+                             name ratio_a_over_b ratio_a1_over_b b95_lo b95_hi a_inside_b95   p_a1    p_a    p_b
+       DRIF pool as filed in #933         0.4027           1.689 0.6461  1.354        FALSE 0.8090 0.3202 0.5620
+         DRIF pool, current store         0.4027           2.712 0.6461  1.354        FALSE 0.5613 0.0907 0.1708
+ Avoid Worst pool, T = n_switches         1.9843          19.349 0.6461  1.354        FALSE 0.9365 0.4767 0.4411
+     Avoid Worst pool, T = n_days         0.5005           4.880 0.6461  1.354        FALSE 0.7928 0.2212 0.2784
+(a1 = default V = 1; a = V_mult set to the annual pool variance, i.e. the documented 'pass var(trial_sharpes)' usage; b = V_stat = V_ann/af.  Hurdles in annual Sharpe units.)
+
+Leaderboard-wide proxy pool: var of annual Full-Period Sharpes over 18 strategies = 0.3535 (a proxy, not the K_eff trial pool)
+            name    K    T  af sharpe_ann hurdle_a1_ann hurdle_a_ann hurdle_b_ann ratio_a_over_b   p_a1     p_a   p_b p_stored
+      Factor MAX 14.4  740  12      0.391         0.219        0.130         1.02          0.127 0.0885 0.02046 1.000  0.05099
+     Factor DRIF 14.4  691  12      0.499         0.226        0.135         1.02          0.132 0.0197 0.00296 1.000  0.00794
+       Stock MAX 14.4  255  12     -0.799         0.373        0.222         1.02          0.217 1.0000 1.00000 1.000  1.00000
+      Stock DRIF 14.4  195  12     -1.237         0.426        0.253         1.02          0.248 1.0000 1.00000 1.000  1.00000
+        XGB DRIF 14.4  195  12     -1.286         0.426        0.253         1.02          0.248 1.0000 1.00000 1.000  1.00000
+             LTR 14.4  254  12      0.430         0.373        0.222         1.02          0.217 0.3976 0.17020 0.997  0.25415
+    Mom Pre-Peak 14.4  638  12      0.452         0.236        0.140         1.02          0.137 0.0580 0.01176 1.000  0.01246
+   Mom Post-Peak 14.4  638  12     -0.487         0.236        0.140         1.02          0.137 1.0000 1.00000 1.000  1.00000
+        Mom 12-2 14.4  638  12      0.049         0.236        0.140         1.02          0.137 0.9131 0.74663 1.000  0.69257
+     Value (HML) 14.4  752  12      0.068         0.217        0.129         1.02          0.126 0.8808 0.68542 1.000  0.79796
+ Managed Futures 14.4  227  12      0.477         0.395        0.235         1.02          0.230 0.3612 0.14722 0.991  0.32572
+             CMR 14.4 6516 252      0.250         0.338        0.201         1.02          0.197 0.6723 0.40130 1.000  0.37171
+ CMR Conditioned 14.4 6463 252      0.352         0.339        0.202         1.02          0.197 0.4741 0.22325 1.000  0.29352
+         OLMAR-1 14.4 4063 252      0.780         0.428        0.254         1.02          0.249 0.0788 0.01745 0.834  0.06079
+             TOM 14.4 8092 252     -0.039         0.303        0.180         1.02          0.176 0.9737 0.89293 1.000  0.95642
+      Risk State 14.4 8355 252      0.252         0.298        0.177         1.02          0.174 0.6051 0.33369 1.000  0.45910
+     Avoid Worst 14.4 8353 252      0.250         0.298        0.177         1.02          0.174 0.6096 0.33795 1.000  0.48781
+p_a1 is a summary-statistic re-computation (normal moments); p_stored is the raw-series value from the store.
+max |p_a1 - p_stored| = 0.301 (skew/kurtosis, rf basis and K non-integer use explain differences)
+
+-- OLMAR-1 (K = 14, T = 4063, annual excess Sharpe 0.8117, HAC t 3.723; research-log series not reconstructed, summary numbers used) --
+                                                       name hurdle_a1_ann hurdle_a_ann hurdle_b_ann ratio_a_over_b ratio_a1_over_b
+         OLMAR-1, iid-normal SE, V_pool = leaderboard proxy        0.4242      0.25222       1.0128          0.249          0.4189
+ OLMAR-1, HAC-implied SE (sr/t), V_pool = leaderboard proxy        0.4242      0.25222       1.0128          0.249          0.4189
+                     OLMAR-1, HAC-implied SE, V_pool = 0.05        0.4242      0.09486       0.3809          0.249          1.1138
+                     OLMAR-1, HAC-implied SE, V_pool = 0.25        0.4242      0.21211       0.8517          0.249          0.4981
+                                                       name    p_a1       p_a     p_b
+         OLMAR-1, iid-normal SE, V_pool = leaderboard proxy 0.05999 0.0123832 0.79011
+ OLMAR-1, HAC-implied SE (sr/t), V_pool = leaderboard proxy 0.03776 0.0051419 0.82179
+                     OLMAR-1, HAC-implied SE, V_pool = 0.05 0.03776 0.0005047 0.02408
+                     OLMAR-1, HAC-implied SE, V_pool = 0.25 0.03776 0.0029786 0.57277
+(HAC-implied SE = per-period Sharpe / 3.723; the iid row uses the normal-moment SE.  The first two rows differ only in SE.)
+
+== 2. Grid (ann_factor 252) ==
+Analytically ratio_a_over_b = sqrt(252 / T): independent of K and V.  Check: TRUE 
+ratio_a_over_b by T:
+    T   ratio
+   74 1.84537
+   74 1.84537
+   74 1.84537
+  252 1.00000
+  252 1.00000
+ 1000 0.50200
+ 1000 0.50200
+ 4063 0.24904
+ 4063 0.24904
+ 4063 0.24904
+   74 1.84537
+   74 1.84537
+  252 1.00000
+  252 1.00000
+  252 1.00000
+ 1000 0.50200
+ 4063 0.24904
+ 4063 0.24904
+   74 1.84537
+
+Cells with (a, V_mult = V_ann)/(b) within +/-10% of 1: 36 of 144 (T values: 252)
+Cells with (a1, default V = 1)/(b) within +/-10% of 1: 12 of 144
+Those (K, T, V_ann) cells:
+    T V_ann
+ 1000  0.25
+  252  1.00
+
+Annual-Sharpe hurdle, K = 14, wide view (a1 = V=1 default, a = V_mult=V_ann, b = standard):
+    T V_ann hurdle_a1_ann hurdle_a_ann hurdle_b_ann ratio_a_over_b ratio_a1_over_b
+   74  0.01         3.143       0.3143        0.170          1.845          18.454
+  252  0.01         1.703       0.1703        0.170          1.000          10.000
+ 1000  0.01         0.855       0.0855        0.170          0.502           5.020
+ 4063  0.01         0.424       0.0424        0.170          0.249           2.490
+   74  0.05         3.143       0.7029        0.381          1.845           8.253
+  252  0.05         1.703       0.3809        0.381          1.000           4.472
+ 1000  0.05         0.855       0.1912        0.381          0.502           2.245
+ 4063  0.05         0.424       0.0949        0.381          0.249           1.114
+   74  0.10         3.143       0.9940        0.539          1.845           5.836
+  252  0.10         1.703       0.5387        0.539          1.000           3.162
+ 1000  0.10         0.855       0.2704        0.539          0.502           1.587
+ 4063  0.10         0.424       0.1341        0.539          0.249           0.788
+   74  0.25         3.143       1.5717        0.852          1.845           3.691
+  252  0.25         1.703       0.8517        0.852          1.000           2.000
+ 1000  0.25         0.855       0.4275        0.852          0.502           1.004
+ 4063  0.25         0.424       0.2121        0.852          0.249           0.498
+   74  0.50         3.143       2.2227        1.204          1.845           2.610
+  252  0.50         1.703       1.2045        1.204          1.000           1.414
+ 1000  0.50         0.855       0.6046        1.204          0.502           0.710
+ 4063  0.50         0.424       0.3000        1.204          0.249           0.352
+   74  1.00         3.143       3.1434        1.703          1.845           1.845
+  252  1.00         1.703       1.7034        1.703          1.000           1.000
+ 1000  1.00         0.855       0.8551        1.703          0.502           0.502
+ 4063  1.00         0.424       0.4242        1.703          0.249           0.249
+
+== 3. Is (a) inside the sampling interval of (b)? ==
+sd formula verified by simulation: 200000 draws of K normal trial Sharpes per K (true V_stat = 0.0004)
+  K relsd_V_theory relsd_V_sim relsd_sqrtV_approx relsd_sqrtV_sim bias_sqrtV_sim q025_sim q975_sim q025_chisq q975_chisq
+  2         1.4142      1.4097             0.7071          0.6015         0.7975  0.03127    2.237    0.03134      2.241
+  5         0.7071      0.7054             0.3536          0.3409         0.9403  0.34783    1.668    0.34800      1.669
+ 10         0.4714      0.4708             0.2357          0.2321         0.9720  0.54824    1.451    0.54776      1.454
+ 14         0.3922      0.3922             0.1961          0.1940         0.9814  0.62258    1.379    0.62072      1.379
+ 17         0.3536      0.3531             0.1768          0.1751         0.9841  0.65820    1.342    0.65706      1.343
+ 50         0.2020      0.2024             0.1010          0.1009         0.9948  0.80148    1.197    0.80248      1.197
+max |sim - theory| of the relative sd of V_hat: 0.0045
+
+Interval of the (b) hurdle, as a multiple of its true-V value, from chi2_{K-1} (95%) and 1 +/- 2 sd (sim sd of sqrt(V_hat)):
+(a with V_mult = V_ann) / (b) = sqrt(252/T); 'inside' = that ratio lies in the (b) interval.
+  K    T ratio_a_over_b b95_lo b95_hi a_inside_95 b2sd_lo b2sd_hi a_inside_2sd
+  2   74          1.845 0.0313   2.24        TRUE  -0.203    2.20         TRUE
+  2  252          1.000 0.0313   2.24        TRUE  -0.203    2.20         TRUE
+  2 1000          0.502 0.0313   2.24        TRUE  -0.203    2.20         TRUE
+  2 4063          0.249 0.0313   2.24        TRUE  -0.203    2.20         TRUE
+  5   74          1.845 0.3480   1.67       FALSE   0.318    1.68        FALSE
+  5  252          1.000 0.3480   1.67        TRUE   0.318    1.68         TRUE
+  5 1000          0.502 0.3480   1.67        TRUE   0.318    1.68         TRUE
+  5 4063          0.249 0.3480   1.67       FALSE   0.318    1.68        FALSE
+ 10   74          1.845 0.5478   1.45       FALSE   0.536    1.46        FALSE
+ 10  252          1.000 0.5478   1.45        TRUE   0.536    1.46         TRUE
+ 10 1000          0.502 0.5478   1.45       FALSE   0.536    1.46        FALSE
+ 10 4063          0.249 0.5478   1.45       FALSE   0.536    1.46        FALSE
+ 14   74          1.845 0.6207   1.38       FALSE   0.612    1.39        FALSE
+ 14  252          1.000 0.6207   1.38        TRUE   0.612    1.39         TRUE
+ 14 1000          0.502 0.6207   1.38       FALSE   0.612    1.39        FALSE
+ 14 4063          0.249 0.6207   1.38       FALSE   0.612    1.39        FALSE
+ 17   74          1.845 0.6571   1.34       FALSE   0.650    1.35        FALSE
+ 17  252          1.000 0.6571   1.34        TRUE   0.650    1.35         TRUE
+ 17 1000          0.502 0.6571   1.34       FALSE   0.650    1.35        FALSE
+ 17 4063          0.249 0.6571   1.34       FALSE   0.650    1.35        FALSE
+ 50   74          1.845 0.8025   1.20       FALSE   0.798    1.20        FALSE
+ 50  252          1.000 0.8025   1.20        TRUE   0.798    1.20         TRUE
+ 50 1000          0.502 0.8025   1.20       FALSE   0.798    1.20        FALSE
+ 50 4063          0.249 0.8025   1.20       FALSE   0.798    1.20        FALSE
+
+Grid cells (n = 144): (a, V_mult=V_ann) inside (b) 95% interval in 60; (a1, V=1) inside in 42.
+(a, V_mult=V_ann) inside by T:
+    T a_inside_95
+   74     0.16667
+  252     1.00000
+ 1000     0.33333
+ 4063     0.16667
+(a1, V=1) inside, by K and T (share over V_ann):
+  K    T a1_inside_95
+  2   74      0.16667
+  5   74      0.00000
+ 10   74      0.00000
+ 14   74      0.00000
+ 17   74      0.00000
+ 50   74      0.00000
+  2  252      0.50000
+  5  252      0.33333
+ 10  252      0.33333
+ 14  252      0.16667
+ 17  252      0.16667
+ 50  252      0.16667
+  2 1000      0.66667
+  5 1000      0.66667
+ 10 1000      0.33333
+ 14 1000      0.33333
+ 17 1000      0.33333
+ 50 1000      0.16667
+  2 4063      0.83333
+  5 4063      0.66667
+ 10 4063      0.33333
+ 14 4063      0.33333
+ 17 4063      0.33333
+ 50 4063      0.16667
+
+== 4. Simulation: best of K zero-Sharpe trials ==
+Monte Carlo: 4000 replications per cell; per-period sd 0.01; ann_factor 252; target false-positive rate 0.05.
+a1 = hd_deflated_sharpe(V = 1); a2 = hd_deflated_sharpe(V = 252 * V_stat_hat) [documented usage with annual-unit variance];
+b = standard with V_stat_hat = var of the K per-period trial Sharpes.  p < 0.05 counts as a rejection.
+
+-- Null (all K trials have true Sharpe 0): false-positive rates --
+  K    T true_sharpe_best_ann reps  rej_a1    se_a1  rej_a2    se_a2   rej_b     se_b disagree_a1_b disagree_a2_b
+  5  252                    0 4000 0.01250 0.001757 0.00250 0.000790 0.00250 0.000790       0.01000        0.0000
+ 14  252                    0 4000 0.00700 0.001318 0.00025 0.000250 0.00025 0.000250       0.00675        0.0000
+ 50  252                    0 4000 0.00300 0.000865 0.00150 0.000612 0.00150 0.000612       0.00150        0.0000
+  5 1000                    0 4000 0.01100 0.001649 0.04050 0.003117 0.00025 0.000250       0.01075        0.0403
+ 14 1000                    0 4000 0.00450 0.001058 0.05800 0.003696 0.00025 0.000250       0.00425        0.0578
+ 50 1000                    0 4000 0.00175 0.000661 0.11500 0.005044 0.00050 0.000353       0.00125        0.1145
+
+-- Alternatives (trial 1 has true annual Sharpe 1.0 or 2.0, the rest 0): rejection rate = power --
+  K    T true_sharpe_best_ann reps rej_a1    se_a1  rej_a2    se_a2   rej_b     se_b disagree_a1_b disagree_a2_b
+  5  252                    1 4000 0.0455 0.003295 0.00700 0.001318 0.00700 0.001318        0.0400         0.000
+ 14  252                    1 4000 0.0163 0.001999 0.00175 0.000661 0.00175 0.000661        0.0145         0.000
+ 50  252                    1 4000 0.0035 0.000934 0.00100 0.000500 0.00100 0.000500        0.0025         0.000
+  5 1000                    1 4000 0.2303 0.006656 0.36525 0.007613 0.05050 0.003462        0.1817         0.315
+ 14 1000                    1 4000 0.0882 0.004485 0.28600 0.007145 0.02400 0.002420        0.0648         0.262
+ 50 1000                    1 4000 0.0325 0.002804 0.28000 0.007099 0.01900 0.002159        0.0150         0.261
+  5  252                    2 4000 0.2120 0.006463 0.04725 0.003355 0.04725 0.003355        0.1678         0.000
+ 14  252                    2 4000 0.0927 0.004587 0.02100 0.002267 0.02100 0.002267        0.0717         0.000
+ 50  252                    2 4000 0.0345 0.002886 0.01775 0.002088 0.01775 0.002088        0.0182         0.000
+  5 1000                    2 4000 0.8835 0.005073 0.93575 0.003877 0.52600 0.007895        0.3590         0.410
+ 14 1000                    2 4000 0.7275 0.007040 0.90600 0.004614 0.44350 0.007855        0.2840         0.463
+ 50 1000                    2 4000 0.5467 0.007871 0.88650 0.005015 0.40925 0.007774        0.1430         0.477
+
+Identity assertion passed on every replication: (b) p-value == hd_deflated_sharpe(V = T * V_stat_hat) p-value to 1e-9.
+
+== 5. Materiality ==
+Leaderboard Full-Period strategies (summary-statistic recomputation, p < 0.05), pool variance V_pool_ann assumed for all:
+ V_pool_ann  n pass_a1 pass_a pass_b flips_a_vs_b flips_a1_vs_b
+       0.01 17       1      6      4            2             3
+       0.05 17       1      5      0            5             1
+       0.10 17       1      4      0            4             1
+       0.25 17       1      4      0            4             1
+       0.50 17       1      4      0            4             1
+       1.00 17       1      1      0            1             1
+
+Hurdle shift in annual Sharpe units, (a, V_mult=V_ann) minus (b), K = 14:
+    T V_ann hurdle_a_ann hurdle_b_ann shift_ann
+   74  0.01       0.3143        0.170  1.44e-01
+  252  0.01       0.1703        0.170  0.00e+00
+ 1000  0.01       0.0855        0.170 -8.48e-02
+ 4063  0.01       0.0424        0.170 -1.28e-01
+   74  0.05       0.7029        0.381  3.22e-01
+  252  0.05       0.3809        0.381  0.00e+00
+ 1000  0.05       0.1912        0.381 -1.90e-01
+ 4063  0.05       0.0949        0.381 -2.86e-01
+   74  0.10       0.9940        0.539  4.55e-01
+  252  0.10       0.5387        0.539  0.00e+00
+ 1000  0.10       0.2704        0.539 -2.68e-01
+ 4063  0.10       0.1341        0.539 -4.05e-01
+   74  0.25       1.5717        0.852  7.20e-01
+  252  0.25       0.8517        0.852 -1.11e-16
+ 1000  0.25       0.4275        0.852 -4.24e-01
+ 4063  0.25       0.2121        0.852 -6.40e-01
+   74  0.50       2.2227        1.204  1.02e+00
+  252  0.50       1.2045        1.204  2.22e-16
+ 1000  0.50       0.6046        1.204 -6.00e-01
+ 4063  0.50       0.3000        1.204 -9.05e-01
+   74  1.00       3.1434        1.703  1.44e+00
+  252  1.00       1.7034        1.703 -2.22e-16
+ 1000  1.00       0.8551        1.703 -8.48e-01
+ 4063  1.00       0.4242        1.703 -1.28e+00
+
+Done.
