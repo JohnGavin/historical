@@ -4,7 +4,13 @@
 \alias{hd_deflated_sharpe}
 \title{Deflated Sharpe Ratio}
 \usage{
-hd_deflated_sharpe(r, K_trials = 1L, ann_factor = 252L, trial_sharpe_var = 1)
+hd_deflated_sharpe(
+  r,
+  K_trials = 1L,
+  ann_factor = 252L,
+  trial_sharpe_var = 1,
+  trial_sharpe_var_stat = NULL
+)
 }
 \arguments{
 \item{r}{Numeric vector of returns (daily or monthly).}
@@ -15,14 +21,16 @@ multiple-testing adjustment).}
 \item{ann_factor}{Integer. Annualisation factor (252 for daily, 12 for
 monthly). Default 252.}
 
-\item{trial_sharpe_var}{Numeric scalar > 0. Variance of the Sharpe ratios
-across the \code{K_trials} trial population (V in the Details section).
-Default \code{1}, i.e. a unit-variance trial pool -- the implicit
-assumption of every call before #558. A wider trial-Sharpe dispersion
-(e.g. a pool containing low-trade "junk" strategies) should be passed
-here as \code{var(trial_sharpes)}; this widens the hurdle and therefore
-lowers \code{dsr} / raises \code{dsr_pvalue} for the SAME underlying
-returns, all else equal.}
+\item{trial_sharpe_var}{Numeric scalar > 0. V in the multiplier convention
+(see the "Two conventions for V" section for units and the hurdle).
+Default \code{1}, the implicit assumption of every call before #558.
+Do NOT pass \code{var()} of annualised Sharpes here; use
+\code{trial_sharpe_var_stat} for that.}
+
+\item{trial_sharpe_var_stat}{Numeric scalar > 0 or \code{NULL} (default).
+V in the statistic-units convention (see the "Two conventions for V"
+section, which also gives the conversion from an annualised variance).
+When supplied, \code{trial_sharpe_var} must be left at its default.}
 }
 \value{
 Named list:
@@ -34,7 +42,12 @@ Named list:
 \item{skewness}{Sample skewness of returns.}
 \item{kurtosis}{Sample excess kurtosis of returns.}
 \item{K_trials}{Number of strategies tested.}
-\item{trial_sharpe_var}{Echoed input V (see Details).}
+\item{trial_sharpe_var}{Echoed multiplier-convention input.}
+\item{trial_sharpe_var_stat}{Echoed statistic-units input;
+\code{NA_real_} when it was not supplied.}
+\item{hurdle_convention}{\code{"multiplier"} or
+\code{"statistic-units"} (see the "Two conventions for V"
+section).}
 \item{T}{Number of observations.}
 }
 }
@@ -54,28 +67,44 @@ even under pure noise (the "haircut").
 The expected-maximum-Sharpe hurdle E\link{max SR} that the "haircut" subtracts
 depends on TWO things, not one: the trial COUNT \code{K_trials} (the
 "logarithmic blessing" -- adding trials raises the hurdle only slowly) and
-the trial-population VARIANCE \code{trial_sharpe_var} (V) -- how dispersed
-the Sharpe ratios of the \code{K_trials} candidates were. A pool containing
-low-trade, erratic "junk" strategies has a wide Sharpe dispersion and
-therefore a much higher honest hurdle than a clean pool of the same size,
-even though \code{K_trials} is identical. Bailey, Borwein, Lopez de Prado &
-Zhu (2014) write this as
-\eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where \eqn{E[\max Z]} is
-the expected maximum of \code{K_trials} unit-variance (V = 1) trial
-Z-scores. This implementation computes \eqn{E[\max Z]} exactly by
-quadrature (\code{\link{hd_expected_max_normal}}) and multiplies it by
-\eqn{\sqrt{V}}. (Before #931 it used the asymptotic Euler-Mascheroni
-approximation, which overstated \eqn{E[\max Z]} by 9-31\\% for
-\code{K_trials} in 2..5000, so the hurdle was too strict.)
-\code{trial_sharpe_var = 1} (the default) reproduces the pre-#558
-variance-unaware scaling.
+the trial-population VARIANCE V -- how dispersed the Sharpe ratios of the
+\code{K_trials} candidates were. A pool containing low-trade, erratic
+"junk" strategies has a wide Sharpe dispersion and therefore a much higher
+honest hurdle than a clean pool of the same size, even though
+\code{K_trials} is identical. Bailey, Borwein, Lopez de Prado & Zhu (2014)
+write this as \eqn{E[\max SR] \approx \sqrt{V}\cdot E[\max Z]} where
+\eqn{E[\max Z]} is the expected maximum of \code{K_trials} unit-variance
+trial Z-scores. This implementation computes \eqn{E[\max Z]} exactly by
+quadrature (\code{\link{hd_expected_max_normal}}). (Before #931 it used the
+asymptotic Euler-Mascheroni approximation, which overstated
+\eqn{E[\max Z]} by 9-31\\% for \code{K_trials} in 2..5000, so the hurdle
+was too strict.)
+}
 
-When the caller has (or can estimate) the population of trial Sharpe
-ratios that produced \code{K_trials}, pass
-\code{var(trial_sharpes, na.rm = TRUE)} as \code{trial_sharpe_var} rather
-than leaving it at 1 -- omitting it silently assumes the trial pool has
-the tightest possible Sharpe dispersion, understating the hurdle whenever
-the pool contains noisy, low-trade strategies (the "junk-variance trap").
+\section{Two conventions for V (#959)}{
+
+V can be supplied in one of two units, through two separately named
+arguments; supplying both is an error.
+\describe{
+\item{\code{trial_sharpe_var} (multiplier; the default)}{V is a
+dimensionless multiplier on the null dispersion of the per-period
+Sharpe, so the hurdle is
+\eqn{E[\max Z]\sqrt{V}/\sqrt{T}}. \code{V = 1} gives the null sd
+\eqn{1/\sqrt{T}} exactly. This is the convention every published
+number in this package uses.}
+\item{\code{trial_sharpe_var_stat} (statistic units; for external
+reporting)}{V is the variance of the trial Sharpe ratios in the SAME
+units as the statistic being tested -- here the per-period Sharpe --
+so the hurdle is \eqn{E[\max Z]\sqrt{V}} with no \eqn{1/\sqrt{T}}.
+This is the Bailey et al. form as usually quoted.}
+}
+The two agree exactly when \code{trial_sharpe_var_stat =
+trial_sharpe_var / T}. To convert an ANNUALISED trial-Sharpe variance (what
+\code{\link{hd_trial_sharpe_var}} returns) to the per-period variance that
+\code{trial_sharpe_var_stat} expects, divide by \code{ann_factor}:
+\code{V_annual / ann_factor}. The result field \code{hurdle_convention}
+(\code{"multiplier"} or \code{"statistic-units"}) names the convention
+used, so a table can label it.
 }
 
 \references{
