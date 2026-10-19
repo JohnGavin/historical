@@ -101,6 +101,19 @@ test_that("function signatures are stable", {
   expect_snapshot(args(hd_excess_returns))
 })
 
+test_that("#937: Mean Reversion is a TOTAL-basis row that keeps rf and cites file:line", {
+  reg <- hd_return_basis()
+  row <- reg[reg$strategy == "Mean Reversion", ]
+  expect_identical(nrow(row), 1L)
+  expect_identical(row$basis, "total")
+  expect_true(is.na(row$cash_weight_col))
+  expect_true(grepl("R/plan_mean_reversion\\.R:[0-9]", row$evidence))
+  rf <- c(0.001, 0.002)
+  expect_identical(hd_rf_for_basis(rf, "Mean Reversion"), rf)
+  expect_equal(hd_excess_returns(c(0.01, 0.02), rf, "Mean Reversion"),
+               c(0.01, 0.02) - rf)
+})
+
 test_that("#937 group C: research-series rows are TOTAL and keep rf (not zeroed)", {
   reg <- hd_return_basis()
   res <- reg[startsWith(reg$strategy, "Research: "), ]
