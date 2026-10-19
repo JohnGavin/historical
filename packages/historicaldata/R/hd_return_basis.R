@@ -138,7 +138,10 @@ hd_return_basis <- function() {
     "Momentum Decomposition L/S", "excess",
     "R/momentum_decomposition.R:624-627,675 weight = +leverage/(2*n_long) / -leverage/(2*n_short) (sums to 0, dollar-neutral); net_ret = portfolio_ret - cost",
     "Regime Momentum", "excess",
-    "R/zakamulin_allocation.R:199 allocated_ret = net_ret * allocation: a dollar-neutral spread (R/momentum_decomposition.R:624-627) scaled by exposure in [0,1]; the cash leg earns 0 by construction (R/zakamulin_allocation.R:174), so no rf is in the series"
+    "R/zakamulin_allocation.R:199 allocated_ret = net_ret * allocation: a dollar-neutral spread (R/momentum_decomposition.R:624-627) scaled by exposure in [0,1]; the cash leg earns 0 by construction (R/zakamulin_allocation.R:174), so no rf is in the series",
+    # --- #937: Mean Reversion (long-only equal-weight, not on the leaderboard) ---
+    "Mean Reversion", "total",
+    "R/plan_mean_reversion.R:167,169,190 port_ret = mean(held_rets) over long-only open positions (0 when flat, cash earns 0 not rf), net_ret = port_ret - trade_cost: no short leg, no rf deducted, so the full rf is still the benchmark"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure

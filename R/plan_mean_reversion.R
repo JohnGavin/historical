@@ -198,20 +198,32 @@ plan_mean_reversion <- function() {
     # so it no longer silently extends past the sealed Validation partition
     # on every tar_make(). strategy + window_start/window_end columns added
     # so gate S11 (check_metric_window_bounds()) can assert the bound.
+    #
+    # #937: the Sharpe is on the EXCESS basis. net_ret is a TOTAL return
+    # (long-only equal-weight, cash days earn 0, no rf deducted: registry row
+    # "Mean Reversion", hd_return_basis()), so rf is deducted via
+    # sharpe_ratio_rf() with the registry-routed rf. This also moves the
+    # numerator from arithmetic (mean * 252) to the geometric CAGR, matching
+    # OLMAR-1 (#677); cagr and vol are computed as before. rf is joined once
+    # on the full series (.mr_join_rf(): leading/interior gaps abort,
+    # trailing publication lag is trimmed with a counted warning).
     targets::tar_target(mr_metrics, {
       library(dplyr)
 
       calc <- function(d, label) {
-        ret <- d$net_ret
-        dts <- d$date[!is.na(ret)]
-        ret <- ret[!is.na(ret)]
+        keep <- !is.na(d$net_ret)
+        dts <- d$date[keep]
+        ret <- d$net_ret[keep]
+        rf <- d$rf_ret[keep]
         n <- length(ret)
         if (n < 20) return(NULL)
         years <- n / 252
         cum <- prod(1 + ret)
         cagr <- (cum^(1 / years) - 1)
         vol <- sd(ret) * sqrt(252)
-        sharpe <- if (vol > 0) mean(ret) * 252 / vol else NA_real_
+        sharpe <- sharpe_ratio_rf(
+          ret, hd_rf_for_basis(rf, "Mean Reversion"), periods_per_year = 252L
+        )$sharpe
         dd <- (cumprod(1 + ret) - cummax(cumprod(1 + ret))) / cummax(cumprod(1 + ret))
         max_dd <- min(dd)
         avg_trades <- mean(d$n_new_trades)
@@ -230,8 +242,9 @@ plan_mean_reversion <- function() {
       }
 
       port <- mr_portfolio |>
-        dplyr::mutate(date = as.Date(date))
-      oos      <- as.Date(mr_params$test_start)
+        dplyr::mutate(date = as.Date(date)) |>
+        .mr_join_rf(daily_rf)
+      oos     <- as.Date(mr_params$test_start)
       test_end <- as.Date(mr_params$test_end)
 
       dplyr::bind_rows(
@@ -305,5 +318,28 @@ plan_mean_reversion <- function() {
       )
     })
 
+  )
+}
+
+#' Join the shared daily risk-free series onto the Mean Reversion portfolio (#937)
+#'
+#' Mirrors \code{.olmar_join_rf()} (R/plan_olmar.R): the three-case coverage
+#' policy of \code{.join_rf_series()} (R/utils_metrics.R) applies, because
+#' "Mean Reversion" is a TOTAL-basis strategy in \code{hd_return_basis()}.
+#' A missing risk-free series is never treated as zero (fail-loud-not-null).
+#'
+#' @param port Tibble with a `date` column (the \code{mr_portfolio} target).
+#' @param rf Tibble with columns `date`, `rf_ret` (the `daily_rf` target,
+#'   R/plan_stock_backtest.R).
+#' @return `port` with `rf_ret` joined, trailing uncovered dates removed.
+#' @noRd
+.mr_join_rf <- function(port, rf) {
+  .join_rf_series(
+    df = port, rf = rf, key = "date",
+    label = ".mr_join_rf", rf_label = "daily_rf",
+    rf_source = "the daily_rf target, R/plan_stock_backtest.R",
+    df_label = "mr_portfolio", strategy_label = "Mean Reversion",
+    period_noun = "date", df_arg_name = "port",
+    basis_strategy = "Mean Reversion"
   )
 }
