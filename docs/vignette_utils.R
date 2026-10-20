@@ -182,7 +182,9 @@ hd_caption <- function(text, short = NULL, threshold = 300,
 
   htmltools::tags$caption(
     style = style, class = "dt-caption",
-    htmltools::tags$span(short), " ",
+    # A character summary stays an inline <span> (unchanged); a tag (e.g. a
+    # bullet <ul>) is block content and is emitted as-is.
+    if (is.character(short)) htmltools::tags$span(short) else short, " ",
     htmltools::tags$details(
       htmltools::tags$summary(summary_label),
       text

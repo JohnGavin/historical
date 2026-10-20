@@ -69,6 +69,11 @@ col_popover_path <- if (file.exists("../R/column_popover.R")) "../R/column_popov
   file.path(here::here(), "R/column_popover.R")
 source(col_popover_path)
 
+# Rankings caption as bullets with hover details (builder is unit-tested).
+lb_caption_path <- if (file.exists("../R/leaderboard_caption.R")) "../R/leaderboard_caption.R" else
+  file.path(here::here(), "R/leaderboard_caption.R")
+source(lb_caption_path)
+
 partitions_path <- if (file.exists("../R/plan_partitions.R")) "../R/plan_partitions.R" else
   file.path(here::here(), "R/plan_partitions.R")
 source(partitions_path)
@@ -313,7 +318,7 @@ if (!is.null(lb)) {
   # close. G_capped is the backstop-capped figure actually shown; a
   # `backstop_binds = TRUE` strategy had a higher uncapped implied leverage.
   # The backstop LEVEL is PROVISIONAL (#626 D1 not finalized) -- always
-  # disclosed in the tooltip and in gross_target_note below, never presented
+  # disclosed in the tooltip and in the Gross (target) popover below, never presented
   # as settled. A strategy whose detection verdict is underpowered or
   # unverified (NA) is additionally flagged as BLOCKED by QA gate S31
   # (detection-power-required.md) when its G_capped exceeds 1.0x -- the
@@ -570,27 +575,10 @@ if (!is.null(lb)) {
            `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`,
            `Breach Risk (±20% DD)`)
 
-  # NA credible (not is.na(credible) | !credible) is deliberate here: `!NA`
-  # is NA, and indexing a character vector with a logical vector containing
-  # NA inserts a literal NA element into the result -- that is the root
-  # cause of the "WARNING: NA, NA, NA, ..." defect (#637 follow-up). Only
-  # strategies with an explicit, computed FALSE are flagged.
-  n_flagged <- sum(!is.na(full$credible) & !full$credible)
-  flag_note <- if (n_flagged > 0) {
-    flagged <- full$strategy[!is.na(full$credible) & !full$credible]
-    paste0(" WARNING: ", paste(flagged, collapse = ", "),
-           " flagged as non-credible (>20% CAGR or >50x cum P&L — likely unrealistic).")
-  } else ""
-
-  n_biased <- if ("survivorship_biased" %in% names(full)) sum(full$survivorship_biased, na.rm = TRUE) else 0L
-  bias_note <- if (n_biased > 0) {
-    biased <- full$strategy[!is.na(full$survivorship_biased) & full$survivorship_biased]
-    paste0(" Survivorship-biased (`survivorship_biased = TRUE`): ",
-           paste(biased, collapse = ", "),
-           " — draw on `stk_universe` (see issue #150).")
-  } else ""
-
-  # ── Gross-exposure disclosure note (#626) — dynamically computed, never hardcoded ──
+  # ── Rankings caption (presentation only) ──
+  # Bullets, not prose: the builder lives in R/leaderboard_caption.R so it is
+  # unit-tested. Every count in it is computed from `full`; nothing is typed
+  # here. Long explanations sit in hover popovers (Bootstrap, docs/vignette-shared.js).
   gh_url <- tryCatch({
     remote <- system("git remote get-url origin 2>/dev/null", intern = TRUE)
     sub("\\.git$", "", sub("^git@github\\.com:", "https://github.com/", remote))
@@ -602,216 +590,13 @@ if (!is.null(lb)) {
   git_sha <- if (length(git_sha) == 0 || !nzchar(git_sha)) "main" else git_sha
   gh_base <- if (!is.null(gh_url) && length(gh_url) > 0) gh_url else
     "https://github.com/JohnGavin/historical"
-  hd_exposure_link <- hd_link(
-    htmltools::tags$code("hd_exposure_metrics()"),
-    sprintf("%s/blob/%s/packages/historicaldata/R/exposure.R#L67", gh_base, git_sha)
-  )
-  gross_registry_link <- hd_link(
-    htmltools::tags$code("strategy_gross_convention"),
-    sprintf("%s/blob/%s/R/plan_exposure.R#L27", gh_base, git_sha)
-  )
 
-  n_2x <- if ("gross_convention" %in% names(full)) {
-    sum(full$gross_convention >= 2, na.rm = TRUE)
-  } else 0L
-  n_capped <- if ("is_cap" %in% names(full)) sum(full$is_cap, na.rm = TRUE) else 0L
-  n_na_gross <- if ("gross_convention" %in% names(full)) sum(is.na(full$gross_convention)) else nrow(full)
-
-  # tagList, not paste0: hd_exposure_link/gross_registry_link are real
-  # htmltools <a> tags (see hd_link() in vignette_utils.R), not markdown
-  # strings -- DT hands the caption straight to the browser with no
-  # markdown pass, so `[text](url)` syntax previously rendered as literal
-  # brackets and a bare URL instead of a clickable link.
-  gross_note <- htmltools::tagList(
-    " Gross exposure (", htmltools::tags$code("sum(abs(w))"), ", computed by ", hd_exposure_link,
-    " and recorded per strategy in ", gross_registry_link,
-    ") is not uniform across this table: ", n_2x,
-    " strategies are built dollar-neutral long-short at 2.0x gross while others run long-only at 1.0x, ",
-    "so Vol, Net CAGR, and Max DD are not directly comparable across rows even when Sharpe is similar ",
-    "(Sharpe is leverage-invariant under proportional scaling; the other three columns are not). ",
-    "A trailing `*` on the Gross (now) column (", n_capped,
-    " strategies) marks a construction ceiling the strategy can reach but does not realise every period ",
-    "(e.g. Managed Futures targets volatility and only hits its 3.0x cap in low-vol regimes) — treat those as upper bounds, not realised averages. ",
-    if (n_na_gross > 0) paste0(n_na_gross, " strategy row(s) show — for Gross (now): either the return is assembled from a pre-computed factor series with no explicit weight vector to measure, or the row is a meta-portfolio blend of other rows.") else ""
+  lb_caption <- hd_leaderboard_caption(
+    full, gh_base = gh_base, git_sha = git_sha, kraw = kraw, keff = keff,
+    has_sharpe_ci = has_sharpe_ci, n_ci_crosses_zero = n_ci_crosses_zero
   )
-
-  # ── Leverage allocator gross-target disclosure note (#626) — dynamically
-  # computed, never hardcoded. Distinct from gross_note above: that note
-  # describes Gross (now) (what a strategy's own construction implements
-  # today); this one describes Gross (target) (what the vol-normalised
-  # allocator would assign) and explicitly flags the backstop level as
-  # PROVISIONAL, per #626 decision D1.
-  leverage_plan_link <- hd_link(
-    htmltools::tags$code("compute_allocator_gross()"),
-    sprintf("%s/blob/%s/R/plan_leverage.R", gh_base, git_sha)
-  )
-  issue_626_link <- htmltools::tags$a(
-    href = "https://github.com/JohnGavin/historical/issues/626",
-    target = "_blank", rel = "noopener noreferrer", "#626"
-  )
-  n_gross_target <- sum(!is.na(full$G_capped))
-  n_binds <- sum(full$backstop_binds, na.rm = TRUE)
-  n_blocked_s31 <- sum(
-    !is.na(full$G_capped) & full$G_capped > 1.0 &
-      (is.na(full$detection_underpowered) | full$detection_underpowered),
-    na.rm = TRUE
-  )
-  sigma_used_vals <- full$sigma_target_used[!is.na(full$sigma_target_used)]
-  backstop_used_vals <- full$backstop_used[!is.na(full$backstop_used)]
-
-  gross_target_note <- if (n_gross_target > 0) {
-    htmltools::tagList(
-      " Gross (target) (", leverage_plan_link, ", ", issue_626_link,
-      ") is the leverage the vol-normalised allocator would assign this build: sigma_target = ",
-      sprintf("%.4f", sigma_used_vals[1]),
-      " divided by each strategy's own vol-per-unit-gross, capped at a PROVISIONAL gross-exposure ",
-      "backstop of ", sprintf("%.1f", backstop_used_vals[1]),
-      "x (issue #626 decision D1 — this LEVEL is not yet finalized; override with HD_LEVERAGE_GROSS_BACKSTOP). ",
-      "The backstop binds for ", n_binds, " strateg", if (n_binds == 1) "y" else "ies", " (", n_gross_target,
-      " strategies have a measurable target). ",
-      if (n_blocked_s31 > 0) {
-        paste0(
-          n_blocked_s31, " strategy row(s) show a BLOCKED badge — QA gate S31 (R/plan_qa_gates.R) forbids ",
-          "actually granting more than 1.0x gross to a detection-underpowered or unverified strategy ",
-          "(detection-power-required.md); the figure displayed is the allocator's raw, unblocked output, ",
-          "shown for transparency only."
-        )
-      } else {
-        "No strategy is currently blocked by the detection-power gate (S31)."
-      }
-    )
-  } else ""
-
-  # ── Transaction-cost disclosure note (#624) — dynamically computed, never hardcoded ──
-  cost_registry_link <- hd_link(
-    htmltools::tags$code("strategy_cost_convention"),
-    sprintf("%s/blob/%s/R/plan_cost_convention.R#L44", gh_base, git_sha)
-  )
-  n_zero_cost <- if ("cost_per_trade_bps" %in% names(full)) {
-    sum(full$cost_per_trade_bps == 0, na.rm = TRUE)
-  } else 0L
-  zero_cost_strategies <- if (n_zero_cost > 0) {
-    full$strategy[!is.na(full$cost_per_trade_bps) & full$cost_per_trade_bps == 0]
-  } else character(0)
-  n_na_cost <- if ("cost_per_trade_bps" %in% names(full)) sum(is.na(full$cost_per_trade_bps)) else nrow(full)
-  cost_bps_range <- if ("cost_per_trade_bps" %in% names(full) &&
-                          any(!is.na(full$cost_per_trade_bps))) {
-    rng <- range(full$cost_per_trade_bps, na.rm = TRUE)
-    paste0(rng[1], "–", rng[2], " bps")
-  } else "not available"
-
-  cost_note <- htmltools::tagList(
-    " Per-strategy transaction-cost assumptions (recorded in ", cost_registry_link,
-    ") are not uniform across this table, in both magnitude (", cost_bps_range,
-    ") and unit: most rows charge ",
-    "a per-trade bps figure on realised turnover, but Value (HML) and Managed Futures charge a flat ",
-    "per-calendar-month bps figure regardless of turnover, and TOM/Risk State charge only on discrete ",
-    "switch days — see cost_convention in the registry for each row's exact timing. ",
-    if (n_zero_cost > 0) {
-      paste0("A trailing `*` on the Cost (bps) column (", paste(zero_cost_strategies, collapse = ", "),
-             ") marks a verified zero — no transaction-cost deduction exists in that strategy's code, ",
-             "not a plausible default; it is not net-of-cost comparable to the cost-charging rows above and below it. ")
-    } else "",
-    if (n_na_cost > 0) paste0(n_na_cost, " strategy row(s) show — for Cost (bps): a meta-portfolio blend inherits its constituents' already-net returns with no separate cost applied at the blend level. ") else "",
-    "This Cost (bps) column is the strategy's own internal assumption baked into its returns before they reach this table; ",
-    "for the ", sum(!is.na(full$net_cagr)),
-    " strategies with a Net CAGR value above, it is additional to — not the same as — the flat cost applied there."
-  )
-
-  # ── Diversification-value disclosure note (Pillar 7, #268; surfaced #624) ──
-  corr_registry_link <- hd_link(
-    htmltools::tags$code("plan_strategy_correlation.R"),
-    sprintf("%s/blob/%s/R/plan_strategy_correlation.R#L31", gh_base, git_sha)
-  )
-  n_redundant <- if ("redundant" %in% names(full)) sum(full$redundant, na.rm = TRUE) else 0L
-  n_redundant_na <- if ("redundant" %in% names(full)) sum(is.na(full$redundant)) else nrow(full)
-  # Dynamically computed, never hardcoded (#728/#733 widened
-  # strat_corr_augment's coverage from 5 to 16 of 17 strategies -- a
-  # hardcoded strategy list here would have gone stale the moment that
-  # widening shipped, exactly the failure mode this note exists to avoid).
-  corr_covered_n <- if ("redundant" %in% names(full)) sum(!is.na(full$redundant)) else 0L
-  corr_excluded_strats <- if ("redundant" %in% names(full)) {
-    full$strategy[is.na(full$redundant)]
-  } else full$strategy
-  diversification_note <- htmltools::tagList(
-    " Redundant = \"YES\" when a strategy's Full-Period monthly-return correlation with another, ",
-    "higher-Sharpe strategy exceeds the threshold fixed in ", corr_registry_link,
-    " (", n_redundant, " of ", nrow(full),
-    " strategies currently flagged); \"not computed\" (", n_redundant_na,
-    " strateg", if (n_redundant_na == 1L) "y" else "ies",
-    ") marks a strategy outside the ", corr_covered_n,
-    "-strategy correlation universe that plan_strategy_correlation.R currently covers",
-    if (length(corr_excluded_strats) > 0L) {
-      paste0(" (excluded: ", paste(corr_excluded_strats, collapse = ", "), ")")
-    } else "",
-    " — that is unassessed, not assessed-and-passed. Incremental Sharpe = the ",
-    "change in equal-weight-portfolio Sharpe from including this strategy vs excluding it — ",
-    "positive means it adds diversification value, negative means the portfolio is better off ",
-    "without it; it shares the same \"not computed\" scope as Redundant above (both come from ",
-    "the same join). Both feed the new-strategy value gate (#496)."
-  )
-
-  # ── Detection-power / rigour disclosure note (#726, #728) — dynamically computed ──
-  detection_note <- paste0(
-    " Detection = 3-state verdict from `hd_detection_power()` (`detection-power-required` rule): ",
-    "whether this row's own sample has enough data to distinguish its Sharpe from zero at ",
-    "alpha=0.05 one-sided, 80% power. A strategy that passes the single test but fails once ",
-    "corrected for testing ", kraw, " strategies (K_eff = ", keff,
-    ") is marked distinctly (◆ “fails MT-correction”), not rendered identically to one ",
-    "that clears both bars — see #726. Rigour = coverage of deflated Sharpe / DSR p-value / K_eff ",
-    "(hover for the three numeric values); ○ excluded marks a documented exclusion from ",
-    "`DEFLATED_SHARPE_EXEMPTIONS` (R/plan_qa_gates.R), not a gap — see #728."
-  )
-
-  # ── Sharpe confidence-interval disclosure note (#585 G2) — dynamically
-  # computed, never hardcoded. n_ci_crosses_zero/has_sharpe_ci come from the
-  # mutate() block above (same values used to render the flag).
-  sharpe_ci_note <- if (has_sharpe_ci) {
-    paste0(
-      " Sharpe is shown as point [90% block-bootstrap CI lo, hi] (1000 draws, ",
-      "3-month blocks — R/plan_bootstrap_ci.R); &#9888; marks the ", n_ci_crosses_zero,
-      " of ", nrow(full),
-      " strateg", if (n_ci_crosses_zero == 1L) "y" else "ies",
-      " whose CI spans zero — a positive point estimate there is not evidence the true ",
-      "Sharpe differs from zero (see Robustness > Bootstrap CI below for CAGR/Max DD CIs too)."
-    )
-  } else ""
-
-  # Short caption (#1 in the caption-length audit, historical#0b412a9c): the
-  # unconditional text states only what the table ranks and the single most
-  # important comparability warning. Everything else (column definitions,
-  # per-strategy caveats) is real but was drowning that one sentence -- it
-  # moves into a collapsed <details> block via hd_caption() (vignette_utils.R)
-  # instead of being deleted.
-  short_caption <- paste0(
-    "Strategies ranked by Sharpe (highest first); CAGR is unadjusted (gross), Net CAGR is net ",
-    "of a 0.20%/month round-trip cost where available. Values are not directly comparable ",
-    "across rows — gross exposure, cost basis, and the Credible/Redundant/Detection/Rigour ",
-    "flags vary by strategy; expand below for full column definitions."
-  )
-
-  # ── Out-of-scope-column coverage counts (#637 follow-up, "not computed"
-  # uniformity pass) — dynamically computed, never hardcoded.
-  n_ssr_covered <- sum(!is.na(full$ssr))
-  n_ssr_na      <- sum(is.na(full$ssr))
-  n_net_covered <- sum(!is.na(full$net_cagr))
-
-  full_notes <- htmltools::tagList(
-    "CAGR = unadjusted (gross) compound annual growth rate, computed for every strategy. ",
-    "SSR = Sharpe Stability Ratio (HAC t-stat of rolling 36-month Sharpes; ≥2 = consistent). ",
-    "Top5% Share = fraction of total return from best 5% of months. Both SSR and Top5% Share ",
-    "are computed for a fixed subset of strategies (", n_ssr_covered, " of ", nrow(full),
-    "); the remaining ", n_ssr_na, " show \"not computed\" — never assessed, not a computed ",
-    "absence of stability. ",
-    "Credible = plausible CAGR (<20%) and cum P&L (<50x): \"NO\" marks a strategy that was ",
-    "assessed and failed that check, \"not computed\" marks a strategy for which cost-adjusted ",
-    "metrics were never assessed at all (not the same as failing the check). The Net CAGR and ",
-    "CVaR 95% columns share this exact same \"not computed\" scope (", n_net_covered, " of ",
-    nrow(full), " strategies covered) — all three come from the same cost_rows join and are ",
-    "jointly present or jointly absent per row (QA gate S23, R/plan_qa_gates.R).",
-    flag_note, bias_note, gross_note, gross_target_note, cost_note, diversification_note, detection_note,
-    sharpe_ci_note
-  )
+  short_caption <- lb_caption$short
+  full_notes <- lb_caption$details
 
   full_caption <- hd_caption(
     full_notes,
