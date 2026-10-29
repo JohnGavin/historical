@@ -919,7 +919,7 @@ data-flow. Future PRs extend this seed diagram to the full strategy graph
 cat('<div id="dag-portcons-mount" style="min-height:580px;"></div>')
 ```
 
-Node colours follow the [diagram colour palette](https://github.com/JohnGavin/llm/blob/main/.claude/rules/mermaid-dashboard-pattern.md):
+Node colours follow the project's diagram colour palette:
 <abbr title="Covariance config + estimator — data inputs to the weight engines">Covariance Estimator</abbr> (subgraph) |
 <abbr title="Expected-returns shrinkage applied before Black-Litterman">Expected Returns</abbr> (subgraph) |
 <abbr title="GMV, BL, HRP, TRP, PSO — portfolio weight engines">Weight Engines</abbr> (subgraph) |
