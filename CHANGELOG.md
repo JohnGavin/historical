@@ -293,7 +293,7 @@
   first free route to an actual survivorship-corrected result here.
 
 - **Wikidata evaluated as a data-generation and cross-check source**
-  ([llm#1193](https://github.com/JohnGavin/llm/issues/1193)), prompted by an
+  (llm#1193), prompted by an
   R/Shiny castle atlas built on it. Verified by live query rather than
   assumed: Wikidata holds Enron's inception (1985), **dissolution (2001)**,
   exchange (NYSE) and ticker (`ENE`) — so it is a genuine second source for
@@ -660,18 +660,18 @@ project from here.
 
 ### Filed elsewhere (not fixed here — see `cross-project-scope`)
 
-- [llm#1123](https://github.com/JohnGavin/llm/issues/1123) — the rest of the
+- llm#1123 — the rest of the
   2026-09-01 daily report: `.roborev/` is gitignored in every reviewed repo
   (confirmed in `historical`, `llmtelemetry`, `llm`), which lines up exactly
   with the report's "29 reviews that did not run" (the review agent can't
   read its own snapshot diff); 14 findings with unclassified severity
   (parser/format gap); the dashboard button reported as 404 despite `llm`
   already merging a fix for that exact symptom on 2026-08-23
-  ([llm#946](https://github.com/JohnGavin/llm/issues/946) /
-  [PR #1009](https://github.com/JohnGavin/llm/pull/1009)) — three candidate
+  (llm#946 /
+  llm PR #1009) — three candidate
   explanations listed for the `llm` session to run down. micromort#9962/
   #9963/#9968 (High) explicitly left untouched — belong to `micromort`.
-- [llm#1126](https://github.com/JohnGavin/llm/issues/1126) — whether `/bye`'s
+- llm#1126 — whether `/bye`'s
   roborev NOT-CLEAN Y/N gate should account for session volume (this
   session ended with 54 verdict failures / 43 addressed = 11 net
   unaddressed, 0 crash, 0 quota, consistency clean — informational, not
