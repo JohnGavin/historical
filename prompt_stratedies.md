@@ -57,7 +57,7 @@
 		+ reduce overall market movements
 + /Users/johngavin/docs_gh/blogs/quantitiativo.com/inst/qmd/quantitativo.com_spy_2.11_sharpe.qmd
   + **https://github.com/JohnGavin/quantitiativo.com/actions**
-    + https://github.com/JohnGavin/llm
+    + JohnGavin/llm (private repo)
     + https://github.com/JohnGavin/r.package.example/actions
       + https://github.com/user-workshop-cicd/r.pkg.template/actions
 

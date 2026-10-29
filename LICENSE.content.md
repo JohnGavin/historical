@@ -13,4 +13,4 @@ separately under the repository's own software licence (see `LICENSE` /
 `DESCRIPTION` where present). Creative Commons licences are not used for source
 code.
 
-Policy: [JohnGavin/llm#767](https://github.com/JohnGavin/llm/issues/767).
+Policy: JohnGavin/llm#767.
