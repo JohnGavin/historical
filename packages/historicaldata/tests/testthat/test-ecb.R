@@ -113,3 +113,25 @@ test_that("hd_ecb returns NULL on malformed schema with warning", {
   )
   expect_null(suppressWarnings(httr2::with_mocked_responses(fake, hd_ecb("FOO/BAR"))))
 })
+
+test_that("hd_ecb retries connection-level failures (retry_on_failure = TRUE)", {
+  # 2026-10-31 poll: one 30 s timeout aborted the whole fetch. req_retry() only
+  # retries HTTP 429/503 unless retry_on_failure = TRUE.
+  skip_if_not_installed("httr2")
+  captured <- list()
+  orig <- httr2::req_retry
+  testthat::local_mocked_bindings(
+    req_retry = function(req, ...) {
+      captured <<- list(...)
+      orig(req, ...)
+    },
+    .package = "httr2"
+  )
+  csv_body <- "KEY,FREQ,TIME_PERIOD,OBS_VALUE\nX,D,2024-01-02,1.5\n"
+  fake <- function(req) {
+    httr2::response(status_code = 200, body = charToRaw(csv_body))
+  }
+  httr2::with_mocked_responses(fake, hd_ecb("EXR/D.USD.EUR.SP00.A"))
+  expect_true(isTRUE(captured$retry_on_failure))
+  expect_equal(captured$max_tries, 3)
+})
