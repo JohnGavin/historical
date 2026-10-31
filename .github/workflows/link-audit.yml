@@ -117,10 +117,11 @@ jobs:
           path: ./lychee-out.md
           retention-days: 14
 
-      - name: Create issue on schedule failure
+      # Comment on the open `link-audit` issue if there is one, else file one
+      # (no duplicate alerts, #995/#997/#999/#1001). Never closes anything.
+      - name: Report failure (comment on open issue or create one)
         if: failure() && github.event_name == 'schedule'
-        uses: peter-evans/create-issue-from-file@v5
-        with:
-          title: "link-audit: broken links detected on Pages site"
-          content-filepath: ./lychee-out.md
-          labels: bug, deploy, link-audit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: bash scripts/link_audit_file_issue.sh ./lychee-out.md
