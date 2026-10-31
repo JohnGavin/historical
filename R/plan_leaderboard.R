@@ -186,6 +186,28 @@
   as.numeric(ifelse(use_dsr, dsr_T_obs, months))
 }
 
+#' Validate the logged per-specification trial count K (#972)
+#'
+#' K (the number of trials) feeds \code{hd_deflated_sharpe(K_trials = )}. A
+#' K that is NA, zero, negative, fractional or a vector would silently
+#' produce a wrong (or no) correction, so anything but one positive whole
+#' number aborts.
+#'
+#' @param x Candidate K (the \code{strat_k_trials_logged} target value).
+#' @return \code{x} as a single integer.
+#' @noRd
+.check_k_trials_logged <- function(x) {
+  if (!is.numeric(x) || length(x) != 1L || is.na(x) || !is.finite(x) ||
+      x < 1 || x != round(x)) {
+    cli::cli_abort(c(
+      "x" = "The logged trial count {.field k_trials_logged} must be a single positive whole number.",
+      "i" = "Got {.val {x}} (class {.cls {class(x)}}, length {length(x)}).",
+      "i" = "It comes from {.fn hd_strategy_spec_trial_count} (target {.code strat_k_trials_logged})."
+    ), call = NULL)
+  }
+  as.integer(x)
+}
+
 #' Build STRATEGY_OBS_ANN_FACTOR from strategy_names + its provenance table
 #'
 #' Exposed as a function (rather than inlined at source() time) so tests can
@@ -948,6 +970,10 @@ plan_leaderboard <- function() {
                      dsr_convention,  # #959/#788: labels dsr_pvalue's convention
                      k_eff_leaderboard, k_raw_leaderboard,
                      k_eff_family, k_raw_family,
+                     # #972 (report-only): logged trial count + the DSR pair
+                     # computed with it, beside the published pair.
+                     k_trials_logged, deflated_sharpe_klogged,
+                     dsr_pvalue_klogged,
                      # #919: the ARITHMETIC per-period EXCESS Sharpe (registry
                      # basis) -- the input prob_sharpe_positive needs below.
                      # Temporary column, dropped after prob_sharpe_diag.
@@ -957,6 +983,13 @@ plan_leaderboard <- function() {
                      .dsr_T_obs = T_obs),
             by = "strategy"
           )
+        # #972: k_trials_logged is ONE scalar for the whole leaderboard, so it
+        # is set on every row (including a strategy with no DSR row, e.g. PSO
+        # Optimal, which the join above leaves NA). Aborts if the DSR target
+        # carried more than one distinct value.
+        all_metrics$k_trials_logged <- .check_k_trials_logged(
+          unique(strat_deflated_sharpe$k_trials_logged)
+        )
       }
 
       # ── Walk-Forward Correlation columns (#318) ────────────────────────────
@@ -1730,6 +1763,20 @@ plan_leaderboard <- function() {
     # k_eff_family / k_raw_family are populated ONLY for the original
     # 5-strategy family (NA elsewhere) -- informational context, no longer
     # used to compute deflated_sharpe/dsr_pvalue (#728 item 2).
+    # ── Logged trial count K (#972 step 1, REPORT-ONLY) ────────────────────
+    # K = the number of distinct SPECIFICATIONS in the tracked research log
+    # (hd_strategy_spec_trial_count(): hypothesis group x distinct normalised
+    # params_json), the count a deflated Sharpe ratio is supposed to be
+    # deflated by. It is surfaced beside K_eff, NOT instead of it: no
+    # published number changes. cue = always because the log is read from
+    # disk (targets does not track it as a dependency); the downstream
+    # targets only rebuild when the value actually changes.
+    targets::tar_target(
+      strat_k_trials_logged,
+      hd_strategy_spec_trial_count(),
+      cue = targets::tar_cue(mode = "always")
+    ),
+
     targets::tar_target(strat_deflated_sharpe, {
       library(dplyr)
 
@@ -1799,6 +1846,9 @@ plan_leaderboard <- function() {
       k_raw_lb  <- nrow(strat_corr_matrix_leaderboard)
       k_eff_fam <- max(1L, round(strat_keff_vertox))
       k_raw_fam <- nrow(strat_corr_matrix)
+      # #972: the logged per-specification trial count (fail loud on anything
+      # that is not a single positive whole number).
+      k_logged  <- .check_k_trials_logged(strat_k_trials_logged)
 
       # ── Return basis (#919) ────────────────────────────────────────────
       # The leaderboard `sharpe` is on an EXCESS-return basis (rf deducted
@@ -1859,6 +1909,11 @@ plan_leaderboard <- function() {
         }
         r <- r[!is.na(r)]
         d <- hd_deflated_sharpe(r, K_trials = k_eff_lb, ann_factor = ann_factor)
+        # #972 (report-only): the SAME series and call as above, differing
+        # ONLY in K_trials (logged specification count instead of K_eff). NA
+        # exactly where `d` is NA (hd_deflated_sharpe returns NA for < 10
+        # observations regardless of K), never 0.
+        d_kl <- hd_deflated_sharpe(r, K_trials = k_logged, ann_factor = ann_factor)
 
         # ── Harvey-Liu Sharpe haircut (#490 Gap 1) ─────────────────────────
         # n_tests = k_eff_lb (the SAME correlation-aware K_eff used for DSR
@@ -1903,7 +1958,12 @@ plan_leaderboard <- function() {
           k_eff_leaderboard  = strat_keff_vertox_leaderboard,
           k_raw_leaderboard  = k_raw_lb,
           k_eff_family       = if (is_family) k_eff_fam else NA_real_,
-          k_raw_family       = if (is_family) k_raw_fam else NA_integer_
+          k_raw_family       = if (is_family) k_raw_fam else NA_integer_,
+          # #972 step 1 (report-only): new columns, appended last so every
+          # existing column keeps its name, position and value.
+          k_trials_logged         = k_logged,
+          deflated_sharpe_klogged = d_kl$dsr,
+          dsr_pvalue_klogged      = d_kl$dsr_pvalue
         )
       }
 
