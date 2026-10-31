@@ -60,6 +60,7 @@ Other research-log:
 \code{\link{hd_strategy_idea_priorities}()},
 \code{\link{hd_strategy_ledger}()},
 \code{\link{hd_strategy_ledger_register}()},
+\code{\link{hd_strategy_spec_trial_count}()},
 \code{\link{hd_strategy_trial_count}()}
 }
 \concept{research-log}
