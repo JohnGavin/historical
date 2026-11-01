@@ -76,21 +76,48 @@ hd_ff_factors <- function(dataset = "F-F_Research_Data_5_Factors_2x3",
   url <- paste0(base_url, "/", zip_name)
 
   # Download and extract
+  # Each call extracts into its own directory, so a CSV left by an earlier
+  # download in the same session can never be picked up.
   temp_zip <- tempfile(fileext = ".zip")
-  temp_dir <- tempdir()
+  temp_dir <- tempfile("ken_french_")
+  dir.create(temp_dir)
+  on.exit(unlink(c(temp_zip, temp_dir), recursive = TRUE), add = TRUE)
 
   cli::cli_alert_info("Downloading {dataset} from Ken French library...")
   tryCatch({
-    download.file(url, temp_zip, mode = "wb", quiet = TRUE)
-    unzip(temp_zip, exdir = temp_dir)
+    utils::download.file(url, temp_zip, mode = "wb", quiet = TRUE)
+    utils::unzip(temp_zip, exdir = temp_dir)
   }, error = function(e) {
     cli::cli_abort("Failed to download {dataset}: {e$message}")
   })
 
-  # Find CSV file (name varies)
-  csv_files <- list.files(temp_dir, pattern = "\\.csv$", full.names = TRUE, ignore.case = TRUE)
+  df <- .ff_read_csv_dir(temp_dir, dataset, frequency)
+
+  # Cache if requested
+  if (cache) {
+    saveRDS(df, cache_file)
+    cli::cli_alert_success("Cached {dataset} to {basename(cache_file)}")
+  }
+
+  df
+}
+
+
+#' Parse the Ken French CSV found in one extraction directory
+#'
+#' Internal. Reads the CSV in `dir`, validates the column count against the
+#' dataset's expected shape, names the columns, converts dates and percent
+#' returns.
+#'
+#' @param dir Directory holding this call's unzipped download.
+#' @param dataset Character. Ken French dataset name.
+#' @param frequency Character. "monthly" or "daily".
+#' @return A tibble.
+#' @noRd
+.ff_read_csv_dir <- function(dir, dataset, frequency) {
+  csv_files <- list.files(dir, pattern = "\\.csv$", full.names = TRUE, ignore.case = TRUE)
   if (length(csv_files) == 0) {
-    cli::cli_abort("No CSV file found in {zip_name}")
+    cli::cli_abort("No CSV file found for {dataset} in the extracted download")
   }
   csv_file <- csv_files[1]
 
@@ -119,12 +146,15 @@ hd_ff_factors <- function(dataset = "F-F_Research_Data_5_Factors_2x3",
   # Parse based on dataset type
   if (grepl("5_Factors|Research_Data_Factors", dataset)) {
     # Format: Date, Mkt-RF, SMB, HML, RMW, CMA, RF
+    .ff_check_ncol(df, dataset, 7L)
     names(df) <- c("date", "Mkt.RF", "SMB", "HML", "RMW", "CMA", "RF")
   } else if (grepl("Momentum", dataset)) {
     # Format: Date, Mom (UMD)
+    .ff_check_ncol(df, dataset, 2L)
     names(df) <- c("date", "Mom")
   } else if (grepl("Industry", dataset)) {
     # Format: Date, Ind1, Ind2, ...
+    .ff_check_ncol(df, dataset, 2L, at_least = TRUE)
     n_cols <- ncol(df)
     names(df) <- c("date", paste0("Ind", seq_len(n_cols - 1)))
   } else {
@@ -142,15 +172,22 @@ hd_ff_factors <- function(dataset = "F-F_Research_Data_5_Factors_2x3",
   numeric_cols <- setdiff(names(df), "date")
   df[numeric_cols] <- lapply(df[numeric_cols], function(x) as.numeric(x) / 100)
 
-  df <- dplyr::as_tibble(df)
+  dplyr::as_tibble(df)
+}
 
-  # Cache if requested
-  if (cache) {
-    saveRDS(df, cache_file)
-    cli::cli_alert_success("Cached {dataset} to {basename(cache_file)}")
+
+# Abort (naming dataset, expected, found) when the parsed width is wrong.
+.ff_check_ncol <- function(df, dataset, expected, at_least = FALSE) {
+  found <- ncol(df)
+  bad <- if (at_least) found < expected else found != expected
+  if (bad) {
+    qualifier <- if (at_least) "at least " else ""
+    cli::cli_abort(c(
+      "Unexpected column count in {dataset}.",
+      "x" = "Expected {qualifier}{expected} columns, found {found}."
+    ))
   }
-
-  df
+  invisible(df)
 }
 
 
