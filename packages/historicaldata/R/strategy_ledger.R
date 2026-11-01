@@ -92,6 +92,42 @@ hd_strategy_idea_priorities <- function() {
   )
 }
 
+# Grouping key shared by the ledger and the specification trial count:
+# identical (economic_claim, predictor) is ONE hypothesis group.
+.sl_gkey <- function(rows) {
+  paste(
+    ifelse(is.na(rows$economic_claim), "<NA>", rows$economic_claim),
+    ifelse(is.na(rows$predictor), "<NA>", rows$predictor),
+    sep = "\x1f"
+  )
+}
+
+# Canonical form of one params_json string (key order and whitespace do not
+# matter). Fails loud on NA, empty or unparseable input: a specification whose
+# parameters cannot be read cannot be counted as distinct or as the same.
+.sl_norm_params <- function(x, impl_uuid) {
+  if (length(x) != 1L || is.na(x) || !nzchar(trimws(x))) {
+    cli::cli_abort(c(
+      "x" = "Implementation {.val {impl_uuid}} has a missing or empty {.field params_json}.",
+      "i" = "The specification trial count cannot tell whether it is a new specification."
+    ), call = NULL)
+  }
+  parsed <- tryCatch(
+    jsonlite::fromJSON(x, simplifyVector = FALSE),
+    error = function(e) {
+      cli::cli_abort(c(
+        "x" = "Implementation {.val {impl_uuid}} has unparseable {.field params_json}.",
+        "i" = "Parser said: {conditionMessage(e)}"
+      ), call = NULL)
+    }
+  )
+  if (is.list(parsed) && !is.null(names(parsed))) {
+    parsed <- parsed[order(names(parsed))]
+  }
+  as.character(jsonlite::toJSON(parsed, auto_unbox = TRUE, null = "null",
+                                na = "null", digits = NA))
+}
+
 # Research-log part of the ledger: one row per (economic_claim, predictor).
 .sl_from_log <- function(base_dir) {
   base_dir <- hd_rlog_path(base_dir)
@@ -123,11 +159,7 @@ hd_strategy_idea_priorities <- function() {
   rows$.source   <- .sl_field(parsed, "source")
   rows$.issue    <- .sl_field(parsed, "issue")
   rows$.strategy <- .sl_field(parsed, "strategy_id")
-  rows$.gkey <- paste(
-    ifelse(is.na(rows$economic_claim), "<NA>", rows$economic_claim),
-    ifelse(is.na(rows$predictor), "<NA>", rows$predictor),
-    sep = "\x1f"
-  )
+  rows$.gkey <- .sl_gkey(rows)
 
   out <- lapply(split(seq_len(nrow(rows)), rows$.gkey), function(idx) {
     g   <- rows[idx, , drop = FALSE]
@@ -496,6 +528,97 @@ hd_strategy_trial_count <- function(base_dir = NULL) {
     ))
   }
   as.integer(sum(led$latest_status %in% counted))
+}
+
+#' Count the distinct specifications that have been tested (K)
+#'
+#' Returns K, the number of trials, counted per SPECIFICATION rather than per
+#' ledger row. K is the number of distinct things that were tried; a
+#' multiple-testing correction such as the deflated Sharpe ratio needs it,
+#' because the more things you try, the better the best of them looks by luck.
+#'
+#' A \emph{specification} is a hypothesis group (rows of the
+#' \code{hypotheses} table with identical \code{economic_claim} AND
+#' \code{predictor}, the grouping of \code{hd_strategy_ledger()}) crossed with
+#' the distinct, normalised \code{params_json} of the implementations linked to
+#' that group (\code{implementations.parent_uuid} equal to the uuid of any row
+#' of the group). Normalised means key order and whitespace are ignored. A
+#' claim logged ten times with one parameter set is therefore ONE trial; the
+#' same claim run with two parameter sets is two.
+#'
+#' A group with no linked implementation counts as one specification (it is
+#' never dropped and never counted as zero). An implementation whose
+#' \code{params_json} is missing or not valid JSON is an error, not a guess.
+#'
+#' Only groups whose latest status is \code{refuted}, \code{supported},
+#' \code{inconclusive-underpowered} or \code{testing} are counted (a refuted
+#' idea was still a trial). \code{inconclusive-unmeasurable} (no test
+#' statistic was produced) and \code{proposed} are not. Groups at the
+#' deprecated \code{tested} status are not counted either; a
+#' \code{cli::cli_inform()} reports how many were left out.
+#'
+#' This is a REPORT-ONLY quantity: it changes no published number. It sits
+#' beside, and does not replace, \code{hd_strategy_trial_count()} and the
+#' effective count K_eff (\code{hd_strat_keff_vertox()}).
+#'
+#' @param base_dir Override research-log base directory (see
+#'   \code{hd_rlog_path()}).
+#' @return A single integer.
+#' @family research-log
+#' @export
+hd_strategy_spec_trial_count <- function(base_dir = NULL) {
+  base_dir <- hd_rlog_path(base_dir)
+  has_files <- function(tbl) {
+    length(list.files(file.path(base_dir, tbl), pattern = "\\.parquet$")) > 0L
+  }
+  rows <- if (has_files("hypotheses")) {
+    hd_rlog_query("hypotheses", base_dir = base_dir)
+  } else {
+    hd_rlog_schema("hypotheses")
+  }
+  if (nrow(rows) == 0L) return(0L)
+
+  valid_statuses <- hd_rlog_statuses()$status
+  bad <- unique(rows$status[is.na(rows$status) | !rows$status %in% valid_statuses])
+  if (length(bad) > 0L) {
+    cli::cli_abort(c(
+      "x" = "Hypotheses in the research log have status outside the vocabulary: {.val {bad}}",
+      "i" = "Allowed values: {.val {valid_statuses}}"
+    ))
+  }
+  rlang::check_installed("jsonlite")
+
+  impls <- if (has_files("implementations")) {
+    hd_rlog_query("implementations", base_dir = base_dir)
+  } else {
+    hd_rlog_schema("implementations")
+  }
+
+  counted <- c("refuted", "supported", "inconclusive-underpowered", "testing")
+  rows$.gkey <- .sl_gkey(rows)
+  n_legacy <- 0L
+  total <- 0L
+  for (idx in split(seq_len(nrow(rows)), rows$.gkey)) {
+    g <- rows[idx, , drop = FALSE]
+    newest <- g[order(g$timestamp, g$uuid, decreasing = TRUE)[1L], , drop = FALSE]
+    if (identical(newest$status, "tested")) n_legacy <- n_legacy + 1L
+    if (!newest$status %in% counted) next
+    mine <- impls[!is.na(impls$parent_uuid) & impls$parent_uuid %in% g$uuid,
+                  , drop = FALSE]
+    if (nrow(mine) == 0L) {
+      total <- total + 1L
+    } else {
+      norm <- mapply(.sl_norm_params, mine$params_json, mine$uuid,
+                     USE.NAMES = FALSE)
+      total <- total + length(unique(norm))
+    }
+  }
+  if (n_legacy > 0L) {
+    cli::cli_inform(c(
+      "i" = "{n_legacy} entr{?y/ies} with deprecated status {.val tested} not counted as trials (outcome unknown)."
+    ))
+  }
+  as.integer(total)
 }
 
 # ── Query layer (rebuildable DuckDB view) ───────────────────────────────────

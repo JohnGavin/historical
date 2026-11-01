@@ -1982,7 +1982,9 @@ columns rather than hover-only badges, are below.
 # never a re-derived or hand-typed verdict.
 det_rig_cols <- c("sharpe", "detection_underpowered", "detection_min_n_years",
                    "detection_underpowered_mt", "detection_min_n_years_mt",
-                   "deflated_sharpe", "dsr_pvalue", "k_eff_leaderboard")
+                   "deflated_sharpe", "dsr_pvalue", "k_eff_leaderboard",
+                   # #972 (report-only): logged trial count + the DSR pair it gives
+                   "k_trials_logged", "deflated_sharpe_klogged", "dsr_pvalue_klogged")
 if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHARPE_EXEMPTIONS")) {
   det_rig_tbl <- full |>
     mutate(
@@ -1998,8 +2000,11 @@ if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHA
       `Years Needed` = ifelse(is.na(detection_min_n_years), "—", as.character(round(detection_min_n_years, 1))),
       `Years Needed (MT-corrected)` = ifelse(is.na(detection_min_n_years_mt), "—", as.character(round(detection_min_n_years_mt, 1))),
       K_eff = ifelse(is.na(k_eff_leaderboard), "—", as.character(round(k_eff_leaderboard, 1))),
+      `K (logged)` = ifelse(is.na(k_trials_logged), "—", as.character(k_trials_logged)),
       `Deflated Sharpe` = ifelse(is.na(deflated_sharpe), "—", as.character(round(deflated_sharpe, 2))),
       `DSR p-value` = ifelse(is.na(dsr_pvalue), "—", as.character(round(dsr_pvalue, 3))),
+      `Deflated Sharpe (K logged)` = ifelse(is.na(deflated_sharpe_klogged), "—", as.character(round(deflated_sharpe_klogged, 2))),
+      `DSR p-value (K logged)` = ifelse(is.na(dsr_pvalue_klogged), "—", as.character(round(dsr_pvalue_klogged, 3))),
       .rig_present = rowSums(!is.na(cbind(deflated_sharpe, dsr_pvalue, k_eff_leaderboard))),
       .rig_exempt = strategy %in% DEFLATED_SHARPE_EXEMPTIONS$strategy,
       `Rigour Coverage` = dplyr::case_when(
@@ -2010,7 +2015,8 @@ if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHA
       )
     ) |>
     select(Strategy = strategy, Sharpe, Verdict, `Years Needed`, `Years Needed (MT-corrected)`,
-           K_eff, `Deflated Sharpe`, `DSR p-value`, `Rigour Coverage`)
+           K_eff, `K (logged)`, `Deflated Sharpe`, `DSR p-value`,
+           `Deflated Sharpe (K logged)`, `DSR p-value (K logged)`, `Rigour Coverage`)
 
   # #959/#788: the DSR p-value header names its convention (multiplier vs
   # statistic-units) and hovers to explain the difference. The convention is
@@ -2020,10 +2026,21 @@ if (exists("full") && all(det_rig_cols %in% names(full)) && exists("DEFLATED_SHA
   dsr_conv_vals <- if ("dsr_convention" %in% names(full)) full$dsr_convention else NA_character_
   dsr_header_html <- hd_dsr_header_popover(dsr_conv_vals)
 
+  # #972 step 1 (report-only): the logged trial count, read from the data
+  # (one scalar on every row) so the caption never carries a typed number.
+  k_logged_txt <- as.character(unique(full$k_trials_logged[!is.na(full$k_trials_logged)]))
+  k_logged_txt <- if (length(k_logged_txt) == 1L) k_logged_txt else "an inconsistent number of"
+
   hd_dt(det_rig_tbl, paste0(
+    "Is each strategy's edge still distinguishable from luck once we allow for how many things were tried, ",
+    "and is the answer the same if we count trials by logged specification rather than by effective ",
+    "(correlation-adjusted) strategies? ",
     "Per-strategy statistical detection power and rigour, this build. Verdict/Years Needed follow ",
     "`hd_detection_power()` (`detection-power-required` rule); K_eff/Deflated Sharpe/DSR p-value are ",
-    "the deflated-Sharpe correction for testing multiple strategies. The DSR p-value header names ",
+    "the deflated-Sharpe correction for testing multiple strategies. The `(K logged)` columns repeat that ",
+    "correction with K, the number of trials, set to the ", k_logged_txt, " distinct specifications in the ",
+    "research log (`hd_strategy_spec_trial_count()`) instead of K_eff. They are shown for comparison only: ",
+    "they change no published number. The DSR p-value header names ",
     "the convention used for the trial-Sharpe variance; hover it for both definitions. See ",
     "[#726](https://github.com/JohnGavin/historical/issues/726) (detection power), ",
     "[#728](https://github.com/JohnGavin/historical/issues/728) (rigour coverage) and ",

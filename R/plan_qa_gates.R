@@ -2272,6 +2272,36 @@ check_leaderboard_deflated_sharpe_coverage <- function(leaderboard, exemptions =
 }
 
 
+#' Assert the leaderboard's logged trial count is one positive whole number
+#' (#972 step 1, report-only)
+#'
+#' \code{k_trials_logged} is the per-specification trial count
+#' (\code{hd_strategy_spec_trial_count()}), shown beside K_eff. It is ONE
+#' scalar for the whole leaderboard, so every row must carry the same positive
+#' whole number: an NA, 0, a fraction, or two different values would mean the
+#' K-corrected deflated Sharpe beside it was computed with a wrong or
+#' inconsistent K. The column is report-only and optional, so a leaderboard
+#' without it is not checked (nothing was reported).
+#'
+#' @param leaderboard Tibble; the output of the \code{leaderboard} target.
+#' @return \code{TRUE} invisibly on success.
+#' @noRd
+check_leaderboard_k_trials_logged <- function(leaderboard) {
+  if (!"k_trials_logged" %in% names(leaderboard)) return(invisible(TRUE))
+  k <- leaderboard$k_trials_logged
+  if (!is.numeric(k) || length(k) == 0L || anyNA(k) || any(!is.finite(k)) ||
+      any(k < 1) || any(k != round(k)) || length(unique(k)) != 1L) {
+    shown <- if (is.numeric(k)) unique(k) else class(k)
+    cli::cli_abort(c(
+      "x" = "Leaderboard {.field k_trials_logged} must be one positive whole number on every row.",
+      "i" = "Got distinct value(s): {.val {shown}} across {length(k)} row(s).",
+      "i" = "check_leaderboard_k_trials_logged() (#972): K comes from {.fn hd_strategy_spec_trial_count} via the strat_deflated_sharpe target; a wrong K silently mis-deflates the K-logged Sharpe."
+    ))
+  }
+  invisible(TRUE)
+}
+
+
 #' Assert leaderboard `net_cagr`, `cvar_95`, and `credible` are jointly NA or
 #' jointly non-NA per row (S23, fail-loud-not-null.md)
 #'
@@ -5251,6 +5281,18 @@ plan_qa_gates <- function() {
       command = {
         check_leaderboard_deflated_sharpe_coverage(leaderboard, DEFLATED_SHARPE_EXEMPTIONS)
         cli::cli_inform(c("v" = "qa_leaderboard_deflated_sharpe_coverage: S21 passed (every positive-Sharpe Full Period strategy has a deflated-Sharpe verdict or a declared exemption)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: the logged trial count K on the leaderboard is one positive
+    # whole number on every row (#972 step 1, report-only columns).
+    targets::tar_target(
+      qa_leaderboard_k_trials_logged,
+      command = {
+        check_leaderboard_k_trials_logged(leaderboard)
+        cli::cli_inform(c("v" = "qa_leaderboard_k_trials_logged: passed (k_trials_logged is one positive whole number, or absent)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

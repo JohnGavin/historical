@@ -61,7 +61,8 @@ source(here::here("R/plan_leaderboard.R"))
     strat_keff_vertox_leaderboard = 5,
     strat_corr_matrix_leaderboard = diag(5),
     strat_keff_vertox = 3,
-    strat_corr_matrix = diag(3)
+    strat_corr_matrix = diag(3),
+    strat_k_trials_logged = 40L   # #972: report-only, never feeds the published DSR
   )
 }
 
