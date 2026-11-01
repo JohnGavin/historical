@@ -18,11 +18,13 @@ hd_ecb <- function(series_key, start = "2000-01-01", end = NULL) {
   }
 
   url <- paste0("https://data-api.ecb.europa.eu/service/data/", series_key)
+  # retry_on_failure = TRUE: also retry connection-level failures (timeouts,
+  # resets), not only HTTP 429/503. The 2026-10-31 poll died on one timeout.
   req <- httr2::request(url) |>
     httr2::req_headers(Accept = "text/csv") |>
     httr2::req_url_query(startPeriod = as.character(start), detail = "dataonly") |>
     httr2::req_timeout(30) |>
-    httr2::req_retry(max_tries = 3, backoff = ~ 2)
+    httr2::req_retry(max_tries = 3, retry_on_failure = TRUE, backoff = ~ 2)
 
   if (!is.null(end)) {
     req <- req |> httr2::req_url_query(endPeriod = as.character(end))
