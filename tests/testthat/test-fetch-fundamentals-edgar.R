@@ -106,3 +106,64 @@ test_that("validate_cik_filing_overlap aborts when the candidate has no KEEP_FOR
     "ZZZZ", "0000000001", "GHOST CORP", na_range
   ))
 })
+
+# --- #865 remainder: CIK carried through the triangle ------------------------
+
+# Raw filing-level frame for two issuers that share the ticker "APC" in
+# different eras (Anadarko 2011-2019, ARKO 2021-2022; synthetic values).
+.make_raw_apc <- function() {
+  tibble::tibble(
+    ticker     = "APC",
+    cik        = c("0000773910", "0000773910", "0001835022", "0001835022"),
+    xbrl_tag   = "Revenues",
+    unit       = "USD",
+    period_end = as.Date(c("2010-12-31", "2018-12-31", "2020-12-31", "2021-12-31")),
+    fy         = c(2010L, 2018L, 2020L, 2021L),
+    fp         = "FY",
+    form       = "10-K",
+    filed      = as.Date(c("2011-02-15", "2019-02-25", "2021-03-10", "2022-03-08")),
+    accn       = c("a1", "a2", "b1", "b2"),
+    val        = c(10, 20, 30, 40)
+  )
+}
+
+test_that("build_triangle keeps two issuers sharing a ticker distinct by cik", {
+  tri <- build_triangle(.make_raw_apc())
+  expect_true("cik" %in% names(tri))
+  expect_true("ticker" %in% names(tri))
+  expect_equal(nrow(tri), 4L)
+  expect_setequal(unique(tri$cik), c("0000773910", "0001835022"))
+  expect_equal(unique(tri$ticker), "APC")
+  expect_equal(anyDuplicated(tri[c("cik", "ticker", "xbrl_tag", "period_end")]), 0L)
+})
+
+test_that("build_triangle cik is character with exactly 10 digits (leading zeros kept)", {
+  tri <- build_triangle(.make_raw_apc())
+  expect_type(tri$cik, "character")
+  expect_true(all(grepl("^[0-9]{10}$", tri$cik)))
+  expect_true(any(startsWith(tri$cik, "000")))
+})
+
+test_that("build_triangle aborts on a missing (NA) cik rather than NA-filling", {
+  raw <- .make_raw_apc()
+  raw$cik[2] <- NA_character_
+  expect_error(build_triangle(raw), "missing")
+})
+
+test_that("build_triangle aborts when cik is absent, numeric, or not 10 digits", {
+  raw <- .make_raw_apc()
+  expect_error(build_triangle(raw[setdiff(names(raw), "cik")]), "no.*cik")
+  num <- raw
+  num$cik <- c(773910, 773910, 1835022, 1835022)
+  expect_error(build_triangle(num), "character")
+  short <- raw
+  short$cik[1] <- "773910"
+  expect_error(build_triangle(short), "10-digit")
+})
+
+test_that("extract_tag_facts stamps cik and rejects an invalid cik", {
+  out <- extract_tag_facts(.anadarko_facts, "APC", "Revenues", "0000773910")
+  expect_equal(unique(out$cik), "0000773910")
+  expect_error(extract_tag_facts(.anadarko_facts, "APC", "Revenues", NA_character_), "missing")
+  expect_error(extract_tag_facts(.anadarko_facts, "APC", "Revenues", 773910), "character")
+})
