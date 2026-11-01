@@ -41,10 +41,9 @@
 # historical/delisted coverage -- the check will not reject any of them
 # today (#865's own "Severity today: latent, not live"). It becomes
 # load-bearing the moment this script (or a descendant of it) is pointed
-# at a historical or delisted universe. Carrying CIK as a first-class
-# column throughout the repo, and a repo-wide audit of every other
-# ticker-keyed join, are explicitly OUT OF SCOPE here -- see #865 items 3
-# and 4, which remain open follow-up work.
+# at a historical or delisted universe. The triangle now carries `cik`
+# (zero-padded 10-char character) as an output column (#865); the audit of
+# other ticker-keyed joins is docs/ticker-join-audit-865.md.
 #
 # User-Agent: SEC's fair-access policy requires a descriptive, non-generic
 # User-Agent (https://www.sec.gov/os/webmaster-faq#developers) --
@@ -255,7 +254,8 @@ fetch_companyfacts <- function(cik, ticker) {
 }
 
 #' Extract one XBRL tag's raw filing-level facts into a long tibble
-extract_tag_facts <- function(facts, ticker, tag) {
+extract_tag_facts <- function(facts, ticker, tag, cik) {
+  assert_valid_cik(cik, context = sprintf("extract_tag_facts(%s, %s)", ticker, tag))
   node <- facts$facts[["us-gaap"]][[tag]]
   if (is.null(node)) return(NULL)
   units <- node$units
@@ -267,6 +267,7 @@ extract_tag_facts <- function(facts, ticker, tag) {
   purrr::map_dfr(entries, function(e) {
     tibble(
       ticker       = ticker,
+      cik          = as.character(cik),
       xbrl_tag     = tag,
       unit         = unit_name,
       period_end   = suppressWarnings(as.Date(e$end %||% NA_character_)),
@@ -280,12 +281,54 @@ extract_tag_facts <- function(facts, ticker, tag) {
   })
 }
 
+#' Abort unless `cik` is a non-missing zero-padded 10-digit character vector
+#'
+#' #865: a numeric CIK silently loses its leading zeros, and an NA CIK would
+#' make a row unattributable to an issuer. Neither is ever filled in
+#' silently; both abort.
+#'
+#' @param cik Vector to check.
+#' @param context Short label for the error message.
+#' @return `TRUE` invisibly when valid.
+assert_valid_cik <- function(cik, context = "cik") {
+  if (!is.character(cik)) {
+    cli::cli_abort(c(
+      "x" = "{context}: cik must be a character vector, got {.cls {class(cik)}}.",
+      "i" = "A numeric CIK silently drops leading zeros (#865); keep it as a zero-padded 10-character string."
+    ))
+  }
+  if (length(cik) == 0L || anyNA(cik)) {
+    cli::cli_abort(c(
+      "x" = "{context}: cik is missing (NA or empty) for {sum(is.na(cik))} value{?s}.",
+      "i" = "Refusing to build rows that cannot be attributed to an issuer (#865)."
+    ))
+  }
+  bad <- unique(cik[!grepl("^[0-9]{10}$", cik)])
+  if (length(bad) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{context}: {length(bad)} cik value{?s} are not 10-digit zero-padded strings: {.val {bad}}.",
+      "i" = "Expected e.g. {.val 0000320193} (#865)."
+    ))
+  }
+  invisible(TRUE)
+}
+
 #' Collapse raw filing-level facts into the ratified revision-triangle
-#' schema: one row per (ticker, xbrl_tag, period_end).
+#' schema: one row per (cik, ticker, xbrl_tag, period_end).
+#'
+#' `cik` is carried as an output column (#865) so two issuers sharing a
+#' reused ticker stay distinct. `raw` must have a valid `cik` column.
 build_triangle <- function(raw) {
+  if (!"cik" %in% names(raw)) {
+    cli::cli_abort(c(
+      "x" = "build_triangle(): input has no {.field cik} column.",
+      "i" = "Rows keyed on ticker alone can merge different issuers that reused a ticker (#865)."
+    ))
+  }
+  assert_valid_cik(raw$cik, context = "build_triangle()")
   raw |>
     filter(form %in% KEEP_FORMS, !is.na(val), !is.na(filed), !is.na(period_end)) |>
-    group_by(ticker, xbrl_tag, period_end) |>
+    group_by(cik, ticker, xbrl_tag, period_end) |>
     summarise(
       fiscal_period  = fp[which.min(filed)],
       first_filed    = min(filed),
@@ -297,9 +340,9 @@ build_triangle <- function(raw) {
     mutate(
       restated = abs(latest_value - original_value) > 0.005 * pmax(abs(original_value), 1e-9)
     ) |>
-    select(ticker, fiscal_period, period_end, first_filed, xbrl_tag,
+    select(ticker, cik, fiscal_period, period_end, first_filed, xbrl_tag,
            original_value, latest_value, restated, source) |>
-    arrange(ticker, xbrl_tag, period_end)
+    arrange(ticker, cik, xbrl_tag, period_end)
 }
 
 # ---------------------------------------------------------------------------
@@ -335,7 +378,7 @@ build_triangle <- function(raw) {
     validate_cik_filing_overlap(tk, cik, title, filing_range)
 
     purrr::map_dfr(PILOT_TAGS, function(tag) {
-      extract_tag_facts(facts, tk, tag) %||% tibble()
+      extract_tag_facts(facts, tk, tag, cik) %||% tibble()
     })
   })
 
