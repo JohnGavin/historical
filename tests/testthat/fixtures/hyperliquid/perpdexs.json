@@ -1,0 +1,170 @@
+[
+  null,
+  {
+    "name": "xyz",
+    "fullName": "XYZ",
+    "assetToStreamingOiCap": [
+      [
+        "xyz:AAOI",
+        "25000000.0"
+      ],
+      [
+        "xyz:AAPL",
+        "200000000.0"
+      ],
+      [
+        "xyz:ACN",
+        "25000000.0"
+      ]
+    ]
+  },
+  {
+    "name": "flx",
+    "fullName": "Felix Exchange",
+    "assetToStreamingOiCap": [
+      [
+        "flx:COIN",
+        "8000000.0"
+      ],
+      [
+        "flx:COPPER",
+        "5000000.0"
+      ],
+      [
+        "flx:CRCL",
+        "5000000.0"
+      ]
+    ]
+  },
+  {
+    "name": "vntl",
+    "fullName": "Ventuals",
+    "assetToStreamingOiCap": [
+      [
+        "vntl:ANTHROPIC",
+        "10000000.0"
+      ],
+      [
+        "vntl:BIOTECH",
+        "10000000.0"
+      ],
+      [
+        "vntl:DEFENSE",
+        "10000000.0"
+      ]
+    ]
+  },
+  {
+    "name": "hyna",
+    "fullName": "HyENA",
+    "assetToStreamingOiCap": [
+      [
+        "hyna:ADA",
+        "35000000.0"
+      ],
+      [
+        "hyna:BASED",
+        "10000000.0"
+      ],
+      [
+        "hyna:BCH",
+        "35000000.0"
+      ]
+    ]
+  },
+  {
+    "name": "km",
+    "fullName": "Markets by Kinetiq",
+    "assetToStreamingOiCap": [
+      [
+        "km:AAPL",
+        "160000.0"
+      ],
+      [
+        "km:BABA",
+        "1300000.0"
+      ],
+      [
+        "km:BMNR",
+        "420000.0"
+      ]
+    ]
+  },
+  {
+    "name": "abcd",
+    "fullName": "ABCDEx",
+    "assetToStreamingOiCap": []
+  },
+  {
+    "name": "cash",
+    "fullName": "dreamcash",
+    "assetToStreamingOiCap": [
+      [
+        "cash:AMZN",
+        "20000000.0"
+      ],
+      [
+        "cash:CAR",
+        "500000.0"
+      ],
+      [
+        "cash:EWY",
+        "50000000.0"
+      ]
+    ]
+  },
+  {
+    "name": "para",
+    "fullName": "Paragon",
+    "assetToStreamingOiCap": [
+      [
+        "para:10Y",
+        "25000000.0"
+      ],
+      [
+        "para:2Y",
+        "25000000.0"
+      ],
+      [
+        "para:30Y",
+        "25000000.0"
+      ]
+    ]
+  },
+  {
+    "name": "mkts",
+    "fullName": "Markets By Kinetiq",
+    "assetToStreamingOiCap": [
+      [
+        "mkts:BVIV",
+        "2000000.0"
+      ],
+      [
+        "mkts:SMALL2000",
+        "390000.0"
+      ],
+      [
+        "mkts:US500",
+        "2300000.0"
+      ]
+    ]
+  },
+  {
+    "name": "io",
+    "fullName": "EntropyIO",
+    "assetToStreamingOiCap": [
+      [
+        "io:ANTH",
+        "100000000.0"
+      ],
+      [
+        "io:DRAM",
+        "5000000.0"
+      ],
+      [
+        "io:EWY",
+        "5000000.0"
+      ]
+    ]
+  }
+]

@@ -1,0 +1,146 @@
+[
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0002354745",
+    "time": 1761955200078
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.00035401",
+    "time": 1761958800002
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000083621",
+    "premium": "-0.0004331032",
+    "time": 1761962400000
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.000004994",
+    "premium": "-0.0004600482",
+    "time": 1761966000108
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0003838598",
+    "time": 1761969600053
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0003017005",
+    "time": 1761973200085
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0003223774",
+    "time": 1761976800046
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000068675",
+    "premium": "-0.0004450601",
+    "time": 1761980400032
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000084033",
+    "premium": "-0.0004327736",
+    "time": 1761984000039
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000087957",
+    "premium": "-0.0004296347",
+    "time": 1761987600075
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000032929",
+    "premium": "-0.0004736565",
+    "time": 1761991200010
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000014701",
+    "premium": "-0.0004882393",
+    "time": 1761994800062
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "-0.0000012168",
+    "premium": "-0.0005097347",
+    "time": 1761998400072
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000035932",
+    "premium": "-0.0004712542",
+    "time": 1762002000047
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "-0.0000044575",
+    "premium": "-0.0005356602",
+    "time": 1762005600013
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "-0.000002878",
+    "premium": "-0.000523024",
+    "time": 1762009200106
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "-0.0000080646",
+    "premium": "-0.0005645168",
+    "time": 1762012800044
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "-0.0000058042",
+    "premium": "-0.0005464336",
+    "time": 1762016400100
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000044613",
+    "premium": "-0.0004643093",
+    "time": 1762020000005
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0003340266",
+    "time": 1762023600116
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0003215432",
+    "time": 1762027200002
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.0003361671",
+    "time": 1762030800008
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000124185",
+    "premium": "-0.0004006521",
+    "time": 1762034400031
+  },
+  {
+    "coin": "SOL",
+    "fundingRate": "0.0000125",
+    "premium": "-0.000317137",
+    "time": 1762038000014
+  }
+]
