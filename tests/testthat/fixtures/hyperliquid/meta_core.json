@@ -1,0 +1,91 @@
+[
+  {
+    "universe": [
+      {
+        "szDecimals": 5,
+        "name": "BTC",
+        "maxLeverage": 40,
+        "marginTableId": 56
+      },
+      {
+        "szDecimals": 4,
+        "name": "ETH",
+        "maxLeverage": 25,
+        "marginTableId": 55
+      },
+      {
+        "szDecimals": 2,
+        "name": "ATOM",
+        "maxLeverage": 5,
+        "marginTableId": 5
+      },
+      {
+        "szDecimals": 1,
+        "name": "MATIC",
+        "maxLeverage": 20,
+        "marginTableId": 20,
+        "isDelisted": true
+      }
+    ],
+    "collateralToken": 0
+  },
+  [
+    {
+      "funding": "0.0000125",
+      "openInterest": "40146.47296",
+      "prevDayPx": "77498.0",
+      "dayNtlVlm": "776536809.2114297152",
+      "premium": "-0.0002745829",
+      "oraclePx": "77936.4",
+      "markPx": "77913.0",
+      "midPx": "77914.5",
+      "impactPxs": [
+        "77914.0",
+        "77915.0"
+      ],
+      "dayBaseVlm": "9971.34145"
+    },
+    {
+      "funding": "0.0000125",
+      "openInterest": "973690.1716",
+      "prevDayPx": "2252.2",
+      "dayNtlVlm": "286856778.6835599542",
+      "premium": "-0.0002647838",
+      "oraclePx": "2266.0",
+      "markPx": "2265.2",
+      "midPx": "2265.35",
+      "impactPxs": [
+        "2265.3",
+        "2265.4"
+      ],
+      "dayBaseVlm": "126665.6232000001"
+    },
+    {
+      "funding": "-0.0000583424",
+      "openInterest": "2886478.6600000001",
+      "prevDayPx": "1.5075",
+      "dayNtlVlm": "458491.9894620001",
+      "premium": "-0.0009582478",
+      "oraclePx": "1.461",
+      "markPx": "1.4578",
+      "midPx": "1.4578",
+      "impactPxs": [
+        "1.4566",
+        "1.4596"
+      ],
+      "dayBaseVlm": "309125.7399999999"
+    },
+    {
+      "funding": "0.0",
+      "openInterest": "0.0",
+      "prevDayPx": "0.37621",
+      "dayNtlVlm": "0.0",
+      "premium": null,
+      "oraclePx": "0.3754",
+      "markPx": "0.37621",
+      "midPx": null,
+      "impactPxs": null,
+      "dayBaseVlm": "0.0"
+    }
+  ]
+]
