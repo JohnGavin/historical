@@ -157,9 +157,13 @@ the `K_trials` trial population, per Bailey, Borwein, Lopez de Prado & Zhu
 containing low-trade, erratic "junk" strategies has a wider Sharpe dispersion
 and therefore a genuinely higher honest hurdle at the SAME `K_trials`; passing
 `V = 1` for such a pool understates the hurdle (the "junk-variance trap").
-When the population of trial Sharpes is available, pass
-`trial_sharpe_var = var(trial_sharpes, na.rm = TRUE)` rather than leaving the
-default. Screen the trial population for low-trade strategies (a `min_trades`
+`trial_sharpe_var` is a DIMENSIONLESS multiplier on the null dispersion
+(`V = T_obs * Var(per-period SR)`, hurdle `E[max Z] * sqrt(V) / sqrt(T_obs)`), so
+passing `var()` of annualised or per-period Sharpes to it is a unit error (#959).
+When the population of trial Sharpes is available, compute it with
+`hd_trial_sharpe_var()` (annualised units), divide by `ann_factor`, and pass the
+result as `trial_sharpe_var_stat` (statistic-units convention) rather than
+leaving the default. Screen the trial population for low-trade strategies (a `min_trades`
 gate) BEFORE computing `V` from it — junk strategies inflate V by definition,
 so they must be excluded from the population the hurdle is calibrated against,
 not merely from the survivor list reported afterward.
