@@ -5012,6 +5012,108 @@ check_vocab_resolution <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S46: research-log hypotheses uuid must not repeat (Refs #968) ----------
+
+#' Known historical repeated hypotheses uuids (S46 allow-list)
+#'
+#' Every entry is an explicit, reasoned exception: `max_rows` caps how many
+#' rows that uuid may hold, so any NEW repeat (or growth of an old one) still
+#' FAILS. The research log is append-only, so these rows cannot be edited away.
+#' Scope: the log at `hd_rlog_path()` (tracked rows; in the main checkout also
+#' untracked working rows, which hold the same 7 rows today).
+#'
+#' d2ccd873: 7 hypotheses rows, 2026-05-23 .. 2026-09-21 13:20:05, all written
+#' before commit a12524c (#888, 2026-09-23). Until then `hd_rlog_uuid()` drew
+#' from R's RNG, which `targets` seeds per target name, so each rebuild of
+#' `olmar_research_log` emitted the same id (#968 owner comment, fixed in #973).
+#' @noRd
+S46_RLOG_DUP_ALLOWLIST <- tibble::tibble(
+  uuid     = "d2ccd873-41ab-4e6b-8486-78e33053834e",
+  max_rows = 7L,
+  reason   = paste0("pre-a12524c seeded-RNG uuid reuse across OLMAR-1 rebuilds ",
+                    "(7 rows, last 2026-09-21); append-only log, #968")
+)
+
+#' S46: one verdict per distinct hypotheses uuid
+#'
+#' PASS: uuid occurs once, or repeats within its allow-list `max_rows`
+#' (detail names the reason). FAIL: any other repeat, or a missing (NA) uuid.
+#' INDETERMINATE: `hypotheses` is NULL / not a data frame / has no `uuid`
+#' column / has zero rows, so nothing could be decided.
+#'
+#' @param hypotheses Tibble from `hd_rlog_query("hypotheses")` (NULL allowed).
+#' @param allowlist Tibble with uuid, max_rows, reason (`S46_RLOG_DUP_ALLOWLIST`).
+#' @return Tibble: uuid, n_rows, verdict, detail.
+#' @noRd
+build_rlog_uuid_table <- function(hypotheses, allowlist = S46_RLOG_DUP_ALLOWLIST) {
+  row1 <- function(uuid, n, verdict, detail) {
+    tibble::tibble(uuid = uuid, n_rows = as.integer(n), verdict = verdict, detail = detail)
+  }
+  if (is.null(hypotheses) || !is.data.frame(hypotheses) || !"uuid" %in% names(hypotheses)) {
+    return(row1(NA_character_, NA_integer_, "INDETERMINATE",
+                "hypotheses is NULL, not a data frame, or has no uuid column"))
+  }
+  if (nrow(hypotheses) == 0L) {
+    return(row1(NA_character_, 0L, "INDETERMINATE", "hypotheses table has zero rows"))
+  }
+  n_na <- sum(is.na(hypotheses$uuid))
+  counts <- table(hypotheses$uuid[!is.na(hypotheses$uuid)])
+  out <- tibble::tibble(uuid = names(counts), n_rows = as.integer(counts))
+  allowed_max <- allowlist$max_rows[match(out$uuid, allowlist$uuid)]
+  reason <- allowlist$reason[match(out$uuid, allowlist$uuid)]
+  repeats <- out$n_rows > 1L
+  in_cap <- repeats & !is.na(allowed_max) & out$n_rows <= allowed_max
+  out$verdict <- ifelse(repeats & !in_cap, "FAIL", "PASS")
+  out$detail <- ifelse(
+    !repeats, "unique",
+    ifelse(in_cap, paste0("allow-listed repeat: ", reason),
+           ifelse(is.na(allowed_max),
+                  "uuid repeats and is not on the allow-list",
+                  paste0("uuid repeats beyond its allow-list cap of ", allowed_max))))
+  if (n_na > 0L) {
+    out <- dplyr::bind_rows(out, row1(NA_character_, n_na, "FAIL",
+                                      "hypotheses rows with a missing uuid"))
+  }
+  out
+}
+
+#' S46: abort on a repeated/missing uuid, or when nothing could be decided
+#'
+#' FAIL aborts with class `qa_s46_fail`; INDETERMINATE (undecidable, or zero
+#' PASS/FAIL rows examined) with `qa_s46_indeterminate`; PASS returns the table
+#' with a `summary` attribute (pass, fail, indeterminate, examined, allowed).
+#' @param verdict_tbl Output of `build_rlog_uuid_table()`.
+#' @noRd
+check_rlog_uuid_unique <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  n_allowed <- sum(grepl("^allow-listed repeat", verdict_tbl$detail))
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+                      examined = examined, allowed = n_allowed), as.integer, integer(1))
+  head_line <- sprintf("%d pass (%d allow-listed), %d fail, %d indeterminate; %d distinct uuid(s) examined",
+                       n_pass, n_allowed, n_fail, n_ind, examined)
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s (%s rows): %s",
+                                     ifelse(is.na(bad$uuid), "(no uuid)", bad$uuid),
+                                     ifelse(is.na(bad$n_rows), "?", bad$n_rows), bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_rlog_hypothesis_uuid (S46) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "A hypotheses uuid must name one row. Never edit the append-only log; fix the writer (Refs #968)."
+    ), class = "qa_s46_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_rlog_hypothesis_uuid (S46) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The log could not be checked; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s46_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -6068,6 +6170,25 @@ plan_qa_gates <- function() {
         "qa_vocab_resolution: S45 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
         " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
         " label(s) examined on ", s[["surfaces"]], " surface(s) (Refs #668)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: no research-log hypotheses uuid repeats (S46, Refs #968). Reads
+    # the log at hd_rlog_path() AFTER olmar_research_log has written (the
+    # reference below is the dependency edge). One known historical repeat is
+    # carried by S46_RLOG_DUP_ALLOWLIST with a stated reason and row cap.
+    targets::tar_target(qa_rlog_hypothesis_uuid, {
+      olmar_research_log  # dependency edge: run after the writer
+      verdict_tbl <- check_rlog_uuid_unique(
+        build_rlog_uuid_table(hd_rlog_query("hypotheses"))
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_rlog_hypothesis_uuid: S46 passed -- ", s[["pass"]], " pass (",
+        s[["allowed"]], " allow-listed) / ", s[["fail"]], " fail / ",
+        s[["indeterminate"]], " indeterminate; ", s[["examined"]],
+        " distinct uuid(s) examined (Refs #968)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always"))
