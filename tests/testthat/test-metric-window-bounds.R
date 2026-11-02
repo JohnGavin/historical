@@ -13,6 +13,7 @@ testthat::local_edition(3)
 # prohibits. This gate catches a recurrence of that defect class: any
 # non-Validation, non-Full(-Period) row whose window_end exceeds test_end.
 
+source(here::here("R/glossary.R"))  # check_metric_window_bounds() derives its exemptions from the glossary (#668 P2-2)
 source(here::here("R/plan_qa_gates.R"))
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────

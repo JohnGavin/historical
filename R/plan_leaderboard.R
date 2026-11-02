@@ -122,6 +122,25 @@
   )
 )
 
+#' Resolve `period` labels to the glossary's canonical spelling (#668 P2-1)
+#'
+#' Single point for the source-label -> canonical rename that `.norm_mf()` and
+#' `.norm_value()` used to do inline (`ifelse(period == "Full", "Full Period",
+#' period)`, #643). The alias map is `data/entity_resolution.yaml`
+#' (`period_label`); behaviour is identical for every input: a registered alias
+#' is replaced, every other value (including `NA` and unknown spellings such as
+#' "OOS" or "full") passes through UNCHANGED, as before. Unknown spellings are
+#' deliberately not rejected here: S10 (`check_leaderboard_period_vocab()`)
+#' fails loud on any non-vocabulary label downstream.
+#'
+#' @param x Character vector of source period labels.
+#' @param resolution The list returned by `load_entity_resolution()`.
+#' @return Character vector, same length as `x`.
+#' @noRd
+.canonical_period_label <- function(x, resolution = load_entity_resolution()) {
+  resolve_entity(x, "period_label", resolution)
+}
+
 #' Sharpe fed to the probabilistic-Sharpe diagnostic, per leaderboard row (#919)
 #'
 #' \code{hd_prob_sharpe_positive()} assumes the ARITHMETIC per-period
@@ -606,7 +625,7 @@ plan_leaderboard <- function() {
           select(-strategy, -calmar) |>
           rename(months = n_months) |>
           mutate(
-            period = ifelse(period == "Full", "Full Period", period),
+            period = .canonical_period_label(period),
             cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
             ann_rf = ann_rf / 100
           )
@@ -629,7 +648,7 @@ plan_leaderboard <- function() {
           select(-strategy, -calmar) |>
           rename(months = n_months) |>
           mutate(
-            period = ifelse(period == "Full", "Full Period", period),
+            period = .canonical_period_label(period),
             cagr   = cagr / 100, vol = vol / 100, max_dd = max_dd / 100,
             ann_rf = ann_rf / 100
           )

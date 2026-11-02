@@ -7,13 +7,11 @@
 #
 # period_label's "Full" -> "Full Period" alias mirrors the rename already
 # applied inline by R/plan_leaderboard.R's .norm_mf() and .norm_value()
-# helpers (#643) -- registered here as the documented, testable version of
-# that rename (tests/testthat/test-glossary.R). Migrating .norm_mf()/
-# .norm_value() themselves onto resolve_entity() is a follow-up (#668 PR
-# report): both are private closures inside the `leaderboard` tar_target
-# body, and changing them cannot be verified against real data from a
-# worktree (no targets store, tar_make() is a 40+ minute main-checkout-only
-# build per scripts/build.sh) -- see the PR report for the full rationale.
+# helpers (#643). Those helpers now consume it through
+# R/plan_leaderboard.R::.canonical_period_label() -> resolve_entity() (#668
+# P2-1), and S11's full-sample exemption is derived from it
+# (R/plan_qa_gates.R::.s11_exempt_periods(), #668 P2-2). Pinned by
+# tests/testthat/test-period-norm-characterisation-668.R.
 
 period_label:
   - alias: "Full"

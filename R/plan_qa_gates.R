@@ -709,6 +709,34 @@ check_s11_registry_consistency <- function(registry_names, metrics_by_name_names
   invisible(TRUE)
 }
 
+#' Periods exempt from S11's window-end bound (#668 P2-2)
+#'
+#' The sealed partitions ("Validation", "Holdout") are exempt by design; the
+#' full-sample row is exempt too, in BOTH spellings. The full-sample spelling
+#' pair used to be hand-typed (`"Full", "Full Period"`); it is now derived: the
+#' canonical value is the glossary's `canonical_full_sample_value`, and the
+#' alias spellings are every `period_label` alias that resolves to it. Result
+#' for the current registry: `c("Validation", "Holdout", "Full", "Full Period")`
+#' (pinned by tests/testthat/test-period-norm-characterisation-668.R).
+#'
+#' @param glossary The list returned by `load_glossary()`.
+#' @param resolution The list returned by `load_entity_resolution()`.
+#' @return Character vector.
+#' @noRd
+.s11_exempt_periods <- function(glossary = load_glossary(),
+                                resolution = load_entity_resolution()) {
+  canonical <- glossary$period_label$canonical_full_sample_value
+  if (is.null(canonical) || length(canonical) != 1L || is.na(canonical)) {
+    cli::cli_abort(c(
+      "x" = "data/glossary.yaml {.field period_label} has no {.field canonical_full_sample_value}.",
+      "i" = "S11 derives its full-sample exemption from it (#668 P2-2)."
+    ))
+  }
+  map <- resolution$period_label
+  aliases <- if (is.null(map)) character(0) else map$alias[map$canonical == canonical]
+  c("Validation", "Holdout", aliases, canonical)
+}
+
 check_metric_window_bounds <- function(metrics, test_end, source_label) {
   required_cols <- c("strategy", "period", "window_end")
   missing_cols <- setdiff(required_cols, names(metrics))
@@ -719,7 +747,7 @@ check_metric_window_bounds <- function(metrics, test_end, source_label) {
     ))
   }
 
-  exempt_periods <- c("Validation", "Holdout", "Full", "Full Period")
+  exempt_periods <- .s11_exempt_periods()
 
   is_offender <- !is.na(metrics$window_end) &
     !(metrics$period %in% exempt_periods) &
