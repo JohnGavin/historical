@@ -16,9 +16,25 @@
 #   11. Input-validation snapshot: non-numeric existing
 #   12. Input-validation snapshot: no overlapping rows (empty after NA drop)
 #   13. Function signature stability snapshot
+#   14. Return-basis guard (#937 item 4): mixed / unlabelled bases abort with
+#       class hd_error_mixed_basis (3 message snapshots)
 #
-# Snapshot count: 4 snapshots (errors x3 + args x1) out of 13 blocks
-# => ratio 4/13 >= 30% -- satisfies snapshot-test-policy for 9+ blocks
+# Snapshot count: 7 snapshots (errors x3 + args x1 + basis errors x3) out of
+# 20 blocks => ratio >= 30% -- satisfies snapshot-test-policy for 9+ blocks
+
+# The gate compares equal-weight CAGR/vol across candidate and existing
+# columns with NO rf, which is only like-for-like when every column is on the
+# same return basis (hd_return_basis()). The fixtures below are synthetic
+# dollar-neutral spreads, i.e. EXCESS series, so they carry excess labels.
+CAND_BASIS  <- "Mom 12-2"
+EXIST_BASIS <- "Mom Pre-Peak"   # recycled over every existing column
+
+.gate <- function(candidate, existing, ...) {
+  hd_strategy_value_gate(
+    candidate, existing,
+    candidate_basis = CAND_BASIS, existing_basis = EXIST_BASIS, ...
+  )
+}
 
 # ---- Synthetic data helpers ------------------------------------------------
 #
@@ -92,7 +108,7 @@ test_that("strong anti-correlated candidate with a 20yr sample yields 'admit'", 
   existing  <- .make_existing_1strat()
   candidate <- .make_admit_candidate(existing)
 
-  result <- hd_strategy_value_gate(
+  result <- .gate(
     candidate, existing, candidate_name = "anti_corr", periods_per_year = 12L
   )
 
@@ -115,7 +131,7 @@ test_that("near-duplicate candidate on a short sample yields 'reject'", {
   existing  <- .make_existing_2strat()
   candidate <- .make_near_dup_candidate(existing)
 
-  result <- hd_strategy_value_gate(
+  result <- .gate(
     candidate, existing, candidate_name = "near_dup",
     corr_threshold = 0.80, periods_per_year = 12L
   )
@@ -138,7 +154,7 @@ test_that("noise candidate yields 'mixed', never 'admit', never 'indeterminate'"
   existing  <- .make_noise_existing()
   candidate <- .make_noise_candidate(n = nrow(existing))
 
-  result <- hd_strategy_value_gate(
+  result <- .gate(
     candidate, existing, candidate_name = "noise", periods_per_year = 12L
   )
 
@@ -161,7 +177,7 @@ test_that("a check that cannot be computed yields 'indeterminate', distinct from
   # the test run as an uncaptured WARNING.
   warns <- character()
   result <- withCallingHandlers(
-    hd_strategy_value_gate(
+    .gate(
       candidate, existing, candidate_name = "flatcol", periods_per_year = 12L
     ),
     warning = function(w) {
@@ -187,7 +203,7 @@ test_that("result tibble has exact columns, 7 rows, and factor levels incl. 'n_a
   existing  <- .make_existing_1strat()
   candidate <- .make_admit_candidate(existing)
 
-  result <- hd_strategy_value_gate(candidate, existing, periods_per_year = 12L)
+  result <- .gate(candidate, existing, periods_per_year = 12L)
 
   expect_s3_class(result, "tbl_df")
   expect_named(result, c("check", "metric", "value", "threshold", "verdict"))
@@ -212,7 +228,7 @@ test_that("a reject-quality candidate returns a tibble, not an error", {
   candidate <- .make_near_dup_candidate(existing)
 
   result <- expect_no_error(
-    hd_strategy_value_gate(candidate, existing, periods_per_year = 12L)
+    .gate(candidate, existing, periods_per_year = 12L)
   )
   expect_s3_class(result, "tbl_df")
   expect_true(attr(result, "overall") %in% c("admit", "mixed", "reject", "indeterminate"))
@@ -223,7 +239,7 @@ test_that("crowding = TRUE yields 'flag' verdict", {
   existing  <- .make_existing_1strat()
   candidate <- .make_admit_candidate(existing)
 
-  result <- hd_strategy_value_gate(
+  result <- .gate(
     candidate, existing, crowding = TRUE, periods_per_year = 12L
   )
   crowd_row <- result[result$check == "crowding", ]
@@ -241,7 +257,7 @@ test_that("detection_power is 'n_a' (not 'na') when the candidate's own Sharpe i
   existing  <- .make_noise_existing()
   candidate <- .make_noise_candidate(n = nrow(existing))
 
-  result <- hd_strategy_value_gate(candidate, existing, periods_per_year = 12L)
+  result <- .gate(candidate, existing, periods_per_year = 12L)
   dp_row <- result[result$check == "detection_power", ]
 
   # "n_a" (not applicable -- a legitimate, determinate non-positive-effect
@@ -275,11 +291,92 @@ test_that("candidate all-NA yields cli_abort for no overlapping rows", {
   candidate <- rep(NA_real_, 5L)
   expect_snapshot(
     error = TRUE,
-    hd_strategy_value_gate(candidate, existing)
+    .gate(candidate, existing)
   )
 })
 
 # ---- Test 13: Function signature stability ---------------------------------
 test_that("hd_strategy_value_gate() signature is stable (catches API drift)", {
   expect_snapshot(args(hd_strategy_value_gate))
+})
+
+# ---- Test 14: return-basis guard (#937 item 4) -----------------------------
+# .sharpe_ew_gate() is cagr/vol with NO rf, so it is only like-for-like when
+# the candidate and every existing column share one basis. The maths is left
+# alone; the gate refuses to run on mixed or unlabelled bases instead.
+test_that("matching registered bases run; the verdict is unchanged by the labels", {
+  existing  <- .make_existing_1strat()
+  candidate <- .make_admit_candidate(existing)
+  # total/total and excess/excess both pass the guard
+  r_total  <- hd_strategy_value_gate(candidate, existing,
+                                     candidate_basis = "Value (HML)",
+                                     existing_basis = "Managed Futures")
+  r_excess <- .gate(candidate, existing)
+  expect_equal(r_total, r_excess)
+})
+
+test_that("candidate and existing on DIFFERENT bases abort with class hd_error_mixed_basis", {
+  existing  <- .make_existing_2strat()
+  candidate <- .make_near_dup_candidate(existing)
+  expect_error(
+    hd_strategy_value_gate(candidate, existing,
+                           candidate_basis = "Value (HML)",        # total
+                           existing_basis  = c("Mom 12-2", "LTR")), # excess
+    class = "hd_error_mixed_basis"
+  )
+  # a single mixed EXISTING column is enough, even if the candidate matches one
+  expect_error(
+    hd_strategy_value_gate(candidate, existing,
+                           candidate_basis = "Mom 12-2",
+                           existing_basis  = c("Mom Pre-Peak", "Value (HML)")),
+    class = "hd_error_mixed_basis"
+  )
+  expect_snapshot(
+    error = TRUE,
+    hd_strategy_value_gate(candidate, existing,
+                           candidate_basis = "Value (HML)",
+                           existing_basis  = c("Mom 12-2", "LTR"))
+  )
+})
+
+test_that("an UNLABELLED candidate or existing set aborts with class hd_error_mixed_basis", {
+  existing  <- .make_existing_1strat()
+  candidate <- .make_admit_candidate(existing)
+  expect_error(hd_strategy_value_gate(candidate, existing),
+               class = "hd_error_mixed_basis")
+  expect_error(hd_strategy_value_gate(candidate, existing,
+                                      candidate_basis = "Mom 12-2"),
+               class = "hd_error_mixed_basis")
+  expect_error(hd_strategy_value_gate(candidate, existing,
+                                      existing_basis = "Mom 12-2"),
+               class = "hd_error_mixed_basis")
+  expect_error(hd_strategy_value_gate(candidate, existing,
+                                      candidate_basis = NA_character_,
+                                      existing_basis = "Mom 12-2"),
+               class = "hd_error_mixed_basis")
+  expect_snapshot(error = TRUE, hd_strategy_value_gate(candidate, existing))
+})
+
+test_that("existing_basis of the wrong length, or an unclassified basis, also aborts", {
+  existing  <- .make_existing_2strat()
+  candidate <- .make_near_dup_candidate(existing)
+  expect_error(
+    hd_strategy_value_gate(candidate, existing,
+                           candidate_basis = "Mom 12-2",
+                           existing_basis  = rep("Mom 12-2", 3L)),
+    class = "hd_error_mixed_basis"
+  )
+  expect_snapshot(
+    error = TRUE,
+    hd_strategy_value_gate(candidate, existing,
+                           candidate_basis = "Mom 12-2",
+                           existing_basis  = rep("Mom 12-2", 3L))
+  )
+  # an unregistered label is still loud (hd_return_basis_of aborts)
+  expect_error(
+    hd_strategy_value_gate(candidate, existing,
+                           candidate_basis = "Not A Strategy",
+                           existing_basis  = "Mom 12-2"),
+    "not registered"
+  )
 })

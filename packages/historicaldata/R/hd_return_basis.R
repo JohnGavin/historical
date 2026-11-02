@@ -141,7 +141,12 @@ hd_return_basis <- function() {
     "R/zakamulin_allocation.R:199 allocated_ret = net_ret * allocation: a dollar-neutral spread (R/momentum_decomposition.R:624-627) scaled by exposure in [0,1]; the cash leg earns 0 by construction (R/zakamulin_allocation.R:174), so no rf is in the series",
     # --- #937: Mean Reversion (long-only equal-weight, not on the leaderboard) ---
     "Mean Reversion", "total",
-    "R/plan_mean_reversion.R:167,169,190 port_ret = mean(held_rets) over long-only open positions (0 when flat, cash earns 0 not rf), net_ret = port_ret - trade_cost: no short leg, no rf deducted, so the full rf is still the benchmark"
+    "R/plan_mean_reversion.R:167,169,190 port_ret = mean(held_rets) over long-only open positions (0 when flat, cash earns 0 not rf), net_ret = port_ret - trade_cost: no short leg, no rf deducted, so the full rf is still the benchmark",
+    # --- #937 item 4 row 1: Defense First macro rotation (not on the leaderboard) ---
+    "Defense First", "total",
+    "R/plan_backtest.R:155,276 port_ret = sum(allocation * ETF return) with weights c(0.4, 0.3, 0.2, 0.1) summing to 1 (or 100% SPY on the fallback): fully invested, no short leg, no zero-return cash months (BIL is only a momentum score), so the full rf is still the benchmark",
+    "Research: SPY buy and hold (Defense First benchmark)", "total",
+    "R/plan_backtest.R:279 bench_ret = SPY adjusted-close monthly return (dividend-inclusive, no rf subtracted)"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure

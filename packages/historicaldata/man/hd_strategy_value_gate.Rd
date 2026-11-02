@@ -15,7 +15,9 @@ hd_strategy_value_gate(
   correction = c("none", "bonferroni"),
   target_power = 0.8,
   crowding = NA,
-  robustness_pass = NA
+  robustness_pass = NA,
+  candidate_basis = NULL,
+  existing_basis = NULL
 )
 }
 \arguments{
@@ -61,6 +63,18 @@ value > 3 indicates high crowding (\code{"flag"}); \code{FALSE} / <= 3 -> \code{
 
 \item{robustness_pass}{Optional logical from the CPCV/falsification gauntlet.
 \code{TRUE} -> \code{"pass"}, \code{FALSE} -> \code{"fail"}, \code{NA} -> \code{"na"}. Default \code{NA}.}
+
+\item{candidate_basis}{Single string: the candidate's
+\code{\link[=hd_return_basis]{hd_return_basis()}} label. REQUIRED (no default is guessed). The gate's
+Sharpe is CAGR / vol with NO risk-free rate, so it is only like-for-like
+when candidate and existing columns share one basis (#937).}
+
+\item{existing_basis}{Character vector: the \code{\link[=hd_return_basis]{hd_return_basis()}} label of
+each \code{existing} column (one per column), or a single label applied to
+all. REQUIRED. If any label is unregistered, \code{"indeterminate"}, missing,
+or its basis differs from \code{candidate_basis}'s, the gate aborts with
+class \code{hd_error_mixed_basis} (use \code{\link[=hd_excess_returns]{hd_excess_returns()}} to bring the
+series onto one basis first).}
 }
 \value{
 A tibble with 7 rows (one per check/metric combination) and columns:
@@ -101,7 +115,8 @@ Matches \code{strat_corr_augment} in \code{plan_strategy_correlation.R}:
 \verb{Sharpe(equal-weight candidate + existing) - Sharpe(equal-weight existing)},
 where \code{Sharpe = CAGR / (sd(r) * sqrt(periods_per_year))} (geometric CAGR,
 annualised vol). Positive = candidate adds value; negative = portfolio
-improves without it.
+improves without it. There is NO risk-free rate in this Sharpe, so the gate
+refuses mixed or unlabelled return bases (see \code{candidate_basis}).
 }
 
 \section{Detection power (#496 review, .claude/rules/detection-power-required.md)}{
@@ -170,9 +185,12 @@ existing <- matrix(rnorm(n * 2, mean = 0.006, sd = 0.035),
 # Anti-correlated, strong-effect candidate
 candidate <- -0.3 * (existing[, 1] - mean(existing[, 1])) + 0.012 +
   rnorm(n, sd = 0.03)
+# Synthetic spreads: label them with registered excess-basis strategies.
 result <- hd_strategy_value_gate(candidate, existing,
                                  candidate_name = "anti_corr",
-                                 periods_per_year = 12L)
+                                 periods_per_year = 12L,
+                                 candidate_basis = "Mom 12-2",
+                                 existing_basis = "Mom Pre-Peak")
 attr(result, "overall")   # typically "admit"
 result$verdict
 }

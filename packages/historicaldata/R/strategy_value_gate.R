@@ -65,6 +65,50 @@ HD_REDUNDANCY_THRESH <- 0.80
   if (vol <= 0) NA_real_ else cagr / vol
 }
 
+# Return-basis guard (#937 item 4). .sharpe_ew_gate() is CAGR / vol with NO
+# risk-free rate, so the incremental-Sharpe comparison is only like-for-like
+# when the candidate and every existing column are on ONE basis
+# (hd_return_basis()). The maths is deliberately left alone; this aborts
+# instead of letting a total-return candidate be compared with excess-return
+# columns (or the reverse), and aborts on an unlabelled series rather than
+# guessing its basis (fail-loud-not-null.md). Returns the shared basis.
+.check_gate_basis <- function(candidate_basis, existing_basis, n_existing,
+                              call = rlang::caller_env()) {
+  .is_label <- function(x) is.character(x) && length(x) >= 1L && !anyNA(x) && all(nzchar(x))
+  if (!.is_label(candidate_basis) || length(candidate_basis) != 1L) {
+    cli::cli_abort(c(
+      "x" = "{.arg candidate_basis} must be one registered {.fn hd_return_basis} label.",
+      "i" = "Got {.cls {class(candidate_basis)}} of length {length(candidate_basis)}.",
+      "i" = "The gate compares CAGR/vol with no rf, so it must know the candidate's return basis; it never guesses one."
+    ), class = "hd_error_mixed_basis", call = call)
+  }
+  if (!.is_label(existing_basis) || !length(existing_basis) %in% unique(c(1L, n_existing))) {
+    cli::cli_abort(c(
+      "x" = "{.arg existing_basis} must be one registered {.fn hd_return_basis} label per existing column (or a single label for all).",
+      "i" = "Got {.cls {class(existing_basis)}} of length {length(existing_basis)} for {n_existing} existing column{?s}.",
+      "i" = "The gate compares CAGR/vol with no rf, so it must know every column's return basis; it never guesses one."
+    ), class = "hd_error_mixed_basis", call = call)
+  }
+  cand_b  <- hd_return_basis_of(candidate_basis)
+  exist_b <- vapply(existing_basis, hd_return_basis_of, character(1), USE.NAMES = FALSE)
+  all_b   <- c(cand_b, exist_b)
+  if ("indeterminate" %in% all_b) {
+    cli::cli_abort(c(
+      "x" = "A series is registered as {.val indeterminate}, so its return basis is unknown.",
+      "i" = "Candidate {.val {candidate_basis}}: {.val {cand_b}}; existing {.val {existing_basis}}: {.val {exist_b}}."
+    ), class = "hd_error_mixed_basis", call = call)
+  }
+  if (length(unique(all_b)) > 1L) {
+    cli::cli_abort(c(
+      "x" = "Candidate and existing series are on different return bases.",
+      "i" = "Candidate {.val {candidate_basis}}: {.val {cand_b}}.",
+      "i" = "Existing {.val {existing_basis}}: {.val {exist_b}}.",
+      "i" = "CAGR/vol with no rf is only comparable within one basis; convert with {.fn hd_excess_returns} first."
+    ), class = "hd_error_mixed_basis", call = call)
+  }
+  invisible(cand_b)
+}
+
 # Equal-weight portfolio variance over a return matrix (annualised).
 .var_ew_gate <- function(ret_matrix, periods_per_year) {
   n_col <- ncol(ret_matrix)
@@ -125,7 +169,8 @@ HD_REDUNDANCY_THRESH <- 0.80
 #' `Sharpe(equal-weight candidate + existing) - Sharpe(equal-weight existing)`,
 #' where `Sharpe = CAGR / (sd(r) * sqrt(periods_per_year))` (geometric CAGR,
 #' annualised vol). Positive = candidate adds value; negative = portfolio
-#' improves without it.
+#' improves without it. There is NO risk-free rate in this Sharpe, so the gate
+#' refuses mixed or unlabelled return bases (see `candidate_basis`).
 #'
 #' @section Detection power (#496 review, .claude/rules/detection-power-required.md):
 #' Computes the candidate's OWN standalone annualised Sharpe (not the
@@ -210,6 +255,16 @@ HD_REDUNDANCY_THRESH <- 0.80
 #'   `NA` -> `"na"`. Default `NA`.
 #' @param robustness_pass Optional logical from the CPCV/falsification gauntlet.
 #'   `TRUE` -> `"pass"`, `FALSE` -> `"fail"`, `NA` -> `"na"`. Default `NA`.
+#' @param candidate_basis Single string: the candidate's
+#'   [hd_return_basis()] label. REQUIRED (no default is guessed). The gate's
+#'   Sharpe is CAGR / vol with NO risk-free rate, so it is only like-for-like
+#'   when candidate and existing columns share one basis (#937).
+#' @param existing_basis Character vector: the [hd_return_basis()] label of
+#'   each `existing` column (one per column), or a single label applied to
+#'   all. REQUIRED. If any label is unregistered, `"indeterminate"`, missing,
+#'   or its basis differs from `candidate_basis`'s, the gate aborts with
+#'   class `hd_error_mixed_basis` (use [hd_excess_returns()] to bring the
+#'   series onto one basis first).
 #'
 #' @return A tibble with 7 rows (one per check/metric combination) and columns:
 #'   \describe{
@@ -245,9 +300,12 @@ HD_REDUNDANCY_THRESH <- 0.80
 #' # Anti-correlated, strong-effect candidate
 #' candidate <- -0.3 * (existing[, 1] - mean(existing[, 1])) + 0.012 +
 #'   rnorm(n, sd = 0.03)
+#' # Synthetic spreads: label them with registered excess-basis strategies.
 #' result <- hd_strategy_value_gate(candidate, existing,
 #'                                  candidate_name = "anti_corr",
-#'                                  periods_per_year = 12L)
+#'                                  periods_per_year = 12L,
+#'                                  candidate_basis = "Mom 12-2",
+#'                                  existing_basis = "Mom Pre-Peak")
 #' attr(result, "overall")   # typically "admit"
 #' result$verdict
 hd_strategy_value_gate <- function(
@@ -261,7 +319,9 @@ hd_strategy_value_gate <- function(
     correction       = c("none", "bonferroni"),
     target_power     = 0.80,
     crowding         = NA,
-    robustness_pass  = NA) {
+    robustness_pass  = NA,
+    candidate_basis  = NULL,
+    existing_basis   = NULL) {
 
   correction <- match.arg(correction)
 
@@ -287,6 +347,7 @@ hd_strategy_value_gate <- function(
       "i" = "Got {ncol(existing)} columns."
     ))
   }
+  .check_gate_basis(candidate_basis, existing_basis, ncol(existing))
   if (length(candidate) != nrow(existing)) {
     cli::cli_warn(c(
       "!" = "{.arg candidate} length ({length(candidate)}) differs from",
