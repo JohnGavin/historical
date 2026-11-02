@@ -709,6 +709,34 @@ check_s11_registry_consistency <- function(registry_names, metrics_by_name_names
   invisible(TRUE)
 }
 
+#' Periods exempt from S11's window-end bound (#668 P2-2)
+#'
+#' The sealed partitions ("Validation", "Holdout") are exempt by design; the
+#' full-sample row is exempt too, in BOTH spellings. The full-sample spelling
+#' pair used to be hand-typed (`"Full", "Full Period"`); it is now derived: the
+#' canonical value is the glossary's `canonical_full_sample_value`, and the
+#' alias spellings are every `period_label` alias that resolves to it. Result
+#' for the current registry: `c("Validation", "Holdout", "Full", "Full Period")`
+#' (pinned by tests/testthat/test-period-norm-characterisation-668.R).
+#'
+#' @param glossary The list returned by `load_glossary()`.
+#' @param resolution The list returned by `load_entity_resolution()`.
+#' @return Character vector.
+#' @noRd
+.s11_exempt_periods <- function(glossary = load_glossary(),
+                                resolution = load_entity_resolution()) {
+  canonical <- glossary$period_label$canonical_full_sample_value
+  if (is.null(canonical) || length(canonical) != 1L || is.na(canonical)) {
+    cli::cli_abort(c(
+      "x" = "data/glossary.yaml {.field period_label} has no {.field canonical_full_sample_value}.",
+      "i" = "S11 derives its full-sample exemption from it (#668 P2-2)."
+    ))
+  }
+  map <- resolution$period_label
+  aliases <- if (is.null(map)) character(0) else map$alias[map$canonical == canonical]
+  c("Validation", "Holdout", aliases, canonical)
+}
+
 check_metric_window_bounds <- function(metrics, test_end, source_label) {
   required_cols <- c("strategy", "period", "window_end")
   missing_cols <- setdiff(required_cols, names(metrics))
@@ -719,7 +747,7 @@ check_metric_window_bounds <- function(metrics, test_end, source_label) {
     ))
   }
 
-  exempt_periods <- c("Validation", "Holdout", "Full", "Full Period")
+  exempt_periods <- .s11_exempt_periods()
 
   is_offender <- !is.na(metrics$window_end) &
     !(metrics$period %in% exempt_periods) &
@@ -4852,6 +4880,138 @@ check_psr_vs_dsr <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S45: every emitted vocabulary label resolves via the glossary (Refs #668) -
+
+#' Glossary entity -> published column carrying that entity's vocabulary (S45)
+#'
+#' Registry-driven scope of S45: an entity listed here, with the column name it
+#' appears under, is checked on every surface that has that column. Adding an
+#' entity to `data/glossary.yaml` and a pair here widens the gate with no other
+#' code change. Entities not listed are not checked (nothing to claim about
+#' them). `metric_unit` is listed but no current surface publishes a
+#' `metric_unit` column, so today only `period_label` is exercised on real data.
+#' @noRd
+S45_VOCAB_COLUMNS <- c(period_label = "period", metric_unit = "metric_unit")
+
+#' S45: resolve every distinct vocabulary label on every surface
+#'
+#' For each (surface, entity, column) it resolves each DISTINCT observed value
+#' through `resolve_entity()` and checks the resolved value is in the entity's
+#' allowed `values` in the glossary. Unlike S10 (which requires the label to
+#' already be canonical), S45 asks the registry question: "can the registry
+#' resolve this label?".
+#'
+#' Verdicts per row: PASS, FAIL (resolved value is not in the allowed set, NA
+#' counted as unresolved), INDETERMINATE (the surface is NULL/zero-row, has none
+#' of the registered columns, or the entity has no allowed `values` in the
+#' glossary, so nothing could be decided).
+#'
+#' Out of scope on purpose: calendar sub-period labels such as "2008-2019"
+#' (`*_subperiod` targets) are a different vocabulary than `period_label`; they
+#' are not passed to this gate.
+#'
+#' @param surfaces Named list of tibbles (NULL allowed, meaning unreadable).
+#' @param glossary Output of `load_glossary()`.
+#' @param resolution Output of `load_entity_resolution()`.
+#' @param columns Named character vector entity -> column (`S45_VOCAB_COLUMNS`).
+#' @return Tibble: surface, entity, column, value, resolved, verdict, detail.
+#' @noRd
+build_vocab_resolution_table <- function(surfaces, glossary, resolution,
+                                         columns = S45_VOCAB_COLUMNS) {
+  empty <- tibble::tibble(surface = character(0), entity = character(0),
+                          column = character(0), value = character(0),
+                          resolved = character(0), verdict = character(0),
+                          detail = character(0))
+  row1 <- function(surface, entity, column, value, resolved, verdict, detail) {
+    tibble::tibble(surface = surface, entity = entity, column = column,
+                   value = value, resolved = resolved, verdict = verdict,
+                   detail = detail)
+  }
+  if (length(surfaces) == 0L || is.null(names(surfaces)) || anyNA(names(surfaces)) ||
+        any(!nzchar(names(surfaces)))) {
+    return(empty)
+  }
+  rows <- list()
+  for (sn in names(surfaces)) {
+    tbl <- surfaces[[sn]]
+    if (is.null(tbl) || !is.data.frame(tbl) || nrow(tbl) == 0L) {
+      rows[[length(rows) + 1L]] <- row1(sn, NA_character_, NA_character_, NA_character_,
+                                        NA_character_, "INDETERMINATE",
+                                        "surface is NULL, not a data frame, or has zero rows")
+      next
+    }
+    present <- columns[unname(columns) %in% names(tbl)]
+    if (length(present) == 0L) {
+      rows[[length(rows) + 1L]] <- row1(sn, NA_character_, NA_character_, NA_character_,
+                                        NA_character_, "INDETERMINATE",
+                                        paste0("surface has none of the registered vocabulary columns (",
+                                               paste(unname(columns), collapse = ", "), ")"))
+      next
+    }
+    for (entity in names(present)) {
+      col <- unname(present[[entity]])
+      allowed <- glossary[[entity]]$values
+      vals <- unique(as.character(tbl[[col]]))
+      if (is.null(allowed) || length(allowed) == 0L) {
+        rows[[length(rows) + 1L]] <- row1(sn, entity, col, NA_character_, NA_character_,
+                                          "INDETERMINATE",
+                                          "glossary has no allowed `values` for this entity")
+        next
+      }
+      resolved <- resolve_entity(vals, entity, resolution)
+      ok <- !is.na(resolved) & resolved %in% allowed
+      rows[[length(rows) + 1L]] <- tibble::tibble(
+        surface = sn, entity = entity, column = col, value = vals,
+        resolved = resolved,
+        verdict = ifelse(ok, "PASS", "FAIL"),
+        detail = ifelse(ok, "resolves to an allowed value",
+                        "does not resolve to any allowed value (unregistered label)")
+      )
+    }
+  }
+  dplyr::bind_rows(rows)
+}
+
+#' S45: abort on an unresolved label, or when nothing could be decided
+#'
+#' Three outcomes, never collapsed. FAIL aborts with class `qa_s45_fail`;
+#' INDETERMINATE (any undecidable row, or zero PASS/FAIL rows examined) aborts
+#' with `qa_s45_indeterminate`; otherwise PASS returns `verdict_tbl` with a
+#' `summary` attribute (pass, fail, indeterminate, examined, surfaces).
+#' A gate that examined nothing cannot report a pass.
+#'
+#' @param verdict_tbl Output of `build_vocab_resolution_table()`.
+#' @noRd
+check_vocab_resolution <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  surfaces <- length(unique(verdict_tbl$surface[v %in% c("PASS", "FAIL")]))
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+                      examined = examined, surfaces = surfaces), as.integer, integer(1))
+  head_line <- sprintf("%d pass, %d fail, %d indeterminate; %d label(s) examined on %d surface(s)",
+                       n_pass, n_fail, n_ind, examined, surfaces)
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s / %s: %s -- %s", bad$surface, bad$column,
+                                     ifelse(is.na(bad$value), "(no value)", bad$value), bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_vocab_resolution (S45) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "Register the label as an alias in data/entity_resolution.yaml or as an allowed value in data/glossary.yaml, or fix the source (Refs #668)."
+    ), class = "qa_s45_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_vocab_resolution (S45) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = if (examined == 0L) "Zero labels were examined -- a gate that checked nothing cannot report a pass." else
+        "A surface could not be checked; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s45_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -5873,6 +6033,41 @@ plan_qa_gates <- function() {
         " fail / ", s[["not_computed"]], " not computed / ", s[["not_applicable"]],
         " not applicable / ", s[["indeterminate"]], " indeterminate; ",
         s[["examined"]], " row(s) examined (Refs #919, #937)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: every vocabulary label the leaderboard and the S11 metrics
+    # registry targets emit resolves through resolve_entity() to an allowed
+    # glossary value (S45, Refs #668). Same literal-list pattern as S11
+    # (targets' static analysis needs each surface as a real dependency edge)
+    # and the same registry/list consistency guard. Calendar sub-period
+    # targets (`*_subperiod`, labels like "2008-2019") are a different
+    # vocabulary and deliberately not passed in.
+    targets::tar_target(qa_vocab_resolution, {
+      surfaces <- list(
+        leaderboard      = leaderboard,
+        mf_metrics       = mf_metrics,
+        ev_metrics       = ev_metrics,
+        rsc_metrics      = rsc_metrics,
+        aw_metrics       = aw_metrics,
+        mr_metrics       = mr_metrics,
+        rafi_metrics     = rafi_metrics,
+        fip_comparison   = fip_comparison,
+        eur_results      = eur_results,
+        eur_comparison   = eur_comparison,
+        eur_ciss_results = eur_ciss_results
+      )
+      check_s11_registry_consistency(names(S11_METRICS_REGISTRY),
+                                     setdiff(names(surfaces), "leaderboard"))
+      verdict_tbl <- check_vocab_resolution(
+        build_vocab_resolution_table(surfaces, load_glossary(), load_entity_resolution())
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_vocab_resolution: S45 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
+        " label(s) examined on ", s[["surfaces"]], " surface(s) (Refs #668)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always"))
