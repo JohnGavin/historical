@@ -364,8 +364,7 @@ if (!is.null(summary_tbl)) {
 
   DT::datatable(
     display_df,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
+    caption = hd_caption(
       paste0(
         "Pre-peak / post-peak 12-2 momentum decomposition summary. ",
         "Annualised metrics from ", if (!is.na(pre_nmonths)) pre_nmonths else "N/A",
@@ -537,8 +536,7 @@ if (!is.null(ret_pre)) {
 
   DT::datatable(
     display_ret,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
+    caption = hd_caption(
       "Monthly long-short returns for all three decomposition strategies. ret_ls = ret_long - ret_short - 2 × 10 bps transaction cost. Negative ret_ls in the same month caused the bankruptcy in post-peak and combined strategies."
     ),
     rownames = FALSE,
@@ -652,9 +650,8 @@ skew_tbl <- tibble::tibble(
 
 DT::datatable(
   skew_tbl,
-  caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold;",
-    paste0(
+  caption = hd_caption(
+      paste0(
       "Skewness of monthly L/S returns for each decomposition strategy. ",
       "Positive skewness implies fewer large-magnitude negative months, ",
       "which is preferable from a tail-risk perspective. ",
@@ -755,8 +752,7 @@ if (p8_available) {
 
   DT::datatable(
     p8_display,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
+    caption = hd_caption(
       paste0(
         "Pillar-8 risk metrics for all three momentum decomposition strategies. ",
         "Avg/Max DD duration is measured in months (index positions, no date column). ",
@@ -816,8 +812,7 @@ if (wfc_available) {
 
   DT::datatable(
     wfc_display,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
+    caption = hd_caption(
       paste0(
         "Walk-Forward Correlation grid for mom_prepeak over n_quantiles ∈ {5, 10, 20}. ",
         "IS = annualised Sharpe on the first half of the sample (~1973–mid). ",
@@ -925,8 +920,7 @@ if (rand_available) {
 
   DT::datatable(
     null_display,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
+    caption = hd_caption(
       paste0(
         "Random-day-as-peak null test. The null strategy uses the same ",
         "formation window, portfolio construction, and transaction costs, ",
@@ -1015,9 +1009,8 @@ stat_display <- tibble::tibble(
 
 DT::datatable(
   stat_display,
-  caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold;",
-    paste0(
+  caption = hd_caption(
+      paste0(
       "Statistical hardening metrics for mom_prepeak. ",
       "HAC inference uses Newey-West bandwidth (floor(4*(T/100)^(2/9))). ",
       "FF5 regression uses monthly Fama-French 5-factor + Momentum factors from Kenneth French's data library. ",
@@ -1091,9 +1084,8 @@ ssr_display <- tibble::tibble(
 
 DT::datatable(
   ssr_display,
-  caption = htmltools::tags$caption(
-    style = "caption-side: top; text-align: left; font-weight: bold;",
-    paste0(
+  caption = hd_caption(
+      paste0(
       "Sharpe Stability Ratio (SSR) for mom_prepeak — 36-month rolling windows, ann_factor = 12. ",
       "Calibration anchors: S\\u00B950 500 daily since 1995: SSR \\u224 5.3; macro FX cross-asset: SSR \\u224 4.4. ",
       "SSR is computed via hd_sharpe_stability_ratio() in packages/historicaldata/R/stability.R ",
@@ -1136,7 +1128,7 @@ This vignette reads pre-computed targets from the pipeline and builds nine secti
 - `mom_prepeak_signal_raw` — output of [`historicaldata::hd_mom_prepeak_signal()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/strategy_mom_prepeak.R#L67) applied to `ltr_universe` (~51 US non-ETF equities, daily adjusted prices, 1973-onwards). One row per (ticker, as_of_date) with columns `pre_peak_return`, `post_peak_return`, `total_return`, `peak_position`.
 - `mom_prepeak_summary`, `mom_*_returns` targets — computed by [`R/plan_mom_prepeak.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak.R) using [`.mom_prepeak_compute_metrics()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/utils_mom_prepeak_metrics.R#L24) from `packages/historicaldata/R/utils_mom_prepeak_metrics.R`, extended in PR 4/4 to include Pillar-8 columns.
 - `mom_prepeak_wfc_grid`, `mom_prepeak_wfc_result` — Walk-Forward Correlation targets from [`R/plan_mom_prepeak_gauntlet.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R), using [`hd_wf_correlation()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/wf_correlation.R#L84).
-- `mom_prepeak_random_peak_test`, `mom_prepeak_random_peak_metrics` — random-day-as-peak null from [`.mom_prepeak_random_peak_signal()`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R) in the gauntlet plan.
+- `mom_prepeak_random_peak_test`, `mom_prepeak_random_peak_metrics` — random-day-as-peak null from [`.mom_prepeak_random_peak_signal()`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R#L512) in the gauntlet plan.
 - `mom_prepeak_hac`, `mom_prepeak_ff_reg` — HAC Sharpe and FF5+Momentum regression via [`hd_hac_sharpe()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L80) and [`hd_factor_null_test()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L738) on monthly Fama-French factors from `hd_factors(frequency="monthly")`.
 - `mom_prepeak_pbo` — CPCV Probability of Backtest Overfitting via [`hd_pbo()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/cpcv.R#L267) over n_quantiles ∈ {5, 10, 20}.
 - `mom_prepeak_ssr` — Sharpe Stability Ratio via [`hd_sharpe_stability_ratio()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/stability.R#L132) with w=36 months and ann_factor=12. Computed in [`R/plan_mom_prepeak_gauntlet.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_mom_prepeak_gauntlet.R).
