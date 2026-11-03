@@ -1,5 +1,30 @@
 # Changelog
 
+## 2026-11-03 (unit/vocabulary gates, rf-basis sites, research-log gate, inner-join audit)
+
+### Completed
+
+- **Merged:** unit and vocabulary census ([#1008](https://github.com/JohnGavin/historical/pull/1008)) and the S45 vocabulary gate ([#1012](https://github.com/JohnGavin/historical/pull/1012)); Hyperliquid fetcher ([#1009](https://github.com/JohnGavin/historical/pull/1009)); zero-padded CIK column and ticker-join audit ([#1010](https://github.com/JohnGavin/historical/pull/1010)); the DSR V-convention rule fix ([#1011](https://github.com/JohnGavin/historical/pull/1011)); the four rf-basis sites of [#937](https://github.com/JohnGavin/historical/issues/937) item 4 ([#1013](https://github.com/JohnGavin/historical/pull/1013)); the S46 research-log uuid gate and OLMAR universe findings ([#1014](https://github.com/JohnGavin/historical/pull/1014)); the 52-site inner-join census ([#1015](https://github.com/JohnGavin/historical/pull/1015)).
+- **Closed:** [#959](https://github.com/JohnGavin/historical/issues/959), [#554](https://github.com/JohnGavin/historical/issues/554), [#555](https://github.com/JohnGavin/historical/issues/555) (the gate code already existed in `R/plan_qa_fundamentals.R`).
+- **In flight (separate PRs):** research-log writes moved out of builds (#968 option c) and the SPY benchmark-correlation join fix (#657 row A9).
+
+### Failed Approaches
+
+- None this session.
+
+### Accuracy / Metrics
+
+- Two `scripts/build.sh` runs passed with 0 errored targets (rf-basis head, S46 head). Root suite stayed at baseline failed 3 / skipped 1; package suite at failed 1 / skipped 17.
+- Read-only check on the main store: the SPY correlation for the monthly DRIF, fac_max and ltr strategies is -0.06, -0.01, -0.06 as computed, against -0.29, -0.37, +0.07 with SPY compounded to months.
+
+### Known Limitations
+
+- `compute_backfill_metrics` correlates monthly strategies with one-day SPY returns until the SPY join PR merges.
+- The OLMAR-1 price matrix has 20 of the 30 declared tickers (ten sector funds missing); survivorship size is undetermined.
+- S46 carries one allow-list entry (uuid `d2ccd873`, 7 rows) for rows written before the writer fix.
+- Rendered dashboards and `docs/_targets_meta_snapshot.csv` are uncommitted in the main checkout; publishing them is a separate PR.
+- 4 low-severity roborev reviews are open.
+
 ## 2026-09-23 (plan_avoid_worst.R: registered leaderboard metrics now source from the VIX-timed strategy, refs #813)
 
 - **Wrong return series (#813):** `avoid_worst_register_runs`'s bt.metric
