@@ -1,6 +1,6 @@
 testthat::local_edition(3)
-# Tests for .olmar_research_log_write() (R/plan_olmar.R, #968): the OLMAR-1
-# research-log writer is idempotent, never writes the deprecated "tested"
+# Tests for .olmar_research_log_plan() / _commit() (R/plan_olmar.R, #968): the
+# build only PLANS (read-only); the explicit seed script COMMITS. The commit is idempotent, never writes the deprecated "tested"
 # status, and never overrides a newer real status. Every run uses a temp log
 # directory; the tracked log is never touched.
 
@@ -35,11 +35,15 @@ source(here::here("R/plan_olmar.R"))
     turnover = rep(0.1, n), net_ret = net, rf_ret = rep(0.00005, n)
   )
 }
+# plan (read-only, what the build target does) then commit (what the explicit
+# seed script does). Returns the plan's ids, as the old single writer did.
 .run <- function(base_dir, sharpe = 0.78, port = .mk_port()) {
-  suppressMessages(.olmar_research_log_write(
+  plan <- suppressMessages(.olmar_research_log_plan(
     .mk_metrics(sharpe), .mk_params(), .mk_prices(), port,
     base_dir = base_dir
   ))
+  suppressMessages(.olmar_research_log_commit(plan, base_dir = base_dir))
+  plan$ids
 }
 .n_files <- function(base_dir) {
   length(list.files(base_dir, pattern = "\\.parquet$", recursive = TRUE))
@@ -137,7 +141,7 @@ test_that("a portfolio without net_ret/rf_ret aborts instead of aliasing", {
   bad <- tibble::tibble(date = as.Date("2010-01-04") + 0:2, turnover = 0.1)
   expect_snapshot(
     error = TRUE,
-    .olmar_research_log_write(.mk_metrics(), .mk_params(), .mk_prices(), bad,
+    .olmar_research_log_plan(.mk_metrics(), .mk_params(), .mk_prices(), bad,
                               base_dir = d)
   )
   expect_equal(.n_files(d), 0L)  # validated before anything is appended
@@ -148,7 +152,7 @@ test_that("a missing Full Period row aborts", {
   bad <- .mk_metrics()[1:2, ]
   expect_snapshot(
     error = TRUE,
-    .olmar_research_log_write(bad, .mk_params(), .mk_prices(), .mk_port(),
+    .olmar_research_log_plan(bad, .mk_params(), .mk_prices(), .mk_port(),
                               base_dir = d)
   )
   expect_equal(.n_files(d), 0L)
@@ -160,10 +164,119 @@ test_that("an unreadable log aborts instead of looking empty", {
   writeLines("not parquet", file.path(d, "hypotheses", "broken.parquet"))
   expect_snapshot(
     error = TRUE,
-    .olmar_research_log_write(.mk_metrics(), .mk_params(), .mk_prices(),
+    .olmar_research_log_plan(.mk_metrics(), .mk_params(), .mk_prices(),
                               .mk_port(), base_dir = d),
     transform = function(lines) {
       sub("Underlying error:.*", "Underlying error: <arrow message>", lines)
     }
   )
+})
+
+# ── Read-only build (#968 option c) ──────────────────────────────────────────
+.snapshot_dir <- function(d) {
+  f <- sort(list.files(d, recursive = TRUE, full.names = TRUE))
+  stats::setNames(unname(tools::md5sum(f)), sub(paste0(d, "/"), "", f, fixed = TRUE))
+}
+.plan <- function(d, port = .mk_port()) {
+  suppressMessages(.olmar_research_log_plan(
+    .mk_metrics(), .mk_params(), .mk_prices(), port, base_dir = d))
+}
+
+test_that("planning on an empty log writes nothing but reports what it would", {
+  d <- withr::local_tempdir()
+  before <- .snapshot_dir(d)
+  plan <- .plan(d)
+  expect_identical(.snapshot_dir(d), before)
+  expect_equal(.n_files(d), 0L)
+  expect_equal(
+    vapply(plan$pending, nrow, integer(1))[hd_rlog_tables()],
+    c(hypotheses = 1L, implementations = 1L, results = 1L,
+      critiques = 2L, robustness = 2L)
+  )
+  expect_equal(plan$n_pending, 7L)
+  expect_equal(plan$pending$hypotheses$status, "testing")
+  # ids are the same ones the commit will write (downstream lineage works)
+  expect_equal(plan$ids$hyp_id, plan$pending$hypotheses$uuid)
+})
+
+test_that("planning against an already-seeded log leaves it byte-identical and pending is empty", {
+  d <- withr::local_tempdir()
+  .run(d)
+  before <- .snapshot_dir(d)
+  plan <- .plan(d)
+  expect_identical(.snapshot_dir(d), before)
+  expect_equal(plan$n_pending, 0L)
+  expect_true(all(vapply(plan$pending, nrow, integer(1)) == 0L))
+})
+
+test_that("commit writes the pending rows once; a repeat commit of the same plan writes nothing", {
+  d <- withr::local_tempdir()
+  plan <- .plan(d)
+  w1 <- suppressMessages(.olmar_research_log_commit(plan, base_dir = d))
+  expect_equal(sum(w1), 7L)
+  after1 <- .snapshot_dir(d)
+  w2 <- suppressMessages(.olmar_research_log_commit(plan, base_dir = d))
+  expect_equal(sum(w2), 0L)
+  expect_identical(.snapshot_dir(d), after1)
+})
+
+test_that("commit never edits an existing file", {
+  d <- withr::local_tempdir()
+  .run(d)
+  before <- .snapshot_dir(d)
+  .run(d, port = .mk_port(seed = 2L))  # new results -> appends new files only
+  after <- .snapshot_dir(d)
+  expect_true(all(names(before) %in% names(after)))
+  expect_identical(after[names(before)], before)
+})
+
+# ── Seed script (scripts/seed_olmar_research_log.R) ──────────────────────────
+test_that("seed script exit codes: 3 INDETERMINATE when inputs are unreadable", {
+  skip_if(Sys.which("Rscript") == "")
+  d <- withr::local_tempdir()
+  script <- here::here("scripts/seed_olmar_research_log.R")
+  skip_if_not(file.exists(script))
+  out <- suppressWarnings(system2(
+    file.path(R.home("bin"), "Rscript"),
+    c(shQuote(script), shQuote(d), shQuote(file.path(d, "no_such_store"))),
+    stdout = TRUE, stderr = TRUE))
+  expect_identical(attr(out, "status"), 3L)
+  expect_equal(.n_files(d), 0L)
+})
+
+test_that("seed script: exit 0 writes the lineage, exit 1 on the unchanged re-run", {
+  skip_if_not_installed("targets")
+  d <- withr::local_tempdir()          # research log
+  w <- withr::local_tempdir()          # scratch targets project
+  store <- file.path(w, "store")
+  script <- file.path(w, "_targets.R")
+  # Real store holding the four OLMAR inputs (deparsed literals, no build).
+  lit <- function(x) paste(deparse(x), collapse = "\n")
+  writeLines(c(
+    "library(targets)",
+    "tar_option_set(packages = character(0))",
+    "list(",
+    paste0("  tar_target(olmar_metrics, ", lit(.mk_metrics()), "),"),
+    paste0("  tar_target(olmar_params, ", lit(.mk_params()), "),"),
+    paste0("  tar_target(olmar_prices, ", lit(.mk_prices()), "),"),
+    paste0("  tar_target(olmar_portfolio, ", lit(.mk_port()), ")"),
+    ")"
+  ), script)
+  targets::tar_make(script = script, store = store, callr_function = NULL,
+                    reporter = "silent")
+  seed <- here::here("scripts/seed_olmar_research_log.R")
+  go <- function() {
+    out <- suppressWarnings(system2(
+      file.path(R.home("bin"), "Rscript"),
+      c(shQuote(seed), shQuote(d), shQuote(store)),
+      stdout = TRUE, stderr = TRUE))
+    status <- attr(out, "status")
+    if (is.null(status)) 0L else status
+  }
+  expect_identical(go(), 0L)
+  expect_equal(.n_rows(d, "hypotheses"), 1L)
+  expect_equal(.n_rows(d, "results"), 1L)
+  after <- .snapshot_dir(d)
+  expect_identical(go(), 1L)                 # nothing new -> exit 1
+  expect_identical(.snapshot_dir(d), after)  # and nothing written
 })

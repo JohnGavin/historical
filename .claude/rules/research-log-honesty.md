@@ -73,6 +73,16 @@ Equally: **do not leave a column NA when the value is computable.** An NA standi
 | NA in a column whose value sits in a results file | NA standing in for "not computed" | Compute it |
 | Metrics typed by hand into the log script | Not reproducible, no audit trail | Read them from the committed result files |
 
+## Builds never write the log (#968)
+
+`tar_make()` is read-only with respect to the research log. The `olmar_research_log` target only PLANS: its value lists the rows an explicit write would append (`n_pending` is 0 when the log already holds the result). Rows reach the log only through an owner-run seed script. To log OLMAR-1's current result after a build:
+
+```
+nix develop . --command Rscript scripts/seed_olmar_research_log.R
+```
+
+It re-plans against the log as it is now and appends only what is new (hypothesis, implementation, results, then critiques and robustness; status `testing`, unsealed). Exit codes: `0` rows appended, `1` nothing to write (the log already holds this result), `3` INDETERMINATE (store, input target or log unreadable; nothing written). QA gate S47 (`qa_rlog_build_readonly`) statically scans `R/*.R` and `docs/_targets.R` and fails if any function names a log writer, apart from the allow-listed `.olmar_research_log_commit()`, which no other function may name. It cannot show the tracked log is byte-identical after a build; that is not checkable inside `tar_make()`.
+
 ## Self-test
 
 Before appending a hypothesis:

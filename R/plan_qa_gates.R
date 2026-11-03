@@ -4880,6 +4880,104 @@ check_psr_vs_dsr <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S49: leaderboard Sharpe vs DSR-path Sharpe on the same basis (Refs #937) -
+
+#' S49: per-strategy basis consistency of the leaderboard and DSR Sharpe
+#'
+#' The leaderboard \code{sharpe} is geometric, \code{(CAGR - rf) / vol}; the
+#' DSR path's \code{naive_sharpe} is the arithmetic ANNUALISED excess Sharpe
+#' (\code{hd_deflated_sharpe()}: annual mean / annual vol).
+#' On one series and one rf basis, CAGR <= arithmetic mean (AM-GM), so the
+#' geometric Sharpe cannot exceed the arithmetic one beyond sampling noise.
+#' \code{sharpe > naive_sharpe + tol} therefore means the two paths deduct rf differently (the #919
+#' shape). One-sided on purpose: a geometric Sharpe BELOW the arithmetic one is
+#' the normal variance drag. (The hurdle SR0 >= 0 is already enforced by S44's
+#' \code{1 - dsr_pvalue <= prob_sharpe_positive}, and window equality by S43.)
+#' Verdicts: PASS, FAIL, INDETERMINATE (NA input, strategy in one table only,
+#' duplicates).
+#'
+#' @param leaderboard Tibble with strategy, period, sharpe.
+#' @param dsr Tibble with strategy, naive_sharpe (strat_deflated_sharpe).
+#' @param excluded Strategies with no DSR row by design.
+#' @param tol Absolute tolerance on the Sharpe (observed lb - naive on the 2026-11 build: max +0.054).
+#' @return Tibble: strategy, sharpe, naive_sharpe_ann, verdict, detail.
+#' @noRd
+build_sharpe_basis_table <- function(leaderboard, dsr, excluded = QA_DSR_EXCLUDED_STRATEGIES,
+                                     tol = 0.1) {
+  miss_lb <- setdiff(c("strategy", "period", "sharpe"), names(leaderboard))
+  miss_dsr <- setdiff(c("strategy", "naive_sharpe"), names(dsr))
+  if (length(miss_lb) > 0L || length(miss_dsr) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_sharpe_basis_table() (S49): input is missing required column(s).",
+      "i" = "Leaderboard missing: {.field {miss_lb}}; DSR table missing: {.field {miss_dsr}}."
+    ))
+  }
+  fp <- leaderboard[leaderboard$period %in% "Full Period" &
+                      !(leaderboard$strategy %in% excluded), , drop = FALSE]
+  strategies <- union(fp$strategy, dsr$strategy)
+  strategies <- setdiff(strategies, excluded)
+  rows <- lapply(strategies, function(s) {
+    lb <- fp[fp$strategy == s, , drop = FALSE]
+    d <- dsr[dsr$strategy == s, , drop = FALSE]
+    out <- function(verdict, detail, sh = NA_real_, na = NA_real_) {
+      tibble::tibble(strategy = s, sharpe = sh, naive_sharpe_ann = na,
+                     verdict = verdict, detail = detail)
+    }
+    if (nrow(lb) == 0L) return(out("INDETERMINATE", "missing_in_leaderboard: no Full Period row"))
+    if (nrow(d) == 0L) return(out("INDETERMINATE", "missing_in_dsr: no strat_deflated_sharpe row"))
+    if (nrow(lb) > 1L || nrow(d) > 1L) return(out("INDETERMINATE", "duplicate: more than one row"))
+    sh <- lb$sharpe; na <- d$naive_sharpe
+    if (anyNA(c(sh, na))) return(out("INDETERMINATE", "na_value: sharpe or naive_sharpe is NA", sh, na))
+    if (sh <= na + tol) return(out("PASS", "geometric Sharpe <= annualised arithmetic Sharpe", sh, na))
+    out("FAIL", sprintf(
+      "leaderboard sharpe %.3f exceeds annualised DSR-path Sharpe %.3f by more than %.2f (rf basis differs?)",
+      sh, na, tol
+    ), sh, na)
+  })
+  if (length(rows) == 0L) {
+    return(tibble::tibble(strategy = character(0), sharpe = numeric(0),
+                          naive_sharpe_ann = numeric(0), verdict = character(0),
+                          detail = character(0)))
+  }
+  dplyr::bind_rows(rows)
+}
+
+#' S49: abort on a basis mismatch, or when nothing could be decided
+#'
+#' @param verdict_tbl Output of \code{build_sharpe_basis_table()}.
+#' @return \code{verdict_tbl} with attribute \code{summary} (named integer:
+#'   pass, fail, indeterminate, examined). FAIL aborts with class
+#'   \code{qa_s49_fail}; INDETERMINATE (or zero rows) with
+#'   \code{qa_s49_indeterminate}.
+#' @noRd
+check_sharpe_basis <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind, examined = examined),
+                    as.integer, integer(1))
+  head_line <- sprintf("%d pass, %d fail, %d indeterminate; %d strateg%s examined",
+                       n_pass, n_fail, n_ind, examined, ifelse(examined == 1L, "y", "ies"))
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_sharpe_basis (S49) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The leaderboard and the DSR path must deduct rf on the same basis (Refs #937, #919)."
+    ), class = "qa_s49_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_sharpe_basis (S49) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = if (examined == 0L) "Zero strategies were examined -- a gate that checked nothing cannot report a pass." else
+        "A strategy could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s49_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- S45: every emitted vocabulary label resolves via the glossary (Refs #668) -
 
 #' Glossary entity -> published column carrying that entity's vocabulary (S45)
@@ -5012,6 +5110,81 @@ check_vocab_resolution <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S48: OLMAR-1 declared universe == tested universe (Refs #976, #977) ----
+
+#' S48: one verdict per ticker in the union of declared and tested universes
+#'
+#' PASS: ticker is both declared (`olmar_params$tickers`) and a column of the
+#' price matrix. FAIL: declared but absent from the matrix (the #976 shape: a
+#' ticker returning no rows is dropped silently by `olmar_prices`), tested but
+#' never declared, a duplicated declared ticker, or an NA declared ticker.
+#' INDETERMINATE: either side is NULL / not character / empty.
+#'
+#' @param declared Character vector, `olmar_params$tickers`.
+#' @param tested Character vector, price-matrix columns without `date`.
+#' @return Tibble: ticker, verdict, detail.
+#' @noRd
+build_olmar_universe_table <- function(declared, tested) {
+  row1 <- function(ticker, verdict, detail) {
+    tibble::tibble(ticker = ticker, verdict = verdict, detail = detail)
+  }
+  ok <- function(x) is.character(x) && length(x) > 0L
+  if (!ok(declared) || !ok(tested)) {
+    return(row1(NA_character_, "INDETERMINATE",
+                "declared or tested universe is NULL, not character, or empty"))
+  }
+  out <- tibble::tibble(ticker = unique(c(declared[!is.na(declared)], tested)))
+  in_decl <- out$ticker %in% declared
+  in_test <- out$ticker %in% tested
+  out$verdict <- ifelse(in_decl & in_test, "PASS", "FAIL")
+  out$detail <- ifelse(in_decl & in_test, "declared and tested",
+                       ifelse(in_decl, "declared but absent from the price matrix",
+                              "in the price matrix but not declared"))
+  extra <- list()
+  dup <- unique(declared[duplicated(declared) & !is.na(declared)])
+  if (length(dup) > 0L) {
+    extra[[length(extra) + 1L]] <- row1(dup, "FAIL", "declared more than once")
+  }
+  if (anyNA(declared)) {
+    extra[[length(extra) + 1L]] <- row1(NA_character_, "FAIL", "declared ticker is NA")
+  }
+  dplyr::bind_rows(c(list(out), extra))
+}
+
+#' S48: abort on any declared/tested mismatch, or when nothing could be decided
+#'
+#' FAIL aborts with class `qa_s48_fail`; INDETERMINATE with
+#' `qa_s48_indeterminate`; PASS returns the table with a `summary` attribute.
+#' @param verdict_tbl Output of `build_olmar_universe_table()`.
+#' @noRd
+check_olmar_universe <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+                      examined = examined), as.integer, integer(1))
+  head_line <- sprintf("%d pass, %d fail, %d indeterminate; %d ticker(s) examined",
+                       n_pass, n_fail, n_ind, examined)
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s: %s",
+                                     ifelse(is.na(bad$ticker), "(none)", bad$ticker), bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_olmar_universe (S48) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The declared universe must equal the tested one (Refs #976). Fix the declaration or the data; never drop tickers silently."
+    ), class = "qa_s48_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_olmar_universe (S48) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The universes could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s48_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- S46: research-log hypotheses uuid must not repeat (Refs #968) ----------
 
 #' Known historical repeated hypotheses uuids (S46 allow-list)
@@ -5110,6 +5283,136 @@ check_rlog_uuid_unique <- function(verdict_tbl) {
       stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
       "i" = "The log could not be checked; this is NOT a pass (checks-must-distinguish-unknown)."
     ), class = "qa_s46_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
+# ---- S47: build code must not call a research-log writer (Refs #968) --------
+
+#' Functions that append to the research log (S47)
+#'
+#' `hd_rlog_append()` is the only function that writes the log's parquet;
+#' `hd_strategy_idea_append()` and `hd_admission_preregister()` call it;
+#' `write_parquet` is the underlying writer. A build target must never reach any of
+#' them (option (c) of #968: only explicit, owner-run seed scripts write).
+#' @noRd
+S47_RLOG_WRITERS <- c("hd_rlog_append", "hd_strategy_idea_append",
+                      "hd_admission_preregister", "write_parquet")
+
+#' Build-code functions allowed to write the log, with the reason (S47)
+#'
+#' Such a function may contain a writer call, but no OTHER function in the
+#' scanned files may name it, so it is reachable only from a script that is
+#' not part of any target.
+#' @noRd
+S47_RLOG_COMMIT_ALLOW <- tibble::tibble(
+  fn     = ".olmar_research_log_commit",
+  reason = paste0("explicit writer; called only by scripts/seed_olmar_research_log.R ",
+                  "and tests, never by a target (#968 option c)")
+)
+
+#' S47: static scan for research-log writer calls in build code
+#'
+#' Parses each file and, per top-level expression, lists every function name
+#' and every string literal used (so `do.call("hd_rlog_append", ...)` is also
+#' caught). Limits, stated plainly: it is a name scan, not data-flow; a writer
+#' reached through a function defined outside the scanned files, or through a
+#' name built at run time, is invisible. The scanned files are the build code
+#' (`R/*.R`, `docs/_targets.R`), not the package library, where the writers are
+#' defined. It cannot show that a build left the tracked log byte-identical;
+#' that is not checkable inside `tar_make()`.
+#'
+#' Per file: PASS (no writer reference), or FAIL with one row per offending
+#' top-level function. INDETERMINATE: no files, a file missing, or a parse
+#' error.
+#'
+#' @param files Character vector of R file paths to scan.
+#' @param writers Writer function names (`S47_RLOG_WRITERS`).
+#' @param allow Tibble `fn`, `reason` (`S47_RLOG_COMMIT_ALLOW`).
+#' @return Tibble: file, fn, verdict, detail.
+#' @noRd
+build_rlog_writer_table <- function(files, writers = S47_RLOG_WRITERS,
+                                    allow = S47_RLOG_COMMIT_ALLOW) {
+  row1 <- function(file, fn, verdict, detail) {
+    tibble::tibble(file = file, fn = fn, verdict = verdict, detail = detail)
+  }
+  if (length(files) == 0L) {
+    return(row1(NA_character_, NA_character_, "INDETERMINATE", "no files to scan"))
+  }
+  strings_of <- function(e) {
+    if (is.character(e)) return(e)
+    if (is.call(e) || is.expression(e) || is.pairlist(e)) {
+      return(unlist(lapply(as.list(e), strings_of), use.names = FALSE))
+    }
+    character(0)
+  }
+  out <- lapply(files, function(f) {
+    if (!file.exists(f)) {
+      return(row1(f, NA_character_, "INDETERMINATE", "file does not exist"))
+    }
+    exprs <- tryCatch(parse(f, keep.source = FALSE), error = function(e) e)
+    if (inherits(exprs, "error")) {
+      return(row1(f, NA_character_, "INDETERMINATE",
+                  paste0("parse error: ", conditionMessage(exprs))))
+    }
+    bad <- list()
+    for (e in as.list(exprs)) {
+      own <- if (is.call(e) && length(e) >= 3L &&
+                 as.character(e[[1L]])[1L] %in% c("<-", "=") && is.name(e[[2L]])) {
+        as.character(e[[2L]])
+      } else NA_character_
+      # The gate's own configuration lists the writer names as strings.
+      if (!is.na(own) && own %in% c("S47_RLOG_WRITERS", "S47_RLOG_COMMIT_ALLOW")) next
+      used <- unique(c(all.names(e), strings_of(e)))
+      hit_writer <- intersect(used, writers)
+      hit_commit <- setdiff(intersect(used, allow$fn), own)
+      if (!is.na(own) && own %in% allow$fn) hit_writer <- character(0)
+      if (length(hit_writer) + length(hit_commit) > 0L) {
+        bad[[length(bad) + 1L]] <- row1(
+          f, if (is.na(own)) "(top-level expression)" else own, "FAIL",
+          paste0("names ", paste(c(hit_writer, hit_commit), collapse = ", "))
+        )
+      }
+    }
+    if (length(bad) == 0L) row1(f, NA_character_, "PASS", "no research-log writer referenced")
+    else dplyr::bind_rows(bad)
+  })
+  dplyr::bind_rows(out)
+}
+
+#' S47: abort on a build-code writer call, or when nothing could be decided
+#'
+#' FAIL aborts with class `qa_s47_fail`; INDETERMINATE (or zero PASS/FAIL rows)
+#' with `qa_s47_indeterminate`; PASS returns the table with a `summary`
+#' attribute (pass, fail, indeterminate, examined).
+#' @param verdict_tbl Output of `build_rlog_writer_table()`.
+#' @noRd
+check_rlog_build_readonly <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+                      examined = examined), as.integer, integer(1))
+  head_line <- sprintf("%d file(s) clean, %d offending function(s), %d indeterminate",
+                       n_pass, n_fail, n_ind)
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_file <- as.character(ifelse(is.na(bad$file), "(none)", bad$file))
+  bad_fn   <- as.character(ifelse(is.na(bad$fn), "-", bad$fn))
+  bad_msgs <- .qa_cli_escape(sprintf("  %s :: %s: %s",
+                                     basename(bad_file), bad_fn, bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_rlog_build_readonly (S47) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "A build must not write the research log; use an explicit seed script (Refs #968)."
+    ), class = "qa_s47_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_rlog_build_readonly (S47) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The build code could not be scanned; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s47_indeterminate")
   }
   structure(verdict_tbl, summary = summary)
 }
@@ -6259,6 +6562,23 @@ plan_qa_gates <- function() {
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always")),
 
+    # QA gate: leaderboard Sharpe vs DSR-path Sharpe on the same rf basis
+    # (S49, Refs #937 Phase 3 item 3). Geometric <= arithmetic on one basis,
+    # so a leaderboard Sharpe above the annualised DSR-path Sharpe means the
+    # two deduct rf differently. FAIL / INDETERMINATE are distinct outcomes.
+    targets::tar_target(qa_sharpe_basis, {
+      verdict_tbl <- check_sharpe_basis(
+        build_sharpe_basis_table(leaderboard, strat_deflated_sharpe)
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_sharpe_basis: S49 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
+        " strateg", ifelse(s[["examined"]] == 1L, "y", "ies"), " examined (Refs #937)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
     # QA gate: every vocabulary label the leaderboard and the S11 metrics
     # registry targets emit resolves through resolve_entity() to an allowed
     # glossary value (S45, Refs #668). Same literal-list pattern as S11
@@ -6294,6 +6614,22 @@ plan_qa_gates <- function() {
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always")),
 
+    # QA gate: OLMAR-1 declared universe == price-matrix universe (S48, Refs
+    # #976, #977). Fails if a declared ticker silently vanished from the matrix.
+    targets::tar_target(qa_olmar_universe, {
+      verdict_tbl <- check_olmar_universe(
+        build_olmar_universe_table(olmar_params$tickers,
+                                   setdiff(colnames(olmar_prices), "date"))
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_olmar_universe: S48 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
+        " ticker(s) examined (Refs #976, #977)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
     # QA gate: no research-log hypotheses uuid repeats (S46, Refs #968). Reads
     # the log at hd_rlog_path() AFTER olmar_research_log has written (the
     # reference below is the dependency edge). One known historical repeat is
@@ -6309,6 +6645,24 @@ plan_qa_gates <- function() {
         s[["allowed"]], " allow-listed) / ", s[["fail"]], " fail / ",
         s[["indeterminate"]], " indeterminate; ", s[["examined"]],
         " distinct uuid(s) examined (Refs #968)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: build code names no research-log writer (S47, Refs #968 option
+    # c). Static scan of R/*.R and docs/_targets.R; the explicit commit function
+    # is allow-listed and may not be named by any other function.
+    targets::tar_target(qa_rlog_build_readonly, {
+      files <- c(
+        list.files(here::here("R"), pattern = "\\.R$", full.names = TRUE),
+        here::here("docs", "_targets.R")
+      )
+      verdict_tbl <- check_rlog_build_readonly(build_rlog_writer_table(files))
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_rlog_build_readonly: S47 passed -- ", s[["pass"]], " pass / ",
+        s[["fail"]], " fail / ", s[["indeterminate"]], " indeterminate; ",
+        s[["examined"]], " file(s) scanned (Refs #968)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always")),

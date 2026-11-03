@@ -52,3 +52,51 @@ Could not determine, and why: the 2010 liquidity and size rank of each ticker
 (no point-in-time source in the repo, no network); whether any 2010-era peer
 was delisted (same reason; `equity_daily` records zero delistings so it cannot
 show it).
+
+## Addendum 2026-11-03: resolution of the open items (#976, #977)
+
+Read-only DuckDB query on the local copy of the pipeline's input,
+`data/dist/equity_daily.parquet` (1,622 tickers, 7,123,143 rows, last bar
+2026-04-13), run through `hd_ohlcv()`'s source table.
+
+### #976: the open question is closed
+
+| Ticker | Rows in equity_daily |
+|---|---|
+| XLF XLE XLV XLK XLI XLP XLU XLB XLY XLRE | 0 each (only unrelated LSE products `XL3S.L`, `XLE3.L`, `XLF3.L`, `XLGS.L`, `XLPE.L` match `XL%`) |
+
+Verdict: **data-source gap**. The ten sector SPDRs were never in `equity_daily`,
+so `hd_ohlcv()` returned zero rows and `olmar_prices` dropped them without a
+warning (the earlier INDETERMINATE row). Not a deliberate cut, not short
+history. Adding them needs a new data source and is not a trivial fix, so the
+declared universe was corrected to the 20 tested tickers (`olmar_params$tickers`,
+with the reason in a code comment) and the gate S48 (`qa_olmar_universe`,
+`tests/testthat/test-qa-olmar-universe-s48.R`) fails whenever declared and
+tested universes differ. XLRE would in any case start 2015-10, after a
+2010-01-04 start. A future run with the ten added must be logged as a new
+implementation row, not a re-tune.
+
+### #977: first bar per ticker (from the data the pipeline reads)
+
+| First bar | Tickers |
+|---|---|
+| before 1990 | CVX JNJ PG XOM (1962), PFE (1972), WMT (1972), BAC (1973), JPM (1980), AAPL (1980), HD (1981), UNH (1984), MSFT (1986) |
+| 1990s to 2004 | SPY (1993), AMZN (1997), DIA (1998), QQQ (1999), GS (1999), IWM (2000), GOOGL (2004-08-19) |
+| after 2010-01-04 | META (2012-05-18) |
+
+19 of 20 existed and traded on 2010-01-04 (the first bar is only the first in
+the source, so existence is shown, liquidity is not). META enters mid-sample.
+
+**Verdict: biased, probably, size unknown.** Mechanism: the list was written on
+2026-05-23 (commit 59d1aa4), after the whole test window, from today's
+mega-caps (16 of 20), and the only source, `equity_daily`, records no
+delistings. Cannot tell the magnitude: no 2010 point-in-time constituents or
+market caps in the repo (issue #150). The OLMAR-vs-equal-weight comparison
+shares the bias, so it is less affected than the absolute Sharpe.
+
+### Research-log rows that need correcting (after #1020 merges; not edited here)
+
+The OLMAR-1 hypothesis row declares a 30-ticker universe. It should state the
+20 tested tickers, the ten SPDRs absent from `equity_daily`, and a
+survivorship caveat, as a new row appended by the seed script
+(`scripts/seed_olmar_research_log.R`), not an edit (the log is append-only).

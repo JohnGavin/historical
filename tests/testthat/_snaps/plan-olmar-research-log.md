@@ -1,7 +1,7 @@
 # a portfolio without net_ret/rf_ret aborts instead of aliasing
 
     Code
-      .olmar_research_log_write(.mk_metrics(), .mk_params(), .mk_prices(), bad,
+      .olmar_research_log_plan(.mk_metrics(), .mk_params(), .mk_prices(), bad,
       base_dir = d)
     Condition
       Error:
@@ -11,8 +11,7 @@
 # a missing Full Period row aborts
 
     Code
-      .olmar_research_log_write(bad, .mk_params(), .mk_prices(), .mk_port(),
-      base_dir = d)
+      .olmar_research_log_plan(bad, .mk_params(), .mk_prices(), .mk_port(), base_dir = d)
     Condition
       Error:
       x olmar_research_log: expected exactly one "Full Period" row in `olmar_metrics`, found 0.
@@ -21,7 +20,7 @@
 # an unreadable log aborts instead of looking empty
 
     Code
-      .olmar_research_log_write(.mk_metrics(), .mk_params(), .mk_prices(), .mk_port(),
+      .olmar_research_log_plan(.mk_metrics(), .mk_params(), .mk_prices(), .mk_port(),
       base_dir = d)
     Condition
       Error:
