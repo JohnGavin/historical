@@ -4880,6 +4880,104 @@ check_psr_vs_dsr <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S47: leaderboard Sharpe vs DSR-path Sharpe on the same basis (Refs #937) -
+
+#' S47: per-strategy basis consistency of the leaderboard and DSR Sharpe
+#'
+#' The leaderboard \code{sharpe} is geometric, \code{(CAGR - rf) / vol}; the
+#' DSR path's \code{naive_sharpe} is the arithmetic ANNUALISED excess Sharpe
+#' (\code{hd_deflated_sharpe()}: annual mean / annual vol).
+#' On one series and one rf basis, CAGR <= arithmetic mean (AM-GM), so the
+#' geometric Sharpe cannot exceed the arithmetic one beyond sampling noise.
+#' \code{sharpe > naive_sharpe + tol} therefore means the two paths deduct rf differently (the #919
+#' shape). One-sided on purpose: a geometric Sharpe BELOW the arithmetic one is
+#' the normal variance drag. (The hurdle SR0 >= 0 is already enforced by S44's
+#' \code{1 - dsr_pvalue <= prob_sharpe_positive}, and window equality by S43.)
+#' Verdicts: PASS, FAIL, INDETERMINATE (NA input, strategy in one table only,
+#' duplicates).
+#'
+#' @param leaderboard Tibble with strategy, period, sharpe.
+#' @param dsr Tibble with strategy, naive_sharpe (strat_deflated_sharpe).
+#' @param excluded Strategies with no DSR row by design.
+#' @param tol Absolute tolerance on the Sharpe (observed lb - naive on the 2026-11 build: max +0.054).
+#' @return Tibble: strategy, sharpe, naive_sharpe_ann, verdict, detail.
+#' @noRd
+build_sharpe_basis_table <- function(leaderboard, dsr, excluded = QA_DSR_EXCLUDED_STRATEGIES,
+                                     tol = 0.1) {
+  miss_lb <- setdiff(c("strategy", "period", "sharpe"), names(leaderboard))
+  miss_dsr <- setdiff(c("strategy", "naive_sharpe"), names(dsr))
+  if (length(miss_lb) > 0L || length(miss_dsr) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_sharpe_basis_table() (S47): input is missing required column(s).",
+      "i" = "Leaderboard missing: {.field {miss_lb}}; DSR table missing: {.field {miss_dsr}}."
+    ))
+  }
+  fp <- leaderboard[leaderboard$period %in% "Full Period" &
+                      !(leaderboard$strategy %in% excluded), , drop = FALSE]
+  strategies <- union(fp$strategy, dsr$strategy)
+  strategies <- setdiff(strategies, excluded)
+  rows <- lapply(strategies, function(s) {
+    lb <- fp[fp$strategy == s, , drop = FALSE]
+    d <- dsr[dsr$strategy == s, , drop = FALSE]
+    out <- function(verdict, detail, sh = NA_real_, na = NA_real_) {
+      tibble::tibble(strategy = s, sharpe = sh, naive_sharpe_ann = na,
+                     verdict = verdict, detail = detail)
+    }
+    if (nrow(lb) == 0L) return(out("INDETERMINATE", "missing_in_leaderboard: no Full Period row"))
+    if (nrow(d) == 0L) return(out("INDETERMINATE", "missing_in_dsr: no strat_deflated_sharpe row"))
+    if (nrow(lb) > 1L || nrow(d) > 1L) return(out("INDETERMINATE", "duplicate: more than one row"))
+    sh <- lb$sharpe; na <- d$naive_sharpe
+    if (anyNA(c(sh, na))) return(out("INDETERMINATE", "na_value: sharpe or naive_sharpe is NA", sh, na))
+    if (sh <= na + tol) return(out("PASS", "geometric Sharpe <= annualised arithmetic Sharpe", sh, na))
+    out("FAIL", sprintf(
+      "leaderboard sharpe %.3f exceeds annualised DSR-path Sharpe %.3f by more than %.2f (rf basis differs?)",
+      sh, na, tol
+    ), sh, na)
+  })
+  if (length(rows) == 0L) {
+    return(tibble::tibble(strategy = character(0), sharpe = numeric(0),
+                          naive_sharpe_ann = numeric(0), verdict = character(0),
+                          detail = character(0)))
+  }
+  dplyr::bind_rows(rows)
+}
+
+#' S47: abort on a basis mismatch, or when nothing could be decided
+#'
+#' @param verdict_tbl Output of \code{build_sharpe_basis_table()}.
+#' @return \code{verdict_tbl} with attribute \code{summary} (named integer:
+#'   pass, fail, indeterminate, examined). FAIL aborts with class
+#'   \code{qa_s47_fail}; INDETERMINATE (or zero rows) with
+#'   \code{qa_s47_indeterminate}.
+#' @noRd
+check_sharpe_basis <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind, examined = examined),
+                    as.integer, integer(1))
+  head_line <- sprintf("%d pass, %d fail, %d indeterminate; %d strateg%s examined",
+                       n_pass, n_fail, n_ind, examined, ifelse(examined == 1L, "y", "ies"))
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_sharpe_basis (S47) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The leaderboard and the DSR path must deduct rf on the same basis (Refs #937, #919)."
+    ), class = "qa_s47_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_sharpe_basis (S47) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = if (examined == 0L) "Zero strategies were examined -- a gate that checked nothing cannot report a pass." else
+        "A strategy could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s47_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- S45: every emitted vocabulary label resolves via the glossary (Refs #668) -
 
 #' Glossary entity -> published column carrying that entity's vocabulary (S45)
@@ -6135,6 +6233,23 @@ plan_qa_gates <- function() {
         " fail / ", s[["not_computed"]], " not computed / ", s[["not_applicable"]],
         " not applicable / ", s[["indeterminate"]], " indeterminate; ",
         s[["examined"]], " row(s) examined (Refs #919, #937)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: leaderboard Sharpe vs DSR-path Sharpe on the same rf basis
+    # (S47, Refs #937 Phase 3 item 3). Geometric <= arithmetic on one basis,
+    # so a leaderboard Sharpe above the annualised DSR-path Sharpe means the
+    # two deduct rf differently. FAIL / INDETERMINATE are distinct outcomes.
+    targets::tar_target(qa_sharpe_basis, {
+      verdict_tbl <- check_sharpe_basis(
+        build_sharpe_basis_table(leaderboard, strat_deflated_sharpe)
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_sharpe_basis: S47 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
+        " strateg", ifelse(s[["examined"]] == 1L, "y", "ies"), " examined (Refs #937)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always")),
