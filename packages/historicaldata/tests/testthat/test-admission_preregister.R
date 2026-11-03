@@ -139,7 +139,11 @@ test_that("a supplied gate_result populates gate_overall", {
                        dimnames = list(NULL, "strat_a"))
   candidate <- -0.3 * (existing[, 1] - mean(existing[, 1])) + 0.012 +
     rnorm(nrow(existing), sd = 0.03)
-  gate_result <- hd_strategy_value_gate(candidate, existing, periods_per_year = 12L)
+  # Synthetic spreads: excess-basis labels (#937 item 4 basis guard).
+  gate_result <- hd_strategy_value_gate(
+    candidate, existing, periods_per_year = 12L,
+    candidate_basis = "Mom 12-2", existing_basis = "Mom Pre-Peak"
+  )
 
   hd_admission_preregister(
     strategy    = "test_strat_6",

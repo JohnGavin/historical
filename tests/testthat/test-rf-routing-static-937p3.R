@@ -124,13 +124,10 @@ suppressMessages(pkgload::load_all(pkg_path, quiet = TRUE))
 # Sites that cannot yet be classified. Key: "<file>::<rf argument text>".
 # Every entry states why; a stale entry (site now routed/annotated, or gone)
 # fails the test below so this list cannot rot.
-KNOWN_UNCLASSIFIED <- c(
-  "plan_backtest.R::df$rf_ret" = paste(
-    "INDETERMINATE (#937 phase 3 item 4): .bt_sharpe_rf() deducts raw rf from",
-    "bt_expanding$actual_return / benchmark_return; the basis of that series",
-    "is not established, so it is neither routed nor annotated total."
-  )
-)
+#
+# Empty since #937 item 4 row 1: .bt_sharpe_rf() (the last entry) now routes
+# rf through hd_rf_for_basis() with its Defense First / SPY total labels.
+KNOWN_UNCLASSIFIED <- stats::setNames(character(0), character(0))
 
 repo_root <- here::here()
 scan_paths <- c(

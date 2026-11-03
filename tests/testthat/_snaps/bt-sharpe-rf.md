@@ -1,7 +1,7 @@
 # .bt_sharpe_rf aborts on an INTERIOR gap (not a publication lag)
 
     Code
-      .bt_sharpe_rf(dts, r, rf, ann_factor = 12L)
+      .bt_sharpe_rf(dts, r, rf, "Defense First", ann_factor = 12L)
     Condition
       Error in `.bt_sharpe_rf()`:
       x 1 month inside stk_rf's own span have no risk-free rate.
@@ -12,7 +12,7 @@
 # .bt_sharpe_rf aborts when stk_rf lacks required columns
 
     Code
-      .bt_sharpe_rf(dts, r, bad_rf, ann_factor = 12L)
+      .bt_sharpe_rf(dts, r, bad_rf, "Defense First", ann_factor = 12L)
     Condition
       Error in `.bt_sharpe_rf()`:
       x .bt_sharpe_rf(): stk_rf is missing 1 required column: rf_ret.

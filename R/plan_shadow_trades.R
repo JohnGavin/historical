@@ -4,9 +4,13 @@
 # the measured alpha is sensitive to precise entry/exit timing.
 # Shifts entry by 0–3 business days forward and exit by -5 to +5 business
 # days, re-computes trade returns for each combination, and summarises
-# Sharpe, win rate, and mean return across the grid.
+# the per-trade ratio, win rate, and mean return across the grid.
 #
-# Interpretation: if the offset (0,0) Sharpe is significantly higher than
+# The per-trade ratio is mean/sd of the individual trade returns: NOT
+# annualised and with NO risk-free rate deducted (not excess), so it is not a
+# Sharpe and must not be compared with an annual Sharpe (#937 item 4).
+#
+# Interpretation: if the offset (0,0) ratio is significantly higher than
 # neighbouring offsets, the strategy may depend on lucky timing rather than
 # a genuine edge.
 
@@ -59,7 +63,7 @@ plan_shadow_trades <- function() {
       )
     }),
 
-    # ── Summary: Sharpe / win-rate across the offset grid ─────────
+    # ── Summary: per-trade ratio / win-rate across the offset grid ─
     targets::tar_target(shadow_summary, {
       library(dplyr)
 
@@ -72,7 +76,8 @@ plan_shadow_trades <- function() {
           mean_return  = round(mean(return_pct, na.rm = TRUE) * 100, 2),
           median_return = round(median(return_pct, na.rm = TRUE) * 100, 2),
           win_rate     = round(mean(is_win, na.rm = TRUE) * 100, 1),
-          sharpe       = round(
+          # per-trade ratio, not annualised, not excess (no rf): not a Sharpe
+          per_trade_ratio = round(
             mean(return_pct, na.rm = TRUE) /
               sd(return_pct, na.rm = TRUE),
             2
@@ -92,14 +97,14 @@ plan_shadow_trades <- function() {
         dplyr::filter(entry_offset == 0L, exit_offset == 0L)
 
       best <- shadow_summary |>
-        dplyr::slice_max(sharpe, n = 1L, with_ties = FALSE)
+        dplyr::slice_max(per_trade_ratio, n = 1L, with_ties = FALSE)
 
       list(
-        actual_sharpe = actual$sharpe,
-        best_entry    = best$entry_offset,
-        best_exit     = best$exit_offset,
-        best_sharpe   = best$sharpe,
-        improvement   = best$sharpe - actual$sharpe
+        actual_ratio = actual$per_trade_ratio,
+        best_entry   = best$entry_offset,
+        best_exit    = best$exit_offset,
+        best_ratio   = best$per_trade_ratio,
+        improvement  = best$per_trade_ratio - actual$per_trade_ratio
       )
     }),
 
@@ -113,16 +118,18 @@ plan_shadow_trades <- function() {
         "Shadow trade analysis for Avoid Worst Days strategy. ",
         "Entry offsets: 0\u20133 business days forward; ",
         "exit offsets: \u22125 to +5 business days. ",
-        "Actual timing (0,0) Sharpe: ", shadow_optimal$actual_sharpe, ". ",
+        "Ratios are mean/sd of individual trade returns ",
+        "(per-trade ratio, not annualised, not excess). ",
+        "Actual timing (0,0) per-trade ratio: ", shadow_optimal$actual_ratio, ". ",
         "Best offset (",
         shadow_optimal$best_entry, ", ",
         shadow_optimal$best_exit,
-        ") Sharpe: ", shadow_optimal$best_sharpe, ". ",
+        ") per-trade ratio: ", shadow_optimal$best_ratio, ". ",
         if (shadow_optimal$improvement > 0.05) {
           paste0(
             "Signal timing may be suboptimal \u2014 ",
             round(shadow_optimal$improvement, 2),
-            " Sharpe improvement available from alternative offsets."
+            " per-trade-ratio improvement available from alternative offsets."
           )
         } else {
           "Signal timing is well-calibrated: no meaningful improvement from neighbouring offsets."

@@ -78,8 +78,24 @@ Every leaderboard Sharpe elsewhere in this package (and in the
 \code{aum = 0} row of this curve -- the point at which market impact
 vanishes and only the strategy's OWN cost model (if any) applies.
 }
+\section{Input return basis (#937)}{
+
+\code{gross_sharpe} and \code{net_sharpe} are \code{mean / sd} of the
+series passed in, with NO risk-free rate deducted and no \code{rf}
+argument (deliberately: a Sharpe on the wrong basis is not rescued by an
+optional argument). They are an EXCESS-basis Sharpe only when
+\code{monthly_ret} is already an excess return. Pass an excess-basis
+strategy's series as is (a dollar-neutral spread), and for a \code{"total"}
+or \code{"blend"} strategy pass \code{\link{hd_excess_returns}()} of it. The
+basis of every strategy is registered in \code{\link{hd_return_basis}};
+every call site must declare the label of the series it passes with a
+\code{# basis: <label>} comment on the call's first line (enforced by
+\code{tests/testthat/test-capacity-basis-937.R}).
+}
+
 \examples{
 set.seed(1)
+# Synthetic EXCESS-basis spread (no rf in it), so no rf is needed.
 rets <- rnorm(60, mean = 0.01, sd = 0.04)
 curve <- hd_capacity_curve(
   monthly_ret = rets, aum_grid = c(1e6, 1e7, 1e8, 1e9),
