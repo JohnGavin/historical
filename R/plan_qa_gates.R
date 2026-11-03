@@ -5114,9 +5114,9 @@ check_rlog_uuid_unique <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
-# ---- S47: source-level bare-source-URL gate (Refs #631) ----
+# ---- S50: source-level bare-source-URL gate (Refs #631) ----
 
-#' Classify a source-link's visible text as a symbol reference (S47)
+#' Classify a source-link's visible text as a symbol reference (S50)
 #'
 #' A link whose text names a function or target ("fn()", or backticked code
 #' that is not a file name) points at ONE definition, so it needs a `#L<n>`
@@ -5136,7 +5136,7 @@ check_rlog_uuid_unique <- function(verdict_tbl) {
   grepl("\\(\\)$", inner) || backticked
 }
 
-#' Scan one .qmd text for source links lacking / mis-anchoring `#L<n>` (S47)
+#' Scan one .qmd text for source links lacking / mis-anchoring `#L<n>` (S50)
 #'
 #' Render-independent (works on `.qmd` source, so it runs in `verify.sh`).
 #' Two violation kinds, never collapsed:
@@ -5211,12 +5211,12 @@ scan_source_links_text <- function(text, repo_root, file = "<text>") {
   if (length(rows) == 0L) empty else dplyr::bind_rows(rows)
 }
 
-#' Scan every docs/*.qmd for bare / stale source links (S47, Refs #631)
+#' Scan every docs/*.qmd for bare / stale source links (S50, Refs #631)
 #'
 #' @param docs_dir Directory holding the `.qmd` sources.
 #' @param repo_root Absolute repository root (resolves `#L<n>` targets).
 #' @return A tibble as from `scan_source_links_text()`, one row per violation.
-#'   Aborts with class `qa_s47_indeterminate` when no `.qmd` is found (an empty
+#'   Aborts with class `qa_s50_indeterminate` when no `.qmd` is found (an empty
 #'   scan is not a pass).
 #' @noRd
 check_no_bare_source_urls <- function(docs_dir, repo_root = dirname(docs_dir)) {
@@ -5224,9 +5224,9 @@ check_no_bare_source_urls <- function(docs_dir, repo_root = dirname(docs_dir)) {
   files <- files[!grepl("_files/", files, fixed = TRUE)]
   if (length(files) == 0L) {
     cli::cli_abort(c(
-      "x" = "qa_no_bare_source_urls (S47) is INDETERMINATE: no .qmd files under {.path {docs_dir}}.",
+      "x" = "qa_no_bare_source_urls (S50) is INDETERMINATE: no .qmd files under {.path {docs_dir}}.",
       "i" = "Nothing was scanned; this is NOT a pass (checks-must-distinguish-unknown)."
-    ), class = "qa_s47_indeterminate")
+    ), class = "qa_s50_indeterminate")
   }
   dplyr::bind_rows(lapply(files, function(f) {
     scan_source_links_text(paste(readLines(f, warn = FALSE), collapse = "\n"),
@@ -6314,20 +6314,20 @@ plan_qa_gates <- function() {
     }, cue = targets::tar_cue(mode = "always")),
 
     # QA gate: no docs/*.qmd symbol link into project source lacks #L<n>, and no
-    # #L<n> anchor is stale (S47, Refs #631). Source-level, so it needs no
+    # #L<n> anchor is stale (S50, Refs #631). Source-level, so it needs no
     # render; whole-file references (link text a file name or prose) are exempt.
     targets::tar_target(qa_no_bare_source_urls, {
       hits <- check_no_bare_source_urls(here::here("docs"), here::here())
       if (nrow(hits) > 0L) {
-        msgs <- .qa_cli_escape(sprintf("  S47: %s:%d %s -- %s",
+        msgs <- .qa_cli_escape(sprintf("  S50: %s:%d %s -- %s",
           basename(hits$file), hits$line, hits$kind, hits$url))
         cli::cli_abort(c(
-          "x" = "qa_no_bare_source_urls (S47): {nrow(hits)} source link(s) lack a #L<n> anchor or have a stale one:",
+          "x" = "qa_no_bare_source_urls (S50): {nrow(hits)} source link(s) lack a #L<n> anchor or have a stale one:",
           stats::setNames(msgs, rep("i", length(msgs))),
           "i" = "Anchor symbol links to the definition line (mermaid-click-anchors rule; Refs #631)."
-        ), class = "qa_s47_fail")
+        ), class = "qa_s50_fail")
       }
-      cli::cli_inform(c("v" = "qa_no_bare_source_urls: S47 passed (0 bare/stale source links in docs/*.qmd)"))
+      cli::cli_inform(c("v" = "qa_no_bare_source_urls: S50 passed (0 bare/stale source links in docs/*.qmd)"))
       nrow(hits)
     }, cue = targets::tar_cue(mode = "always"))
   )

@@ -1,5 +1,5 @@
 testthat::local_edition(3)
-# S47 / #631: dashboard source links need a `#L<n>` anchor when the link text
+# S50 / #631: dashboard source links need a `#L<n>` anchor when the link text
 # names a symbol, and every anchor must be within the target's line count.
 # Render-independent: scans docs/*.qmd, so it runs in verify.sh with no store.
 
@@ -70,5 +70,5 @@ test_that("reported line numbers point at the offending line", {
 
 test_that("INDETERMINATE (not pass) when no .qmd is found", {
   d <- withr::local_tempdir()
-  expect_error(check_no_bare_source_urls(d, root), class = "qa_s47_indeterminate")
+  expect_error(check_no_bare_source_urls(d, root), class = "qa_s50_indeterminate")
 })
