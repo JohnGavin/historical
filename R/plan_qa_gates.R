@@ -4880,9 +4880,9 @@ check_psr_vs_dsr <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
-# ---- S47: leaderboard Sharpe vs DSR-path Sharpe on the same basis (Refs #937) -
+# ---- S49: leaderboard Sharpe vs DSR-path Sharpe on the same basis (Refs #937) -
 
-#' S47: per-strategy basis consistency of the leaderboard and DSR Sharpe
+#' S49: per-strategy basis consistency of the leaderboard and DSR Sharpe
 #'
 #' The leaderboard \code{sharpe} is geometric, \code{(CAGR - rf) / vol}; the
 #' DSR path's \code{naive_sharpe} is the arithmetic ANNUALISED excess Sharpe
@@ -4908,7 +4908,7 @@ build_sharpe_basis_table <- function(leaderboard, dsr, excluded = QA_DSR_EXCLUDE
   miss_dsr <- setdiff(c("strategy", "naive_sharpe"), names(dsr))
   if (length(miss_lb) > 0L || length(miss_dsr) > 0L) {
     cli::cli_abort(c(
-      "x" = "build_sharpe_basis_table() (S47): input is missing required column(s).",
+      "x" = "build_sharpe_basis_table() (S49): input is missing required column(s).",
       "i" = "Leaderboard missing: {.field {miss_lb}}; DSR table missing: {.field {miss_dsr}}."
     ))
   }
@@ -4942,13 +4942,13 @@ build_sharpe_basis_table <- function(leaderboard, dsr, excluded = QA_DSR_EXCLUDE
   dplyr::bind_rows(rows)
 }
 
-#' S47: abort on a basis mismatch, or when nothing could be decided
+#' S49: abort on a basis mismatch, or when nothing could be decided
 #'
 #' @param verdict_tbl Output of \code{build_sharpe_basis_table()}.
 #' @return \code{verdict_tbl} with attribute \code{summary} (named integer:
 #'   pass, fail, indeterminate, examined). FAIL aborts with class
-#'   \code{qa_s47_fail}; INDETERMINATE (or zero rows) with
-#'   \code{qa_s47_indeterminate}.
+#'   \code{qa_s49_fail}; INDETERMINATE (or zero rows) with
+#'   \code{qa_s49_indeterminate}.
 #' @noRd
 check_sharpe_basis <- function(verdict_tbl) {
   v <- verdict_tbl$verdict
@@ -4962,18 +4962,18 @@ check_sharpe_basis <- function(verdict_tbl) {
   bad_msgs <- .qa_cli_escape(sprintf("  %s -- %s: %s", bad$strategy, bad$verdict, bad$detail))
   if (n_fail > 0L) {
     cli::cli_abort(c(
-      "x" = paste0("qa_sharpe_basis (S47) FAILED: ", head_line, "."),
+      "x" = paste0("qa_sharpe_basis (S49) FAILED: ", head_line, "."),
       stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
       "i" = "The leaderboard and the DSR path must deduct rf on the same basis (Refs #937, #919)."
-    ), class = "qa_s47_fail")
+    ), class = "qa_s49_fail")
   }
   if (examined == 0L || n_ind > 0L) {
     cli::cli_abort(c(
-      "x" = paste0("qa_sharpe_basis (S47) is INDETERMINATE: ", head_line, "."),
+      "x" = paste0("qa_sharpe_basis (S49) is INDETERMINATE: ", head_line, "."),
       stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
       "i" = if (examined == 0L) "Zero strategies were examined -- a gate that checked nothing cannot report a pass." else
         "A strategy could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
-    ), class = "qa_s47_indeterminate")
+    ), class = "qa_s49_indeterminate")
   }
   structure(verdict_tbl, summary = summary)
 }
@@ -6238,7 +6238,7 @@ plan_qa_gates <- function() {
     }, cue = targets::tar_cue(mode = "always")),
 
     # QA gate: leaderboard Sharpe vs DSR-path Sharpe on the same rf basis
-    # (S47, Refs #937 Phase 3 item 3). Geometric <= arithmetic on one basis,
+    # (S49, Refs #937 Phase 3 item 3). Geometric <= arithmetic on one basis,
     # so a leaderboard Sharpe above the annualised DSR-path Sharpe means the
     # two deduct rf differently. FAIL / INDETERMINATE are distinct outcomes.
     targets::tar_target(qa_sharpe_basis, {
@@ -6247,7 +6247,7 @@ plan_qa_gates <- function() {
       )
       s <- attr(verdict_tbl, "summary")
       cli::cli_inform(c("v" = paste0(
-        "qa_sharpe_basis: S47 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        "qa_sharpe_basis: S49 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
         " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
         " strateg", ifelse(s[["examined"]] == 1L, "y", "ies"), " examined (Refs #937)"
       )))
