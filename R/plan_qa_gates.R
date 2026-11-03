@@ -5012,6 +5012,81 @@ check_vocab_resolution <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S48: OLMAR-1 declared universe == tested universe (Refs #976, #977) ----
+
+#' S48: one verdict per ticker in the union of declared and tested universes
+#'
+#' PASS: ticker is both declared (`olmar_params$tickers`) and a column of the
+#' price matrix. FAIL: declared but absent from the matrix (the #976 shape: a
+#' ticker returning no rows is dropped silently by `olmar_prices`), tested but
+#' never declared, a duplicated declared ticker, or an NA declared ticker.
+#' INDETERMINATE: either side is NULL / not character / empty.
+#'
+#' @param declared Character vector, `olmar_params$tickers`.
+#' @param tested Character vector, price-matrix columns without `date`.
+#' @return Tibble: ticker, verdict, detail.
+#' @noRd
+build_olmar_universe_table <- function(declared, tested) {
+  row1 <- function(ticker, verdict, detail) {
+    tibble::tibble(ticker = ticker, verdict = verdict, detail = detail)
+  }
+  ok <- function(x) is.character(x) && length(x) > 0L
+  if (!ok(declared) || !ok(tested)) {
+    return(row1(NA_character_, "INDETERMINATE",
+                "declared or tested universe is NULL, not character, or empty"))
+  }
+  out <- tibble::tibble(ticker = unique(c(declared[!is.na(declared)], tested)))
+  in_decl <- out$ticker %in% declared
+  in_test <- out$ticker %in% tested
+  out$verdict <- ifelse(in_decl & in_test, "PASS", "FAIL")
+  out$detail <- ifelse(in_decl & in_test, "declared and tested",
+                       ifelse(in_decl, "declared but absent from the price matrix",
+                              "in the price matrix but not declared"))
+  extra <- list()
+  dup <- unique(declared[duplicated(declared) & !is.na(declared)])
+  if (length(dup) > 0L) {
+    extra[[length(extra) + 1L]] <- row1(dup, "FAIL", "declared more than once")
+  }
+  if (anyNA(declared)) {
+    extra[[length(extra) + 1L]] <- row1(NA_character_, "FAIL", "declared ticker is NA")
+  }
+  dplyr::bind_rows(c(list(out), extra))
+}
+
+#' S48: abort on any declared/tested mismatch, or when nothing could be decided
+#'
+#' FAIL aborts with class `qa_s48_fail`; INDETERMINATE with
+#' `qa_s48_indeterminate`; PASS returns the table with a `summary` attribute.
+#' @param verdict_tbl Output of `build_olmar_universe_table()`.
+#' @noRd
+check_olmar_universe <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+                      examined = examined), as.integer, integer(1))
+  head_line <- sprintf("%d pass, %d fail, %d indeterminate; %d ticker(s) examined",
+                       n_pass, n_fail, n_ind, examined)
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_msgs <- .qa_cli_escape(sprintf("  %s: %s",
+                                     ifelse(is.na(bad$ticker), "(none)", bad$ticker), bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_olmar_universe (S48) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The declared universe must equal the tested one (Refs #976). Fix the declaration or the data; never drop tickers silently."
+    ), class = "qa_s48_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_olmar_universe (S48) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The universes could not be compared; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s48_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- S46: research-log hypotheses uuid must not repeat (Refs #968) ----------
 
 #' Known historical repeated hypotheses uuids (S46 allow-list)
@@ -6300,6 +6375,22 @@ plan_qa_gates <- function() {
         "qa_vocab_resolution: S45 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
         " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
         " label(s) examined on ", s[["surfaces"]], " surface(s) (Refs #668)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: OLMAR-1 declared universe == price-matrix universe (S48, Refs
+    # #976, #977). Fails if a declared ticker silently vanished from the matrix.
+    targets::tar_target(qa_olmar_universe, {
+      verdict_tbl <- check_olmar_universe(
+        build_olmar_universe_table(olmar_params$tickers,
+                                   setdiff(colnames(olmar_prices), "date"))
+      )
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_olmar_universe: S48 passed -- ", s[["pass"]], " pass / ", s[["fail"]],
+        " fail / ", s[["indeterminate"]], " indeterminate; ", s[["examined"]],
+        " ticker(s) examined (Refs #976, #977)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always")),
