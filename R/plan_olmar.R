@@ -36,10 +36,18 @@ plan_olmar <- function() {
         test_end   = p$test_end,
         val_start  = p$val_start,
 
-        # Universe: ~30 large-cap + broad ETF tickers (MVP proxy for S&P 500)
-        # Identical to mr_params$tickers so both plans share the same universe.
-        tickers = c("SPY", "QQQ", "IWM", "DIA", "XLF", "XLE", "XLV",
-                    "XLK", "XLI", "XLP", "XLU", "XLB", "XLY", "XLRE",
+        # Universe: 20 tickers (4 index ETFs + 16 large-cap stocks), the set
+        # actually tested. Until #976 this list also declared ten sector SPDRs
+        # (XLF XLE XLV XLK XLI XLP XLU XLB XLY XLRE) that were NEVER in the
+        # price matrix: equity_daily holds none of them (checked 2026-11-03
+        # against data/dist/equity_daily.parquet, 1,622 tickers: 0 rows each),
+        # and olmar_prices dropped the empty fetches without a warning. Adding
+        # them is a data-sourcing task, not a trivial fix (XLRE also lists only
+        # in 2015-10). A re-run with them would be a NEW implementation row.
+        # QA gate S48 (qa_olmar_universe) fails if this list and the price
+        # matrix ever differ. Survivorship of this list: docs/olmar-universe-findings-976-977.md
+        # (mr_params$tickers in plan_mean_reversion.R still carries 30; separate).
+        tickers = c("SPY", "QQQ", "IWM", "DIA",
                     "AAPL", "MSFT", "GOOGL", "AMZN", "META",
                     "JPM", "BAC", "GS", "JNJ", "PFE", "UNH",
                     "XOM", "CVX", "HD", "WMT", "PG")
