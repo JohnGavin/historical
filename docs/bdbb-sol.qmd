@@ -85,7 +85,7 @@ scored the SAME bar the rolling window own diagnostics (R, theta, Kyle)
 were computed from -- a contemporaneous, not predictive, association -- and
 the extreme-move threshold was computed over the FULL sample, including
 bars after each window. Both are look-ahead violations; see
-[`bdbb_tail_predict()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R)
+[`bdbb_tail_predict()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L338)
 for the fix. The table below reflects the corrected, next-bar,
 trailing-threshold test as of the last render of this page -- check the
 build-info footer commit date against the fix merge date if in doubt.

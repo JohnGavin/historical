@@ -1805,7 +1805,7 @@ fig_cap <- paste0(
   "([plan_strategy_names.R](https://github.com/JohnGavin/historical/blob/main/R/plan_strategy_names.R)), ",
   "ordered by whole-history Sharpe ascending. ",
   "**Methodology:** iterative forward-split t-test at 1% level with 5-year minimum segment; see ",
-  "[hd_structural_breaks()](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/structural_breaks.R). ",
+  "[hd_structural_breaks()](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/structural_breaks.R#L144). ",
   "**Caveats:** scanning all candidate split dates inflates false-break rate above the nominal 1% level; ",
   "a detected break is evidence to investigate, not an allocation trigger (`resulting-prohibition`); ",
   "whole-history estimation often beats break-adjusted OOS (Carver 2026). ",
