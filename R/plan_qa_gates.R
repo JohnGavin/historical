@@ -5114,6 +5114,136 @@ check_rlog_uuid_unique <- function(verdict_tbl) {
   structure(verdict_tbl, summary = summary)
 }
 
+# ---- S47: build code must not call a research-log writer (Refs #968) --------
+
+#' Functions that append to the research log (S47)
+#'
+#' `hd_rlog_append()` is the only function that writes the log's parquet;
+#' `hd_strategy_idea_append()` and `hd_admission_preregister()` call it;
+#' `write_parquet` is the underlying writer. A build target must never reach any of
+#' them (option (c) of #968: only explicit, owner-run seed scripts write).
+#' @noRd
+S47_RLOG_WRITERS <- c("hd_rlog_append", "hd_strategy_idea_append",
+                      "hd_admission_preregister", "write_parquet")
+
+#' Build-code functions allowed to write the log, with the reason (S47)
+#'
+#' Such a function may contain a writer call, but no OTHER function in the
+#' scanned files may name it, so it is reachable only from a script that is
+#' not part of any target.
+#' @noRd
+S47_RLOG_COMMIT_ALLOW <- tibble::tibble(
+  fn     = ".olmar_research_log_commit",
+  reason = paste0("explicit writer; called only by scripts/seed_olmar_research_log.R ",
+                  "and tests, never by a target (#968 option c)")
+)
+
+#' S47: static scan for research-log writer calls in build code
+#'
+#' Parses each file and, per top-level expression, lists every function name
+#' and every string literal used (so `do.call("hd_rlog_append", ...)` is also
+#' caught). Limits, stated plainly: it is a name scan, not data-flow; a writer
+#' reached through a function defined outside the scanned files, or through a
+#' name built at run time, is invisible. The scanned files are the build code
+#' (`R/*.R`, `docs/_targets.R`), not the package library, where the writers are
+#' defined. It cannot show that a build left the tracked log byte-identical;
+#' that is not checkable inside `tar_make()`.
+#'
+#' Per file: PASS (no writer reference), or FAIL with one row per offending
+#' top-level function. INDETERMINATE: no files, a file missing, or a parse
+#' error.
+#'
+#' @param files Character vector of R file paths to scan.
+#' @param writers Writer function names (`S47_RLOG_WRITERS`).
+#' @param allow Tibble `fn`, `reason` (`S47_RLOG_COMMIT_ALLOW`).
+#' @return Tibble: file, fn, verdict, detail.
+#' @noRd
+build_rlog_writer_table <- function(files, writers = S47_RLOG_WRITERS,
+                                    allow = S47_RLOG_COMMIT_ALLOW) {
+  row1 <- function(file, fn, verdict, detail) {
+    tibble::tibble(file = file, fn = fn, verdict = verdict, detail = detail)
+  }
+  if (length(files) == 0L) {
+    return(row1(NA_character_, NA_character_, "INDETERMINATE", "no files to scan"))
+  }
+  strings_of <- function(e) {
+    if (is.character(e)) return(e)
+    if (is.call(e) || is.expression(e) || is.pairlist(e)) {
+      return(unlist(lapply(as.list(e), strings_of), use.names = FALSE))
+    }
+    character(0)
+  }
+  out <- lapply(files, function(f) {
+    if (!file.exists(f)) {
+      return(row1(f, NA_character_, "INDETERMINATE", "file does not exist"))
+    }
+    exprs <- tryCatch(parse(f, keep.source = FALSE), error = function(e) e)
+    if (inherits(exprs, "error")) {
+      return(row1(f, NA_character_, "INDETERMINATE",
+                  paste0("parse error: ", conditionMessage(exprs))))
+    }
+    bad <- list()
+    for (e in as.list(exprs)) {
+      own <- if (is.call(e) && length(e) >= 3L &&
+                 as.character(e[[1L]])[1L] %in% c("<-", "=") && is.name(e[[2L]])) {
+        as.character(e[[2L]])
+      } else NA_character_
+      # The gate's own configuration lists the writer names as strings.
+      if (!is.na(own) && own %in% c("S47_RLOG_WRITERS", "S47_RLOG_COMMIT_ALLOW")) next
+      used <- unique(c(all.names(e), strings_of(e)))
+      hit_writer <- intersect(used, writers)
+      hit_commit <- setdiff(intersect(used, allow$fn), own)
+      if (!is.na(own) && own %in% allow$fn) hit_writer <- character(0)
+      if (length(hit_writer) + length(hit_commit) > 0L) {
+        bad[[length(bad) + 1L]] <- row1(
+          f, if (is.na(own)) "(top-level expression)" else own, "FAIL",
+          paste0("names ", paste(c(hit_writer, hit_commit), collapse = ", "))
+        )
+      }
+    }
+    if (length(bad) == 0L) row1(f, NA_character_, "PASS", "no research-log writer referenced")
+    else dplyr::bind_rows(bad)
+  })
+  dplyr::bind_rows(out)
+}
+
+#' S47: abort on a build-code writer call, or when nothing could be decided
+#'
+#' FAIL aborts with class `qa_s47_fail`; INDETERMINATE (or zero PASS/FAIL rows)
+#' with `qa_s47_indeterminate`; PASS returns the table with a `summary`
+#' attribute (pass, fail, indeterminate, examined).
+#' @param verdict_tbl Output of `build_rlog_writer_table()`.
+#' @noRd
+check_rlog_build_readonly <- function(verdict_tbl) {
+  v <- verdict_tbl$verdict
+  n_pass <- sum(v == "PASS"); n_fail <- sum(v == "FAIL"); n_ind <- sum(v == "INDETERMINATE")
+  examined <- n_pass + n_fail
+  summary <- vapply(c(pass = n_pass, fail = n_fail, indeterminate = n_ind,
+                      examined = examined), as.integer, integer(1))
+  head_line <- sprintf("%d file(s) clean, %d offending function(s), %d indeterminate",
+                       n_pass, n_fail, n_ind)
+  bad <- verdict_tbl[v %in% c("FAIL", "INDETERMINATE"), , drop = FALSE]
+  bad_file <- as.character(ifelse(is.na(bad$file), "(none)", bad$file))
+  bad_fn   <- as.character(ifelse(is.na(bad$fn), "-", bad$fn))
+  bad_msgs <- .qa_cli_escape(sprintf("  %s :: %s: %s",
+                                     basename(bad_file), bad_fn, bad$detail))
+  if (n_fail > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_rlog_build_readonly (S47) FAILED: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "A build must not write the research log; use an explicit seed script (Refs #968)."
+    ), class = "qa_s47_fail")
+  }
+  if (examined == 0L || n_ind > 0L) {
+    cli::cli_abort(c(
+      "x" = paste0("qa_rlog_build_readonly (S47) is INDETERMINATE: ", head_line, "."),
+      stats::setNames(bad_msgs, rep("i", length(bad_msgs))),
+      "i" = "The build code could not be scanned; this is NOT a pass (checks-must-distinguish-unknown)."
+    ), class = "qa_s47_indeterminate")
+  }
+  structure(verdict_tbl, summary = summary)
+}
+
 # ---- QA gate plan ----
 
 plan_qa_gates <- function() {
@@ -6189,6 +6319,24 @@ plan_qa_gates <- function() {
         s[["allowed"]], " allow-listed) / ", s[["fail"]], " fail / ",
         s[["indeterminate"]], " indeterminate; ", s[["examined"]],
         " distinct uuid(s) examined (Refs #968)"
+      )))
+      verdict_tbl
+    }, cue = targets::tar_cue(mode = "always")),
+
+    # QA gate: build code names no research-log writer (S47, Refs #968 option
+    # c). Static scan of R/*.R and docs/_targets.R; the explicit commit function
+    # is allow-listed and may not be named by any other function.
+    targets::tar_target(qa_rlog_build_readonly, {
+      files <- c(
+        list.files(here::here("R"), pattern = "\\.R$", full.names = TRUE),
+        here::here("docs", "_targets.R")
+      )
+      verdict_tbl <- check_rlog_build_readonly(build_rlog_writer_table(files))
+      s <- attr(verdict_tbl, "summary")
+      cli::cli_inform(c("v" = paste0(
+        "qa_rlog_build_readonly: S47 passed -- ", s[["pass"]], " pass / ",
+        s[["fail"]], " fail / ", s[["indeterminate"]], " indeterminate; ",
+        s[["examined"]], " file(s) scanned (Refs #968)"
       )))
       verdict_tbl
     }, cue = targets::tar_cue(mode = "always"))
