@@ -1385,12 +1385,26 @@ plan_falsification <- function() {
         # Calmar
         calmar <- if (!is.na(max_dd) && max_dd < 0) cagr / abs(max_dd) else NA_real_
 
-        # Correlation with SPY benchmark (align dates)
-        aligned <- dplyr::inner_join(daily_ret_df, spy_ret_df, by = "date") |>
-          dplyr::filter(!is.na(strategy_ret), !is.na(spy_ret))
-        correlation_benchmark <- if (nrow(aligned) >= 10L) {
-          stats::cor(aligned$strategy_ret, aligned$spy_ret, use = "complete.obs")
-        } else NA_real_
+        # Correlation with SPY benchmark. SPY is compounded to the strategy's
+        # own return frequency first (align_to_benchmark, R/utils_align.R):
+        # an exact-date join paired a monthly strategy return with one SPY day
+        # (Refs #657, audit row A9). Low coverage -> NA with a loud warning;
+        # an unknown frequency / non-Date key aborts (INDETERMINATE).
+        correlation_benchmark <- tryCatch(
+          {
+            bench_al <- align_to_benchmark(daily_ret_df, spy_ret_df)
+            if (nrow(bench_al$aligned) >= 10L) {
+              stats::cor(bench_al$aligned$strategy_ret, bench_al$aligned$spy_ret)
+            } else NA_real_
+          },
+          hd_align_fail = function(cnd) {
+            cli::cli_warn(c(
+              "!" = "correlation_benchmark set to NA: low SPY coverage.",
+              "i" = conditionMessage(cnd)
+            ))
+            NA_real_
+          }
+        )
 
         # CVaR 5%
         q5     <- stats::quantile(ret, 0.05, na.rm = TRUE)

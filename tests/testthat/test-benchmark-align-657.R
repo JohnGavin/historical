@@ -96,13 +96,34 @@ test_that("the old exact-date join gives a near-zero value on the same monthly d
 test_that("low benchmark coverage raises the FAIL class", {
   spy <- make_spy_daily()
   strat <- make_monthly_strategy(spy)
-  short_spy <- dplyr::filter(spy, date < as.Date("2013-01-01"))
+  # keep odd calendar years only: inside the benchmark span, even-year months
+  # have no benchmark observations
+  short_spy <- dplyr::filter(spy, as.integer(format(date, "%Y")) %% 2L == 1L)
 
   expect_error(
     align_to_benchmark(strat, short_spy),
     class = "hd_align_fail"
   )
   expect_snapshot(error = TRUE, align_to_benchmark(strat, short_spy))
+})
+
+test_that("strategy history before the benchmark starts is not a coverage failure", {
+  spy <- make_spy_daily()
+  strat <- make_monthly_strategy(spy)
+  late_spy <- dplyr::filter(spy, date >= as.Date("2014-01-01"))
+
+  res <- align_to_benchmark(strat, late_spy)
+
+  expect_gt(res$n_outside_span, 0L)
+  expect_equal(res$n_unmatched, 0L)
+  expect_equal(res$n_matched + res$n_outside_span, res$n_strategy_periods)
+})
+
+test_that("no overlap between strategy and benchmark raises INDETERMINATE", {
+  spy <- make_spy_daily()
+  strat <- make_monthly_strategy(spy)
+  late_spy <- dplyr::mutate(spy, date = date + 365L * 30L)
+  expect_error(align_to_benchmark(strat, late_spy), class = "hd_align_indeterminate")
 })
 
 # ── INDETERMINATE ──────────────────────────────────────────────────────────────

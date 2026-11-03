@@ -318,3 +318,164 @@ e.g. last observation per date.",
 
   tibble::as_tibble(out)
 }
+
+#' Align a strategy return series with a benchmark at the strategy's frequency
+#'
+#' Joins a strategy return series to a benchmark return series after
+#' compounding the benchmark to the strategy's own return frequency. An
+#' exact-date join of a monthly strategy with a daily benchmark pairs one
+#' month's return with a single day's return, which is not the correlation with
+#' the benchmark (inner-join audit row A9, Refs #657).
+#'
+#' The frequency is read from the median gap between strategy dates:
+#' about 1 day is "daily" (gap 0.5 to 3.5), about 7 days is "weekly" (5 to 9),
+#' about a month is "monthly" (27 to 32). Any other gap is not guessed.
+#' Daily strategies are joined on the exact date, exactly as before.
+#' Benchmark returns inside a period are compounded as `prod(1 + r) - 1`.
+#'
+#' Three outcomes: PASS (a list is returned); FAIL (condition class
+#' `hd_align_fail`: fewer than `min_coverage` of the strategy's periods inside
+#' the benchmark's date span have a benchmark match; strategy periods outside
+#' the span, such as history before the benchmark starts, are counted in
+#' `n_outside_span` but not held against coverage); INDETERMINATE (condition class `hd_align_indeterminate`:
+#' unknown frequency, a non-Date key such as POSIXct, an empty side, or
+#' duplicate strategy periods). Both condition classes also inherit
+#' `hd_align_error`.
+#'
+#' @param strategy_df Data frame with `date` (Date) and `strategy_col`.
+#' @param benchmark_df Data frame with `date` (Date) and `benchmark_col`
+#'   (daily or finer-than-strategy returns).
+#' @param strategy_col,benchmark_col Column names of the return series.
+#' @param min_coverage Minimum share of non-NA strategy periods that must have
+#'   a non-NA benchmark match. Default 0.8.
+#' @return A list: `aligned` (tibble with columns `period`, `strategy_ret` and
+#'   the compounded benchmark return `spy_ret`), `frequency`, `n_matched`,
+#'   `n_strategy_periods`, `n_unmatched` (inside the benchmark span),
+#'   `n_outside_span` and `coverage`.
+#' @export
+align_to_benchmark <- function(strategy_df, benchmark_df,
+                               strategy_col = "strategy_ret",
+                               benchmark_col = "spy_ret",
+                               min_coverage = 0.8) {
+  indeterminate <- function(msg_x, msg_i = NULL) {
+    cli::cli_abort(
+      c("x" = msg_x, if (!is.null(msg_i)) c("i" = msg_i)),
+      class = c("hd_align_indeterminate", "hd_align_error"),
+      call = rlang::caller_env(),
+      .envir = rlang::caller_env()
+    )
+  }
+
+  for (nm in c("strategy_df", "benchmark_df")) {
+    obj <- get(nm)
+    col <- if (nm == "strategy_df") strategy_col else benchmark_col
+    if (!is.data.frame(obj) || !all(c("date", col) %in% names(obj))) {
+      indeterminate(
+        "{.arg {nm}} must be a data frame with columns {.val date} and {.val {col}}."
+      )
+    }
+    if (!inherits(obj$date, "Date")) {
+      indeterminate(
+        "{.arg {nm}}$date must be {.cls Date}, not {.cls {class(obj$date)[1L]}}.",
+        "A POSIXct key silently gives zero matches on a join; coerce with as.Date() upstream (data-validation-timeseries section 9)."
+      )
+    }
+  }
+
+  strat <- strategy_df[!is.na(strategy_df[[strategy_col]]), , drop = FALSE]
+  bench <- benchmark_df[!is.na(benchmark_df[[benchmark_col]]), , drop = FALSE]
+  if (nrow(strat) < 2L) {
+    indeterminate(
+      "The strategy series has {nrow(strat)} non-NA row{?s}; at least 2 are needed to detect its frequency."
+    )
+  }
+  if (nrow(bench) == 0L) {
+    indeterminate("The benchmark series has no non-NA rows.")
+  }
+
+  strat <- strat[order(strat$date), , drop = FALSE]
+  med_gap <- stats::median(as.numeric(diff(strat$date)))
+  frequency <- if (med_gap >= 0.5 && med_gap <= 3.5) {
+    "daily"
+  } else if (med_gap >= 5 && med_gap <= 9) {
+    "weekly"
+  } else if (med_gap >= 27 && med_gap <= 32) {
+    "monthly"
+  } else {
+    NA_character_
+  }
+  if (is.na(frequency)) {
+    indeterminate(
+      "Cannot detect the strategy frequency: median gap between dates is {med_gap} days.",
+      "Expected about 1 (daily), 7 (weekly) or 27 to 32 (monthly) days."
+    )
+  }
+
+  period_key <- function(d) {
+    switch(
+      frequency,
+      daily   = format(d, "%Y-%m-%d"),
+      weekly  = format(d - (as.integer(format(d, "%u")) - 1L), "%Y-%m-%d"),
+      monthly = format(d, "%Y-%m")
+    )
+  }
+
+  strat_key <- period_key(strat$date)
+  if (anyDuplicated(strat_key) > 0L) {
+    indeterminate(
+      "The strategy has more than one row in the same {frequency} period.",
+      "First duplicate period: {.val {strat_key[anyDuplicated(strat_key)]}}."
+    )
+  }
+
+  bench_key <- period_key(bench$date)
+  bench_ret <- tapply(
+    bench[[benchmark_col]], bench_key, function(r) prod(1 + r) - 1
+  )
+
+  # Strategy periods outside the benchmark's own date span are history the
+  # benchmark never covered (e.g. a strategy that starts before SPY exists);
+  # they are not matching failures, so coverage is judged inside the span only.
+  bench_span <- range(names(bench_ret))
+  in_span <- strat_key >= bench_span[1L] & strat_key <= bench_span[2L]
+  n_outside <- sum(!in_span)
+  n_in_span <- sum(in_span)
+  if (n_in_span == 0L) {
+    indeterminate(
+      "No strategy {frequency} period falls inside the benchmark span ({bench_span[1L]} to {bench_span[2L]}).",
+      "Strategy spans {strat_key[1L]} to {strat_key[length(strat_key)]}."
+    )
+  }
+
+  matched_ret <- as.numeric(bench_ret[strat_key])
+  n_periods <- nrow(strat)
+  n_matched <- sum(!is.na(matched_ret))
+  coverage <- n_matched / n_in_span
+
+  if (coverage < min_coverage) {
+    cli::cli_abort(
+      c(
+        "x" = "Benchmark covers only {n_matched} of {n_in_span} {frequency} strategy periods inside its span ({round(100 * coverage, 1)}%).",
+        "i" = "Minimum coverage is {round(100 * min_coverage)}%."
+      ),
+      class = c("hd_align_fail", "hd_align_error")
+    )
+  }
+
+  keep <- !is.na(matched_ret)
+  aligned <- tibble::tibble(
+    period       = strat_key[keep],
+    strategy_ret = strat[[strategy_col]][keep],
+    spy_ret      = matched_ret[keep]
+  )
+
+  list(
+    aligned            = aligned,
+    frequency          = frequency,
+    n_matched          = as.integer(n_matched),
+    n_strategy_periods = as.integer(n_periods),
+    n_unmatched        = as.integer(n_in_span - n_matched),
+    n_outside_span     = as.integer(n_outside),
+    coverage           = coverage
+  )
+}
