@@ -186,10 +186,13 @@ plan_olmar <- function() {
     }),
 
     # ── Research-log lineage target (THE HEADLINE: #200 + #270) ─
-    # Idempotent (#968): see .olmar_research_log_write(). A failure aborts the
-    # target; nothing is swallowed.
+    # READ-ONLY (#968 option c): the build never appends to the research log.
+    # The target value is the PLAN: ids plus the rows an explicit commit WOULD
+    # append (empty when the log already holds this result). Rows are written
+    # only by scripts/seed_olmar_research_log.R. A failure aborts the target;
+    # nothing is swallowed.
     targets::tar_target(olmar_research_log, {
-      .olmar_research_log_write(
+      .olmar_research_log_plan(
         olmar_metrics  = olmar_metrics,
         olmar_params    = olmar_params,
         olmar_prices    = olmar_prices,
@@ -313,13 +316,16 @@ plan_olmar <- function() {
   both_na | (!is.na(a) & !is.na(b) & abs(a - b) <= 1e-12)
 }
 
-#' Write OLMAR-1's research-log lineage, idempotently (#968)
+#' Plan OLMAR-1's research-log lineage, read-only (#968)
 #'
 #' The previous inline target body appended a full set of rows on every
 #' build, including a hypotheses row with the deprecated status "tested".
 #' Because the strategy ledger takes the NEWEST row per claim, each build
-#' reverted any real status recorded since. This function appends only what
-#' is new:
+#' reverted any real status recorded since. Option (c) of #968: the build must
+#' not write the log at all. This function only READS the log and returns the
+#' rows that are new; `.olmar_research_log_commit()` (called only from
+#' scripts/seed_olmar_research_log.R, never from a target) appends them. The
+#' rows that are new are:
 #' \itemize{
 #'   \item hypotheses: only when no row has the identical economic_claim and
 #'     predictor. Otherwise the oldest such row (the ledger's `ledger_id`) is
@@ -331,7 +337,8 @@ plan_olmar <- function() {
 #'     turnover_annual, n_obs). Critiques and robustness are appended only
 #'     together with a NEW results row, parented on it.
 #' }
-#' Re-running on unchanged output therefore writes nothing. If the numbers
+#' Planning against a log that already holds the result therefore yields no
+#' pending rows, and committing a plan twice writes nothing the second time. If the numbers
 #' change, one results row (plus its critiques and robustness) is appended,
 #' which keeps the history of changes.
 #'
@@ -342,9 +349,11 @@ plan_olmar <- function() {
 #' @param olmar_metrics,olmar_params,olmar_prices,olmar_portfolio The
 #'   same-named OLMAR targets.
 #' @param base_dir Research-log directory; `NULL` = the tracked log.
-#' @return Tibble with `hyp_id`, `impl_id`, `res_id` (reused or new).
+#' @return List: `ids` (tibble with `hyp_id`, `impl_id`, `res_id`, reused or
+#'   new), `pending` (named list of tibbles, one per research-log table, zero
+#'   rows when nothing is new) and `n_pending` (total pending rows).
 #' @noRd
-.olmar_research_log_write <- function(olmar_metrics, olmar_params,
+.olmar_research_log_plan <- function(olmar_metrics, olmar_params,
                                       olmar_prices, olmar_portfolio,
                                       base_dir = NULL) {
   base_dir <- hd_rlog_path(base_dir)
@@ -416,6 +425,19 @@ plan_olmar <- function() {
 
   oldest_first <- function(d) d[order(d$timestamp, d$uuid), , drop = FALSE]
 
+  # Rows to be appended by .olmar_research_log_commit(); nothing here writes.
+  pending <- stats::setNames(
+    lapply(hd_rlog_tables(), function(t) hd_rlog_schema(t)[0, , drop = FALSE]),
+    hd_rlog_tables()
+  )
+  finish <- function(hyp_id, impl_id, res_id) {
+    list(
+      ids = tibble::tibble(hyp_id = hyp_id, impl_id = impl_id, res_id = res_id),
+      pending = pending,
+      n_pending = sum(vapply(pending, nrow, integer(1)))
+    )
+  }
+
   # 1. Hypothesis: reuse the claim's group if it exists.
   hyps <- .olmar_rlog_read("hypotheses", base_dir)
   in_group <- !is.na(hyps$economic_claim) & hyps$economic_claim == claim &
@@ -425,7 +447,7 @@ plan_olmar <- function() {
     hyp_id <- group$uuid[1L]
   } else {
     hyp_id <- hd_rlog_uuid()
-    hd_rlog_append("hypotheses",
+    pending$hypotheses <-
       tibble::tibble(
         uuid            = hyp_id,
         economic_claim  = claim,
@@ -450,9 +472,7 @@ plan_olmar <- function() {
             "sealing after the result is known commits to nothing"
           )
         ), auto_unbox = TRUE))
-      ),
-      base_dir = base_dir
-    )
+      )
   }
   group_ids <- unique(c(hyp_id, group$uuid))
 
@@ -466,7 +486,7 @@ plan_olmar <- function() {
     impl_id <- impl_match$uuid[1L]
   } else {
     impl_id <- hd_rlog_uuid()
-    hd_rlog_append("implementations",
+    pending$implementations <-
       tibble::tibble(
         uuid          = impl_id,
         parent_uuid   = hyp_id,
@@ -474,9 +494,7 @@ plan_olmar <- function() {
         notebook_path = NA_character_,
         params_json   = params_json,
         extra_json    = NA_character_
-      ),
-      base_dir = base_dir
-    )
+      )
   }
   impl_ids <- unique(c(impl_id, impl_match$uuid))
 
@@ -502,22 +520,19 @@ plan_olmar <- function() {
     .olmar_same_num(res$n_obs, new_res$n_obs)
   if (any(same)) {
     res_id <- oldest_first(res[same, , drop = FALSE])$uuid[1L]
-    return(tibble::tibble(hyp_id = hyp_id, impl_id = impl_id, res_id = res_id))
+    return(finish(hyp_id, impl_id, res_id))
   }
 
   res_id <- hd_rlog_uuid()
-  hd_rlog_append("results",
-    dplyr::bind_cols(
-      tibble::tibble(uuid = res_id, parent_uuid = impl_id),
-      new_res,
-      tibble::tibble(results_db_run_date = Sys.Date(),
-                     extra_json = results_extra)
-    ),
-    base_dir = base_dir
+  pending$results <- dplyr::bind_cols(
+    tibble::tibble(uuid = res_id, parent_uuid = impl_id),
+    new_res,
+    tibble::tibble(results_db_run_date = Sys.Date(),
+                   extra_json = results_extra)
   )
 
   # 4. Critiques: the two highest-catch-rate Kinlay defect classes
-  hd_rlog_append("critiques",
+  pending$critiques <-
     tibble::tibble(
       uuid         = c(hd_rlog_uuid(), hd_rlog_uuid()),
       parent_uuid  = res_id,
@@ -540,14 +555,12 @@ plan_olmar <- function() {
       ),
       cell_ref     = rep("packages/historicaldata/R/olmar.R:olmar_backtest()", 2L),
       resolved     = c(TRUE, TRUE)
-    ),
-    base_dir = base_dir
-  )
+    )
 
   # 5. Robustness: one row per partition
   sharpe_train <- as.double(m_train$sharpe)
   sharpe_test  <- as.double(m_test$sharpe)
-  hd_rlog_append("robustness",
+  pending$robustness <-
     tibble::tibble(
       uuid         = c(hd_rlog_uuid(), hd_rlog_uuid()),
       parent_uuid  = res_id,
@@ -562,11 +575,38 @@ plan_olmar <- function() {
         !is.na(sharpe_test)  && abs(sharpe_test)  < 5
       ),
       extra_json   = NA_character_
-    ),
-    base_dir = base_dir
-  )
+    )
 
-  tibble::tibble(hyp_id = hyp_id, impl_id = impl_id, res_id = res_id)
+  finish(hyp_id, impl_id, res_id)
+}
+
+#' Append a planned OLMAR-1 lineage to the research log (#968)
+#'
+#' The ONLY OLMAR function that writes the log. Called by
+#' scripts/seed_olmar_research_log.R and tests; QA gate S47 fails if any other
+#' function in R/ or docs/_targets.R names it or a log writer. Rows whose uuid
+#' is already in the log are skipped, so committing the same plan twice writes
+#' nothing the second time. Tables are written in lineage order (hypotheses,
+#' implementations, results, critiques, robustness). Existing rows are never
+#' edited.
+#'
+#' @param plan Output of `.olmar_research_log_plan()`.
+#' @param base_dir Research-log directory; `NULL` = the tracked log.
+#' @return Named integer vector: rows written per table.
+#' @noRd
+.olmar_research_log_commit <- function(plan, base_dir = NULL) {
+  base_dir <- hd_rlog_path(base_dir)
+  written <- stats::setNames(integer(length(hd_rlog_tables())), hd_rlog_tables())
+  for (tbl in hd_rlog_tables()) {
+    rows <- plan$pending[[tbl]]
+    if (is.null(rows) || nrow(rows) == 0L) next
+    have <- .olmar_rlog_read(tbl, base_dir)
+    rows <- rows[!rows$uuid %in% have$uuid, , drop = FALSE]
+    if (nrow(rows) == 0L) next
+    hd_rlog_append(tbl, rows, base_dir = base_dir)
+    written[[tbl]] <- nrow(rows)
+  }
+  written
 }
 
 #' Join the shared daily risk-free series onto OLMAR's daily portfolio (#677)
