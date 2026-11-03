@@ -315,3 +315,58 @@ test_that("leaderboard.qmd source: no bespoke tags$caption() call has a literal 
     )
   )
 })
+
+# ---------------------------------------------------------------------------
+# #771: the same source-level guard, extended to the dashboards migrated to
+# hd_caption() (european-overlay, momentum-prepeak). Unlike the leaderboard
+# test above, caption text here is nested (htmltools::HTML(paste0(...))), so
+# this counts string literals RECURSIVELY in UNNAMED arguments (the named
+# `style =` CSS string is not caption text). Remaining un-migrated files
+# (falsification fals_dt(), bdbb-sol knitr::kable) are NOT listed: see #771.
+# ---------------------------------------------------------------------------
+
+#' Total nchar of string literals in unnamed args, recursively.
+literal_caption_text_nchar <- function(expr) {
+  if (is.character(expr)) return(sum(nchar(expr)))
+  if (!is.call(expr)) return(0L)
+  parts <- as.list(expr)[-1]
+  nms <- names(parts)
+  if (is.null(nms)) nms <- rep("", length(parts))
+  sum(vapply(seq_along(parts), function(i) {
+    if (nzchar(nms[i])) return(0L)
+    p <- tryCatch(parts[[i]], error = function(e) NULL)
+    as.integer(literal_caption_text_nchar(p))
+  }, integer(1)))
+}
+
+HD_CAPTION_MIGRATED_QMDS <- c("european-overlay.qmd", "momentum-prepeak.qmd")
+
+test_that("migrated dashboards: no bespoke tags$caption() carries >300 literal chars", {
+  skip_if_not(requireNamespace("knitr", quietly = TRUE))
+  for (qmd in HD_CAPTION_MIGRATED_QMDS) {
+    qmd_path <- here::here("docs", qmd)
+    skip_if_not(file.exists(qmd_path), paste(qmd, "not present"))
+    r_tmp <- tempfile(fileext = ".R")
+    knitr::purl(qmd_path, output = r_tmp, quiet = TRUE)
+    all_calls <- list()
+    for (e in as.list(parse(r_tmp))) all_calls <- find_tags_caption_calls(e, all_calls)
+    lens <- vapply(all_calls, literal_caption_text_nchar, integer(1))
+    expect_equal(
+      sum(lens > 300), 0L,
+      label = sprintf("%s: bespoke tags$caption() calls >300 chars (use hd_caption()): %s",
+                      qmd, paste(lens[lens > 300], collapse = ", "))
+    )
+  }
+})
+
+test_that("falsification: the migrated-file guard goes red on an un-migrated long caption", {
+  long <- paste(rep("word", 100), collapse = " ")
+  e <- parse(text = sprintf(
+    'x <- DT::datatable(d, caption = htmltools::tags$caption(style = "s", htmltools::HTML(paste0("%s", "tail"))))',
+    long))[[1]]
+  calls <- find_tags_caption_calls(e)
+  expect_equal(length(calls), 1L)
+  expect_gt(literal_caption_text_nchar(calls[[1]]), 300L)
+  e2 <- parse(text = 'x <- DT::datatable(d, caption = hd_caption("short"))')[[1]]
+  expect_equal(length(find_tags_caption_calls(e2)), 0L)
+})
