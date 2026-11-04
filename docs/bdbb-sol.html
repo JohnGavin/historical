@@ -6,7 +6,7 @@
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
-<meta name="dcterms.date" content="2026-10-27">
+<meta name="dcterms.date" content="2026-11-04">
 <meta name="description" content="M/G/infinity queueing model (Varma 2026) applied to SOL/USD Kraken hourly data. Replicates resilience half-life estimation and tail-risk predictivity test.">
 
 <title>BDBB Queueing Diagnostics — SOL/USD (Phase 1)</title>
@@ -84,6 +84,16 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
      static default never causes Chrome to invert the page. -->
 <meta name="color-scheme" content="dark">
 <style>:root, html, body { color-scheme: dark; }</style>
+<link href="bdbb-sol_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
+<script src="bdbb-sol_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<link href="bdbb-sol_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
+<script src="bdbb-sol_files/libs/datatables-binding-0.34.0/datatables.js"></script>
+<script src="bdbb-sol_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<link href="bdbb-sol_files/libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+<link href="bdbb-sol_files/libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet">
+<script src="bdbb-sol_files/libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
+<link href="bdbb-sol_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
+<script src="bdbb-sol_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
 <meta name="color-scheme" content="dark">
 <style>:root, html, body { color-scheme: dark; }</style>
 <link rel="stylesheet" href="vignette-shared.css">
@@ -277,7 +287,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">October 27, 2026</p>
+      <p class="date">November 4, 2026</p>
     </div>
   </div>
   
@@ -330,39 +340,15 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell">
 <div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>fit     <span class="ot">&lt;-</span> <span class="fu">tar_read</span>(bdbb_sol_fit)</span>
 <span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>metrics <span class="ot">&lt;-</span> <span class="fu">tar_read</span>(bdbb_sol_metrics)</span>
-<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(metrics, <span class="at">caption =</span> <span class="fu">tar_read</span>(bdbb_sol_caption))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a>DT<span class="sc">::</span><span class="fu">datatable</span>(</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>  metrics,</span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="fu">hd_caption</span>(<span class="fu">tar_read</span>(bdbb_sol_caption)),</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">rownames =</span> <span class="cn">FALSE</span>, <span class="at">filter =</span> <span class="st">"none"</span>,</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">options =</span> <span class="fu">list</span>(<span class="at">dom =</span> <span class="st">"t"</span>, <span class="at">pageLength =</span> <span class="dv">15</span>)</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 <div class="cell-output-display">
-<table class="caption-top table table-sm table-striped small">
-<caption>BDBB M/G/infinity queueing diagnostics on SOL/USD (Varma 2026). Kraken hourly OHLCVT, 2021-06 to 2025-12. Rolling 30-day windows: 39024 total. Regime: 56.6% mean-reversion (Varma BTC benchmark: ~39%). Median resilience half-life: 8.6 hrs (Varma BTC benchmark: 10-25 hrs). R-metric tail predictivity spread: 2.87 pp (Varma BTC benchmark: 8.6 pp).</caption>
-<colgroup>
-<col style="width: 8%">
-<col style="width: 11%">
-<col style="width: 21%">
-<col style="width: 24%">
-<col style="width: 13%">
-<col style="width: 20%">
-</colgroup>
-<thead>
-<tr class="header">
-<th style="text-align: left;">ticker</th>
-<th style="text-align: right;">n_windows</th>
-<th style="text-align: right;">pct_mean_reversion</th>
-<th style="text-align: right;">median_half_life_hrs</th>
-<th style="text-align: right;">r_spread_pp</th>
-<th style="text-align: right;">varma_r_spread_pp</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">SOL</td>
-<td style="text-align: right;">39024</td>
-<td style="text-align: right;">56.6</td>
-<td style="text-align: right;">8.6</td>
-<td style="text-align: right;">2.87</td>
-<td style="text-align: right;">8.6</td>
-</tr>
-</tbody>
-</table>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-934b7254c2933d20d9db" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-934b7254c2933d20d9db">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold;\" class=\"dt-caption\">\n  <span>BDBB M/G/infinity queueing diagnostics on SOL/USD (Varma 2026).<\/span>\n   \n  <details>\n    <summary>Show full details<\/summary>\n    BDBB M/G/infinity queueing diagnostics on SOL/USD (Varma 2026). Kraken hourly OHLCVT, 2021-06 to 2025-12. Rolling 30-day windows: 39024 total. Regime: 56.6% mean-reversion (Varma BTC benchmark: ~39%). Median resilience half-life: 8.6 hrs (Varma BTC benchmark: 10-25 hrs). R-metric tail predictivity spread: 2.87 pp (Varma BTC benchmark: 8.6 pp).\n  <\/details>\n<\/caption>","data":[["SOL"],[39024],[56.6],[8.6],[2.87],[8.6]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>ticker<\/th>\n      <th>n_windows<\/th>\n      <th>pct_mean_reversion<\/th>\n      <th>median_half_life_hrs<\/th>\n      <th>r_spread_pp<\/th>\n      <th>varma_r_spread_pp<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","pageLength":15,"columnDefs":[{"className":"dt-right","targets":[1,2,3,4,5]},{"name":"ticker","targets":0},{"name":"n_windows","targets":1},{"name":"pct_mean_reversion","targets":2},{"name":"median_half_life_hrs","targets":3},{"name":"r_spread_pp","targets":4},{"name":"varma_r_spread_pp","targets":5}],"order":[],"autoWidth":false,"orderClasses":false,"lengthMenu":[10,15,25,50,100]}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 </section>
@@ -414,72 +400,55 @@ Note
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">round</span>(dplyr<span class="sc">::</span><span class="fu">filter</span>(tp, predictor <span class="sc">==</span> pred)<span class="sc">$</span>spread_pp, <span class="dv">2</span>)</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(</span>
-<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  tp,</span>
-<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">digits  =</span> <span class="dv">2</span>,</span>
-<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="fu">paste0</span>(</span>
-<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Tail-risk predictivity by predictor (next-bar, trailing-threshold "</span>,</span>
-<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    <span class="st">"test -- see the methodology note above and #868). "</span>,</span>
-<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). "</span>,</span>
-<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="st">"SOL/USD spreads computed here: R = "</span>, <span class="fu">pull_spread</span>(<span class="st">"R"</span>), <span class="st">" pp, "</span>,</span>
-<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Amihud = "</span>, <span class="fu">pull_spread</span>(<span class="st">"amihud_mean"</span>), <span class="st">" pp, "</span>,</span>
-<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Kyle = "</span>, <span class="fu">pull_spread</span>(<span class="st">"kyle_mean"</span>), <span class="st">" pp. "</span>,</span>
-<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Varma (2026) BTC benchmarks, shown for reference ONLY -- NOT a "</span>,</span>
-<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    <span class="st">"like-for-like comparison, since Varma Table 2 uses a genuinely "</span>,</span>
-<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="st">"next-day test while this page pre-#868 renders did not: R = 8.6 pp, "</span>,</span>
-<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Amihud = 4.7 pp, Kyle = 1.1 pp. A spread near zero, or one with a wide "</span>,</span>
-<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>    <span class="st">"confidence interval, after the #868 fix is a legitimate outcome, not a "</span>,</span>
-<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>    <span class="st">"defect -- see the detection-power-required and research-log-honesty "</span>,</span>
-<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>    <span class="st">"project rules. Kyle lambda is estimated as the OLS "</span>,</span>
-<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="st">"price-impact slope of log-returns on signed order flow within each "</span>,</span>
-<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    <span class="st">"rolling window (cov/var; see "</span>,</span>
-<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>    <span class="st">"[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46)"</span>,</span>
-<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>    <span class="st">"), not a per-bar ratio. Prior to [#624](https://github.com/JohnGavin/historical/issues/624), "</span>,</span>
-<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>    <span class="st">"the `kyle_mean` column was numerically identical to `amihud_mean`, so any "</span>,</span>
-<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>    <span class="st">"earlier apparent agreement with the Varma Kyle benchmark was spurious and "</span>,</span>
-<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>    <span class="st">"the corrected figures above should not be assumed to reproduce it."</span></span>
-<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  )</span>
-<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>tail_notes <span class="ot">&lt;-</span> htmltools<span class="sc">::</span><span class="fu">tagList</span>(</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Tail-risk predictivity by predictor (next-bar, trailing-threshold "</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  <span class="st">"test -- see the methodology note above and #868). "</span>,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). "</span>,</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>  <span class="st">"SOL/USD spreads computed here: R = "</span>, <span class="fu">pull_spread</span>(<span class="st">"R"</span>), <span class="st">" pp, "</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Amihud = "</span>, <span class="fu">pull_spread</span>(<span class="st">"amihud_mean"</span>), <span class="st">" pp, "</span>,</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Kyle = "</span>, <span class="fu">pull_spread</span>(<span class="st">"kyle_mean"</span>), <span class="st">" pp. "</span>,</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Varma (2026) BTC benchmarks, shown for reference ONLY -- NOT a "</span>,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>  <span class="st">"like-for-like comparison, since Varma Table 2 uses a genuinely "</span>,</span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>  <span class="st">"next-day test while this page pre-#868 renders did not: R = 8.6 pp, "</span>,</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Amihud = 4.7 pp, Kyle = 1.1 pp. A spread near zero, or one with a wide "</span>,</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>  <span class="st">"confidence interval, after the #868 fix is a legitimate outcome, not a "</span>,</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>  <span class="st">"defect -- see the detection-power-required and research-log-honesty "</span>,</span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a>  <span class="st">"project rules. Kyle lambda is estimated as the OLS "</span>,</span>
+<span id="cb4-20"><a href="#cb4-20" aria-hidden="true" tabindex="-1"></a>  <span class="st">"price-impact slope of log-returns on signed order flow within each "</span>,</span>
+<span id="cb4-21"><a href="#cb4-21" aria-hidden="true" tabindex="-1"></a>  <span class="st">"rolling window (cov/var; see "</span>,</span>
+<span id="cb4-22"><a href="#cb4-22" aria-hidden="true" tabindex="-1"></a>  htmltools<span class="sc">::</span>tags<span class="sc">$</span><span class="fu">a</span>(</span>
+<span id="cb4-23"><a href="#cb4-23" aria-hidden="true" tabindex="-1"></a>    <span class="at">href =</span> <span class="st">"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46"</span>,</span>
+<span id="cb4-24"><a href="#cb4-24" aria-hidden="true" tabindex="-1"></a>    htmltools<span class="sc">::</span>tags<span class="sc">$</span><span class="fu">code</span>(<span class="st">"bdbb_fit()"</span>)</span>
+<span id="cb4-25"><a href="#cb4-25" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb4-26"><a href="#cb4-26" aria-hidden="true" tabindex="-1"></a>  <span class="st">"), not a per-bar ratio. Prior to "</span>,</span>
+<span id="cb4-27"><a href="#cb4-27" aria-hidden="true" tabindex="-1"></a>  htmltools<span class="sc">::</span>tags<span class="sc">$</span><span class="fu">a</span>(<span class="at">href =</span> <span class="st">"https://github.com/JohnGavin/historical/issues/624"</span>, <span class="st">"#624"</span>),</span>
+<span id="cb4-28"><a href="#cb4-28" aria-hidden="true" tabindex="-1"></a>  <span class="st">", the "</span>, htmltools<span class="sc">::</span>tags<span class="sc">$</span><span class="fu">code</span>(<span class="st">"kyle_mean"</span>), <span class="st">" column was numerically identical to "</span>,</span>
+<span id="cb4-29"><a href="#cb4-29" aria-hidden="true" tabindex="-1"></a>  htmltools<span class="sc">::</span>tags<span class="sc">$</span><span class="fu">code</span>(<span class="st">"amihud_mean"</span>), <span class="st">", so any "</span>,</span>
+<span id="cb4-30"><a href="#cb4-30" aria-hidden="true" tabindex="-1"></a>  <span class="st">"earlier apparent agreement with the Varma Kyle benchmark was spurious and "</span>,</span>
+<span id="cb4-31"><a href="#cb4-31" aria-hidden="true" tabindex="-1"></a>  <span class="st">"the corrected figures above should not be assumed to reproduce it."</span></span>
+<span id="cb4-32"><a href="#cb4-32" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-33"><a href="#cb4-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-34"><a href="#cb4-34" aria-hidden="true" tabindex="-1"></a>DT<span class="sc">::</span><span class="fu">datatable</span>(</span>
+<span id="cb4-35"><a href="#cb4-35" aria-hidden="true" tabindex="-1"></a>  dplyr<span class="sc">::</span><span class="fu">mutate</span>(tp, dplyr<span class="sc">::</span><span class="fu">across</span>(dplyr<span class="sc">::</span><span class="fu">where</span>(is.numeric), <span class="sc">~</span> <span class="fu">round</span>(.x, <span class="dv">2</span>))),</span>
+<span id="cb4-36"><a href="#cb4-36" aria-hidden="true" tabindex="-1"></a>  <span class="at">caption =</span> <span class="fu">hd_caption</span>(</span>
+<span id="cb4-37"><a href="#cb4-37" aria-hidden="true" tabindex="-1"></a>    tail_notes,</span>
+<span id="cb4-38"><a href="#cb4-38" aria-hidden="true" tabindex="-1"></a>    <span class="at">short =</span> <span class="fu">paste0</span>(</span>
+<span id="cb4-39"><a href="#cb4-39" aria-hidden="true" tabindex="-1"></a>      <span class="st">"Tail-risk predictivity by predictor (next-bar, trailing-threshold test; "</span>,</span>
+<span id="cb4-40"><a href="#cb4-40" aria-hidden="true" tabindex="-1"></a>      <span class="st">"see the methodology note above and #868). Spread = P(top-decile hourly "</span>,</span>
+<span id="cb4-41"><a href="#cb4-41" aria-hidden="true" tabindex="-1"></a>      <span class="st">"move | high tercile) - P(... | low tercile)."</span></span>
+<span id="cb4-42"><a href="#cb4-42" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb4-43"><a href="#cb4-43" aria-hidden="true" tabindex="-1"></a>  ),</span>
+<span id="cb4-44"><a href="#cb4-44" aria-hidden="true" tabindex="-1"></a>  <span class="at">rownames =</span> <span class="cn">FALSE</span>, <span class="at">filter =</span> <span class="st">"none"</span>,</span>
+<span id="cb4-45"><a href="#cb4-45" aria-hidden="true" tabindex="-1"></a>  <span class="at">options =</span> <span class="fu">list</span>(<span class="at">dom =</span> <span class="st">"t"</span>, <span class="at">pageLength =</span> <span class="dv">10</span>)</span>
+<span id="cb4-46"><a href="#cb4-46" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning in instance$preRenderHook(instance): It seems your data is too big for
+client-side DataTables. You may consider server-side processing:
+https://rstudio.github.io/DT/server.html</code></pre>
+</div>
 <div class="cell-output-display">
-<table class="caption-top table table-sm table-striped small">
-<caption>Tail-risk predictivity by predictor (next-bar, trailing-threshold test – see the methodology note above and #868). Spread = P(top-decile hourly move | high tercile) - P(… | low tercile). SOL/USD spreads computed here: R = 2.87 pp, Amihud = 0.5 pp, Kyle = 0.81 pp.&nbsp;Varma (2026) BTC benchmarks, shown for reference ONLY – NOT a like-for-like comparison, since Varma Table 2 uses a genuinely next-day test while this page pre-#868 renders did not: R = 8.6 pp, Amihud = 4.7 pp, Kyle = 1.1 pp.&nbsp;A spread near zero, or one with a wide confidence interval, after the #868 fix is a legitimate outcome, not a defect – see the detection-power-required and research-log-honesty project rules. Kyle lambda is estimated as the OLS price-impact slope of log-returns on signed order flow within each rolling window (cov/var; see <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46"><code>bdbb_fit()</code></a>), not a per-bar ratio. Prior to <a href="https://github.com/JohnGavin/historical/issues/624">#624</a>, the <code>kyle_mean</code> column was numerically identical to <code>amihud_mean</code>, so any earlier apparent agreement with the Varma Kyle benchmark was spurious and the corrected figures above should not be assumed to reproduce it.</caption>
-<thead>
-<tr class="header">
-<th style="text-align: left;">predictor</th>
-<th style="text-align: right;">p_extreme_high_tercile</th>
-<th style="text-align: right;">p_extreme_low_tercile</th>
-<th style="text-align: right;">spread_pp</th>
-<th style="text-align: right;">n_high</th>
-<th style="text-align: right;">n_low</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td style="text-align: left;">R</td>
-<td style="text-align: right;">0.09</td>
-<td style="text-align: right;">0.06</td>
-<td style="text-align: right;">2.87</td>
-<td style="text-align: right;">13007</td>
-<td style="text-align: right;">13008</td>
-</tr>
-<tr class="even">
-<td style="text-align: left;">amihud_mean</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.50</td>
-<td style="text-align: right;">13007</td>
-<td style="text-align: right;">13008</td>
-</tr>
-<tr class="odd">
-<td style="text-align: left;">kyle_mean</td>
-<td style="text-align: right;">0.08</td>
-<td style="text-align: right;">0.07</td>
-<td style="text-align: right;">0.81</td>
-<td style="text-align: right;">13007</td>
-<td style="text-align: right;">13008</td>
-</tr>
-</tbody>
-</table>
+<div class="datatables html-widget html-fill-item" id="htmlwidget-9f12d8936b76587e724f" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-9f12d8936b76587e724f">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold;\" class=\"dt-caption\">\n  <span>Tail-risk predictivity by predictor (next-bar, trailing-threshold test; see the methodology note above and #868). Spread = P(top-decile hourly move | high tercile) - P(... | low tercile).<\/span>\n   \n  <details>\n    <summary>Show full details<\/summary>\n    Tail-risk predictivity by predictor (next-bar, trailing-threshold \n    test -- see the methodology note above and #868). \n    Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). \n    SOL/USD spreads computed here: R = \n    2.87\n     pp, \n    Amihud = \n    0.5\n     pp, \n    Kyle = \n    0.81\n     pp. \n    Varma (2026) BTC benchmarks, shown for reference ONLY -- NOT a \n    like-for-like comparison, since Varma Table 2 uses a genuinely \n    next-day test while this page pre-#868 renders did not: R = 8.6 pp, \n    Amihud = 4.7 pp, Kyle = 1.1 pp. A spread near zero, or one with a wide \n    confidence interval, after the #868 fix is a legitimate outcome, not a \n    defect -- see the detection-power-required and research-log-honesty \n    project rules. Kyle lambda is estimated as the OLS \n    price-impact slope of log-returns on signed order flow within each \n    rolling window (cov/var; see \n    <a href=\"https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46\">\n      <code>bdbb_fit()<\/code>\n    <\/a>\n    ), not a per-bar ratio. Prior to \n    <a href=\"https://github.com/JohnGavin/historical/issues/624\">#624<\/a>\n    , the \n    <code>kyle_mean<\/code>\n     column was numerically identical to \n    <code>amihud_mean<\/code>\n    , so any \n    earlier apparent agreement with the Varma Kyle benchmark was spurious and \n    the corrected figures above should not be assumed to reproduce it.\n  <\/details>\n<\/caption>","data":[["R","amihud_mean","kyle_mean"],[0.09,0.07000000000000001,0.08],[0.06,0.07000000000000001,0.07000000000000001],[2.87,0.5,0.8100000000000001],[13007,13007,13007],[13008,13008,13008]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>predictor<\/th>\n      <th>p_extreme_high_tercile<\/th>\n      <th>p_extreme_low_tercile<\/th>\n      <th>spread_pp<\/th>\n      <th>n_high<\/th>\n      <th>n_low<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"dom":"t","pageLength":10,"columnDefs":[{"className":"dt-right","targets":[1,2,3,4,5]},{"name":"predictor","targets":0},{"name":"p_extreme_high_tercile","targets":1},{"name":"p_extreme_low_tercile","targets":2},{"name":"spread_pp","targets":3},{"name":"n_high","targets":4},{"name":"n_low","targets":5}],"order":[],"autoWidth":false,"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
 </div>
 </div>
 </section>
@@ -508,11 +477,11 @@ Note
 <tbody>
 <tr class="odd">
 <td><span title="git rev-parse HEAD, resolved at render time">Commit</span></td>
-<td><a href="https://github.com/JohnGavin/historical/commit/84da1e5ebd7ce3a4d7a55d836e0d0a02a680d338"><code>84da1e5</code></a></td>
+<td><a href="https://github.com/JohnGavin/historical/commit/633c4290d3eba5d88c4d4276d7350abd7cf76c4b"><code>633c429</code></a></td>
 </tr>
 <tr class="even">
 <td><span title="git rev-parse --abbrev-ref HEAD (detached HEAD resolves to the commit SHA instead)">Branch</span></td>
-<td><code>main</code></td>
+<td><code>HEAD (detached at 633c429)</code></td>
 </tr>
 <tr class="odd">
 <td><span title="git status --porcelain --untracked-files=no at render time -- reports the COMMITTED source only. Excludes this render's own output (docs/*.html, docs/*_files/**, docs/_targets_meta_snapshot.csv), since our publish flow is render then commit the rendered output, and excludes ALL untracked files/directories, since those were never part of the committed source this page was built from. 'clean' means no tracked source file differs from HEAD -- it says nothing about untracked local clutter on the machine that rendered it">Source tree</span></td>
@@ -524,11 +493,11 @@ Note
 </tr>
 <tr class="odd">
 <td><span title="nrow(targets::tar_meta(store = ...))">Targets in store</span></td>
-<td>1545</td>
+<td>1585</td>
 </tr>
 <tr class="even">
 <td><span title="max(targets::tar_meta()$time)">Store last built</span></td>
-<td>2026-10-27 21:02 GMT</td>
+<td>2026-11-03 16:11 GMT</td>
 </tr>
 <tr class="odd">
 <td><span title="GitHub issue tracker for this repo">Open issues</span></td>
@@ -588,7 +557,7 @@ Note
 </tr>
 <tr class="even">
 <td><span title="this page's own source, scanned for DT::datatable()/hd_dt() vs knitr::kable() at render time">Table engine</span></td>
-<td>knitr::kable() (base HTML table, no DT)</td>
+<td>DT <code>0.34.0</code></td>
 </tr>
 </tbody>
 </table>
