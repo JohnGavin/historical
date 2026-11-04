@@ -12,8 +12,8 @@
     Code
       names(result)
     Output
-      [1] "ticker"         "fiscal_period"  "period_end"     "first_filed"   
-      [5] "xbrl_tag"       "original_value" "source"        
+      [1] "ticker"         "cik"            "fiscal_period"  "period_end"    
+      [5] "first_filed"    "xbrl_tag"       "original_value" "source"        
 
 ---
 

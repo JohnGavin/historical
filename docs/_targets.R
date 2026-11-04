@@ -153,6 +153,8 @@ source(here::here("R/plan_backtest.R"))
 source(here::here("R/plan_factormax.R"))
 source(here::here("R/plan_drif.R"))
 source(here::here("R/plan_drif_v2.R"))
+# #865: provenance helper used by plan_stock_backtest()'s stk_universe_provenance.
+source(here::here("R/ticker_universe_provenance.R"))
 source(here::here("R/plan_stock_backtest.R"))
 # #625: dashboard-side liquidity targets (plan_liquidity_dashboard()), sourced
 # after plan_stock_backtest.R because its targets reference stk_universe.

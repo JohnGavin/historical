@@ -341,6 +341,9 @@ arrow::write_parquet(macro_sample, file.path(out_dir, "macro_sample.parquet"))
 # random chance.
 # ---------------------------------------------------------------------------
 FUND_TICKERS <- c("AAPL", "MSFT")
+# MANUAL: no source -- fixture-only CIKs (SEC issuer keys, 10-digit zero-padded
+# character; #865). They carry no numeric content and consume no RNG.
+FUND_CIKS <- c(AAPL = "0000320193", MSFT = "0000789019")
 FUND_TAGS <- c("Revenues", "EarningsPerShareDiluted",
                "StockholdersEquity",
                "NetCashProvidedByUsedInOperatingActivities")
@@ -369,6 +372,7 @@ for (tk in FUND_TICKERS) {
       latest_val <- if (restated) round(base_val * (1 + runif(1, 0.01, 0.03)), 4) else base_val
       fund_rows[[fi]] <- tibble::tibble(
         ticker         = tk,
+        cik            = unname(FUND_CIKS[tk]),
         fiscal_period  = FUND_PERIODS$fiscal_period[p],
         period_end     = period_end,
         first_filed    = first_filed,
@@ -385,7 +389,8 @@ fundamentals_sample <- dplyr::bind_rows(fund_rows)
 stopifnot(
   nrow(fundamentals_sample) == length(FUND_TICKERS) * length(FUND_TAGS) * nrow(FUND_PERIODS),
   any(fundamentals_sample$restated), any(!fundamentals_sample$restated),
-  all(fundamentals_sample$first_filed > fundamentals_sample$period_end)
+  all(fundamentals_sample$first_filed > fundamentals_sample$period_end),
+  all(grepl("^[0-9]{10}$", fundamentals_sample$cik))
 )
 arrow::write_parquet(fundamentals_sample, file.path(out_dir, "fundamentals_sample.parquet"))
 

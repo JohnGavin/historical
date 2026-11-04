@@ -123,7 +123,7 @@ hd_datasets <- function() {
     ),
     fundamentals = list(
       url = hd_base_url("fundamentals.parquet"),
-      schema = c("ticker", "fiscal_period", "period_end", "first_filed",
+      schema = c("ticker", "cik", "fiscal_period", "period_end", "first_filed",
                  "xbrl_tag", "original_value", "latest_value", "restated",
                  "source"),
       frequency = "filing",

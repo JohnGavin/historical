@@ -18,6 +18,7 @@ import pyarrow as pa
 
 sys.path.insert(0, str(Path(__file__).parent))
 from pit_tracker import track_amendments, save_amendments
+from metadata_helpers import duplicated_tickers, with_snapshot_provenance
 
 
 def compute_returns_from_prices(data_dir: Path) -> pd.DataFrame:
@@ -121,6 +122,20 @@ def main():
     print(f"  ytd_return: {computed['computed_ytd_return'].notna().sum()} non-null")
     print(f"  ann_return_3yr: {computed['computed_ann_return_3yr'].notna().sum()} non-null")
 
+    # #865: this join is on ticker alone against the CURRENT metadata
+    # snapshot. A ticker with several metadata rows (the recycled-ticker
+    # symptom) would fan out silently, so report it loudly. Warn rather than
+    # abort: this script already ran with whatever rows exist, and a
+    # point-in-time fix needs the #816 universe.
+    dup = duplicated_tickers(old_meta["ticker"])
+    if dup:
+        print(
+            f"WARNING (#865): {len(dup)} ticker(s) occur more than once in "
+            f"metadata.parquet; the merge on ticker attaches computed values "
+            f"to every row: {dup[:20]}",
+            file=sys.stderr,
+        )
+
     # Merge computed values into metadata (overwrite only if computed is not None)
     new_meta = old_meta.merge(computed, on="ticker", how="left")
 
@@ -133,11 +148,16 @@ def main():
             new_meta.loc[mask, dst] = new_meta.loc[mask, src]
             new_meta = new_meta.drop(columns=[src])
 
-    # Track amendments (PIT)
+    # Track amendments (PIT). #865: the method string records the join key
+    # and the snapshot date, so the published log says what the join was.
+    as_of = datetime.now(timezone.utc).date().isoformat()
     amendments = track_amendments(
         old_meta, new_meta,
         source="computed_from_price_data",
-        method="beta=cov(ret,spy)/var(spy), ytd=close/jan_close-1, 3yr=annualised",
+        method=with_snapshot_provenance(
+            "beta=cov(ret,spy)/var(spy), ytd=close/jan_close-1, 3yr=annualised",
+            as_of,
+        ),
         amended_by="enrich_metadata.py"
     )
     print(f"\nAmendments: {len(amendments)} field changes tracked")

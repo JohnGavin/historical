@@ -40,7 +40,8 @@ test_that("registry schema matches actual parquet columns for sample-backed data
   local_sample_data()
 
   ds_list <- hd_datasets()
-  sample_backed <- c("equity_daily", "crypto_daily", "macro_daily", "factors", "metadata")
+  sample_backed <- c("equity_daily", "crypto_daily", "macro_daily", "factors", "metadata",
+                     "fundamentals")  # #865: schema must list cik
   for (nm in intersect(names(ds_list), sample_backed)) {
     ds <- ds_list[[nm]]
     actual_cols <- duckplyr::read_parquet_duckdb(historicaldata:::hd_dataset_source(nm)) |>

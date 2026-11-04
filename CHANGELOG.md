@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-11-04 (ticker-recycling follow-ups: hd_fundamentals cik, provenance for snapshot-selected universes, refs #865)
+
+- `hd_fundamentals()` returns `cik`, accepts `cik =`, warns when one ticker
+  maps to several CIKs, aborts on a malformed `cik` or a parquet without the
+  column. Registry schema, sample fixture and API doc updated together.
+- `stk_universe_provenance` target and `R/ticker_universe_provenance.R`:
+  records the metadata snapshot as-of proxy and the ticker-only-key caveat for
+  `stk_top_tickers` (nothing consumes it; no published number changes).
+- `scripts/enrich_metadata.py`: amendments-log `method` names the join key and
+  snapshot date; duplicate tickers in the snapshot warn on stderr.
+- `docs/ticker-join-audit-865.md`: dated status section (rows 1 to 5; why no
+  company-existence check is possible yet, TODO #816).
+
 ## 2026-09-23 (plan_avoid_worst.R: registered leaderboard metrics now source from the VIX-timed strategy, refs #813)
 
 - **Wrong return series (#813):** `avoid_worst_register_runs`'s bt.metric
