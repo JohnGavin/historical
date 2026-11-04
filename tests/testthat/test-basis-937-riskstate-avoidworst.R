@@ -338,10 +338,11 @@ test_that(".aw_excess_series: a hole INSIDE the rf span aborts (#937)", {
   )
 })
 
-test_that(".aw_excess_series: total strategy subtracts rf; NA strategy is the benchmark (#937)", {
+test_that(".aw_excess_series: total strategy subtracts rf; benchmark label is registered (#937)", {
   d <- as.Date("2020-01-01") + 0:9
   rf <- tibble::tibble(date = d, rf_ret = RF_D)
   r <- seq(0.001, 0.01, length.out = 10L)
   expect_equal(.aw_excess_series(d, r, rf, strategy = "Avoid Worst")$ret, r - RF_D)
-  expect_equal(.aw_excess_series(d, r, rf, strategy = NA_character_)$ret, r - RF_D)
+  expect_equal(.aw_excess_series(d, r, rf, strategy = "Research: ETF buy and hold")$ret,
+               r - RF_D)
 })

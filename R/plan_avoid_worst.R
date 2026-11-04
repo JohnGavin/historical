@@ -111,13 +111,12 @@
 #' @param ret Numeric vector of daily returns.
 #' @param aw_daily_rf Tibble with columns `date`, `rf_ret`.
 #' @param strategy Single string, a registered `hd_return_basis()` strategy
-#'   label (an unregistered label aborts), or `NA_character_` for a
-#'   non-strategy total-return benchmark (e.g. SPY), which has no registry
-#'   label yet -- vocabulary for benchmarks is tracked in #937 Phase 3.
+#'   label (an unregistered label aborts). A non-strategy benchmark (e.g. SPY
+#'   buy-and-hold) uses its `"Research: ..."` registry label; NA aborts.
 #' @return Tibble `date`, `ret` (the EXCESS return), rows with no rf dropped.
 #' @noRd
 .aw_excess_series <- function(dates, ret, aw_daily_rf, strategy) {
-  if (!is.na(strategy)) hd_return_basis_of(strategy)  # abort early if unregistered
+  hd_return_basis_of(strategy)  # abort early if unregistered
 
   df <- tibble::tibble(date = as.Date(dates), ret = ret) |>
     dplyr::filter(!is.na(.data$ret)) |>
@@ -143,12 +142,7 @@
     ))
   }
 
-  df$ret <- if (is.na(strategy)) {
-    # basis: total (SPY benchmark); registry vocabulary for benchmarks tracked in #937 Phase 3
-    df$ret - df$rf_ret
-  } else {
-    hd_excess_returns(df$ret, df$rf_ret, strategy)
-  }
+  df$ret <- hd_excess_returns(df$ret, df$rf_ret, strategy)
   df[c("date", "ret")]
 }
 
@@ -1251,10 +1245,11 @@ plan_avoid_worst <- function() {
                                      cummax(cum_dd_s)) * 100, 1),
           # #937: arithmetic Sharpe (mean/sd * sqrt(252), convention kept) on
           # the EXCESS series. Buy-and-hold is a total-return asset series
-          # (SPY/QQQ/IWM/DIA benchmarks; no registry label yet -- #937 Phase 3);
+          # (SPY/QQQ/IWM/DIA benchmarks; registry label "Research: ETF buy and hold");
           # the VIX-timed strategy is "Avoid Worst" (total: asset or 0/cash).
           sharpe_bh = arith_sharpe(
-            .aw_excess_series(d$date, d$ret, aw_daily_rf, NA_character_)$ret),
+            .aw_excess_series(d$date, d$ret, aw_daily_rf,
+                              "Research: ETF buy and hold")$ret),
           sharpe_strat = arith_sharpe(
             .aw_excess_series(d$date, sr, aw_daily_rf, "Avoid Worst")$ret),
           pct_cash = round(sum(!in_mkt) / n * 100, 1)
@@ -1275,9 +1270,8 @@ plan_avoid_worst <- function() {
       # warning, identically for both series (same dates).
       strat_ret <- .aw_excess_series(d$date, d$ret_strategy, aw_daily_rf,
                                      "Avoid Worst")$ret
-      # basis: total (SPY benchmark); registry vocabulary for benchmarks tracked in #937 Phase 3
       mkt_ret <- .aw_excess_series(d$date, d$ret_market, aw_daily_rf,
-                                   NA_character_)$ret
+                                   "Research: ETF buy and hold")$ret
       n <- length(strat_ret)
       block_size <- 63L  # ~3 months
       n_boot <- 1000L
