@@ -163,10 +163,10 @@ fals_dt <- function(df, caption_text) {
     df,
     container = sketch,
     escape = FALSE,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      htmltools::HTML(caption_text)
-    ),
+    # #771: HTML-authored caption (md_links anchors + hand-typed &lt;/&gt;);
+    # hd_caption_html() keeps each entity escaped exactly once and collapses
+    # captions over 300 visible chars into <details>.
+    caption = hd_caption_html(caption_text),
     rownames = FALSE,
     filter = "top",
     options = list(
@@ -962,13 +962,13 @@ if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
     escape = FALSE,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 10, dom = "t"),
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left;",
-      htmltools::HTML(paste0("Conditional independence tests via partial correlation. ",
+    caption = hd_caption_html(
+      paste0("Conditional independence tests via partial correlation. ",
              cg_impl$n_holds, " of ", cg_impl$n_implications,
              " implications hold (|r| &lt; 0.15). ",
              "Violated implications suggest missing edges in the DAG. ",
-             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."))
+             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."),
+      style_extra = " font-weight: normal;"
     )
   ) |>
     DT::formatRound("Partial r", digits = 3)
@@ -1007,13 +1007,13 @@ if (!is.null(split) && !is.null(split$comparison)) {
     split$comparison,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 5, dom = "t"),
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left;",
-      htmltools::HTML(md_links(paste0(
+    caption = hd_caption_html(
+      md_links(paste0(
         "HML-VIX correlation by period. Pre-2010 includes dot-com crash + GFC. ",
         "Source: [plan_causal_graph.R]",
         "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R)."
-      )))
+      )),
+      style_extra = " font-weight: normal;"
     )
   ) |> DT::formatRound("hml_vix_r", digits = 3)
 } else {
@@ -1113,9 +1113,8 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
     risk_tbl,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 10, dom = "t"),
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left;",
-      htmltools::HTML(paste0(
+    caption = hd_caption_html(
+      paste0(
         "Tinsley Pillar 8 risk-architecture metrics. ",
         "Worst max drawdown duration: <b>",
         worst_max_dd_strat, "</b> (",
@@ -1133,7 +1132,8 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
         "hd_trade_metrics()</a> in packages/historicaldata, ",
         "wired via <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R' target='_blank'>",
         "plan_falsification.R</a>."
-      ))
+      ),
+      style_extra = " font-weight: normal;"
     )
   ) |>
     DT::formatRound(c("Runs p-val", "ACF lag-1"), digits = 3) |>

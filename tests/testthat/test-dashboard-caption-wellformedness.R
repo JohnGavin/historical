@@ -315,3 +315,81 @@ test_that("leaderboard.qmd source: no bespoke tags$caption() call has a literal 
     )
   )
 })
+
+# ---------------------------------------------------------------------------
+# #771: falsification.qmd and bdbb-sol.qmd captions go through hd_caption()
+# (via hd_caption_html() for captions authored as HTML), never a bespoke
+# htmltools::tags$caption(). Source-level and render-independent.
+# ---------------------------------------------------------------------------
+
+test_that("#771 source: no htmltools::tags$caption() remains in falsification.qmd / bdbb-sol.qmd", {
+  skip_if_not(requireNamespace("knitr", quietly = TRUE))
+  for (nm in c("falsification.qmd", "bdbb-sol.qmd")) {
+    qmd_path <- here::here("docs", nm)
+    skip_if_not(file.exists(qmd_path), paste(nm, "not present"))
+    r_tmp <- tempfile(fileext = ".R")
+    knitr::purl(qmd_path, output = r_tmp, quiet = TRUE)
+    all_calls <- list()
+    for (e in as.list(parse(r_tmp))) all_calls <- find_tags_caption_calls(e, all_calls)
+    expect_equal(
+      length(all_calls), 0L,
+      label = sprintf("%s: %d bespoke tags$caption() call(s) (use hd_caption())", nm, length(all_calls))
+    )
+  }
+})
+
+# Load fals_dt (and the two globals it needs) from the qmd source without
+# rendering: purl the document, evaluate only those three definitions.
+load_fals_dt_env <- function() {
+  env <- new.env(parent = globalenv())
+  sys.source(here::here("docs", "vignette_utils.R"), envir = env)
+  r_tmp <- tempfile(fileext = ".R")
+  knitr::purl(here::here("docs", "falsification.qmd"), output = r_tmp, quiet = TRUE)
+  for (e in as.list(parse(r_tmp))) {
+    if (is.call(e) && identical(e[[1]], as.name("<-")) &&
+        as.character(e[[2]])[1] %in% c("col_defs", "md_links", "fals_dt")) {
+      eval(e, envir = env)
+    }
+  }
+  env
+}
+
+count_fixed <- function(pattern, x) {
+  m <- gregexpr(pattern, x, fixed = TRUE)[[1]]
+  if (m[1] == -1L) 0L else length(m)
+}
+
+test_that("#771 fals_dt: hand-typed &lt;/&gt; in a SHORT caption ends up escaped exactly once", {
+  skip_if_not(requireNamespace("DT", quietly = TRUE))
+  skip_if_not(requireNamespace("knitr", quietly = TRUE))
+  env <- load_fals_dt_env()
+  df <- data.frame(Strategy = "a", x = 1)
+  w <- env$fals_dt(df, "Runs p &lt; 0.05 AND ACF &gt; 0.2.")
+  cap <- as.character(w$x$caption)
+  expect_equal(count_fixed("&lt;", cap), 1L)
+  expect_equal(count_fixed("&gt;", cap), 1L)
+  expect_false(grepl("&amp;", cap, fixed = TRUE))
+  expect_equal(well_formed_single_caption(cap)$n, 1L)
+})
+
+test_that("#771 fals_dt: LONG caption collapses in <details>; &lt;/&gt; escaped once, anchors survive", {
+  skip_if_not(requireNamespace("DT", quietly = TRUE))
+  skip_if_not(requireNamespace("knitr", quietly = TRUE))
+  env <- load_fals_dt_env()
+  df <- data.frame(Strategy = "a", x = 1)
+  long <- paste0(
+    "Short lead sentence about the table. ",
+    paste(rep("Filler detail sentence for length.", 12), collapse = " "),
+    " Clustered if runs p &lt; 0.05 AND ACF &gt; 0.2. ",
+    "See [the source](https://example.org/x)."
+  )
+  w <- env$fals_dt(df, long)
+  cap <- as.character(w$x$caption)
+  expect_true(grepl("<details", cap, fixed = TRUE))
+  expect_equal(count_fixed("&lt;", cap), 1L)
+  expect_equal(count_fixed("&gt;", cap), 1L)
+  expect_false(grepl("&amp;", cap, fixed = TRUE))
+  expect_true(grepl("<a href=\"https://example.org/x\"", cap, fixed = TRUE))
+  expect_equal(well_formed_single_caption(cap)$n, 1L)
+  expect_lte(visible_caption_word_count(cap), 90L)
+})

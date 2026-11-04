@@ -192,6 +192,43 @@ hd_caption <- function(text, short = NULL, threshold = 300,
   )
 }
 
+#' hd_caption() for a caption AUTHORED AS HTML (#771).
+#'
+#' Some captions carry hand-written markup: anchors from `md_links()`, `<b>`,
+#' and hand-typed entities (`&lt;`, `&gt;`). Passing such a string to
+#' `hd_caption()` as plain text would escape it a second time (`&amp;lt;`),
+#' and passing it as `htmltools::HTML()` bypasses the 300-char collapse. This
+#' helper keeps the HTML untouched (each entity stays escaped exactly once) and
+#' adds the collapse: when the VISIBLE text (tags stripped, entities decoded)
+#' exceeds `threshold`, the first sentence becomes the always-visible summary
+#' (a plain string, so `<`/`>` in it are escaped once by htmltools) and the full
+#' HTML goes inside `<details>`.
+#' @param html Caption as a single HTML string.
+#' @param summary_label,threshold,style_extra As in `hd_caption()`.
+hd_caption_html <- function(html, summary_label = "Show full details",
+                            threshold = 300, style_extra = "") {
+  html <- as.character(html)
+  plain <- gsub("<[^>]+>", "", html)
+  plain <- gsub("&nbsp;", " ", plain, fixed = TRUE)
+  plain <- gsub("&lt;", "<", plain, fixed = TRUE)
+  plain <- gsub("&gt;", ">", plain, fixed = TRUE)
+  plain <- gsub("&quot;", "\"", plain, fixed = TRUE)
+  plain <- gsub("&amp;", "&", plain, fixed = TRUE)  # last: avoid double-decode
+  plain <- trimws(gsub("\\s+", " ", plain))
+
+  if (nchar(plain) <= threshold) {
+    style <- paste0("caption-side: top; text-align: left; font-weight: bold;", style_extra)
+    return(htmltools::tags$caption(style = style, class = "dt-caption",
+                                   htmltools::HTML(html)))
+  }
+
+  m <- regexpr("(?<=[a-zA-Z0-9)%])\\. (?=[A-Z])", plain, perl = TRUE)
+  short <- if (m[1] > 20) substr(plain, 1, m[1]) else
+    paste0(substr(plain, 1, threshold), "…")
+  hd_caption(htmltools::HTML(html), short = short,
+             summary_label = summary_label, style_extra = style_extra)
+}
+
 #' DT table with caption, sortable, human-readable formatting
 #' @param container Optional `DT::datatable(container = )` table tag, e.g. from
 #'   `hd_dt_header_container()` (R/column_popover.R, #788) when a header
