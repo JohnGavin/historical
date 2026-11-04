@@ -243,6 +243,41 @@ Run with `nix develop <repo-root> --command Rscript -e '...'` from the main chec
 4. Prove or reclassify B3 with the `anti_join` above, then B2, B15, B17.
 5. Build `hd_checked_join()` per the design, falsify it, and adopt it in the order given.
 
+## Measured 2026-11-04
+
+Read-only queries against the main-checkout store (`docs/_targets`, read with `tar_read_raw(..., store =)`; no build, no write). A9 is excluded: it was fixed by PR #1019. Each count recomputes the join from the stored inputs and compares it with the stored output where one exists. The store's data ends 2026-02-27 for the factor, rf and strategy series (daily strategies run to 2026-04-10), so a trailing drop is a publication-lag edge effect, not a defect.
+
+Verdict key: (a) intended, bounded to the series edge or a genuine common-date requirement; (b) defect (key/type mismatch); (c) could not decide.
+
+| Row | Target | Before | After | Dropped | Verdict |
+|---|---|---|---|---|---|
+| A6 | `mc_analysis` | drif 691, fmax 740, ltr 254 months | 254 (store: `n_overlap_months` 254, 2005-01 to 2026-02) | 0 inside the window 2005-01 to 2026-02; 437 DRIF and 486 Factor MAX months precede `ltr` start (edge) | (a) |
+| A7 | `ms_portfolio` | same three inputs | 254 rows (store) | 0 inside the window | (a) |
+| A8 | `cg_test_data` | window 2005-01 to 2026-02 = 254 months | 254 rows, first-of-month `Date`, 0 calendar gaps | 0 | (a) |
+| A10 | `fals_ff_avoid_worst` | 8353 | 8324 | 29 (0.3%), all after 2026-02-27, the rf/factor end | (a) edge |
+| A10 | `fals_ff_drif` / `fac_max` / `ltr` / `tom` | 691 / 740 / 254 / 8092 | same | 0 each | (a) |
+| A10 | `fals_ff_rsc` | 8355 | 8326 | 29 (0.3%), trailing edge | (a) edge |
+| A10 | `mom_prepeak_ff_reg` | 638 | 637 | 1 (2026-03, after rf end) | (a) edge |
+| A10 | `rafi_ff_regression` (two strategies) | 752 each | 752 | 0 | (a) |
+| A10 | `eur_ff_regression` | not reproduced (inputs are built inside the target from live Yahoo data) | | | (c) |
+| A11 | `nyt_vs_spy` | `nyt_keywords` 1864 rows, class `Date`, every day-of-month = 01, 2000-01 to 2026-04 | `n_months` 312 (Federal Reserve System 300) | the key condition that could have emptied the join does not hold | (a) |
+| A16 | `jst_ff_comparison` | JST USA 149 annual rows (1872 to 2020) | target value is `NULL` | join not reached: the factors dataset holds only FF5/FF3/Mom daily and FF3/FF5 monthly, and `hd_factors("FF3", "annual")` returns 0 rows | (c), data source absent, not a join defect |
+| A17 | `momentum_comparison` | components 202,726; total-momentum 215,860 | | `anti_join(components, total, by = c("ticker","date"))` = 0 rows | (a) |
+| B2 | `stk_max_vs_factor` | stock 255 months, factor 740 | 253 (store) | 0 inside the window 2005-02 to 2026-02; 2026-03 and 2026-04 trail the factor series' end (edge) | (a) |
+| B3 | `xgb_vs_enet` | xgb 195 months, enet 195 | 195 (store) | 0 both directions; the "same month set" claim holds on this build | (a); the #656 claim is now measured, still not guaranteed structurally |
+| B15 | `stk_max_portfolio` | 255 merged months | 255 | 0 months below the 50-stock gate; 0 calendar gaps | (a) |
+| B17 | `xgb_drif_portfolio` | 18,999 signal rows | 18,999 after the `stk_monthly` join and the ADV join; 18,983 after the ADV threshold | 16 rows; 0 months lost to the min-stocks gate (195 signal months, 195 portfolio months) | (a) |
+
+Result: no key or type defect among the measured rows. Every drop is either zero or a trailing-edge effect of a shorter series. No code under `R/` or `packages/` was changed by this pass.
+
+Falsification of the measuring method (so a zero is meaningful): removing 2015-06 from the Factor MAX input makes the A6/A7 window count report 1 dropped month (real data: 0; unchanged control: 0). Shifting the `fals_rf` dates by one day cuts the A10 join for DRIF from 691 rows to 572, so the join-size measure does move when keys mismatch.
+
+Not fixed, and why:
+
+- **A10 reporting.** `hd_factor_null_test()` still returns no `n_obs`. The trailing drops (29 rows for two daily strategies, 1 for `mom_prepeak`) are intended, and there is no caption on these targets to carry a count. Adding a column to a package export changes every `fals_ff_*` output and needs `regen_api_context.sh`; left for a separate decision.
+- **A16.** The target is dead until an annual FF3 source exists. Options: derive it from FF3 monthly by compounding, or remove the target. That is a product decision, not a join fix.
+- **A6/A7.** The windows are equal to the shortest series. They already report `n_overlap_months`; no change.
+
 ## Related
 
 #656 (verified findings), #641, #651 (the spine fix pattern), #603, #626/#635 (the correlation structure under the diversification claim), #865 (`docs/ticker-join-audit-865.md`), #668 (`docs/unit-vocab-census-668.md`), `.claude/rules/fail-loud-not-null.md`.
