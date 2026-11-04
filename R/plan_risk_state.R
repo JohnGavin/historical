@@ -317,9 +317,8 @@ plan_risk_state <- function() {
       # is the hd_return_basis() row naming the series' basis -- rf is deducted
       # iff the series is a TOTAL return. It is REQUIRED (no default): an
       # unregistered label aborts inside hd_rf_for_basis(), never a silent
-      # guess. NA_character_ marks a non-strategy benchmark (SPY_buyhold),
-      # which is a total-return asset series with no registry label yet
-      # (vocabulary for benchmarks: #937 Phase 3) and is treated as total.
+      # guess. The non-strategy benchmark (SPY_buyhold) is registered as
+      # "Research: ETF buy and hold" (total).
       # Convention: sharpe = geometric (sharpe_ratio_rf); hac_sharpe/hac_tstat
       # = arithmetic (hd_hac_sharpe) -- both now on the same excess series.
       calc_metrics <- function(ret_vec, date_vec, label, strategy_name, registry_label,
@@ -335,9 +334,6 @@ plan_risk_state <- function() {
         # rf actually deducted: rf for a total series, 0 for an excess one.
         rf_eff <- if (is.null(rf_vec)) {
           NULL
-        } else if (is.na(registry_label)) {
-          # basis: total (SPY benchmark); registry vocabulary for benchmarks tracked in #937 Phase 3
-          rf_vec
         } else {
           hd_rf_for_basis(rf_vec, registry_label)
         }
@@ -421,18 +417,18 @@ plan_risk_state <- function() {
       # zero-filled for leading NAs at rsc_portfolio construction time
       # (R/plan_risk_state.R rsc_portfolio target) -- safe to pass directly.
       spy_bh_full  <- calc_metrics(port$ret_buyhold,  port$date,  "Full Period", "SPY_buyhold",
-                                   registry_label = NA_character_, rf_vec = port$rf_daily)
+                                   registry_label = "Research: ETF buy and hold", rf_vec = port$rf_daily)
       spy_ov_full  <- calc_metrics(port$ret_strategy, port$date,  "Full Period", "SPY_overlay",
                                    registry_label = "Risk State", rf_vec = port$rf_daily)
       spy_bh_train <- calc_metrics(port$ret_buyhold[is_train],  port$date[is_train],
                                    "Training", "SPY_buyhold",
-                                   registry_label = NA_character_, rf_vec = port$rf_daily[is_train])
+                                   registry_label = "Research: ETF buy and hold", rf_vec = port$rf_daily[is_train])
       spy_ov_train <- calc_metrics(port$ret_strategy[is_train], port$date[is_train],
                                    "Training", "SPY_overlay",
                                    registry_label = "Risk State", rf_vec = port$rf_daily[is_train])
       spy_bh_test  <- calc_metrics(port$ret_buyhold[is_test],  port$date[is_test],
                                    "Testing", "SPY_buyhold",
-                                   registry_label = NA_character_, rf_vec = port$rf_daily[is_test])
+                                   registry_label = "Research: ETF buy and hold", rf_vec = port$rf_daily[is_test])
       spy_ov_test  <- calc_metrics(port$ret_strategy[is_test], port$date[is_test],
                                    "Testing", "SPY_overlay",
                                    registry_label = "Risk State", rf_vec = port$rf_daily[is_test])
