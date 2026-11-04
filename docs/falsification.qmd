@@ -269,7 +269,7 @@ A null environment generates synthetic return series with no genuine signal, but
 
 For each null environment, we generate M = 100 synthetic series, apply the strategy's logic, and compute the [<abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr> t-statistic](https://en.wikipedia.org/wiki/Newey%E2%80%93West_estimator){target="_blank" rel="noopener noreferrer"}. The rejection rate is the fraction that exceeds the observed t-statistic.
 
-**The 6 null environments** (implemented in [`falsification.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R){target="_blank" rel="noopener noreferrer"}):
+**The 6 null environments** (implemented in [`falsification.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L116){target="_blank" rel="noopener noreferrer"}):
 
 - **White Noise**: iid N(0, sigma). Baseline — if a strategy "works" here, it's pure luck.
 - **Regime Vol**: Two-state volatility (high/low). Tests whether signal is just vol timing.
@@ -499,7 +499,7 @@ The **wide universe** result (~30 large-cap US equities, p/n ≈ 0.50) shows Sam
 
 **Why the default COV_METHOD stays "sample":**
 
-The deployed strategy universes (4–6 assets) operate at p/n ≪ 0.1, where the sample covariance is already well-conditioned. The regularisation benefit is most important in wide regimes (p/n ≥ 0.1). COV_METHOD is the documented knob to flip when deploying a wide or point-in-time universe — set `COV_METHOD <- "ledoit_wolf"` in [`R/cov_config.R`](https://github.com/JohnGavin/historical/blob/main/R/cov_config.R){target="_blank" rel="noopener noreferrer"} and re-run `tar_make()`.
+The deployed strategy universes (4–6 assets) operate at p/n ≪ 0.1, where the sample covariance is already well-conditioned. The regularisation benefit is most important in wide regimes (p/n ≥ 0.1). COV_METHOD is the documented knob to flip when deploying a wide or point-in-time universe — set `COV_METHOD <- "ledoit_wolf"` in [`R/cov_config.R`](https://github.com/JohnGavin/historical/blob/main/R/cov_config.R#L9){target="_blank" rel="noopener noreferrer"} and re-run `tar_make()`.
 
 **References:** Raviv (2026), *WIREs Computational Statistics*, [doi:10.1002/wics.70068](https://doi.org/10.1002/wics.70068). Full digest: [`knowledge/wiki/covariance-estimation-wide-data.md`](https://github.com/JohnGavin/historical/blob/main/knowledge/wiki/covariance-estimation-wide-data.md){target="_blank" rel="noopener noreferrer"}. Issue [#498](https://github.com/JohnGavin/historical/issues/498){target="_blank" rel="noopener noreferrer"}.
 
@@ -681,7 +681,7 @@ if (!is.null(vol_stats)) {
     "Computed over the same top-market-cap equity universe ",
     "([`stk_universe`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target=\"_blank\" rel=\"noopener noreferrer\"}) ",
     "the stock backtests on this dashboard trade. Sourced from `equity_daily_volume_stats` ",
-    "([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target=\"_blank\" rel=\"noopener noreferrer\"})."
+    "([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R#L36){target=\"_blank\" rel=\"noopener noreferrer\"})."
   )
   fals_dt(vol_stats, cap)
 } else {
@@ -714,7 +714,7 @@ if (!is.null(vol_stats_pctile)) {
     "Sourced from [`filter_liquidity(threshold_mode = \"percentile\")`]",
     "(https://github.com/JohnGavin/historical/blob/main/R/liquidity.R#L35){target=\"_blank\" rel=\"noopener noreferrer\"} ",
     "via `equity_daily_volume_stats_pctile` ",
-    "([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R){target=\"_blank\" rel=\"noopener noreferrer\"}). ",
+    "([`R/plan_liquidity.R`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R#L36){target=\"_blank\" rel=\"noopener noreferrer\"}). ",
     "Informational only, same as the Volume Stats tab: `filter_mode = \"warn\"` here too, ",
     "so nothing is removed from any backtest by this table."
   )
@@ -812,7 +812,7 @@ Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode
 
 **What this framework does NOT do:**
 
-- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R){target="_blank" rel="noopener noreferrer"} (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/look-ahead-bias-prevention.md){target="_blank" rel="noopener noreferrer"} rule)
+- Does not test for [look-ahead bias](https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R#L72){target="_blank" rel="noopener noreferrer"} (handled by the [`look-ahead-bias-prevention`](https://github.com/JohnGavin/historical/blob/main/.claude/rules/look-ahead-bias-prevention.md){target="_blank" rel="noopener noreferrer"} rule)
 - Does not test for transaction cost sensitivity (handled by [`execution-delay-sensitivity`](https://github.com/JohnGavin/historical/blob/main/R/plan_alpha_decay.R#L55){target="_blank" rel="noopener noreferrer"} — alpha decay analysis)
 - Does not test for parameter sensitivity (handled by [`backtest-robustness`](https://github.com/JohnGavin/historical/blob/main/R/plan_bootstrap_ci.R#L9){target="_blank" rel="noopener noreferrer"} — bootstrap CI)
 - Does not test for temporal stability (handled by [`backtest-partitions`](https://github.com/JohnGavin/historical/blob/main/R/plan_partitions.R#L137){target="_blank" rel="noopener noreferrer"} — train/test/validation split)
@@ -859,7 +859,7 @@ cat('<div id="dag-overview-mount"></div>')
 cat('<div id="dag-full-mount"></div>')
 ```
 
-Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: <a href="https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R" target="_blank" rel="noopener noreferrer">plan_causal_graph.R</a>.
+Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (momentum), RMW (profitability), CMA (investment)">Factors</abbr> (blue) | <abbr title="VIX, VVIX, Fed rate, Inflation — observable macro indicators">Macro</abbr> (gold) | <abbr title="Classified market state: Vol Regime (VIX-based), Rate Regime (Fed-based)">Regime</abbr> (orange) | <abbr title="Strategy-specific trading signals derived from factors and regimes">Signals</abbr> (purple) | <abbr title="Realised strategy returns after applying signals">Returns</abbr> (green) | <abbr title="Portfolio-level metrics: Sharpe ratio, max drawdown">Outcomes</abbr> (red) | <abbr title="Structural factors: factor crowding, premium decay, rebalancing costs">Structural</abbr> (grey). Yellow dashed = <abbr title="Conditional independence test failed (|partial r| >= 0.15) — DAG is missing an edge">violated implication</abbr>. Green = tested, holds. Source: <a href="https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15" target="_blank" rel="noopener noreferrer">plan_causal_graph.R</a>.
 
 `r paste0('<p>Full DAG tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>')`
 
@@ -872,7 +872,7 @@ Node colours: <abbr title="Fama-French factors: HML (value), SMB (size), Mom (mo
 cat('<div id="dag-drif-mount"></div>')
 ```
 
-<abbr title="Dynamic Rotation Into Factors — each month selects the FF factor with highest trailing return">DRIF</abbr> selects the best-performing FF factor each month. Loads on <abbr title="High Minus Low — value factor: cheap stocks minus expensive stocks">HML</abbr>, <abbr title="Small Minus Big — size factor: small-cap minus large-cap returns">SMB</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>. Yellow dashed edge: VIX affects HML in crises (<abbr title="Partial correlation between HML and VIX = -0.17, indicating they co-move in crises">r=-0.17</abbr>). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R).
+<abbr title="Dynamic Rotation Into Factors — each month selects the FF factor with highest trailing return">DRIF</abbr> selects the best-performing FF factor each month. Loads on <abbr title="High Minus Low — value factor: cheap stocks minus expensive stocks">HML</abbr>, <abbr title="Small Minus Big — size factor: small-cap minus large-cap returns">SMB</abbr>, <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr>, <abbr title="Robust Minus Weak — profitability factor">RMW</abbr>. Yellow dashed edge: VIX affects HML in crises (<abbr title="Partial correlation between HML and VIX = -0.17, indicating they co-move in crises">r=-0.17</abbr>). Source: [plan_drif.R](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R#L9).
 
 `r paste0('<p>DRIF tab rendered: ', format(Sys.time(), "%Y-%m-%d %H:%M:%S %Z"), ' | commit: ', system("git rev-parse --short HEAD", intern=TRUE), '</p>')`
 
@@ -885,7 +885,7 @@ cat('<div id="dag-drif-mount"></div>')
 cat('<div id="dag-fmax-mount"></div>')
 ```
 
-<abbr title="Factor Momentum MAX — selects the single FF factor with highest recent momentum">Factor MAX</abbr> selects the top-momentum factor. Premium has <abbr title="Strategy Sharpe ratio in early period vs late period. >50% decay means the edge has halved.">decayed >50%</abbr> (#73). Source: [plan_factormax.R](https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R).
+<abbr title="Factor Momentum MAX — selects the single FF factor with highest recent momentum">Factor MAX</abbr> selects the top-momentum factor. Premium has <abbr title="Strategy Sharpe ratio in early period vs late period. >50% decay means the edge has halved.">decayed >50%</abbr> (#73). Source: [plan_factormax.R](https://github.com/JohnGavin/historical/blob/main/R/plan_factormax.R#L9).
 
 #### LTR
 
@@ -896,7 +896,7 @@ cat('<div id="dag-fmax-mount"></div>')
 cat('<div id="dag-ltr-mount"></div>')
 ```
 
-<abbr title="LambdaMART — XGBoost-based cross-sectional momentum strategy. Ranks stocks by predicted return using gradient-boosted trees.">LTR</abbr> uses XGBoost for cross-sectional stock ranking. Loads on <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr> + <abbr title="Small Minus Big — size factor">SMB</abbr>. <abbr title="Fed rate above/below median classifies as high/low rate regime">Rate regime</abbr> feeds into signal. Source: [plan_ltr_momentum.R](https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R).
+<abbr title="LambdaMART — XGBoost-based cross-sectional momentum strategy. Ranks stocks by predicted return using gradient-boosted trees.">LTR</abbr> uses XGBoost for cross-sectional stock ranking. Loads on <abbr title="Momentum — past 12-month winners minus losers">Mom</abbr> + <abbr title="Small Minus Big — size factor">SMB</abbr>. <abbr title="Fed rate above/below median classifies as high/low rate regime">Rate regime</abbr> feeds into signal. Source: [plan_ltr_momentum.R](https://github.com/JohnGavin/historical/blob/main/R/plan_ltr_momentum.R#L13).
 
 #### Strategy & Dashboard Relationship Map
 
@@ -968,7 +968,7 @@ if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
              cg_impl$n_holds, " of ", cg_impl$n_implications,
              " implications hold (|r| &lt; 0.15). ",
              "Violated implications suggest missing edges in the DAG. ",
-             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."))
+             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."))
     )
   ) |>
     DT::formatRound("Partial r", digits = 3)
@@ -989,10 +989,10 @@ The value factor (HML) and volatility index (VIX) are NOT independent. This mean
 
 | Impact area | What it means | Action |
 |-------------|---------------|--------|
-| **[DRIF strategy](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R)** | DRIF loads on HML. During VIX spikes, DRIF underperforms MORE than the Vol_regime node alone predicts. | Consider reducing DRIF weight in crisis regimes |
-| **[Multi-strategy portfolio](https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R) ([#52](https://github.com/JohnGavin/historical/issues/52))** | Diversification between VIX overlay and value-heavy strategies is LESS than K_eff suggests — they correlate in crises, exactly when diversification matters most | Recompute weights with crisis-conditional correlations |
+| **[DRIF strategy](https://github.com/JohnGavin/historical/blob/main/R/plan_drif.R#L9)** | DRIF loads on HML. During VIX spikes, DRIF underperforms MORE than the Vol_regime node alone predicts. | Consider reducing DRIF weight in crisis regimes |
+| **[Multi-strategy portfolio](https://github.com/JohnGavin/historical/blob/main/R/plan_multi_strategy.R#L7) ([#52](https://github.com/JohnGavin/historical/issues/52))** | Diversification between VIX overlay and value-heavy strategies is LESS than K_eff suggests — they correlate in crises, exactly when diversification matters most | Recompute weights with crisis-conditional correlations |
 | **[Tail independence](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L558) ([#55](https://github.com/JohnGavin/historical/issues/55))** | K_eff_crisis < K_eff_calm is expected — this finding explains why | See the [Crisis vs Calm tab](#multiplicity), computed via [`hd_tail_keff_frob()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L558) |
-| **[DAG revision](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R)** | Need either: VIX → HML edge (direct), or latent "Crisis_mode" → {VIX, HML} | Added VIX → HML edge (dashed yellow in diagram) |
+| **[DAG revision](https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15)** | Need either: VIX → HML edge (direct), or latent "Crisis_mode" → {VIX, HML} | Added VIX → HML edge (dashed yellow in diagram) |
 
 **Economic explanation:** In crises, investors sell risky assets indiscriminately. Value stocks (high book-to-market) are often distressed firms — they get sold first. Simultaneously, VIX spikes as options demand surges. The correlation is not VIX *causing* value to fall, but both responding to the same flight-to-safety mechanism.
 
@@ -1012,7 +1012,7 @@ if (!is.null(split) && !is.null(split$comparison)) {
       htmltools::HTML(md_links(paste0(
         "HML-VIX correlation by period. Pre-2010 includes dot-com crash + GFC. ",
         "Source: [plan_causal_graph.R]",
-        "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R)."
+        "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15)."
       )))
     )
   ) |> DT::formatRound("hml_vix_r", digits = 3)
@@ -1131,7 +1131,7 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
         "hd_dd_duration() + hd_loss_clustering()</a> + ",
         "<a href='https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/trades.R#L217' target='_blank'>",
         "hd_trade_metrics()</a> in packages/historicaldata, ",
-        "wired via <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R' target='_blank'>",
+        "wired via <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R#L72' target='_blank'>",
         "plan_falsification.R</a>."
       ))
     )
@@ -1179,7 +1179,7 @@ specifically targets persistence.
 and
 [`hd_loss_clustering()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/risk_metrics.R#L140)
 in `packages/historicaldata/R/risk_metrics.R`. Tests in
-[`test-risk-metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/tests/testthat/test-risk-metrics.R).
+[`test-risk-metrics.R`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/tests/testthat/test-risk-metrics.R#L1).
 Issue [#269](https://github.com/JohnGavin/historical/issues/269).
 
 #### Related Vignettes

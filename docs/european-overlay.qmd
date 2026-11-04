@@ -119,7 +119,7 @@ if (!is.null(ecb_raw)) {
             "Spearman rank correlations between CISS sub-indices and VIX. ",
             "N = ", format(nrow(merged), big.mark = ","), " overlapping daily observations. ",
             "CISS equity is the strongest VIX proxy (r = 0.75). ",
-            "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_ecb.R' target='_blank'>plan_ecb.R</a> + FRED VIXCLS."
+            "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_ecb.R#L12' target='_blank'>plan_ecb.R</a> + FRED VIXCLS."
         )),
         short = "Spearman rank correlations between CISS sub-indices and VIX.",
         style_extra = " font-weight: normal;"
@@ -200,7 +200,7 @@ if (!is.null(ciss_res)) {
         "CISS regime: benign (100% equity), cautious (50%), hostile (10%). ",
         "Thresholds: 33rd/67th percentile of CISS equity stress history. ",
         "4 of 5 ETFs improve on Sharpe ratio. Max drawdown halved across all ETFs. ",
-        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R' target='_blank'>plan_european_overlay.R</a>."
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R#L17' target='_blank'>plan_european_overlay.R</a>."
         )),
         short = "CISS equity overlay vs Buy & Hold for 5 European ETFs (OOS, 2020-present).",
         style_extra = " font-weight: normal;"
@@ -244,7 +244,7 @@ if (!is.null(eur_vix) && !is.null(ciss_res)) {
         "Three-way comparison: Buy & Hold vs US VIX overlay vs ECB CISS overlay. ",
         "CISS overlay uses European-native stress signal; VIX uses US vol. ",
         "Both reduce drawdowns dramatically. CISS outperforms VIX overlay on Sharpe for 3 of 5 ETFs. ",
-        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R' target='_blank'>plan_european_overlay.R</a>."
+        "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_european_overlay.R#L17' target='_blank'>plan_european_overlay.R</a>."
         )),
         short = "Three-way comparison: Buy & Hold vs US VIX overlay vs ECB CISS overlay.",
         style_extra = " font-weight: normal;"

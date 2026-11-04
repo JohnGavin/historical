@@ -1,6 +1,6 @@
 testthat::local_edition(3)
-# S50 / #631: dashboard source links need a `#L<n>` anchor when the link text
-# names a symbol, and every anchor must be within the target's line count.
+# S50 / #631: EVERY dashboard link into project .R source needs a `#L<n>`
+# anchor (no whole-file carve-out), and every anchor must be within the target's line count.
 # Render-independent: scans docs/*.qmd, so it runs in verify.sh with no store.
 
 source(here::here("R/plan_qa_gates.R"))
@@ -8,7 +8,7 @@ source(here::here("R/plan_qa_gates.R"))
 root <- here::here()
 gh <- "https://github.com/JohnGavin/historical/blob/main"
 
-test_that("docs/*.qmd: no symbol link into project source lacks #L<n>, none is stale", {
+test_that("docs/*.qmd: no link into project .R source lacks #L<n>, none is stale", {
   skip_if_not(dir.exists(here::here("docs")), "docs/ not present")
   hits <- check_no_bare_source_urls(here::here("docs"), root)
   expect_equal(
@@ -35,15 +35,23 @@ test_that("falsification: an invented bare symbol link goes red (markdown + html
   expect_equal(nrow(scan_source_links_text(esc, root)), 1L)
 })
 
-test_that("an anchored symbol link and whole-file references are exempt", {
-  ok_anchor <- sprintf("[`fn()`](%s/R/plan_qa_gates.R#L1)", gh)
-  expect_equal(nrow(scan_source_links_text(ok_anchor, root)), 0L)
+test_that("whole-file references are bare too; anchoring them goes green", {
+  # falsified (#631 option 1): these three were exempt before and must now be red
+  for (txt in c(
+    sprintf("[plan_drif.R](%s/R/plan_drif.R)", gh),
+    sprintf("[`R/plan_drif.R`](%s/R/plan_drif.R)", gh),
+    sprintf("[the DRIF plan](%s/R/plan_drif.R)", gh),
+    sprintf("[look-ahead](%s/R/plan_falsification.R){target=\"_blank\"}", gh),
+    sprintf("<a href='%s/R/plan_drif.R'>the DRIF plan</a>", gh))) {
+    r <- scan_source_links_text(txt, root)
+    expect_equal(nrow(r), 1L, label = txt)
+    expect_identical(r$kind, "bare")
+  }
+  # green once anchored
   expect_equal(nrow(scan_source_links_text(
-    sprintf("[plan_drif.R](%s/R/plan_drif.R)", gh), root)), 0L)
+    sprintf("[the DRIF plan](%s/R/plan_qa_gates.R#L1)", gh), root)), 0L)
   expect_equal(nrow(scan_source_links_text(
-    sprintf("[`R/plan_drif.R`](%s/R/plan_drif.R)", gh), root)), 0L)
-  expect_equal(nrow(scan_source_links_text(
-    sprintf("[the DRIF plan](%s/R/plan_drif.R)", gh), root)), 0L)
+    sprintf("[`fn()`](%s/R/plan_qa_gates.R#L1)", gh), root)), 0L)
   # an external (non-project) link is out of scope
   expect_equal(nrow(scan_source_links_text(
     "[`fn()`](https://github.com/other/repo/blob/main/R/x.R)", root)), 0L)

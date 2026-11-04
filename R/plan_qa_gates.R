@@ -5419,33 +5419,15 @@ check_rlog_build_readonly <- function(verdict_tbl) {
 
 # ---- S50: source-level bare-source-URL gate (Refs #631) ----
 
-#' Classify a source-link's visible text as a symbol reference (S50)
-#'
-#' A link whose text names a function or target ("fn()", or backticked code
-#' that is not a file name) points at ONE definition, so it needs a `#L<n>`
-#' anchor. A link whose text is a file name ("plan_drif.R", "R/plan_x.R",
-#' backticked or not) or ordinary prose ("the DRIF plan") refers to the whole
-#' file and is exempt (option 2 of #631; mermaid-click-anchors rule).
-#' @param text Raw link text (may contain HTML tags, backticks, newlines).
-#' @return Logical scalar.
-#' @noRd
-.s47_is_symbol_text <- function(text) {
-  plain <- gsub("<[^>]+>", "", text)
-  plain <- trimws(gsub("\\s+", " ", plain))
-  inner <- trimws(gsub("`", "", plain, fixed = TRUE))
-  if (!nzchar(inner)) return(FALSE)
-  if (grepl("\\.R$", inner) || grepl("/", inner, fixed = TRUE)) return(FALSE)
-  backticked <- grepl("^`.*`$", plain)
-  grepl("\\(\\)$", inner) || backticked
-}
-
 #' Scan one .qmd text for source links lacking / mis-anchoring `#L<n>` (S50)
 #'
 #' Render-independent (works on `.qmd` source, so it runs in `verify.sh`).
 #' Two violation kinds, never collapsed:
 #' * `bare`: a markdown `[text](.../blob/<ref>/<path>.R)` or HTML
-#'   `<a href='...'>text</a>` link with NO `#L<n>` whose text is a symbol
-#'   reference (`.s47_is_symbol_text()`).
+#'   `<a href='...'>text</a>` link with NO `#L<n>`, whatever its text. There is
+#'   no whole-file carve-out (option 1 of #631; mermaid-click-anchors rule):
+#'   a file-level reference anchors to the file's first `tar_target(`/
+#'   `tar_plan(` line or header comment.
 #' * `stale`: ANY `.../blob/<ref>/<path>.R#L<n>` (links, sprintf templates)
 #'   whose file is missing from `repo_root` or has fewer than `n` lines.
 #'   A path containing `%` (a format placeholder) cannot be resolved and is
@@ -5483,7 +5465,7 @@ scan_source_links_text <- function(text, repo_root, file = "<text>") {
       grp <- function(k) substr(text, cs[i, k], cs[i, k] + cl[i, k] - 1L)
       if (pat_text_first) { lt <- grp(1); url <- grp(2); anc <- grp(3) }
       else { url <- grp(1); anc <- grp(2); lt <- grp(3) }
-      if (!nzchar(anc) && .s47_is_symbol_text(lt)) {
+      if (!nzchar(anc)) {
         rows[[length(rows) + 1L]] <<- tibble::tibble(
           file = file, line = line_of(starts[i]), kind = "bare", url = url,
           text = trimws(gsub("\\s+", " ", lt)),
