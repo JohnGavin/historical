@@ -66,48 +66,6 @@ plan_jst <- function() {
       country_premium
     }),
 
-    # ── Compare JST USA with Fama-French market factor ─────────────────────
-    # Overlap period: 1926-2020 (FF starts 1926, JST ends 2020)
-    targets::tar_target(jst_ff_comparison, {
-
-      # JST USA annual equity premium
-      jst_usa <- jst_raw |>
-        dplyr::filter(iso == "USA", !is.na(eq_tr), !is.na(bill_rate)) |>
-        dplyr::mutate(
-          jst_premium = eq_tr - bill_rate
-        ) |>
-        dplyr::select(year, jst_premium)
-
-      # FF market premium (annual)
-      ff <- hd_factors(dataset = "FF3", frequency = "annual")
-      if (is.null(ff) || nrow(ff) == 0L) {
-        cli::cli_warn("FF3 annual data not available")
-        return(NULL)
-      }
-
-      ff_annual <- ff |>
-        dplyr::filter(!is.na(`Mkt-RF`)) |>
-        dplyr::mutate(
-          year = as.integer(format(date, "%Y")),
-          ff_premium = `Mkt-RF`  # Already excess return
-        ) |>
-        dplyr::group_by(year) |>
-        dplyr::summarise(ff_premium = sum(ff_premium, na.rm = TRUE), .groups = "drop")
-
-      # Merge and compare
-      merged <- dplyr::inner_join(jst_usa, ff_annual, by = "year")
-
-      list(
-        data = merged,
-        correlation = round(cor(merged$jst_premium, merged$ff_premium,
-                                use = "complete.obs"), 3),
-        n_years = nrow(merged),
-        jst_mean = round(mean(merged$jst_premium), 2),
-        ff_mean = round(mean(merged$ff_premium), 2),
-        period = c(min(merged$year), max(merged$year))
-      )
-    }),
-
     # ── Financial crisis detection (crisisJST indicator) ──────────────────
     targets::tar_target(jst_crises, {
       jst_raw |>
@@ -137,8 +95,7 @@ plan_jst <- function() {
         year_range = year_range,
         n_obs = n_obs,
         pervasive_count = pervasive_countries,
-        pervasive_total = total_countries,
-        correlation_with_ff = jst_ff_comparison$correlation
+        pervasive_total = total_countries
       )
     })
   )

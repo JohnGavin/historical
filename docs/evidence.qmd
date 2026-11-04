@@ -271,7 +271,6 @@ The [Jordà-Schularick-Taylor Macrohistory Database](https://www.macrohistory.ne
 **Key findings:**
 
 - Equity premium is positive in `r jst_summary$pervasive_count` of `r jst_summary$pervasive_total` countries over the full sample (mean > 0, t-stat > 2, majority of years positive)
-- USA equity premium from JST correlates `r jst_summary$correlation_with_ff` with the Fama-French market factor (1926-2020 overlap period)
 - Financial crises occurred in `r nrow(jst_crises)` countries, with total crisis-years ranging from `r min(jst_crises$n_crises)` to `r max(jst_crises$n_crises)` per country
 
 **Source:** Òscar Jordà, Moritz Schularick, and Alan M. Taylor (2017). "Macrofinancial History and the New Business Cycle Facts." In *NBER Macroeconomics Annual 2016*, volume 31, edited by Martin Eichenbaum and Jonathan A. Parker. Chicago: University of Chicago Press. [DOI: 10.1086/690241](https://doi.org/10.1086/690241){target="_blank" rel="noopener noreferrer"}
