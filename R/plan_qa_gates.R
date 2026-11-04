@@ -5498,7 +5498,7 @@ scan_source_links_text <- function(text, repo_root, file = "<text>") {
 
 #' Scan every docs/*.qmd for bare / stale source links (S50, Refs #631)
 #'
-#' @param docs_dir Directory holding the `.qmd` sources.
+#' @param docs_dir Directory holding the `.qmd` files.
 #' @param repo_root Absolute repository root (resolves `#L<n>` targets).
 #' @return A tibble as from `scan_source_links_text()`, one row per violation.
 #'   Aborts with class `qa_s50_indeterminate` when no `.qmd` is found (an empty

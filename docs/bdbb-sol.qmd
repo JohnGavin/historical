@@ -27,6 +27,10 @@ library(ggplot2)
 store_path <- if (dir.exists("_targets")) "_targets" else
   file.path(here::here(), "docs/_targets")
 tar_config_set(store = store_path)
+# hd_caption() (#771): long captions collapse into <details>.
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
 ```
 
 ## Overview
@@ -53,7 +57,12 @@ knitr::kable(dv, caption = "SOL/USD data coverage")
 ```{r fit-summary}
 fit     <- tar_read(bdbb_sol_fit)
 metrics <- tar_read(bdbb_sol_metrics)
-knitr::kable(metrics, caption = tar_read(bdbb_sol_caption))
+DT::datatable(
+  metrics,
+  caption = hd_caption(tar_read(bdbb_sol_caption)),
+  rownames = FALSE, filter = "none",
+  options = list(dom = "t", pageLength = 15)
+)
 ```
 
 ## Regime Distribution
@@ -97,31 +106,46 @@ pull_spread <- function(pred) {
   round(dplyr::filter(tp, predictor == pred)$spread_pp, 2)
 }
 
-knitr::kable(
-  tp,
-  digits  = 2,
-  caption = paste0(
-    "Tail-risk predictivity by predictor (next-bar, trailing-threshold ",
-    "test -- see the methodology note above and #868). ",
-    "Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). ",
-    "SOL/USD spreads computed here: R = ", pull_spread("R"), " pp, ",
-    "Amihud = ", pull_spread("amihud_mean"), " pp, ",
-    "Kyle = ", pull_spread("kyle_mean"), " pp. ",
-    "Varma (2026) BTC benchmarks, shown for reference ONLY -- NOT a ",
-    "like-for-like comparison, since Varma Table 2 uses a genuinely ",
-    "next-day test while this page pre-#868 renders did not: R = 8.6 pp, ",
-    "Amihud = 4.7 pp, Kyle = 1.1 pp. A spread near zero, or one with a wide ",
-    "confidence interval, after the #868 fix is a legitimate outcome, not a ",
-    "defect -- see the detection-power-required and research-log-honesty ",
-    "project rules. Kyle lambda is estimated as the OLS ",
-    "price-impact slope of log-returns on signed order flow within each ",
-    "rolling window (cov/var; see ",
-    "[`bdbb_fit()`](https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46)",
-    "), not a per-bar ratio. Prior to [#624](https://github.com/JohnGavin/historical/issues/624), ",
-    "the `kyle_mean` column was numerically identical to `amihud_mean`, so any ",
-    "earlier apparent agreement with the Varma Kyle benchmark was spurious and ",
-    "the corrected figures above should not be assumed to reproduce it."
-  )
+tail_notes <- htmltools::tagList(
+  "Tail-risk predictivity by predictor (next-bar, trailing-threshold ",
+  "test -- see the methodology note above and #868). ",
+  "Spread = P(top-decile hourly move | high tercile) - P(... | low tercile). ",
+  "SOL/USD spreads computed here: R = ", pull_spread("R"), " pp, ",
+  "Amihud = ", pull_spread("amihud_mean"), " pp, ",
+  "Kyle = ", pull_spread("kyle_mean"), " pp. ",
+  "Varma (2026) BTC benchmarks, shown for reference ONLY -- NOT a ",
+  "like-for-like comparison, since Varma Table 2 uses a genuinely ",
+  "next-day test while this page pre-#868 renders did not: R = 8.6 pp, ",
+  "Amihud = 4.7 pp, Kyle = 1.1 pp. A spread near zero, or one with a wide ",
+  "confidence interval, after the #868 fix is a legitimate outcome, not a ",
+  "defect -- see the detection-power-required and research-log-honesty ",
+  "project rules. Kyle lambda is estimated as the OLS ",
+  "price-impact slope of log-returns on signed order flow within each ",
+  "rolling window (cov/var; see ",
+  htmltools::tags$a(
+    href = "https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/bdbb.R#L46",
+    htmltools::tags$code("bdbb_fit()")
+  ),
+  "), not a per-bar ratio. Prior to ",
+  htmltools::tags$a(href = "https://github.com/JohnGavin/historical/issues/624", "#624"),
+  ", the ", htmltools::tags$code("kyle_mean"), " column was numerically identical to ",
+  htmltools::tags$code("amihud_mean"), ", so any ",
+  "earlier apparent agreement with the Varma Kyle benchmark was spurious and ",
+  "the corrected figures above should not be assumed to reproduce it."
+)
+
+DT::datatable(
+  dplyr::mutate(tp, dplyr::across(dplyr::where(is.numeric), ~ round(.x, 2))),
+  caption = hd_caption(
+    tail_notes,
+    short = paste0(
+      "Tail-risk predictivity by predictor (next-bar, trailing-threshold test; ",
+      "see the methodology note above and #868). Spread = P(top-decile hourly ",
+      "move | high tercile) - P(... | low tercile)."
+    )
+  ),
+  rownames = FALSE, filter = "none",
+  options = list(dom = "t", pageLength = 10)
 )
 ```
 
