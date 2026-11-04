@@ -694,6 +694,26 @@ plan_stock_backtest <- function() {
         pull(ticker)
     }, cue = targets::tar_cue(mode = "always")),
 
+    # ── #865 provenance: which metadata snapshot stk_top_tickers came from ──
+    # Nothing downstream consumes this target (no change to any published
+    # number); it records the as-of proxy and the ticker-only-key caveat next
+    # to the universe. A point-in-time universe is #816.
+    targets::tar_target(stk_universe_provenance, {
+      library(dplyr)
+
+      duckplyr_path <- Sys.glob("/nix/store/*-r-duckplyr-*/library")
+      duckplyr_path <- duckplyr_path[file.exists(file.path(duckplyr_path, "duckplyr"))]
+      if (length(duckplyr_path) > 0) .libPaths(c(.libPaths(), duckplyr_path[[1]]))
+
+      meta_url <- hd_datasets()[["metadata"]]$url
+      meta_sel <- duckplyr::read_parquet_duckdb(meta_url) |>
+        filter(dataset == "equity_daily", ticker %in% stk_top_tickers) |>
+        select(ticker, market_cap, end_date) |>
+        collect()
+      ticker_universe_provenance(meta_sel, stk_top_tickers,
+                                 top_n = stk_params$top_n_market_cap)
+    }, cue = targets::tar_cue(mode = "always")),
+
     # ── Group 1: Universe — top-N non-ETF stocks with sufficient history ──
     targets::tar_target(stk_universe, {
       library(dplyr)

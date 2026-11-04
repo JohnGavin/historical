@@ -71,7 +71,7 @@
         ..$ description: chr "US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot). Use hd_alphavantage(ticker) to "| __truncated__
        $ fundamentals       :List of 4
         ..$ url        : chr "hf://datasets/JohnGavin/finance-data/fundamentals.parquet"
-        ..$ schema     : chr [1:9] "ticker" "fiscal_period" "period_end" "first_filed" ...
+        ..$ schema     : chr [1:10] "ticker" "cik" "fiscal_period" "period_end" ...
         ..$ frequency  : chr "filing"
         ..$ description: chr "SEC EDGAR XBRL company-fundamentals revision triangle: one row per (ticker, xbrl_tag, fiscal_period), carrying "| __truncated__
        $ kraken_ohlcvt      :List of 4

@@ -11,7 +11,8 @@ hd_fundamentals(
   strict_same_day = FALSE,
   include_latest = FALSE,
   local = FALSE,
-  collect = TRUE
+  collect = TRUE,
+  cik = NULL
 )
 }
 \arguments{
@@ -40,9 +41,18 @@ registry's remote URL. See \code{\link[=hd_dataset_source]{hd_dataset_source()}}
 
 \item{collect}{If \code{TRUE} (default), materialise. If \code{FALSE}, return a
 lazy duckplyr frame.}
+
+\item{cik}{Character vector of 10-digit zero-padded SEC CIKs (the issuer
+key). \code{NULL} (default) applies no CIK filter. Tickers are recycled
+(#865: \code{APC} was Anadarko, CIK \code{0000773910}, and is now ARKO Corp, CIK
+\code{0001835022}), so a ticker-only query can match more than one issuer;
+supply \code{cik} to pin the issuer. When \code{ticker} is given without \code{cik}
+and \code{collect = TRUE}, a warning of class
+\code{hd_fundamentals_ticker_multi_cik} is raised if one ticker maps to more
+than one CIK in the result.}
 }
 \value{
-Tibble (or lazy frame) with columns \code{ticker}, \code{fiscal_period},
+Tibble (or lazy frame) with columns \code{ticker}, \code{cik}, \code{fiscal_period},
 \code{period_end}, \code{first_filed}, \code{xbrl_tag}, \code{original_value}, \code{source},
 plus \code{latest_value} and \code{restated} when \code{include_latest = TRUE}.
 }

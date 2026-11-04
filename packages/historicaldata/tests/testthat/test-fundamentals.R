@@ -20,7 +20,7 @@ test_that("hd_fundamentals returns tibble with expected columns (default: origin
   expect_true(nrow(result) > 0)
   expect_setequal(
     names(result),
-    c("ticker", "fiscal_period", "period_end", "first_filed", "xbrl_tag",
+    c("ticker", "cik", "fiscal_period", "period_end", "first_filed", "xbrl_tag",
       "original_value", "source")
   )
   expect_false("latest_value" %in% names(result))

@@ -78,3 +78,38 @@ def _missing_pct(total: int, expected: int) -> float:
     if expected <= 0:
         return 0.0
     return max(round(100 * (1 - total / expected), 1), 0.0)
+
+
+def with_snapshot_provenance(method: str, as_of: str) -> str:
+    """Append #865 join provenance to an amendments-log ``method`` string.
+
+    enrich_metadata.py joins computed returns onto the CURRENT metadata
+    snapshot on ``ticker`` alone, and tickers are recycled (#865). The
+    amendments log is the published record of that join, so its ``method``
+    names the key and the snapshot date. ``as_of`` must be an ISO date
+    (YYYY-MM-DD); anything else raises ValueError rather than recording an
+    unknown snapshot date.
+    """
+    from datetime import date
+
+    try:
+        parsed = date.fromisoformat(as_of)
+    except (TypeError, ValueError):
+        raise ValueError(f"as_of must be an ISO date YYYY-MM-DD, got {as_of!r}") from None
+    prov = (
+        f"join_key=ticker (no cik); metadata_snapshot_as_of={parsed.isoformat()}; "
+        "ticker-recycling risk #865, point-in-time universe #816"
+    )
+    return f"{method}; {prov}" if method else prov
+
+
+def duplicated_tickers(tickers) -> list:
+    """Sorted list of tickers that occur more than once.
+
+    A ticker string with several metadata rows is the recycled-ticker
+    symptom (#865); a ``merge(on="ticker")`` would fan it out silently.
+    """
+    seen, dup = set(), set()
+    for t in tickers:
+        (dup if t in seen else seen).add(t)
+    return sorted(dup)
