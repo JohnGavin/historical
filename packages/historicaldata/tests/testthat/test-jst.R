@@ -33,20 +33,23 @@ test_that("jst_macrohistory entry is in hd_datasets registry", {
 })
 
 test_that("hd_jst returns cached data when cache file exists", {
-  cache_file <- file.path(hd_cache_path(), "jst_macrohistory.rds")
-  skip_if(!file.exists(cache_file), "JST cache file not present — run hd_jst() once to populate")
+  # Hermetic (#1026): previously this skipped unless the developer's real
+  # cache happened to exist, so the package skip count moved between
+  # machines. Write a synthetic cache into a temp HD_CACHE_DIR and check
+  # hd_jst() returns it unchanged without touching the network.
+  withr::with_envvar(c(HD_CACHE_DIR = withr::local_tempdir()), {
+    cache_file <- file.path(hd_cache_path(), "jst_macrohistory.rds")
+    fixture <- tibble::tibble(
+      iso = rep(c("USA", "GBR"), each = 3L),
+      year = rep(c(1870L, 1950L, 2020L), times = 2L),
+      eq_tr = c(0.05, 0.10, 0.20, 0.04, 0.08, 0.15)
+    )
+    dir.create(dirname(cache_file), showWarnings = FALSE, recursive = TRUE)
+    saveRDS(fixture, cache_file)
 
-  result <- hd_jst(cache = TRUE)
-  expect_s3_class(result, "tbl_df")
-  expect_true("iso" %in% names(result))
-  expect_true("year" %in% names(result))
-  expect_true("eq_tr" %in% names(result))
-  expect_true(nrow(result) > 0)
-  # 18 countries expected in Release 6
-  expect_true(length(unique(result$iso)) >= 10)
-  # Coverage 1870-2020
-  expect_true(min(result$year) <= 1900)
-  expect_true(max(result$year) >= 2000)
+    result <- hd_jst(cache = TRUE)
+    expect_identical(result, fixture)
+  })
 })
 
 test_that("hd_jst aborts when cache missing and haven not installed", {
