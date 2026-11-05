@@ -82,3 +82,57 @@ test_that(".aw_excess_series: a benchmark is classified by its registered label;
                r - 0.0002)
   expect_error(.aw_excess_series(d, r, rf, NA_character_))
 })
+
+# #937 phase 3 item 2, excess side: the Fama-French Mkt-RF benchmark (DRIF,
+# Factor MAX) is registered as excess rather than hard-coded "no rf" with a
+# free-text "tracked in #937" note. Every `# basis: excess (<label>)` comment
+# must name a label registered as excess.
+.scan_excess <- function(lines, file = "<text>") {
+  ann_re <- "#\\s*basis:\\s*excess\\s*\\(([^()]*(\\([^)]*\\))?[^()]*)\\)"
+  m <- regmatches(lines, regexec(ann_re, lines))
+  ann <- vapply(m, function(x) if (length(x) >= 2L) x[2] else NA_character_,
+                character(1))
+  data.frame(file = rep(file, sum(!is.na(ann))), line = which(!is.na(ann)),
+             label = ann[!is.na(ann)], stringsAsFactors = FALSE)
+}
+
+test_that("excess scanner: positive control reads nested-parenthesis labels", {
+  got <- .scan_excess(c(
+    "# basis: excess (Benchmark: Fama-French Mkt-RF (market excess))",
+    "# basis: excess (Nope)",
+    "# basis: total (Value (HML))"
+  ))
+  expect_identical(got$label,
+                   c("Benchmark: Fama-French Mkt-RF (market excess)", "Nope"))
+})
+
+test_that("every '# basis: excess (<label>)' in R/ names a label registered as excess", {
+  reg <- hd_return_basis()
+  excess_labels <- reg$strategy[reg$basis == "excess"]
+  ann <- do.call(rbind, lapply(.src_files, function(p) {
+    .scan_excess(readLines(p, warn = FALSE), basename(p))
+  }))
+  expect_gte(nrow(ann), 2L)  # the DRIF and Factor MAX benchmark sites
+  bad <- ann[!(ann$label %in% excess_labels), ]
+  expect_identical(
+    nrow(bad), 0L,
+    info = paste0("Unregistered excess label(s): ",
+                  paste0(bad$file, ":", bad$line, " '", bad$label, "'", collapse = "; "))
+  )
+})
+
+test_that("Mkt-RF benchmark is excess in the registry: zero rf, Sharpe unchanged", {
+  lab <- "Benchmark: Fama-French Mkt-RF (market excess)"
+  expect_identical(hd_return_basis_of(lab), "excess")
+  rf <- rep(0.003, 24L)
+  expect_identical(hd_rf_for_basis(rf, lab), rep(0, 24L))
+})
+
+test_that("no 'registry vocabulary ... tracked in #937' placeholder remains", {
+  hits <- unlist(lapply(.src_files, function(p) {
+    l <- grep("registry vocabulary for benchmarks tracked in #937",
+              readLines(p, warn = FALSE), fixed = TRUE)
+    if (length(l)) paste0(basename(p), ":", l)
+  }))
+  expect_identical(hits, NULL)
+})

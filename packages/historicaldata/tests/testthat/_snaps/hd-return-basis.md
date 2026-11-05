@@ -10,15 +10,16 @@
     "Research: ETF buy and hold", "Research: ETF/cash overlay", "Research: JST equity total return", 
     "Research: JST equity/bills trend", "Research: asset panel (adjusted-close returns)", 
     "PSO Regime-Adjusted", "Commodity Momentum L/S", "Momentum Decomposition L/S", 
-    "Regime Momentum", "Mean Reversion", "Defense First", "Research: SPY buy and hold (Defense First benchmark)"
-    ), basis = c("total", "total", "total", "total", "total", "total", 
-    "excess", "excess", "excess", "excess", "excess", "blend", "excess", 
-    "excess", "excess", "excess", "excess", "excess", "total", "total", 
-    "total", "total", "total", "total", "total", "blend", "excess", 
-    "excess", "excess", "total", "total", "total"), cash_weight_col = c(NA, 
+    "Regime Momentum", "Mean Reversion", "Defense First", "Research: SPY buy and hold (Defense First benchmark)", 
+    "Benchmark: Fama-French Mkt-RF (market excess)"), basis = c("total", 
+    "total", "total", "total", "total", "total", "excess", "excess", 
+    "excess", "excess", "excess", "blend", "excess", "excess", "excess", 
+    "excess", "excess", "excess", "total", "total", "total", "total", 
+    "total", "total", "total", "blend", "excess", "excess", "excess", 
+    "total", "total", "total", "excess"), cash_weight_col = c(NA, 
     NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "cash_weight", NA, NA, 
     NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, NA, "cash_weight", NA, 
-    NA, NA, NA, NA, NA))
+    NA, NA, NA, NA, NA, NA))
 
 # an unregistered strategy aborts (never a silent default)
 
@@ -27,7 +28,7 @@
     Condition
       Error in `hd_return_basis_of()`:
       x Strategy "Not A Strategy" is not registered in `hd_return_basis()`.
-      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Defense First", and "Research: SPY buy and hold (Defense First benchmark)".
+      i Registered strategies: "Value (HML)", "Managed Futures", "Risk State", "Avoid Worst", "TOM", "OLMAR-1", "Mom Pre-Peak", "Mom Post-Peak", "Mom 12-2", "LTR", "CMR", "CMR Conditioned", "Stock MAX", "Stock DRIF", "XGB DRIF", "Factor MAX", "Factor DRIF", "PSO Optimal", ..., "Research: SPY buy and hold (Defense First benchmark)", and "Benchmark: Fama-French Mkt-RF (market excess)".
       i Add it to 'packages/historicaldata/R/hd_return_basis.R' with a file:line evidence string; a silent default would put its Sharpe on an unknown basis.
 
 ---

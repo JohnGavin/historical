@@ -305,10 +305,11 @@ plan_drif <- function() {
 
         bench_ann <- prod(1 + df$benchmark_ret, na.rm = TRUE)^(12/n) - 1
         bench_vol <- sd(df$benchmark_ret, na.rm = TRUE) * sqrt(12)
-        # basis: excess (Mkt-RF); registry vocabulary for benchmarks tracked in #937 Phase 3
-        # Mkt-RF is ALREADY an excess return, so NO rf is deducted (#937,
-        # refs #919) -- same as drif_pbo's benchmark scoring below.
-        bench_sharpe <- bench_ann / bench_vol
+        # basis: excess (Benchmark: Fama-French Mkt-RF (market excess))
+        # Mkt-RF is ALREADY an excess return, so the registry deducts NO rf
+        # (#937, refs #919) -- same as drif_pbo's benchmark scoring below.
+        bench_rf <- mean(hd_rf_for_basis(df$rf_ret, "Benchmark: Fama-French Mkt-RF (market excess)"), na.rm = TRUE) * 12
+        bench_sharpe <- (bench_ann - bench_rf) / bench_vol
 
         tibble(
           period = label, months = n,
