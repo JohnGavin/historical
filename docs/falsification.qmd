@@ -163,10 +163,10 @@ fals_dt <- function(df, caption_text) {
     df,
     container = sketch,
     escape = FALSE,
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left; font-weight: bold;",
-      htmltools::HTML(caption_text)
-    ),
+    # #771: HTML-authored caption (md_links anchors + hand-typed &lt;/&gt;);
+    # hd_caption_html() keeps each entity escaped exactly once and collapses
+    # captions over 300 visible chars into <details>.
+    caption = hd_caption_html(caption_text),
     rownames = FALSE,
     filter = "top",
     options = list(
@@ -784,7 +784,7 @@ if (!is.null(adv_impact) && !is.null(sp)) {
 
 Neither value governs the other, and **`filter_liquidity()` runs in `filter_mode = "warn"`** — it flags illiquid rows but removes nothing, for both the ingestion-side (`equity_liquidity_filtered`) and dashboard-side (`equity_daily_liquidity_filtered`) targets. `stk_universe` ([`R/plan_stock_backtest.R:421`](https://github.com/JohnGavin/historical/blob/main/R/plan_stock_backtest.R#L421){target="_blank" rel="noopener noreferrer"}) does not depend on either filtered target — the dependency runs the other way (`equity_daily_liquidity_filtered` is derived *from* `stk_universe`, not vice versa). **Illiquid stocks are not excluded from any backtest portfolio shown on this dashboard today.** Do not read the Universe Summary / Volume Stats tabs as implying otherwise; they are a diagnostic, not a filter.
 
-**Universe Summary / Volume Stats now wired in (#625, resolved 2026-08-04):** the two tabs above are computed by [`plan_liquidity_dashboard()`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R#L129){target="_blank" rel="noopener noreferrer"} in `R/plan_liquidity.R`, which re-expresses the same `calculate_adv()` → `filter_liquidity()` → `liquidity_summary()` pipeline against `stk_universe` instead of `consolidated_equity` (which only exists in the root ingestion pipeline). This means the two tabs describe the **top-market-cap dashboard universe**, not the full ingested equity universe — see the per-table captions above for the exact scope. The original `plan_liquidity()` targets (`liquidity_summary_tbl`, `volume_stats`) are unchanged and still run only in the ingestion pipeline (root `_targets.R`); this dashboard has never depended on them. **Provenance risk:** nothing asserts the two equity sources (`consolidated_equity` vs. `stk_universe`) agree, so the ingestion-side and dashboard-side liquidity summaries can diverge — this is flagged as a follow-up in [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}, not resolved here. **Also unverified:** this PR could not run `tar_make()` (concurrent-store conflict with other work on this repo), so neither of these two tabs has been confirmed to actually render — the "Not available" fallback text above will show if the target has not yet been built by a subsequent pipeline run.
+**Universe Summary / Volume Stats now wired in (#625, resolved 2026-08-04):** the two tabs above are computed by [`plan_liquidity_dashboard()`](https://github.com/JohnGavin/historical/blob/main/R/plan_liquidity.R#L129){target="_blank" rel="noopener noreferrer"} in `R/plan_liquidity.R`, which re-expresses the same `calculate_adv()` → `filter_liquidity()` → `liquidity_summary()` pipeline against `stk_universe` instead of `consolidated_equity` (which only exists in the root ingestion pipeline). This means the two tabs describe the **top-market-cap dashboard universe**, not the full ingested equity universe — see the per-table captions above for the exact scope. The original `plan_liquidity()` targets (`liquidity_summary_tbl`, `volume_stats`) are unchanged and still run only in the ingestion pipeline (root `_targets.R`); this dashboard has never depended on them. **Provenance risk:** nothing asserts the two equity inputs (`consolidated_equity` vs. `stk_universe`) agree, so the ingestion-side and dashboard-side liquidity summaries can diverge — this is flagged as a follow-up in [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}, not resolved here. **Also unverified:** this PR could not run `tar_make()` (concurrent-store conflict with other work on this repo), so neither of these two tabs has been confirmed to actually render — the "Not available" fallback text above will show if the target has not yet been built by a subsequent pipeline run.
 
 **Percentile-Indexed Threshold (#625, added 2026-08-31):** the nominal $1M cut used by the Universe Summary / Volume Stats tabs is a fixed dollar figure applied across the full 2005–2026 sample; as market-wide ADV grows over that span, $1M sits at a different liquidity percentile in 2005 than in 2025, so the nominal gate silently tightens or loosens over time. The Percentile-Indexed Threshold tab surfaces the alternative flagged as "the principled fix" in [#625](https://github.com/JohnGavin/historical/issues/625){target="_blank" rel="noopener noreferrer"}: recompute the cutoff from each day's cross-sectional ADV distribution (bottom 30% flagged illiquid) instead of a fixed dollar amount. This is deliberately scoped to this dashboard-visible, informational flag only — `filter_mode` stays `"warn"` here too, so nothing is removed from any backtest. The *other* nominal ADV gate in this codebase, `stk_params$adv_threshold` ($5M, used directly inside Factor MAX / DRIF decile construction), is a production investability gate whose numbers feed the leaderboard; switching it to a percentile basis would change published backtest returns and needs its own before/after comparison, so it is intentionally left nominal here — tracked as a follow-up, not resolved in this change.
 
@@ -962,13 +962,13 @@ if (!is.null(cg_impl) && is.data.frame(cg_impl$results)) {
     escape = FALSE,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 10, dom = "t"),
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left;",
-      htmltools::HTML(paste0("Conditional independence tests via partial correlation. ",
+    caption = hd_caption_html(
+      paste0("Conditional independence tests via partial correlation. ",
              cg_impl$n_holds, " of ", cg_impl$n_implications,
              " implications hold (|r| &lt; 0.15). ",
              "Violated implications suggest missing edges in the DAG. ",
-             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."))
+             "Source: <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15' target='_blank'>plan_causal_graph.R</a>, tested on monthly data."),
+      style_extra = " font-weight: normal;"
     )
   ) |>
     DT::formatRound("Partial r", digits = 3)
@@ -1007,13 +1007,13 @@ if (!is.null(split) && !is.null(split$comparison)) {
     split$comparison,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 5, dom = "t"),
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left;",
-      htmltools::HTML(md_links(paste0(
+    caption = hd_caption_html(
+      md_links(paste0(
         "HML-VIX correlation by period. Pre-2010 includes dot-com crash + GFC. ",
         "Source: [plan_causal_graph.R]",
         "(https://github.com/JohnGavin/historical/blob/main/R/plan_causal_graph.R#L15)."
-      )))
+      )),
+      style_extra = " font-weight: normal;"
     )
   ) |> DT::formatRound("hml_vix_r", digits = 3)
 } else {
@@ -1113,9 +1113,8 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
     risk_tbl,
     rownames = FALSE, filter = "none",
     options = list(pageLength = 10, dom = "t"),
-    caption = htmltools::tags$caption(
-      style = "caption-side: top; text-align: left;",
-      htmltools::HTML(paste0(
+    caption = hd_caption_html(
+      paste0(
         "Tinsley Pillar 8 risk-architecture metrics. ",
         "Worst max drawdown duration: <b>",
         worst_max_dd_strat, "</b> (",
@@ -1133,7 +1132,8 @@ if (!is.null(fals_db) && nrow(fals_db) > 0 &&
         "hd_trade_metrics()</a> in packages/historicaldata, ",
         "wired via <a href='https://github.com/JohnGavin/historical/blob/main/R/plan_falsification.R#L72' target='_blank'>",
         "plan_falsification.R</a>."
-      ))
+      ),
+      style_extra = " font-weight: normal;"
     )
   ) |>
     DT::formatRound(c("Runs p-val", "ACF lag-1"), digits = 3) |>
