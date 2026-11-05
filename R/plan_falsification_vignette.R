@@ -80,7 +80,7 @@ plan_falsification_vignette <- function() {
         "Alpha (%) = annualised Fama-French 5-factor + Momentum intercept; ",
         "Alpha t = HAC t-statistic on the alpha; ",
         "R² (%) = variance explained by known factors. ",
-        "Source: ", a_("plan_falsification.R", paste0(gh, "/R/plan_falsification.R")), ", ",
+        "Source: ", a_("plan_falsification.R", paste0(gh, "/R/plan_falsification.R#L72")), ", ",
         "M = ", fals_params$M, " null simulations per environment."
       )
       paste0(parts, collapse = "")
@@ -192,7 +192,7 @@ plan_falsification_vignette <- function() {
         "Null environments: White Noise (iid), Regime Vol (high/low vol switching), ",
         "MA(1) (autocorrelation friction), Factor Null (random factor exposure), ",
         "GARCH(1,1) (volatility clustering), GJR-GARCH (asymmetric leverage). ",
-        "Source: ", a_("hd_null_rejection_rate()", paste0(gh, "/packages/historicaldata/R/falsification.R")), ", alpha = ",
+        "Source: ", a_("hd_null_rejection_rate()", paste0(gh, "/packages/historicaldata/R/falsification.R#L403")), ", alpha = ",
         fals_params$alpha_level, "."
       )
     }),
@@ -349,7 +349,7 @@ plan_falsification_vignette <- function() {
         "Mkt-RF through Mom = factor betas. ",
         highest_r2_name, " has the highest factor exposure (R² = ", highest_r2_pct, "%). ",
         best_alpha_name, " has the strongest alpha (t = ", best_alpha_t, "). ",
-        "Source: ", a_("hd_factor_null_test()", paste0(gh, "/packages/historicaldata/R/falsification.R")), ", ",
+        "Source: ", a_("hd_factor_null_test()", paste0(gh, "/packages/historicaldata/R/falsification.R#L738")), ", ",
         "daily factor data from ",
         a_("Ken French Data Library", "https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html"), "."
       )
@@ -397,8 +397,8 @@ plan_falsification_vignette <- function() {
         "out-of-sample t-statistics. ",
         "Harvey et al. (2016) threshold = sqrt(2*log(K_eff_frob)) = ", harvey_t,
         ". A strategy's HAC t must exceed this to survive multiplicity correction. ",
-        "Source: ", a_("hd_keff_frob()", paste0(gh, "/packages/historicaldata/R/falsification.R")), ", ",
-        a_("hd_delta_z()", paste0(gh, "/packages/historicaldata/R/falsification.R")), "."
+        "Source: ", a_("hd_keff_frob()", paste0(gh, "/packages/historicaldata/R/falsification.R#L456")), ", ",
+        a_("hd_delta_z()", paste0(gh, "/packages/historicaldata/R/falsification.R#L500")), "."
       )
     }),
 

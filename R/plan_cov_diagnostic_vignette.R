@@ -267,10 +267,10 @@ plan_cov_diagnostic_vignette <- function() {
         "only currently-listed tickers with no delisted firms, biasing all methods ",
         "toward apparent profitability and obscuring the regularisation benefit. ",
         "Source: ",
-        a_("hd_cov_oos_diagnostic()", paste0(gh_base, "/packages/historicaldata/R/cov_diagnostic.R#L87")), ", ",
+        a_("hd_cov_oos_diagnostic()", paste0(gh_base, "/packages/historicaldata/R/cov_diagnostic.R#L89")), ", ",
         a_("hd_min_var_weights()", paste0(gh_base, "/packages/historicaldata/R/min_var_weights.R#L65")), ", ",
         a_("hd_cov_estimate()", paste0(gh_base, "/packages/historicaldata/R/cov_estimate.R#L100")), ", ",
-        a_("R/plan_cov_diagnostic_vignette.R", paste0(gh_base, "/R/plan_cov_diagnostic_vignette.R")), ", issue #498."
+        a_("R/plan_cov_diagnostic_vignette.R", paste0(gh_base, "/R/plan_cov_diagnostic_vignette.R#L16")), ", issue #498."
       )
     })
 
