@@ -75,3 +75,37 @@ test_that("#631 guard goes red on a bare and on a stale generated link", {
   expect_match(bad[1], "no #L anchor")
   expect_match(bad[2], "does not define it")
 })
+
+# Links can also come from data (data/column_glossary.yaml), and any other
+# route we have not thought of ends up in the rendered page. So check the
+# shipped artifact too: no committed docs/*.html may hold a bare .R link.
+bare_source_links_in <- function(text) {
+  pat <- "github\\.com/JohnGavin/historical/blob/main/[^\"'#&<> ]+\\.R(\"|'|&quot;)"
+  regmatches(text, gregexpr(pat, text))[[1]]
+}
+
+test_that("#631: data/column_glossary.yaml source links carry #L anchors", {
+  path <- here::here("data", "column_glossary.yaml")
+  skip_if_not(file.exists(path), "column_glossary.yaml not present")
+  hits <- bare_source_links_in(paste(readLines(path, warn = FALSE), collapse = "\n"))
+  expect_equal(hits, character(0))
+})
+
+test_that("#631: rendered docs/*.html hold no bare .R source links", {
+  pages <- Sys.glob(here::here("docs", "*.html"))
+  # No rendered pages means nothing was checked, not a pass.
+  expect_gt(length(pages), 0L)
+  bad <- unlist(lapply(pages, function(p) {
+    hits <- bare_source_links_in(paste(readLines(p, warn = FALSE), collapse = "\n"))
+    if (length(hits)) paste(basename(p), hits) else character(0)
+  }))
+  expect_equal(bad, character(0))
+})
+
+test_that("#631 bare-link matcher goes red on bare links and passes anchored ones", {
+  gh <- "https://github.com/JohnGavin/historical/blob/main/R/x.R"
+  expect_length(bare_source_links_in(paste0('<a href="', gh, '">')), 1L)
+  expect_length(bare_source_links_in(paste0("&lt;a href=&quot;", gh, "&quot;")), 1L)
+  expect_length(bare_source_links_in(paste0('url: "', gh, '"')), 1L)
+  expect_length(bare_source_links_in(paste0('<a href="', gh, '#L3">')), 0L)
+})
