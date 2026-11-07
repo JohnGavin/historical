@@ -37,6 +37,12 @@ Only snapshots inside the price universe's overall window (earliest
 \code{first_date} to latest \code{last_date}, each widened by \code{tol_days}) are scored;
 later snapshots would measure stale price data, not survivorship.
 }
+\details{
+\code{share_covered} is an UPPER bound on true coverage: a recycled ticker (a
+different company reusing the symbol, #865) and an interior gap inside a
+span both count as covered. The survivorship gap \code{1 - share_covered} is
+therefore a LOWER bound.
+}
 \seealso{
 Other sp500: 
 \code{\link{hd_sp500_data_dir}()},

@@ -118,7 +118,9 @@ hd_sp500_membership <- function(path = hd_sp500_membership_path(),
   n <- lengths(cells)
 
   empty <- vapply(cells, function(z) any(!nzchar(z)), logical(1))
-  empty <- empty | n == 0L
+  # strsplit() drops a trailing empty field ("A,B," -> "A","B"), so a trailing
+  # comma must be caught on the raw cell.
+  empty <- empty | n == 0L | grepl(",\\s*$", snaps$tickers)
   if (any(empty)) {
     cli::cli_abort(c(
       "x" = "{sum(empty)} snapshot{?s} with an empty ticker token or no tickers.",
@@ -373,6 +375,11 @@ hd_sp500_equity_spans <- function(local = FALSE) {
 #' Only snapshots inside the price universe's overall window (earliest
 #' `first_date` to latest `last_date`, each widened by `tol_days`) are scored;
 #' later snapshots would measure stale price data, not survivorship.
+#'
+#' `share_covered` is an UPPER bound on true coverage: a recycled ticker (a
+#' different company reusing the symbol, #865) and an interior gap inside a
+#' span both count as covered. The survivorship gap `1 - share_covered` is
+#' therefore a LOWER bound.
 #'
 #' @param membership Output of [hd_sp500_membership()].
 #' @param spans A data.frame with `ticker`, `first_date`, `last_date`

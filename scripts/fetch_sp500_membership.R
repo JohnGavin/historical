@@ -35,10 +35,12 @@ suppressPackageStartupMessages({
 
 REPO_API   <- "https://api.github.com/repos/fja05680/sp500"
 SOURCE_FILE <- "S&P 500 Historical Components & Changes (Updated).csv"
-SOURCE_URL <- paste0(
-  "https://raw.githubusercontent.com/fja05680/sp500/master/",
-  utils::URLencode(SOURCE_FILE, reserved = TRUE)
-)
+# The download is pinned to an upstream commit SHA (looked up FIRST), so the
+# bytes and the SHA recorded in the manifest cannot diverge (no master race).
+source_url_at <- function(sha) {
+  paste0("https://raw.githubusercontent.com/fja05680/sp500/", sha, "/",
+         utils::URLencode(SOURCE_FILE, reserved = TRUE))
+}
 MIN_BYTES  <- 1e6   # observed ~5.5 MB; floor well below that
 DEST_NAME  <- "sp500_historical_components.csv"
 
@@ -69,12 +71,52 @@ api_get <- function(url) {
 
 force_refetch <- nzchar(Sys.getenv("SP500_FORCE_REFETCH", ""))
 present <- file.exists(dest) && file.info(dest)$size >= MIN_BYTES
-if (present && !force_refetch) {
-  cli::cli_inform("Already present: {.path {dest}} ({file.info(dest)$size} bytes)")
+reuse <- present && !force_refetch
+
+existing <- if (file.exists(MANIFEST_PATH)) {
+  utils::read.csv(MANIFEST_PATH, stringsAsFactors = FALSE, colClasses = "character")
+} else NULL
+
+# Provenance from the GitHub API. Licence is informational: an unavailable
+# value is recorded as "unavailable", never silently dropped.
+repo    <- api_get(REPO_API)
+licence <- if (!is.null(repo) && !is.null(repo$license)) repo$license$spdx_id else "unavailable"
+
+if (reuse) {
+  # Cache reuse: the file is NOT re-downloaded, so the manifest must keep the
+  # provenance recorded when it WAS downloaded. Never stamp today's date or the
+  # newest upstream SHA onto old bytes.
+  cached_sha <- digest::digest(dest, algo = "sha256", file = TRUE)
+  if (is.null(existing) || nrow(existing) != 1L || !identical(existing$sha256, cached_sha)) {
+    cli::cli_abort(c(
+      "x" = "Cached {.path {dest}} does not match the committed manifest (or there is none).",
+      "i" = "Cached sha256: {cached_sha}; manifest sha256: {if (is.null(existing)) 'no manifest' else existing$sha256[1L]}.",
+      "i" = "Provenance cannot be vouched for. Re-fetch with {.code SP500_FORCE_REFETCH=1}."
+    ))
+  }
+  up_sha     <- existing$upstream_commit_sha
+  up_date    <- existing$upstream_commit_date
+  dl_date    <- existing$download_date
+  src_url    <- existing$source_url
+  licence    <- existing$licence_spdx
+  cli::cli_inform("Already present, matches manifest: {.path {dest}} ({file.info(dest)$size} bytes); provenance kept.")
 } else {
-  cli::cli_progress_step("Downloading {SOURCE_FILE}")
+  # Look up the upstream commit FIRST, then download that exact commit.
+  commits <- api_get(sprintf("%s/commits?path=%s&per_page=1", REPO_API,
+                             utils::URLencode(SOURCE_FILE, reserved = TRUE)))
+  if (length(commits) < 1L || is.null(commits[[1L]]$sha)) {
+    cli::cli_abort(c(
+      "x" = "Could not look up the upstream commit for {.file {SOURCE_FILE}}.",
+      "i" = "A download that cannot be tied to a commit SHA is not recorded."
+    ))
+  }
+  up_sha  <- commits[[1L]]$sha
+  up_date <- commits[[1L]]$commit$committer$date
+  dl_date <- as.character(Sys.Date())
+  src_url <- source_url_at(up_sha)
+  cli::cli_progress_step("Downloading {SOURCE_FILE} at {substr(up_sha, 1, 7)}")
   ok <- tryCatch({
-    curl::curl_download(SOURCE_URL, dest, quiet = TRUE)
+    curl::curl_download(src_url, dest, quiet = TRUE)
     TRUE
   }, error = function(e) {
     cli::cli_warn("curl_download failed: {conditionMessage(e)}")
@@ -91,16 +133,6 @@ if (present && !force_refetch) {
   cli::cli_alert_success("Downloaded {.path {dest}} ({got} bytes)")
 }
 
-# Provenance from the GitHub API. Unavailable values are recorded as the
-# string "unavailable", never silently dropped (a manifest that hides a failed
-# lookup would read as a complete one).
-repo   <- api_get(REPO_API)
-licence <- if (!is.null(repo) && !is.null(repo$license)) repo$license$spdx_id else "unavailable"
-commits <- api_get(sprintf("%s/commits?path=%s&per_page=1", REPO_API,
-                           utils::URLencode(SOURCE_FILE, reserved = TRUE)))
-up_sha  <- if (length(commits) >= 1L) commits[[1L]]$sha else "unavailable"
-up_date <- if (length(commits) >= 1L) commits[[1L]]$commit$committer$date else "unavailable"
-
 # Smoke-read through the package loader so a bad download is caught here, and
 # record the coverage actually obtained.
 pkgload::load_all(here::here("packages", "historicaldata"), quiet = TRUE)
@@ -110,8 +142,8 @@ manifest <- data.frame(
   file                 = DEST_NAME,
   bytes                = file.info(dest)$size,
   sha256               = digest::digest(dest, algo = "sha256", file = TRUE),
-  download_date        = as.character(Sys.Date()),
-  source_url           = SOURCE_URL,
+  download_date        = dl_date,
+  source_url           = src_url,
   upstream_commit_sha  = up_sha,
   upstream_commit_date = up_date,
   licence_spdx         = licence,

@@ -86,6 +86,15 @@
       x 1 snapshot with a ticker listed more than once.
       i First offending snapshot: "2020-01-01"
 
+# hd_sp500_membership: aborts on a trailing comma (strsplit drops the empty tail)
+
+    Code
+      hd_sp500_membership(p, min_members = 1L)
+    Condition
+      Error in `hd_sp500_membership()`:
+      x 1 snapshot with an empty ticker token or no tickers.
+      i First offending snapshot: "2020-01-01"
+
 # hd_sp500_membership: aborts on legacy SYM-YYYYMM marker tokens
 
     Code

@@ -9,6 +9,14 @@
 # INPUTS. The cached membership file (scripts/fetch_sp500_membership.R) and the
 # remote equity_daily parquet via the package (hd_lazy). Nothing is typed in.
 #
+# CAVEAT. share_covered is an UPPER bound on true coverage: a recycled ticker
+# (a different company reusing the symbol, #865) and an interior gap inside a
+# ticker's [first, last] span both count as covered. The survivorship gap
+# (1 - share_covered) is therefore a LOWER bound.
+#
+# EXIT STATUS. Aborts (non-zero) if any known-failed-name presence check row is
+# not PASS, after writing the CSVs and printing the table.
+#
 # OUTPUTS (derived statistics only; the raw membership file is never committed):
 #   coverage_by_snapshot.csv  one row per snapshot date
 #   coverage_by_year.csv      per calendar year: min / median / max share
@@ -62,3 +70,11 @@ print(as.data.frame(pick), row.names = FALSE)
 cat(sprintf("\nall snapshots: min %.3f, median %.3f, max %.3f (n = %d)\n",
             min(cov$share_covered), median(cov$share_covered),
             max(cov$share_covered), nrow(cov)))
+
+bad <- chk[chk$status != "PASS", , drop = FALSE]
+if (nrow(bad) > 0L) {
+  cli::cli_abort(c(
+    "x" = "Presence check failed for {nrow(bad)} name{?s}: {.val {bad$ticker}}.",
+    "i" = "Statuses: {.val {bad$status}}."
+  ))
+}

@@ -118,6 +118,15 @@ test_that("hd_sp500_membership: aborts on empty tokens and repeated tickers", {
   expect_snapshot(error = TRUE, hd_sp500_membership(p2, min_members = 1L))
 })
 
+test_that("hd_sp500_membership: aborts on a trailing comma (strsplit drops the empty tail)", {
+  tmp <- withr::local_tempdir()
+  p <- .sp_write(tmp, data.frame(date = "2020-01-01", tickers = "A,B,"))
+  expect_error(hd_sp500_membership(p, min_members = 1L), "empty ticker token")
+  expect_snapshot(error = TRUE, hd_sp500_membership(p, min_members = 1L))
+  p2 <- .sp_write(tmp, data.frame(date = "2020-01-01", tickers = "A,B, "), name = "m2.csv")
+  expect_error(hd_sp500_membership(p2, min_members = 1L), "empty ticker token")
+})
+
 test_that("hd_sp500_membership: aborts on legacy SYM-YYYYMM marker tokens", {
   tmp <- withr::local_tempdir()
   p <- .sp_write(tmp, data.frame(date = "2020-01-01", tickers = "A,B,C-201002"))
