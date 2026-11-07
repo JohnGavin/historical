@@ -80,13 +80,38 @@ test_that("appends exactly one survivorship-bias critique, then does nothing", {
   cur <- res$sharpe[res$universe == "current" & res$strategy == "OLMAR-1" &
                       res$period == "Full Period"]
   expect_match(after$finding, sprintf("OLMAR-1 Sharpe %.3f", cur), fixed = TRUE)
-  expect_match(after$finding, "232 of 501", fixed = TRUE)
+  mc <- utils::read.csv(here::here("docs", "olmar-survivorship-977",
+                                   "membership_classes.csv"))
+  n_abs <- sum(mc$n[mc$class %in% c("absent_from_equity_daily", "delisted_per_source")])
+  expect_match(after$finding, sprintf("%d of %d", n_abs, sum(mc$n)), fixed = TRUE)
+  expect_no_match(after$finding, "[0-9]th percentile")
   expect_match(after$finding, "issues/977", fixed = TRUE)
 
   second <- .run_sv(lg$dir)
   expect_equal(second$status, 1L)
   expect_true(any(grepl("written=0", second$out)))
   expect_equal(nrow(hd_rlog_query("critiques", base_dir = lg$dir)), nrow(after))
+})
+
+test_that("a later OLMAR results row does not make a re-run append a duplicate", {
+  .skip_unless_sv_runnable()
+  pkgload::load_all(here::here("packages", "historicaldata"), quiet = TRUE)
+  lg <- .make_sv_log()
+  first <- .run_sv(lg$dir)
+  expect_equal(first$status, 0L)
+  n1 <- nrow(hd_rlog_query("critiques", base_dir = lg$dir))
+  # Append one more OLMAR full-period results row under the same implementation.
+  impl <- hd_rlog_query("implementations", base_dir = lg$dir)
+  Sys.sleep(1.1)
+  hd_rlog_append("results", tibble::tibble(
+    uuid = hd_rlog_uuid(), parent_uuid = impl$uuid[[1]], strategy_id = "olmar",
+    partition = "full", cagr = 0.1, sharpe_hac = 0.78,
+    max_dd = 0.2, turnover_annual = 5, n_obs = 4063L,
+    results_db_run_date = Sys.Date(), extra_json = NA_character_
+  ), base_dir = lg$dir)
+  second <- .run_sv(lg$dir)
+  expect_equal(second$status, 1L)
+  expect_equal(nrow(hd_rlog_query("critiques", base_dir = lg$dir)), n1)
 })
 
 test_that("a pre-existing qualitative survivorship-bias row does not block the estimate", {

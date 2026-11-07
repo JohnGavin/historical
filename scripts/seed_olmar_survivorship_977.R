@@ -74,11 +74,14 @@ if (nrow(res_olmar) == 0L) indeterminate("no OLMAR full-period results rows via 
 res_olmar <- res_olmar[order(res_olmar$timestamp, res_olmar$uuid), , drop = FALSE]
 newest <- res_olmar[nrow(res_olmar), , drop = FALSE]
 n_total <- nrow(res_olmar)
+# The idempotency key is the stable CELL_REF_TAIL, matched as a fixed substring:
+# the full cell_ref embeds the row count at write time, which grows when a later
+# OLMAR results row is appended, so it cannot be the key.
 CELL_REF <- paste0("results:strategy_id=olmar partition=full (", n_total,
                    " rows); ", CELL_REF_TAIL)
 
-if (any(state$crit$cell_ref == CELL_REF & state$crit$parent_uuid %in% res_olmar$uuid,
-        na.rm = TRUE)) {
+if (any(grepl(CELL_REF_TAIL, state$crit$cell_ref, fixed = TRUE) &
+          state$crit$parent_uuid %in% res_olmar$uuid, na.rm = TRUE)) {
   cat("seed_olmar_survivorship_977: written=0 skipped=1\n")
   cat("  skipped (the survivorship size estimate is already recorded)\n")
   quit(save = "no", status = 1L)
@@ -121,21 +124,28 @@ dd <- function(s) deltas[deltas$strategy == s, , drop = FALSE]
 d_o <- dd("OLMAR-1"); d_e <- dd("EqualWeight")
 if (nrow(d_o) != 1L || nrow(d_e) != 1L) indeterminate("deltas.csv lacks the two strategy rows")
 
+# Window literals: neither the CSVs nor the log hold the test window, so these
+# come from scripts/olmar_survivorship_977.R (the producer: study window
+# 2010-2026, membership snapshot S&P 500 as of 2010-01-04).
+WINDOW <- "2010-2026"
+MEMBERS_AS_OF <- "2010-01-04"
+
+rng <- function(a, b) paste0(sprintf("%+.2f", min(a, b)), " to ", sprintf("%+.2f", max(a, b)))
 f3 <- function(x) sprintf("%.3f", x)
 f2 <- function(x) sprintf("%.2f", x)
 
 FINDING <- paste0(
   "SURVIVORSHIP SIZE ESTIMATE. Universe is a 2026 list of current mega-caps ",
-  "tested over 2010-2026; equity_daily has no delistings and ", n_absent, " of ",
-  n_members, " S&P 500 members as of 2010-01-04 are absent from it. Against ",
+  "tested over ", WINDOW, "; equity_daily has no delistings and ", n_absent, " of ",
+  n_members, " S&P 500 members as of ", MEMBERS_AS_OF, " are absent from it. Against ",
   n_draws, " random same-size universes of 2010 members present in the data, ",
-  "OLMAR-1 Sharpe ", f3(cur_o$sharpe), " is at the ", pct(cur_o$sharpe, do$sharpe),
-  "th percentile (median ", f3(stats::median(do$sharpe)), ") and equal-weight Sharpe ",
-  f3(cur_e$sharpe), " at the ", pct(cur_e$sharpe, de$sharpe), "th (median ",
+  "OLMAR-1 Sharpe ", f3(cur_o$sharpe), " is at percentile ", pct(cur_o$sharpe, do$sharpe),
+  " (median ", f3(stats::median(do$sharpe)), ") and equal-weight Sharpe ",
+  f3(cur_e$sharpe), " at percentile ", pct(cur_e$sharpe, de$sharpe), " (median ",
   f3(stats::median(de$sharpe)), "). Hindsight inflates the absolute Sharpe by ",
-  "about +", f2(cur_o$sharpe - stats::median(do$sharpe)), " to +", f2(d_o$d_sharpe),
-  " (OLMAR-1) and +", f2(cur_e$sharpe - stats::median(de$sharpe)), " to +",
-  f2(d_e$d_sharpe), " (equal-weight); it does not explain OLMAR-1's gap to ",
+  "about ", rng(cur_o$sharpe - stats::median(do$sharpe), d_o$d_sharpe),
+  " (OLMAR-1) and ", rng(cur_e$sharpe - stats::median(de$sharpe), d_e$d_sharpe),
+  " (equal-weight); it does not explain OLMAR-1's gap to ",
   "equal-weight (", f3(cur_o$sharpe - cur_e$sharpe), " vs random median ",
   f3(stats::median(gap_draw)), "). The delta is a floor: failed names cannot be ",
   "tested on this data. Liquidity-ranked alternative: OLMAR-1 Sharpe ",
