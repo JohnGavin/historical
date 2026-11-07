@@ -1,0 +1,6 @@
+"ticker","name","member_on","is_pit_member","in_price_universe","status"
+"BSC","Bear Stearns",2008-01-02,TRUE,FALSE,"PASS"
+"LEHMQ","Lehman Brothers",2008-01-02,TRUE,FALSE,"PASS"
+"WAMUQ","Washington Mutual",2008-01-02,TRUE,FALSE,"PASS"
+"ENRNQ","Enron",2001-06-01,TRUE,FALSE,"PASS"
+"WCOEQ","WorldCom",2002-01-02,TRUE,FALSE,"PASS"

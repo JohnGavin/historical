@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-11-07 (point-in-time S&P 500 membership universe replaces the stub, refs #816)
+
+- `hd_sp500_*` loaders in `packages/historicaldata/R/sp500_membership.R`
+  (membership, PIT universe, as-of lookup, known-delisted presence check,
+  coverage statistic); `scripts/fetch_sp500_membership.R` + committed manifest
+  (source fja05680/sp500, MIT; raw data stays local).
+- `R/plan_universe_pit.R`: stub removed; five real targets wired into
+  `docs/_targets.R`. `delisting_date` is the index-exit date only; reason and
+  price are unavailable from this source.
+- `scripts/olmar_survivorship_977.R` now reads membership through the package
+  (one home for the parser).
+- `explorations/pit_universe_coverage/`: share of PIT members with
+  `equity_daily` price data per snapshot (derived CSVs only).
+
 ## 2026-11-04 (ticker-recycling follow-ups: hd_fundamentals cik, provenance for snapshot-selected universes, refs #865)
 
 - `hd_fundamentals()` returns `cik`, accepts `cik =`, warns when one ticker

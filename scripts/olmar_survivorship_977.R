@@ -74,25 +74,20 @@
 
 #' Parse the constituents-history CSV: one row per change date, a `tickers`
 #' cell holding the comma-separated membership AFTER that change. A token
-#' `SYM-YYYYMM` means the source records SYM as removed in that month.
+#' `SYM-YYYYMM` means the source records SYM as removed in that month (legacy
+#' file layout only; the validated reader is the package's
+#' hd_sp500_read_snapshots(), which does not touch tokens).
 #' @noRd
 .osv_parse_membership <- function(path) {
-  if (!file.exists(path)) {
-    cli::cli_abort("membership file not found: {.path {path}}", call = NULL)
+  # One home (#816): the validated reader lives in the package
+  # (historicaldata::hd_sp500_read_snapshots). Load the package lazily so this
+  # script stays sourceable in tests, like .osv_sharpe() above.
+  if (!"historicaldata" %in% loadedNamespaces()) {
+    root <- if (is.null(.osv_env$root)) here::here() else .osv_env$root
+    suppressPackageStartupMessages(pkgload::load_all(
+      file.path(root, "packages", "historicaldata"), quiet = TRUE))
   }
-  d <- utils::read.csv(path, stringsAsFactors = FALSE, check.names = FALSE)
-  if (!identical(names(d), c("date", "tickers"))) {
-    cli::cli_abort(c(
-      "x" = "membership file must have exactly the columns date,tickers.",
-      "i" = "Found: {.val {names(d)}}"
-    ), call = NULL)
-  }
-  d$date <- as.Date(d$date, format = "%Y-%m-%d")
-  if (anyNA(d$date) || nrow(d) == 0L) {
-    cli::cli_abort(
-      "membership file has no rows or unparseable dates.", call = NULL)
-  }
-  d[order(d$date), , drop = FALSE]
+  historicaldata::hd_sp500_read_snapshots(path)
 }
 
 #' Tokens of the last snapshot dated on or before `asof`.
