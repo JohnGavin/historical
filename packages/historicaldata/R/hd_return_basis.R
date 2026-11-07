@@ -146,7 +146,10 @@ hd_return_basis <- function() {
     "Defense First", "total",
     "R/plan_backtest.R:155,276 port_ret = sum(allocation * ETF return) with weights c(0.4, 0.3, 0.2, 0.1) summing to 1 (or 100% SPY on the fallback): fully invested, no short leg, no zero-return cash months (BIL is only a momentum score), so the full rf is still the benchmark",
     "Research: SPY buy and hold (Defense First benchmark)", "total",
-    "R/plan_backtest.R:279 bench_ret = SPY adjusted-close monthly return (dividend-inclusive, no rf subtracted)"
+    "R/plan_backtest.R:279 bench_ret = SPY adjusted-close monthly return (dividend-inclusive, no rf subtracted)",
+    # --- #937 phase 3 item 2: Fama-French market factor used as a benchmark ---
+    "Benchmark: Fama-French Mkt-RF (market excess)", "excess",
+    "R/plan_drif.R and R/plan_factormax.R benchmark_ret = Fama-French Mkt-RF, the market return minus RF: already excess (R/plan_rafi.R:123 rebuilds the total market as Mkt_RF + RF)"
   )
   # Cash-weight column of each "blend" row (NA elsewhere). The column is
   # produced by the strategy's own constructing code from its exposure

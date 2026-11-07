@@ -200,10 +200,11 @@ plan_factormax <- function() {
 
         bench_ann <- prod(1 + df$benchmark_ret)^(12/n) - 1
         bench_vol <- sd(df$benchmark_ret) * sqrt(12)
-        # basis: excess (Mkt-RF); registry vocabulary for benchmarks tracked in #937 Phase 3
-        # Mkt-RF is ALREADY an excess return, so NO rf is deducted (#937,
-        # refs #919); deducting it again understated the benchmark.
-        bench_sharpe <- bench_ann / bench_vol
+        # basis: excess (Benchmark: Fama-French Mkt-RF (market excess))
+        # Mkt-RF is ALREADY an excess return, so the registry deducts NO rf
+        # (#937, refs #919); deducting it again understated the benchmark.
+        bench_rf <- mean(hd_rf_for_basis(df$rf_ret, "Benchmark: Fama-French Mkt-RF (market excess)")) * 12
+        bench_sharpe <- (bench_ann - bench_rf) / bench_vol
 
         tibble(
           period = label,
