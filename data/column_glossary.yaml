@@ -55,7 +55,7 @@ columns:
       - label: "hd_deflated_sharpe() docs (api-historicaldata.md)"
         url: "https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md"
       - label: "roxygen source: Two conventions for V"
-        url: "https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R"
+        url: "https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/falsification.R#L816"
       - label: "evidence: explorations/dsr_conventions/"
         url: "https://github.com/JohnGavin/historical/tree/main/explorations/dsr_conventions"
       - label: "PR 982"
