@@ -765,3 +765,22 @@ test_that("hd_alpaca_exit_controls reports absent tickers and is INDETERMINATE b
   expect_equal(sum(res$status == "ABSENT"), 3L)
   expect_error(hd_alpaca_exit_controls(.ep_truth()[1:12, ]), "INDETERMINATE")
 })
+
+test_that(".hd_env_flag parses explicitly and aborts on unknown values", {
+  f <- historicaldata:::.hd_env_flag
+  expect_false(f("X", ""))
+  for (v in c("1", "true", "TRUE", "yes")) expect_true(f("X", v))
+  for (v in c("0", "false", "FALSE", "no")) expect_false(f("X", v))
+  expect_error(f("ALPACA_FORCE_REFETCH", "maybe"), "maybe")
+})
+
+test_that(".hd_alpaca_request_digest changes when a ticker or window changes", {
+  d <- historicaldata:::.hd_alpaca_request_digest
+  s <- as.Date(c("2016-01-04", "2017-02-01", "2018-03-01"))
+  e <- s + 400L
+  base <- d(c("AAA", "BBB", "CCC"), s, e)
+  expect_match(base, "^[0-9a-f]{16}$")
+  expect_equal(d(c("CCC", "AAA", "BBB"), s[c(3, 1, 2)], e[c(3, 1, 2)]), base)  # order-free
+  expect_false(identical(d(c("AAA", "BBB", "ZZZ"), s, e), base))               # one ticker swapped
+  expect_false(identical(d(c("AAA", "BBB", "CCC"), s, e + c(0L, 0L, 1L)), base)) # one window moved
+})

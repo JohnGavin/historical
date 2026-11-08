@@ -22,6 +22,38 @@ hd_alpaca_bars_data_dir <- function() {
   path.expand(Sys.getenv("ALPACA_BARS_DIR", "~/.cache/historical/alpaca_exit_bars"))
 }
 
+#' Parse a boolean environment variable
+#'
+#' Empty or unset is `FALSE`; "1", "true", "TRUE", "yes" is `TRUE`; "0",
+#' "false", "FALSE", "no" is `FALSE`. Anything else aborts, naming the value.
+#' @param name Environment variable name.
+#' @param value The raw value (defaults to the variable's current value).
+#' @return `TRUE` or `FALSE`.
+#' @keywords internal
+.hd_env_flag <- function(name, value = Sys.getenv(name, "")) {
+  if (!nzchar(value) || value %in% c("0", "false", "FALSE", "no")) return(FALSE)
+  if (value %in% c("1", "true", "TRUE", "yes")) return(TRUE)
+  cli::cli_abort(c(
+    "x" = "{.envvar {name}} has unrecognised value {.val {value}}.",
+    "i" = "Use one of 1, true, TRUE, yes, 0, false, FALSE, no, or leave it unset."
+  ))
+}
+
+#' Digest of an Alpaca request set (tickers and their windows)
+#'
+#' sha256 of the sorted `ticker|win_start|win_end` lines, first 16 hex
+#' characters. Part of the fetch cache key: a changed ticker set or window
+#' changes it even when the ticker count does not.
+#' @param tickers,win_start,win_end Parallel vectors, one element per request.
+#' @return Character scalar, 16 hex characters.
+#' @keywords internal
+.hd_alpaca_request_digest <- function(tickers, win_start, win_end) {
+  lines <- sort(paste(tickers, format(win_start), format(win_end), sep = "|"),
+                method = "radix")
+  substr(digest::digest(paste(lines, collapse = "\n"), algo = "sha256",
+                        serialize = FALSE), 1L, 16L)
+}
+
 #' File name of the cached exit-bars parquet inside [hd_alpaca_bars_data_dir()]
 #' @return Character scalar.
 #' @keywords internal

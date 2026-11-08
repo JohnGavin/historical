@@ -41,7 +41,9 @@
 # row's and the manifest's `params` equal this run's, that file is not fetched.
 # A sha256 mismatch, a missing manifest row, or changed params ABORTS
 # (provenance cannot be vouched for); set ALPACA_FORCE_REFETCH=1 to fetch all
-# three again on purpose. A file that does not exist is fetched alone.
+# three again on purpose (parsed strictly: 1/true/TRUE/yes or 0/false/FALSE/no;
+# anything else aborts). The params include a digest of the ticker|window
+# request set. A file that does not exist is fetched alone.
 #
 # Usage, from the repo root:
 #   nix develop <repo> --command Rscript scripts/fetch_alpaca_exit_bars.R
@@ -83,7 +85,7 @@ cli::cli_inform(c(
   "i" = "{pre_start} earlier exit{?s} have no free price source and are not requested."
 ))
 
-force_refetch <- nzchar(Sys.getenv("ALPACA_FORCE_REFETCH", ""))
+force_refetch <- .hd_env_flag("ALPACA_FORCE_REFETCH")
 existing <- if (file.exists(MANIFEST_PATH)) {
   utils::read.csv(MANIFEST_PATH, stringsAsFactors = FALSE, colClasses = "character")
 } else NULL
@@ -160,8 +162,12 @@ fetch_bars <- function(adjustment) {
   bars
 }
 
-base_params <- sprintf("feed=%s;tickers=%d;window_days=%d;panel_start=%s",
-                       FEED, nrow(exits), rule$window_days, format(rule$panel_start))
+# request= is a digest of the sorted ticker|win_start|win_end lines, so a changed
+# ticker SET or changed windows (same count) cannot reuse a stale cache.
+request_digest <- .hd_alpaca_request_digest(exits$ticker, exits$win_start, exits$win_end)
+base_params <- sprintf("feed=%s;tickers=%d;request=%s;window_days=%d;panel_start=%s",
+                       FEED, nrow(exits), request_digest, rule$window_days,
+                       format(rule$panel_start))
 
 # ---- the three files --------------------------------------------------------
 m_raw <- ensure_file(
@@ -186,8 +192,8 @@ m_adj <- ensure_file(
 
 m_ca <- ensure_file(
   .hd_alpaca_exit_corp_actions_file_name(),
-  sprintf("start=%s;types=%s;tickers=%d", format(CA_START),
-          paste(CA_TYPES, collapse = ","), nrow(exits)),
+  sprintf("start=%s;types=%s;tickers=%d;request=%s", format(CA_START),
+          paste(CA_TYPES, collapse = ","), nrow(exits), request_digest),
   function() {
     hd_alpaca_corporate_actions(exits$ticker, CA_START, FETCH_END, types = CA_TYPES)
   }

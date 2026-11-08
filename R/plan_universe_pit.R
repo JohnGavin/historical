@@ -156,19 +156,25 @@ plan_universe_pit <- function() {
     # constants live in hd_alpaca_exit_rule(); a known failed name is forced to
     # exit_type = "failure_candidate". A ticker_change row has no price: join
     # it to new_ticker.
+    #
+    # The positive control GATES this target: 17 real leavers whose fate is
+    # known must get that exit_type (TWTR its 54.2 deal price, NBL acquirer
+    # CVX); hd_alpaca_exit_controls() aborts on any mismatch, or if fewer than
+    # 13 are present, so stk_exit_prices fails and everything downstream
+    # (stk_exit_coverage and every consumer) is skipped.
     targets::tar_target(stk_exit_prices, {
-      hd_alpaca_exit_prices(
+      prices <- hd_alpaca_exit_prices(
         stk_exit_bars,
         stk_exit_bars_adj,
         stk_exit_corp_actions,
         hd_sp500_exits(stk_universe_pit[, c("date", "ticker")]),
         known_failed = hd_sp500_known_delisted()$ticker
       )
+      hd_alpaca_exit_controls(prices)
+      prices
     }),
 
-    # Positive control (can go red): 17 real leavers whose fate is known must
-    # get that exit_type (TWTR its 54.2 deal price, NBL acquirer CVX); aborts on
-    # any mismatch, or if fewer than 13 are present.
+    # Reporting table of the control (the gate itself is inside stk_exit_prices).
     targets::tar_target(stk_exit_prices_controls, {
       hd_alpaca_exit_controls(stk_exit_prices)
     }),
