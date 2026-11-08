@@ -8,7 +8,7 @@
 # on the stocks that were ACTUALLY in the S&P 500 at the time, including those
 # that were later taken over or failed?
 #
-# THREE VARIANTS, same months (2016-02 .. latest), same MAX signal, same
+# THREE VARIANTS, same months (the common non-NA-rf months of all three), same MAX signal, same
 # deciles, same costs, same rf:
 #   biased     today's top-100-by-market-cap universe (stk_max_portfolio),
 #              restricted to the months the PIT variants cover.
@@ -36,7 +36,8 @@
 #                                member since 2016 (scripts/fetch_alpaca_member_bars.R)
 #   stk_pit_series          one adjusted-price series per security
 #   stk_pit_monthly         hd_pit_monthly_returns(): the PIT monthly returns
-#   stk_pit_excluded        securities excluded, with the reason, counted
+#   stk_pit_excluded        securities excluded, with the reason, counted (members
+#                           within the backtest window; n_all = all leavers)
 #   stk_pit_max_signal      MAX signal on the PIT series
 #   stk_pit_max_panel       signal x held-month returns, valid months only
 #   stk_pit_max_portfolio_upper / _lower
@@ -157,26 +158,45 @@ pit_biased_n_stocks <- function(max_signal, monthly, yms, n_deciles) {
 #' The comparison table: biased vs PIT upper vs PIT lower
 #'
 #' Metrics come from calc_backtest_metrics() with strategy "Stock MAX", exactly
-#' as stk_max_metrics (long-short, EXCESS basis: no rf deducted).
-#' @param biased,upper,lower The three portfolios over the same months.
+#' as stk_max_metrics (long-short, EXCESS basis: no rf deducted, so
+#' sharpe = cagr / vol). EVERY variant is measured over the COMMON set of months:
+#' months present in all three portfolios AND with a non-NA `rf_ret` (the biased
+#' universe and the rf series end earlier than the PIT bars). The window is shown
+#' in `first_ym`, `last_ym` and `n_months`.
+#' @param biased,upper,lower The three portfolios (`ym`, `port_ret`, `long_ret`,
+#'   `short_ret`, `rf_ret`).
 #' @param panel pit_max_panel() (for stocks per month and leaver-months).
 #' @param biased_n pit_biased_n_stocks().
-#' @return Tibble, one row per variant: variant, n_months, ann_return, ann_vol,
-#'   sharpe, max_dd, mean_n_stocks, n_takeover, n_failure_candidate, n_demotion
-#'   (leaver-months in the panel; NA for biased, which has none).
+#' @param min_months Abort when fewer common months remain (default 24).
+#' @return Tibble, one row per variant: variant, first_ym, last_ym, n_months,
+#'   ann_return, ann_vol, sharpe, max_dd, long_ann, short_ann (mean leg return
+#'   times 12), mean_n_stocks, n_takeover, n_failure_candidate, n_demotion
+#'   (leaver-months in the common window; NA for biased, which has none).
 #' @noRd
-pit_max_comparison <- function(biased, upper, lower, panel, biased_n) {
+pit_max_comparison <- function(biased, upper, lower, panel, biased_n,
+                               min_months = 24L) {
+  ok_rf <- function(p) p$ym[!is.na(p$rf_ret)]
+  common <- Reduce(intersect, list(
+    intersect(biased$ym, ok_rf(biased)),
+    intersect(upper$ym, ok_rf(upper)),
+    intersect(lower$ym, ok_rf(lower))
+  ))
+  common <- sort(common)
+  if (length(common) < min_months) {
+    cli::cli_abort(c(
+      "x" = "Only {length(common)} month{?s} are common to all three variants with a non-NA rf_ret; at least {min_months} are needed.",
+      "i" = "Check that the member bars, equity_daily and stk_rf overlap."
+    ))
+  }
+  panel <- panel[panel$ym %in% common, , drop = FALSE]
   one <- function(p, variant, mean_n, leavers) {
+    p <- p[p$ym %in% common, , drop = FALSE]
     m <- calc_backtest_metrics(p, "Full Period", strategy = "Stock MAX")
-    if (is.null(m)) {
-      cli::cli_abort(c(
-        "x" = "Variant {.val {variant}} has {nrow(p)} month{?s}; calc_backtest_metrics() needs at least 12.",
-        "i" = "Check that the member bars cover the period."
-      ))
-    }
     tibble::tibble(
-      variant = variant, n_months = m$months, ann_return = m$cagr,
+      variant = variant, first_ym = min(p$ym), last_ym = max(p$ym),
+      n_months = m$months, ann_return = m$cagr,
       ann_vol = m$vol, sharpe = m$sharpe, max_dd = m$max_dd,
+      long_ann = mean(p$long_ret) * 12, short_ann = mean(p$short_ret) * 12,
       mean_n_stocks = mean_n,
       n_takeover = leavers[["takeover"]],
       n_failure_candidate = leavers[["failure_candidate"]],
@@ -189,11 +209,35 @@ pit_max_comparison <- function(biased, upper, lower, panel, biased_n) {
                    demotion = cnt("demotion"))
   na_leavers <- c(takeover = NA_integer_, failure_candidate = NA_integer_,
                   demotion = NA_integer_)
+  biased_n <- biased_n[biased_n$ym %in% common, , drop = FALSE]
   dplyr::bind_rows(
     one(biased, "biased", mean(biased_n$n_stocks), na_leavers),
     one(upper, "pit_upper", pit_n, pit_leavers),
     one(lower, "pit_lower", pit_n, pit_leavers)
   )
+}
+
+#' Securities excluded from the PIT backtest, in-window and overall
+#'
+#' Leavers that left the index before the backtest window (`panel_start`) were
+#' never candidates for a held month, so the headline count is restricted to
+#' securities that were members at some snapshot on or after `panel_start`. The
+#' count over all securities stays in `n_all`, so nothing is hidden.
+#' @param excluded `attr(stk_pit_monthly, "excluded")`: `ticker` (permanent id),
+#'   `reason`.
+#' @param member_ids Permanent ids of securities that were members at a snapshot
+#'   on or after `panel_start`.
+#' @return Tibble: `reason`, `n_securities` (in-window), `n_all` (all).
+#' @noRd
+pit_excluded_summary <- function(excluded, member_ids) {
+  excluded |>
+    dplyr::group_by(reason) |>
+    dplyr::summarise(
+      n_securities = sum(ticker %in% member_ids),
+      n_all = dplyr::n(),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(dplyr::desc(n_securities), dplyr::desc(n_all))
 }
 
 plan_pit_max <- function() {
@@ -219,12 +263,12 @@ plan_pit_max <- function() {
       hd_pit_monthly_returns(stk_member_bars_adj, stk_universe_pit, stk_exit_prices)
     }),
 
-    # Coverage loss made visible: one row per exclusion reason.
+    # Coverage loss made visible: one row per exclusion reason, for securities
+    # that were members within the backtest window; `n_all` keeps the full count.
     targets::tar_target(stk_pit_excluded, {
-      ex <- attr(stk_pit_monthly, "excluded")
-      ex |>
-        dplyr::count(reason, name = "n_securities") |>
-        dplyr::arrange(dplyr::desc(n_securities))
+      win <- stk_universe_pit[stk_universe_pit$date >= historicaldata::hd_alpaca_exit_rule()$panel_start, ]
+      ids <- historicaldata:::.hd_pit_permanent_id(unique(win$ticker), stk_exit_prices)
+      pit_excluded_summary(attr(stk_pit_monthly, "excluded"), ids)
     }),
 
     targets::tar_target(stk_pit_max_signal, {

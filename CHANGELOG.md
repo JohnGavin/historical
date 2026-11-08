@@ -34,6 +34,7 @@ Report-only: nothing here feeds the leaderboard or the research registry
   `Manifest:` / `Now:` bullets. Cause: a params string is one long unbreakable
   token, so cli wrapped it onto a continuation line. It now lists only the
   key=value pieces that differ.
+- `stk_pit_max_comparison` now measures all three variants over the COMMON months (present in all portfolios and with non-NA `rf_ret`; aborts below 24), adds `first_ym`, `last_ym`, `long_ann`, `short_ann`; `stk_pit_excluded` counts only securities that were members on or after `panel_start` (`n_all` keeps the full count).
 - Not run here: the member-bars fetch (no network or credentials in the agent)
   and the targets build, so no table of results exists yet.
 

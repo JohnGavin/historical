@@ -135,7 +135,7 @@ test_that("pit_max_comparison: one row per variant, same metric code, leaver-mon
   biased <- up
   biased$port_ret <- biased$port_ret + 0.001
   biased_n <- tibble::tibble(ym = up$ym, n_stocks = 60L)
-  cmp <- pit_env$pit_max_comparison(biased, up, lo, panel, biased_n)
+  cmp <- pit_env$pit_max_comparison(biased, up, lo, panel, biased_n, min_months = 12L)
   expect_equal(cmp$variant, c("biased", "pit_upper", "pit_lower"))
   expect_equal(cmp$n_months, rep(14L, 3L))
   ref <- pit_env$calc_backtest_metrics(up, "Full Period", strategy = "Stock MAX")
@@ -147,14 +147,64 @@ test_that("pit_max_comparison: one row per variant, same metric code, leaver-mon
   expect_lt(cmp$ann_return[3L], cmp$ann_return[2L])   # lower bound is worse
 })
 
-test_that("pit_max_comparison aborts when a variant has fewer than 12 months", {
+test_that("pit_max_comparison: every variant uses the common non-NA-rf months only", {
+  set.seed(2)
+  panel <- .pm_panel(n_months = 32L)         # months 2020-02 .. 2022-09
+  panel$ret_upper <- panel$ret_upper + rnorm(nrow(panel), 0, 0.01)
+  panel$ret_lower <- panel$ret_upper
+  panel$ret_lower[panel$is_exit] <- -1
+  rf <- .pm_rf(30L)                          # 2020-01 .. 2022-06: last 3 panel months NA
+  rf$rf_ret[10L] <- NA_real_                 # 2020-10 NA as well
+  up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, rf)
+  lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, rf)
+  biased <- up[4:29, ]                       # the biased universe starts later, ends earlier
+  biased$port_ret <- biased$port_ret + 0.002
+  biased_n <- tibble::tibble(ym = biased$ym, n_stocks = 60L)
+  cmp <- pit_env$pit_max_comparison(biased, up, lo, panel, biased_n)
+  common <- setdiff(biased$ym, "2020-10")
+  expect_length(common, 25L)
+  expect_equal(cmp$n_months, rep(25L, 3L))
+  expect_equal(cmp$first_ym, rep(min(common), 3L))
+  expect_equal(cmp$last_ym, rep(max(common), 3L))
+  ref <- pit_env$calc_backtest_metrics(up[up$ym %in% common, ], "Full Period",
+                                       strategy = "Stock MAX")
+  expect_equal(cmp$sharpe[2L], ref$sharpe)
+  expect_equal(cmp$ann_return[2L], ref$cagr)
+  ub <- up[up$ym %in% common, ]
+  expect_equal(cmp$long_ann[2L], mean(ub$long_ret) * 12)
+  expect_equal(cmp$short_ann[2L], mean(ub$short_ret) * 12)
+  # Leaver-months are counted in the common window only: the failure sits in
+  # 2020-02, which is before the biased start, so it drops out.
+  expect_equal(cmp$n_failure_candidate, c(NA, 0L, 0L))
+})
+
+test_that("pit_max_comparison aborts when fewer than 24 common non-NA-rf months remain", {
   panel <- .pm_panel(n_months = 3L)
   up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, .pm_rf())
   lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, .pm_rf())
   expect_error(
     pit_env$pit_max_comparison(up, up, lo, panel, tibble::tibble(ym = up$ym, n_stocks = 50L)),
-    "at least 12"
+    "at least 24"
   )
+  # 26 months, but 3 NA rf months leave 23 common: still an abort.
+  panel <- .pm_panel(n_months = 26L)
+  rf <- .pm_rf(30L)
+  rf$rf_ret[c(5L, 6L, 7L)] <- NA_real_
+  up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, rf)
+  lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, rf)
+  expect_error(
+    pit_env$pit_max_comparison(up, up, lo, panel, tibble::tibble(ym = up$ym, n_stocks = 50L)),
+    "Only 23 months"
+  )
+})
+
+test_that("pit_excluded_summary counts in-window securities and keeps the full count", {
+  ex <- tibble::tibble(ticker = c("A", "B", "C", "D", "E"),
+                       reason = c("no_bars", "no_bars", "no_bars", "failure_no_bars", "failure_no_bars"))
+  out <- pit_env$pit_excluded_summary(ex, member_ids = c("A", "D", "Z"))
+  expect_equal(out$reason, c("no_bars", "failure_no_bars"))   # tie: larger n_all first
+  expect_equal(out$n_securities, c(1L, 1L))
+  expect_equal(out$n_all, c(3L, 2L))
 })
 
 test_that("plan_pit_max defines the report targets and none feeds the leaderboard", {
