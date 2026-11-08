@@ -69,3 +69,13 @@
       x 1 takeover or failure exit cannot be priced: "TTT".
       i Each needs last_trade_date, a positive last_close, exit_price_upper and exit_price_lower.
 
+# hd_alpaca_member_bars_adj_path aborts naming the fetch script when absent
+
+    Code
+      hd_alpaca_member_bars_adj_path(tmp)
+    Condition
+      Error in `hd_alpaca_member_bars_adj_path()`:
+      x Alpaca member-bars file not found: '<TMP>/alpaca_member_bars_adj.parquet'.
+      i Fetch it first (needs `ALPACA_KEY` and `ALPACA_SECRET`): `Rscript scripts/fetch_alpaca_member_bars.R`
+      i Or set `ALPACA_BARS_DIR` to a directory that holds 'alpaca_member_bars_adj.parquet'.
+

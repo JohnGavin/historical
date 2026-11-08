@@ -264,3 +264,15 @@ test_that("hd_pit_price_series splices renamed tickers and clips at the last tra
   expect_equal(new$adj_close, c(100, 102, 102, 104))   # 2 = 102/51
   expect_equal(max(s$date[s$ticker == "TTT"]), as.Date("2020-02-20"))
 })
+
+test_that("hd_alpaca_member_bars_adj_path aborts naming the fetch script when absent", {
+  tmp <- withr::local_tempdir()
+  expect_snapshot(
+    error = TRUE,
+    hd_alpaca_member_bars_adj_path(tmp),
+    transform = function(x) gsub(tmp, "<TMP>", x, fixed = TRUE)
+  )
+  file.create(file.path(tmp, "alpaca_member_bars_adj.parquet"))
+  expect_equal(hd_alpaca_member_bars_adj_path(tmp),
+               file.path(tmp, "alpaca_member_bars_adj.parquet"))
+})
