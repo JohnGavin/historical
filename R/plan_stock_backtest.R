@@ -126,14 +126,24 @@ stk_drif_month_features <- function(daily, target_ym, monthly, lb = 21L, min_day
 #' @param cost_per_trade Cost per trade as fraction (default 0.005 = 0.50%)
 #' @param borrow_rate_annual Annual borrow cost for short positions (default 0.03 = 3%)
 #' @param max_monthly_ret Winsorise monthly returns at ±this (default 0.20 = 20%)
+#' @param winsorise_exits If `FALSE` and `df` has a logical `is_exit` column,
+#'   rows with `is_exit == TRUE` (a stock's final month when it was taken over
+#'   or failed, #1041) are NOT winsorised, so a -100% failure survives into the
+#'   portfolio return; every other row is clipped as usual. Default `TRUE`: all
+#'   rows clipped, as before (no change for existing callers).
 #' @return Tibble with ym, port_ret, long_ret, short_ret, n_long, n_short, turnover, total_cost
 portfolio_longshort <- function(df, long_decile = 1L, short_decile = 10L,
                                 cost_per_trade = 0.005,
                                 borrow_rate_annual = 0.03,
-                                max_monthly_ret = 0.20) {
+                                max_monthly_ret = 0.20,
+                                winsorise_exits = TRUE) {
   # Option 2: Winsorise extreme monthly returns
+  exempt <- if (!winsorise_exits && "is_exit" %in% names(df)) df$is_exit %in% TRUE else rep(FALSE, nrow(df))
   df <- df |>
-    dplyr::mutate(monthly_ret = pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret))
+    dplyr::mutate(monthly_ret = ifelse(
+      exempt, monthly_ret,
+      pmin(pmax(monthly_ret, -max_monthly_ret), max_monthly_ret)
+    ))
 
   # Option 4: Estimate turnover per decile per month
   # Count tickers per decile-month, assume ~80% turnover (conservative for monthly sort)
