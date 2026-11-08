@@ -122,6 +122,17 @@ test_that("pit_max_panel keeps only months with at least n_deciles * 5 stocks an
   expect_equal(unique(out2$ym), "2020-02")
 })
 
+# A current-members portfolio for the tests: same months, no exits, a slightly
+# different return level so the variants are distinguishable.
+.pm_current <- function(panel, rf, shift = 0.003) {
+  ok <- panel
+  ok$ret_upper <- ok$ret_upper + shift
+  ok$ret_lower <- ok$ret_upper
+  ok$exit_type <- NA_character_
+  ok$is_exit <- FALSE
+  list(panel = ok, port = pit_env$pit_max_portfolio(ok, "upper", .pm_params, rf))
+}
+
 test_that("pit_max_comparison: one row per variant, same metric code, leaver-months counted", {
   panel <- .pm_panel(n_months = 14L)
   # Month-varying returns so the volatility is not zero.
@@ -132,22 +143,26 @@ test_that("pit_max_comparison: one row per variant, same metric code, leaver-mon
   rf <- .pm_rf()
   up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, rf)
   lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, rf)
+  cur <- .pm_current(panel, rf)
   biased <- up
   biased$port_ret <- biased$port_ret + 0.001
   biased_n <- tibble::tibble(ym = up$ym, n_stocks = 60L)
-  cmp <- pit_env$pit_max_comparison(biased, up, lo, panel, biased_n, min_months = 12L)
-  expect_equal(cmp$variant, c("biased", "pit_upper", "pit_lower"))
-  expect_equal(cmp$n_months, rep(14L, 3L))
+  cmp <- pit_env$pit_max_comparison(biased, cur$port, up, lo, panel, cur$panel,
+                                    biased_n, min_months = 12L)
+  expect_equal(cmp$variant, c("biased", "current_members", "pit_upper", "pit_lower"))
+  expect_equal(cmp$n_months, rep(14L, 4L))
   ref <- pit_env$calc_backtest_metrics(up, "Full Period", strategy = "Stock MAX")
-  expect_equal(cmp$sharpe[2L], ref$sharpe)
-  expect_equal(cmp$ann_return[2L], ref$cagr)
-  expect_equal(cmp$mean_n_stocks, c(60, 50, 50))
-  expect_equal(cmp$n_failure_candidate, c(NA, 1L, 1L))
-  expect_equal(cmp$n_takeover, c(NA, 0L, 0L))
-  expect_lt(cmp$ann_return[3L], cmp$ann_return[2L])   # lower bound is worse
+  expect_equal(cmp$sharpe[3L], ref$sharpe)
+  expect_equal(cmp$ann_return[3L], ref$cagr)
+  ref_cur <- pit_env$calc_backtest_metrics(cur$port, "Full Period", strategy = "Stock MAX")
+  expect_equal(cmp$ann_return[2L], ref_cur$cagr)
+  expect_equal(cmp$mean_n_stocks, c(60, 50, 50, 50))
+  expect_equal(cmp$n_failure_candidate, c(NA, NA, 1L, 1L))
+  expect_equal(cmp$n_takeover, c(NA, NA, 0L, 0L))
+  expect_lt(cmp$ann_return[4L], cmp$ann_return[3L])   # lower bound is worse
 })
 
-test_that("pit_max_comparison: every variant uses the common non-NA-rf months only", {
+test_that("pit_max_comparison: every variant uses the common non-NA-rf months of ALL FOUR", {
   set.seed(2)
   panel <- .pm_panel(n_months = 32L)         # months 2020-02 .. 2022-09
   panel$ret_upper <- panel$ret_upper + rnorm(nrow(panel), 0, 0.01)
@@ -160,42 +175,196 @@ test_that("pit_max_comparison: every variant uses the common non-NA-rf months on
   biased <- up[4:29, ]                       # the biased universe starts later, ends earlier
   biased$port_ret <- biased$port_ret + 0.002
   biased_n <- tibble::tibble(ym = biased$ym, n_stocks = 60L)
-  cmp <- pit_env$pit_max_comparison(biased, up, lo, panel, biased_n)
-  common <- setdiff(biased$ym, "2020-10")
-  expect_length(common, 25L)
-  expect_equal(cmp$n_months, rep(25L, 3L))
-  expect_equal(cmp$first_ym, rep(min(common), 3L))
-  expect_equal(cmp$last_ym, rep(max(common), 3L))
+  cur <- .pm_current(panel, rf)
+  # The current-members portfolio starts even later and ends earlier still.
+  cur_port <- cur$port[6:27, ]
+  cmp <- pit_env$pit_max_comparison(biased, cur_port, up, lo, panel, cur$panel,
+                                    biased_n, min_months = 12L)
+  common <- setdiff(intersect(biased$ym, cur_port$ym), "2020-10")
+  expect_length(common, 21L)
+  expect_equal(cmp$n_months, rep(21L, 4L))
+  expect_equal(cmp$first_ym, rep(min(common), 4L))
+  expect_equal(cmp$last_ym, rep(max(common), 4L))
   ref <- pit_env$calc_backtest_metrics(up[up$ym %in% common, ], "Full Period",
                                        strategy = "Stock MAX")
-  expect_equal(cmp$sharpe[2L], ref$sharpe)
-  expect_equal(cmp$ann_return[2L], ref$cagr)
+  expect_equal(cmp$sharpe[3L], ref$sharpe)
+  expect_equal(cmp$ann_return[3L], ref$cagr)
   ub <- up[up$ym %in% common, ]
-  expect_equal(cmp$long_ann[2L], mean(ub$long_ret) * 12)
-  expect_equal(cmp$short_ann[2L], mean(ub$short_ret) * 12)
+  expect_equal(cmp$long_ann[3L], mean(ub$long_ret) * 12)
+  expect_equal(cmp$short_ann[3L], mean(ub$short_ret) * 12)
+  cb <- cur_port[cur_port$ym %in% common, ]
+  expect_equal(cmp$long_ann[2L], mean(cb$long_ret) * 12)
   # Leaver-months are counted in the common window only: the failure sits in
   # 2020-02, which is before the biased start, so it drops out.
-  expect_equal(cmp$n_failure_candidate, c(NA, 0L, 0L))
+  expect_equal(cmp$n_failure_candidate, c(NA, NA, 0L, 0L))
 })
 
 test_that("pit_max_comparison aborts when fewer than 24 common non-NA-rf months remain", {
   panel <- .pm_panel(n_months = 3L)
-  up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, .pm_rf())
-  lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, .pm_rf())
-  expect_error(
-    pit_env$pit_max_comparison(up, up, lo, panel, tibble::tibble(ym = up$ym, n_stocks = 50L)),
-    "at least 24"
-  )
+  rf <- .pm_rf()
+  up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, rf)
+  lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, rf)
+  bn <- tibble::tibble(ym = up$ym, n_stocks = 50L)
+  expect_error(pit_env$pit_max_comparison(up, up, up, lo, panel, panel, bn), "at least 24")
   # 26 months, but 3 NA rf months leave 23 common: still an abort.
   panel <- .pm_panel(n_months = 26L)
   rf <- .pm_rf(30L)
   rf$rf_ret[c(5L, 6L, 7L)] <- NA_real_
   up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, rf)
   lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, rf)
-  expect_error(
-    pit_env$pit_max_comparison(up, up, lo, panel, tibble::tibble(ym = up$ym, n_stocks = 50L)),
-    "Only 23 months"
+  bn <- tibble::tibble(ym = up$ym, n_stocks = 50L)
+  expect_error(pit_env$pit_max_comparison(up, up, up, lo, panel, panel, bn), "Only 23 months")
+  # ONE short variant is enough to abort the four-way comparison.
+  expect_error(pit_env$pit_max_comparison(up, up[1:10, ], up, lo, panel, panel, bn),
+               "Only 7 months")
+})
+
+test_that("pit_diff_stats: a constant +0.01 monthly difference gives annualised mean 0.12", {
+  st <- pit_env$pit_diff_stats(rep(0.01, 48L), B = 200L)
+  expect_equal(st$mean_ann, 0.12)
+  expect_equal(st$n_months, 48L)
+  # No variation: the bootstrap interval collapses on the mean.
+  expect_equal(st$ci_lo, 0.12)
+  expect_equal(st$ci_hi, 0.12)
+})
+
+test_that("pit_diff_stats: an iid-noise difference has a small t and an interval around 0", {
+  set.seed(7)
+  d <- rnorm(240L, 0, 0.02)
+  st <- pit_env$pit_diff_stats(d, B = 2000L)
+  expect_lt(abs(st$t_plain), 3)
+  expect_lt(abs(st$t_nw), 3)
+  expect_lt(st$ci_lo, 0)
+  expect_gt(st$ci_hi, 0)
+  expect_equal(st$mean_ann, mean(d) * 12)
+  # A real +1.5 sd drift is detected: the same noise shifted has a large t.
+  big <- pit_env$pit_diff_stats(d + 0.03, B = 500L)
+  expect_gt(big$t_plain, 5)
+  expect_gt(big$ci_lo, 0)
+})
+
+test_that("pit_diff_stats: Newey-West t equals the plain t when lags = 0", {
+  set.seed(11)
+  d <- rnorm(100L, 0.002, 0.02)
+  st <- pit_env$pit_diff_stats(d, lags = 0L, B = 100L)
+  expect_equal(st$t_nw, st$t_plain)
+  # With autocorrelated data and lags the two differ.
+  ar <- as.numeric(stats::arima.sim(list(ar = 0.6), n = 200L)) * 0.01 + 0.002
+  st6 <- pit_env$pit_diff_stats(ar, lags = 6L, B = 100L)
+  expect_false(isTRUE(all.equal(st6$t_nw, st6$t_plain)))
+  expect_lt(abs(st6$t_nw), abs(st6$t_plain))   # positive autocorrelation widens the SE
+})
+
+test_that("pit_diff_stats: the bootstrap is reproducible under a seed and validates input", {
+  d <- c(0.01, -0.02, 0.03, 0.0, 0.015, -0.01, 0.02, 0.005)
+  set.seed(1041L); a <- pit_env$pit_diff_stats(d, B = 500L)
+  set.seed(1041L); b <- pit_env$pit_diff_stats(d, B = 500L)
+  expect_equal(a, b)
+  expect_error(pit_env$pit_diff_stats(c(0.1, NA, 0.2)), "without NA")
+  expect_error(pit_env$pit_diff_stats(c(0.1, 0.2)), "at least 3")
+})
+
+test_that("pit_max_decomposition: three effects x three legs, differences of the right pair", {
+  set.seed(3)
+  panel <- .pm_panel(n_months = 30L)
+  panel$ret_upper <- panel$ret_upper + rnorm(nrow(panel), 0, 0.01)
+  panel$ret_lower <- panel$ret_upper
+  panel$ret_lower[panel$is_exit] <- -1
+  rf <- .pm_rf(40L)
+  up <- pit_env$pit_max_portfolio(panel, "upper", .pm_params, rf)
+  lo <- pit_env$pit_max_portfolio(panel, "lower", .pm_params, rf)
+  cur <- .pm_current(panel, rf, shift = 0.003)
+  biased <- up
+  biased$port_ret <- biased$port_ret + 0.005
+  biased$long_ret <- biased$long_ret + 0.005
+  set.seed(1041L)
+  dec <- pit_env$pit_max_decomposition(biased, cur$port, up, lo, lags = 6L, block = 6L, B = 300L)
+  expect_equal(nrow(dec), 9L)
+  expect_equal(unique(dec$comparison),
+               c("biased - current_members", "current_members - pit_upper",
+                 "pit_upper - pit_lower"))
+  expect_equal(unique(dec$effect), c("size / concentration", "survivorship", "failure bound"))
+  expect_equal(dec$leg[1:3], c("long", "short", "long_short"))
+  expect_true(all(dec$n_months == 30L))
+  # survivorship long leg: current - upper, annualised mean.
+  row <- dec[dec$comparison == "current_members - pit_upper" & dec$leg == "long", ]
+  expect_equal(row$mean_ann, mean(cur$port$long_ret - up$long_ret) * 12)
+  # size long-short: (up + 0.005) - current on port_ret.
+  row2 <- dec[dec$comparison == "biased - current_members" & dec$leg == "long_short", ]
+  expect_equal(row2$mean_ann, mean(biased$port_ret - cur$port$port_ret) * 12)
+  # failure bound: lower is worse only in the failure month, so the mean is > 0.
+  row3 <- dec[dec$comparison == "pit_upper - pit_lower" & dec$leg == "long", ]
+  expect_gt(row3$mean_ann, 0)
+  expect_error(pit_env$pit_max_decomposition(up, cur$port[1:5, ], up, lo), "at least 24")
+})
+
+# Alpaca returns a renamed company's FULL history under its CURRENT symbol, and an
+# old symbol may later be reused by another company (HCP: Healthpeak, then
+# HashiCorp). The current_members variant therefore uses ONLY today's symbols and
+# never splices a rename. All data here is SYNTHETIC.
+.cm_fixture <- function() {
+  # Semi-monthly bars (mid-month and month-end): consecutive bars are at most 16
+  # days apart, so hd_trim_symbol_reuse() sees no gap inside a real history.
+  me <- as.Date(c("2020-01-31", "2020-02-28", "2020-03-31", "2020-04-30", "2020-05-29", "2020-06-30"))
+  mid <- me - 14L
+  bars <- function(sym, idx, closes) {
+    d <- as.Date(c(rbind(mid[idx], me[idx])), origin = "1970-01-01")
+    tibble::tibble(symbol = sym, date = d, close = rep(closes, each = 2L), volume = 1000)
+  }
+  b_close <- c(100, 110, 99, 120, 130, 143)
+  b <- dplyr::bind_rows(
+    bars("B", 1:6, b_close),                                # current ticker, full history
+    bars("A", 1:2, c(10, 12)),                              # B's old symbol: real bars ...
+    bars("A", 5:6, c(500, 450)),                            # ... gap ... another company's tail
+    bars("C", 1:6, c(50, 51, 52, 53, 54, 55)),
+    bars("GONE", 1:6, rep(5, 6))
   )
+  uni <- tibble::tibble(
+    ticker = c("B", "GONE", "B", "C"),
+    date = as.Date(c("2019-06-30", "2019-06-30", "2020-06-30", "2020-06-30"))
+  )
+  ex <- tibble::tibble(
+    ticker = c("A", "GONE"), index_exit_date = as.Date(c("2020-02-29", "2020-03-31")),
+    exit_type = c("ticker_change", "takeover"), new_ticker = c("B", NA_character_),
+    last_trade_date = as.Date(c(NA, "2020-06-30")), last_close = c(NA, 5),
+    exit_price_upper = c(NA, 6), exit_price_lower = c(NA, 0), has_bars = TRUE
+  )
+  list(bars = b, uni = uni, ex = ex)
+}
+
+test_that("pit_current_member_bars keeps only today's symbols, then trims symbol reuse", {
+  f <- .cm_fixture()
+  out <- pit_env$pit_current_member_bars(f$bars, f$uni)
+  expect_setequal(unique(out$symbol), c("B", "C"))          # no A, no GONE
+  expect_s3_class(attr(out, "trimmed"), "data.frame")
+  # Trim runs AFTER the filter: a current symbol reused by another company is trimmed.
+  d <- dplyr::bind_rows(
+    f$bars[f$bars$symbol == "C", ],
+    tibble::tibble(symbol = "B", date = as.Date(c("2016-01-29", "2016-02-29", "2020-05-29")),
+                   close = c(7, 7, 130), volume = 1000)
+  )
+  out2 <- pit_env$pit_current_member_bars(d, f$uni)
+  expect_equal(out2$date[out2$symbol == "B"], as.Date("2020-05-29"))
+  expect_equal(attr(out2, "trimmed")$symbol, "B")
+})
+
+test_that("pit_current_members_monthly: B's series is B's own bars, no old-symbol rows", {
+  f <- .cm_fixture()
+  cb <- pit_env$pit_current_member_bars(f$bars, f$uni)
+  ser <- hd_pit_price_series(cb, f$ex[0L, , drop = FALSE])
+  sb <- ser[ser$ticker == "B", ]
+  own <- f$bars[f$bars$symbol == "B", ]
+  expect_equal(sb$date, own$date)                           # exactly B's dates
+  expect_equal(sb$adj_close, own$close)                     # no A rows, no rescaling
+  expect_false("A" %in% ser$ticker)
+  out <- pit_env$pit_current_members_monthly(cb, f$uni, f$ex, as.Date("2016-01-04"))
+  expect_setequal(out$ticker, c("B", "C"))                  # A and GONE are not securities
+  expect_true(all(is.na(out$exit_type)))
+  expect_equal(out$ret_upper, out$ret_lower)
+  b_mar <- out[out$ticker == "B" & out$ym == "2020-03", ]
+  expect_equal(b_mar$ret_upper, 99 / 110 - 1)
+  b_may <- out[out$ticker == "B" & out$ym == "2020-05", ]
+  expect_equal(b_may$ret_upper, 130 / 120 - 1)              # not A's 500 tail
 })
 
 test_that("pit_excluded_summary counts in-window securities and keeps the full count", {
@@ -214,9 +383,14 @@ test_that("plan_pit_max defines the report targets and none feeds the leaderboar
   nm <- vapply(tg, function(t) t$settings$name, character(1))
   expect_true(all(c("stk_member_bars_adj_file", "stk_member_bars_adj", "stk_pit_monthly",
                     "stk_pit_max_portfolio_upper", "stk_pit_max_portfolio_lower",
-                    "stk_max_portfolio_biased_2016", "stk_pit_max_comparison") %in% nm))
+                    "stk_max_portfolio_biased_2016", "stk_pit_max_comparison",
+                    "stk_current_member_bars_adj_file", "stk_current_member_bars_adj",
+                    "stk_current_member_trimmed", "stk_current_members_monthly",
+                    "stk_current_members_max_portfolio",
+                    "stk_pit_max_decomposition") %in% nm))
   src <- paste(readLines(here::here("R/plan_pit_max.R")), collapse = "\n")
   code <- gsub("#[^\n]*", "", src)
   expect_false(grepl("register_runs|leaderboard", code))
   expect_equal(tg[[which(nm == "stk_member_bars_adj_file")]]$settings$format, "file")
+  expect_equal(tg[[which(nm == "stk_current_member_bars_adj_file")]]$settings$format, "file")
 })

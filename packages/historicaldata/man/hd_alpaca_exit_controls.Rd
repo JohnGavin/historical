@@ -37,6 +37,7 @@ Other alpaca:
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
 \code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_current_member_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_corp_actions_path}()},

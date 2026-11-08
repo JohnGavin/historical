@@ -61,6 +61,7 @@ early if either is missing.
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
+\code{\link{hd_alpaca_current_member_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_controls}()},
