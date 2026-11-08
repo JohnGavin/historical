@@ -27,6 +27,7 @@ ends at its \code{last_trade_date}.
 }
 \seealso{
 Other pit: 
-\code{\link{hd_pit_monthly_returns}()}
+\code{\link{hd_pit_monthly_returns}()},
+\code{\link{hd_trim_symbol_reuse}()}
 }
 \concept{pit}

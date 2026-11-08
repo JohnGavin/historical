@@ -64,6 +64,7 @@ no bars of its own).
 }
 \seealso{
 Other pit: 
-\code{\link{hd_pit_price_series}()}
+\code{\link{hd_pit_price_series}()},
+\code{\link{hd_trim_symbol_reuse}()}
 }
 \concept{pit}

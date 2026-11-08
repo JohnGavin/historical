@@ -186,6 +186,60 @@ hd_pit_price_series <- function(bars_adj, exit_prices) {
   .hd_pit_series(bars_adj, exit_prices)
 }
 
+#' Drop the bars of an earlier company that used the same ticker symbol
+#'
+#' A ticker can belong to an earlier, different company: an old firm is
+#' delisted and the symbol is reused years later (SNDK was SanDisk until 2016
+#' and is the 2025 spin-off now). Per symbol, among bars with `volume > 0`, if
+#' two consecutive trading bars are more than `max_gap_days` calendar days
+#' apart, only the bars from the LAST such gap onward are kept; everything
+#' before it (including zero-volume bars) is dropped.
+#'
+#' Symbols are treated one at a time, so the old symbol of a rename (whose
+#' bars end at the rename and have no internal gap) is unaffected; call this
+#' on the bars BEFORE they are spliced into one series per security (see
+#' [hd_pit_price_series()]).
+#'
+#' @param bars Daily bars: `symbol`, Date `date`, numeric `close` and `volume`,
+#'   no `NA` (as from [hd_alpaca_bars()]).
+#' @param max_gap_days A single positive number: the longest calendar gap
+#'   between consecutive trading bars that is still one company. Default 30.
+#' @return `bars` without the dropped rows, with the attribute `trimmed`: a
+#'   tibble `symbol`, `dropped_from` (Date), `dropped_to` (Date), `n_dropped`
+#'   (integer), one row per trimmed symbol (zero rows when none).
+#' @family pit
+#' @export
+hd_trim_symbol_reuse <- function(bars, max_gap_days = 30L) {
+  .hd_check_exit_bars(bars, "bars")
+  if (!is.numeric(max_gap_days) || length(max_gap_days) != 1L ||
+      is.na(max_gap_days) || max_gap_days <= 0) {
+    cli::cli_abort(c(
+      "x" = "{.arg max_gap_days} must be a single positive number.",
+      "i" = "Got {.val {max_gap_days}}."
+    ))
+  }
+  empty <- tibble::tibble(symbol = character(), dropped_from = as.Date(character()),
+                          dropped_to = as.Date(character()), n_dropped = integer())
+  cut_by_sym <- vapply(split(seq_len(nrow(bars)), bars$symbol), function(i) {
+    d <- sort(unique(as.numeric(bars$date[i][bars$volume[i] > 0])))
+    big <- which(diff(d) > max_gap_days)
+    if (length(big) == 0L) NA_real_ else d[max(big) + 1L]
+  }, numeric(1))
+  cut <- unname(cut_by_sym[bars$symbol])
+  drop <- !is.na(cut) & as.numeric(bars$date) < cut
+  trimmed <- empty
+  if (any(drop)) {
+    gone <- bars[drop, , drop = FALSE]
+    trimmed <- dplyr::bind_rows(lapply(split(gone, gone$symbol), function(g) {
+      tibble::tibble(symbol = g$symbol[1L], dropped_from = min(g$date),
+                     dropped_to = max(g$date), n_dropped = nrow(g))
+    }))
+  }
+  out <- bars[!drop, , drop = FALSE]
+  attr(out, "trimmed") <- trimmed
+  out
+}
+
 #' Point-in-time monthly returns for S&P 500 members, with exit bounds
 #'
 #' One row per security and HELD month. A security is in the universe at the
