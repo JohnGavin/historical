@@ -267,7 +267,10 @@ plan_pit_max <- function() {
     # that were members within the backtest window; `n_all` keeps the full count.
     targets::tar_target(stk_pit_excluded, {
       win <- stk_universe_pit[stk_universe_pit$date >= historicaldata::hd_alpaca_exit_rule()$panel_start, ]
-      ids <- historicaldata:::.hd_pit_permanent_id(unique(win$ticker), stk_exit_prices)
+      # Permanent ids (rename chains) as in hd_pit_monthly_returns(); the helper
+      # is internal to the package, so it is fetched explicitly, not via `:::`.
+      pid <- utils::getFromNamespace(".hd_pit_permanent_id", "historicaldata")
+      ids <- pid(unique(win$ticker), stk_exit_prices)
       pit_excluded_summary(attr(stk_pit_monthly, "excluded"), ids)
     }),
 
