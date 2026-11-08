@@ -214,7 +214,8 @@ hd_pit_price_series <- function(bars_adj, exit_prices) {
 #'
 #' Securities that cannot be handled are EXCLUDED and COUNTED, never dropped
 #' silently: they are listed in `attr(x, "excluded")` (columns `ticker`,
-#' `reason`): `no_bars` (leaver with no bars, mostly before the Alpaca history
+#' `reason`, and Date `last_member_date`, the latest snapshot at which the
+#' security was a member): `no_bars` (leaver with no bars, mostly before the Alpaca history
 #' starts), `failure_no_bars` (a known failure with no bars, which understates
 #' failures), `too_recent` (exit too recent to classify), `member_no_bars` (a
 #' member the bars do not cover and `exit_prices` does not list),
@@ -284,8 +285,14 @@ hd_pit_monthly_returns <- function(bars_adj, members, exit_prices) {
   rn <- is.na(reason) & has_series & all_perm %in% renamed_to &
     !(all_perm %in% bars_adj$symbol[bars_adj$volume > 0])
   reason[rn] <- "rename_no_new_bars"
-  excluded <- tibble::tibble(ticker = all_perm[!is.na(reason)],
-                             reason = reason[!is.na(reason)])
+  last_member <- tapply(as.numeric(mem$date), mem$ticker, max)
+  keep <- !is.na(reason)
+  excluded <- tibble::tibble(
+    ticker = all_perm[keep],
+    reason = reason[keep],
+    last_member_date = as.Date(as.numeric(last_member[all_perm[keep]]),
+                               origin = "1970-01-01")
+  )
   excluded <- excluded[order(excluded$reason, excluded$ticker), , drop = FALSE]
 
   # Universe at each signal month-end.

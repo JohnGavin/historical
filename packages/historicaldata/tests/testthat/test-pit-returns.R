@@ -276,3 +276,20 @@ test_that("hd_alpaca_member_bars_adj_path aborts naming the fetch script when ab
   expect_equal(hd_alpaca_member_bars_adj_path(tmp),
                file.path(tmp, "alpaca_member_bars_adj.parquet"))
 })
+
+test_that("excluded carries last_member_date: the latest snapshot a security was a member", {
+  bars <- .pr_aaa()
+  mem <- .pr_members(
+    "2018-06-30" = c("AAA", "OLD", "NEW"),
+    "2019-12-31" = c("AAA", "NEW")
+  )
+  ex <- rbind(
+    .pr_exit("OLD", "2019-01-02", "no_bars", has_bars = FALSE),
+    .pr_exit("NEW", "2020-02-02", "no_bars", has_bars = FALSE)
+  )
+  ex_tbl <- attr(hd_pit_monthly_returns(bars, mem, ex), "excluded")
+  expect_s3_class(ex_tbl$last_member_date, "Date")
+  got <- stats::setNames(ex_tbl$last_member_date, ex_tbl$ticker)
+  expect_equal(got[["OLD"]], as.Date("2018-06-30"))   # pre-window leaver
+  expect_equal(got[["NEW"]], as.Date("2019-12-31"))   # still a member later
+})

@@ -53,7 +53,8 @@ later rows exist.
 
 Securities that cannot be handled are EXCLUDED and COUNTED, never dropped
 silently: they are listed in \code{attr(x, "excluded")} (columns \code{ticker},
-\code{reason}): \code{no_bars} (leaver with no bars, mostly before the Alpaca history
+\code{reason}, and Date \code{last_member_date}, the latest snapshot at which the
+security was a member): \code{no_bars} (leaver with no bars, mostly before the Alpaca history
 starts), \code{failure_no_bars} (a known failure with no bars, which understates
 failures), \code{too_recent} (exit too recent to classify), \code{member_no_bars} (a
 member the bars do not cover and \code{exit_prices} does not list),

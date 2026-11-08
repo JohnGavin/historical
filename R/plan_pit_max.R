@@ -224,16 +224,15 @@ pit_max_comparison <- function(biased, upper, lower, panel, biased_n,
 #' securities that were members at some snapshot on or after `panel_start`. The
 #' count over all securities stays in `n_all`, so nothing is hidden.
 #' @param excluded `attr(stk_pit_monthly, "excluded")`: `ticker` (permanent id),
-#'   `reason`.
-#' @param member_ids Permanent ids of securities that were members at a snapshot
-#'   on or after `panel_start`.
+#'   `reason`, `last_member_date` (latest snapshot at which it was a member).
+#' @param panel_start Date; first day of the backtest window.
 #' @return Tibble: `reason`, `n_securities` (in-window), `n_all` (all).
 #' @noRd
-pit_excluded_summary <- function(excluded, member_ids) {
+pit_excluded_summary <- function(excluded, panel_start) {
   excluded |>
     dplyr::group_by(reason) |>
     dplyr::summarise(
-      n_securities = sum(ticker %in% member_ids),
+      n_securities = sum(last_member_date >= panel_start),
       n_all = dplyr::n(),
       .groups = "drop"
     ) |>
@@ -266,12 +265,8 @@ plan_pit_max <- function() {
     # Coverage loss made visible: one row per exclusion reason, for securities
     # that were members within the backtest window; `n_all` keeps the full count.
     targets::tar_target(stk_pit_excluded, {
-      win <- stk_universe_pit[stk_universe_pit$date >= historicaldata::hd_alpaca_exit_rule()$panel_start, ]
-      # Permanent ids (rename chains) as in hd_pit_monthly_returns(); the helper
-      # is internal to the package, so it is fetched explicitly, not via `:::`.
-      pid <- utils::getFromNamespace(".hd_pit_permanent_id", "historicaldata")
-      ids <- pid(unique(win$ticker), stk_exit_prices)
-      pit_excluded_summary(attr(stk_pit_monthly, "excluded"), ids)
+      pit_excluded_summary(attr(stk_pit_monthly, "excluded"),
+                           historicaldata::hd_alpaca_exit_rule()$panel_start)
     }),
 
     targets::tar_target(stk_pit_max_signal, {

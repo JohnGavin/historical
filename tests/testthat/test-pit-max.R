@@ -200,8 +200,10 @@ test_that("pit_max_comparison aborts when fewer than 24 common non-NA-rf months 
 
 test_that("pit_excluded_summary counts in-window securities and keeps the full count", {
   ex <- tibble::tibble(ticker = c("A", "B", "C", "D", "E"),
-                       reason = c("no_bars", "no_bars", "no_bars", "failure_no_bars", "failure_no_bars"))
-  out <- pit_env$pit_excluded_summary(ex, member_ids = c("A", "D", "Z"))
+                       reason = c("no_bars", "no_bars", "no_bars", "failure_no_bars", "failure_no_bars"),
+                       last_member_date = as.Date(c("2020-01-01", "2015-01-01", "2014-01-01",
+                                                    "2021-01-01", "2012-01-01")))
+  out <- pit_env$pit_excluded_summary(ex, panel_start = as.Date("2016-01-01"))
   expect_equal(out$reason, c("no_bars", "failure_no_bars"))   # tie: larger n_all first
   expect_equal(out$n_securities, c(1L, 1L))
   expect_equal(out$n_all, c(3L, 2L))
