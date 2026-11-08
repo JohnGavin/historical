@@ -25,6 +25,15 @@
 # is no per-symbol window that could be NA (the failure roborev 15479 found in
 # fetch_alpaca_member_bars.R); the check below aborts if a symbol is NA anyway.
 #
+# OLD SYMBOLS ARE FETCHED BUT NOT USED. The targets (R/plan_pit_max.R,
+# pit_current_member_bars()) keep only bars whose symbol is a current member and
+# do not splice renames: Alpaca returns a renamed company's full history under its
+# CURRENT symbol (META, FISV, DOC: 2016 to now, no gaps), and several old symbols
+# were later reused by other companies (HCP: Healthpeak to 2019, then HashiCorp
+# 2021-12 to 2025-02), so splicing them corrupts the current company's series.
+# The fetch is left unchanged so that its manifest params, and the cached file,
+# stay valid (changing them would force a re-fetch).
+#
 # CREDENTIALS. ALPACA_KEY and ALPACA_SECRET in the environment (the paper keys
 # work for market data). They are read by the package functions; nothing here
 # prints or stores them.

@@ -25,9 +25,19 @@ Report-only, as the entry below: nothing feeds the leaderboard or the registry.
   `stk_current_member_bars_adj`, `stk_current_member_trimmed`,
   `stk_current_members_series` / `_monthly` / `_max_signal` / `_max_panel` /
   `_max_portfolio`. The monthly returns reuse `hd_pit_monthly_returns()` with ONE
-  snapshot dated the day before `panel_start` listing today's tickers, and only the
-  `ticker_change` rows of `stk_exit_prices` (no exits by construction); no change to
-  that function was needed.
+  snapshot dated the day before `panel_start` listing today's tickers and a
+  ZERO-row exit table (no exits, no rename spliced); no change to that function was
+  needed (it accepts a zero-row exit table).
+- Defect found on real data and fixed: Alpaca returns a renamed company's FULL
+  history under its CURRENT symbol (META, FISV, DOC: 2728 bars, no gaps), and some
+  old symbols were later reused (HCP: Healthpeak to 2019-11, then HashiCorp
+  2021-12 to 2025-02; FI; FB). Trimming kept the reused tail and the rename splice
+  put HashiCorp's bars on Healthpeak's (DOC) series. Now
+  `pit_current_member_bars()` keeps ONLY bars whose symbol is in the latest
+  snapshot, then trims symbol reuse (still needed for DOW, EXE, SMCI); old symbols
+  are fetched but not used (note in the fetch script, which is unchanged so its
+  manifest params stay valid). `pit_renames_only()` removed. Tested on synthetic
+  bars (old symbol with a gap and another company's tail).
 - `stk_pit_max_comparison` now has four rows (biased, current_members, pit_upper,
   pit_lower) over the months common to ALL FOUR portfolios with non-NA rf (abort
   below 24). New `stk_pit_max_decomposition`: monthly-difference statistics of

@@ -14,8 +14,9 @@
 #              restricted to the months the PIT variants cover.
 #   current_members  TODAY's S&P 500 members (the latest membership snapshot),
 #              carried back to 2016: the PIT size range (about 500 stocks) with
-#              the survivors' hindsight, no exits by construction. A ticker with
-#              an earlier symbol (a rename) is spliced; a symbol reused by an
+#              the survivors' hindsight, no exits by construction. Only bars of
+#              today's symbols are used and renames are NOT spliced (Alpaca gives
+#              the full history under the current symbol); a symbol reused by an
 #              earlier, different company is trimmed (hd_trim_symbol_reuse()).
 #   pit_upper  point-in-time S&P 500 members; the final month of a stock that
 #              stopped trading ends at exit_price_upper.
@@ -57,7 +58,7 @@
 #   stk_max_portfolio_biased_2016
 #   stk_current_member_bars_adj_file / stk_current_member_bars_adj  adjusted bars of
 #                           today's members (scripts/fetch_alpaca_current_member_bars.R),
-#                           symbol reuse trimmed; stk_current_member_trimmed lists the trims
+#                           today's symbols only, symbol reuse trimmed; stk_current_member_trimmed lists the trims
 #   stk_current_members_series / _monthly / _max_signal / _max_panel / _max_portfolio
 #                           the current_members variant, as the PIT chain
 #   stk_pit_max_comparison  the comparison table (four variants)
@@ -332,16 +333,26 @@ pit_max_decomposition <- function(biased, current, upper, lower,
   }))
 }
 
-#' The rename rows of the exit table
+#' Bars of today's S&P 500 members only, symbol reuse trimmed
 #'
-#' The current-members variant has no exits by construction: only the
-#' `ticker_change` rows are kept, so every old symbol still splices to its
-#' current ticker.
-#' @param exit_prices stk_exit_prices.
-#' @return The `ticker_change` rows.
+#' Alpaca returns a renamed company's FULL history under its CURRENT symbol
+#' (META, FISV and DOC each have the whole 2016 to 2026 history, no gaps). The
+#' fetch also pulled the OLD symbols (FB, FI, HCP, ...), and several old symbols
+#' were later REUSED by other companies: HCP is Healthpeak's old symbol (to
+#' 2019-11), then, after a gap, HashiCorp (2021-12 to 2025-02). Using the old
+#' symbols and splicing them onto the current ticker would put HashiCorp's bars
+#' on Healthpeak's series. So only bars whose symbol is in the latest snapshot of
+#' `universe` are kept, and renames are NOT spliced. hd_trim_symbol_reuse() runs
+#' AFTER the filter: it still matters for current symbols that an earlier company
+#' used (DOW: Dow Chemical before 2017; EXE; SMCI).
+#' @param bars Adjusted bars (`symbol`, `date`, `close`, `volume`, ...).
+#' @param universe stk_universe_pit (`ticker`, `date`).
+#' @return The kept bars, with the attribute `trimmed` (hd_trim_symbol_reuse()).
 #' @noRd
-pit_renames_only <- function(exit_prices) {
-  exit_prices[exit_prices$exit_type %in% "ticker_change", , drop = FALSE]
+pit_current_member_bars <- function(bars, universe) {
+  latest <- max(universe$date)
+  today <- unique(universe$ticker[universe$date == latest])
+  hd_trim_symbol_reuse(bars[bars$symbol %in% today, , drop = FALSE])
 }
 
 #' Monthly returns of today's S&P 500 members, carried back
@@ -349,10 +360,12 @@ pit_renames_only <- function(exit_prices) {
 #' Calls hd_pit_monthly_returns() with ONE membership snapshot, dated the day
 #' before `panel_start`, listing the tickers of the latest snapshot of
 #' `universe`: every month's universe is today's list. A stock listed later
-#' enters when it first has a signal-month and a held-month bar.
-#' @param bars Adjusted bars (stk_current_member_bars_adj).
+#' enters when it first has a signal-month and a held-month bar. The exit table
+#' is passed with ZERO rows: no exits by construction, and no rename is spliced
+#' (see pit_current_member_bars()).
+#' @param bars Bars of today's members (pit_current_member_bars()).
 #' @param universe stk_universe_pit (`ticker`, `date`).
-#' @param exit_prices stk_exit_prices (reduced to renames here).
+#' @param exit_prices stk_exit_prices (only its columns are used; all rows dropped).
 #' @param panel_start Date; first day of the backtest window.
 #' @return As hd_pit_monthly_returns().
 #' @noRd
@@ -362,7 +375,7 @@ pit_current_members_monthly <- function(bars, universe, exit_prices, panel_start
     ticker = sort(unique(universe$ticker[universe$date == latest])),
     date = as.Date(panel_start) - 1L
   )
-  hd_pit_monthly_returns(bars, members, pit_renames_only(exit_prices))
+  hd_pit_monthly_returns(bars, members, exit_prices[0L, , drop = FALSE])
 }
 
 #' Securities excluded from the PIT backtest, in-window and overall
@@ -445,11 +458,15 @@ plan_pit_max <- function() {
       format = "file"
     ),
 
-    # Symbol reuse trimmed per symbol BEFORE the series are spliced; the trims
-    # stay on the attribute "trimmed" and in stk_current_member_trimmed.
+    # Only today's symbols (old symbols of renames are fetched but NOT used:
+    # Alpaca gives the full history under the current symbol, and a reused old
+    # symbol, e.g. HCP -> HashiCorp, would corrupt the series), then symbol reuse
+    # trimmed; the trims stay on the attribute "trimmed" and in
+    # stk_current_member_trimmed.
     targets::tar_target(stk_current_member_bars_adj, {
-      hd_trim_symbol_reuse(
-        tibble::as_tibble(arrow::read_parquet(stk_current_member_bars_adj_file))
+      pit_current_member_bars(
+        tibble::as_tibble(arrow::read_parquet(stk_current_member_bars_adj_file)),
+        stk_universe_pit
       )
     }),
 
@@ -458,7 +475,7 @@ plan_pit_max <- function() {
     }),
 
     targets::tar_target(stk_current_members_series, {
-      hd_pit_price_series(stk_current_member_bars_adj, pit_renames_only(stk_exit_prices))
+      hd_pit_price_series(stk_current_member_bars_adj, stk_exit_prices[0L, , drop = FALSE])
     }),
 
     targets::tar_target(stk_current_members_monthly, {

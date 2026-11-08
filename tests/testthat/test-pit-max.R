@@ -298,38 +298,73 @@ test_that("pit_max_decomposition: three effects x three legs, differences of the
   expect_error(pit_env$pit_max_decomposition(up, cur$port[1:5, ], up, lo), "at least 24")
 })
 
-test_that("pit_current_members_monthly: today's list in every month, renames spliced, no exits", {
-  # AAA is a current member all along; NEW (renamed from OLD) joined the index later
-  # but is a current member too, so it is carried back; GONE left before the latest
-  # snapshot and must NOT appear.
-  bars <- function(sym, dates, closes) {
-    tibble::tibble(symbol = sym, date = as.Date(dates), close = closes, volume = 1000)
+# Alpaca returns a renamed company's FULL history under its CURRENT symbol, and an
+# old symbol may later be reused by another company (HCP: Healthpeak, then
+# HashiCorp). The current_members variant therefore uses ONLY today's symbols and
+# never splices a rename. All data here is SYNTHETIC.
+.cm_fixture <- function() {
+  # Semi-monthly bars (mid-month and month-end): consecutive bars are at most 16
+  # days apart, so hd_trim_symbol_reuse() sees no gap inside a real history.
+  me <- as.Date(c("2020-01-31", "2020-02-28", "2020-03-31", "2020-04-30", "2020-05-29", "2020-06-30"))
+  mid <- me - 14L
+  bars <- function(sym, idx, closes) {
+    d <- as.Date(c(rbind(mid[idx], me[idx])), origin = "1970-01-01")
+    tibble::tibble(symbol = sym, date = d, close = rep(closes, each = 2L), volume = 1000)
   }
+  b_close <- c(100, 110, 99, 120, 130, 143)
   b <- dplyr::bind_rows(
-    bars("AAA", c("2020-01-31", "2020-02-28", "2020-03-31"), c(100, 110, 99)),
-    bars("OLD", c("2020-01-31", "2020-02-28"), c(10, 12)),
-    bars("NEW", c("2020-03-31"), c(6)),
-    bars("GONE", c("2020-01-31", "2020-02-28", "2020-03-31"), c(5, 5, 5))
+    bars("B", 1:6, b_close),                                # current ticker, full history
+    bars("A", 1:2, c(10, 12)),                              # B's old symbol: real bars ...
+    bars("A", 5:6, c(500, 450)),                            # ... gap ... another company's tail
+    bars("C", 1:6, c(50, 51, 52, 53, 54, 55)),
+    bars("GONE", 1:6, rep(5, 6))
   )
   uni <- tibble::tibble(
-    ticker = c("AAA", "GONE", "AAA", "NEW"),
+    ticker = c("B", "GONE", "B", "C"),
     date = as.Date(c("2019-06-30", "2019-06-30", "2020-06-30", "2020-06-30"))
   )
   ex <- tibble::tibble(
-    ticker = c("OLD", "GONE"), index_exit_date = as.Date(c("2020-03-01", "2020-06-30")),
-    exit_type = c("ticker_change", "takeover"), new_ticker = c("NEW", NA_character_),
-    last_trade_date = as.Date(c(NA, "2020-03-31")), last_close = c(NA, 5),
+    ticker = c("A", "GONE"), index_exit_date = as.Date(c("2020-02-29", "2020-03-31")),
+    exit_type = c("ticker_change", "takeover"), new_ticker = c("B", NA_character_),
+    last_trade_date = as.Date(c(NA, "2020-06-30")), last_close = c(NA, 5),
     exit_price_upper = c(NA, 6), exit_price_lower = c(NA, 0), has_bars = TRUE
   )
-  out <- pit_env$pit_current_members_monthly(b, uni, ex, as.Date("2016-01-04"))
-  expect_setequal(out$ticker, c("AAA", "NEW"))           # GONE is not a current member
-  expect_true(all(is.na(out$exit_type)))                 # no exits by construction
+  list(bars = b, uni = uni, ex = ex)
+}
+
+test_that("pit_current_member_bars keeps only today's symbols, then trims symbol reuse", {
+  f <- .cm_fixture()
+  out <- pit_env$pit_current_member_bars(f$bars, f$uni)
+  expect_setequal(unique(out$symbol), c("B", "C"))          # no A, no GONE
+  expect_s3_class(attr(out, "trimmed"), "data.frame")
+  # Trim runs AFTER the filter: a current symbol reused by another company is trimmed.
+  d <- dplyr::bind_rows(
+    f$bars[f$bars$symbol == "C", ],
+    tibble::tibble(symbol = "B", date = as.Date(c("2016-01-29", "2016-02-29", "2020-05-29")),
+                   close = c(7, 7, 130), volume = 1000)
+  )
+  out2 <- pit_env$pit_current_member_bars(d, f$uni)
+  expect_equal(out2$date[out2$symbol == "B"], as.Date("2020-05-29"))
+  expect_equal(attr(out2, "trimmed")$symbol, "B")
+})
+
+test_that("pit_current_members_monthly: B's series is B's own bars, no old-symbol rows", {
+  f <- .cm_fixture()
+  cb <- pit_env$pit_current_member_bars(f$bars, f$uni)
+  ser <- hd_pit_price_series(cb, f$ex[0L, , drop = FALSE])
+  sb <- ser[ser$ticker == "B", ]
+  own <- f$bars[f$bars$symbol == "B", ]
+  expect_equal(sb$date, own$date)                           # exactly B's dates
+  expect_equal(sb$adj_close, own$close)                     # no A rows, no rescaling
+  expect_false("A" %in% ser$ticker)
+  out <- pit_env$pit_current_members_monthly(cb, f$uni, f$ex, as.Date("2016-01-04"))
+  expect_setequal(out$ticker, c("B", "C"))                  # A and GONE are not securities
+  expect_true(all(is.na(out$exit_type)))
   expect_equal(out$ret_upper, out$ret_lower)
-  # NEW is the OLD series chain-linked: 12/10 - 1 in 2020-02 (OLD's own bars).
-  new_feb <- out[out$ticker == "NEW" & out$ym == "2020-02", ]
-  expect_equal(new_feb$ret_upper, 12 / 10 - 1)
-  # Every month's universe is today's list, from the first month on.
-  expect_equal(sort(unique(out$ticker[out$ym == "2020-02"])), c("AAA", "NEW"))
+  b_mar <- out[out$ticker == "B" & out$ym == "2020-03", ]
+  expect_equal(b_mar$ret_upper, 99 / 110 - 1)
+  b_may <- out[out$ticker == "B" & out$ym == "2020-05", ]
+  expect_equal(b_may$ret_upper, 130 / 120 - 1)              # not A's 500 tail
 })
 
 test_that("pit_excluded_summary counts in-window securities and keeps the full count", {
