@@ -546,3 +546,30 @@ hd_alpaca_member_bars_adj_path <- function(data_dir = hd_alpaca_bars_data_dir())
   }
   path
 }
+
+#' File name of the cached adjusted bars of TODAY's S&P 500 members
+#'
+#' Adjusted daily bars (`adjustment = "all"`) of the tickers on the latest
+#' membership snapshot, each over the whole backtest window, plus the old
+#' symbols of their renames (see `scripts/fetch_alpaca_current_member_bars.R`).
+#' @return Character scalar.
+#' @keywords internal
+.hd_alpaca_current_member_bars_adj_file_name <- function() "alpaca_current_member_bars_adj.parquet"
+
+#' Path of the cached current-member-bars parquet
+#'
+#' @inheritParams hd_alpaca_exit_bars_path
+#' @return Character path. Aborts if the file is absent, naming the fetch script.
+#' @family alpaca
+#' @export
+hd_alpaca_current_member_bars_adj_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
+  path <- file.path(data_dir, .hd_alpaca_current_member_bars_adj_file_name())
+  if (!file.exists(path)) {
+    cli::cli_abort(c(
+      "x" = "Alpaca current-member-bars file not found: {.path {path}}.",
+      "i" = "Fetch it first (needs {.envvar ALPACA_KEY} and {.envvar ALPACA_SECRET}): {.code Rscript scripts/fetch_alpaca_current_member_bars.R}",
+      "i" = "Or set {.envvar ALPACA_BARS_DIR} to a directory that holds {.file {(.hd_alpaca_current_member_bars_adj_file_name())}}."
+    ))
+  }
+  path
+}

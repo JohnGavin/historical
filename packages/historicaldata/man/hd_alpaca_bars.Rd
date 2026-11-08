@@ -68,6 +68,7 @@ are not trades is the caller's job (see \code{\link[=hd_alpaca_exit_prices]{hd_a
 Other alpaca: 
 \code{\link{hd_alpaca_bars_data_dir}()},
 \code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_current_member_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_controls}()},

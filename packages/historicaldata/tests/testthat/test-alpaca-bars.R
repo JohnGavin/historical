@@ -784,3 +784,12 @@ test_that(".hd_alpaca_request_digest changes when a ticker or window changes", {
   expect_false(identical(d(c("AAA", "BBB", "ZZZ"), s, e), base))               # one ticker swapped
   expect_false(identical(d(c("AAA", "BBB", "CCC"), s, e + c(0L, 0L, 1L)), base)) # one window moved
 })
+
+test_that("hd_alpaca_current_member_bars_adj_path aborts naming the fetch script, else returns the path", {
+  d <- withr::local_tempdir()
+  expect_error(hd_alpaca_current_member_bars_adj_path(d),
+               "fetch_alpaca_current_member_bars.R")
+  f <- file.path(d, "alpaca_current_member_bars_adj.parquet")
+  file.create(f)
+  expect_equal(hd_alpaca_current_member_bars_adj_path(d), f)
+})
