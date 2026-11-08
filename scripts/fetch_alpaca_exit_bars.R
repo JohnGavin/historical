@@ -54,6 +54,9 @@ pkgload::load_all(here::here("packages", "historicaldata"), quiet = TRUE)
 
 FEED          <- "sip"
 SPY_START     <- as.Date("2015-10-01")
+# Free Alpaca plans refuse SIP data from the last 15 minutes (HTTP 403), so
+# requests that run to "now" stop at yesterday instead (#1041).
+FETCH_END     <- Sys.Date() - 1L
 CA_START      <- as.Date("2016-01-01")
 CA_TYPES      <- c("name_change", "cash_merger", "stock_merger",
                    "stock_and_cash_merger", "spin_off")
@@ -175,7 +178,7 @@ m_adj <- ensure_file(
   paste0("adjustment=all;spy_start=", format(SPY_START), ";", base_params),
   function() {
     b <- fetch_bars("all")
-    spy <- hd_alpaca_bars("SPY", SPY_START, Sys.Date(), feed = FEED, adjustment = "all")
+    spy <- hd_alpaca_bars("SPY", SPY_START, FETCH_END, feed = FEED, adjustment = "all")
     b <- dplyr::bind_rows(b, spy)
     b[order(b$symbol, b$date), , drop = FALSE]
   }
@@ -186,7 +189,7 @@ m_ca <- ensure_file(
   sprintf("start=%s;types=%s;tickers=%d", format(CA_START),
           paste(CA_TYPES, collapse = ","), nrow(exits)),
   function() {
-    hd_alpaca_corporate_actions(exits$ticker, CA_START, Sys.Date(), types = CA_TYPES)
+    hd_alpaca_corporate_actions(exits$ticker, CA_START, FETCH_END, types = CA_TYPES)
   }
 )
 
