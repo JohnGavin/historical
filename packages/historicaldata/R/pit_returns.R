@@ -67,7 +67,7 @@
   bad <- priced & (is.na(exit_prices$last_trade_date) | is.na(exit_prices$last_close) |
                      is.na(exit_prices$exit_price_upper) |
                      is.na(exit_prices$exit_price_lower) |
-                     !(exit_prices$last_close > 0))
+                     exit_prices$last_close <= 0)
   if (any(bad)) {
     cli::cli_abort(c(
       "x" = "{sum(bad)} takeover or failure exit{?s} cannot be priced: {.val {exit_prices$ticker[bad]}}.",
