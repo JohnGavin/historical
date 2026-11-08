@@ -293,3 +293,65 @@ test_that("excluded carries last_member_date: the latest snapshot a security was
   expect_equal(got[["OLD"]], as.Date("2018-06-30"))   # pre-window leaver
   expect_equal(got[["NEW"]], as.Date("2019-12-31"))   # still a member later
 })
+
+test_that("dropped lists member-months lost to a missing bar, with a reason", {
+  # GAP trades in Jan and Mar only (no Feb bar); END trades in Jan only.
+  bars <- rbind(
+    .pr_aaa(),
+    .pr_bars("GAP", c("2020-01-31", "2020-03-31"), c(10, 12)),
+    .pr_bars("END", "2020-01-31", 10)
+  )
+  mem <- .pr_members("2019-12-31" = c("AAA", "GAP", "END"))
+  out <- hd_pit_monthly_returns(bars, mem, .pr_exit())
+  dr <- attr(out, "dropped")
+  expect_s3_class(dr, "tbl_df")
+  expect_named(dr, c("ticker", "signal_ym", "ym", "reason"))
+  # GAP: Jan -> Feb has a signal bar but no held bar; Feb -> Mar has no signal bar.
+  g <- dr[dr$ticker == "GAP", ]
+  expect_equal(g$reason[g$ym == "2020-02"], "no_held_bar")
+  expect_equal(g$reason[g$ym == "2020-03"], "no_signal_bar")
+  expect_equal(g$signal_ym[g$ym == "2020-03"], "2020-02")
+  # END: the same two losses; neither is an excluded security.
+  e <- dr[dr$ticker == "END", ]
+  expect_equal(sort(e$ym), c("2020-02", "2020-03"))
+  # ordered by reason, then ym, then ticker
+  expect_equal(dr, dr[order(dr$reason, dr$ym, dr$ticker), ])
+  # a dropped member-month is not a returned row
+  expect_false(any(paste(dr$ticker, dr$ym) %in% paste(out$ticker, out$ym)))
+})
+
+test_that("dropped does not list months that are not observable or already over", {
+  bars <- rbind(
+    .pr_aaa(),
+    .pr_bars("TTT", c("2020-01-31", "2020-02-20"), c(20, 25))
+  )
+  mem <- .pr_members("2019-12-31" = c("AAA", "TTT"))
+  ex <- .pr_exit("TTT", "2020-02-24", "takeover", last_trade_date = "2020-02-20",
+                 last_close = 25, exit_price_upper = 30, exit_price_lower = 30)
+  out <- hd_pit_monthly_returns(bars, mem, ex)
+  dr <- attr(out, "dropped")
+  # (iii) the takeover's months after its last trade are not listed
+  expect_false("TTT" %in% dr$ticker)
+  expect_equal(out$ym[out$ticker == "TTT"], "2020-02")  # the exit row itself
+  # (iv) the month after the last calendar month (2020-04) is not listed
+  expect_false("2020-04" %in% dr$ym)
+  expect_equal(nrow(dr), 0L)
+})
+
+test_that("dropped is always present, zero rows with the right types", {
+  chk <- function(x) {
+    dr <- attr(x, "dropped")
+    expect_s3_class(dr, "tbl_df")
+    expect_equal(nrow(dr), 0L)
+    expect_type(dr$ticker, "character")
+    expect_type(dr$signal_ym, "character")
+    expect_type(dr$ym, "character")
+    expect_type(dr$reason, "character")
+  }
+  chk(hd_pit_monthly_returns(.pr_aaa(), .pr_members("2019-12-31" = "AAA"), .pr_exit()))
+  # early return: no snapshot on or before any calendar month-end
+  chk(hd_pit_monthly_returns(.pr_aaa(), .pr_members("2021-12-31" = "AAA"), .pr_exit()))
+  # early return: every member excluded, so no row survives
+  chk(hd_pit_monthly_returns(.pr_aaa(), .pr_members("2019-12-31" = "NOB"),
+                             .pr_exit("NOB", "2020-02-02", "no_bars", has_bars = FALSE)))
+})

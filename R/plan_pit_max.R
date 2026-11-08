@@ -50,6 +50,7 @@
 #                                member since 2016 (scripts/fetch_alpaca_member_bars.R)
 #   stk_pit_series          one adjusted-price series per security
 #   stk_pit_monthly         hd_pit_monthly_returns(): the PIT monthly returns
+#   stk_pit_dropped         member-months dropped for a missing bar, by reason
 #   stk_pit_excluded        securities excluded, with the reason, counted (members
 #                           within the backtest window; n_all = all leavers)
 #   stk_pit_max_signal      MAX signal on the PIT series
@@ -400,6 +401,27 @@ pit_excluded_summary <- function(excluded, panel_start) {
     dplyr::arrange(dplyr::desc(n_securities), dplyr::desc(n_all))
 }
 
+#' Member-months dropped for a missing bar, in the backtest window
+#'
+#' The held month `ym` must fall on or after the month of `panel_start` to count
+#' as in-window; `n_all` keeps the count over every month.
+#' @param dropped `attr(stk_pit_monthly, "dropped")`: `ticker`, `signal_ym`,
+#'   `ym` (held month), `reason`.
+#' @param panel_start Date; first day of the backtest window.
+#' @return Tibble: `reason`, `n_member_months` (in-window), `n_all` (all).
+#' @noRd
+pit_dropped_summary <- function(dropped, panel_start) {
+  start_ym <- format(as.Date(panel_start), "%Y-%m")
+  dropped |>
+    dplyr::group_by(reason) |>
+    dplyr::summarise(
+      n_member_months = sum(ym >= start_ym),
+      n_all = dplyr::n(),
+      .groups = "drop"
+    ) |>
+    dplyr::arrange(dplyr::desc(n_member_months), dplyr::desc(n_all))
+}
+
 plan_pit_max <- function() {
   list(
 
@@ -428,6 +450,12 @@ plan_pit_max <- function() {
     targets::tar_target(stk_pit_excluded, {
       pit_excluded_summary(attr(stk_pit_monthly, "excluded"),
                            hd_alpaca_exit_rule()$panel_start)
+    }),
+
+    # Member-months lost to a missing signal or held bar (not whole securities).
+    targets::tar_target(stk_pit_dropped, {
+      pit_dropped_summary(attr(stk_pit_monthly, "dropped"),
+                          hd_alpaca_exit_rule()$panel_start)
     }),
 
     targets::tar_target(stk_pit_max_signal, {
