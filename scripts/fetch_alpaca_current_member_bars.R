@@ -90,7 +90,7 @@ chg_end <- .hd_pit_permanent_id(chg$ticker, prices)
 old_syms <- sort(unique(setdiff(chg$ticker[chg_end %in% current], current)))
 
 symbols <- sort(unique(c(current, old_syms)))
-if (anyNA(symbols) || any(!nzchar(symbols))) {
+if (anyNA(symbols) || !all(nzchar(symbols))) {
   cli::cli_abort("A requested symbol is NA or empty: refusing to send a malformed request.")
 }
 wins <- data.frame(ticker = symbols, win_start = win_start, win_end = FETCH_END,

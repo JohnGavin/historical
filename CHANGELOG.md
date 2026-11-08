@@ -1,5 +1,47 @@
 # Changelog
 
+## 2026-11-08 (fourth variant of the stock MAX comparison: today's S&P 500 members, refs #1041)
+
+Report-only, as the entry below: nothing feeds the leaderboard or the registry.
+
+- Why: biased (today's top 100 by market cap) vs `pit_upper` (point-in-time
+  members) mixes survivorship with size (100 mega-caps vs about 500 stocks). The
+  new variant `current_members` is TODAY's S&P 500 members (latest snapshot)
+  carried back to 2016-02: the size range of the PIT variants with the survivors'
+  hindsight. biased - current_members is then the size / concentration effect,
+  current_members - pit_upper the survivorship effect.
+- `scripts/fetch_alpaca_current_member_bars.R`, `hd_alpaca_current_member_bars_adj_path()`:
+  adjusted sip bars of the latest snapshot's members over
+  [panel_start - 45 days, yesterday], plus the old symbol(s) of every rename whose
+  chain ends at a current ticker (META: FB). Same manifest / `ALPACA_FORCE_REFETCH`
+  pattern; the window ends at yesterday, so a re-run on a later day needs
+  `ALPACA_FORCE_REFETCH=1`. Not run here (no network or credentials in the agent).
+- `hd_trim_symbol_reuse(bars, max_gap_days = 30)` (exported): per symbol, bars before
+  the last calendar gap > 30 days between trading bars are dropped (a ticker can
+  belong to an earlier, different company: SNDK was SanDisk until 2016). The drop is
+  reported in `attr(x, "trimmed")`. A rename's old symbol ends, it has no internal
+  gap, so it is unaffected (tested).
+- `R/plan_pit_max.R`: targets `stk_current_member_bars_adj_file`,
+  `stk_current_member_bars_adj`, `stk_current_member_trimmed`,
+  `stk_current_members_series` / `_monthly` / `_max_signal` / `_max_panel` /
+  `_max_portfolio`. The monthly returns reuse `hd_pit_monthly_returns()` with ONE
+  snapshot dated the day before `panel_start` listing today's tickers, and only the
+  `ticker_change` rows of `stk_exit_prices` (no exits by construction); no change to
+  that function was needed.
+- `stk_pit_max_comparison` now has four rows (biased, current_members, pit_upper,
+  pit_lower) over the months common to ALL FOUR portfolios with non-NA rf (abort
+  below 24). New `stk_pit_max_decomposition`: monthly-difference statistics of
+  biased - current_members, current_members - pit_upper and pit_upper - pit_lower,
+  for the long, short and long-short legs: annualised mean, plain t, Newey-West t
+  (6 lags, Bartlett), 95% moving-block bootstrap interval (block 6, B = 10000,
+  seed 1041) and months (`pit_diff_stats()`, tested).
+- `scripts/fetch_alpaca_member_bars.R`: a rename extra whose old ticker has no window
+  (it left the index before `panel_start`) gave NA dates; such extras are now dropped
+  and reported (roborev 15479).
+- Orchestrator to do: run `scripts/fetch_alpaca_current_member_bars.R`, commit its
+  manifest, `tar_invalidate()` the package-dependent PIT targets (package source is
+  not tracked by targets), and build the targets.
+
 ## 2026-11-08 (stock MAX on point-in-time S&P 500 members: survivorship bias and failure sensitivity, refs #1041)
 
 Report-only: nothing here feeds the leaderboard or the research registry
