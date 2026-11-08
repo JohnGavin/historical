@@ -6,22 +6,25 @@
 \usage{
 hd_alpaca_exit_prices(
   bars,
+  bars_adj,
+  corp_actions,
   exits,
-  assets,
   known_failed = character(),
   rule = hd_alpaca_exit_rule()
 )
 }
 \arguments{
-\item{bars}{Output of \code{\link[=hd_alpaca_bars]{hd_alpaca_bars()}} (needs \code{symbol}, \code{date}, \code{close},
-\code{volume}; no \code{NA} in \code{date}, \code{close}, \code{volume}).}
+\item{bars}{Output of \code{\link[=hd_alpaca_bars]{hd_alpaca_bars()}} with raw prices (needs \code{symbol},
+\code{date}, \code{close}, \code{volume}; no \code{NA} in those).}
+
+\item{bars_adj}{The same for \code{adjustment = "all"}, for the exit tickers AND
+\code{SPY} (aborts without SPY rows).}
+
+\item{corp_actions}{Output of \code{hd_alpaca_corporate_actions()} (needs the
+columns of that function).}
 
 \item{exits}{Output of \code{\link[=hd_sp500_exits]{hd_sp500_exits()}} (needs \code{ticker},
 \code{first_member_date}, \code{index_exit_date}; one row per ticker).}
-
-\item{assets}{Alpaca assets, status active and inactive (needs character
-\code{symbol}, \code{name}, \code{status}), as saved by \code{scripts/fetch_alpaca_exit_bars.R}.
-Used only to detect ticker changes.}
 
 \item{known_failed}{Character vector of tickers known to have failed
 (e.g. \code{hd_sp500_known_delisted()$ticker}); they are forced to
@@ -31,10 +34,12 @@ Used only to detect ticker changes.}
 }
 \value{
 A tibble, one row per exit: \code{ticker}, \code{index_exit_date}, \code{exit_type},
-\code{new_ticker}, \code{last_trade_date}, \code{last_close}, \code{gap_trading_days},
-\code{ret_60d}, \code{failure_candidate} (\code{exit_type == "failure_candidate"}; \code{NA}
-for \code{no_bars} and \code{too_recent}, where it is unknown), \code{exit_price_upper},
-\code{exit_price_lower}, \code{has_bars}.
+\code{new_ticker}, \code{ca_source} (\code{"corporate_action"} when a record decided the
+type, \code{"rule"} otherwise, \code{NA} for \code{no_bars}), \code{acquirer}, \code{acquirer_rate},
+\code{cash_rate}, \code{last_trade_date}, \code{last_close}, \code{gap_trading_days},
+\code{ret_60d}, \code{ret_60d_spy}, \code{ret_60d_rel}, \code{failure_candidate}
+(\code{exit_type == "failure_candidate"}; \code{NA} for \code{no_bars} and \code{too_recent},
+where it is unknown), \code{exit_price_upper}, \code{exit_price_lower}, \code{has_bars}.
 }
 \description{
 Applies the #1041 exit-price rule (constants in \code{\link[=hd_alpaca_exit_rule]{hd_alpaca_exit_rule()}}).
@@ -52,29 +57,44 @@ kept trading, so the index exit is not a delisting. Price (upper = lower)
 is the close of the last trade ON OR BEFORE the exit date.
 \item \code{too_recent}: the exit is within \code{too_recent_weekdays} weekdays of the
 last date in \code{bars}, so whether it keeps trading is not yet known. No price.
-\item \code{ticker_change}: stopped trading, and exactly one ACTIVE asset with a
-different symbol has the same normalised company name as this symbol
-(see \code{.hd_normalise_company_name()}). \code{new_ticker} names it. No price: it
-is not an exit, join to the new ticker. Several active matches:
-\code{ticker_change_ambiguous}, nothing chosen, no price.
-\item \code{failure_candidate}: stopped trading, \code{ret_60d < -crash_drop}. Upper =
-last close, lower = 0.
-\item \code{takeover}: stopped trading otherwise. Upper = lower = last close.
+\item Stopped trading, and \code{corp_actions} holds a record for the ticker dated
+from \code{ca_days_before} days before the exit to \code{ca_days_after} days after
+it (\code{ca_source = "corporate_action"}). If several, \code{name_change} wins, then
+\code{cash_merger}, \code{stock_and_cash_merger}, \code{stock_merger}, then the record
+closest to the exit:
+\itemize{
+\item \code{name_change}: \code{ticker_change}, \code{new_ticker} = the new symbol, no price
+(not an exit; join to the new ticker).
+\item \code{cash_merger}: \code{takeover}, upper = lower = the deal price (\code{rate}).
+\item \code{stock_merger} / \code{stock_and_cash_merger}: \code{takeover} at the last close,
+with \code{acquirer}, \code{acquirer_rate} and \code{cash_rate} recorded.
+A \code{spin_off} record alone classifies nothing.
+}
+\item Stopped trading, no record (\code{ca_source = "rule"}): \code{failure_candidate} if
+the RELATIVE fall over \code{crash_lookback} trading days to the last trade,
+on ADJUSTED closes, is worse than \code{-crash_drop}; upper = last close,
+lower = 0. Otherwise \code{takeover} at the last close (also when the fall
+cannot be computed: fewer than \code{crash_lookback + 1} adjusted bars, or no
+SPY close).
 }
 
-\code{ret_60d} is the close at the priced bar over the close \code{crash_lookback}
-trading days earlier, minus 1 (\code{NA} with fewer bars). \code{last_trade_date} and
-\code{last_close} are the last trade inside the window (after the exit date for a
-demotion); \code{gap_trading_days} counts weekdays from it to the exit (0 if on or
-after; holidays not removed) and is informational only.
+\code{ret_60d} is the adjusted close at the priced bar over the adjusted close
+\code{crash_lookback} trading days earlier, minus 1; \code{ret_60d_spy} the SPY return
+over the same two dates; \code{ret_60d_rel = (1 + ret_60d) / (1 + ret_60d_spy) - 1}
+(all \code{NA} when not computable). \code{last_trade_date} and \code{last_close} (raw) are
+the last trade inside the window (after the exit date for a demotion);
+\code{gap_trading_days} counts weekdays from it to the exit (0 if on or after;
+holidays not removed) and is informational only.
 }
 \seealso{
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
-\code{\link{hd_alpaca_exit_assets_path}()},
+\code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_controls}()},
+\code{\link{hd_alpaca_exit_corp_actions_path}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_rule}()}
 }

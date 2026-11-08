@@ -4,7 +4,7 @@
 \alias{hd_alpaca_exit_controls}
 \title{Positive control for the exit-type rule against named real cases}
 \usage{
-hd_alpaca_exit_controls(exit_prices, min_present = 10L)
+hd_alpaca_exit_controls(exit_prices, min_present = 13L)
 }
 \arguments{
 \item{exit_prices}{Output of \code{\link[=hd_alpaca_exit_prices]{hd_alpaca_exit_prices()}}.}
@@ -13,15 +13,18 @@ hd_alpaca_exit_controls(exit_prices, min_present = 10L)
 }
 \value{
 A tibble, one row per control: \code{ticker}, \code{expected},
-\code{expected_new_ticker}, \code{observed}, \code{observed_new_ticker}, \code{status}
+\code{expected_new_ticker}, \code{expected_acquirer}, \code{expected_price}, \code{observed},
+\code{observed_new_ticker}, \code{observed_acquirer}, \code{observed_price}, \code{status}
 (\code{"PASS"}, \code{"FAIL"}, \code{"ABSENT"}).
 }
 \description{
-Real S&P 500 leavers whose true fate is known (checked by hand on the
-2026-11-08 build, #1041): SIVB, FRC, SBNY failed; TWTR, ATVI, CELG, NBL, JNPR
-were taken over; XEC, ARNC, M, AIV, LUMN were demoted and kept trading; FI
-became FISV. The function compares \code{exit_type} (and \code{new_ticker} for FI) with
-that truth for each control present in \code{exit_prices}.
+Real S&P 500 leavers whose true fate is known (checked by hand, #1041):
+SIVB, FRC, SBNY failed; TWTR (cash deal, 54.20 a share), NBL (stock deal,
+acquirer CVX), ATVI, CELG, JNPR, RTN, DWDP were taken over or merged (DWDP
+was a spin-off, not a loss); XEC, ARNC, M, AIV, LUMN were demoted and kept
+trading; FI became FISV and UTX became RTX. The function compares
+\code{exit_type}, \code{new_ticker}, and, where the truth names one, \code{acquirer} and
+\code{exit_price_upper}, for each control present in \code{exit_prices}.
 }
 \details{
 Aborts, listing every mismatch, if any present control disagrees. Controls
@@ -33,8 +36,10 @@ and aborts too.
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
-\code{\link{hd_alpaca_exit_assets_path}()},
+\code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
+\code{\link{hd_alpaca_exit_corp_actions_path}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_prices}()},
 \code{\link{hd_alpaca_exit_rule}()}

@@ -1,2 +1,2 @@
-"file","symbols_requested","symbols_returned","rows","first_date","last_date","bytes","sha256","fetched_at","feed","adjustment","note","assets_file","assets_rows","assets_sha256","assets_fetched_at"
-"alpaca_exit_bars.parquet","242","240","262589","2016-01-04","2026-08-17","8090727","9b3b28d7e2d572dac8801db59141d898e6757ef61df5aa02fc7f5a274c812e69","2026-11-08T10:37:22Z","sip","raw","Daily bars for S&P 500 index leavers, window = membership span +/- window_days. Raw file kept LOCAL, not committed.","alpaca_assets_us_equity_both.parquet",33544,"21712800e5897de34eeb25a5f758a4ea292189312faaf24a13bf6d75aa39986b","2026-11-08T10:59:46Z"
+"file","rows","sha256","fetched_at","params"
+"alpaca_exit_bars.parquet","262589","9b3b28d7e2d572dac8801db59141d898e6757ef61df5aa02fc7f5a274c812e69","2026-11-08T10:37:22Z","adjustment=raw;feed=sip;tickers=242;window_days=30;panel_start=2016-01-04"

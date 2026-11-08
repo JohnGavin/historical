@@ -17,13 +17,19 @@ Exits before it cannot be priced.}
 \item{\code{window_days}}{Days either side of a ticker's membership span within
 which bars are used. Clips ticker recycling (a later company reusing the
 symbol) and stale series that run on after a seizure.}
-\item{\code{crash_drop}}{A name that stopped trading and whose close fell by
-MORE than this fraction over \code{crash_lookback} trading days to its last
-trade is a failure candidate. 0.30: the real failures fell 43\% (SBNY) to
-98\% (FRC), the real takeovers moved -2\% to +31\%.}
-\item{\code{crash_lookback}}{Trading days (bars with volume > 0) for the drop.}
+\item{\code{crash_drop}}{A name that stopped trading, has no corporate-action
+record, and whose ADJUSTED close fell by MORE than this fraction RELATIVE
+to SPY over \code{crash_lookback} trading days to its last trade is a failure
+candidate. 0.40: relative fall = (1 + stock return) / (1 + SPY return) - 1.
+SBNY fell 43\% against a SPY gain; the false failures were spin-offs
+(-44\% raw, ~0\% adjusted) and a merger in the COVID crash (-48\% against
+SPY -25\%, relative -31\%).}
+\item{\code{crash_lookback}}{Trading days (bars with volume > 0) for the fall.}
 \item{\code{too_recent_weekdays}}{An exit within this many weekdays of the last
 date in the fetched bars cannot yet be told from a demotion.}
+\item{\code{ca_days_before}, \code{ca_days_after}}{A corporate-action record counts
+for an exit if its date (\code{effective_date}, else \code{process_date}) lies
+from \code{ca_days_before} days before the exit to \code{ca_days_after} days after it.}
 }
 A bar is a trade only if its \code{volume} is above zero.
 }
@@ -31,9 +37,11 @@ A bar is a trade only if its \code{volume} is above zero.
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
-\code{\link{hd_alpaca_exit_assets_path}()},
+\code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_controls}()},
+\code{\link{hd_alpaca_exit_corp_actions_path}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_prices}()}
 }

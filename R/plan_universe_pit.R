@@ -48,15 +48,19 @@
 # after Alpaca's 2016-01-04 history start):
 #   stk_exit_bars_file   cached Alpaca bars parquet, format = "file"
 #   stk_exit_bars        the bars (symbol, date, open..vwap)
-#   stk_exit_assets_file cached Alpaca asset list (active + inactive), format = "file"
-#   stk_exit_assets      the asset list (symbol, name, status; detects ticker changes)
+#   stk_exit_bars_adj_file / stk_exit_bars_adj  split- and spin-off-adjusted
+#                        bars of the same tickers plus SPY, format = "file"
+#   stk_exit_corp_actions_file / stk_exit_corp_actions  Alpaca corporate-action
+#                        records (name changes, mergers, spin-offs) for them
 #   stk_exit_prices      one row per index exit: exit_type (demotion,
 #                        ticker_change, failure_candidate, takeover, ...), last
-#                        trade, exit_price_lower / exit_price_upper
-#                        (hd_alpaca_exit_rule())
-#   stk_exit_prices_controls  positive control: named real cases (SIVB, NBL, FI,
-#                        ...) must get their known exit_type; ABORTS otherwise
-#   stk_exit_coverage    by exit year: exits, with bars, one count per exit_type
+#                        trade, exit_price_lower / exit_price_upper,
+#                        ca_source (record vs rule) (hd_alpaca_exit_rule())
+#   stk_exit_prices_controls  positive control: 17 named real cases (SIVB, NBL,
+#                        FI, UTX, ...) must get their known exit_type; ABORTS
+#                        otherwise
+#   stk_exit_coverage    by exit year: exits, with bars, one count per
+#                        exit_type and per ca_source
 # These are BOUNDS, not delisting returns: a failure candidate's lower bound is
 # 0 and its upper bound the last exchange close.
 #
@@ -128,13 +132,23 @@ plan_universe_pit <- function() {
     }),
 
     targets::tar_target(
-      stk_exit_assets_file,
-      hd_alpaca_exit_assets_path(),
+      stk_exit_bars_adj_file,
+      hd_alpaca_exit_bars_adj_path(),
       format = "file"
     ),
 
-    targets::tar_target(stk_exit_assets, {
-      tibble::as_tibble(arrow::read_parquet(stk_exit_assets_file))
+    targets::tar_target(stk_exit_bars_adj, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_bars_adj_file))
+    }),
+
+    targets::tar_target(
+      stk_exit_corp_actions_file,
+      hd_alpaca_exit_corp_actions_path(),
+      format = "file"
+    ),
+
+    targets::tar_target(stk_exit_corp_actions, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_corp_actions_file))
     }),
 
     # All index exits (706 as of 2026-11-08, including 464 before the Alpaca
@@ -145,14 +159,16 @@ plan_universe_pit <- function() {
     targets::tar_target(stk_exit_prices, {
       hd_alpaca_exit_prices(
         stk_exit_bars,
+        stk_exit_bars_adj,
+        stk_exit_corp_actions,
         hd_sp500_exits(stk_universe_pit[, c("date", "ticker")]),
-        stk_exit_assets,
         known_failed = hd_sp500_known_delisted()$ticker
       )
     }),
 
-    # Positive control (can go red): 14 real leavers whose fate is known must
-    # get that exit_type; aborts on any mismatch, or if fewer than 10 are present.
+    # Positive control (can go red): 17 real leavers whose fate is known must
+    # get that exit_type (TWTR its 54.2 deal price, NBL acquirer CVX); aborts on
+    # any mismatch, or if fewer than 13 are present.
     targets::tar_target(stk_exit_prices_controls, {
       hd_alpaca_exit_controls(stk_exit_prices)
     }),

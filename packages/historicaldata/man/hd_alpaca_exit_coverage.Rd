@@ -11,9 +11,11 @@ hd_alpaca_exit_coverage(exit_prices)
 }
 \value{
 A tibble: \code{exit_year}, \code{n_exits}, \code{n_with_bars},
-\code{n_failure_candidates} (count of \code{TRUE}; \code{NA} is not counted), then one
+\code{n_failure_candidates} (count of \code{TRUE}; \code{NA} is not counted), one
 \verb{n_<exit_type>} column per exit type (demotion, ticker_change,
-ticker_change_ambiguous, failure_candidate, takeover, too_recent, no_bars).
+failure_candidate, takeover, too_recent, no_bars), then \code{n_ca_corporate_action}
+and \code{n_ca_rule} (exits decided by a corporate-action record vs by the rule;
+\code{no_bars} is in neither).
 }
 \description{
 Exit-price coverage by index-exit year
@@ -22,9 +24,11 @@ Exit-price coverage by index-exit year
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
-\code{\link{hd_alpaca_exit_assets_path}()},
+\code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_controls}()},
+\code{\link{hd_alpaca_exit_corp_actions_path}()},
 \code{\link{hd_alpaca_exit_prices}()},
 \code{\link{hd_alpaca_exit_rule}()}
 }

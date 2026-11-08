@@ -1,10 +1,21 @@
 #!/usr/bin/env Rscript
 # fetch_alpaca_exit_bars.R
 #
-# #1041: daily bars from Alpaca (sip feed, raw prices) for every ticker that
-# left the point-in-time S&P 500 on or after 2016-01-04, the date the sip feed
-# starts. Used to price index leavers (hd_alpaca_exit_prices()); the 464
-# leavers before that date have no free source and are not requested.
+# #1041: Alpaca data for every ticker that left the point-in-time S&P 500 on or
+# after 2016-01-04, the date the sip feed starts. Used to classify and price
+# index leavers (hd_alpaca_exit_prices()); the 464 leavers before that date
+# have no free source and are not requested. Three files:
+#
+#   alpaca_exit_bars.parquet          RAW daily bars (adjustment = "raw")
+#   alpaca_exit_bars_adj.parquet      ADJUSTED daily bars (adjustment = "all")
+#                                     for the same tickers and windows, plus SPY
+#                                     over 2015-10-01..today. A spin-off or
+#                                     split looks like a crash on raw prices.
+#   alpaca_exit_corp_actions.parquet  Alpaca corporate-action records
+#                                     (name_change, cash_merger, stock_merger,
+#                                     stock_and_cash_merger, spin_off) for the
+#                                     tickers, 2016-01-01..today, flattened by
+#                                     hd_alpaca_corporate_actions().
 #
 # WHICH TICKERS. Derived from the package, not re-parsed here:
 # hd_sp500_exits(hd_sp500_membership(hd_sp500_membership_path())), kept when
@@ -17,28 +28,20 @@
 # symbol later reused by another company is not pulled in beyond its window.
 #
 # CREDENTIALS. ALPACA_KEY and ALPACA_SECRET in the environment (the paper
-# keys work for market data). They are read by hd_alpaca_bars(); nothing here
-# prints or stores them.
+# keys work for market data). They are read by the package functions; nothing
+# here prints or stores them.
 #
-# DATA. Bars go to ALPACA_BARS_DIR (default ~/.cache/historical/alpaca_exit_bars/)
-# as alpaca_exit_bars.parquet and stay LOCAL (same posture as the S&P 500
-# membership file and OSAP). Only the manifest is committed:
+# DATA. Files go to ALPACA_BARS_DIR (default ~/.cache/historical/alpaca_exit_bars/)
+# and stay LOCAL (same posture as the S&P 500 membership file and OSAP). Only
+# the manifest is committed, one row per file:
 #   packages/historicaldata/inst/extdata/alpaca/alpaca_exit_bars_manifest.csv
-# (symbols requested, symbols returned, rows, sha256, fetched_at, feed), plus
-# assets_* columns for the asset list below.
+# (file, rows, sha256, fetched_at, params).
 #
-# ASSETS. The Alpaca asset list (status active and inactive, us_equity), saved
-# next to the bars as alpaca_assets_us_equity_both.parquet. The exit rule uses
-# it to tell a ticker change (an inactive symbol and an active one with the
-# same company name) from a real exit. Manifest: assets_rows, assets_sha256,
-# assets_fetched_at. Re-fetched whenever the bars are.
-#
-# CACHE REUSE. If the parquet exists and its sha256 equals the manifest's, and
-# the number of tickers requested still equals the manifest's, nothing is
-# fetched; the assets file is checked the same way (sha256 vs manifest) and
-# fetched alone if it is missing. A sha256 mismatch, a missing manifest, or a changed request list
-# ABORTS (provenance cannot be vouched for); set ALPACA_FORCE_REFETCH=1 to
-# fetch again on purpose.
+# CACHE REUSE, per file. If the file exists, its sha256 equals the manifest
+# row's and the manifest's `params` equal this run's, that file is not fetched.
+# A sha256 mismatch, a missing manifest row, or changed params ABORTS
+# (provenance cannot be vouched for); set ALPACA_FORCE_REFETCH=1 to fetch all
+# three again on purpose. A file that does not exist is fetched alone.
 #
 # Usage, from the repo root:
 #   nix develop <repo> --command Rscript scripts/fetch_alpaca_exit_bars.R
@@ -49,8 +52,11 @@ suppressPackageStartupMessages({
 
 pkgload::load_all(here::here("packages", "historicaldata"), quiet = TRUE)
 
-FEED       <- "sip"
-ADJUSTMENT <- "raw"
+FEED          <- "sip"
+SPY_START     <- as.Date("2015-10-01")
+CA_START      <- as.Date("2016-01-01")
+CA_TYPES      <- c("name_change", "cash_merger", "stock_merger",
+                   "stock_and_cash_merger", "spin_off")
 MANIFEST_PATH <- here::here(
   "packages", "historicaldata", "inst", "extdata", "alpaca",
   "alpaca_exit_bars_manifest.csv"
@@ -58,7 +64,6 @@ MANIFEST_PATH <- here::here(
 
 rule <- hd_alpaca_exit_rule()
 data_dir <- hd_alpaca_bars_data_dir()
-dest <- file.path(data_dir, .hd_alpaca_exit_bars_file_name())
 
 # ---- which tickers, and over what windows ----------------------------------
 membership <- hd_sp500_membership(hd_sp500_membership_path())
@@ -79,36 +84,62 @@ force_refetch <- nzchar(Sys.getenv("ALPACA_FORCE_REFETCH", ""))
 existing <- if (file.exists(MANIFEST_PATH)) {
   utils::read.csv(MANIFEST_PATH, stringsAsFactors = FALSE, colClasses = "character")
 } else NULL
-assets_dest <- file.path(data_dir, .hd_alpaca_exit_assets_file_name())
 
-need_bars <- TRUE
-if (file.exists(dest) && !force_refetch) {
-  cached_sha <- digest::digest(dest, algo = "sha256", file = TRUE)
-  if (is.null(existing) || nrow(existing) != 1L || !identical(existing$sha256, cached_sha)) {
+# Fetch one file, or keep the cached one if it matches the manifest. Returns
+# its one-row manifest data frame.
+ensure_file <- function(name, params, build) {
+  dest <- file.path(data_dir, name)
+  prev <- if (is.null(existing)) NULL else existing[existing$file == name, , drop = FALSE]
+  if (file.exists(dest) && !force_refetch) {
+    sha <- digest::digest(dest, algo = "sha256", file = TRUE)
+    if (is.null(prev) || nrow(prev) != 1L || !identical(prev$sha256, sha)) {
+      cli::cli_abort(c(
+        "x" = "Cached {.path {dest}} does not match the committed manifest (or has no row there).",
+        "i" = "Cached sha256: {sha}; manifest sha256: {if (is.null(prev) || nrow(prev) != 1L) 'no manifest row' else prev$sha256}.",
+        "i" = "Provenance cannot be vouched for. Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
+      ))
+    }
+    if (!identical(prev$params, params)) {
+      cli::cli_abort(c(
+        "x" = "{.file {name}} was fetched with different parameters.",
+        "i" = "Manifest: {prev$params}",
+        "i" = "Now: {params}",
+        "i" = "Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
+      ))
+    }
+    cli::cli_inform("Already present, matches manifest: {.path {dest}} ({file.info(dest)$size} bytes). Not fetched.")
+    return(data.frame(file = name, rows = prev$rows, sha256 = prev$sha256,
+                      fetched_at = prev$fetched_at, params = prev$params,
+                      stringsAsFactors = FALSE))
+  }
+  df <- build()
+  if (nrow(df) == 0L) {
     cli::cli_abort(c(
-      "x" = "Cached {.path {dest}} does not match the committed manifest (or there is none).",
-      "i" = "Cached sha256: {cached_sha}; manifest sha256: {if (is.null(existing)) 'no manifest' else existing$sha256[1L]}.",
-      "i" = "Provenance cannot be vouched for. Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
+      "x" = "Alpaca returned nothing for {.file {name}}.",
+      "i" = "Refusing to write an empty cache: that would look like data and mean nothing."
     ))
   }
-  if (!identical(as.integer(existing$symbols_requested), nrow(exits))) {
-    cli::cli_abort(c(
-      "x" = "The cache was fetched for {existing$symbols_requested} ticker{?s}; the membership file now has {nrow(exits)} exit{?s} in range.",
-      "i" = "Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
-    ))
-  }
-  cli::cli_inform("Bars already present, match manifest: {.path {dest}} ({file.info(dest)$size} bytes). Not fetched.")
-  need_bars <- FALSE
+  dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
+  arrow::write_parquet(df, dest)
+  cli::cli_alert_success("Wrote {nrow(df)} row{?s} to {.path {dest}}")
+  data.frame(
+    file       = name,
+    rows       = as.character(nrow(df)),
+    sha256     = digest::digest(dest, algo = "sha256", file = TRUE),
+    fetched_at = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
+    params     = params,
+    stringsAsFactors = FALSE
+  )
 }
 
-# ---- bars ------------------------------------------------------------------
-if (need_bars) {
-  cli::cli_progress_bar("Fetching Alpaca bars", total = nrow(exits))
+# Bars per ticker over its own window; "SPY" is added by the caller.
+fetch_bars <- function(adjustment) {
+  cli::cli_progress_bar(paste("Fetching Alpaca bars,", adjustment), total = nrow(exits))
   pieces <- vector("list", nrow(exits))
   for (i in seq_len(nrow(exits))) {
     b <- hd_alpaca_bars(
       exits$ticker[i], exits$win_start[i], exits$win_end[i],
-      feed = FEED, adjustment = ADJUSTMENT
+      feed = FEED, adjustment = adjustment
     )
     # Belt and braces: the request window is already the clip window, but a
     # symbol must never carry bars outside it into the cache.
@@ -117,79 +148,51 @@ if (need_bars) {
   }
   cli::cli_progress_done()
   bars <- dplyr::bind_rows(pieces)
-  if (nrow(bars) == 0L) {
-    cli::cli_abort(c(
-      "x" = "Alpaca returned no bars for any of {nrow(exits)} ticker{?s}.",
-      "i" = "Refusing to write an empty cache: that would look like data and mean nothing."
-    ))
-  }
-  bars <- bars[order(bars$symbol, bars$date), , drop = FALSE]
-
-  dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
-  arrow::write_parquet(bars, dest)
-
-  returned <- length(unique(bars$symbol))
-  manifest <- data.frame(
-    file              = basename(dest),
-    symbols_requested = nrow(exits),
-    symbols_returned  = returned,
-    rows              = nrow(bars),
-    first_date        = as.character(min(bars$date)),
-    last_date         = as.character(max(bars$date)),
-    bytes             = file.info(dest)$size,
-    sha256            = digest::digest(dest, algo = "sha256", file = TRUE),
-    fetched_at        = format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC"),
-    feed              = FEED,
-    adjustment        = ADJUSTMENT,
-    note              = "Daily bars for S&P 500 index leavers, window = membership span +/- window_days. Raw file kept LOCAL, not committed.",
-    stringsAsFactors  = FALSE
-  )
-  cli::cli_alert_success("Wrote {nrow(bars)} bar{?s} for {returned} of {nrow(exits)} ticker{?s} to {.path {dest}}")
   missing_syms <- setdiff(exits$ticker, bars$symbol)
   if (length(missing_syms) > 0L) {
     cli::cli_inform(c(
-      "i" = "{length(missing_syms)} requested ticker{?s} returned no bars (unknown to Alpaca, or no trades in the window): {.val {missing_syms}}"
+      "i" = "{length(missing_syms)} requested ticker{?s} returned no {adjustment} bars (unknown to Alpaca, or no trades in the window): {.val {missing_syms}}"
     ))
   }
-} else {
-  manifest <- existing[, setdiff(names(existing), grep("^assets_", names(existing), value = TRUE)), drop = FALSE]
+  bars
 }
 
-# ---- assets ----------------------------------------------------------------
-need_assets <- TRUE
-if (!need_bars && file.exists(assets_dest) && !force_refetch) {
-  a_sha <- digest::digest(assets_dest, algo = "sha256", file = TRUE)
-  if (is.null(existing$assets_sha256) || !identical(existing$assets_sha256, a_sha)) {
-    cli::cli_abort(c(
-      "x" = "Cached {.path {assets_dest}} does not match the committed manifest (assets_sha256).",
-      "i" = "Provenance cannot be vouched for. Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
-    ))
-  }
-  cli::cli_inform("Assets already present, match manifest: {.path {assets_dest}}. Not fetched.")
-  manifest <- existing
-  need_assets <- FALSE
-}
-if (need_assets) {
-  # The snapshot function names its file by date; save it in a scratch
-  # directory and keep it under the stable name the pipeline expects.
-  scratch <- tempfile("alpaca_assets_")
-  snap <- hd_alpaca_assets_snapshot(scratch, asset_class = "us_equity", status = "both")
-  dir.create(data_dir, recursive = TRUE, showWarnings = FALSE)
-  if (!file.copy(snap, assets_dest, overwrite = TRUE)) {
-    cli::cli_abort("Could not copy the assets snapshot to {.path {assets_dest}}.")
-  }
-  unlink(scratch, recursive = TRUE)
-  assets <- arrow::read_parquet(assets_dest)
-  manifest$assets_file       <- basename(assets_dest)
-  manifest$assets_rows       <- nrow(assets)
-  manifest$assets_sha256     <- digest::digest(assets_dest, algo = "sha256", file = TRUE)
-  manifest$assets_fetched_at <- format(Sys.time(), "%Y-%m-%dT%H:%M:%SZ", tz = "UTC")
-  cli::cli_alert_success("Wrote {nrow(assets)} asset{?s} (active and inactive) to {.path {assets_dest}}")
-}
+base_params <- sprintf("feed=%s;tickers=%d;window_days=%d;panel_start=%s",
+                       FEED, nrow(exits), rule$window_days, format(rule$panel_start))
 
+# ---- the three files --------------------------------------------------------
+m_raw <- ensure_file(
+  .hd_alpaca_exit_bars_file_name(),
+  paste0("adjustment=raw;", base_params),
+  function() {
+    b <- fetch_bars("raw")
+    b[order(b$symbol, b$date), , drop = FALSE]
+  }
+)
+
+m_adj <- ensure_file(
+  .hd_alpaca_exit_bars_adj_file_name(),
+  paste0("adjustment=all;spy_start=", format(SPY_START), ";", base_params),
+  function() {
+    b <- fetch_bars("all")
+    spy <- hd_alpaca_bars("SPY", SPY_START, Sys.Date(), feed = FEED, adjustment = "all")
+    b <- dplyr::bind_rows(b, spy)
+    b[order(b$symbol, b$date), , drop = FALSE]
+  }
+)
+
+m_ca <- ensure_file(
+  .hd_alpaca_exit_corp_actions_file_name(),
+  sprintf("start=%s;types=%s;tickers=%d", format(CA_START),
+          paste(CA_TYPES, collapse = ","), nrow(exits)),
+  function() {
+    hd_alpaca_corporate_actions(exits$ticker, CA_START, Sys.Date(), types = CA_TYPES)
+  }
+)
+
+manifest <- rbind(m_raw, m_adj, m_ca)
 dir.create(dirname(MANIFEST_PATH), recursive = TRUE, showWarnings = FALSE)
 utils::write.csv(manifest, MANIFEST_PATH, row.names = FALSE)
 cli::cli_alert_success("Manifest written: {.path {MANIFEST_PATH}}")
-print(manifest[, intersect(c("symbols_requested", "symbols_returned", "rows", "sha256", "feed",
-                             "assets_rows", "assets_sha256"), names(manifest))], row.names = FALSE)
+print(manifest[, c("file", "rows", "sha256")], row.names = FALSE)
 cli::cli_inform("Raw files kept at {.path {data_dir}} -- NOT committed (see header).")

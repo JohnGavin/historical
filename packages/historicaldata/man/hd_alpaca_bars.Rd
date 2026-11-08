@@ -67,9 +67,11 @@ are not trades is the caller's job (see \code{\link[=hd_alpaca_exit_prices]{hd_a
 \seealso{
 Other alpaca: 
 \code{\link{hd_alpaca_bars_data_dir}()},
-\code{\link{hd_alpaca_exit_assets_path}()},
+\code{\link{hd_alpaca_corporate_actions}()},
+\code{\link{hd_alpaca_exit_bars_adj_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
 \code{\link{hd_alpaca_exit_controls}()},
+\code{\link{hd_alpaca_exit_corp_actions_path}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_prices}()},
 \code{\link{hd_alpaca_exit_rule}()}

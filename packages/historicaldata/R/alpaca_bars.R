@@ -47,27 +47,52 @@ hd_alpaca_exit_bars_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
   path
 }
 
-#' File name of the cached Alpaca assets parquet inside [hd_alpaca_bars_data_dir()]
+#' File name of the cached split- and dividend-ADJUSTED bars parquet
 #'
-#' The asset list (status active and inactive, us_equity) used to detect ticker
-#' changes in [hd_alpaca_exit_prices()].
+#' Adjusted daily bars (`adjustment = "all"`) of the exit tickers plus SPY. A
+#' spin-off or split looks like a crash on raw prices and not on these.
 #' @return Character scalar.
 #' @keywords internal
-.hd_alpaca_exit_assets_file_name <- function() "alpaca_assets_us_equity_both.parquet"
+.hd_alpaca_exit_bars_adj_file_name <- function() "alpaca_exit_bars_adj.parquet"
 
-#' Path of the cached Alpaca assets parquet
+#' Path of the cached adjusted-bars parquet
 #'
 #' @inheritParams hd_alpaca_exit_bars_path
 #' @return Character path. Aborts if the file is absent, naming the fetch script.
 #' @family alpaca
 #' @export
-hd_alpaca_exit_assets_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
-  path <- file.path(data_dir, .hd_alpaca_exit_assets_file_name())
+hd_alpaca_exit_bars_adj_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
+  path <- file.path(data_dir, .hd_alpaca_exit_bars_adj_file_name())
   if (!file.exists(path)) {
     cli::cli_abort(c(
-      "x" = "Alpaca assets file not found: {.path {path}}.",
+      "x" = "Alpaca adjusted-bars file not found: {.path {path}}.",
       "i" = "Fetch it first (needs {.envvar ALPACA_KEY} and {.envvar ALPACA_SECRET}): {.code Rscript scripts/fetch_alpaca_exit_bars.R}",
-      "i" = "Or set {.envvar ALPACA_BARS_DIR} to a directory that holds {.file {(.hd_alpaca_exit_assets_file_name())}}."
+      "i" = "Or set {.envvar ALPACA_BARS_DIR} to a directory that holds {.file {(.hd_alpaca_exit_bars_adj_file_name())}}."
+    ))
+  }
+  path
+}
+
+#' File name of the cached corporate-actions parquet
+#'
+#' The flattened output of [hd_alpaca_corporate_actions()] for the exit tickers.
+#' @return Character scalar.
+#' @keywords internal
+.hd_alpaca_exit_corp_actions_file_name <- function() "alpaca_exit_corp_actions.parquet"
+
+#' Path of the cached corporate-actions parquet
+#'
+#' @inheritParams hd_alpaca_exit_bars_path
+#' @return Character path. Aborts if the file is absent, naming the fetch script.
+#' @family alpaca
+#' @export
+hd_alpaca_exit_corp_actions_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
+  path <- file.path(data_dir, .hd_alpaca_exit_corp_actions_file_name())
+  if (!file.exists(path)) {
+    cli::cli_abort(c(
+      "x" = "Alpaca corporate-actions file not found: {.path {path}}.",
+      "i" = "Fetch it first (needs {.envvar ALPACA_KEY} and {.envvar ALPACA_SECRET}): {.code Rscript scripts/fetch_alpaca_exit_bars.R}",
+      "i" = "Or set {.envvar ALPACA_BARS_DIR} to a directory that holds {.file {(.hd_alpaca_exit_corp_actions_file_name())}}."
     ))
   }
   path
@@ -263,4 +288,202 @@ hd_alpaca_bars <- function(symbols, start, end,
   out <- dplyr::bind_rows(pieces)
   if (nrow(out) == 0L) return(.hd_alpaca_empty_bars())
   out[order(out$symbol, out$date), , drop = FALSE]
+}
+
+#' Zero-row corporate-actions table with the column types
+#' `hd_alpaca_corporate_actions()` returns
+#' @return A zero-row tibble.
+#' @keywords internal
+.hd_alpaca_empty_corp_actions <- function() {
+  tibble::tibble(
+    type            = character(),
+    symbol          = character(),
+    new_symbol      = character(),
+    acquirer_symbol = character(),
+    rate            = double(),
+    cash_rate       = double(),
+    acquirer_rate   = double(),
+    acquiree_rate   = double(),
+    effective_date  = as.Date(character()),
+    process_date    = as.Date(character())
+  )
+}
+
+#' Flatten the `corporate_actions` object of one response page (internal)
+#'
+#' The object maps a plural type name (`name_changes`, `cash_mergers`, ...) to
+#' a list of records. `symbol` is the first present of `symbol`, `old_symbol`,
+#' `acquiree_symbol`, `source_symbol` (the company that stops existing in its
+#' old form). `type` is the plural name without its trailing "s".
+#' @param cas Named list from `jsonlite::fromJSON(simplifyVector = FALSE)`;
+#'   `NULL` or empty is allowed.
+#' @return A tibble in the shape of `.hd_alpaca_empty_corp_actions()`.
+#' @keywords internal
+.hd_alpaca_parse_corp_actions <- function(cas) {
+  if (length(cas) == 0L) return(.hd_alpaca_empty_corp_actions())
+  parts <- lapply(names(cas), function(plural) {
+    recs <- cas[[plural]]
+    if (length(recs) == 0L) return(NULL)
+    chr <- function(fields) {
+      vapply(recs, function(r) {
+        for (f in fields) {
+          v <- r[[f]]
+          if (!is.null(v)) return(as.character(v)[1L])
+        }
+        NA_character_
+      }, character(1))
+    }
+    num <- function(field) {
+      vapply(recs, function(r) as.numeric(r[[field]] %||% NA_real_), numeric(1))
+    }
+    day <- function(field) as.Date(substr(chr(field), 1L, 10L))
+    tibble::tibble(
+      type            = sub("s$", "", plural),
+      symbol          = chr(c("symbol", "old_symbol", "acquiree_symbol", "source_symbol")),
+      new_symbol      = chr("new_symbol"),
+      acquirer_symbol = chr("acquirer_symbol"),
+      rate            = num("rate"),
+      cash_rate       = num("cash_rate"),
+      acquirer_rate   = num("acquirer_rate"),
+      acquiree_rate   = num("acquiree_rate"),
+      effective_date  = day("effective_date"),
+      process_date    = day("process_date")
+    )
+  })
+  out <- dplyr::bind_rows(parts)
+  if (nrow(out) == 0L) .hd_alpaca_empty_corp_actions() else out
+}
+
+#' Corporate actions from the Alpaca market-data API
+#'
+#' Calls `GET https://data.alpaca.markets/v1/corporate-actions` for `symbols`,
+#' in batches, following `next_page_token`, and flattens every record type into
+#' one table. The records used by the exit-type rule (#1041) are
+#' `name_change` (`old_symbol` to `new_symbol`), `cash_merger` (deal price in
+#' `rate`), and `stock_merger` / `stock_and_cash_merger` (`acquirer_symbol`,
+#' `acquirer_rate`, `acquiree_rate`, `cash_rate`). A live probe on 2026-11-08
+#' found the feed starting around 2020: earlier events have no record.
+#'
+#' A non-200 response aborts with the HTTP status and the API message.
+#'
+#' @inheritSection hd_alpaca_bars Credentials
+#'
+#' @param symbols Character vector of ticker symbols (no `NA`, no empty
+#'   strings; duplicates are dropped).
+#' @param start,end Inclusive date range (Date or coercible).
+#' @param types Record types to request; any of `"name_change"`,
+#'   `"cash_merger"`, `"stock_merger"`, `"stock_and_cash_merger"`,
+#'   `"spin_off"`. Default: all five.
+#' @param key,secret Optional explicit credentials; default to the environment.
+#' @param batch_size Symbols per request. Default 50.
+#' @param limit Records per page (API maximum 1000). Default 1000.
+#' @return A tibble: `type`, `symbol`, `new_symbol`, `acquirer_symbol`, `rate`,
+#'   `cash_rate`, `acquirer_rate`, `acquiree_rate`, `effective_date` (Date),
+#'   `process_date` (Date). Fields a record type does not have are `NA`. Zero
+#'   rows (same columns) when nothing is returned.
+#' @family alpaca
+#' @export
+hd_alpaca_corporate_actions <- function(symbols, start, end,
+                                        types = c("name_change", "cash_merger",
+                                                  "stock_merger", "stock_and_cash_merger",
+                                                  "spin_off"),
+                                        key = NULL, secret = NULL,
+                                        batch_size = 50L, limit = 1000L) {
+  rlang::check_installed(c("httr2", "jsonlite"))
+
+  if (!is.character(symbols) || length(symbols) == 0L || anyNA(symbols) ||
+      any(!nzchar(trimws(symbols)))) {
+    cli::cli_abort(c(
+      "x" = "{.arg symbols} must be a non-empty character vector without NA or empty strings."
+    ))
+  }
+  symbols <- unique(trimws(symbols))
+  start <- as.Date(start)
+  end <- as.Date(end)
+  if (length(start) != 1L || length(end) != 1L || is.na(start) || is.na(end) || start > end) {
+    cli::cli_abort(c(
+      "x" = "{.arg start} and {.arg end} must be single dates with {.arg start} <= {.arg end}."
+    ))
+  }
+  all_types <- c("name_change", "cash_merger", "stock_merger",
+                 "stock_and_cash_merger", "spin_off")
+  if (!is.character(types) || length(types) == 0L || anyNA(types) ||
+      !all(types %in% all_types)) {
+    cli::cli_abort(c(
+      "x" = "{.arg types} must be one or more of {.val {all_types}}."
+    ))
+  }
+  types <- unique(types)
+  if (length(batch_size) != 1L || is.na(batch_size) || batch_size < 1L ||
+      length(limit) != 1L || is.na(limit) || limit < 1L || limit > 1000L) {
+    cli::cli_abort("{.arg batch_size} must be >= 1 and {.arg limit} must be in 1..1000.")
+  }
+
+  key <- key %||% Sys.getenv("ALPACA_KEY", unset = NA_character_)
+  secret <- secret %||% Sys.getenv("ALPACA_SECRET", unset = NA_character_)
+  if (is.na(key) || !nzchar(key) || is.na(secret) || !nzchar(secret)) {
+    cli::cli_abort(c(
+      "x" = "Alpaca credentials missing.",
+      "i" = "Set {.envvar ALPACA_KEY} and {.envvar ALPACA_SECRET} in {.file ~/.Renviron} (then restart R), or pass {.arg key}/{.arg secret} explicitly."
+    ))
+  }
+
+  fetch_page <- function(batch, token) {
+    query <- list(
+      symbols    = paste(batch, collapse = ","),
+      types      = paste(types, collapse = ","),
+      start      = format(start),
+      end        = format(end),
+      limit      = as.integer(limit),
+      page_token = token
+    )
+    req <- httr2::request("https://data.alpaca.markets") |>
+      httr2::req_url_path_append("v1", "corporate-actions") |>
+      httr2::req_headers(
+        `APCA-API-KEY-ID` = key,
+        `APCA-API-SECRET-KEY` = secret
+      ) |>
+      httr2::req_url_query(!!!query) |>
+      httr2::req_error(is_error = function(resp) FALSE) |>
+      httr2::req_retry(max_tries = 3L) |>
+      httr2::req_throttle(rate = 200 / 60)
+    resp <- httr2::req_perform(req)
+    status <- httr2::resp_status(resp)
+    body <- httr2::resp_body_string(resp)
+    if (status != 200L) {
+      msg <- if (nzchar(body) && jsonlite::validate(body)) {
+        parsed <- jsonlite::fromJSON(body, simplifyVector = FALSE)
+        as.character(parsed[["message"]] %||% body)[1L]
+      } else {
+        body
+      }
+      cli::cli_abort(c(
+        "x" = "Alpaca corporate-actions request failed: HTTP {status}.",
+        "i" = "API message: {.val {msg}}",
+        "i" = "Symbols in this batch ({length(batch)}): {.val {utils::head(batch, 5L)}}."
+      ), call = rlang::caller_env())
+    }
+    if (!jsonlite::validate(body)) {
+      cli::cli_abort(c(
+        "x" = "Alpaca corporate-actions response was HTTP 200 but not valid JSON.",
+        "i" = "Symbols in this batch ({length(batch)}): {.val {utils::head(batch, 5L)}}."
+      ), call = rlang::caller_env())
+    }
+    jsonlite::fromJSON(body, simplifyVector = FALSE)
+  }
+
+  batches <- split(symbols, ceiling(seq_along(symbols) / batch_size))
+  pieces <- list()
+  for (batch in batches) {
+    token <- NULL
+    repeat {
+      page <- fetch_page(batch, token)
+      pieces[[length(pieces) + 1L]] <- .hd_alpaca_parse_corp_actions(page[["corporate_actions"]])
+      token <- page[["next_page_token"]]
+      if (is.null(token) || !is.character(token) || !nzchar(token)) break
+    }
+  }
+  out <- dplyr::bind_rows(pieces)
+  if (nrow(out) == 0L) return(.hd_alpaca_empty_corp_actions())
+  out[order(out$symbol, out$effective_date, out$process_date, out$type), , drop = FALSE]
 }
