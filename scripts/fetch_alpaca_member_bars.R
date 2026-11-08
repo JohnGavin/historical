@@ -103,6 +103,19 @@ chg <- prices[prices$exit_type == "ticker_change" & !is.na(prices$new_ticker), ,
 extra <- chg[!(chg$new_ticker %in% wins$ticker), , drop = FALSE]
 if (nrow(extra) > 0L) {
   old_w <- wins[match(extra$ticker, wins$ticker), , drop = FALSE]
+  # An old ticker with no window (it left the index before panel_start, so it was
+  # dropped from `wins`) gives NA dates: drop such extras and report them rather
+  # than send an NA window to the API (roborev 15479).
+  no_win <- is.na(old_w$win_start) | is.na(old_w$win_end)
+  if (any(no_win)) {
+    cli::cli_inform(c(
+      "i" = "{sum(no_win)} new symbol{?s} of ticker changes not requested: the old ticker has no window (it left the index before {format(rule$panel_start)}): {.val {extra$new_ticker[no_win]}}"
+    ))
+  }
+  extra <- extra[!no_win, , drop = FALSE]
+  old_w <- old_w[!no_win, , drop = FALSE]
+}
+if (nrow(extra) > 0L) {
   extra_w <- data.frame(
     ticker = extra$new_ticker, win_start = old_w$win_start,
     win_end = old_w$win_end, stringsAsFactors = FALSE
