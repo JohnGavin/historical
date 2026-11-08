@@ -44,6 +44,16 @@
 #   stk_universe_pit_coverage  per snapshot: share of PIT members that have
 #                              price data in equity_daily (the survivorship gap)
 #
+# Targets added in #1041 (exit prices; the 706 index leavers, 242 of them on or
+# after Alpaca's 2016-01-04 history start):
+#   stk_exit_bars_file   cached Alpaca bars parquet, format = "file"
+#   stk_exit_bars        the bars (symbol, date, open..vwap)
+#   stk_exit_prices      one row per index exit: last trade, failure flag,
+#                        exit_price_lower / exit_price_upper (hd_alpaca_exit_rule())
+#   stk_exit_coverage    by exit year: exits, with bars, failure candidates
+# These are BOUNDS, not delisting returns: a failure candidate's lower bound is
+# 0 and its upper bound the last exchange close.
+#
 # Intended consumption (plan_olmar.R Phase 4): per-date filtering inside the
 # backtest via hd_sp500_members_asof(), NOT a static ticker list.
 #
@@ -93,6 +103,38 @@ plan_universe_pit <- function() {
         stk_universe_pit[, c("date", "ticker")],
         stk_universe_pit_spans
       )
+    }),
+
+    # ---- #1041: exit prices for names that left the index -------------------
+    # Alpaca daily bars (sip feed, from 2016-01-04) for tickers that left the
+    # PIT index on/after 2016-01-04, cached by scripts/fetch_alpaca_exit_bars.R.
+    # A machine without the cache fails stk_exit_bars_file loudly, naming that
+    # script (hd_alpaca_exit_bars_path() aborts; never an empty result).
+
+    targets::tar_target(
+      stk_exit_bars_file,
+      hd_alpaca_exit_bars_path(),
+      format = "file"
+    ),
+
+    targets::tar_target(stk_exit_bars, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_bars_file))
+    }),
+
+    # All index exits (706 as of 2026-11-08, including 464 before the Alpaca
+    # history starts: those come back has_bars = FALSE). The rule and its
+    # constants live in hd_alpaca_exit_rule(); a known failed name is forced to
+    # failure_candidate = TRUE.
+    targets::tar_target(stk_exit_prices, {
+      hd_alpaca_exit_prices(
+        stk_exit_bars,
+        hd_sp500_exits(stk_universe_pit[, c("date", "ticker")]),
+        known_failed = hd_sp500_known_delisted()$ticker
+      )
+    }),
+
+    targets::tar_target(stk_exit_coverage, {
+      hd_alpaca_exit_coverage(stk_exit_prices)
     })
 
   )
