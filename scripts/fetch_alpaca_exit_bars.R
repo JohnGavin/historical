@@ -105,10 +105,18 @@ ensure_file <- function(name, params, build) {
       ))
     }
     if (!identical(prev$params, params)) {
+      # A params string is one long unbreakable token, so a bullet holding the
+      # whole string wraps at the console width and its value lands on a
+      # continuation line (the "Manifest:" / "Now:" bullets looked blank). Show
+      # only the key=value pieces that differ: short, and the useful part.
+      old_p <- strsplit(prev$params, ";", fixed = TRUE)[[1L]]
+      new_p <- strsplit(params, ";", fixed = TRUE)[[1L]]
+      only_manifest <- setdiff(old_p, new_p)
+      only_now <- setdiff(new_p, old_p)
       cli::cli_abort(c(
         "x" = "{.file {name}} was fetched with different parameters.",
-        "i" = "Manifest: {prev$params}",
-        "i" = "Now: {params}",
+        "i" = "In the manifest only: {.val {only_manifest}}",
+        "i" = "In this run only: {.val {only_now}}",
         "i" = "Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
       ))
     }

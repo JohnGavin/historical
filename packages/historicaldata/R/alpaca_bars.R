@@ -519,3 +519,30 @@ hd_alpaca_corporate_actions <- function(symbols, start, end,
   if (nrow(out) == 0L) return(.hd_alpaca_empty_corp_actions())
   out[order(out$symbol, out$effective_date, out$process_date, out$type), , drop = FALSE]
 }
+
+#' File name of the cached adjusted bars of every S&P 500 member since 2016
+#'
+#' Adjusted daily bars (`adjustment = "all"`) of every ticker that was a
+#' point-in-time S&P 500 member on or after the first date Alpaca covers, one
+#' window per ticker (see `scripts/fetch_alpaca_member_bars.R`).
+#' @return Character scalar.
+#' @keywords internal
+.hd_alpaca_member_bars_adj_file_name <- function() "alpaca_member_bars_adj.parquet"
+
+#' Path of the cached member-bars parquet
+#'
+#' @inheritParams hd_alpaca_exit_bars_path
+#' @return Character path. Aborts if the file is absent, naming the fetch script.
+#' @family alpaca
+#' @export
+hd_alpaca_member_bars_adj_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
+  path <- file.path(data_dir, .hd_alpaca_member_bars_adj_file_name())
+  if (!file.exists(path)) {
+    cli::cli_abort(c(
+      "x" = "Alpaca member-bars file not found: {.path {path}}.",
+      "i" = "Fetch it first (needs {.envvar ALPACA_KEY} and {.envvar ALPACA_SECRET}): {.code Rscript scripts/fetch_alpaca_member_bars.R}",
+      "i" = "Or set {.envvar ALPACA_BARS_DIR} to a directory that holds {.file {(.hd_alpaca_member_bars_adj_file_name())}}."
+    ))
+  }
+  path
+}

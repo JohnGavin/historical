@@ -1,5 +1,43 @@
 # Changelog
 
+## 2026-11-08 (stock MAX on point-in-time S&P 500 members: survivorship bias and failure sensitivity, refs #1041)
+
+Report-only: nothing here feeds the leaderboard or the research registry
+(register_runs), so no published number and no trial count K (#972) changes.
+
+- `hd_pit_monthly_returns()` and `hd_pit_price_series()`
+  (`packages/historicaldata/R/pit_returns.R`): monthly returns of every stock
+  that was an S&P 500 member at a month-end, held over the next month, from ONE
+  source (Alpaca adjusted bars). The final month of a stock that stopped trading
+  (`takeover`, `failure_candidate`) is `(adj_last / adj_signal_end) *
+  (exit_price_b / last_close) - 1` for the upper and lower bound; the lower bound
+  of a failure is -100%. A `demotion` keeps its real return. A rename
+  (`ticker_change`) is one security (chain-linked, a cycle aborts). `no_bars`,
+  `too_recent` and members the bars do not cover are excluded and listed in
+  `attr(x, "excluded")`.
+- `scripts/fetch_alpaca_member_bars.R` and `hd_alpaca_member_bars_adj_path()`:
+  adjusted bars of every member since 2016-01-04 into the local cache
+  (manifest committed once the script is run). The fetch window ends at the
+  index exit date, not the last listing date: a member stays a member until the
+  next snapshot that omits it.
+- `R/plan_pit_max.R` (wired in `docs/_targets.R`): `stk_pit_monthly`,
+  `stk_pit_max_portfolio_upper`, `stk_pit_max_portfolio_lower`,
+  `stk_max_portfolio_biased_2016` and the table `stk_pit_max_comparison`
+  (variant, months, annual return, volatility, Sharpe, mean stocks per month,
+  leaver-months by exit type).
+- `portfolio_longshort()` gains `winsorise_exits` (default `TRUE`, no change for
+  existing callers). It clips every monthly return at +-20%, which would turn a
+  -100% failure month into -20% and make the lower bound meaningless; the PIT
+  portfolios pass `FALSE` and so leave exit months unclipped (all other months
+  are clipped as before). Test: `tests/testthat/test-pit-max.R`.
+- `scripts/fetch_alpaca_exit_bars.R`: the "params differ" abort printed blank
+  `Manifest:` / `Now:` bullets. Cause: a params string is one long unbreakable
+  token, so cli wrapped it onto a continuation line. It now lists only the
+  key=value pieces that differ.
+- `stk_pit_max_comparison` now measures all three variants over the COMMON months (present in all portfolios and with non-NA `rf_ret`; aborts below 24), adds `first_ym`, `last_ym`, `long_ann`, `short_ann`; `stk_pit_excluded` counts only securities that were members on or after `panel_start` (`n_all` keeps the full count).
+- Not run here: the member-bars fetch (no network or credentials in the agent)
+  and the targets build, so no table of results exists yet.
+
 ## 2026-11-08 (Alpaca exit prices for stocks that left the point-in-time S&P 500, refs #1041)
 
 - `hd_alpaca_bars()` (`packages/historicaldata/R/alpaca_bars.R`): daily bars

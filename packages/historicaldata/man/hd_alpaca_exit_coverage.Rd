@@ -30,6 +30,7 @@ Other alpaca:
 \code{\link{hd_alpaca_exit_controls}()},
 \code{\link{hd_alpaca_exit_corp_actions_path}()},
 \code{\link{hd_alpaca_exit_prices}()},
-\code{\link{hd_alpaca_exit_rule}()}
+\code{\link{hd_alpaca_exit_rule}()},
+\code{\link{hd_alpaca_member_bars_adj_path}()}
 }
 \concept{alpaca}

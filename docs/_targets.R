@@ -236,6 +236,10 @@ source(here::here("R/plan_artefact_registry.R"))
 # Reads the local cache written by scripts/fetch_sp500_membership.R; a machine
 # without it fails the file target loudly (no silent fallback).
 source(here::here("R/plan_universe_pit.R"))
+# #1041: stock MAX on point-in-time S&P 500 members (survivorship bias and
+# failure sensitivity). Report-only: nothing here feeds the leaderboard or the
+# research registry. Reads the cache written by scripts/fetch_alpaca_member_bars.R.
+source(here::here("R/plan_pit_max.R"))
 # #617: dv_pairwise_alignment_matrix — previously written but never sourced
 # here, so plan_data_validation() was unreachable and the target unwired.
 # Wired now rather than deleted: tests/testthat/test-pairwise-alignment.R
@@ -320,6 +324,7 @@ c(plan_strategy_names(),
   plan_structural_breaks(),
   plan_artefact_registry(),
   plan_universe_pit(),
+  plan_pit_max(),
 
   # #753 mechanism (2): track packages/historicaldata/R source content as a
   # normal `targets` dependency, using the file-hash cue `targets` already

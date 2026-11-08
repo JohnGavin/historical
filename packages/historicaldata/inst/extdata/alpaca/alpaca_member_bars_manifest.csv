@@ -1,0 +1,2 @@
+"file","rows","sha256","fetched_at","params"
+"alpaca_member_bars_adj.parquet","1403703","7cd90eb804fffdd64a49d2d6b8df7abebc25e5bc067c708e9011112efe201101","2026-11-08T19:37:06Z","adjustment=all;feed=sip;tickers=746;request=bc3996e8e929ecb9;lookback_days=45;panel_start=2016-01-04"
