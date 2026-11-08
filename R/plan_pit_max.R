@@ -414,7 +414,7 @@ plan_pit_max <- function() {
     # that were members within the backtest window; `n_all` keeps the full count.
     targets::tar_target(stk_pit_excluded, {
       pit_excluded_summary(attr(stk_pit_monthly, "excluded"),
-                           historicaldata::hd_alpaca_exit_rule()$panel_start)
+                           hd_alpaca_exit_rule()$panel_start)
     }),
 
     targets::tar_target(stk_pit_max_signal, {
@@ -464,7 +464,7 @@ plan_pit_max <- function() {
     targets::tar_target(stk_current_members_monthly, {
       pit_current_members_monthly(
         stk_current_member_bars_adj, stk_universe_pit, stk_exit_prices,
-        historicaldata::hd_alpaca_exit_rule()$panel_start
+        hd_alpaca_exit_rule()$panel_start
       )
     }),
 
