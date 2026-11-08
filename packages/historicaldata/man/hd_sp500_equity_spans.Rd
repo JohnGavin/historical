@@ -21,6 +21,7 @@ Reads the remote (or \code{local = TRUE} cached) \code{equity_daily} parquet thr
 Other sp500: 
 \code{\link{hd_sp500_coverage}()},
 \code{\link{hd_sp500_data_dir}()},
+\code{\link{hd_sp500_exits}()},
 \code{\link{hd_sp500_known_delisted}()},
 \code{\link{hd_sp500_members_asof}()},
 \code{\link{hd_sp500_membership}()},

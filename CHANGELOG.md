@@ -1,5 +1,64 @@
 # Changelog
 
+## 2026-11-08 (Alpaca exit prices for stocks that left the point-in-time S&P 500, refs #1041)
+
+- `hd_alpaca_bars()` (`packages/historicaldata/R/alpaca_bars.R`): daily bars
+  from the Alpaca market-data API (`sip` feed, from 2016-01-04, includes
+  delisted symbols); batches symbols, follows `next_page_token`, aborts on any
+  non-200 with the HTTP status and API message.
+- `hd_alpaca_corporate_actions()`: Alpaca `GET /v1/corporate-actions`
+  (name changes, cash / stock / stock-and-cash mergers, spin-offs), batched by
+  symbol, paginated, flattened to one table; aborts on any non-200.
+- `hd_sp500_exits()`, `hd_alpaca_exit_rule()`, `hd_alpaca_exit_prices()`,
+  `hd_alpaca_exit_coverage()`, `hd_alpaca_exit_controls()`
+  (`alpaca_exit_prices.R`). Third revision of the rule (owner-approved
+  2026-11-08). The first rule (trading gap + 50% fall) misclassified 9 of 15
+  flags on real data; the second (company-name match against Alpaca's asset
+  list) found zero ticker changes, because the list omits FI and DWDP has an
+  empty name, and computed the 60-day fall on UNADJUSTED bars, so spin-offs
+  (DWDP, UTX) and a merger in the COVID crash (RTN) looked like failures.
+  Bars are clipped to the membership span +/- 30 days and only `volume > 0`
+  bars are trades. Each exit gets an `exit_type`: `known_delisted.csv` names are
+  `failure_candidate`; no bars is `no_bars`; a trade after the index exit date
+  is a `demotion` (priced at the last close on or before the exit date); an exit
+  within 5 weekdays of the last fetched bar is `too_recent`. A name that stopped
+  trading and has a corporate-action record dated from 30 days before to 10 days
+  after the exit takes its type from the record (`ca_source = "corporate_action"`):
+  `name_change` is `ticker_change` (`new_ticker` set, no price), `cash_merger` is
+  a `takeover` at the deal price, `stock_merger` / `stock_and_cash_merger` a
+  `takeover` at the last close with `acquirer`, `acquirer_rate`, `cash_rate`.
+  With no record (`ca_source = "rule"`) it is a `failure_candidate` (upper =
+  last close, lower = 0) if the 60-trading-day fall to the last trade, on
+  split- and spin-off-ADJUSTED closes and RELATIVE to SPY
+  (`(1 + r_stock) / (1 + r_SPY) - 1`), is worse than -40%; otherwise a
+  `takeover` at the last close. New columns `ret_60d_spy`, `ret_60d_rel`
+  (`ret_60d` is now adjusted). Name matching and the asset-list dependency are
+  gone (`.hd_normalise_company_name()`, `hd_alpaca_exit_assets_path()`, the
+  `assets` argument). These are bounds, not delisting returns.
+- `scripts/fetch_alpaca_exit_bars.R` + manifest
+  (`inst/extdata/alpaca/alpaca_exit_bars_manifest.csv`, one row per file: file,
+  rows, sha256, fetched_at, params): fetches, for the 242 of 706 index exits on
+  or after 2016-01-04 (the other 464 have no free source), raw bars, adjusted
+  bars (`adjustment = "all"`, plus SPY from 2015-10-01) and corporate actions
+  (from 2016-01-01); cache reuse is per file by sha256 and params. Raw files
+  stay local. The adjusted-bars and corporate-actions rows are added by the
+  first run of the script.
+- `R/plan_universe_pit.R`: targets `stk_exit_bars_file`,
+  `stk_exit_bars_adj_file`, `stk_exit_corp_actions_file` (`format = "file"`,
+  abort naming the fetch script when the cache is absent), `stk_exit_bars`,
+  `stk_exit_bars_adj`, `stk_exit_corp_actions`, `stk_exit_prices`,
+  `stk_exit_prices_controls` (positive control: 17 named real cases must get
+  their known `exit_type`; TWTR its 54.2 deal price, NBL acquirer CVX; aborts on
+  any mismatch or if fewer than 13 are present) and `stk_exit_coverage` (one
+  count per `exit_type` and per `ca_source`). The `stk_exit_assets*` targets are
+  removed.
+- Hermetic tests (`test-alpaca-bars.R`): mocked HTTP (pagination, flattening of
+  each record type, non-200 snapshot, empty response) and synthetic shapes: spin-off
+  (raw -44%, adjusted 0%), market crash (stock -48%, SPY -25%), SBNY (stock -43%,
+  SPY +3%), each record type, records outside the date window, demotion,
+  `known_delisted` override, and the controls check aborting on planted mismatches.
+  `packages/historicaldata/tests/testthat/.gitignore` ignores testthat's `_problems/`.
+
 ## 2026-11-07 (point-in-time S&P 500 membership universe replaces the stub, refs #816)
 
 - `hd_sp500_*` loaders in `packages/historicaldata/R/sp500_membership.R`

@@ -44,6 +44,26 @@
 #   stk_universe_pit_coverage  per snapshot: share of PIT members that have
 #                              price data in equity_daily (the survivorship gap)
 #
+# Targets added in #1041 (exit prices; the 706 index leavers, 242 of them on or
+# after Alpaca's 2016-01-04 history start):
+#   stk_exit_bars_file   cached Alpaca bars parquet, format = "file"
+#   stk_exit_bars        the bars (symbol, date, open..vwap)
+#   stk_exit_bars_adj_file / stk_exit_bars_adj  split- and spin-off-adjusted
+#                        bars of the same tickers plus SPY, format = "file"
+#   stk_exit_corp_actions_file / stk_exit_corp_actions  Alpaca corporate-action
+#                        records (name changes, mergers, spin-offs) for them
+#   stk_exit_prices      one row per index exit: exit_type (demotion,
+#                        ticker_change, failure_candidate, takeover, ...), last
+#                        trade, exit_price_lower / exit_price_upper,
+#                        ca_source (record vs rule) (hd_alpaca_exit_rule())
+#   stk_exit_prices_controls  positive control: 17 named real cases (SIVB, NBL,
+#                        FI, UTX, ...) must get their known exit_type; ABORTS
+#                        otherwise
+#   stk_exit_coverage    by exit year: exits, with bars, one count per
+#                        exit_type and per ca_source
+# These are BOUNDS, not delisting returns: a failure candidate's lower bound is
+# 0 and its upper bound the last exchange close.
+#
 # Intended consumption (plan_olmar.R Phase 4): per-date filtering inside the
 # backtest via hd_sp500_members_asof(), NOT a static ticker list.
 #
@@ -93,6 +113,74 @@ plan_universe_pit <- function() {
         stk_universe_pit[, c("date", "ticker")],
         stk_universe_pit_spans
       )
+    }),
+
+    # ---- #1041: exit prices for names that left the index -------------------
+    # Alpaca daily bars (sip feed, from 2016-01-04) for tickers that left the
+    # PIT index on/after 2016-01-04, cached by scripts/fetch_alpaca_exit_bars.R.
+    # A machine without the cache fails stk_exit_bars_file loudly, naming that
+    # script (hd_alpaca_exit_bars_path() aborts; never an empty result).
+
+    targets::tar_target(
+      stk_exit_bars_file,
+      hd_alpaca_exit_bars_path(),
+      format = "file"
+    ),
+
+    targets::tar_target(stk_exit_bars, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_bars_file))
+    }),
+
+    targets::tar_target(
+      stk_exit_bars_adj_file,
+      hd_alpaca_exit_bars_adj_path(),
+      format = "file"
+    ),
+
+    targets::tar_target(stk_exit_bars_adj, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_bars_adj_file))
+    }),
+
+    targets::tar_target(
+      stk_exit_corp_actions_file,
+      hd_alpaca_exit_corp_actions_path(),
+      format = "file"
+    ),
+
+    targets::tar_target(stk_exit_corp_actions, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_corp_actions_file))
+    }),
+
+    # All index exits (706 as of 2026-11-08, including 464 before the Alpaca
+    # history starts: those come back has_bars = FALSE). The rule and its
+    # constants live in hd_alpaca_exit_rule(); a known failed name is forced to
+    # exit_type = "failure_candidate". A ticker_change row has no price: join
+    # it to new_ticker.
+    #
+    # The positive control GATES this target: 17 real leavers whose fate is
+    # known must get that exit_type (TWTR its 54.2 deal price, NBL acquirer
+    # CVX); hd_alpaca_exit_controls() aborts on any mismatch, or if fewer than
+    # 13 are present, so stk_exit_prices fails and everything downstream
+    # (stk_exit_coverage and every consumer) is skipped.
+    targets::tar_target(stk_exit_prices, {
+      prices <- hd_alpaca_exit_prices(
+        stk_exit_bars,
+        stk_exit_bars_adj,
+        stk_exit_corp_actions,
+        hd_sp500_exits(stk_universe_pit[, c("date", "ticker")]),
+        known_failed = hd_sp500_known_delisted()$ticker
+      )
+      hd_alpaca_exit_controls(prices)
+      prices
+    }),
+
+    # Reporting table of the control (the gate itself is inside stk_exit_prices).
+    targets::tar_target(stk_exit_prices_controls, {
+      hd_alpaca_exit_controls(stk_exit_prices)
+    }),
+
+    targets::tar_target(stk_exit_coverage, {
+      hd_alpaca_exit_coverage(stk_exit_prices)
     })
 
   )

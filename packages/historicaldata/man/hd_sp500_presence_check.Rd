@@ -43,6 +43,7 @@ Other sp500:
 \code{\link{hd_sp500_coverage}()},
 \code{\link{hd_sp500_data_dir}()},
 \code{\link{hd_sp500_equity_spans}()},
+\code{\link{hd_sp500_exits}()},
 \code{\link{hd_sp500_known_delisted}()},
 \code{\link{hd_sp500_members_asof}()},
 \code{\link{hd_sp500_membership}()},
