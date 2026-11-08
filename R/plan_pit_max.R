@@ -8,16 +8,29 @@
 # on the stocks that were ACTUALLY in the S&P 500 at the time, including those
 # that were later taken over or failed?
 #
-# THREE VARIANTS, same months (the common non-NA-rf months of all three), same MAX signal, same
+# FOUR VARIANTS, same months (the common non-NA-rf months of all four), same MAX signal, same
 # deciles, same costs, same rf:
 #   biased     today's top-100-by-market-cap universe (stk_max_portfolio),
 #              restricted to the months the PIT variants cover.
+#   current_members  TODAY's S&P 500 members (the latest membership snapshot),
+#              carried back to 2016: the PIT size range (about 500 stocks) with
+#              the survivors' hindsight, no exits by construction. A ticker with
+#              an earlier symbol (a rename) is spliced; a symbol reused by an
+#              earlier, different company is trimmed (hd_trim_symbol_reuse()).
 #   pit_upper  point-in-time S&P 500 members; the final month of a stock that
 #              stopped trading ends at exit_price_upper.
 #   pit_lower  the same, ending at exit_price_lower (0 for a failure candidate,
 #              so that month's return is -100%).
 # The two PIT variants differ ONLY in exit months. They are BOUNDS, not a
 # delisting return (Alpaca has none).
+#
+# WHY THE FOURTH VARIANT. biased vs pit_upper mixes two effects: survivorship
+# AND size (100 mega-caps vs about 500 stocks). current_members has the size
+# range of the PIT variants but survivors only, so
+#   biased - current_members     = size / concentration,
+#   current_members - pit_upper  = survivorship,
+#   pit_upper - pit_lower        = failure bound.
+# stk_pit_max_decomposition reports each as a monthly-difference statistic.
 #
 # REPORT ONLY. Nothing here is registered in the leaderboard or the research
 # registry (register_runs): that would change published numbers and the trial
@@ -42,7 +55,13 @@
 #   stk_pit_max_panel       signal x held-month returns, valid months only
 #   stk_pit_max_portfolio_upper / _lower
 #   stk_max_portfolio_biased_2016
-#   stk_pit_max_comparison  the comparison table
+#   stk_current_member_bars_adj_file / stk_current_member_bars_adj  adjusted bars of
+#                           today's members (scripts/fetch_alpaca_current_member_bars.R),
+#                           symbol reuse trimmed; stk_current_member_trimmed lists the trims
+#   stk_current_members_series / _monthly / _max_signal / _max_panel / _max_portfolio
+#                           the current_members variant, as the PIT chain
+#   stk_pit_max_comparison  the comparison table (four variants)
+#   stk_pit_max_decomposition  monthly-difference statistics of the three effects
 
 # ── Helpers (not targets) ─────────────────────────────────────────
 
@@ -155,40 +174,52 @@ pit_biased_n_stocks <- function(max_signal, monthly, yms, n_deciles) {
     dplyr::filter(n_stocks >= n_deciles * 5, ym %in% yms)
 }
 
-#' The comparison table: biased vs PIT upper vs PIT lower
+#' Months common to all portfolios, with a non-NA rf
+#'
+#' @param ports List of portfolios (`ym`, `rf_ret`).
+#' @param min_months Abort when fewer common months remain.
+#' @return Sorted character vector of "YYYY-MM".
+#' @noRd
+pit_common_months <- function(ports, min_months = 24L) {
+  ok_rf <- function(p) intersect(p$ym, p$ym[!is.na(p$rf_ret)])
+  common <- sort(Reduce(intersect, lapply(ports, ok_rf)))
+  if (length(common) < min_months) {
+    n_common <- length(common)
+    n_variants <- length(ports)
+    cli::cli_abort(c(
+      "x" = "Only {n_common} month{?s} are common to all {n_variants} variants with a non-NA rf_ret; at least {min_months} are needed.",
+      "i" = "Check that the member bars, equity_daily and stk_rf overlap."
+    ))
+  }
+  common
+}
+
+#' The comparison table: biased, current members, PIT upper, PIT lower
 #'
 #' Metrics come from calc_backtest_metrics() with strategy "Stock MAX", exactly
 #' as stk_max_metrics (long-short, EXCESS basis: no rf deducted, so
 #' sharpe = cagr / vol). EVERY variant is measured over the COMMON set of months:
-#' months present in all three portfolios AND with a non-NA `rf_ret` (the biased
+#' months present in all four portfolios AND with a non-NA `rf_ret` (the biased
 #' universe and the rf series end earlier than the PIT bars). The window is shown
 #' in `first_ym`, `last_ym` and `n_months`.
-#' @param biased,upper,lower The three portfolios (`ym`, `port_ret`, `long_ret`,
-#'   `short_ret`, `rf_ret`).
+#' @param biased,current,upper,lower The four portfolios (`ym`, `port_ret`,
+#'   `long_ret`, `short_ret`, `rf_ret`).
 #' @param panel pit_max_panel() (for stocks per month and leaver-months).
+#' @param current_panel The panel of the current-members variant (stocks per month).
 #' @param biased_n pit_biased_n_stocks().
 #' @param min_months Abort when fewer common months remain (default 24).
-#' @return Tibble, one row per variant: variant, first_ym, last_ym, n_months,
+#' @return Tibble, one row per variant (biased, current_members, pit_upper,
+#'   pit_lower): variant, first_ym, last_ym, n_months,
 #'   ann_return, ann_vol, sharpe, max_dd, long_ann, short_ann (mean leg return
 #'   times 12), mean_n_stocks, n_takeover, n_failure_candidate, n_demotion
-#'   (leaver-months in the common window; NA for biased, which has none).
+#'   (leaver-months in the common window; NA for biased and current_members,
+#'   which have none by construction).
 #' @noRd
-pit_max_comparison <- function(biased, upper, lower, panel, biased_n,
-                               min_months = 24L) {
-  ok_rf <- function(p) p$ym[!is.na(p$rf_ret)]
-  common <- Reduce(intersect, list(
-    intersect(biased$ym, ok_rf(biased)),
-    intersect(upper$ym, ok_rf(upper)),
-    intersect(lower$ym, ok_rf(lower))
-  ))
-  common <- sort(common)
-  if (length(common) < min_months) {
-    cli::cli_abort(c(
-      "x" = "Only {length(common)} month{?s} are common to all three variants with a non-NA rf_ret; at least {min_months} are needed.",
-      "i" = "Check that the member bars, equity_daily and stk_rf overlap."
-    ))
-  }
+pit_max_comparison <- function(biased, current, upper, lower, panel,
+                               current_panel, biased_n, min_months = 24L) {
+  common <- pit_common_months(list(biased, current, upper, lower), min_months)
   panel <- panel[panel$ym %in% common, , drop = FALSE]
+  current_panel <- current_panel[current_panel$ym %in% common, , drop = FALSE]
   one <- function(p, variant, mean_n, leavers) {
     p <- p[p$ym %in% common, , drop = FALSE]
     m <- calc_backtest_metrics(p, "Full Period", strategy = "Stock MAX")
@@ -203,7 +234,7 @@ pit_max_comparison <- function(biased, upper, lower, panel, biased_n,
       n_demotion = leavers[["demotion"]]
     )
   }
-  pit_n <- panel |> dplyr::count(ym) |> dplyr::pull(n) |> mean()
+  mean_per_month <- function(pn) pn |> dplyr::count(ym) |> dplyr::pull(n) |> mean()
   cnt <- function(type) sum(panel$exit_type %in% type)
   pit_leavers <- c(takeover = cnt("takeover"), failure_candidate = cnt("failure_candidate"),
                    demotion = cnt("demotion"))
@@ -212,9 +243,126 @@ pit_max_comparison <- function(biased, upper, lower, panel, biased_n,
   biased_n <- biased_n[biased_n$ym %in% common, , drop = FALSE]
   dplyr::bind_rows(
     one(biased, "biased", mean(biased_n$n_stocks), na_leavers),
-    one(upper, "pit_upper", pit_n, pit_leavers),
-    one(lower, "pit_lower", pit_n, pit_leavers)
+    one(current, "current_members", mean_per_month(current_panel), na_leavers),
+    one(upper, "pit_upper", mean_per_month(panel), pit_leavers),
+    one(lower, "pit_lower", mean_per_month(panel), pit_leavers)
   )
+}
+
+#' Monthly-difference statistics of one return series
+#'
+#' For a vector `d` of monthly differences: the annualised mean (times 12), the
+#' plain t-statistic of the mean, a Newey-West t-statistic (Bartlett weights,
+#' `lags` lags, long-run variance times n / (n - 1) so that `lags = 0` equals
+#' the plain t exactly), and a moving-block bootstrap confidence interval of the
+#' annualised mean (overlapping blocks of `block` months, `B` resamples of
+#' length n). The bootstrap draws from the session RNG: call set.seed() first.
+#' @param d Numeric vector of monthly differences, no NA, at least 3 values.
+#' @param lags Newey-West lags (default 6).
+#' @param block Bootstrap block length in months (default 6; capped at n).
+#' @param B Bootstrap resamples (default 10000).
+#' @param level Confidence level of the interval (default 0.95).
+#' @return One-row tibble: n_months, mean_ann, t_plain, t_nw, ci_lo, ci_hi.
+#' @noRd
+pit_diff_stats <- function(d, lags = 6L, block = 6L, B = 10000L, level = 0.95) {
+  if (!is.numeric(d) || anyNA(d) || length(d) < 3L) {
+    cli::cli_abort(c(
+      "x" = "{.arg d} must be numeric, without NA, with at least 3 values.",
+      "i" = "Got {length(d)} value{?s}."
+    ))
+  }
+  n <- length(d)
+  lags <- min(as.integer(lags), n - 1L)
+  block <- min(as.integer(block), n)
+  m <- mean(d)
+  e <- d - m
+  gamma <- function(l) sum(e[(l + 1L):n] * e[seq_len(n - l)]) / n
+  lrv <- gamma(0L)
+  for (l in seq_len(lags)) lrv <- lrv + 2 * (1 - l / (lags + 1)) * gamma(l)
+  lrv <- lrv * n / (n - 1L)
+  s <- stats::sd(d)
+  t_plain <- if (s > 1e-12) m / (s / sqrt(n)) else NA_real_
+  t_nw <- if (lrv > 1e-24) m / sqrt(lrv / n) else NA_real_
+  k <- ceiling(n / block)
+  starts <- matrix(sample.int(n - block + 1L, B * k, replace = TRUE), nrow = B, ncol = k)
+  idx <- matrix(0L, nrow = B, ncol = k * block)
+  for (j in seq_len(k)) {
+    idx[, (j - 1L) * block + seq_len(block)] <- starts[, j] + rep(0:(block - 1L), each = B)
+  }
+  boot_mean <- rowMeans(matrix(d[idx[, seq_len(n)]], nrow = B)) * 12
+  ci <- stats::quantile(boot_mean, c((1 - level) / 2, 1 - (1 - level) / 2), names = FALSE)
+  tibble::tibble(n_months = n, mean_ann = m * 12, t_plain = t_plain, t_nw = t_nw,
+                 ci_lo = ci[1L], ci_hi = ci[2L])
+}
+
+#' The decomposition table: three effects, three legs
+#'
+#' Over the months common to the four portfolios (see pit_common_months()),
+#' the monthly difference of each leg between two variants:
+#' biased - current_members (size / concentration), current_members - pit_upper
+#' (survivorship), pit_upper - pit_lower (failure bound). The long-short leg is
+#' `port_ret`: costs are the same for every variant, so they cancel in a
+#' difference.
+#' @param biased,current,upper,lower The four portfolios.
+#' @param min_months Abort when fewer common months remain.
+#' @param ... Passed to pit_diff_stats() (`lags`, `block`, `B`, `level`).
+#' @return Tibble: comparison, effect, leg ("long", "short", "long_short"),
+#'   then the columns of pit_diff_stats().
+#' @noRd
+pit_max_decomposition <- function(biased, current, upper, lower,
+                                  min_months = 24L, ...) {
+  common <- pit_common_months(list(biased, current, upper, lower), min_months)
+  get <- function(p, col) p[[col]][match(common, p$ym)]
+  pairs <- list(
+    list(a = biased, b = current, comparison = "biased - current_members",
+         effect = "size / concentration"),
+    list(a = current, b = upper, comparison = "current_members - pit_upper",
+         effect = "survivorship"),
+    list(a = upper, b = lower, comparison = "pit_upper - pit_lower",
+         effect = "failure bound")
+  )
+  legs <- c(long = "long_ret", short = "short_ret", long_short = "port_ret")
+  dplyr::bind_rows(lapply(pairs, function(pr) {
+    dplyr::bind_rows(lapply(names(legs), function(leg) {
+      st <- pit_diff_stats(get(pr$a, legs[[leg]]) - get(pr$b, legs[[leg]]), ...)
+      dplyr::bind_cols(
+        tibble::tibble(comparison = pr$comparison, effect = pr$effect, leg = leg), st
+      )
+    }))
+  }))
+}
+
+#' The rename rows of the exit table
+#'
+#' The current-members variant has no exits by construction: only the
+#' `ticker_change` rows are kept, so every old symbol still splices to its
+#' current ticker.
+#' @param exit_prices stk_exit_prices.
+#' @return The `ticker_change` rows.
+#' @noRd
+pit_renames_only <- function(exit_prices) {
+  exit_prices[exit_prices$exit_type %in% "ticker_change", , drop = FALSE]
+}
+
+#' Monthly returns of today's S&P 500 members, carried back
+#'
+#' Calls hd_pit_monthly_returns() with ONE membership snapshot, dated the day
+#' before `panel_start`, listing the tickers of the latest snapshot of
+#' `universe`: every month's universe is today's list. A stock listed later
+#' enters when it first has a signal-month and a held-month bar.
+#' @param bars Adjusted bars (stk_current_member_bars_adj).
+#' @param universe stk_universe_pit (`ticker`, `date`).
+#' @param exit_prices stk_exit_prices (reduced to renames here).
+#' @param panel_start Date; first day of the backtest window.
+#' @return As hd_pit_monthly_returns().
+#' @noRd
+pit_current_members_monthly <- function(bars, universe, exit_prices, panel_start) {
+  latest <- max(universe$date)
+  members <- tibble::tibble(
+    ticker = sort(unique(universe$ticker[universe$date == latest])),
+    date = as.Date(panel_start) - 1L
+  )
+  hd_pit_monthly_returns(bars, members, pit_renames_only(exit_prices))
 }
 
 #' Securities excluded from the PIT backtest, in-window and overall
@@ -289,14 +437,74 @@ plan_pit_max <- function() {
       pit_restrict_biased(stk_max_portfolio, stk_pit_max_portfolio_upper)
     }),
 
+    # ---- Fourth variant: today's S&P 500 members carried back (#1041) -------
+    # A machine without the cache fails loudly, naming the fetch script.
+    targets::tar_target(
+      stk_current_member_bars_adj_file,
+      hd_alpaca_current_member_bars_adj_path(),
+      format = "file"
+    ),
+
+    # Symbol reuse trimmed per symbol BEFORE the series are spliced; the trims
+    # stay on the attribute "trimmed" and in stk_current_member_trimmed.
+    targets::tar_target(stk_current_member_bars_adj, {
+      hd_trim_symbol_reuse(
+        tibble::as_tibble(arrow::read_parquet(stk_current_member_bars_adj_file))
+      )
+    }),
+
+    targets::tar_target(stk_current_member_trimmed, {
+      attr(stk_current_member_bars_adj, "trimmed")
+    }),
+
+    targets::tar_target(stk_current_members_series, {
+      hd_pit_price_series(stk_current_member_bars_adj, pit_renames_only(stk_exit_prices))
+    }),
+
+    targets::tar_target(stk_current_members_monthly, {
+      pit_current_members_monthly(
+        stk_current_member_bars_adj, stk_universe_pit, stk_exit_prices,
+        historicaldata::hd_alpaca_exit_rule()$panel_start
+      )
+    }),
+
+    targets::tar_target(stk_current_members_max_signal, {
+      pit_max_signal(stk_current_members_series)
+    }),
+
+    targets::tar_target(stk_current_members_max_panel, {
+      pit_max_panel(stk_current_members_monthly, stk_current_members_max_signal,
+                    stk_params$n_deciles)
+    }),
+
+    # No exits, so ret_upper == ret_lower; "upper" is the same series either way.
+    targets::tar_target(stk_current_members_max_portfolio, {
+      pit_max_portfolio(stk_current_members_max_panel, "upper", stk_params, stk_rf)
+    }),
+
     targets::tar_target(stk_pit_max_comparison, {
       pit_max_comparison(
         stk_max_portfolio_biased_2016,
+        stk_current_members_max_portfolio,
         stk_pit_max_portfolio_upper,
         stk_pit_max_portfolio_lower,
         stk_pit_max_panel,
+        stk_current_members_max_panel,
         pit_biased_n_stocks(stk_max_signal, stk_monthly,
                             stk_pit_max_portfolio_upper$ym, stk_params$n_deciles)
+      )
+    }),
+
+    # Monthly-difference statistics of the three effects (size, survivorship,
+    # failure bound); the seed makes the bootstrap interval reproducible.
+    targets::tar_target(stk_pit_max_decomposition, {
+      set.seed(1041L)
+      pit_max_decomposition(
+        stk_max_portfolio_biased_2016,
+        stk_current_members_max_portfolio,
+        stk_pit_max_portfolio_upper,
+        stk_pit_max_portfolio_lower,
+        lags = 6L, block = 6L, B = 10000L
       )
     })
 
