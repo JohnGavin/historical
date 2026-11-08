@@ -54,6 +54,46 @@ hd_alpaca_bars_data_dir <- function() {
                         serialize = FALSE), 1L, 16L)
 }
 
+#' cli bullets for a fetch-cache params mismatch
+#'
+#' A params string is one long unbreakable token, so a bullet holding the whole
+#' string wraps at the console width. The bullets show only the `key=value`
+#' pieces (split on `;`) that differ. When the two strings differ but neither has
+#' a piece the other lacks (reordered, repeated or empty pieces), both full
+#' strings are shown, one per bullet, so the abort never lists empty bullets.
+#' Values are rendered here, so the result is safe to pass to
+#' [cli::cli_abort()] from any environment.
+#' @param name File name the params belong to.
+#' @param manifest_params,run_params Character scalars: the committed manifest's
+#'   params and this run's params.
+#' @return Named character vector for `cli::cli_abort()`.
+#' @keywords internal
+.hd_params_diff_bullets <- function(name, manifest_params, run_params) {
+  esc <- function(x) gsub("}", "}}", gsub("{", "{{", x, fixed = TRUE), fixed = TRUE)
+  val <- function(x) esc(cli::format_inline("{.val {x}}"))
+  old_p <- strsplit(manifest_params, ";", fixed = TRUE)[[1L]]
+  new_p <- strsplit(run_params, ";", fixed = TRUE)[[1L]]
+  only_manifest <- setdiff(old_p, new_p)
+  only_now <- setdiff(new_p, old_p)
+  head <- c("x" = esc(cli::format_inline("{.file {name}} was fetched with different parameters.")))
+  tail <- c("i" = "Re-fetch with {.code ALPACA_FORCE_REFETCH=1}.")
+  if (length(only_manifest) == 0L && length(only_now) == 0L) {
+    return(c(
+      head,
+      "i" = "Both params strings hold the same key=value pieces; only their order, repetition or an empty segment differ.",
+      "i" = paste0("In the manifest: ", val(manifest_params)),
+      "i" = paste0("In this run: ", val(run_params)),
+      tail
+    ))
+  }
+  c(
+    head,
+    "i" = paste0("In the manifest only: ", val(only_manifest)),
+    "i" = paste0("In this run only: ", val(only_now)),
+    tail
+  )
+}
+
 #' File name of the cached exit-bars parquet inside [hd_alpaca_bars_data_dir()]
 #' @return Character scalar.
 #' @keywords internal
