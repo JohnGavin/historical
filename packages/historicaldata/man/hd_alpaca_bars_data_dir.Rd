@@ -17,7 +17,9 @@ with \code{scripts/fetch_alpaca_exit_bars.R}.
 \seealso{
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
+\code{\link{hd_alpaca_exit_assets_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
+\code{\link{hd_alpaca_exit_controls}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_prices}()},
 \code{\link{hd_alpaca_exit_rule}()}

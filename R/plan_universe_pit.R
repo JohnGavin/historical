@@ -48,9 +48,15 @@
 # after Alpaca's 2016-01-04 history start):
 #   stk_exit_bars_file   cached Alpaca bars parquet, format = "file"
 #   stk_exit_bars        the bars (symbol, date, open..vwap)
-#   stk_exit_prices      one row per index exit: last trade, failure flag,
-#                        exit_price_lower / exit_price_upper (hd_alpaca_exit_rule())
-#   stk_exit_coverage    by exit year: exits, with bars, failure candidates
+#   stk_exit_assets_file cached Alpaca asset list (active + inactive), format = "file"
+#   stk_exit_assets      the asset list (symbol, name, status; detects ticker changes)
+#   stk_exit_prices      one row per index exit: exit_type (demotion,
+#                        ticker_change, failure_candidate, takeover, ...), last
+#                        trade, exit_price_lower / exit_price_upper
+#                        (hd_alpaca_exit_rule())
+#   stk_exit_prices_controls  positive control: named real cases (SIVB, NBL, FI,
+#                        ...) must get their known exit_type; ABORTS otherwise
+#   stk_exit_coverage    by exit year: exits, with bars, one count per exit_type
 # These are BOUNDS, not delisting returns: a failure candidate's lower bound is
 # 0 and its upper bound the last exchange close.
 #
@@ -121,16 +127,34 @@ plan_universe_pit <- function() {
       tibble::as_tibble(arrow::read_parquet(stk_exit_bars_file))
     }),
 
+    targets::tar_target(
+      stk_exit_assets_file,
+      hd_alpaca_exit_assets_path(),
+      format = "file"
+    ),
+
+    targets::tar_target(stk_exit_assets, {
+      tibble::as_tibble(arrow::read_parquet(stk_exit_assets_file))
+    }),
+
     # All index exits (706 as of 2026-11-08, including 464 before the Alpaca
     # history starts: those come back has_bars = FALSE). The rule and its
     # constants live in hd_alpaca_exit_rule(); a known failed name is forced to
-    # failure_candidate = TRUE.
+    # exit_type = "failure_candidate". A ticker_change row has no price: join
+    # it to new_ticker.
     targets::tar_target(stk_exit_prices, {
       hd_alpaca_exit_prices(
         stk_exit_bars,
         hd_sp500_exits(stk_universe_pit[, c("date", "ticker")]),
+        stk_exit_assets,
         known_failed = hd_sp500_known_delisted()$ticker
       )
+    }),
+
+    # Positive control (can go red): 14 real leavers whose fate is known must
+    # get that exit_type; aborts on any mismatch, or if fewer than 10 are present.
+    targets::tar_target(stk_exit_prices_controls, {
+      hd_alpaca_exit_controls(stk_exit_prices)
     }),
 
     targets::tar_target(stk_exit_coverage, {

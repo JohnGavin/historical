@@ -7,24 +7,36 @@
   delisted symbols); batches symbols, follows `next_page_token`, aborts on any
   non-200 with the HTTP status and API message.
 - `hd_sp500_exits()`, `hd_alpaca_exit_rule()`, `hd_alpaca_exit_prices()`,
-  `hd_alpaca_exit_coverage()` (`alpaca_exit_prices.R`). Rule, constants in one
-  place: last trade = last bar with `volume > 0` within the membership span
-  +/- 30 days (clips ticker recycling and the zero-volume flat tail Alpaca
-  carries after a seizure). `failure_candidate` when the last trade is more
-  than 5 trading days before the index exit, or the close fell more than 50%
-  over the last 60 trading days, or the name is in `known_delisted.csv`.
-  `exit_price_upper` is the last close; `exit_price_lower` is 0 for a failure
-  candidate. These are bounds, not delisting returns.
+  `hd_alpaca_exit_coverage()`, `hd_alpaca_exit_controls()`
+  (`alpaca_exit_prices.R`). Rule (owner-approved 2026-11-08; the first rule, a
+  trading-gap test plus a 50% fall, misclassified 9 of 15 flags on real data).
+  Bars are clipped to the membership span +/- 30 days and only `volume > 0`
+  bars are trades. Each exit gets an `exit_type`: `demotion` (a trade after the
+  index exit date; priced at the last close on or before the exit date, upper =
+  lower), `ticker_change` (stopped trading and exactly one ACTIVE Alpaca asset
+  with another symbol has the same normalised company name; `new_ticker` set,
+  no price; several matches give `ticker_change_ambiguous`),
+  `failure_candidate` (stopped trading and the 60-trading-day return to the
+  last trade is below -30%; upper = last close, lower = 0), `takeover`
+  (stopped trading otherwise; upper = lower = last close), `too_recent` (exit
+  within 5 weekdays of the last fetched bar) and `no_bars`. `known_delisted.csv`
+  names are forced to `failure_candidate`. The trading-gap test is no longer
+  used (`gap_trading_days` stays as information). `failure_candidate` (logical)
+  is kept. These are bounds, not delisting returns.
 - `scripts/fetch_alpaca_exit_bars.R` + manifest
-  (`inst/extdata/alpaca/alpaca_exit_bars_manifest.csv` once fetched): fetches
-  the 242 of 706 index exits on or after 2016-01-04 (the other 464 have no free
-  source); raw bars stay local. Not run in this change (needs Alpaca keys).
-- `R/plan_universe_pit.R`: targets `stk_exit_bars_file` (`format = "file"`,
-  aborts naming the fetch script when the cache is absent), `stk_exit_bars`,
-  `stk_exit_prices`, `stk_exit_coverage`.
+  (`inst/extdata/alpaca/alpaca_exit_bars_manifest.csv`): fetches the 242 of 706
+  index exits on or after 2016-01-04 (the other 464 have no free source) and
+  the Alpaca asset list (active and inactive; manifest `assets_rows`,
+  `assets_sha256`); raw files stay local.
+- `R/plan_universe_pit.R`: targets `stk_exit_bars_file` and
+  `stk_exit_assets_file` (`format = "file"`, abort naming the fetch script when
+  the cache is absent), `stk_exit_bars`, `stk_exit_assets`, `stk_exit_prices`,
+  `stk_exit_prices_controls` (positive control: 14 named real cases must get
+  their known `exit_type`, aborts on any mismatch or if fewer than 10 are
+  present) and `stk_exit_coverage` (one count per `exit_type`).
 - Hermetic tests (`test-alpaca-bars.R`): mocked HTTP (pagination, non-200
-  snapshot, empty response) and synthetic SIVB, SBNY, takeover, crash, known
-  failure and ticker-recycling shapes.
+  snapshot, empty response) and synthetic shapes of each `exit_type`, the
+  controls check and the company-name normaliser.
 
 ## 2026-11-07 (point-in-time S&P 500 membership universe replaces the stub, refs #816)
 

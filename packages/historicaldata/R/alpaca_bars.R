@@ -47,6 +47,32 @@ hd_alpaca_exit_bars_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
   path
 }
 
+#' File name of the cached Alpaca assets parquet inside [hd_alpaca_bars_data_dir()]
+#'
+#' The asset list (status active and inactive, us_equity) used to detect ticker
+#' changes in [hd_alpaca_exit_prices()].
+#' @return Character scalar.
+#' @keywords internal
+.hd_alpaca_exit_assets_file_name <- function() "alpaca_assets_us_equity_both.parquet"
+
+#' Path of the cached Alpaca assets parquet
+#'
+#' @inheritParams hd_alpaca_exit_bars_path
+#' @return Character path. Aborts if the file is absent, naming the fetch script.
+#' @family alpaca
+#' @export
+hd_alpaca_exit_assets_path <- function(data_dir = hd_alpaca_bars_data_dir()) {
+  path <- file.path(data_dir, .hd_alpaca_exit_assets_file_name())
+  if (!file.exists(path)) {
+    cli::cli_abort(c(
+      "x" = "Alpaca assets file not found: {.path {path}}.",
+      "i" = "Fetch it first (needs {.envvar ALPACA_KEY} and {.envvar ALPACA_SECRET}): {.code Rscript scripts/fetch_alpaca_exit_bars.R}",
+      "i" = "Or set {.envvar ALPACA_BARS_DIR} to a directory that holds {.file {(.hd_alpaca_exit_assets_file_name())}}."
+    ))
+  }
+  path
+}
+
 #' Zero-row bars table with the column types `hd_alpaca_bars()` returns
 #' @return A zero-row tibble.
 #' @keywords internal

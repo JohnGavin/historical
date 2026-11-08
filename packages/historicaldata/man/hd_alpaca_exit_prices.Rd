@@ -2,11 +2,12 @@
 % Please edit documentation in R/alpaca_exit_prices.R
 \name{hd_alpaca_exit_prices}
 \alias{hd_alpaca_exit_prices}
-\title{Exit price and failure flag for each S&P 500 leaver}
+\title{Exit type, price and failure flag for each S&P 500 leaver}
 \usage{
 hd_alpaca_exit_prices(
   bars,
   exits,
+  assets,
   known_failed = character(),
   rule = hd_alpaca_exit_rule()
 )
@@ -18,44 +19,62 @@ hd_alpaca_exit_prices(
 \item{exits}{Output of \code{\link[=hd_sp500_exits]{hd_sp500_exits()}} (needs \code{ticker},
 \code{first_member_date}, \code{index_exit_date}; one row per ticker).}
 
+\item{assets}{Alpaca assets, status active and inactive (needs character
+\code{symbol}, \code{name}, \code{status}), as saved by \code{scripts/fetch_alpaca_exit_bars.R}.
+Used only to detect ticker changes.}
+
 \item{known_failed}{Character vector of tickers known to have failed
 (e.g. \code{hd_sp500_known_delisted()$ticker}); they are forced to
-\code{failure_candidate = TRUE}.}
+\code{exit_type = "failure_candidate"}.}
 
 \item{rule}{Rule constants. Defaults to \code{\link[=hd_alpaca_exit_rule]{hd_alpaca_exit_rule()}}.}
 }
 \value{
-A tibble, one row per exit: \code{ticker}, \code{index_exit_date},
-\code{last_trade_date}, \code{last_close}, \code{gap_trading_days}, \code{ret_60d},
-\code{failure_candidate}, \code{exit_price_upper}, \code{exit_price_lower}, \code{has_bars}.
+A tibble, one row per exit: \code{ticker}, \code{index_exit_date}, \code{exit_type},
+\code{new_ticker}, \code{last_trade_date}, \code{last_close}, \code{gap_trading_days},
+\code{ret_60d}, \code{failure_candidate} (\code{exit_type == "failure_candidate"}; \code{NA}
+for \code{no_bars} and \code{too_recent}, where it is unknown), \code{exit_price_upper},
+\code{exit_price_lower}, \code{has_bars}.
 }
 \description{
-Applies the #1041 exit-price rule (constants in \code{\link[=hd_alpaca_exit_rule]{hd_alpaca_exit_rule()}}):
+Applies the #1041 exit-price rule (constants in \code{\link[=hd_alpaca_exit_rule]{hd_alpaca_exit_rule()}}).
+Bars of a ticker are clipped to its membership span plus or minus
+\code{window_days} (lower edge: \code{max(panel_start, first_member_date)}), so a later
+company that reused the symbol is ignored, and only \code{volume > 0} bars count
+as trades. Each exit gets one \code{exit_type}, tested in this order:
 }
 \details{
 \enumerate{
-\item Bars of a ticker are clipped to its membership span plus or minus
-\code{window_days} (lower edge: \code{max(panel_start, first_member_date)}), so a
-later company that reused the symbol is ignored.
-\item A bar is a trade only if \code{volume > 0}. The last trade is the last such
-bar on or before \code{index_exit_date + window_days}.
-\item \code{gap_trading_days} is the number of weekdays between the last trade and
-the index exit (0 if the last trade is on or after the exit). Exchange
-holidays are not removed.
-\item \code{ret_60d} is the last close over the close \code{crash_lookback} trading days
-earlier, minus 1 (\code{NA} with fewer bars).
-\item \code{failure_candidate} is \code{TRUE} when \code{gap_trading_days > max_gap_trading_days}, or \code{ret_60d < -crash_drop}, or the ticker is in
-\code{known_failed}. With no usable bars it is \code{TRUE} for a known failure and
-\code{NA} (unknown) otherwise.
-\item \code{exit_price_upper} is the last close; \code{exit_price_lower} is 0 for a
-failure candidate, else the last close.
+\item \code{known_failed} ticker: \code{failure_candidate} (override).
+\item no bars: \code{no_bars}.
+\item \code{demotion}: at least one trade strictly after \code{index_exit_date}. The name
+kept trading, so the index exit is not a delisting. Price (upper = lower)
+is the close of the last trade ON OR BEFORE the exit date.
+\item \code{too_recent}: the exit is within \code{too_recent_weekdays} weekdays of the
+last date in \code{bars}, so whether it keeps trading is not yet known. No price.
+\item \code{ticker_change}: stopped trading, and exactly one ACTIVE asset with a
+different symbol has the same normalised company name as this symbol
+(see \code{.hd_normalise_company_name()}). \code{new_ticker} names it. No price: it
+is not an exit, join to the new ticker. Several active matches:
+\code{ticker_change_ambiguous}, nothing chosen, no price.
+\item \code{failure_candidate}: stopped trading, \code{ret_60d < -crash_drop}. Upper =
+last close, lower = 0.
+\item \code{takeover}: stopped trading otherwise. Upper = lower = last close.
 }
+
+\code{ret_60d} is the close at the priced bar over the close \code{crash_lookback}
+trading days earlier, minus 1 (\code{NA} with fewer bars). \code{last_trade_date} and
+\code{last_close} are the last trade inside the window (after the exit date for a
+demotion); \code{gap_trading_days} counts weekdays from it to the exit (0 if on or
+after; holidays not removed) and is informational only.
 }
 \seealso{
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
+\code{\link{hd_alpaca_exit_assets_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
+\code{\link{hd_alpaca_exit_controls}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_rule}()}
 }

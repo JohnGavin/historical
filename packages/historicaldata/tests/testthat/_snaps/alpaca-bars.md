@@ -47,7 +47,7 @@
 # hd_alpaca_exit_prices validates its inputs
 
     Code
-      hd_alpaca_exit_prices(data.frame(x = 1), .ep_exit("AAA"))
+      hd_alpaca_exit_prices(data.frame(x = 1), ex, as)
     Condition
       Error in `hd_alpaca_exit_prices()`:
       x `bars` must be a data frame with symbol, date, close, and volume (Date date, numeric close and volume).
@@ -56,7 +56,7 @@
 ---
 
     Code
-      hd_alpaca_exit_prices(bad, .ep_exit("AAA"))
+      hd_alpaca_exit_prices(bad, ex, as)
     Condition
       Error in `hd_alpaca_exit_prices()`:
       ! `bars` has missing symbol, date, close or volume values.
@@ -64,8 +64,17 @@
 ---
 
     Code
-      hd_alpaca_exit_prices(bars, rbind(.ep_exit("AAA"), .ep_exit("AAA")))
+      hd_alpaca_exit_prices(bars, rbind(ex, ex), as)
     Condition
       Error in `hd_alpaca_exit_prices()`:
       ! `exits` must have one row per ticker.
+
+---
+
+    Code
+      hd_alpaca_exit_prices(bars, ex, data.frame(symbol = "A"))
+    Condition
+      Error in `hd_alpaca_exit_prices()`:
+      x `assets` must be a data frame with character symbol, name, and status.
+      i Fetch it with `Rscript scripts/fetch_alpaca_exit_bars.R`.
 

@@ -17,12 +17,13 @@ Exits before it cannot be priced.}
 \item{\code{window_days}}{Days either side of a ticker's membership span within
 which bars are used. Clips ticker recycling (a later company reusing the
 symbol) and stale series that run on after a seizure.}
-\item{\code{max_gap_trading_days}}{A last trade MORE than this many trading
-days before the index exit date marks a failure candidate.}
-\item{\code{crash_drop}}{A close that fell by MORE than this fraction over
-\code{crash_lookback} trading days to the last trade marks a failure
-candidate.}
+\item{\code{crash_drop}}{A name that stopped trading and whose close fell by
+MORE than this fraction over \code{crash_lookback} trading days to its last
+trade is a failure candidate. 0.30: the real failures fell 43\% (SBNY) to
+98\% (FRC), the real takeovers moved -2\% to +31\%.}
 \item{\code{crash_lookback}}{Trading days (bars with volume > 0) for the drop.}
+\item{\code{too_recent_weekdays}}{An exit within this many weekdays of the last
+date in the fetched bars cannot yet be told from a demotion.}
 }
 A bar is a trade only if its \code{volume} is above zero.
 }
@@ -30,7 +31,9 @@ A bar is a trade only if its \code{volume} is above zero.
 Other alpaca: 
 \code{\link{hd_alpaca_bars}()},
 \code{\link{hd_alpaca_bars_data_dir}()},
+\code{\link{hd_alpaca_exit_assets_path}()},
 \code{\link{hd_alpaca_exit_bars_path}()},
+\code{\link{hd_alpaca_exit_controls}()},
 \code{\link{hd_alpaca_exit_coverage}()},
 \code{\link{hd_alpaca_exit_prices}()}
 }
