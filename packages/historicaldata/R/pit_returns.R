@@ -277,6 +277,19 @@ hd_trim_symbol_reuse <- function(bars, max_gap_days = 30L) {
 #' from `bars_adj`), `rename_no_new_bars` (a renamed ticker whose new symbol has
 #' no bars of its own).
 #'
+#' A member-month (a security in the universe at `signal_ym`, held over `ym`)
+#' that has no signal-month bar or no held-month bar cannot be returned, and is
+#' COUNTED too: `attr(x, "dropped")` has one row per such member-month
+#' (`ticker`, `signal_ym`, `ym`, `reason`), ordered by `reason`, `ym`,
+#' `ticker`. `reason` is `no_signal_bar` (no bar of the security in `signal_ym`)
+#' or `no_held_bar` (a signal bar, but no bar in `ym`). A dropped failure would
+#' understate the `-1` lower bound. Not listed, because nothing was lost: a held
+#' month later than the last month of the bar calendar (not yet observable); a
+#' held month after the last bar month of a `takeover` or `failure_candidate`
+#' (its series ended, the exit return is in an earlier row); and securities
+#' already in `excluded`. The table is always present, with zero rows when
+#' nothing is dropped.
+#'
 #' @param bars_adj Adjusted daily bars (`adjustment = "all"`) as from
 #'   [hd_alpaca_bars()]: `symbol`, `date`, `close`, `volume`, no `NA`, one row per
 #'   symbol and date. Only `volume > 0` bars count as trades.
@@ -289,7 +302,8 @@ hd_trim_symbol_reuse <- function(bars, max_gap_days = 30L) {
 #'   month; the last trade in an exit month), `ret_upper`, `ret_lower`,
 #'   `exit_type` (`NA` except in a security's final held month, when it is
 #'   `takeover`, `failure_candidate` or `demotion`), ordered by `ym` then
-#'   `ticker`; with the attribute `excluded`.
+#'   `ticker`; with the attributes `excluded` (securities) and `dropped`
+#'   (member-months).
 #' @family pit
 #' @export
 hd_pit_monthly_returns <- function(bars_adj, members, exit_prices) {
@@ -359,8 +373,11 @@ hd_pit_monthly_returns <- function(bars_adj, members, exit_prices) {
     signal_date = as.Date(character()), date = as.Date(character()),
     ret_upper = double(), ret_lower = double(), exit_type = character()
   )
+  no_dropped <- tibble::tibble(ticker = character(), signal_ym = character(),
+                               ym = character(), reason = character())
   if (nrow(uni) == 0L) {
     attr(empty, "excluded") <- excluded
+    attr(empty, "dropped") <- no_dropped
     return(empty)
   }
   uni <- uni[!(uni$ticker %in% excluded$ticker), , drop = FALSE]
@@ -373,8 +390,28 @@ hd_pit_monthly_returns <- function(bars_adj, members, exit_prices) {
   held <- stats::setNames(me, c("ticker", "ym", "date", "held_px"))
   out <- dplyr::inner_join(uni, sig, by = c("ticker", "signal_ym"))
   out <- dplyr::inner_join(out, held, by = c("ticker", "ym"))
+
+  # Member-months the inner joins lost: a missing signal-month or held-month bar.
+  # Not listed: a held month after the calendar's last month (not yet observable),
+  # and, for a takeover or failure_candidate, a held month after the last bar
+  # month of its series (the series ended; the exit return is in an earlier row).
+  has_sig <- paste(uni$ticker, uni$signal_ym) %in% paste(me$ticker, me$ym)
+  has_held <- paste(uni$ticker, uni$ym) %in% paste(me$ticker, me$ym)
+  closing <- pid(exit_prices$ticker[exit_prices$exit_type %in%
+                                      c("takeover", "failure_candidate")])
+  last_ym <- tapply(ser$ym, ser$ticker, max)
+  ended <- uni$ticker %in% closing & !is.na(last_ym[uni$ticker]) &
+    uni$ym > last_ym[uni$ticker]
+  lost <- !(has_sig & has_held) & uni$ym <= max(cal$ym) & !ended
+  dropped <- tibble::tibble(
+    ticker = uni$ticker[lost], signal_ym = uni$signal_ym[lost], ym = uni$ym[lost],
+    reason = as.character(ifelse(has_sig[lost], "no_held_bar", "no_signal_bar"))
+  )
+  dropped <- dropped[order(dropped$reason, dropped$ym, dropped$ticker), , drop = FALSE]
+
   if (nrow(out) == 0L) {
     attr(empty, "excluded") <- excluded
+    attr(empty, "dropped") <- dropped
     return(empty)
   }
 
@@ -400,5 +437,6 @@ hd_pit_monthly_returns <- function(bars_adj, members, exit_prices) {
                "ret_upper", "ret_lower", "exit_type")]
   out <- tibble::as_tibble(out)
   attr(out, "excluded") <- excluded
+  attr(out, "dropped") <- dropped
   out
 }

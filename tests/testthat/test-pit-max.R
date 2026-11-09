@@ -378,10 +378,23 @@ test_that("pit_excluded_summary counts in-window securities and keeps the full c
   expect_equal(out$n_all, c(3L, 2L))
 })
 
+test_that("pit_dropped_summary counts in-window member-months and keeps the full count", {
+  dr <- tibble::tibble(ticker = c("A", "A", "B", "C"),
+                       signal_ym = c("2014-12", "2016-01", "2016-02", "2016-02"),
+                       ym = c("2015-01", "2016-02", "2016-03", "2016-03"),
+                       reason = c("no_held_bar", "no_held_bar", "no_signal_bar", "no_held_bar"))
+  out <- pit_env$pit_dropped_summary(dr, panel_start = as.Date("2016-01-01"))
+  expect_equal(out$reason, c("no_held_bar", "no_signal_bar"))
+  expect_equal(out$n_member_months, c(2L, 1L))   # the 2015-01 month is pre-window
+  expect_equal(out$n_all, c(3L, 1L))
+  none <- pit_env$pit_dropped_summary(dr[0, ], panel_start = as.Date("2016-01-01"))
+  expect_equal(nrow(none), 0L)
+})
+
 test_that("plan_pit_max defines the report targets and none feeds the leaderboard", {
   tg <- pit_env$plan_pit_max()
   nm <- vapply(tg, function(t) t$settings$name, character(1))
-  expect_true(all(c("stk_member_bars_adj_file", "stk_member_bars_adj", "stk_pit_monthly",
+  expect_true(all(c("stk_member_bars_adj_file", "stk_member_bars_adj", "stk_pit_monthly", "stk_pit_dropped",
                     "stk_pit_max_portfolio_upper", "stk_pit_max_portfolio_lower",
                     "stk_max_portfolio_biased_2016", "stk_pit_max_comparison",
                     "stk_current_member_bars_adj_file", "stk_current_member_bars_adj",

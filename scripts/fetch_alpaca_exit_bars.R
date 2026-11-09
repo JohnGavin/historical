@@ -109,16 +109,7 @@ ensure_file <- function(name, params, build) {
       # whole string wraps at the console width and its value lands on a
       # continuation line (the "Manifest:" / "Now:" bullets looked blank). Show
       # only the key=value pieces that differ: short, and the useful part.
-      old_p <- strsplit(prev$params, ";", fixed = TRUE)[[1L]]
-      new_p <- strsplit(params, ";", fixed = TRUE)[[1L]]
-      only_manifest <- setdiff(old_p, new_p)
-      only_now <- setdiff(new_p, old_p)
-      cli::cli_abort(c(
-        "x" = "{.file {name}} was fetched with different parameters.",
-        "i" = "In the manifest only: {.val {only_manifest}}",
-        "i" = "In this run only: {.val {only_now}}",
-        "i" = "Re-fetch with {.code ALPACA_FORCE_REFETCH=1}."
-      ))
+      cli::cli_abort(.hd_params_diff_bullets(name, prev$params, params))
     }
     cli::cli_inform("Already present, matches manifest: {.path {dest}} ({file.info(dest)$size} bytes). Not fetched.")
     return(data.frame(file = name, rows = prev$rows, sha256 = prev$sha256,

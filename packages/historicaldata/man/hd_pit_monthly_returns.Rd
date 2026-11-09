@@ -23,7 +23,8 @@ A tibble: \code{ticker} (permanent id), \code{signal_ym}, \code{ym} (held month)
 month; the last trade in an exit month), \code{ret_upper}, \code{ret_lower},
 \code{exit_type} (\code{NA} except in a security's final held month, when it is
 \code{takeover}, \code{failure_candidate} or \code{demotion}), ordered by \code{ym} then
-\code{ticker}; with the attribute \code{excluded}.
+\code{ticker}; with the attributes \code{excluded} (securities) and \code{dropped}
+(member-months).
 }
 \description{
 One row per security and HELD month. A security is in the universe at the
@@ -61,6 +62,19 @@ member the bars do not cover and \code{exit_prices} does not list),
 \code{exit_bar_missing} (a takeover or failure whose last-trade bar is absent
 from \code{bars_adj}), \code{rename_no_new_bars} (a renamed ticker whose new symbol has
 no bars of its own).
+
+A member-month (a security in the universe at \code{signal_ym}, held over \code{ym})
+that has no signal-month bar or no held-month bar cannot be returned, and is
+COUNTED too: \code{attr(x, "dropped")} has one row per such member-month
+(\code{ticker}, \code{signal_ym}, \code{ym}, \code{reason}), ordered by \code{reason}, \code{ym},
+\code{ticker}. \code{reason} is \code{no_signal_bar} (no bar of the security in \code{signal_ym})
+or \code{no_held_bar} (a signal bar, but no bar in \code{ym}). A dropped failure would
+understate the \code{-1} lower bound. Not listed, because nothing was lost: a held
+month later than the last month of the bar calendar (not yet observable); a
+held month after the last bar month of a \code{takeover} or \code{failure_candidate}
+(its series ended, the exit return is in an earlier row); and securities
+already in \code{excluded}. The table is always present, with zero rows when
+nothing is dropped.
 }
 \seealso{
 Other pit: 
