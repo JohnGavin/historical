@@ -10,10 +10,11 @@
 # Question: Is failure universal, or equity-specific?
 #
 # Test plan:
-#   1. Load commodities data (37 series, monthly, 1992-2026)
+#   1. Load commodities data (37 series 1992-2026: 24 daily Yahoo, 13 monthly
+#      FRED/IMF; daily-dominated, so every lookback below is in BARS, #1048)
 #   2. Build 4 momentum variants:
-#      a. Baseline 12m (control)
-#      b. Short (3m) + Long (9m) decomposition
+#      a. Baseline 12-bar (control)
+#      b. Short (3-bar) + Long (9-bar) decomposition
 #      c. Volatility-filtered (low-vol preference)
 #      d. Trend-strength-filtered (smooth trends only)
 #   3. Backtest with 0.2% transaction costs
@@ -47,7 +48,7 @@ plan_commodities_momentum <- function() {
     }),
 
 
-    # ── Compute monthly returns ──────────────────────────────────────────
+    # ── Compute per-observation returns (daily-dominated, #1048) ──────────────────────────────────────
     targets::tar_target(commodities_returns, {
       calculate_commodity_returns(commodities_raw)
     }),
@@ -79,8 +80,9 @@ plan_commodities_momentum <- function() {
       # function still carries for standalone/test callers.
       summarize_commodity_performance(
         backtest_results = commodities_backtest,
-        annual_rf = mean(stk_rf$rf_ret) * 12,
-        strategy = "Commodity Momentum L/S"  # excess spread: rf not deducted (#937)
+        annual_rf = mean(stk_rf$rf_ret) * 12,  # stk_rf is monthly: x12 = annual
+        strategy = "Commodity Momentum L/S",  # excess spread: rf not deducted (#937)
+        periods_per_year = 252L  # daily bars (#1048): same basis as CMR (ann_factor 252)
       )
     }),
 
@@ -142,8 +144,8 @@ plan_commodities_momentum <- function() {
       # Strategy labels
       cumret_data <- cumret_data |>
         mutate(strategy_label = case_when(
-          strategy == "baseline" ~ "Baseline (12m)",
-          strategy == "short_long" ~ "Short (3m) + Long (9m)",
+          strategy == "baseline" ~ "Baseline (12-bar)",
+          strategy == "short_long" ~ "Short (3-bar) + Long (9-bar)",
           strategy == "vol_filtered" ~ "Vol-Filtered",
           strategy == "trend_filtered" ~ "Trend-Filtered",
           TRUE ~ strategy
@@ -160,7 +162,7 @@ plan_commodities_momentum <- function() {
           y = "Cumulative Return (log scale)",
           color = "Strategy",
           caption = paste0(
-            "Source: FRED/IMF commodity prices (37 series, monthly, 1992-2026)\n",
+            "Source: Yahoo futures/ETFs (daily) + FRED/IMF indexes (monthly), 1992-2026; lookbacks in bars\n",
             "Issue #134: Test if momentum decomposition works in commodities after equity failure"
           )
         ) +
@@ -172,13 +174,13 @@ plan_commodities_momentum <- function() {
     }),
 
 
-    # ── Rolling Sharpe plot (36-month window) ────────────────────────────
+    # ── Rolling Sharpe plot (36-bar window) ────────────────────────────
     targets::tar_target(commodities_rolling_sharpe_plot, {
       library(ggplot2)
       library(dplyr)
       library(slider)
 
-      # Compute 36-month rolling Sharpe
+      # Compute 36-bar rolling Sharpe, annualised with 252 bars/year (#1048)
       rolling_sharpe <- commodities_backtest |>
         arrange(strategy, date) |>
         group_by(strategy) |>
@@ -188,11 +190,11 @@ plan_commodities_momentum <- function() {
             ~{
               if (length(.x) < 36) return(NA_real_)
               # #937: long-short spread is an excess return; registry => 0
-              monthly_rf <- hd_rf_for_basis((1.02)^(1/12) - 1, "Commodity Momentum L/S")
+              period_rf <- hd_rf_for_basis((1.02)^(1/252) - 1, "Commodity Momentum L/S")
               mean_ret <- mean(.x, na.rm = TRUE)
               sd_ret <- sd(.x, na.rm = TRUE)
               if (sd_ret == 0) return(NA_real_)
-              (mean_ret - monthly_rf) / sd_ret * sqrt(12)
+              (mean_ret - period_rf) / sd_ret * sqrt(252)
             },
             .before = 35,
             .after = 0,
@@ -204,8 +206,8 @@ plan_commodities_momentum <- function() {
       # Strategy labels
       rolling_sharpe <- rolling_sharpe |>
         mutate(strategy_label = case_when(
-          strategy == "baseline" ~ "Baseline (12m)",
-          strategy == "short_long" ~ "Short (3m) + Long (9m)",
+          strategy == "baseline" ~ "Baseline (12-bar)",
+          strategy == "short_long" ~ "Short (3-bar) + Long (9-bar)",
           strategy == "vol_filtered" ~ "Vol-Filtered",
           strategy == "trend_filtered" ~ "Trend-Filtered",
           TRUE ~ strategy
@@ -216,13 +218,13 @@ plan_commodities_momentum <- function() {
         geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
         scale_color_brewer(palette = "Dark2") +
         labs(
-          title = "Commodities Momentum: Rolling 36-Month Sharpe Ratio",
+          title = "Commodities Momentum: Rolling 36-Bar Sharpe Ratio",
           subtitle = "Net of 0.2% transaction costs",
           x = NULL,
-          y = "Sharpe Ratio (36m rolling)",
+          y = "Sharpe Ratio (36-bar rolling, annualised)",
           color = "Strategy",
           caption = paste0(
-            "Sharpe computed on monthly net returns over trailing 36-month window\n",
+            "Sharpe computed on per-bar (daily-dominated) net returns over a trailing 36-bar window, annualised with sqrt(252)\n",
             "Issue #134: Test if decomposition improves risk-adjusted returns"
           )
         ) +
@@ -250,8 +252,8 @@ plan_commodities_momentum <- function() {
       # Strategy labels
       turnover_summary <- turnover_summary |>
         mutate(strategy_label = case_when(
-          strategy == "baseline" ~ "Baseline (12m)",
-          strategy == "short_long" ~ "Short (3m) + Long (9m)",
+          strategy == "baseline" ~ "Baseline (12-bar)",
+          strategy == "short_long" ~ "Short (3-bar) + Long (9-bar)",
           strategy == "vol_filtered" ~ "Vol-Filtered",
           strategy == "trend_filtered" ~ "Trend-Filtered",
           TRUE ~ strategy
@@ -280,7 +282,7 @@ plan_commodities_momentum <- function() {
         scale_fill_brewer(palette = "Dark2") +
         labs(
           title = "Commodities Momentum: Turnover by Strategy",
-          subtitle = "Mean monthly turnover (one-way). Labels show ratio vs baseline.",
+          subtitle = "Mean per-bar turnover (one-way). Labels show ratio vs baseline.",
           x = NULL,
           y = "Mean Turnover",
           caption = paste0(

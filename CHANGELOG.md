@@ -35,6 +35,34 @@ This changes published numbers: every Net CAGR, cumulative P&L and Credible flag
   `.calc_cost_metrics()` (and `.stk_with_gross()`) instead of its own multiplicative copy.
 - `docs/leaderboard.qmd` and the Rankings caption describe this model; the cost-basis table has a
   `Cost basis` column. Published Net CAGR / cumulative P&L / Credible values change again.
+## 2026-11-09 (commodity momentum: label bars as daily and annualise on 252, refs #1048)
+
+Follow-up to the signal/return pairing fix. Published numbers change: the
+momentum Sharpe in `commodities_perf_summary`, `cmr_vs_mom_compare` and both
+falsification-vignette CMR captions (the orchestrator rebuilds).
+
+- Premise measured 2026-11-09 on `commodities_raw`: 24 Yahoo series are daily
+  (median gap 1 day), 13 FRED/IMF series monthly (31 days); the backtest date
+  axis has a median gap of 1 day. So the "12-month / 3-month / 9-month /
+  30-month" lookbacks were 12/3/9/30 bars (trading days for the daily series).
+  Strategy logic is unchanged.
+- Labels: `baseline_12m`/`short_term_3m`/`long_term_9m`/`volatility_30m` become
+  `mom_12d`/`mom_3d`/`mom_9d`/`volatility_roll` (the window is
+  `min(30, lookback)` = 12 bars, not 30); `n_months` becomes `n_periods`; plot
+  titles, captions and roxygen say "bars". `monthly_ret` is deliberately NOT
+  renamed: it is the shared per-observation return column that
+  `hd_commodity_mr_*()` (packages/historicaldata) requires (#720); documented as
+  not a monthly return.
+- Annualisation: `summarize_commodity_performance()` gains
+  `periods_per_year = 252L`; Sharpe uses `sqrt(252)`, rf is converted with
+  `^(1/252)`, `annual_ret` compounds over 252. The rolling-Sharpe plot uses 252
+  too. Before, daily bars were annualised as monthly (Sharpe understated by
+  sqrt(252/12) = 4.58x).
+- Basis check: CMR already annualised on 252 (`ann_factor = 252L`); momentum now
+  matches. The CMR falsification caption wrongly said "monthly (ann_factor =
+  12)"; it now says daily observations, ann_factor = 252.
+- Test: `tests/testthat/test-commodities-momentum-annualisation.R` (red on the
+  old code: 6 failures; green after).
 
 ## 2026-11-08 (fourth variant of the stock MAX comparison: today's S&P 500 members, refs #1041)
 
