@@ -14,6 +14,23 @@ This changes published numbers: every Net CAGR, cumulative P&L and Credible flag
   target dependencies.
 - `docs/leaderboard.qmd`: Turnover basis column and a "Leaderboard cost basis" section, all
   derived from the `leaderboard` target.
+- One cost per strategy (owner decision 2026-11-09). Most series the leaderboard read were
+  already net of the strategy's own cost, so the leaderboard cost was charged on top of it
+  (Stock MAX: ~1.85%/month internal, then 2.25% more). Now the cost pass runs on the GROSS
+  series (Factor MAX/DRIF `gross_port_ret`; stock long-short `port_ret + total_cost`; the rest
+  from the new target `strat_returns_gross_wide`, `build_strat_returns_gross_wide()`) and the
+  leaderboard cost REPLACES the internal one (`cost_basis` "leaderboard"). PSO Optimal and CMR
+  Conditioned expose only a net series: they keep their internal cost, are charged 0, and carry
+  `cost_basis` "internal: ..." (no turnover columns). Avoid Worst has no internal cost. A costed
+  strategy with no gross series aborts (`.cost_ext_rows()`), never falls back to the net one.
+- Leg factor checked: `turnover` is one-way (`hd_turnover()` side "one" = sum(|dw|)/2, per leg),
+  so x2 (x4 long-short, two legs) converts it to value traded; it is NOT a double count. One home
+  `.leg_multiplier()`; tests pin a full A->B switch (one-way 1, two-way 2, cost 1%) and a
+  both-legs long-short replacement (two-way 4, cost 2% + borrow).
+- `scripts/evaluate_validation.R` now calls `.strategy_turnover_cost_basis()` and
+  `.calc_cost_metrics()` (and `.stk_with_gross()`) instead of its own multiplicative copy.
+- `docs/leaderboard.qmd` and the Rankings caption describe this model; the cost-basis table has a
+  `Cost basis` column. Published Net CAGR / cumulative P&L / Credible values change again.
 
 ## 2026-11-08 (fourth variant of the stock MAX comparison: today's S&P 500 members, refs #1041)
 

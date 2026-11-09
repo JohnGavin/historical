@@ -477,7 +477,8 @@ if (!is.null(lb)) {
       # from the strategy's own weights (strategy_realised_turnover);
       # "hand-typed" = the strategy_names value, the full reason in the
       # hover text. Both come from the leaderboard's `turnover_basis` column,
-      # never typed here.
+      # never typed here. NA ("—") = the strategy keeps its internal cost (only
+      # a net series exists, `cost_basis` "internal: ...") so no turnover was charged.
       `Turnover basis` = if ("turnover_basis" %in% names(full)) {
         ifelse(
           is.na(turnover_basis), "—",
@@ -1867,9 +1868,11 @@ Per `backtesting-assumptions` rule, all strategies use:
 
 #### Leaderboard cost basis (Net CAGR)
 
-The Net CAGR column on the Rankings table is not the stock backtest's internal cost above. It subtracts a monthly cost from each month's return: turnover × cost per trade × buy-and-sell × legs (both legs for long-short books), plus the borrow cost for long-short books. The cost is subtracted from the return (`net = return - cost`), so a month with no return still pays it. Daily strategies are compounded to months first, so their cost is also charged per month.
+The Net CAGR column on the Rankings table is not the stock backtest's internal cost above, and it never adds to it: **each strategy pays one cost**. Most strategy return series are already net of the strategy's own cost (the stock backtest's 1.85% per month above, OLMAR's 10 bps per trade, and so on). Where the strategy also exposes its gross series (the same return before that cost), Net CAGR starts from the gross series and subtracts the leaderboard's cost, which therefore *replaces* the internal one. Where only a net series exists (PSO Optimal, a blend of already-net strategies, and CMR Conditioned), the internal cost is kept and the leaderboard charges nothing more; the `Cost basis` column below says which case each strategy is. Avoid Worst has no internal cost, so its series is already gross.
 
-The turnover is the one-way turnover per month per leg. Where the strategy exposes its own weights it is **measured** from them (target `strategy_realised_turnover`, definition in `hd_turnover()`); otherwise the hand-typed value in `strategy_names` is used, and the reason is recorded in the `Turnover basis` column. Nothing on this page types a turnover value: both come from the pipeline.
+The leaderboard cost subtracts a monthly amount from each month's gross return: turnover × cost per trade × buy-and-sell × legs (both legs for long-short books), plus the borrow cost for long-short books. The cost is subtracted from the return (`net = gross - cost`), so a month with no return still pays it. Daily strategies are compounded to months first, so their cost is also charged per month.
+
+The turnover is one-way (the value bought, which equals the value sold) per month per leg, so the factors of 2 (and 4 for long-short) turn it into the value traded: a full switch from asset A to asset B is one-way 1.0, two-way 2.0 and costs 2 × 0.50% = 1.00%. This is not a double count, because the turnover is not the two-way sum. Where the strategy exposes its own weights the turnover is **measured** from them (target `strategy_realised_turnover`, definition in `hd_turnover()`); otherwise the hand-typed value in `strategy_names` is used, and the reason is recorded in the `Turnover basis` column. Nothing on this page types a turnover value: both come from the pipeline.
 
 ```{r}
 lb_cb <- safe_tar_read("leaderboard")
@@ -1878,18 +1881,24 @@ if (!is.null(lb_cb) && "turnover_basis" %in% names(lb_cb)) {
     dplyr::filter(period == "Full Period") |>
     dplyr::transmute(
       Strategy = strategy,
+      `Cost basis` = ifelse(cost_basis == "leaderboard", "leaderboard (on gross series)", sub("^internal: ", "internal: ", cost_basis)),
       `Turnover used (per month per leg)` = round(cost_turnover, 3),
-      Basis = ifelse(startsWith(turnover_basis, "measured"), "measured", "hand-typed"),
-      Reason = ifelse(startsWith(turnover_basis, "measured"), "", sub("^hand-typed: ", "", turnover_basis)),
+      Basis = dplyr::case_when(
+        is.na(turnover_basis) ~ "none (internal cost)",
+        startsWith(turnover_basis, "measured") ~ "measured",
+        TRUE ~ "hand-typed"
+      ),
+      Reason = ifelse(is.na(turnover_basis) | startsWith(turnover_basis, "measured"), "", sub("^hand-typed: ", "", turnover_basis)),
       `Monthly cost` = paste0(round(cost_monthly * 100, 2), "%")
     ) |>
     dplyr::arrange(Basis, Strategy)
   DT::datatable(
     cb, rownames = FALSE,
     caption = paste0(
-      "Turnover and monthly cost used for each strategy's Net CAGR: ",
-      sum(cb$Basis == "measured"), " measured, ", sum(cb$Basis != "measured"),
-      " hand-typed (Full Period rows of the leaderboard target)."
+      "Who charged each strategy's cost, and the turnover and monthly cost the leaderboard charged: ",
+      sum(cb$Basis == "measured"), " measured, ", sum(cb$Basis == "hand-typed"),
+      " hand-typed, ", sum(cb$Basis == "none (internal cost)"),
+      " keep their internal cost (Full Period rows of the leaderboard target)."
     ),
     options = list(pageLength = 20, scrollX = TRUE, dom = "ft")
   )

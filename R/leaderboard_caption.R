@@ -84,6 +84,9 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
   # #567: how many strategies' cost uses MEASURED turnover (vs hand-typed)
   n_tb_known    <- if ("turnover_basis" %in% names(full)) sum(!is.na(full$turnover_basis)) else 0L
   n_tb_measured <- if ("turnover_basis" %in% names(full)) sum(full$turnover_basis == "measured", na.rm = TRUE) else 0L
+  # #567: who charged the cost: leaderboard (on the gross series) or internal (net series only)
+  n_cb_lb  <- if ("cost_basis" %in% names(full)) sum(full$cost_basis == "leaderboard", na.rm = TRUE) else n_tb_known
+  n_cb_int <- if ("cost_basis" %in% names(full)) sum(startsWith(full$cost_basis, "internal"), na.rm = TRUE) else 0L
 
   n_flagged <- sum(!is.na(full$credible) & !full$credible)
   flagged   <- full$strategy[!is.na(full$credible) & !full$credible]
@@ -258,12 +261,15 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
         "constituents' already-net returns with no separate cost applied at the blend level."),
       .lc_p(
         "This Cost (bps) column is the strategy's own internal assumption baked into its returns before ",
-        "they reach this table; for the ", n_net_covered,
-        " strategies with a Net CAGR value above, it is additional to — not the same as — ",
-        "the turnover-based cost applied there."),
+        "they reach this table. Net CAGR does not add a second cost on top of it: for the ",
+        n_cb_lb, " strateg", .lc_plural_y(n_cb_lb), " charged the leaderboard cost, Net CAGR starts from the ",
+        "gross series (before that internal cost) and the turnover-based cost REPLACES it; the ",
+        n_cb_int, " other", if (n_cb_int != 1L) "s" else "", " (cost basis internal: only a net series exists) keep the internal cost and ",
+        "are charged nothing more."),
       if (n_tb_known > 0L) .lc_p(
         "Net CAGR subtracts a monthly cost (turnover x 0.50% per trade x legs, plus 3% a year borrow for long-short books) ",
-        "from each month's return. The turnover is measured from the strategy's own weights for ", n_tb_measured,
+        "from each month's gross return. The turnover is one-way (value bought, equal to value sold); the factor of 2 (4 for ",
+        "long-short) turns it into value traded, so it is not a double count. It is measured from the strategy's own weights for ", n_tb_measured,
         " of ", n_tb_known, " strategies and hand-typed for ", n_tb_known - n_tb_measured,
         " (see the Turnover basis column; the reason is in its hover text).")
     ),
