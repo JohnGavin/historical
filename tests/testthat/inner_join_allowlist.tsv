@@ -2,7 +2,7 @@
 # Columns (tab-separated): file, ordinal (n-th non-comment inner_join( in that file), code (the trimmed source line), class, target, consumer, reason.
 # class: CONFIRMED | LATENT | BENIGN | INDETERMINATE | AUDITED.  consumer: published-metric | published-diagnostic | unpublished | dead.
 # To add a site: append a line with a real reason (measure the dropped count, see docs/inner-join-audit-657.md); to move one, update ordinal and code.
-R/commodities_momentum.R	1	inner_join(	BENIGN	commodities_backtest	unpublished	Row loss 74 of 146124 signal rows, all 2026-02..05 trailing edge (measured 2026-11-09). Separate TIMING finding (signal at d pairs with the return ending d+2 rows): see docs/inner-join-audit-657.md F2.
+R/commodities_momentum.R	1	inner_join(	BENIGN	commodities_backtest	unpublished	Row loss 74 of 146124 signal rows, all 2026-02..05 trailing edge (measured 2026-11-09). TIMING fixed in #1048 (signal at d now pairs with the next month return, lead on its own date); see docs/inner-join-audit-657.md F2.
 R/cross_reference.R	1	joined <- dplyr::inner_join(	BENIGN	cross_reference()	dead	Utility with no caller; warns on a zero-row join and reports n_overlap.
 R/momentum_decomposition.R	1	dplyr::inner_join(factor_ym, by = "ym") |>	BENIGN	momentum_components	unpublished	Prior audit 2026-09-24: 19 stock months unmatched, 18 before FF5 start and 1 after its end; no mid-series loss.
 R/momentum_decomposition.R	2	dplyr::inner_join(forward, by = c("ticker", "date"))	BENIGN	persistence_metrics	unpublished	Forward return is NA at each ticker's tail by construction; per-month rank IC reports n.
