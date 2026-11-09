@@ -73,6 +73,8 @@ Other risk_metrics:
 \code{\link{hd_dd_duration}()},
 \code{\link{hd_first_passage}()},
 \code{\link{hd_loss_clustering}()},
-\code{\link{hd_risk_contribution}()}
+\code{\link{hd_risk_contribution}()},
+\code{\link{hd_turnover}()},
+\code{\link{hd_turnover_series}()}
 }
 \concept{risk_metrics}

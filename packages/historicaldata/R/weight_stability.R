@@ -434,12 +434,15 @@ hd_weight_stability_diagnostic <- function(
 
     # avg_turnover: mean L1 weight change between consecutive non-failed windows
     # ‖w_t − w_{t-1}‖₁ = sum(|w_t − w_{t-1}|)
+    # One definition (#567 A1): this is the TWO-way figure, hd_turnover(side =
+    # "two") == sum(abs(w_t - w_{t-1})). Not halved, not drifted -- the
+    # diagnostic's existing convention, kept so published values do not move.
     avg_turnover <- if (n_ok >= 2L) {
-      diffs <- abs(
-        wts_ok[-1L,         , drop = FALSE] -
-        wts_ok[-n_ok, , drop = FALSE]
-      )
-      mean(rowSums(diffs))
+      mean(vapply(
+        seq_len(n_ok - 1L),
+        function(k) hd_turnover(unname(wts_ok[k + 1L, ]), unname(wts_ok[k, ]), side = "two"),
+        numeric(1L)
+      ))
     } else NA_real_
 
     # max_abs_weight: mean across windows of max|w_j|

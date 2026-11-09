@@ -1449,6 +1449,107 @@ check_lending_status_registry <- function(strategy_cost_convention) {
 }
 
 
+#' Assert `strategy_realised_turnover` is complete, internally consistent, and
+#' never silently blank (#663 Phase 1)
+#'
+#' Guards against the defect class `fail-loud-not-null.md` names: a strategy
+#' whose turnover could not be measured must say WHY (`na_reason`), and a
+#' strategy that was measured must carry a finite, non-negative figure whose
+#' derived columns agree with their definitions. Checks, in order:
+#' every column present; strategies unique and (when `strategy_names_tbl` is
+#' given) exactly the strategy_names roster; each row is EITHER measured
+#' (finite `avg_turnover_oneway` >= 0, `n_periods` > 0, no `na_reason`) OR
+#' explained (non-empty `na_reason`, `n_periods` 0, all figures NA), never
+#' both and never neither; `annualised_turnover_oneway ==
+#' avg_turnover_oneway * periods_per_year` and `turnover_realised ==
+#' annualised_turnover_oneway / 12 / legs`.
+#'
+#' @param tbl The `strategy_realised_turnover` target
+#'   (R/plan_cost_convention.R).
+#' @param strategy_names_tbl Optional `strategy_names`; when given, the roster
+#'   must match `short_name` exactly.
+#' @return `TRUE` invisibly on success.
+#' @noRd
+check_strategy_realised_turnover <- function(tbl, strategy_names_tbl = NULL) {
+  required_cols <- c("strategy", "n_periods", "avg_turnover_oneway",
+                     "annualised_turnover_oneway", "periods_per_year", "legs",
+                     "turnover_realised", "turnover_hand_typed", "na_reason")
+  missing_cols <- setdiff(required_cols, names(tbl))
+  if (length(missing_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "strategy_realised_turnover is missing {length(missing_cols)} required column(s): {missing_cols}.",
+      "i" = "check_strategy_realised_turnover() requires {required_cols}."
+    ))
+  }
+  if (nrow(tbl) == 0L || anyDuplicated(tbl$strategy) > 0L) {
+    cli::cli_abort(c(
+      "x" = "strategy_realised_turnover must have one row per strategy; got {nrow(tbl)} row(s), {sum(duplicated(tbl$strategy))} duplicate(s)."
+    ))
+  }
+  if (!is.null(strategy_names_tbl)) {
+    gone <- setdiff(strategy_names_tbl$short_name, tbl$strategy)
+    extra <- setdiff(tbl$strategy, strategy_names_tbl$short_name)
+    if (length(gone) > 0L || length(extra) > 0L) {
+      msgs <- c(
+        if (length(gone) > 0L) paste0("In strategy_names only: ", paste(gone, collapse = ", "), "."),
+        if (length(extra) > 0L) paste0("In strategy_realised_turnover only: ", paste(extra, collapse = ", "), ".")
+      )
+      cli::cli_abort(c(
+        "x" = "strategy_realised_turnover and strategy_names disagree.",
+        stats::setNames(msgs, rep("i", length(msgs)))
+      ))
+    }
+  }
+
+  has_reason <- !is.na(tbl$na_reason) & nzchar(trimws(tbl$na_reason))
+  has_value  <- !is.na(tbl$avg_turnover_oneway)
+  neither <- tbl$strategy[!has_reason & !has_value]
+  both    <- tbl$strategy[has_reason & has_value]
+  if (length(neither) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(neither)} strateg{?y/ies} with neither a measured turnover nor an na_reason: {neither}.",
+      "i" = "A blank NA is forbidden (fail-loud-not-null.md): state why it cannot be measured."
+    ))
+  }
+  if (length(both) > 0L) {
+    cli::cli_abort(c(
+      "x" = "{length(both)} strateg{?y/ies} with BOTH a measured turnover and an na_reason: {both}."
+    ))
+  }
+
+  m <- tbl[has_value, , drop = FALSE]
+  if (nrow(m) > 0L) {
+    bad <- m$strategy[!is.finite(m$avg_turnover_oneway) | m$avg_turnover_oneway < 0 |
+                        is.na(m$n_periods) | m$n_periods < 1L]
+    if (length(bad) > 0L) {
+      cli::cli_abort(c(
+        "x" = "Measured turnover must be finite, >= 0 and over >= 1 period; violated by: {bad}."
+      ))
+    }
+    ann_ok <- abs(m$annualised_turnover_oneway - m$avg_turnover_oneway * m$periods_per_year) <= 1e-9
+    rea_ok <- abs(m$turnover_realised - m$annualised_turnover_oneway / 12 / m$legs) <= 1e-9
+    off <- m$strategy[is.na(ann_ok) | is.na(rea_ok) | !ann_ok | !rea_ok]
+    if (length(off) > 0L) {
+      cli::cli_abort(c(
+        "x" = "Derived turnover columns disagree with their definitions for: {off}.",
+        "i" = "annualised = avg x periods_per_year; realised = annualised / 12 / legs."
+      ))
+    }
+  }
+  u <- tbl[!has_value, , drop = FALSE]
+  if (nrow(u) > 0L) {
+    stray <- u$strategy[!is.na(u$turnover_realised) | !is.na(u$annualised_turnover_oneway) | u$n_periods != 0L]
+    if (length(stray) > 0L) {
+      cli::cli_abort(c(
+        "x" = "Unmeasured strateg{?y/ies} carry figures or n_periods > 0: {stray}."
+      ))
+    }
+  }
+
+  invisible(TRUE)
+}
+
+
 #' Assert leaderboard `sharpe` is coherent with `cagr`, `vol`, and `ann_rf`
 #' published beside it (S17)
 #'
@@ -5868,6 +5969,19 @@ plan_qa_gates <- function() {
       command = {
         check_lending_status_registry(strategy_cost_convention)
         cli::cli_inform(c("v" = "qa_lending_status_registry: S18 passed (all lending_status values derivable and in vocabulary)"))
+        TRUE
+      },
+      cue = targets::tar_cue(mode = "always")
+    ),
+
+    # QA gate: strategy_realised_turnover is complete and never silently blank
+    # (#663 Phase 1) -- every strategy_names row is either measured or carries
+    # an explicit na_reason, and the derived columns match their definitions.
+    targets::tar_target(
+      qa_strategy_realised_turnover,
+      command = {
+        check_strategy_realised_turnover(strategy_realised_turnover, strategy_names)
+        cli::cli_inform(c("v" = "qa_strategy_realised_turnover: passed (every strategy measured or explained; derived columns consistent)"))
         TRUE
       },
       cue = targets::tar_cue(mode = "always")

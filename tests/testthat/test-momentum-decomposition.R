@@ -1,4 +1,6 @@
 testthat::local_edition(3)
+# backtest_momentum_signals() calls hd_turnover_series() (#567 A1), a package function.
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
 source(here::here("R/momentum_decomposition.R"))
 source(here::here("R/utils_align.R"))
 
