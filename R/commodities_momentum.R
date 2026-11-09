@@ -136,16 +136,18 @@ backtest_commodity_momentum <- function(signals,
 
   cost_per_trade <- cost_bps / 10000
 
-  # Join signals with next month's returns
+  # Join signals with next month's returns (#1048). monthly_ret on the row
+  # dated t is the return over month t, and the signal at t uses data through
+  # t, so the signal at t pairs with lead(monthly_ret) on the SAME date t.
+  # (Relabelling the row to lag(date) too paired it with the t+2 return.)
   combined <- signals |>
     inner_join(
       returns |>
         group_by(series_id) |>
         arrange(date) |>
-        mutate(date_lag = lag(date),
-               next_ret = lead(monthly_ret)) |>
-        filter(!is.na(date_lag), !is.na(next_ret)) |>
-        select(series_id, date = date_lag, next_ret),
+        mutate(next_ret = lead(monthly_ret)) |>
+        filter(!is.na(next_ret)) |>
+        select(series_id, date, next_ret),
       by = c("series_id", "date")
     )
 
