@@ -363,12 +363,11 @@ HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
 # strategy, #567). code_name -> reason shown in `cost_basis`.
 # pso_optimal: a constant-weight blend of the Stock/Factor MAX/DRIF series, each
 #   already net of its own cost; no gross blend is built.
-# cmr_conditioned: net_ret_conditioned = exposure_mult * net_ret + (1 -
-#   exposure_mult) * rf - switch_cost; the conditioned table carries only the
-#   net columns, so the gross conditioned series is not exposed.
+# (cmr_conditioned left this list in #567: the overlay now exposes
+#   gross_ret_conditioned = exposure_mult * gross_ret + (1 - exposure_mult) *
+#   rf - switch_cost, so it takes the leaderboard cost like CMR.)
 .HD_COST_INTERNAL_ONLY <- c(
-  pso_optimal = "blend of constituents already net of their own cost; no gross blend exposed",
-  cmr_conditioned = "overlay series exposed only net of its own cost; no gross series exposed"
+  pso_optimal = "blend of constituents already net of their own cost; no gross blend exposed"
 )
 
 # Strategies with NO internal cost: the series the leaderboard reads is already
@@ -1044,7 +1043,7 @@ plan_leaderboard <- function() {
       # ── Cost metrics (net_cagr, cum_pnl, cvar_95) ─────────────────
       # Compute per strategy per period from raw portfolio returns.
       # #567: ONE cost per strategy. Where a GROSS series exists (every
-      # strategy except pso_optimal and cmr_conditioned) the series fed to
+      # strategy except pso_optimal) the series fed to
       # .calc_cost_metrics() is the GROSS one (fm/drif gross_port_ret; stock
       # long-short port_ret + total_cost; the rest strat_returns_gross_wide)
       # and the leaderboard's own turnover-based cost is deducted SUBTRACTIVELY
@@ -1052,8 +1051,8 @@ plan_leaderboard <- function() {
       # MEASURED (strategy_realised_turnover) where trusted, else the
       # hand-typed strategy_names value, the choice carried per row in
       # `turnover_basis`. That cost REPLACES the strategy's internal cost.
-      # pso_optimal and cmr_conditioned expose only a NET series: they keep
-      # their internal cost and are charged 0 here (`cost_basis` =
+      # pso_optimal exposes only a NET series: it keeps
+      # its internal cost and is charged 0 here (`cost_basis` =
       # "internal: ..."). Both inputs are target dependencies named in the call
       # below, never typed here.
       STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(
@@ -1186,7 +1185,9 @@ plan_leaderboard <- function() {
       # strat_returns_gross_wide (the same series BEFORE that cost,
       # build_strat_returns_gross_wide() in R/plan_strategy_correlation.R) and
       # deducts the leaderboard cost from it instead; see .cost_ext_rows().
-      # cmr_conditioned has no gross series and keeps its internal cost.
+      # cmr_conditioned is on the same basis as cmr: its gross series
+      # (gross_ret_conditioned, switch cost kept) is charged CMR's turnover
+      # cost; pso_optimal alone keeps its internal cost (#567).
       .cost_ext_map <- list(
         list(code = "ltr",          wide_col = "ltr",             label = "LTR"),
         list(code = "mom_prepeak",  wide_col = "mom_prepeak",     label = "Mom Pre-Peak"),

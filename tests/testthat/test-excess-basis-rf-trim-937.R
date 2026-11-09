@@ -62,7 +62,8 @@ test_that("Mom: an unregistered label still aborts (no silent default)", {
 
 # ── CMR path (daily metrics; toy fixtures use monthly spacing, ann_factor 12) ─
 .cdates <- seq.Date(as.Date("2020-01-01"), by = "month", length.out = 24L)
-.cmr_pt <- tibble::tibble(date = .cdates, net_ret = rep(c(0.01, -0.02, 0.015, 0.005), length.out = 24L))
+.cmr_pt <- tibble::tibble(date = .cdates, net_ret = rep(c(0.01, -0.02, 0.015, 0.005), length.out = 24L),
+                          gross_ret = rep(c(0.01, -0.02, 0.015, 0.005), length.out = 24L) + 0.0004)
 .cmr_rf_short <- tibble::tibble(date = .cdates[1:20], rf_ret = 0.002)  # ends 4 periods early
 
 test_that("CMR excess-basis: every return row survives an rf series that ends early", {

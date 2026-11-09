@@ -19,10 +19,20 @@ This changes published numbers: every Net CAGR, cumulative P&L and Credible flag
   (Stock MAX: ~1.85%/month internal, then 2.25% more). Now the cost pass runs on the GROSS
   series (Factor MAX/DRIF `gross_port_ret`; stock long-short `port_ret + total_cost`; the rest
   from the new target `strat_returns_gross_wide`, `build_strat_returns_gross_wide()`) and the
-  leaderboard cost REPLACES the internal one (`cost_basis` "leaderboard"). PSO Optimal and CMR
-  Conditioned expose only a net series: they keep their internal cost, are charged 0, and carry
+  leaderboard cost REPLACES the internal one (`cost_basis` "leaderboard"). PSO Optimal exposes
+  only a net series: it keeps its internal cost, is charged 0, and carries
   `cost_basis` "internal: ..." (no turnover columns). Avoid Worst has no internal cost. A costed
   strategy with no gross series aborts (`.cost_ext_rows()`), never falls back to the net one.
+- CMR Conditioned moved onto the SAME basis as CMR (it had been the internal one, so it read +8.3%
+  next to CMR's -17.1%, mostly an artefact). `.cmr_apply_conditioning_overlay()` now also returns
+  `gross_ret_conditioned = exposure_mult * gross_ret + (1 - exposure_mult) * rf - switch_cost`
+  (the overlay before CMR's own rebalance cost; the switch cost, i.e. the trades entering and
+  leaving reduced or flat exposure, is kept so those trades are still paid for once).
+  `strat_returns_gross_wide` carries it as `cmr_conditioned` (lookback from
+  `cmr_selection_conditioned`) and `.HD_COST_INTERNAL_ONLY` is now PSO Optimal alone. Turnover is
+  CMR's hand-typed 100%/month, long-short: a full-exposure bound, because exposure m <= 1 scales
+  the rebalancing trades down (mean m is about 0.77), so it does not understate them.
+  Read-only estimate from the existing store: CMR Conditioned net CAGR -16.4% (was +8.3%), CMR -17.1%.
 - Leg factor checked: `turnover` is one-way (`hd_turnover()` side "one" = sum(|dw|)/2, per leg),
   so x2 (x4 long-short, two legs) converts it to value traded; for long-only and long-short books
   it is NOT a double count. One home `.leg_multiplier()`; tests pin a full A->B switch (one-way 1,

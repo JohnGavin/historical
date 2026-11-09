@@ -787,7 +787,10 @@ plan_cost_convention <- function() {
         cmr_conditioned = .rt_na_entry(paste0(
           "Exposure-scaling overlay on the cmr tercile book (R/plan_commodities_mean_reversion.R): its ",
           "traded weights are m_t x the cmr weights and are not retained, so the overlay's own turnover ",
-          "is not observable from cmr_portfolio_*_conditioned (only exposure_mult and switch_cost)."
+          "is not observable from cmr_portfolio_*_conditioned (only exposure_mult and switch_cost). ",
+          "Charged on the SAME hand-typed turnover as cmr (full-exposure bound: m_t <= 1 scales the ",
+          "rebalancing trades down, so it does not understate them); the exposure-change trades ",
+          "(entering/leaving reduced or flat periods) are charged by switch_cost, kept in the gross series (#567)."
         ))
       )
 

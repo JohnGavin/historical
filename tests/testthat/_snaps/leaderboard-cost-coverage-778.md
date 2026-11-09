@@ -25,7 +25,7 @@
                                                                                     cost_basis
       1                                                                            leaderboard
       2                                                                            leaderboard
-      3     internal: overlay series exposed only net of its own cost; no gross series exposed
+      3                                                                            leaderboard
       4                                                                            leaderboard
       5                                                                            leaderboard
       6                                                                            leaderboard
@@ -44,7 +44,7 @@
          leg_multiplier turnover
       1               1     0.50
       2               4     1.00
-      3               4       NA
+      3               4     1.00
       4               2     0.30
       5               2     0.20
       6               2     0.30
@@ -63,7 +63,7 @@
                                                                  turnover_basis
       1                                     hand-typed: fixture: no measurement
       2  hand-typed: measured turnover understates: exits not counted (#567 A2)
-      3                                                                    <NA>
+      3                                     hand-typed: fixture: no measurement
       4                                     hand-typed: fixture: no measurement
       5                                     hand-typed: fixture: no measurement
       6                                     hand-typed: fixture: no measurement
@@ -82,7 +82,7 @@
          monthly_cost
       1        0.0025
       2        0.0225
-      3        0.0000
+      3        0.0225
       4        0.0030
       5        0.0020
       6        0.0030

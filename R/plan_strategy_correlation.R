@@ -164,7 +164,7 @@ STRAT_CODE_LABELS <- c(
 #' cost. This returns, on the same `ym` spine and with the same column names
 #' as `strat_returns_wide`, the gross series for every strategy that exposes
 #' one. Strategies with no gross series (`pso_optimal` is not in the wide table
-#' at all; `cmr_conditioned` exposes only a net series) and Avoid Worst (no
+#' at all) and Avoid Worst (no
 #' internal cost: its net series IS gross) are absent on purpose.
 #'
 #' Gross definitions (each the strategy's own code, internal cost added back):
@@ -181,13 +181,16 @@ STRAT_CODE_LABELS <- c(
 #' @param mf_portfolios `mf_portfolios` (date, ret_ls).
 #' @param mf_params `mf_params` (`cost_monthly`).
 #' @param cmr_port The CMR portfolio for the pre-OOS chosen lookback (date, gross_ret).
+#' @param cmr_conditioned_port The conditioned CMR portfolio for the pre-OOS
+#'   chosen conditioned lookback (date, gross_ret_conditioned): the exposure
+#'   overlay before the CMR book's own rebalance cost, switch cost kept (#567).
 #' @param olmar_portfolio,tom_portfolio,rsc_portfolio The daily portfolios.
 #' @return Tibble: `ym` plus one gross column per strategy, ascending.
 #' @noRd
 build_strat_returns_gross_wide <- function(ltr_portfolio, mom_returns,
                                            ev_portfolios,
                                            mf_portfolios, mf_params,
-                                           cmr_port, olmar_portfolio,
+                                           cmr_port, cmr_conditioned_port, olmar_portfolio,
                                            tom_portfolio, rsc_portfolio) {
   ym_of <- function(d) format(as.Date(d), "%Y-%m")
   need <- function(df, cols, label) {
@@ -226,6 +229,7 @@ build_strat_returns_gross_wide <- function(ltr_portfolio, mom_returns,
     monthly(mf_portfolios, "date", "ret_ls", function(d) d$ret_ls + mf_params$cost_monthly,
             "managed_futures"),
     daily(cmr_port, "gross_ret", "cmr"),
+    daily(cmr_conditioned_port, "gross_ret_conditioned", "cmr_conditioned"),
     daily(olmar_portfolio, "gross_ret", "olmar_1"),
     daily(tom_portfolio, "ret_gross", "tom"),
     daily(rsc_portfolio, "gross_ret_strategy", "risk_state")
@@ -1108,6 +1112,15 @@ plan_strategy_correlation <- function() {
           "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
         ))
       )
+      cmr_cond_gross_port <- switch(cmr_selection_conditioned$chosen,
+        "1m" = cmr_portfolio_1m_conditioned,
+        "3m" = cmr_portfolio_3m_conditioned,
+        "6m" = cmr_portfolio_6m_conditioned,
+        cli::cli_abort(c(
+          "x" = "Unrecognised CMR lookback {.val {cmr_selection_conditioned$chosen}} from cmr_selection_conditioned.",
+          "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
+        ))
+      )
       build_strat_returns_gross_wide(
         ltr_portfolio = ltr_portfolio,
         mom_returns = list(
@@ -1117,7 +1130,8 @@ plan_strategy_correlation <- function() {
         ),
         ev_portfolios = ev_portfolios,
         mf_portfolios = mf_portfolios, mf_params = mf_params,
-        cmr_port = cmr_gross_port, olmar_portfolio = olmar_portfolio,
+        cmr_port = cmr_gross_port, cmr_conditioned_port = cmr_cond_gross_port,
+        olmar_portfolio = olmar_portfolio,
         tom_portfolio = tom_portfolio, rsc_portfolio = rsc_portfolio
       )
     }),

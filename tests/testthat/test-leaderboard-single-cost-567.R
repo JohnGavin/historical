@@ -14,6 +14,7 @@ source(here::here("R/plan_strategy_names.R"))
 source(here::here("R/plan_strategy_correlation.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_qa_gates.R"))
+source(here::here("R/plan_commodities_mean_reversion.R"))
 
 .sn <- function() hd_strategy_names_tbl()
 .hand_realised <- function() {
@@ -76,7 +77,7 @@ test_that(".strategy_turnover_cost_basis() marks internal-only strategies and ch
   b <- .strategy_turnover_cost_basis(.sn(), .hand_realised())
   expect_true("cost_basis" %in% names(b))
   internal <- b$code_name[startsWith(b$cost_basis, "internal")]
-  expect_setequal(internal, c("pso_optimal", "cmr_conditioned"))
+  expect_setequal(internal, "pso_optimal")
   expect_true(all(b$monthly_cost[b$code_name %in% internal] == 0))
   expect_true(all(is.na(b$turnover_basis[b$code_name %in% internal])))
   # every other strategy: leaderboard cost, strictly positive
@@ -184,6 +185,7 @@ test_that("build_strat_returns_gross_wide(): gross = net + the strategy's own in
     mf_portfolios = tibble::tibble(date = as.Date(c("2020-01-31", "2020-02-29")), ret_ls = c(0.004, 0.006)),
     mf_params = list(cost_monthly = 0.001),
     cmr_port = tibble::tibble(date = d(n), gross_ret = 0.001, net_ret = 0.0008),
+    cmr_conditioned_port = tibble::tibble(date = d(n), gross_ret_conditioned = 0.0007),
     olmar_portfolio = tibble::tibble(date = d(n), gross_ret = 0.002, net_ret = 0.0015),
     tom_portfolio = tibble::tibble(date = d(n), ret_gross = 0.003, ret_net = 0.0025),
     rsc_portfolio = tibble::tibble(date = d(n), gross_ret_strategy = 0.004, ret_strategy = 0.0035)
@@ -200,6 +202,37 @@ test_that("build_strat_returns_gross_wide(): gross = net + the strategy's own in
   expect_equal(jan$tom,     1.003^31 - 1, tolerance = 1e-12)
   expect_equal(jan$risk_state, 1.004^31 - 1, tolerance = 1e-12)
   expect_equal(jan$cmr,     1.001^31 - 1, tolerance = 1e-12)
+  expect_equal(jan$cmr_conditioned, 1.0007^31 - 1, tolerance = 1e-12)
+})
+
+# ── (4b) CMR Conditioned is on the SAME cost basis as CMR (#567) ────────────
+
+test_that("CMR and CMR Conditioned both take the leaderboard cost, on the same turnover", {
+  b <- .strategy_turnover_cost_basis(.sn(), .hand_realised())
+  cmr  <- b[b$code_name == "cmr", ]
+  cond <- b[b$code_name == "cmr_conditioned", ]
+  expect_equal(cond$cost_basis, "leaderboard")
+  expect_equal(cmr$cost_basis, "leaderboard")
+  expect_equal(cond$turnover, cmr$turnover)
+  expect_equal(cond$leg_multiplier, cmr$leg_multiplier)
+  expect_equal(cond$monthly_cost, cmr$monthly_cost)
+})
+
+test_that(".cmr_apply_conditioning_overlay(): gross_ret_conditioned = m*gross + (1-m)*rf - switch_cost", {
+  dates <- seq.Date(as.Date("2010-01-01"), by = "day", length.out = 4)
+  pt <- tibble::tibble(date = dates, net_ret = c(0.001, 0.002, 0.003, 0.004),
+                       gross_ret = c(0.0015, 0.0025, 0.0035, 0.0045))
+  cond <- tibble::tibble(date = dates[c(1, 3)], cond_signal = c(0, 5),
+                         regime = c("benign", "hostile"), exposure_mult = c(1.0, 0.1))
+  rf <- tibble::tibble(date = dates, rf_ret = 0.0001)
+  out <- .cmr_apply_conditioning_overlay(pt, cond, rf, lookback = "1m")
+  m <- out$exposure_mult
+  expect_equal(out$gross_ret_conditioned,
+               m * pt$gross_ret + (1 - m) * 0.0001 - out$switch_cost, tolerance = 1e-12)
+  # the switch into the reduced-exposure period is still charged (a trade)
+  expect_true(out$switch_cost[3] > 0)
+  expect_error(.cmr_apply_conditioning_overlay(pt[c("date", "net_ret")], cond, rf, lookback = "1m"),
+               "gross_ret")
 })
 
 # ── (5) stock long-short gross, and the validation script's single cost home ──

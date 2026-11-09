@@ -51,7 +51,7 @@ test_that("STRATEGY_COST_BASIS covers every strategy in hd_strategy_names_tbl()"
   charged <- STRATEGY_COST_BASIS$cost_basis == "leaderboard"
   expect_true(all(STRATEGY_COST_BASIS$monthly_cost[charged] > 0))
   expect_true(all(STRATEGY_COST_BASIS$monthly_cost[!charged] == 0))
-  expect_setequal(STRATEGY_COST_BASIS$code_name[!charged], c("pso_optimal", "cmr_conditioned"))
+  expect_setequal(STRATEGY_COST_BASIS$code_name[!charged], "pso_optimal")
 })
 
 # The 12 strategy codes #778/#751's cost_rows extension targets
@@ -85,7 +85,7 @@ test_that("monthly_cost matches the hand-derived turnover-aware formula for ever
     leg <- if (is_ls) 4 else if (tbl$directionality[i] == "overlay") 1 else 2
     expected <- (tbl$turnover_pct_per_period_avg[i] / 100) * 0.005 * leg +
       (if (is_ls) 0.03 / 12 else 0)
-    if (code %in% c("pso_optimal", "cmr_conditioned")) next  # internal-only: charged 0 (#567)
+    if (code %in% "pso_optimal") next  # internal-only: charged 0 (#567)
     actual <- STRATEGY_COST_BASIS$monthly_cost[STRATEGY_COST_BASIS$code_name == code]
     expect_equal(actual, expected, tolerance = 1e-12, label = paste0("monthly_cost[", code, "]"))
   }
