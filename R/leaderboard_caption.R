@@ -269,7 +269,7 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
       if (n_tb_known > 0L) .lc_p(
         "Net CAGR subtracts a monthly cost (turnover x 0.50% per trade x legs, plus 3% a year borrow for long-short books) ",
         "from each month's gross return. The turnover is one-way (value bought, equal to value sold); the factor of 2 (4 for ",
-        "long-short) turns it into value traded, so it is not a double count. It is measured from the strategy's own weights for ", n_tb_measured,
+        "long-short; 1 for the SPY-and-cash overlays, where cash is the other side and costs nothing) turns it into value traded, so it is not a double count. It is measured from the strategy's own weights for ", n_tb_measured,
         " of ", n_tb_known, " strategies and hand-typed for ", n_tb_known - n_tb_measured,
         " (see the Turnover basis column; the reason is in its hover text).")
     ),

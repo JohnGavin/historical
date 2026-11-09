@@ -83,20 +83,23 @@ test_that(".period_cost(): long-short with borrow, monthly series", {
   expect_equal(.period_cost(0.40, "long_short"), 0.0105, tolerance = 1e-12)
 })
 
-test_that(".period_cost(): long-only has no borrow and 2 legs-sides", {
-  # 0.25 * 0.005 * 2 = 0.0025
+test_that(".period_cost(): long-only has no borrow and buy+sell; an overlay trades one side (cash is the other)", {
+  # long_only: 0.25 * 0.005 * 2 = 0.0025
   expect_equal(.period_cost(0.25, "long_only"), 0.0025, tolerance = 1e-12)
-  expect_equal(.period_cost(0.25, "overlay"), 0.0025, tolerance = 1e-12)
+  # overlay (risky asset <-> cash): sum|dw|/2 is already the risky value traded, factor 1:
+  # 0.25 * 0.005 * 1 = 0.00125
+  expect_equal(.period_cost(0.25, "overlay"), 0.00125, tolerance = 1e-12)
 })
 
 test_that(".period_cost(): a daily-frequency series is charged the monthly cost spread over 252/12 periods", {
-  # TOM-like: measured 2.0/month one-way (~24/yr), overlay -> 2.0 * 0.005 * 2 = 0.02 per MONTH.
-  expect_equal(.period_cost(2.0, "overlay", series_ann_factor = 12), 0.02, tolerance = 1e-12)
-  # per DAY: 0.02 * 12 / 252
+  # TOM-like: measured 2.0/month one-way (buy SPY in, sell SPY out = 2 trades of 1.0), overlay
+  # factor 1 -> 2.0 * 0.005 * 1 = 0.01 per MONTH (two 0.5% trades).
+  expect_equal(.period_cost(2.0, "overlay", series_ann_factor = 12), 0.01, tolerance = 1e-12)
+  # per DAY: 0.01 * 12 / 252
   expect_equal(.period_cost(2.0, "overlay", series_ann_factor = 252),
-               0.02 * 12 / 252, tolerance = 1e-12)
+               0.01 * 12 / 252, tolerance = 1e-12)
   # 21 trading days of that daily charge add back to one month's cost
-  expect_equal(21 * .period_cost(2.0, "overlay", series_ann_factor = 252), 0.02, tolerance = 1e-12)
+  expect_equal(21 * .period_cost(2.0, "overlay", series_ann_factor = 252), 0.01, tolerance = 1e-12)
 })
 
 test_that(".period_cost() is vectorised and rejects bad input", {
@@ -117,8 +120,8 @@ test_that(".strategy_turnover_cost_basis() joins choice and cost (hand-computed)
   expect_equal(by("m_ls", "leg_multiplier"), 4)
   # m_lo: measured 0.25 -> 0.0025
   expect_equal(by("m_lo", "monthly_cost"), 0.0025, tolerance = 1e-12)
-  # daily_lo: measured 2.0, overlay -> 0.02/month
-  expect_equal(by("daily_lo", "monthly_cost"), 0.02, tolerance = 1e-12)
+  # daily_lo: measured 2.0, overlay (factor 1) -> 0.01/month
+  expect_equal(by("daily_lo", "monthly_cost"), 0.01, tolerance = 1e-12)
   # typed_na: hand-typed 1.0, long_short -> 1.0*0.005*4 + 0.0025 = 0.0225
   expect_equal(by("typed_na", "monthly_cost"), 0.0225, tolerance = 1e-12)
   # cmr: hand-typed 1.0 (distrusted measured 0.33), long_short -> 0.0225

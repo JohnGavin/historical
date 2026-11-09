@@ -24,9 +24,13 @@ This changes published numbers: every Net CAGR, cumulative P&L and Credible flag
   `cost_basis` "internal: ..." (no turnover columns). Avoid Worst has no internal cost. A costed
   strategy with no gross series aborts (`.cost_ext_rows()`), never falls back to the net one.
 - Leg factor checked: `turnover` is one-way (`hd_turnover()` side "one" = sum(|dw|)/2, per leg),
-  so x2 (x4 long-short, two legs) converts it to value traded; it is NOT a double count. One home
-  `.leg_multiplier()`; tests pin a full A->B switch (one-way 1, two-way 2, cost 1%) and a
-  both-legs long-short replacement (two-way 4, cost 2% + borrow).
+  so x2 (x4 long-short, two legs) converts it to value traded; for long-only and long-short books
+  it is NOT a double count. One home `.leg_multiplier()`; tests pin a full A->B switch (one-way 1,
+  two-way 2, cost 1%) and a both-legs long-short replacement (two-way 4, cost 2% + borrow).
+  The overlays (TOM, Risk State, Avoid Worst) ARE over-charged by x2: their measured weights list
+  CASH as a name, so sum|dw|/2 is already the risky value traded (SPY -> cash is one 0.5% trade).
+  Their factor is now 1 (TOM 2.00% -> 1.00%/month, Risk State 1.39% -> 0.69%, Avoid Worst
+  0.50% -> 0.25%).
 - `scripts/evaluate_validation.R` now calls `.strategy_turnover_cost_basis()` and
   `.calc_cost_metrics()` (and `.stk_with_gross()`) instead of its own multiplicative copy.
 - `docs/leaderboard.qmd` and the Rankings caption describe this model; the cost-basis table has a

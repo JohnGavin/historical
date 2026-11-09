@@ -75,14 +75,14 @@ test_that("every #778/#751 cost-extension strategy code has a STRATEGY_COST_BASI
 # Formula (see STRATEGY_COST_BASIS's own comment, R/plan_leaderboard.R):
 #   monthly_cost = (turnover_pct_per_period_avg / 100) * 0.005 * leg_multiplier
 #                  + (borrow_rate_annual / 12 if directionality == "long_short" else 0)
-#   leg_multiplier = 4 for long_short, 2 otherwise
+#   leg_multiplier = 4 for long_short, 1 for overlay (cash is the other side), 2 otherwise
 
 test_that("monthly_cost matches the hand-derived turnover-aware formula for every strategy", {
   tbl <- hd_strategy_names_tbl()
   for (i in seq_len(nrow(tbl))) {
     code <- tbl$code_name[i]
     is_ls <- tbl$directionality[i] == "long_short"
-    leg <- if (is_ls) 4 else 2
+    leg <- if (is_ls) 4 else if (tbl$directionality[i] == "overlay") 1 else 2
     expected <- (tbl$turnover_pct_per_period_avg[i] / 100) * 0.005 * leg +
       (if (is_ls) 0.03 / 12 else 0)
     if (code %in% c("pso_optimal", "cmr_conditioned")) next  # internal-only: charged 0 (#567)
@@ -91,10 +91,14 @@ test_that("monthly_cost matches the hand-derived turnover-aware formula for ever
   }
 })
 
-test_that("long_short strategies get leg_multiplier 4 and long_only/overlay get 2", {
+test_that("long_short strategies get leg_multiplier 4, overlay 1 and long_only 2", {
   tbl <- hd_strategy_names_tbl()
   ls_codes <- tbl$code_name[tbl$directionality == "long_short"]
-  other_codes <- tbl$code_name[tbl$directionality != "long_short"]
+  ov_codes <- tbl$code_name[tbl$directionality == "overlay"]
+  other_codes <- tbl$code_name[!tbl$directionality %in% c("long_short", "overlay")]
+  expect_true(all(
+    STRATEGY_COST_BASIS$leg_multiplier[STRATEGY_COST_BASIS$code_name %in% ov_codes] == 1
+  ))
 
   expect_true(all(
     STRATEGY_COST_BASIS$leg_multiplier[STRATEGY_COST_BASIS$code_name %in% ls_codes] == 4

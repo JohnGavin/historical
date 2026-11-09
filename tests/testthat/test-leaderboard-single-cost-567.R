@@ -51,9 +51,21 @@ test_that("leg factor: a full replacement of BOTH legs of a long-short book cost
   expect_equal(cost_no_borrow, 0.02, tolerance = 1e-12)
 })
 
-test_that(".leg_multiplier() is the single home of the 2 / 4 factor", {
+test_that("leg factor: an overlay switching SPY -> cash trades ONE side, costs 0.5% (not 1%)", {
+  # SPY and cash are both names in the measured weights (rt_entry_exposure()). Selling
+  # 100% SPY into cash: sum|dw| = 2.0, one-way (default) = 1.0 = 1.0 of SPY sold; the
+  # cash side costs nothing. Cost = 1.0 * 0.005 = 0.5%; the x2 would charge 1%.
+  now  <- c(SPY = 0, CASH = 1)
+  prev <- c(SPY = 1, CASH = 0)
+  expect_equal(c(hd_turnover(now, prev), hd_turnover(now, prev, side = "two")), c(1, 2))
+  expect_equal(.period_cost(hd_turnover(now, prev), "overlay"), 0.005, tolerance = 1e-12)
+  # TOM: in and out once a month = two switches = turnover 2.0 -> 1.0%/month
+  expect_equal(.period_cost(2, "overlay"), 0.01, tolerance = 1e-12)
+})
+
+test_that(".leg_multiplier() is the single home of the 2 / 1 / 4 factor", {
   expect_equal(.leg_multiplier(c("long_only", "overlay", "market_neutral", "long_short")),
-               c(2, 2, 2, 4))
+               c(2, 1, 2, 4))
   b <- .strategy_turnover_cost_basis(.sn(), .hand_realised())
   expect_equal(b$leg_multiplier, .leg_multiplier(.sn()$directionality))
 })

@@ -42,7 +42,7 @@
       17                                                                           leaderboard
       18                                                                           leaderboard
          leg_multiplier turnover
-      1               2     0.50
+      1               1     0.50
       2               4     1.00
       3               4       NA
       4               2     0.30
@@ -55,10 +55,10 @@
       11              4     1.00
       12              2     1.00
       13              2       NA
-      14              2     0.50
+      14              1     0.50
       15              4     1.00
       16              4     1.00
-      17              2     0.10
+      17              1     0.10
       18              4     1.00
                                                                  turnover_basis
       1                                     hand-typed: fixture: no measurement
@@ -80,7 +80,7 @@
       17                                    hand-typed: fixture: no measurement
       18                                    hand-typed: fixture: no measurement
          monthly_cost
-      1        0.0050
+      1        0.0025
       2        0.0225
       3        0.0000
       4        0.0030
@@ -93,10 +93,10 @@
       11       0.0225
       12       0.0100
       13       0.0000
-      14       0.0050
+      14       0.0025
       15       0.0225
       16       0.0225
-      17       0.0010
+      17       0.0005
       18       0.0225
 
 # .strategy_turnover_cost_basis() function signature is stable (catches API drift)

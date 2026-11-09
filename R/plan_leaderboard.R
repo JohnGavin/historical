@@ -327,8 +327,12 @@ HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
 # self-financing book), per month, divided by the number of legs (2 for a
 # long-short book, whose signed-NAV one-way figure counts both legs) so it is
 # per leg. The cost is charged on value TRADED = buy + sell:
-#   long_only / overlay: traded = 2 x one-way          -> leg_multiplier 2
-#   long_short:          traded = 2 x one-way x 2 legs -> leg_multiplier 4
+#   long_only:  traded = 2 x one-way          -> leg_multiplier 2
+#   long_short: traded = 2 x one-way x 2 legs -> leg_multiplier 4
+#   overlay (risky asset <-> cash; cash is listed as a name in the measured
+#   weights, so sum|dw|/2 is already the risky value traded): traded = 1 x
+#   one-way -> leg_multiplier 1. Switching SPY to cash is one-way 1.0 = 1.0 of
+#   SPY sold, one trade; x2 would charge two.
 # so cost = turnover x cost_per_trade x leg_multiplier = (two-way traded
 # value) x cost_per_trade, exactly once. Check: a full A->B switch of a
 # long-only book is one-way 1.0, two-way 2.0, cost 2 x 0.5% = 1%. The x2/x4
@@ -469,14 +473,20 @@ HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
 #'
 #' `turnover` is one-way (value bought = value sold) per leg, so the value
 #' TRADED is buy + sell = 2 x one-way, times the number of legs (2 for a
-#' long-short book): 2 for long_only / overlay / market_neutral, 4 for
-#' long_short. See the header of this section.
+#' long-short book): 2 for long_only / market_neutral, 4 for long_short.
+#' EXCEPTION, overlay: 1. An overlay (TOM, Risk State) moves between one risky
+#' asset and CASH, and strategy_realised_turnover lists cash as a name, so
+#' sum(|dw|)/2 is already the risky value traded; the cash side costs nothing.
+#' Switching from SPY to cash is one-way 1.0 = 1.0 of SPY sold: one trade, not
+#' two (x2 over-charged these rows by a factor of 2). See the header of this
+#' section.
 #'
 #' @param directionality Character/factor vector.
 #' @return Numeric vector of 2 or 4.
 #' @noRd
 .leg_multiplier <- function(directionality) {
-  ifelse(as.character(directionality) == "long_short", 4, 2)
+  d <- as.character(directionality)
+  ifelse(d == "long_short", 4, ifelse(d == "overlay", 1, 2))
 }
 
 #' Cost basis per strategy: who charges the cost, the turnover, and the monthly cost
