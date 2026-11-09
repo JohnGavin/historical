@@ -46,7 +46,12 @@ test_that("STRATEGY_COST_BASIS covers every strategy in hd_strategy_names_tbl()"
   expect_equal(nrow(STRATEGY_COST_BASIS), 18L)
   expect_setequal(STRATEGY_COST_BASIS$code_name, hd_strategy_names_tbl()$code_name)
   expect_true(all(!is.na(STRATEGY_COST_BASIS$monthly_cost)))
-  expect_true(all(STRATEGY_COST_BASIS$monthly_cost > 0))
+  # #567: one cost per strategy -- the leaderboard charges a positive cost to every
+  # strategy except the internal-only ones (net series only), which it charges 0.
+  charged <- STRATEGY_COST_BASIS$cost_basis == "leaderboard"
+  expect_true(all(STRATEGY_COST_BASIS$monthly_cost[charged] > 0))
+  expect_true(all(STRATEGY_COST_BASIS$monthly_cost[!charged] == 0))
+  expect_setequal(STRATEGY_COST_BASIS$code_name[!charged], c("pso_optimal", "cmr_conditioned"))
 })
 
 # The 12 strategy codes #778/#751's cost_rows extension targets
@@ -80,6 +85,7 @@ test_that("monthly_cost matches the hand-derived turnover-aware formula for ever
     leg <- if (is_ls) 4 else 2
     expected <- (tbl$turnover_pct_per_period_avg[i] / 100) * 0.005 * leg +
       (if (is_ls) 0.03 / 12 else 0)
+    if (code %in% c("pso_optimal", "cmr_conditioned")) next  # internal-only: charged 0 (#567)
     actual <- STRATEGY_COST_BASIS$monthly_cost[STRATEGY_COST_BASIS$code_name == code]
     expect_equal(actual, expected, tolerance = 1e-12, label = paste0("monthly_cost[", code, "]"))
   }
@@ -119,6 +125,7 @@ test_that("no strategy takes the flat 0.20%/month multiplicative haircut any mor
   leaderboard_src <- readLines(here::here("R/plan_leaderboard.R"))
   expect_false(any(grepl("^\\s*COST_PER_MONTH <- 0\\.002\\s*$", leaderboard_src)))
   expect_false(any(grepl("\\(1 - cost_per_month\\)", leaderboard_src)))
+  # (and each is charged on a GROSS series, tests/testthat/test-leaderboard-single-cost-567.R)
   for (code in c("fac_max", "drif", "stk_max", "stk_drif", "xgb_drif", "pso_optimal")) {
     expect_true(any(grepl(sprintf('.cost_for("%s")', code), leaderboard_src, fixed = TRUE)),
                 label = paste0(".cost_for(\"", code, "\") is used"))

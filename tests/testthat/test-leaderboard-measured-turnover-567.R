@@ -110,7 +110,7 @@ test_that(".period_cost() is vectorised and rejects bad input", {
 })
 
 test_that(".strategy_turnover_cost_basis() joins choice and cost (hand-computed)", {
-  out <- .strategy_turnover_cost_basis(.toy_names(), .toy_realised())
+  out <- .strategy_turnover_cost_basis(.toy_names(), .toy_realised(), internal_only = character(0))
   by <- function(code, col) out[[col]][out$code_name == code]
   # m_ls: measured 0.40, long_short -> 0.0105
   expect_equal(by("m_ls", "monthly_cost"), 0.0105, tolerance = 1e-12)
@@ -123,8 +123,9 @@ test_that(".strategy_turnover_cost_basis() joins choice and cost (hand-computed)
   expect_equal(by("typed_na", "monthly_cost"), 0.0225, tolerance = 1e-12)
   # cmr: hand-typed 1.0 (distrusted measured 0.33), long_short -> 0.0225
   expect_equal(by("cmr", "monthly_cost"), 0.0225, tolerance = 1e-12)
-  expect_true(all(c("code_name", "short_name", "turnover", "turnover_basis",
+  expect_true(all(c("code_name", "short_name", "cost_basis", "turnover", "turnover_basis",
                     "leg_multiplier", "monthly_cost") %in% names(out)))
+  expect_true(all(out$cost_basis == "leaderboard"))
 })
 
 test_that(".calc_cost_metrics() is SUBTRACTIVE: net = ret - cost, not ret * (1 - cost)", {
@@ -151,7 +152,7 @@ test_that(".calc_cost_metrics() handles NA/empty input and requires an explicit 
 
 # ── real registry: every strategy resolves, distrusted rows stay hand-typed ──
 
-test_that("the real strategy_names table yields one basis row per strategy with positive cost", {
+test_that("the real strategy_names table yields one basis row per strategy; charged ones have positive cost", {
   sn <- hd_strategy_names_tbl()
   realised <- data.frame(
     code_name = sn$code_name,
@@ -161,9 +162,14 @@ test_that("the real strategy_names table yields one basis row per strategy with 
   )
   out <- .strategy_turnover_cost_basis(sn, realised)
   expect_equal(nrow(out), nrow(sn))
-  expect_true(all(startsWith(out$turnover_basis, "hand-typed: ")))
-  # with every row hand-typed this reproduces the pre-#567 per-strategy cost
-  # exactly (hand-typed turnover x 0.005 x legs + borrow): spot-check two
+  expect_true(all(out$monthly_cost[out$cost_basis == "leaderboard"] > 0))
+  # every strategy the leaderboard charges is hand-typed in this fixture; the two
+  # internal-only strategies are charged nothing and carry no turnover basis
+  charged <- out$cost_basis == "leaderboard"
+  expect_true(all(startsWith(out$turnover_basis[charged], "hand-typed: ")))
+  expect_true(all(is.na(out$turnover_basis[!charged])))
+  expect_true(all(out$monthly_cost[!charged] == 0))
+  # hand-typed turnover x 0.005 x legs + borrow: spot-check two
   expect_equal(out$monthly_cost[out$code_name == "ltr"], 0.0065, tolerance = 1e-12)
   expect_equal(out$monthly_cost[out$code_name == "ev_ebit"], 0.002, tolerance = 1e-12)
 })

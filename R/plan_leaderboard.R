@@ -298,24 +298,49 @@ HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
 # Feeds EVERY cost row of the `leaderboard` target (the original six
 # slice_portfolio() strategies and the #778 cost_rows extension alike).
 #
+# ONE COST PER STRATEGY (#567, owner decision 2026-11-09). Most strategy
+# return series the leaderboard reads are ALREADY net of the strategy's own
+# internal cost (Stock MAX deducts ~1.85%/month inside portfolio_longshort();
+# the old leaderboard then deducted ~2.25% more). Now:
+#   * where a GROSS series exists (all strategies but two) the leaderboard
+#     cost is applied to the gross series and REPLACES the internal one:
+#     `cost_basis` = "leaderboard";
+#   * where only a NET series exists (.HD_COST_INTERNAL_ONLY) the internal cost
+#     is kept, the leaderboard deducts nothing, and `cost_basis` =
+#     "internal: <reason>" (its `turnover*` columns are NA: no turnover was
+#     charged).
+# Avoid Worst has no internal cost at all (a hindsight series), so its series
+# is already gross and takes the leaderboard cost.
+#
 # Formula (the codebase's existing cost-model convention, not a new invention:
 # R/plan_stock_backtest.R's portfolio_longshort() and .claude/rules/
 # backtesting-assumptions.md "Cost Model Detail"):
 #
 #   monthly_txn_cost    = turnover * COST_PER_TRADE * leg_multiplier
-#   leg_multiplier      = 4 for directionality == "long_short" (both legs, buy+sell)
-#                        = 2 otherwise (long_only / overlay -- single leg, buy+sell)
 #   monthly_borrow_cost = BORROW_RATE_ANNUAL / 12, ONLY for long_short
 #   monthly_cost        = monthly_txn_cost + monthly_borrow_cost
-#   net return          = gross return - monthly_cost            (SUBTRACTIVE, #567 s.2)
+#   net return          = GROSS return - monthly_cost            (SUBTRACTIVE, #567 s.2)
 #
-# `turnover` is a per-MONTH, per-LEG fraction (the basis of
-# strategy_realised_turnover$turnover_realised, R/plan_cost_convention.R).
-# It is MEASURED when that target has a trusted measurement, else the
-# hand-typed strategy_names$turnover_pct_per_period_avg / 100, and the choice
-# is recorded per row in `turnover_basis` ("measured" or "hand-typed: <reason>").
-# The turnover values are never typed here: both inputs arrive as target
-# dependencies of `leaderboard`.
+# DEFINITION OF `turnover` AND THE LEG FACTOR (single home: .leg_multiplier()).
+# `turnover` is ONE-WAY: hd_turnover() default side = "one" =
+# sum(|w_new - w_prev|) / 2 = the value BOUGHT (= the value SOLD in a
+# self-financing book), per month, divided by the number of legs (2 for a
+# long-short book, whose signed-NAV one-way figure counts both legs) so it is
+# per leg. The cost is charged on value TRADED = buy + sell:
+#   long_only / overlay: traded = 2 x one-way          -> leg_multiplier 2
+#   long_short:          traded = 2 x one-way x 2 legs -> leg_multiplier 4
+# so cost = turnover x cost_per_trade x leg_multiplier = (two-way traded
+# value) x cost_per_trade, exactly once. Check: a full A->B switch of a
+# long-only book is one-way 1.0, two-way 2.0, cost 2 x 0.5% = 1%. The x2/x4
+# is NOT a double count: it converts the ONE-WAY figure to value traded. (It
+# would be a double count only if `turnover` were already the two-way
+# sum(|dw|), which it is not.)
+#
+# `turnover` is MEASURED when strategy_realised_turnover has a trusted
+# measurement, else the hand-typed strategy_names$turnover_pct_per_period_avg /
+# 100, and the choice is recorded per row in `turnover_basis` ("measured" or
+# "hand-typed: <reason>"). The turnover values are never typed here: both
+# inputs arrive as target dependencies of `leaderboard`.
 #
 # The 0.005 cost-per-trade and 3%/yr borrow rate live here only (unchanged).
 .STRATEGY_COST_PER_TRADE     <- 0.005  # 0.50%/trade (backtesting-assumptions.md)
@@ -328,6 +353,24 @@ HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
 .HD_TURNOVER_DISTRUSTED <- c(
   cmr = "measured turnover understates: exits not counted (#567 A2)"
 )
+
+# Strategies whose leaderboard series is NET of an internal cost with NO gross
+# series exposed: the leaderboard charges them nothing more (one cost per
+# strategy, #567). code_name -> reason shown in `cost_basis`.
+# pso_optimal: a constant-weight blend of the Stock/Factor MAX/DRIF series, each
+#   already net of its own cost; no gross blend is built.
+# cmr_conditioned: net_ret_conditioned = exposure_mult * net_ret + (1 -
+#   exposure_mult) * rf - switch_cost; the conditioned table carries only the
+#   net columns, so the gross conditioned series is not exposed.
+.HD_COST_INTERNAL_ONLY <- c(
+  pso_optimal = "blend of constituents already net of their own cost; no gross blend exposed",
+  cmr_conditioned = "overlay series exposed only net of its own cost; no gross series exposed"
+)
+
+# Strategies with NO internal cost: the series the leaderboard reads is already
+# gross, so it takes the leaderboard cost directly.
+# avoid_worst: hindsight series ("NOT a tradeable strategy", R/plan_avoid_worst.R).
+.HD_COST_NO_INTERNAL <- c("avoid_worst")
 
 #' Choose the turnover each strategy's cost is charged on (#567)
 #'
@@ -417,28 +460,127 @@ HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
     cli::cli_abort(c("x" = ".period_cost(): {.arg series_ann_factor} must be one positive finite number."))
   }
   is_ls <- d == "long_short"
-  legs <- ifelse(is_ls, 4, 2)
-  monthly <- turnover * cost_per_trade * legs + ifelse(is_ls, borrow_rate_annual / 12, 0)
+  monthly <- turnover * cost_per_trade * .leg_multiplier(d) +
+    ifelse(is_ls, borrow_rate_annual / 12, 0)
   monthly * 12 / series_ann_factor
 }
 
-#' Cost basis per strategy: chosen turnover, its basis, and the monthly cost
+#' Leg multiplier: one-way per-leg turnover -> value traded (single home)
+#'
+#' `turnover` is one-way (value bought = value sold) per leg, so the value
+#' TRADED is buy + sell = 2 x one-way, times the number of legs (2 for a
+#' long-short book): 2 for long_only / overlay / market_neutral, 4 for
+#' long_short. See the header of this section.
+#'
+#' @param directionality Character/factor vector.
+#' @return Numeric vector of 2 or 4.
+#' @noRd
+.leg_multiplier <- function(directionality) {
+  ifelse(as.character(directionality) == "long_short", 4, 2)
+}
+
+#' Cost basis per strategy: who charges the cost, the turnover, and the monthly cost
+#'
+#' One cost per strategy (#567): a strategy in `internal_only` keeps its own
+#' internal cost and is charged 0 here (`cost_basis` = "internal: <reason>",
+#' `turnover`, `turnover_basis` NA); every other strategy is charged the
+#' turnover-based cost on its GROSS series (`cost_basis` = "leaderboard").
 #'
 #' @param strategy_names_tbl,realised_tbl See [.choose_cost_turnover()].
-#' @return Tibble: code_name, short_name, leg_multiplier, turnover,
+#' @param internal_only Named character vector, code_name -> reason; every name
+#'   must be a `strategy_names_tbl$code_name`.
+#' @return Tibble: code_name, short_name, cost_basis, leg_multiplier, turnover,
 #'   turnover_basis, monthly_cost.
 #' @noRd
-.strategy_turnover_cost_basis <- function(strategy_names_tbl, realised_tbl) {
+.strategy_turnover_cost_basis <- function(strategy_names_tbl, realised_tbl,
+                                          internal_only = .HD_COST_INTERNAL_ONLY) {
+  unknown <- setdiff(names(internal_only), strategy_names_tbl$code_name)
+  if (length(unknown) > 0L) {
+    cli::cli_abort(c(
+      "x" = "internal_only names strategy code(s) not in strategy_names: {unknown}.",
+      "i" = "Fix .HD_COST_INTERNAL_ONLY (R/plan_leaderboard.R) or strategy_names."
+    ))
+  }
   ch <- .choose_cost_turnover(strategy_names_tbl, realised_tbl)
-  ch |>
-    dplyr::transmute(
-      code_name = code_name,
-      short_name = short_name,
-      leg_multiplier = ifelse(directionality == "long_short", 4, 2),
-      turnover = turnover,
-      turnover_basis = turnover_basis,
-      monthly_cost = .period_cost(turnover, directionality)
-    )
+  is_int <- ch$code_name %in% names(internal_only)
+  charged <- !is_int
+  monthly <- rep(0, nrow(ch))
+  if (any(charged)) {
+    monthly[charged] <- .period_cost(ch$turnover[charged], ch$directionality[charged])
+  }
+  tibble::tibble(
+    code_name = ch$code_name,
+    short_name = ch$short_name,
+    cost_basis = ifelse(is_int, paste0("internal: ", unname(internal_only[ch$code_name])), "leaderboard"),
+    leg_multiplier = .leg_multiplier(ch$directionality),
+    turnover = ifelse(is_int, NA_real_, ch$turnover),
+    turnover_basis = ifelse(is_int, NA_character_, ch$turnover_basis),
+    monthly_cost = monthly
+  )
+}
+
+#' Add the gross series to a stock long-short portfolio (#567)
+#'
+#' `portfolio_longshort()` (R/plan_stock_backtest.R) sets `port_ret = long_ret -
+#' short_ret - total_cost`, so the gross series is `port_ret + total_cost` (the
+#' internal trade + borrow cost added back). The leaderboard charges its own
+#' cost on it. Also used by scripts/evaluate_validation.R (one home).
+#'
+#' @param p Portfolio tibble with `port_ret` and `total_cost`.
+#' @return `p` with a `gross_port_ret` column.
+#' @noRd
+.stk_with_gross <- function(p) {
+  if (!all(c("port_ret", "total_cost") %in% names(p))) {
+    cli::cli_abort(c(
+      "x" = ".stk_with_gross(): portfolio lacks {.field port_ret} and/or {.field total_cost}.",
+      "i" = "Cannot rebuild the gross series; see portfolio_longshort() (R/plan_stock_backtest.R)."
+    ))
+  }
+  p$gross_port_ret <- p$port_ret + p$total_cost
+  p
+}
+
+#' Full-Period cost rows for the strategies read from the wide return tables
+#'
+#' One cost per strategy (#567). Per `ext_map` entry: a strategy whose
+#' `cost_basis` is "internal..." uses its NET series from `net_wide` as is
+#' (monthly_cost is 0); a strategy in [.HD_COST_NO_INTERNAL] uses `net_wide`
+#' (already gross); every other strategy uses its GROSS series from `gross_wide`
+#' and is charged `monthly_cost`, which REPLACES the internal cost. A costed
+#' strategy with a net column but no gross column aborts (never silently falls
+#' back to the net series, which would charge two costs).
+#'
+#' @param ext_map List of list(code, wide_col, label).
+#' @param net_wide `strat_returns_wide` (ym + one column per strategy).
+#' @param gross_wide `strat_returns_gross_wide` or NULL.
+#' @param cost_basis [.strategy_turnover_cost_basis()] output.
+#' @return Tibble of net_cagr, cum_pnl, cvar_95, credible, period, strategy.
+#' @noRd
+.cost_ext_rows <- function(ext_map, net_wide, gross_wide, cost_basis) {
+  dplyr::bind_rows(lapply(ext_map, function(m) {
+    if (!m$wide_col %in% names(net_wide)) return(NULL)
+    b <- cost_basis[cost_basis$code_name == m$code, ]
+    if (nrow(b) != 1L) {
+      cli::cli_abort(c(
+        "x" = "No cost basis row for strategy code {.val {m$code}}.",
+        "i" = "Check strategy_names and .HD_COST_INTERNAL_ONLY (R/plan_leaderboard.R)."
+      ))
+    }
+    internal <- startsWith(b$cost_basis, "internal")
+    series <- if (internal || m$code %in% .HD_COST_NO_INTERNAL) {
+      net_wide[[m$wide_col]]
+    } else {
+      if (is.null(gross_wide) || !m$wide_col %in% names(gross_wide)) {
+        cli::cli_abort(c(
+          "x" = "No gross series for {.val {m$label}} ({.field {m$wide_col}}), which is charged the leaderboard cost.",
+          "i" = "Charging it on the net series would deduct two costs (#567). Add it to strat_returns_gross_wide or to .HD_COST_INTERNAL_ONLY."
+        ))
+      }
+      gross_wide[[m$wide_col]]
+    }
+    .calc_cost_metrics(series, cost_per_month = b$monthly_cost) |>
+      dplyr::mutate(period = "Full Period", strategy = m$label)
+  }))
 }
 
 #' Cost-adjusted metrics for one return series: SUBTRACTIVE cost (#567)
@@ -891,15 +1033,19 @@ plan_leaderboard <- function() {
 
       # ── Cost metrics (net_cagr, cum_pnl, cvar_95) ─────────────────
       # Compute per strategy per period from raw portfolio returns.
-      # #567: EVERY strategy (the original six and the #778 extension) is
-      # charged its own turnover-based cost, SUBTRACTIVELY (net = ret - cost,
-      # .calc_cost_metrics()), on the turnover chosen by
-      # .choose_cost_turnover(): MEASURED (strategy_realised_turnover target)
-      # where trusted, else the hand-typed strategy_names value, with the
-      # choice and its reason carried per row in `turnover_basis`. This
-      # replaces the flat 0.20%/month multiplicative haircut
-      # (ret * (1 - 0.002)) the original six used. Both inputs are target
-      # dependencies named in the call below, never typed here.
+      # #567: ONE cost per strategy. Where a GROSS series exists (every
+      # strategy except pso_optimal and cmr_conditioned) the series fed to
+      # .calc_cost_metrics() is the GROSS one (fm/drif gross_port_ret; stock
+      # long-short port_ret + total_cost; the rest strat_returns_gross_wide)
+      # and the leaderboard's own turnover-based cost is deducted SUBTRACTIVELY
+      # (net = gross - cost) on the turnover chosen by .choose_cost_turnover():
+      # MEASURED (strategy_realised_turnover) where trusted, else the
+      # hand-typed strategy_names value, the choice carried per row in
+      # `turnover_basis`. That cost REPLACES the strategy's internal cost.
+      # pso_optimal and cmr_conditioned expose only a NET series: they keep
+      # their internal cost and are charged 0 here (`cost_basis` =
+      # "internal: ..."). Both inputs are target dependencies named in the call
+      # below, never typed here.
       STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(
         strategy_names, strategy_realised_turnover
       )
@@ -962,14 +1108,17 @@ plan_leaderboard <- function() {
       }
 
       cost_rows <- bind_rows(
-        slice_portfolio(fm_portfolio,        "portfolio_ret", fm_params, .cost_for("fac_max")) |> mutate(strategy = "Factor MAX"),
-        slice_portfolio(drif_portfolio,      "portfolio_ret", drif_params, .cost_for("drif")) |> mutate(strategy = "Factor DRIF"),
-        slice_portfolio(stk_max_portfolio,   "port_ret",      stk_params, .cost_for("stk_max")) |> mutate(strategy = "Stock MAX"),
-        slice_portfolio(stk_drif_portfolio,  "port_ret",      stk_params, .cost_for("stk_drif")) |> mutate(strategy = "Stock DRIF"),
-        slice_portfolio(xgb_drif_portfolio,  "port_ret",      stk_params, .cost_for("xgb_drif")) |> mutate(strategy = "XGB DRIF")
+        slice_portfolio(fm_portfolio,        "gross_port_ret", fm_params, .cost_for("fac_max")) |> mutate(strategy = "Factor MAX"),
+        slice_portfolio(drif_portfolio,      "gross_port_ret", drif_params, .cost_for("drif")) |> mutate(strategy = "Factor DRIF"),
+        slice_portfolio(.stk_with_gross(stk_max_portfolio),  "gross_port_ret", stk_params, .cost_for("stk_max")) |> mutate(strategy = "Stock MAX"),
+        slice_portfolio(.stk_with_gross(stk_drif_portfolio), "gross_port_ret", stk_params, .cost_for("stk_drif")) |> mutate(strategy = "Stock DRIF"),
+        slice_portfolio(.stk_with_gross(xgb_drif_portfolio), "gross_port_ret", stk_params, .cost_for("xgb_drif")) |> mutate(strategy = "XGB DRIF")
       )
 
-      # PSO Optimal: derive from port_returns (opt weights applied)
+      # PSO Optimal: derive from port_returns (opt weights applied). The blend
+      # is of series already net of their own cost and no gross blend exists, so
+      # .cost_for("pso_optimal") is 0 (cost_basis "internal", #567): its row is
+      # the blend net of the constituents' internal costs, with no second cost.
       if (!is.null(port_metrics) && nrow(port_metrics) > 0 &&
           !is.null(port_optimal_weights)) {
         w <- port_optimal_weights
@@ -1011,25 +1160,23 @@ plan_leaderboard <- function() {
       # cost_per_month for each strategy comes from STRATEGY_COST_BASIS
       # (built above from strategy_names + strategy_realised_turnover) --
       # turnover-aware (measured where trusted, else hand-typed, x
-      # directionality), the same rule the original six now use (#567).
+      # directionality), the same rule the original six use (#567).
       # See #778 scope item 1
       # ("a cost basis per strategy family, turnover-aware, not a single
-      # blanket rate") and STRATEGY_COST_BASIS's own comment for the formula
-      # and its precedent (R/plan_stock_backtest.R's
+      # blanket rate") and the header of the cost-basis section above for the
+      # formula and its precedent (R/plan_stock_backtest.R's
       # portfolio_longshort()/portfolio_longshort_hrp() cost formula;
       # .claude/rules/backtesting-assumptions.md "Cost Model Detail").
       #
-      # NOTE: several of these strategies already deduct their OWN internal
-      # transaction cost before this leaderboard-level pass runs (e.g. CMR:
-      # R/plan_commodities_mean_reversion.R:740; OLMAR-1: R/plan_olmar.R
-      # cost_bps=10/day). This layers an ADDITIONAL round-trip cost on top,
-      # the SAME "leaderboard applies its own cost pass atop the strategy's
-      # own model" pattern the original 6 already use (Factor MAX/DRIF:
-      # R/plan_factormax.R:141-142 / R/plan_drif.R:242-243 compute
-      # `port_ret <- gross_ret - cost` BEFORE calc_cost_metrics() deducts
-      # the leaderboard's own cost again) -- not a new defect introduced here. Whether
-      # that double layering is itself the right model is a question that
-      # applies equally to the original 6 and is out of #778's scope.
+      # ONE COST (#567): several of these strategies deduct their OWN internal
+      # transaction cost inside the series strat_returns_wide carries (CMR:
+      # R/plan_commodities_mean_reversion.R; OLMAR-1: cost_bps/day; TOM: 5 bps
+      # per switch; Risk State: trade_cost; LTR, Mom *, Value (HML), Managed
+      # Futures: their own per-period cost). The cost pass therefore reads
+      # strat_returns_gross_wide (the same series BEFORE that cost,
+      # build_strat_returns_gross_wide() in R/plan_strategy_correlation.R) and
+      # deducts the leaderboard cost from it instead; see .cost_ext_rows().
+      # cmr_conditioned has no gross series and keeps its internal cost.
       .cost_ext_map <- list(
         list(code = "ltr",          wide_col = "ltr",             label = "LTR"),
         list(code = "mom_prepeak",  wide_col = "mom_prepeak",     label = "Mom Pre-Peak"),
@@ -1052,24 +1199,23 @@ plan_leaderboard <- function() {
       )
 
       if (!is.null(strat_returns_wide) && nrow(strat_returns_wide) > 0) {
-        cost_ext_rows <- bind_rows(lapply(.cost_ext_map, function(m) {
-          if (!m$wide_col %in% names(strat_returns_wide)) return(NULL)
-          r <- strat_returns_wide[[m$wide_col]]
-          .calc_cost_metrics(r, cost_per_month = .cost_for(m$code)) |>
-            mutate(period = "Full Period", strategy = m$label)
-        }))
+        cost_ext_rows <- .cost_ext_rows(
+          .cost_ext_map, strat_returns_wide, strat_returns_gross_wide, STRATEGY_COST_BASIS
+        )
         cost_rows <- bind_rows(cost_rows, cost_ext_rows)
       }
 
-      # Join cost metrics onto all_metrics, plus the turnover the cost was
-      # charged on and why (#567): cost_turnover (per month per leg),
-      # turnover_basis ("measured" / "hand-typed: <reason>"), cost_monthly
-      # (fraction deducted per month). Construction-time properties of the
+      # Join cost metrics onto all_metrics, plus who charged the cost and the
+      # turnover it was charged on (#567): cost_basis ("leaderboard" /
+      # "internal: <reason>"), cost_turnover (per month per leg),
+      # turnover_basis ("measured" / "hand-typed: <reason>"; NA for internal),
+      # cost_monthly (fraction the LEADERBOARD deducts per month; 0 for
+      # internal). Construction-time properties of the
       # strategy, so they broadcast to every period row like the
       # strategy_cost_convention join below.
       cost_basis_join <- STRATEGY_COST_BASIS |>
         dplyr::transmute(
-          strategy = short_name, cost_turnover = turnover,
+          strategy = short_name, cost_basis = cost_basis, cost_turnover = turnover,
           turnover_basis = turnover_basis, cost_monthly = monthly_cost
         )
       all_metrics <- all_metrics |>
