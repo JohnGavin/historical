@@ -1,5 +1,50 @@
 # Changelog
 
+## 2026-11-09 (leaderboard costs from measured turnover, subtractive cost; refs #567, #663)
+
+This changes published numbers: every Net CAGR, cumulative P&L and Credible flag on the leaderboard.
+
+- Cost turnover is now the MEASURED `strategy_realised_turnover$turnover_realised` where trusted,
+  else the hand-typed `strategy_names` value; the choice and reason are a new leaderboard column
+  `turnover_basis` (with `cost_turnover`, `cost_monthly`). Rows with an `na_reason`, and CMR
+  (exits not counted, #567 A2), stay hand-typed.
+- Cost is subtracted (`net = ret - cost`) for every cost row, replacing the flat 0.20%/month
+  multiplicative haircut the original six used (#567 section 2). `.calc_cost_metrics()` has no
+  flat default any more; `STRATEGY_COST_BASIS` is built inside `leaderboard` from its two
+  target dependencies.
+- `docs/leaderboard.qmd`: Turnover basis column and a "Leaderboard cost basis" section, all
+  derived from the `leaderboard` target.
+- One cost per strategy (owner decision 2026-11-09). Most series the leaderboard read were
+  already net of the strategy's own cost, so the leaderboard cost was charged on top of it
+  (Stock MAX: ~1.85%/month internal, then 2.25% more). Now the cost pass runs on the GROSS
+  series (Factor MAX/DRIF `gross_port_ret`; stock long-short `port_ret + total_cost`; the rest
+  from the new target `strat_returns_gross_wide`, `build_strat_returns_gross_wide()`) and the
+  leaderboard cost REPLACES the internal one (`cost_basis` "leaderboard"). PSO Optimal exposes
+  only a net series: it keeps its internal cost, is charged 0, and carries
+  `cost_basis` "internal: ..." (no turnover columns). Avoid Worst has no internal cost. A costed
+  strategy with no gross series aborts (`.cost_ext_rows()`), never falls back to the net one.
+- CMR Conditioned moved onto the SAME basis as CMR (it had been the internal one, so it read +8.3%
+  next to CMR's -17.1%, mostly an artefact). `.cmr_apply_conditioning_overlay()` now also returns
+  `gross_ret_conditioned = exposure_mult * gross_ret + (1 - exposure_mult) * rf - switch_cost`
+  (the overlay before CMR's own rebalance cost; the switch cost, i.e. the trades entering and
+  leaving reduced or flat exposure, is kept so those trades are still paid for once).
+  `strat_returns_gross_wide` carries it as `cmr_conditioned` (lookback from
+  `cmr_selection_conditioned`) and `.HD_COST_INTERNAL_ONLY` is now PSO Optimal alone. Turnover is
+  CMR's hand-typed 100%/month, long-short: a full-exposure bound, because exposure m <= 1 scales
+  the rebalancing trades down (mean m is about 0.77), so it does not understate them.
+  Read-only estimate from the existing store: CMR Conditioned net CAGR -16.4% (was +8.3%), CMR -17.1%.
+- Leg factor checked: `turnover` is one-way (`hd_turnover()` side "one" = sum(|dw|)/2, per leg),
+  so x2 (x4 long-short, two legs) converts it to value traded; for long-only and long-short books
+  it is NOT a double count. One home `.leg_multiplier()`; tests pin a full A->B switch (one-way 1,
+  two-way 2, cost 1%) and a both-legs long-short replacement (two-way 4, cost 2% + borrow).
+  The overlays (TOM, Risk State, Avoid Worst) ARE over-charged by x2: their measured weights list
+  CASH as a name, so sum|dw|/2 is already the risky value traded (SPY -> cash is one 0.5% trade).
+  Their factor is now 1 (TOM 2.00% -> 1.00%/month, Risk State 1.39% -> 0.69%, Avoid Worst
+  0.50% -> 0.25%).
+- `scripts/evaluate_validation.R` now calls `.strategy_turnover_cost_basis()` and
+  `.calc_cost_metrics()` (and `.stk_with_gross()`) instead of its own multiplicative copy.
+- `docs/leaderboard.qmd` and the Rankings caption describe this model; the cost-basis table has a
+  `Cost basis` column. Published Net CAGR / cumulative P&L / Credible values change again.
 ## 2026-11-09 (commodity momentum: label bars as daily and annualise on 252, refs #1048)
 
 Follow-up to the signal/return pairing fix. Published numbers change: the

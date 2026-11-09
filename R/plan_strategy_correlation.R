@@ -157,6 +157,87 @@ STRAT_CODE_LABELS <- c(
 }
 
 
+#' Gross-of-internal-cost monthly return table for the leaderboard cost pass (#567)
+#'
+#' One cost per strategy: the leaderboard charges its own measured-turnover
+#' cost, so it must start from the series BEFORE the strategy's own internal
+#' cost. This returns, on the same `ym` spine and with the same column names
+#' as `strat_returns_wide`, the gross series for every strategy that exposes
+#' one. Strategies with no gross series (`pso_optimal` is not in the wide table
+#' at all) and Avoid Worst (no
+#' internal cost: its net series IS gross) are absent on purpose.
+#'
+#' Gross definitions (each the strategy's own code, internal cost added back):
+#' LTR `ls_ret_gross`; Mom pre/post/12-2 `ret_long - ret_short`; Value (HML)
+#' `RF + HML`; Managed Futures `ret_ls + cost_monthly` (the cost the source
+#' deducts each month); CMR / OLMAR-1 / TOM / Risk State the daily gross column
+#' (`gross_ret`, `gross_ret`, `ret_gross`, `gross_ret_strategy`) compounded to
+#' months by [.resample_daily_to_monthly()] exactly as `strat_returns_wide`.
+#'
+#' @param ltr_portfolio `ltr_portfolio` (date, ls_ret_gross, port_ret).
+#' @param mom_returns Named list `mom_prepeak`, `mom_postpeak`, `mom_combined`
+#'   of the `mom_*_returns` tables (exec_date, ret_long, ret_short, ret_ls).
+#' @param ev_portfolios `ev_portfolios` (date, RF, HML, ret_value_hml).
+#' @param mf_portfolios `mf_portfolios` (date, ret_ls).
+#' @param mf_params `mf_params` (`cost_monthly`).
+#' @param cmr_port The CMR portfolio for the pre-OOS chosen lookback (date, gross_ret).
+#' @param cmr_conditioned_port The conditioned CMR portfolio for the pre-OOS
+#'   chosen conditioned lookback (date, gross_ret_conditioned): the exposure
+#'   overlay before the CMR book's own rebalance cost, switch cost kept (#567).
+#' @param olmar_portfolio,tom_portfolio,rsc_portfolio The daily portfolios.
+#' @return Tibble: `ym` plus one gross column per strategy, ascending.
+#' @noRd
+build_strat_returns_gross_wide <- function(ltr_portfolio, mom_returns,
+                                           ev_portfolios,
+                                           mf_portfolios, mf_params,
+                                           cmr_port, cmr_conditioned_port, olmar_portfolio,
+                                           tom_portfolio, rsc_portfolio) {
+  ym_of <- function(d) format(as.Date(d), "%Y-%m")
+  need <- function(df, cols, label) {
+    miss <- setdiff(cols, names(df))
+    if (length(miss) > 0L) {
+      cli::cli_abort(c(
+        "x" = "build_strat_returns_gross_wide(): {.val {label}} lacks column(s) {.field {miss}}.",
+        "i" = "The gross series is read from the strategy's own table; check its plan file (#567)."
+      ))
+    }
+  }
+  monthly <- function(df, date_col, ret_expr_cols, fn, name) {
+    need(df, c(date_col, ret_expr_cols), name)
+    r <- fn(df)
+    keep <- !is.na(r)
+    out <- tibble::tibble(ym = ym_of(df[[date_col]][keep]), x = r[keep])
+    names(out)[2L] <- name
+    out
+  }
+  daily <- function(df, col, name) {
+    need(df, c("date", col), name)
+    out <- .resample_daily_to_monthly(df$date, df[[col]], min_days = 15L, label = paste0(name, " (gross)"))
+    names(out)[names(out) == "ret"] <- name
+    out
+  }
+
+  parts <- list(
+    monthly(ltr_portfolio, "date", "ls_ret_gross", function(d) d$ls_ret_gross, "ltr"),
+    monthly(mom_returns$mom_prepeak,  "exec_date", c("ret_long", "ret_short"),
+            function(d) d$ret_long - d$ret_short, "mom_prepeak"),
+    monthly(mom_returns$mom_postpeak, "exec_date", c("ret_long", "ret_short"),
+            function(d) d$ret_long - d$ret_short, "mom_postpeak"),
+    monthly(mom_returns$mom_combined, "exec_date", c("ret_long", "ret_short"),
+            function(d) d$ret_long - d$ret_short, "mom_combined"),
+    monthly(ev_portfolios, "date", c("RF", "HML"), function(d) d$RF + d$HML, "value_hml"),
+    monthly(mf_portfolios, "date", "ret_ls", function(d) d$ret_ls + mf_params$cost_monthly,
+            "managed_futures"),
+    daily(cmr_port, "gross_ret", "cmr"),
+    daily(cmr_conditioned_port, "gross_ret_conditioned", "cmr_conditioned"),
+    daily(olmar_portfolio, "gross_ret", "olmar_1"),
+    daily(tom_portfolio, "ret_gross", "tom"),
+    daily(rsc_portfolio, "gross_ret_strategy", "risk_state")
+  )
+  .full_join_return_spine(parts) |>
+    dplyr::arrange(ym)
+}
+
 #' Resample a daily return series to monthly by compounding within each
 #' calendar month (#733 mixed-frequency spine)
 #'
@@ -1014,6 +1095,45 @@ plan_strategy_correlation <- function() {
 
       .full_join_return_spine(parts) |>
         arrange(ym)
+    }),
+
+    # ── strat_returns_wide on the GROSS-of-internal-cost basis (#567) ───────
+    # The leaderboard cost pass deducts its own measured-turnover cost, so it
+    # must start from the series before each strategy's internal cost; see
+    # build_strat_returns_gross_wide(). cmr uses the lookback chosen PRE-OOS
+    # (cmr_selection$chosen), the same pick strat_returns_daily_native uses.
+    targets::tar_target(strat_returns_gross_wide, {
+      cmr_gross_port <- switch(cmr_selection$chosen,
+        "1m" = cmr_portfolio_1m,
+        "3m" = cmr_portfolio_3m,
+        "6m" = cmr_portfolio_6m,
+        cli::cli_abort(c(
+          "x" = "Unrecognised CMR lookback {.val {cmr_selection$chosen}} from cmr_selection.",
+          "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
+        ))
+      )
+      cmr_cond_gross_port <- switch(cmr_selection_conditioned$chosen,
+        "1m" = cmr_portfolio_1m_conditioned,
+        "3m" = cmr_portfolio_3m_conditioned,
+        "6m" = cmr_portfolio_6m_conditioned,
+        cli::cli_abort(c(
+          "x" = "Unrecognised CMR lookback {.val {cmr_selection_conditioned$chosen}} from cmr_selection_conditioned.",
+          "i" = "Expected one of '1m', '3m', '6m' (R/plan_commodities_mean_reversion.R)."
+        ))
+      )
+      build_strat_returns_gross_wide(
+        ltr_portfolio = ltr_portfolio,
+        mom_returns = list(
+          mom_prepeak = mom_prepeak_returns,
+          mom_postpeak = mom_postpeak_returns,
+          mom_combined = mom_combined_returns
+        ),
+        ev_portfolios = ev_portfolios,
+        mf_portfolios = mf_portfolios, mf_params = mf_params,
+        cmr_port = cmr_gross_port, cmr_conditioned_port = cmr_cond_gross_port,
+        olmar_portfolio = olmar_portfolio,
+        tom_portfolio = tom_portfolio, rsc_portfolio = rsc_portfolio
+      )
     }),
 
     # ── strat_returns_wide on the EXCESS basis (#937, refs #919) ─────────────

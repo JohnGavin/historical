@@ -21,6 +21,23 @@ source(here::here("R/plan_strategy_names.R"))
 source(here::here("R/plan_leaderboard.R"))
 source(here::here("R/plan_qa_gates.R"))
 
+# #567: STRATEGY_COST_BASIS is no longer a module-level constant -- it needs the
+# strategy_realised_turnover target, so the `leaderboard` target builds it.
+# These #778 tests pin the HAND-TYPED path (every strategy falls back to
+# strategy_names$turnover_pct_per_period_avg): that is the pre-#567 cost basis,
+# and the formula it documents. The measured-turnover choice is tested in
+# test-leaderboard-measured-turnover-567.R.
+.hand_typed_realised <- function() {
+  sn <- hd_strategy_names_tbl()
+  data.frame(
+    code_name = sn$code_name,
+    turnover_realised = NA_real_,
+    na_reason = "fixture: no measurement",
+    stringsAsFactors = FALSE
+  )
+}
+STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(hd_strategy_names_tbl(), .hand_typed_realised())
+
 # ── STRATEGY_COST_BASIS: coverage ───────────────────────────────────────────
 
 test_that("STRATEGY_COST_BASIS covers every strategy in hd_strategy_names_tbl()", {
@@ -29,7 +46,12 @@ test_that("STRATEGY_COST_BASIS covers every strategy in hd_strategy_names_tbl()"
   expect_equal(nrow(STRATEGY_COST_BASIS), 18L)
   expect_setequal(STRATEGY_COST_BASIS$code_name, hd_strategy_names_tbl()$code_name)
   expect_true(all(!is.na(STRATEGY_COST_BASIS$monthly_cost)))
-  expect_true(all(STRATEGY_COST_BASIS$monthly_cost > 0))
+  # #567: one cost per strategy -- the leaderboard charges a positive cost to every
+  # strategy except the internal-only ones (net series only), which it charges 0.
+  charged <- STRATEGY_COST_BASIS$cost_basis == "leaderboard"
+  expect_true(all(STRATEGY_COST_BASIS$monthly_cost[charged] > 0))
+  expect_true(all(STRATEGY_COST_BASIS$monthly_cost[!charged] == 0))
+  expect_setequal(STRATEGY_COST_BASIS$code_name[!charged], "pso_optimal")
 })
 
 # The 12 strategy codes #778/#751's cost_rows extension targets
@@ -53,25 +75,30 @@ test_that("every #778/#751 cost-extension strategy code has a STRATEGY_COST_BASI
 # Formula (see STRATEGY_COST_BASIS's own comment, R/plan_leaderboard.R):
 #   monthly_cost = (turnover_pct_per_period_avg / 100) * 0.005 * leg_multiplier
 #                  + (borrow_rate_annual / 12 if directionality == "long_short" else 0)
-#   leg_multiplier = 4 for long_short, 2 otherwise
+#   leg_multiplier = 4 for long_short, 1 for overlay (cash is the other side), 2 otherwise
 
 test_that("monthly_cost matches the hand-derived turnover-aware formula for every strategy", {
   tbl <- hd_strategy_names_tbl()
   for (i in seq_len(nrow(tbl))) {
     code <- tbl$code_name[i]
     is_ls <- tbl$directionality[i] == "long_short"
-    leg <- if (is_ls) 4 else 2
+    leg <- if (is_ls) 4 else if (tbl$directionality[i] == "overlay") 1 else 2
     expected <- (tbl$turnover_pct_per_period_avg[i] / 100) * 0.005 * leg +
       (if (is_ls) 0.03 / 12 else 0)
+    if (code %in% "pso_optimal") next  # internal-only: charged 0 (#567)
     actual <- STRATEGY_COST_BASIS$monthly_cost[STRATEGY_COST_BASIS$code_name == code]
     expect_equal(actual, expected, tolerance = 1e-12, label = paste0("monthly_cost[", code, "]"))
   }
 })
 
-test_that("long_short strategies get leg_multiplier 4 and long_only/overlay get 2", {
+test_that("long_short strategies get leg_multiplier 4, overlay 1 and long_only 2", {
   tbl <- hd_strategy_names_tbl()
   ls_codes <- tbl$code_name[tbl$directionality == "long_short"]
-  other_codes <- tbl$code_name[tbl$directionality != "long_short"]
+  ov_codes <- tbl$code_name[tbl$directionality == "overlay"]
+  other_codes <- tbl$code_name[!tbl$directionality %in% c("long_short", "overlay")]
+  expect_true(all(
+    STRATEGY_COST_BASIS$leg_multiplier[STRATEGY_COST_BASIS$code_name %in% ov_codes] == 1
+  ))
 
   expect_true(all(
     STRATEGY_COST_BASIS$leg_multiplier[STRATEGY_COST_BASIS$code_name %in% ls_codes] == 4
@@ -94,20 +121,19 @@ test_that("Value (HML)'s monthly_cost has no borrow component (long_only)", {
   expect_equal(ev_cost, 0.002, tolerance = 1e-12)
 })
 
-test_that("original 6 cost_rows strategies remain at their historical COST_PER_MONTH, unaffected by STRATEGY_COST_BASIS", {
-  # #778 explicitly leaves the original 6 (Factor MAX/DRIF, Stock MAX/DRIF,
-  # XGB DRIF, PSO Optimal) at the flat 0.20%/month COST_PER_MONTH constant --
-  # STRATEGY_COST_BASIS is consulted ONLY for the 11 newly-added strategies.
-  #
-  # COST_PER_MONTH itself is defined INSIDE the `leaderboard` tar_target's
-  # command block (R/plan_leaderboard.R), not at module level, so it cannot
-  # be evaluated by source()-ing the file (the surrounding target needs its
-  # full set of upstream pipeline targets to run, out of scope for a
-  # worktree session -- see this file's header comment). Assert on the
-  # SOURCE TEXT instead: a regression here would silently alter six
-  # strategies' already-published net_cagr.
+test_that("no strategy takes the flat 0.20%/month multiplicative haircut any more (#567)", {
+  # The original six (Factor MAX/DRIF, Stock MAX/DRIF, XGB DRIF, PSO Optimal)
+  # used `ret * (1 - 0.002)`; every cost row now goes through
+  # .calc_cost_metrics() with its own .cost_for(<code>). Source-text guard (the
+  # `leaderboard` target body cannot be evaluated without a built store).
   leaderboard_src <- readLines(here::here("R/plan_leaderboard.R"))
-  expect_true(any(grepl("^\\s*COST_PER_MONTH <- 0\\.002\\s*$", leaderboard_src)))
+  expect_false(any(grepl("^\\s*COST_PER_MONTH <- 0\\.002\\s*$", leaderboard_src)))
+  expect_false(any(grepl("\\(1 - cost_per_month\\)", leaderboard_src)))
+  # (and each is charged on a GROSS series, tests/testthat/test-leaderboard-single-cost-567.R)
+  for (code in c("fac_max", "drif", "stk_max", "stk_drif", "xgb_drif", "pso_optimal")) {
+    expect_true(any(grepl(sprintf('.cost_for("%s")', code), leaderboard_src, fixed = TRUE)),
+                label = paste0(".cost_for(\"", code, "\") is used"))
+  }
 })
 
 test_that("STRATEGY_COST_BASIS output is stable (snapshot)", {
@@ -123,7 +149,7 @@ test_that(".strategy_turnover_cost_basis() function signature is stable (catches
 })
 
 # ── S23 joint-presence gate still holds for #778-shaped rows ────────────────
-# calc_cost_metrics() (R/plan_leaderboard.R) always returns net_cagr, cum_pnl,
+# calc_cost_metrics() (R/plan_leaderboard.R; now .calc_cost_metrics(), #567) always returns net_cagr, cum_pnl,
 # cvar_95, credible TOGETHER from a single call -- the #778 extension calls
 # the SAME function (with a turnover-aware cost_per_month instead of the flat
 # default), so the joint-presence contract S23 guards is structurally

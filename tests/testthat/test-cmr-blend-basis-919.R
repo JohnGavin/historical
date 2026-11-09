@@ -18,7 +18,8 @@ source(here::here("R/plan_commodities_mean_reversion.R"))
 
 .overlay <- function(rf = 0.002, exposure = rep(c(1.0, 0.5, 0.1), length.out = 24L)) {
   portfolio_tbl <- tibble::tibble(
-    date = .dts, net_ret = rep(c(0.01, -0.02, 0.015, 0.005), length.out = 24L)
+    date = .dts, net_ret = rep(c(0.01, -0.02, 0.015, 0.005), length.out = 24L),
+    gross_ret = rep(c(0.01, -0.02, 0.015, 0.005), length.out = 24L) + 0.0004
   )
   cond_regime_tbl <- tibble::tibble(
     date = .dts, cond_signal = 0, regime = "benign", exposure_mult = exposure

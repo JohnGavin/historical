@@ -87,7 +87,7 @@ test_that(".cmr_conditioning_regime: output columns are as documented", {
 
 test_that(".cmr_apply_conditioning_overlay: full (1.0) exposure reproduces net_ret minus the rf blend and switch cost exactly", {
   dates <- seq.Date(as.Date("2010-01-31"), by = "day", length.out = 5)
-  portfolio_tbl <- tibble::tibble(date = dates, net_ret = c(0.01, -0.02, 0.005, 0.03, -0.01))
+  portfolio_tbl <- tibble::tibble(date = dates, net_ret = c(0.01, -0.02, 0.005, 0.03, -0.01), gross_ret = c(0.01, -0.02, 0.005, 0.03, -0.01) + 0.0004)
   cond_regime_tbl <- tibble::tibble(
     date = dates[1], cond_signal = 0, regime = "benign", exposure_mult = 1.0
   )
@@ -108,7 +108,7 @@ test_that(".cmr_apply_conditioning_overlay: full (1.0) exposure reproduces net_r
 
 test_that(".cmr_apply_conditioning_overlay: sparse regime is carried forward (LOCF) onto every portfolio date", {
   dates <- seq.Date(as.Date("2010-01-01"), by = "day", length.out = 10)
-  portfolio_tbl <- tibble::tibble(date = dates, net_ret = rep(0.001, 10))
+  portfolio_tbl <- tibble::tibble(date = dates, net_ret = rep(0.001, 10), gross_ret = rep(0.001, 10) + 0.0004)
   # Regime only known on day 1 and day 6 -- must persist for days 2-5 and 7-10.
   cond_regime_tbl <- tibble::tibble(
     date          = dates[c(1, 6)],
@@ -127,7 +127,7 @@ test_that(".cmr_apply_conditioning_overlay: sparse regime is carried forward (LO
 
 test_that(".cmr_apply_conditioning_overlay: dates before the first conditioning print default to full (neutral) exposure", {
   dates <- seq.Date(as.Date("2010-01-01"), by = "day", length.out = 5)
-  portfolio_tbl <- tibble::tibble(date = dates, net_ret = rep(0.001, 5))
+  portfolio_tbl <- tibble::tibble(date = dates, net_ret = rep(0.001, 5), gross_ret = rep(0.001, 5) + 0.0004)
   # No conditioning data covers ANY of these dates.
   cond_regime_tbl <- tibble::tibble(
     date = as.Date("2020-01-01"), cond_signal = 0, regime = "benign", exposure_mult = 1.0
@@ -143,7 +143,7 @@ test_that(".cmr_apply_conditioning_overlay: dates before the first conditioning 
 
 test_that(".cmr_apply_conditioning_overlay: a regime switch deducts a strictly positive cost", {
   dates <- seq.Date(as.Date("2010-01-01"), by = "day", length.out = 4)
-  portfolio_tbl <- tibble::tibble(date = dates, net_ret = rep(0.001, 4))
+  portfolio_tbl <- tibble::tibble(date = dates, net_ret = rep(0.001, 4), gross_ret = rep(0.001, 4) + 0.0004)
   cond_regime_tbl <- tibble::tibble(
     date          = dates[c(1, 3)],
     cond_signal   = c(0, 5),

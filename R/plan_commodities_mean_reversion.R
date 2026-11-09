@@ -948,7 +948,7 @@ plan_commodities_mean_reversion <- function() {
 #'
 #' @param portfolio_tbl Tibble as returned by
 #'   \code{hd_commodity_mr_portfolio()} (packages/historicaldata/R/
-#'   commodities_mean_reversion.R): needs \code{date}, \code{net_ret}.
+#'   commodities_mean_reversion.R): needs \code{date}, \code{net_ret}, \code{gross_ret}.
 #' @param cond_regime_tbl Tibble as returned by
 #'   \code{.cmr_conditioning_regime()}: columns \code{date},
 #'   \code{cond_signal}, \code{regime}, \code{exposure_mult}.
@@ -960,12 +960,20 @@ plan_commodities_mean_reversion <- function() {
 #'   \code{\link{.HD_CMR_COND_SWITCH_COST}}.
 #' @return Tibble with columns \code{date}, \code{net_ret} (unconditioned,
 #'   passed through), \code{regime}, \code{exposure_mult},
-#'   \code{switch_cost}, \code{net_ret_conditioned}, \code{cash_weight}
+#'   \code{switch_cost}, \code{net_ret_conditioned},
+#'   \code{gross_ret_conditioned} (the overlay before the CMR book's own
+#'   rebalance cost, switch cost kept; #567), \code{cash_weight}
 #'   (\code{= 1 - exposure_mult}, the \code{"blend"} basis cash weight, #919)
 #'   and \code{rf_ret} (the daily rf of the cash leg, NA where unknown).
 #' @noRd
 .cmr_apply_conditioning_overlay <- function(portfolio_tbl, cond_regime_tbl, daily_rf,
                                              lookback, cost_per_switch = .HD_CMR_COND_SWITCH_COST) {
+  if (!all(c("date", "net_ret", "gross_ret") %in% names(portfolio_tbl))) {
+    cli::cli_abort(c(
+      "x" = ".cmr_apply_conditioning_overlay(): portfolio_tbl lacks {.field date}, {.field net_ret} and/or {.field gross_ret}.",
+      "i" = "The gross conditioned series (#567) is built from the CMR book's gross_ret; see hd_commodity_mr_portfolio()."
+    ))
+  }
   all_dates <- portfolio_tbl |>
     dplyr::distinct(.data$date) |>
     dplyr::arrange(.data$date)
@@ -982,7 +990,7 @@ plan_commodities_mean_reversion <- function() {
   rf_lookup <- daily_rf_filled |> dplyr::select(date, rf_ret)
 
   portfolio_tbl |>
-    dplyr::select(date, net_ret) |>
+    dplyr::select(date, net_ret, gross_ret) |>
     dplyr::left_join(joined, by = "date") |>
     dplyr::left_join(rf_lookup, by = "date") |>
     dplyr::arrange(.data$date) |>
@@ -991,6 +999,16 @@ plan_commodities_mean_reversion <- function() {
       .exposure_delta = abs(exposure_mult - dplyr::lag(exposure_mult, default = exposure_mult[1])),
       switch_cost     = cost_per_switch * .exposure_delta * 2.0,
       net_ret_conditioned = exposure_mult * net_ret +
+        (1 - exposure_mult) * .rf_filled - switch_cost,
+      # #567: the same overlay BEFORE the CMR book's own rebalance cost only:
+      # exposure_mult * gross_ret + (1 - exposure_mult) * rf - switch_cost.
+      # The leaderboard charges its measured-turnover cost on this series in
+      # place of CMR's internal cost (net_ret = gross_ret - cost). The
+      # switch_cost (the trades that enter/leave the flat/reduced periods,
+      # i.e. exposure changes) is KEPT: it is a different trade from the
+      # book's rebalancing, which the leaderboard cost covers, so nothing is
+      # charged twice and no exposure-change trade is left free.
+      gross_ret_conditioned = exposure_mult * gross_ret +
         (1 - exposure_mult) * .rf_filled - switch_cost,
       # #919: "blend" return basis (hd_return_basis()). The cash leg's
       # weight, DERIVED from exposure_mult (never typed), is the only part
@@ -1003,7 +1021,7 @@ plan_commodities_mean_reversion <- function() {
       cash_weight = 1 - exposure_mult
     ) |>
     dplyr::select(date, net_ret, regime, exposure_mult, switch_cost, net_ret_conditioned,
-                  cash_weight, rf_ret)
+                  gross_ret_conditioned, cash_weight, rf_ret)
 }
 
 #' Per-periodicity gap tolerances for the CMR periodicity guard (#738)
