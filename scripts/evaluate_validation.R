@@ -44,7 +44,8 @@
 #
 # Requires a built targets store (docs/_targets or _targets) containing
 # bt_partitions, fm_portfolio, drif_portfolio, stk_max_portfolio,
-# stk_drif_portfolio, xgb_drif_portfolio, port_returns, port_optimal_weights.
+# stk_drif_portfolio, xgb_drif_portfolio, port_returns, port_optimal_weights,
+# strategy_names, strategy_realised_turnover.
 # It only READS the store — it never calls tar_make().
 # ============================================================================
 
@@ -66,38 +67,40 @@ cat("Store:", store, "\n\n")
 
 bt_partitions <- tar_read_raw("bt_partitions", store = store)
 
-# COST_PER_MONTH mirrors R/plan_leaderboard.R's calc_cost_metrics() — kept
-# in sync manually since that function is a private closure inside the
-# `leaderboard` target and not exported. If the convention there changes,
-# update this value too.
-COST_PER_MONTH <- 0.002
+# #567: ONE cost model, ONE home. The cost columns come from the SAME functions
+# the `leaderboard` target uses (R/plan_leaderboard.R): the per-strategy
+# turnover-based monthly cost from .strategy_turnover_cost_basis() is deducted
+# SUBTRACTIVELY from the GROSS series (.calc_cost_metrics()); a strategy whose
+# only series is net of an internal cost (PSO Optimal) is charged 0 there.
+# This replaces an older multiplicative copy (ret * (1 - 0.002)).
+suppressPackageStartupMessages(library(tibble))
+pkgload::load_all(here::here("packages/historicaldata"), quiet = TRUE)
+source(here::here("R/plan_leaderboard.R"))
 
-calc_cost_metrics <- function(ret) {
-  ret <- ret[!is.na(ret)]
-  n <- length(ret)
-  if (n == 0L) {
-    return(tibble(net_cagr = NA_real_, cum_pnl = NA_real_, cvar_95 = NA_real_))
-  }
-  net_ret <- ret * (1 - COST_PER_MONTH)
-  net_cagr <- prod(1 + net_ret)^(12 / n) - 1
-  cum_pnl_net <- prod(1 + net_ret) - 1
-  q05 <- quantile(ret, 0.05)
-  cvar_95 <- mean(ret[ret <= q05])
-  tibble(net_cagr = net_cagr, cum_pnl = cum_pnl_net, cvar_95 = cvar_95)
+strategy_names <- tar_read_raw("strategy_names", store = store)
+strategy_realised_turnover <- tar_read_raw("strategy_realised_turnover", store = store)
+STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(strategy_names, strategy_realised_turnover)
+cost_for <- function(code) {
+  r <- STRATEGY_COST_BASIS[STRATEGY_COST_BASIS$code_name == code, ]
+  if (nrow(r) != 1L) cli_abort("No cost basis row for strategy code {.val {code}}.")
+  r$monthly_cost
 }
 
 # One Validation row for a strategy's portfolio-return series, bounded at
 # val_start with no upper bound — matches R/plan_leaderboard.R's
-# `slice_portfolio()` convention (`date >= params$val_start`).
-validation_row <- function(strategy, port_df, ret_col_name, val_start) {
-  if (is.null(port_df) || !ret_col_name %in% names(port_df)) {
-    cli_alert_danger("{strategy}: source portfolio target missing or lacks column {.field {ret_col_name}} — skipped.")
+# `slice_portfolio()` convention (`date >= params$val_start`). `ret_col_name`
+# is the column the headline metrics use; `cost_col_name` is the series the
+# cost is charged on (the GROSS column where one exists, else the same column).
+validation_row <- function(strategy, port_df, ret_col_name, val_start, code,
+                           cost_col_name = ret_col_name) {
+  if (is.null(port_df) || !all(c(ret_col_name, cost_col_name) %in% names(port_df))) {
+    cli_alert_danger("{strategy}: source portfolio target missing or lacks column {.field {ret_col_name}} / {.field {cost_col_name}} — skipped.")
     return(NULL)
   }
   val_data <- port_df[port_df$date >= val_start, ]
   ret <- val_data[[ret_col_name]]
   ann <- annualise_returns(ret, periods_per_year = 12L)
-  cost <- calc_cost_metrics(ret)
+  cost <- .calc_cost_metrics(val_data[[cost_col_name]], cost_per_month = cost_for(code))
   tibble(
     strategy = strategy,
     period = "Validation",
@@ -119,11 +122,16 @@ val_start_factor <- bt_partitions$factor$val_start
 val_start_equity <- bt_partitions$equity$val_start
 
 rows <- list(
-  validation_row("Factor MAX",  fm_portfolio,       "portfolio_ret", val_start_factor),
-  validation_row("Factor DRIF", drif_portfolio,     "portfolio_ret", val_start_factor),
-  validation_row("Stock MAX",   stk_max_portfolio,  "port_ret",      val_start_equity),
-  validation_row("Stock DRIF",  stk_drif_portfolio, "port_ret",      val_start_equity),
-  validation_row("XGB DRIF",    xgb_drif_portfolio, "port_ret",      val_start_equity)
+  validation_row("Factor MAX",  fm_portfolio,       "portfolio_ret", val_start_factor, "fac_max",
+                 cost_col_name = "gross_port_ret"),
+  validation_row("Factor DRIF", drif_portfolio,     "portfolio_ret", val_start_factor, "drif",
+                 cost_col_name = "gross_port_ret"),
+  validation_row("Stock MAX",   if (!is.null(stk_max_portfolio)) .stk_with_gross(stk_max_portfolio),
+                 "port_ret", val_start_equity, "stk_max", cost_col_name = "gross_port_ret"),
+  validation_row("Stock DRIF",  if (!is.null(stk_drif_portfolio)) .stk_with_gross(stk_drif_portfolio),
+                 "port_ret", val_start_equity, "stk_drif", cost_col_name = "gross_port_ret"),
+  validation_row("XGB DRIF",    if (!is.null(xgb_drif_portfolio)) .stk_with_gross(xgb_drif_portfolio),
+                 "port_ret", val_start_equity, "xgb_drif", cost_col_name = "gross_port_ret")
 )
 
 # PSO Optimal — derive from port_returns + the optimal weights, mirroring
@@ -135,7 +143,7 @@ if (!is.null(port_returns) && !is.null(port_optimal_weights)) {
     filter(if_all(all_of(strat_cols), ~ !is.na(.x))) |>
     mutate(opt_ret = as.numeric(as.matrix(pick(all_of(strat_cols))) %*% w))
   rows[[length(rows) + 1L]] <- validation_row(
-    "PSO Optimal", opt_returns_df, "opt_ret", val_start_equity
+    "PSO Optimal", opt_returns_df, "opt_ret", val_start_equity, "pso_optimal"
   )
 } else {
   cli_alert_warning("PSO Optimal: port_returns or port_optimal_weights missing from store — skipped.")
