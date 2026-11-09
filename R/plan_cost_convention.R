@@ -427,8 +427,378 @@ build_borrow_sensitivity_table <- function(returns_by_strategy,
   })
 }
 
+# ── Realised turnover per strategy (#663 Phase 1, #567 A1/A2) ────────────────
+# MEASUREMENT ONLY. Nothing below feeds any return, cost, Sharpe or CAGR: the
+# `strategy_realised_turnover` target sits NEXT TO the hand-typed
+# `turnover_pct_per_period_avg` (R/plan_strategy_names.R) so the two can be
+# compared; the cost model in R/plan_leaderboard.R is unchanged.
+#
+# One definition (packages/historicaldata/R/turnover.R, hd_turnover()):
+# one-way turnover = sum(|w_new - w_prev|) / 2 on the SIGNED NAV weights, over
+# the union of names (a missing name has weight 0, so an exit is a trade).
+# Hence a dollar-neutral 100%/100% long-short book that fully replaces both
+# legs has turnover 2.0, not 1.0; a long-only fully invested book that
+# replaces everything has 1.0.
+#
+# Columns of the result (one row per strategy_names row):
+#   avg_turnover_oneway     mean one-way turnover per rebalance period, on the
+#                           definition above
+#   periods_per_year        strategy_names$ann_factor (252 daily, 12 monthly)
+#   annualised_turnover_oneway  avg_turnover_oneway * periods_per_year
+#   legs                    2 for directionality == "long_short", else 1
+#   turnover_realised       annualised_turnover_oneway / 12 / legs: the
+#                           per-MONTH, per-LEG fraction. This is the SAME basis
+#                           as turnover_pct_per_period_avg / 100, which
+#                           .strategy_turnover_cost_basis() multiplies by
+#                           cost_per_trade * leg_multiplier as a monthly figure.
+#   turnover_hand_typed     turnover_pct_per_period_avg / 100
+#   turnover_ratio          turnover_realised / turnover_hand_typed
+#   na_reason               non-empty text exactly when no turnover could be
+#                           measured (fail-loud-not-null.md): never a blank NA.
+#
+# Sources, and the convention each one's own code uses (not changed here):
+#   weights   -> hd_turnover_series() on the strategy's own weight table
+#   column    -> the strategy's existing `turnover` column, converted to the
+#                definition above where its own convention differs (noted per
+#                row in `convention_note`)
+
+#' One measured-turnover entry for build_strategy_realised_turnover()
+#'
+#' @param turnover Numeric vector, one-way turnover per period ON THE
+#'   PORTFOLIO DEFINITION (see header). `NA` is allowed only in the first
+#'   position (a first period with no previous book).
+#' @param source Character: where the series came from.
+#' @param drift_adjusted Logical: was the previous book drifted by returns?
+#' @param note Character: the convention note for this row.
+#' @param drop_leading Integer: periods to drop from the front before
+#'   averaging (warm-up, or an entry period that is not a rebalance).
+#' @return A list entry.
+#' @noRd
+.rt_entry <- function(turnover, source, drift_adjusted, note, drop_leading = 0L) {
+  list(turnover = turnover, source = source, drift_adjusted = drift_adjusted,
+       note = note, drop_leading = as.integer(drop_leading), na_reason = NA_character_)
+}
+
+#' An entry for a strategy that exposes no weight vector
+#' @param reason Non-empty character: why turnover cannot be measured.
+#' @return A list entry.
+#' @noRd
+.rt_na_entry <- function(reason) {
+  if (!is.character(reason) || length(reason) != 1L || is.na(reason) || !nzchar(reason)) {
+    cli::cli_abort(c(
+      "x" = ".rt_na_entry(): `reason` must be one non-empty string.",
+      "i" = "A strategy with no measurable turnover must say why (fail-loud-not-null)."
+    ))
+  }
+  list(turnover = NULL, source = NA_character_, drift_adjusted = NA,
+       note = NA_character_, drop_leading = 0L, na_reason = reason)
+}
+
+#' Summarise one turnover series
+#' @param entry An entry from .rt_entry().
+#' @return List(avg, n).
+#' @noRd
+.rt_summarise <- function(entry, label) {
+  x <- entry$turnover
+  if (!is.numeric(x) || length(x) == 0L) {
+    cli::cli_abort(c("x" = "{.val {label}}: turnover must be a non-empty numeric vector."))
+  }
+  if (entry$drop_leading > 0L) {
+    if (entry$drop_leading >= length(x)) {
+      cli::cli_abort(c(
+        "x" = "{.val {label}}: drop_leading ({entry$drop_leading}) leaves no periods out of {length(x)}."
+      ))
+    }
+    x <- x[-seq_len(entry$drop_leading)]
+  }
+  if (anyNA(x[-1L]) || !all(is.finite(x[!is.na(x)])) || any(x < 0, na.rm = TRUE)) {
+    cli::cli_abort(c(
+      "x" = "{.val {label}}: turnover must be finite and >= 0, with NA allowed only in the first period.",
+      "i" = "Got {sum(is.na(x))} NA, {sum(!is.finite(x) & !is.na(x))} non-finite, {sum(x < 0, na.rm = TRUE)} negative."
+    ))
+  }
+  x <- x[!is.na(x)]
+  if (length(x) == 0L) {
+    cli::cli_abort(c("x" = "{.val {label}}: no measured periods left after dropping the first."))
+  }
+  list(avg = mean(x), n = length(x))
+}
+
+#' Per-strategy realised turnover table (#663 Phase 1)
+#'
+#' @param entries Named list keyed by `strategy_names$code_name`; each element
+#'   from `.rt_entry()` or `.rt_na_entry()`. Aborts naming any code_name
+#'   missing from `entries` or not in `strategy_names_tbl`.
+#' @param strategy_names_tbl `hd_strategy_names_tbl()` / the `strategy_names`
+#'   target (code_name, short_name, frequency, ann_factor,
+#'   turnover_pct_per_period_avg, directionality).
+#' @return Tibble, one row per strategy_names row (see header for columns).
+#' @noRd
+build_strategy_realised_turnover <- function(entries, strategy_names_tbl) {
+  need <- c("code_name", "short_name", "frequency", "ann_factor",
+            "turnover_pct_per_period_avg", "directionality")
+  miss_cols <- setdiff(need, names(strategy_names_tbl))
+  if (length(miss_cols) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_strategy_realised_turnover(): strategy_names_tbl lacks column(s) {.field {miss_cols}}."
+    ))
+  }
+  if (!is.list(entries) || is.null(names(entries))) {
+    cli::cli_abort(c("x" = "build_strategy_realised_turnover(): `entries` must be a named list."))
+  }
+  missing_e <- setdiff(strategy_names_tbl$code_name, names(entries))
+  extra_e   <- setdiff(names(entries), strategy_names_tbl$code_name)
+  if (length(missing_e) > 0L || length(extra_e) > 0L) {
+    cli::cli_abort(c(
+      "x" = "build_strategy_realised_turnover(): entries and strategy_names disagree.",
+      "i" = "No entry for: {.val {missing_e}}.",
+      "i" = "Entry for a strategy not in strategy_names: {.val {extra_e}}.",
+      "i" = "Every strategy needs a measured series or an explicit na_reason."
+    ))
+  }
+
+  rows <- lapply(seq_len(nrow(strategy_names_tbl)), function(i) {
+    sn <- strategy_names_tbl[i, ]
+    e  <- entries[[sn$code_name]]
+    legs <- if (as.character(sn$directionality) == "long_short") 2 else 1
+    base <- tibble::tibble(
+      strategy              = sn$short_name,
+      code_name             = sn$code_name,
+      measurement_interval  = as.character(sn$frequency),
+      periods_per_year      = as.numeric(sn$ann_factor),
+      legs                  = legs,
+      turnover_hand_typed   = sn$turnover_pct_per_period_avg / 100
+    )
+    if (!is.na(e$na_reason)) {
+      return(dplyr::bind_cols(base, tibble::tibble(
+        n_periods = 0L,
+        avg_turnover_oneway = NA_real_, annualised_turnover_oneway = NA_real_,
+        turnover_realised = NA_real_, turnover_ratio = NA_real_,
+        turnover_source = NA_character_, drift_adjusted = NA,
+        convention_note = NA_character_, na_reason = e$na_reason
+      )))
+    }
+    s <- .rt_summarise(e, sn$short_name)
+    ann <- s$avg * base$periods_per_year
+    realised <- ann / 12 / legs
+    dplyr::bind_cols(base, tibble::tibble(
+      n_periods = as.integer(s$n),
+      avg_turnover_oneway = s$avg, annualised_turnover_oneway = ann,
+      turnover_realised = realised,
+      turnover_ratio = realised / base$turnover_hand_typed,
+      turnover_source = e$source, drift_adjusted = e$drift_adjusted,
+      convention_note = e$note, na_reason = NA_character_
+    ))
+  })
+  dplyr::bind_rows(rows)
+}
+
+#' Entry from a long weight table (Mom Pre-Peak / Post-Peak / 12-2)
+#'
+#' @param panel Data frame with `as_of_date`, `ticker`, `weight` (signed).
+#' @return A .rt_entry(): not drifted (the table carries no per-name returns).
+#' @noRd
+.rt_entry_weight_panel <- function(panel, source) {
+  ts <- hd_turnover_series(
+    data.frame(date = panel$as_of_date, name = panel$ticker, weight = panel$weight),
+    first = "na"
+  )
+  .rt_entry(
+    ts$turnover, source = source, drift_adjusted = FALSE,
+    note = paste0("hd_turnover_series() on the decile weight table; compared with the previous ",
+                  "rebalance's weights as given (no per-name returns in the table to drift them); ",
+                  "first rebalance excluded (initial funding)."),
+    drop_leading = 1L
+  )
+}
+
+#' Entry for managed futures: vol-targeted positions, drifted by asset returns
+#'
+#' ret_ls = RF + sum(pos_i * exc_i) / 4 = sum(w_i * r_i) + (1 - sum w) * RF with
+#' w_i = pos_i / 4, so the book is w_i on each asset plus CASH = 1 - sum(w).
+#'
+#' @param mf The `mf_portfolios` target (date, SPY, TLT, GLD, DBC, RF, pos_*).
+#' @return A .rt_entry().
+#' @noRd
+.rt_entry_managed_futures <- function(mf, source = "weights: mf_portfolios (pos_* / 4 + CASH)") {
+  assets <- c("SPY", "TLT", "GLD", "DBC")
+  mf <- mf[order(mf$date), ]
+  pos <- as.matrix(mf[paste0("pos_", assets)])
+  # Drop the warm-up months before the first signal: all-cash with no trade.
+  first_live <- which(rowSums(abs(pos)) > 0)[1L]
+  if (is.na(first_live)) {
+    cli::cli_abort(c("x" = ".rt_entry_managed_futures(): no month has a non-zero position."))
+  }
+  keep <- seq(first_live, nrow(mf))
+  mf <- mf[keep, ]
+  w <- pos[keep, , drop = FALSE] / 4
+  n <- nrow(mf)
+  weights <- data.frame(
+    date = rep(mf$date, each = 5L),
+    name = rep(c(assets, "CASH"), times = n),
+    weight = as.vector(t(cbind(w, 1 - rowSums(w))))
+  )
+  rets <- data.frame(
+    date = rep(mf$date, each = 5L),
+    name = rep(c(assets, "CASH"), times = n),
+    ret = as.vector(t(cbind(as.matrix(mf[assets]), mf$RF)))
+  )
+  ts <- hd_turnover_series(weights, returns = rets, first = "na")
+  .rt_entry(
+    ts$turnover, source = source, drift_adjusted = TRUE,
+    note = paste0("positions pos_*/4 plus CASH = 1 - sum(w), drifted by the month's asset returns and RF ",
+                  "before comparison; warm-up months before the first signal and the first live month excluded."),
+    drop_leading = 1L
+  )
+}
+
+#' Entry for a SPY/cash exposure overlay (TOM, Risk State)
+#'
+#' @param df Data frame with the date column and exposure column named below.
+#' @param exposure Name of the exposure column (fraction of NAV in SPY held on
+#'   that day; the rest is cash).
+#' @param spy_ret,cash_ret Names of the SPY and cash return columns, or `NULL`
+#'   for no drift. Drift is exactly moot for a 0/1 exposure (the held asset is
+#'   still 100% of the book), so TOM passes `NULL`.
+#' @return A .rt_entry().
+#' @noRd
+.rt_entry_exposure <- function(df, exposure, spy_ret = NULL, cash_ret = NULL,
+                               source, note, date = "date") {
+  df <- df[order(df[[date]]), ]
+  e <- df[[exposure]]
+  if (anyNA(e)) {
+    cli::cli_abort(c("x" = ".rt_entry_exposure(): {.field {exposure}} has NA; filter upstream."))
+  }
+  n <- nrow(df)
+  weights <- data.frame(
+    date = rep(df[[date]], each = 2L),
+    name = rep(c("SPY", "CASH"), times = n),
+    weight = as.vector(rbind(e, 1 - e))
+  )
+  rets <- NULL
+  if (!is.null(spy_ret)) {
+    rets <- data.frame(
+      date = rep(df[[date]], each = 2L),
+      name = rep(c("SPY", "CASH"), times = n),
+      ret = as.vector(rbind(df[[spy_ret]], df[[cash_ret]]))
+    )
+  }
+  ts <- hd_turnover_series(weights, returns = rets, first = "na")
+  .rt_entry(ts$turnover, source = source, drift_adjusted = !is.null(rets),
+            note = note, drop_leading = 1L)
+}
+
+#' Entry from a strategy's own existing `turnover` column
+#'
+#' @param x Numeric vector (its own convention).
+#' @param drift_adjusted Logical: does the strategy's own code drift the previous book?
+#' @param scale Multiplier onto the portfolio one-way definition.
+#' @noRd
+.rt_entry_column <- function(x, source, note, drift_adjusted, scale = 1,
+                             drop_leading = 0L) {
+  .rt_entry(x * scale, source = source, drift_adjusted = drift_adjusted,
+            note = note, drop_leading = drop_leading)
+}
+
 plan_cost_convention <- function() {
   list(
+    # ── #663 Phase 1 / #567 A1-A2: realised turnover, beside the hand-typed one ──
+    # MEASUREMENT ONLY (see the block comment above build_strategy_realised_turnover()).
+    # Every strategy_names row gets a measured series or an explicit na_reason.
+    targets::tar_target(strategy_realised_turnover, {
+      by_date <- function(df) df[order(df$date), ]
+
+      cmr_best <- cmr_selection$chosen
+      cmr_port <- switch(cmr_best,
+        "1m" = cmr_portfolio_1m,
+        "3m" = cmr_portfolio_3m,
+        "6m" = cmr_portfolio_6m,
+        cli::cli_abort(c(
+          "x" = "strategy_realised_turnover: unrecognised CMR lookback {.val {cmr_best}} selected by cmr_selection.",
+          "i" = "Allowed values: 1m, 3m, 6m (R/plan_commodities_mean_reversion.R)."
+        ))
+      )
+
+      eq_long_only_note <- paste0(
+        "own `turnover` column: fraction of the equal-weight long-only book that changed vs the previous ",
+        "month (one-way; not drifted); first month (entry = 1.0) excluded."
+      )
+      stk_na_reason <- paste0(
+        "The portfolio's `turnover` column is the constant est_turnover = 0.80 hard-coded in ",
+        "portfolio_longshort() (R/plan_stock_backtest.R:150): an assumption, not a measurement, and no ",
+        "per-name weights are retained to measure it. Only the separate HRP variants compute drifted ",
+        "turnover, and they are not this leaderboard row."
+      )
+      entries <- list(
+        avoid_worst = .rt_na_entry(paste0(
+          "Hindsight return series (worst-N days excluded ex post, R/plan_avoid_worst.R: 'NOT a tradeable ",
+          "strategy'): there is no weight vector to trade."
+        )),
+        drif = .rt_entry_column(by_date(drif_portfolio)$turnover, "column: drif_portfolio$turnover",
+                                eq_long_only_note, drift_adjusted = FALSE, drop_leading = 1L),
+        fac_max = .rt_entry_column(by_date(fm_portfolio)$turnover, "column: fm_portfolio$turnover",
+                                   eq_long_only_note, drift_adjusted = FALSE, drop_leading = 1L),
+        rsc = .rt_entry_exposure(
+          dplyr::filter(rsc_portfolio, !is.na(spy_ret), !is.na(exposure)),
+          exposure = "exposure", spy_ret = "spy_ret", cash_ret = "rf_daily",
+          source = "weights: rsc_portfolio (exposure SPY + cash)",
+          note = paste0("SPY weight = exposure, cash = 1 - exposure, drifted by the day's SPY and cash returns; ",
+                        "counts the daily trade back to target exposure as well as regime switches ",
+                        "(the cost model charges switch days only). First day excluded.")
+        ),
+        ltr = .rt_na_entry(paste0(
+          "ltr_portfolio keeps only n_long / n_short counts, no per-name weights; its cost is a flat ",
+          "2 x cost_per_trade every month (full turnover assumed), so no turnover is observable."
+        )),
+        tom = .rt_entry_exposure(
+          dplyr::mutate(tom_portfolio, exposure = as.numeric(in_tom)),
+          exposure = "exposure",
+          source = "weights: tom_portfolio (in_tom SPY / cash)",
+          note = paste0("SPY weight = in_tom (0 or 1), cash = 1 - in_tom; one-way turnover is 1 on each ",
+                        "switch day. Drift is moot for a 0/1 book. First day excluded.")
+        ),
+        stk_max = .rt_na_entry(stk_na_reason),
+        stk_drif = .rt_na_entry(stk_na_reason),
+        xgb_drif = .rt_na_entry(stk_na_reason),
+        pso_optimal = .rt_na_entry(paste0(
+          "Meta-portfolio blend of already-net constituent returns (R/plan_portfolio_opt.R): there is no ",
+          "position-level weight vector; the blend weights are constants."
+        )),
+        cmr = .rt_entry_column(by_date(cmr_port)$turnover,
+                               paste0("column: cmr_portfolio_", cmr_best, "$turnover"),
+                               paste0("own `turnover` column: sum|dw|/2 on +/-1/n leg weights, but computed on the ",
+                                      "traded-only table (packages/historicaldata/R/commodities_mean_reversion.R:893-905) ",
+                                      "so a series that EXITS is not counted as a sale at the exit date: this ",
+                                      "understates turnover (#567 A2). Flat pre-breadth dates count as 0."),
+                               drift_adjusted = FALSE),
+        mom_prepeak = .rt_entry_weight_panel(mom_prepeak_portfolio, "weights: mom_prepeak_portfolio"),
+        mom_postpeak = .rt_entry_weight_panel(mom_postpeak_portfolio, "weights: mom_postpeak_portfolio"),
+        mom_combined = .rt_entry_weight_panel(mom_combined_portfolio, "weights: mom_combined_portfolio"),
+        ev_ebit = .rt_na_entry(paste0(
+          "Pre-computed Fama-French factor-return series (R/plan_ev_ebit.R: ret_value_hml = RF + HML - cost); ",
+          "no weight vector exists."
+        )),
+        mf_tsm = .rt_entry_managed_futures(mf_portfolios),
+        olmar = .rt_entry_column(by_date(olmar_portfolio)$turnover, "column: olmar_portfolio$turnover",
+                                 paste0("own `turnover` column: sum|b_new - b_prev|/2 on the full weight ",
+                                        "vector (packages/historicaldata/R/olmar.R, via hd_turnover(); previous ",
+                                        "weights NOT drifted); first window-1 warm-up days excluded."),
+                                 drift_adjusted = FALSE, drop_leading = olmar_params$window - 1L),
+        cmr_conditioned = .rt_na_entry(paste0(
+          "Exposure-scaling overlay on the cmr tercile book (R/plan_commodities_mean_reversion.R): its ",
+          "traded weights are m_t x the cmr weights and are not retained, so the overlay's own turnover ",
+          "is not observable from cmr_portfolio_*_conditioned (only exposure_mult and switch_cost)."
+        ))
+      )
+
+      out <- build_strategy_realised_turnover(entries, strategy_names)
+      cli::cli_inform(c("v" = paste0(
+        "strategy_realised_turnover: ", sum(is.na(out$na_reason)), " measured, ",
+        sum(!is.na(out$na_reason)), " with na_reason (measurement only, #663 Phase 1)"
+      )))
+      out
+    }),
+
     targets::tar_target(strategy_cost_convention, {
       base <- tibble::tibble(
         strategy = c(
