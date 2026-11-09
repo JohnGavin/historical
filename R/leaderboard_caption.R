@@ -81,6 +81,9 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
   n_ssr_covered <- sum(!is.na(full$ssr))
   n_ssr_na      <- sum(is.na(full$ssr))
   n_net_covered <- sum(!is.na(full$net_cagr))
+  # #567: how many strategies' cost uses MEASURED turnover (vs hand-typed)
+  n_tb_known    <- if ("turnover_basis" %in% names(full)) sum(!is.na(full$turnover_basis)) else 0L
+  n_tb_measured <- if ("turnover_basis" %in% names(full)) sum(full$turnover_basis == "measured", na.rm = TRUE) else 0L
 
   n_flagged <- sum(!is.na(full$credible) & !full$credible)
   flagged   <- full$strategy[!is.na(full$credible) & !full$credible]
@@ -257,7 +260,12 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
         "This Cost (bps) column is the strategy's own internal assumption baked into its returns before ",
         "they reach this table; for the ", n_net_covered,
         " strategies with a Net CAGR value above, it is additional to — not the same as — ",
-        "the flat cost applied there.")
+        "the turnover-based cost applied there."),
+      if (n_tb_known > 0L) .lc_p(
+        "Net CAGR subtracts a monthly cost (turnover x 0.50% per trade x legs, plus 3% a year borrow for long-short books) ",
+        "from each month's return. The turnover is measured from the strategy's own weights for ", n_tb_measured,
+        " of ", n_tb_known, " strategies and hand-typed for ", n_tb_known - n_tb_measured,
+        " (see the Turnover basis column; the reason is in its hover text).")
     ),
     code_link("strategy_cost_convention", "R/plan_cost_convention.R", "#L44"), issue(624))
 

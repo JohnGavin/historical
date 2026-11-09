@@ -473,6 +473,21 @@ if (!is.null(lb)) {
       # (e.g. Gross/Cost (bps) below, where a meta-portfolio blend has no
       # separate figure to measure) (#637 follow-up).
       `Net CAGR` = ifelse(is.na(net_cagr),     "not computed", paste0(round(net_cagr * 100, 1), "%")),
+      # #567: which turnover the Net CAGR cost was charged on. "measured" =
+      # from the strategy's own weights (strategy_realised_turnover);
+      # "hand-typed" = the strategy_names value, the full reason in the
+      # hover text. Both come from the leaderboard's `turnover_basis` column,
+      # never typed here.
+      `Turnover basis` = if ("turnover_basis" %in% names(full)) {
+        ifelse(
+          is.na(turnover_basis), "—",
+          sprintf(
+            "<span title='%s'>%s</span>",
+            htmltools::htmlEscape(turnover_basis, attribute = TRUE),
+            ifelse(startsWith(turnover_basis, "measured"), "measured", "hand-typed")
+          )
+        )
+      } else "—",
       `Max DD`   = paste0(round(max_dd * 100, 1), "%"),
       `CVaR 95%` = ifelse(is.na(cvar_95),      "not computed", paste0(round(cvar_95 * 100, 1), "%")),
       Vol        = paste0(round(vol * 100, 1), "%"),
@@ -570,7 +585,7 @@ if (!is.null(lb)) {
     # immediately left of Net CAGR (gross, then net of cost) per item B of
     # the presentation-fix pass this column set belongs to.
     select(Strategy = strategy, Credible, .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
-           CAGR, `Net CAGR`, `Max DD`, `CVaR 95%`, Vol, `Gross (now)`, `Gross (target)`, .grosstgt_rank,
+           CAGR, `Net CAGR`, `Turnover basis`, `Max DD`, `CVaR 95%`, Vol, `Gross (now)`, `Gross (target)`, .grosstgt_rank,
            `Cost (bps)`, SSR, Rigour, .rig_rank,
            `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`,
            `Breach Risk (±20% DD)`)
@@ -1849,6 +1864,39 @@ Per `backtesting-assumptions` rule, all strategies use:
 | Taxes | Excluded (pre-tax) |
 
 **Total monthly cost for L/S:** turnover × cost × 2 legs × 2 (buy+sell) + borrow = 0.80 × 0.005 × 4 + 0.0025 = **~1.85%/month**. This is why most stock-level L/S strategies are unprofitable after costs.
+
+#### Leaderboard cost basis (Net CAGR)
+
+The Net CAGR column on the Rankings table is not the stock backtest's internal cost above. It subtracts a monthly cost from each month's return: turnover × cost per trade × buy-and-sell × legs (both legs for long-short books), plus the borrow cost for long-short books. The cost is subtracted from the return (`net = return - cost`), so a month with no return still pays it. Daily strategies are compounded to months first, so their cost is also charged per month.
+
+The turnover is the one-way turnover per month per leg. Where the strategy exposes its own weights it is **measured** from them (target `strategy_realised_turnover`, definition in `hd_turnover()`); otherwise the hand-typed value in `strategy_names` is used, and the reason is recorded in the `Turnover basis` column. Nothing on this page types a turnover value: both come from the pipeline.
+
+```{r}
+lb_cb <- safe_tar_read("leaderboard")
+if (!is.null(lb_cb) && "turnover_basis" %in% names(lb_cb)) {
+  cb <- lb_cb |>
+    dplyr::filter(period == "Full Period") |>
+    dplyr::transmute(
+      Strategy = strategy,
+      `Turnover used (per month per leg)` = round(cost_turnover, 3),
+      Basis = ifelse(startsWith(turnover_basis, "measured"), "measured", "hand-typed"),
+      Reason = ifelse(startsWith(turnover_basis, "measured"), "", sub("^hand-typed: ", "", turnover_basis)),
+      `Monthly cost` = paste0(round(cost_monthly * 100, 2), "%")
+    ) |>
+    dplyr::arrange(Basis, Strategy)
+  DT::datatable(
+    cb, rownames = FALSE,
+    caption = paste0(
+      "Turnover and monthly cost used for each strategy's Net CAGR: ",
+      sum(cb$Basis == "measured"), " measured, ", sum(cb$Basis != "measured"),
+      " hand-typed (Full Period rows of the leaderboard target)."
+    ),
+    options = list(pageLength = 20, scrollX = TRUE, dom = "ft")
+  )
+} else {
+  cat("The leaderboard target has no `turnover_basis` column (store built before #567).")
+}
+```
 
 #### Partitions
 

@@ -294,52 +294,188 @@ STRATEGY_OBS_ANN_FACTOR <- .build_strategy_obs_ann_factor(
 #' columns for every positive-Sharpe row).
 HD_PROB_SHARPE_POSITIVE_THRESHOLD <- 0.95
 
-# ── #778: turnover-aware cost basis, per strategy code_name ────────────────
-# Feeds the `leaderboard` target's cost_rows-extension block (see the "#778:
-# extend cost_rows" comment inside that target below) -- the flat
-# COST_PER_MONTH constant used by the ORIGINAL 6 cost_rows strategies
-# (Factor MAX/DRIF, Stock MAX/DRIF, XGB DRIF, PSO Optimal) is left unchanged
-# there (#778 scope: extend coverage, not revise those 6's published
-# numbers); every strategy NEWLY added by the extension gets its OWN
-# monthly cost derived here instead.
+# ── #778/#567: turnover-aware, SUBTRACTIVE cost basis, per strategy ─────────
+# Feeds EVERY cost row of the `leaderboard` target (the original six
+# slice_portfolio() strategies and the #778 cost_rows extension alike).
 #
-# Formula matches the codebase's EXISTING cost-model convention, not a new
-# invention:
-#   - R/plan_stock_backtest.R's portfolio_longshort()/portfolio_longshort_hrp()
-#     (trade_cost <- turnover * cost_per_trade * 2 * 2; both legs, buy+sell
-#     each; borrow_cost <- borrow_rate_annual / 12)
-#   - .claude/rules/backtesting-assumptions.md "Cost Model Detail" (same
-#     turnover x cost_per_trade x 2 (buy+sell) x 2 (both legs) formula, same
-#     0.50%/trade and 3%/yr borrow-rate defaults)
+# Formula (the codebase's existing cost-model convention, not a new invention:
+# R/plan_stock_backtest.R's portfolio_longshort() and .claude/rules/
+# backtesting-assumptions.md "Cost Model Detail"):
 #
-#   monthly_txn_cost    = (turnover_pct_per_period_avg / 100) * COST_PER_TRADE * leg_multiplier
-#   leg_multiplier      = 4 for directionality == "long_short" (both legs)
+#   monthly_txn_cost    = turnover * COST_PER_TRADE * leg_multiplier
+#   leg_multiplier      = 4 for directionality == "long_short" (both legs, buy+sell)
 #                        = 2 otherwise (long_only / overlay -- single leg, buy+sell)
-#   monthly_borrow_cost = BORROW_RATE_ANNUAL / 12, ONLY for directionality == "long_short"
+#   monthly_borrow_cost = BORROW_RATE_ANNUAL / 12, ONLY for long_short
 #   monthly_cost        = monthly_txn_cost + monthly_borrow_cost
+#   net return          = gross return - monthly_cost            (SUBTRACTIVE, #567 s.2)
 #
-# turnover_pct_per_period_avg and directionality both come from
-# R/plan_strategy_names.R's hd_strategy_names_tbl() (the single source of
-# truth per strategy-name-consistency.md) -- so a future change to a
-# strategy's declared turnover automatically updates its leaderboard cost
-# basis without touching this file again.
+# `turnover` is a per-MONTH, per-LEG fraction (the basis of
+# strategy_realised_turnover$turnover_realised, R/plan_cost_convention.R).
+# It is MEASURED when that target has a trusted measurement, else the
+# hand-typed strategy_names$turnover_pct_per_period_avg / 100, and the choice
+# is recorded per row in `turnover_basis` ("measured" or "hand-typed: <reason>").
+# The turnover values are never typed here: both inputs arrive as target
+# dependencies of `leaderboard`.
+#
+# The 0.005 cost-per-trade and 3%/yr borrow rate live here only (unchanged).
 .STRATEGY_COST_PER_TRADE     <- 0.005  # 0.50%/trade (backtesting-assumptions.md)
 .STRATEGY_BORROW_RATE_ANNUAL <- 0.03   # 3%/yr (backtesting-assumptions.md)
 
-.strategy_turnover_cost_basis <- function(strategy_names_tbl) {
-  strategy_names_tbl |>
+# A measured turnover that is KNOWN to be wrong is not used, even though the
+# target produced a number: code_name -> reason shown in turnover_basis.
+# cmr: its own `turnover` column is computed on a traded-only table, so a
+# series that EXITS is not counted as a sale at the exit date (#567 A2).
+.HD_TURNOVER_DISTRUSTED <- c(
+  cmr = "measured turnover understates: exits not counted (#567 A2)"
+)
+
+#' Choose the turnover each strategy's cost is charged on (#567)
+#'
+#' Pure. Per row: the measured `turnover_realised` when it is finite, the row
+#' has no `na_reason`, and the strategy is not in `distrusted`; otherwise the
+#' hand-typed `turnover_pct_per_period_avg / 100` with the reason recorded.
+#'
+#' @param strategy_names_tbl `strategy_names` (code_name, short_name,
+#'   directionality, turnover_pct_per_period_avg).
+#' @param realised_tbl `strategy_realised_turnover` (code_name,
+#'   turnover_realised, na_reason).
+#' @param distrusted Named character vector, code_name -> reason.
+#' @return Tibble: code_name, short_name, directionality, turnover,
+#'   turnover_basis.
+#' @noRd
+.choose_cost_turnover <- function(strategy_names_tbl, realised_tbl,
+                                  distrusted = .HD_TURNOVER_DISTRUSTED) {
+  need_sn <- c("code_name", "short_name", "directionality", "turnover_pct_per_period_avg")
+  need_rt <- c("code_name", "turnover_realised", "na_reason")
+  if (!all(need_sn %in% names(strategy_names_tbl)) || !all(need_rt %in% names(realised_tbl))) {
+    cli::cli_abort(c(
+      "x" = ".choose_cost_turnover(): missing input column(s).",
+      "i" = "strategy_names needs {need_sn}; strategy_realised_turnover needs {need_rt}."
+    ))
+  }
+  if (anyDuplicated(realised_tbl$code_name) > 0L) {
+    cli::cli_abort(c("x" = "strategy_realised_turnover has duplicate code_name rows."))
+  }
+  if (any(realised_tbl$turnover_realised < 0, na.rm = TRUE)) {
+    cli::cli_abort(c("x" = "strategy_realised_turnover has a negative turnover_realised."))
+  }
+  idx <- match(strategy_names_tbl$code_name, realised_tbl$code_name)
+  if (anyNA(idx)) {
+    cli::cli_abort(c(
+      "x" = "strategy_names code(s) with no row in strategy_realised_turnover: {strategy_names_tbl$code_name[is.na(idx)]}.",
+      "i" = "Both targets must cover the same strategies (check_strategy_realised_turnover(), S-gate)."
+    ))
+  }
+  measured <- realised_tbl$turnover_realised[idx]
+  reason   <- as.character(realised_tbl$na_reason[idx])
+  hand     <- strategy_names_tbl$turnover_pct_per_period_avg / 100
+  code     <- strategy_names_tbl$code_name
+
+  why <- ifelse(
+    code %in% names(distrusted), unname(distrusted[code]),
+    ifelse(!is.na(reason) & nzchar(reason), reason,
+      ifelse(is.na(measured), "no measured value and no reason recorded", NA_character_)
+    )
+  )
+  use_measured <- is.na(why) & is.finite(measured)
+  tibble::tibble(
+    code_name = code,
+    short_name = strategy_names_tbl$short_name,
+    directionality = strategy_names_tbl$directionality,
+    turnover = ifelse(use_measured, measured, hand),
+    turnover_basis = ifelse(use_measured, "measured", paste0("hand-typed: ", why))
+  )
+}
+
+#' Per-period cost fraction for a given turnover (#567)
+#'
+#' Pure and vectorised. `turnover` is per MONTH per leg; the result is the cost
+#' charged on ONE period of a series with `series_ann_factor` periods a year
+#' (12 = monthly, 252 = daily), so the monthly cost is spread evenly:
+#' `monthly_cost * 12 / series_ann_factor`.
+#'
+#' @param turnover Numeric, finite, >= 0: one-way turnover per month per leg.
+#' @param directionality Character/factor: long_only, long_short, market_neutral, overlay.
+#' @param series_ann_factor Single positive number: periods per year of the return series.
+#' @return Numeric cost fraction per period.
+#' @noRd
+.period_cost <- function(turnover, directionality, series_ann_factor = 12,
+                         cost_per_trade = .STRATEGY_COST_PER_TRADE,
+                         borrow_rate_annual = .STRATEGY_BORROW_RATE_ANNUAL) {
+  if (!is.numeric(turnover) || !all(is.finite(turnover)) || any(turnover < 0)) {
+    cli::cli_abort(c("x" = ".period_cost(): turnover must be finite and >= 0 (never NA)."))
+  }
+  d <- as.character(directionality)
+  if (anyNA(d) || !all(d %in% c("long_only", "long_short", "market_neutral", "overlay"))) {
+    cli::cli_abort(c(
+      "x" = ".period_cost(): unrecognised directionality {.val {unique(d[is.na(d) | !d %in% c('long_only','long_short','market_neutral','overlay')])}}.",
+      "i" = "Allowed: long_only, long_short, market_neutral, overlay."
+    ))
+  }
+  if (!is.numeric(series_ann_factor) || length(series_ann_factor) != 1L ||
+      !is.finite(series_ann_factor) || series_ann_factor <= 0) {
+    cli::cli_abort(c("x" = ".period_cost(): {.arg series_ann_factor} must be one positive finite number."))
+  }
+  is_ls <- d == "long_short"
+  legs <- ifelse(is_ls, 4, 2)
+  monthly <- turnover * cost_per_trade * legs + ifelse(is_ls, borrow_rate_annual / 12, 0)
+  monthly * 12 / series_ann_factor
+}
+
+#' Cost basis per strategy: chosen turnover, its basis, and the monthly cost
+#'
+#' @param strategy_names_tbl,realised_tbl See [.choose_cost_turnover()].
+#' @return Tibble: code_name, short_name, leg_multiplier, turnover,
+#'   turnover_basis, monthly_cost.
+#' @noRd
+.strategy_turnover_cost_basis <- function(strategy_names_tbl, realised_tbl) {
+  ch <- .choose_cost_turnover(strategy_names_tbl, realised_tbl)
+  ch |>
     dplyr::transmute(
       code_name = code_name,
       short_name = short_name,
       leg_multiplier = ifelse(directionality == "long_short", 4, 2),
-      monthly_cost = (turnover_pct_per_period_avg / 100) *
-        .STRATEGY_COST_PER_TRADE * leg_multiplier +
-        ifelse(directionality == "long_short",
-               .STRATEGY_BORROW_RATE_ANNUAL / 12, 0)
+      turnover = turnover,
+      turnover_basis = turnover_basis,
+      monthly_cost = .period_cost(turnover, directionality)
     )
 }
 
-STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(hd_strategy_names_tbl())
+#' Cost-adjusted metrics for one return series: SUBTRACTIVE cost (#567)
+#'
+#' `net = ret - cost_per_month` every period (the old multiplicative haircut
+#' `ret * (1 - cost)` shrank returns by a fraction and charged a zero-return
+#' month nothing). `cvar_95` stays on the GROSS returns.
+#'
+#' @param ret Numeric vector of per-period returns (NA dropped).
+#' @param cost_per_month Single finite cost fraction deducted each period;
+#'   REQUIRED (there is no flat default any more).
+#' @return One-row tibble: net_cagr, cum_pnl, cvar_95, credible.
+#' @noRd
+.calc_cost_metrics <- function(ret, cost_per_month) {
+  if (missing(cost_per_month) || !is.numeric(cost_per_month) ||
+      length(cost_per_month) != 1L || !is.finite(cost_per_month)) {
+    cli::cli_abort(c(
+      "x" = ".calc_cost_metrics(): {.arg cost_per_month} must be one finite number.",
+      "i" = "Pass the strategy's cost from .strategy_turnover_cost_basis(); there is no flat default (#567)."
+    ))
+  }
+  ret <- ret[!is.na(ret)]
+  n <- length(ret)
+  if (n == 0L) {
+    return(tibble::tibble(net_cagr = NA_real_, cum_pnl = NA_real_, cvar_95 = NA_real_,
+                          credible = NA))
+  }
+  net_ret <- ret - cost_per_month
+  net_cagr <- prod(1 + net_ret)^(12 / n) - 1
+  cum_pnl_net <- prod(1 + net_ret) - 1  # net of costs, not gross
+  q05 <- stats::quantile(ret, 0.05)
+  cvar_95 <- mean(ret[ret <= q05])
+  # Credibility flag: >20% CAGR or >50x cum P&L is suspect
+  credible <- abs(net_cagr) < 0.20 & abs(cum_pnl_net) < 50
+  tibble::tibble(net_cagr = net_cagr, cum_pnl = cum_pnl_net, cvar_95 = cvar_95,
+                 credible = credible)
+}
 
 # ── Prop-constrained view scenarios (#586 second comment, "Proposed shape") ──
 # The per-row "Breach Risk (+/-20% DD)" column above (fp_breach_prob_20pct)
@@ -755,36 +891,30 @@ plan_leaderboard <- function() {
 
       # ── Cost metrics (net_cagr, cum_pnl, cvar_95) ─────────────────
       # Compute per strategy per period from raw portfolio returns.
-      # cost: 0.20% round-trip per month (full turnover assumed) -- the
-      # HISTORICAL default for the original 6 strategies below
-      # (slice_portfolio() calls + PSO Optimal). Left UNCHANGED here
-      # (#778 scope: extend coverage, not revise these 6's published
-      # numbers) even though it is flat, not turnover-aware -- see the
-      # "#778 turnover-aware cost basis" block below, which supplies a
-      # per-strategy rate for every NEWLY added strategy instead of reusing
-      # this constant.
-      COST_PER_MONTH <- 0.002
-
-      calc_cost_metrics <- function(ret, cost_per_month = COST_PER_MONTH) {
-        # ret: numeric vector of monthly returns
-        # cost_per_month: fraction deducted from EVERY period's return before
-        #   compounding (e.g. 0.002 == 0.20%/month). Defaults to the flat
-        #   historical rate above; #778's extension block passes a
-        #   turnover-aware rate instead (see .strategy_cost_basis() below).
-        ret <- ret[!is.na(ret)]
-        n <- length(ret)
-        if (n == 0L) {
-          return(tibble(net_cagr = NA_real_, cum_pnl = NA_real_, cvar_95 = NA_real_))
+      # #567: EVERY strategy (the original six and the #778 extension) is
+      # charged its own turnover-based cost, SUBTRACTIVELY (net = ret - cost,
+      # .calc_cost_metrics()), on the turnover chosen by
+      # .choose_cost_turnover(): MEASURED (strategy_realised_turnover target)
+      # where trusted, else the hand-typed strategy_names value, with the
+      # choice and its reason carried per row in `turnover_basis`. This
+      # replaces the flat 0.20%/month multiplicative haircut
+      # (ret * (1 - 0.002)) the original six used. Both inputs are target
+      # dependencies named in the call below, never typed here.
+      STRATEGY_COST_BASIS <- .strategy_turnover_cost_basis(
+        strategy_names, strategy_realised_turnover
+      )
+      .cost_for <- function(code) {
+        r <- STRATEGY_COST_BASIS[STRATEGY_COST_BASIS$code_name == code, ]
+        if (nrow(r) != 1L) {
+          cli::cli_abort(c(
+            "x" = "No turnover-aware cost basis found for strategy code {.val {code}}.",
+            "i" = paste0(
+              "check R/plan_strategy_names.R hd_strategy_names_tbl() and ",
+              "STRATEGY_COST_BASIS (R/plan_leaderboard.R) for a mismatch."
+            )
+          ))
         }
-        net_ret <- ret * (1 - cost_per_month)
-        net_cagr <- prod(1 + net_ret)^(12 / n) - 1
-        cum_pnl_net <- prod(1 + net_ret) - 1  # net of costs, not gross
-        q05      <- quantile(ret, 0.05)
-        cvar_95  <- mean(ret[ret <= q05])
-        # Credibility flag: >20% CAGR or >50x cum P&L is suspect
-        credible <- abs(net_cagr) < 0.20 & abs(cum_pnl_net) < 50
-        tibble(net_cagr = net_cagr, cum_pnl = cum_pnl_net, cvar_95 = cvar_95,
-               credible = credible)
+        r$monthly_cost
       }
 
       # Each portfolio target and its return column (as string) and period slicing params
@@ -819,7 +949,7 @@ plan_leaderboard <- function() {
       # docs/leaderboard.qmd's "By Partition" table. Making Holdout actually
       # visible requires adding a Holdout slice to those source targets too
       # -- a separate, wider change than this one; see the #660 PR report.
-      slice_portfolio <- function(port_df, ret_col_name, params) {
+      slice_portfolio <- function(port_df, ret_col_name, params, cost_per_month) {
         ret <- list(
           Training     = port_df[port_df$date <= params$is_end, ][[ret_col_name]],
           Testing      = port_df[port_df$date >= params$test_start & port_df$date <= params$test_end, ][[ret_col_name]],
@@ -827,16 +957,16 @@ plan_leaderboard <- function() {
           `Full Period` = port_df[[ret_col_name]]
         )
         bind_rows(lapply(names(ret), function(p) {
-          calc_cost_metrics(ret[[p]]) |> mutate(period = p)
+          .calc_cost_metrics(ret[[p]], cost_per_month) |> mutate(period = p)
         }))
       }
 
       cost_rows <- bind_rows(
-        slice_portfolio(fm_portfolio,        "portfolio_ret", fm_params)   |> mutate(strategy = "Factor MAX"),
-        slice_portfolio(drif_portfolio,      "portfolio_ret", drif_params) |> mutate(strategy = "Factor DRIF"),
-        slice_portfolio(stk_max_portfolio,   "port_ret",      stk_params)  |> mutate(strategy = "Stock MAX"),
-        slice_portfolio(stk_drif_portfolio,  "port_ret",      stk_params)  |> mutate(strategy = "Stock DRIF"),
-        slice_portfolio(xgb_drif_portfolio,  "port_ret",      stk_params)  |> mutate(strategy = "XGB DRIF")
+        slice_portfolio(fm_portfolio,        "portfolio_ret", fm_params, .cost_for("fac_max")) |> mutate(strategy = "Factor MAX"),
+        slice_portfolio(drif_portfolio,      "portfolio_ret", drif_params, .cost_for("drif")) |> mutate(strategy = "Factor DRIF"),
+        slice_portfolio(stk_max_portfolio,   "port_ret",      stk_params, .cost_for("stk_max")) |> mutate(strategy = "Stock MAX"),
+        slice_portfolio(stk_drif_portfolio,  "port_ret",      stk_params, .cost_for("stk_drif")) |> mutate(strategy = "Stock DRIF"),
+        slice_portfolio(xgb_drif_portfolio,  "port_ret",      stk_params, .cost_for("xgb_drif")) |> mutate(strategy = "XGB DRIF")
       )
 
       # PSO Optimal: derive from port_returns (opt weights applied)
@@ -852,7 +982,8 @@ plan_leaderboard <- function() {
         pso_cost <- slice_portfolio(
           opt_returns_df |> rename(portfolio_ret = opt_ret),
           "portfolio_ret",
-          stk_params
+          stk_params,
+          .cost_for("pso_optimal")
         ) |> mutate(strategy = "PSO Optimal")
         cost_rows <- bind_rows(cost_rows, pso_cost)
       }
@@ -878,9 +1009,10 @@ plan_leaderboard <- function() {
       # wf_corr, add_corr, deflated_sharpe, ...) above/below.
       #
       # cost_per_month for each strategy comes from STRATEGY_COST_BASIS
-      # (module level, top of file) -- turnover-aware (per-strategy
-      # turnover_pct_per_period_avg x directionality), NOT the flat
-      # COST_PER_MONTH the original 6 strategies use. See #778 scope item 1
+      # (built above from strategy_names + strategy_realised_turnover) --
+      # turnover-aware (measured where trusted, else hand-typed, x
+      # directionality), the same rule the original six now use (#567).
+      # See #778 scope item 1
       # ("a cost basis per strategy family, turnover-aware, not a single
       # blanket rate") and STRATEGY_COST_BASIS's own comment for the formula
       # and its precedent (R/plan_stock_backtest.R's
@@ -895,7 +1027,7 @@ plan_leaderboard <- function() {
       # own model" pattern the original 6 already use (Factor MAX/DRIF:
       # R/plan_factormax.R:141-142 / R/plan_drif.R:242-243 compute
       # `port_ret <- gross_ret - cost` BEFORE calc_cost_metrics() deducts
-      # COST_PER_MONTH again) -- not a new defect introduced here. Whether
+      # the leaderboard's own cost again) -- not a new defect introduced here. Whether
       # that double layering is itself the right model is a question that
       # applies equally to the original 6 and is out of #778's scope.
       .cost_ext_map <- list(
@@ -922,26 +1054,27 @@ plan_leaderboard <- function() {
       if (!is.null(strat_returns_wide) && nrow(strat_returns_wide) > 0) {
         cost_ext_rows <- bind_rows(lapply(.cost_ext_map, function(m) {
           if (!m$wide_col %in% names(strat_returns_wide)) return(NULL)
-          basis_row <- STRATEGY_COST_BASIS[STRATEGY_COST_BASIS$code_name == m$code, ]
-          if (nrow(basis_row) != 1L) {
-            cli::cli_abort(c(
-              "x" = "No turnover-aware cost basis found for strategy code {.val {m$code}}.",
-              "i" = paste0(
-                "check R/plan_strategy_names.R hd_strategy_names_tbl() and ",
-                "STRATEGY_COST_BASIS (R/plan_leaderboard.R) for a mismatch."
-              )
-            ))
-          }
           r <- strat_returns_wide[[m$wide_col]]
-          calc_cost_metrics(r, cost_per_month = basis_row$monthly_cost) |>
+          .calc_cost_metrics(r, cost_per_month = .cost_for(m$code)) |>
             mutate(period = "Full Period", strategy = m$label)
         }))
         cost_rows <- bind_rows(cost_rows, cost_ext_rows)
       }
 
-      # Join cost metrics onto all_metrics
+      # Join cost metrics onto all_metrics, plus the turnover the cost was
+      # charged on and why (#567): cost_turnover (per month per leg),
+      # turnover_basis ("measured" / "hand-typed: <reason>"), cost_monthly
+      # (fraction deducted per month). Construction-time properties of the
+      # strategy, so they broadcast to every period row like the
+      # strategy_cost_convention join below.
+      cost_basis_join <- STRATEGY_COST_BASIS |>
+        dplyr::transmute(
+          strategy = short_name, cost_turnover = turnover,
+          turnover_basis = turnover_basis, cost_monthly = monthly_cost
+        )
       all_metrics <- all_metrics |>
         left_join(cost_rows, by = c("strategy", "period")) |>
+        left_join(cost_basis_join, by = "strategy") |>
         # Mark strategies that draw on stk_universe (survivorship-biased); see #150
         mutate(survivorship_biased = strategy %in% c("Stock MAX", "Stock DRIF", "XGB DRIF"))
 

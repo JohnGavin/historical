@@ -1,5 +1,20 @@
 # Changelog
 
+## 2026-11-09 (leaderboard costs from measured turnover, subtractive cost; refs #567, #663)
+
+This changes published numbers: every Net CAGR, cumulative P&L and Credible flag on the leaderboard.
+
+- Cost turnover is now the MEASURED `strategy_realised_turnover$turnover_realised` where trusted,
+  else the hand-typed `strategy_names` value; the choice and reason are a new leaderboard column
+  `turnover_basis` (with `cost_turnover`, `cost_monthly`). Rows with an `na_reason`, and CMR
+  (exits not counted, #567 A2), stay hand-typed.
+- Cost is subtracted (`net = ret - cost`) for every cost row, replacing the flat 0.20%/month
+  multiplicative haircut the original six used (#567 section 2). `.calc_cost_metrics()` has no
+  flat default any more; `STRATEGY_COST_BASIS` is built inside `leaderboard` from its two
+  target dependencies.
+- `docs/leaderboard.qmd`: Turnover basis column and a "Leaderboard cost basis" section, all
+  derived from the `leaderboard` target.
+
 ## 2026-11-08 (fourth variant of the stock MAX comparison: today's S&P 500 members, refs #1041)
 
 Report-only, as the entry below: nothing feeds the leaderboard or the registry.
