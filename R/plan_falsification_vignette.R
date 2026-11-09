@@ -628,9 +628,9 @@ plan_falsification_vignette <- function() {
       paste0(
         "Commodities Mean Reversion falsification scorecard (Issue #138). ",
         "Three lookback windows (1m, 3m, 6m); long-losers / short-winners, ",
-        "0.2% transaction cost, monthly (ann_factor = 12). ",
+        "0.2% transaction cost, daily observations (ann_factor = 252). ",
         "Best lookback: ", best_lb, " (naive Sharpe ", best_sh, "). ",
-        "Commodity momentum baseline (12m) had Sharpe ", mom_sh, " (Issue #134). ",
+        "Commodity momentum baseline (12-bar lookback, annualised on 252) had Sharpe ", mom_sh, " (Issue #134). ",
         "Columns: HAC t = Newey-West t-statistic; ",
         "WN/RV/MA1/FN/GARCH/GJR = null-environment rejection rates ",
         "(ideally <= 0.075); DSR = Deflated Sharpe Ratio (K=3 lookbacks). ",
@@ -662,9 +662,10 @@ plan_falsification_vignette <- function() {
       verdict     <- if (best_mr > mom_sharpe) "outperforms" else "does not outperform"
       paste0(
         "Head-to-head: Commodities Mean Reversion (1m/3m/6m lookbacks) vs ",
-        "Commodity Momentum (12m baseline, Issue #134). ",
+        "Commodity Momentum (12-bar baseline, Issue #134). ",
         "Best MR Sharpe (naive): ", best_mr, "; ",
-        "Momentum baseline Sharpe: ", mom_sharpe, ". ",
+        "Momentum baseline Sharpe: ", mom_sharpe, 
+        " (both annualised with 252 bars/year). ",
         "Mean reversion ", verdict, " momentum in this commodity universe. ",
         "Source: ",
         gh_base,

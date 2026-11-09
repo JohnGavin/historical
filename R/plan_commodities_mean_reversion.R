@@ -468,7 +468,11 @@ plan_commodities_mean_reversion <- function() {
     # ── Head-to-head: mean reversion vs momentum (Part C) ─────────────────
     # Joins commodity-momentum metrics (from plan_commodities_momentum.R)
     # with MR metrics. Lightweight: no new data fetch.
-    # Momentum baseline = 12m lookback (Sharpe -0.85 per #134).
+    # Momentum baseline = 12-bar lookback (daily-dominated data, #1048). Sharpe basis:
+    # momentum uses arithmetic (mean - rf)/sd * sqrt(252) (periods_per_year = 252,
+    # #1048 follow-up; it was sqrt(12) on daily bars before), CMR uses the
+    # geometric sharpe_ratio_rf() at ann_factor 252. Both are annualised on 252.
+    # The -0.85 quoted for #134 was on the old sqrt(12) basis and is superseded.
 
     targets::tar_target(cmr_vs_mom_compare, {
       library(dplyr)
@@ -476,7 +480,7 @@ plan_commodities_mean_reversion <- function() {
       mom_metrics <- commodities_perf_summary |>
         dplyr::filter(strategy == "baseline") |>
         dplyr::transmute(
-          lookback     = "12m (momentum)",
+          lookback     = "12-bar (momentum)",
           mom_sharpe   = round(sharpe, 3),
           mom_mdd      = round(max_dd, 3)
         )
