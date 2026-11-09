@@ -679,29 +679,24 @@ backtest_momentum_signals <- function(signals,
   # The naive lag()-per-ticker approach only covers stocks present in both old
   # and new periods. Stocks that exit the portfolio (new weight = 0) are absent
   # from the new period's rows, so their exit weight-change is never counted.
-  # Fix: build a complete (scheme, ticker, date) grid, fill missing weights with
-  # 0, then compute abs(new - old) over the full universe. (roborev cluster B, F4)
+  # Fix (roborev cluster B, F4): complete the (ticker x date) grid so exits get
+  # weight 0. That fix now lives in ONE place, hd_turnover_series() (#567 A1):
+  # per scheme, one-way turnover vs the previous month's weights as given (not
+  # drifted -- this function's existing convention), first month = entry from
+  # nothing, and a date where the scheme holds nothing counts as an all-cash
+  # book (`periods = all_dates`, as the old grid did).
   all_dates <- sort(unique(portfolio$date))
-  turnover <- portfolio |>
-    dplyr::select(scheme, ticker, date, weight) |>
-    dplyr::arrange(scheme, ticker, date) |>
-    # Expand to full (scheme x ticker x date) universe so exits get weight = 0
-    tidyr::complete(
-      tidyr::nesting(scheme, ticker),
-      date = all_dates,
-      fill = list(weight = 0)
-    ) |>
-    dplyr::group_by(scheme, ticker) |>
-    dplyr::arrange(date) |>
-    dplyr::mutate(
-      prev_weight = dplyr::lag(weight, default = 0),
-      weight_change = abs(weight - prev_weight)
-    ) |>
-    dplyr::group_by(scheme, date) |>
-    dplyr::summarise(
-      turnover = sum(weight_change, na.rm = TRUE) / 2,  # Divide by 2 for one-way turnover
-      .groups = "drop"
-    )
+  turnover <- dplyr::bind_rows(lapply(
+    split(portfolio, portfolio$scheme),
+    function(p) {
+      out <- hd_turnover_series(
+        data.frame(date = p$date, name = p$ticker, weight = p$weight),
+        side = "one", first = "entry", periods = all_dates
+      )
+      out$scheme <- p$scheme[1L]
+      out[c("scheme", "date", "turnover")]
+    }
+  ))
 
   # Join and compute costs
   result <- monthly_returns |>

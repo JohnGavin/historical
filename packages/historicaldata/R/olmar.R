@@ -298,7 +298,10 @@ olmar_backtest <- function(prices,
     b_new[active] <- b_new_active
 
     # Turnover (one-way)
-    tv <- sum(abs(b_new - b_lev)) / 2
+    # One definition (#567 A1): hd_turnover() == sum(abs(b_new - b_lev)) / 2.
+    # b_lev is deliberately NOT drifted here -- that is this strategy's
+    # existing convention and its published cost depends on it.
+    tv <- hd_turnover(b_new, b_lev)
 
     # Realize return on day t+1 (look-ahead safety: weights formed at end of t)
     # Look-ahead guard: we never read prices[t+1, ] here.
