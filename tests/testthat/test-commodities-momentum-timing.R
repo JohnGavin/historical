@@ -24,10 +24,10 @@ source(here::here("R/commodities_momentum.R"))
 .toy_signals <- tibble::tibble(
   date = rep(.toy_dates, 2),
   series_id = rep(c("A", "B"), each = 4),
-  baseline_12m = rep(c(0.5, -0.5), each = 4),
-  short_term_3m = rep(c(0.5, -0.5), each = 4),
-  long_term_9m = rep(c(0.5, -0.5), each = 4),
-  volatility_30m = 0.1,
+  mom_12d = rep(c(0.5, -0.5), each = 4),
+  mom_3d = rep(c(0.5, -0.5), each = 4),
+  mom_9d = rep(c(0.5, -0.5), each = 4),
+  volatility_roll = 0.1,
   trend_strength = 0.5
 )
 

@@ -43,6 +43,9 @@ LBL_REGIME <- "Regime Momentum"
 .annual_rf <- 0.06
 .mrf <- (1 + .annual_rf)^(1 / 12) - 1
 .excess_sharpe <- function(x) mean(x) / stats::sd(x) * sqrt(12)
+# Commodity momentum runs on daily bars (#1048 follow-up): 252 bars/year.
+.drf <- (1 + .annual_rf)^(1 / 252) - 1
+.excess_sharpe_d <- function(x) mean(x) / stats::sd(x) * sqrt(252)
 
 # ── Registry ────────────────────────────────────────────────────────────────
 
@@ -68,14 +71,14 @@ test_that("the three group-B labels are registered on the excess basis", {
 test_that("summarize_commodity_performance: excess label deducts no rf", {
   res <- summarize_commodity_performance(.comm_bt(), annual_rf = .annual_rf,
                                          strategy = LBL_COMM)
-  expect_equal(res$sharpe, rep(.excess_sharpe(.ret), 2L))
-  expect_equal(res$gross_sharpe, rep(.excess_sharpe(.ret), 2L))
+  expect_equal(res$sharpe, rep(.excess_sharpe_d(.ret), 2L))
+  expect_equal(res$gross_sharpe, rep(.excess_sharpe_d(.ret), 2L))
 })
 
 test_that("summarize_commodity_performance: a total label still deducts rf (control)", {
   res <- summarize_commodity_performance(.comm_bt(), annual_rf = .annual_rf,
                                          strategy = "Value (HML)")
-  expect_equal(res$sharpe, rep((mean(.ret) - .mrf) / stats::sd(.ret) * sqrt(12), 2L))
+  expect_equal(res$sharpe, rep((mean(.ret) - .drf) / stats::sd(.ret) * sqrt(252), 2L))
 })
 
 test_that("summarize_commodity_performance: missing / unregistered label aborts", {
@@ -85,10 +88,13 @@ test_that("summarize_commodity_performance: missing / unregistered label aborts"
 })
 
 test_that("DECISION: the rescue test's 'any positive Sharpe' flips when rf stops being deducted", {
-  res <- summarize_commodity_performance(.comm_bt(), annual_rf = .annual_rf,
+  # On daily bars a mean of 0.002 only sits below the per-bar rf when the
+  # annual rf is extreme, so use 80%/yr here ((1.8)^(1/252) - 1 = 0.00233).
+  rf_hi <- 0.80
+  res <- summarize_commodity_performance(.comm_bt(), annual_rf = rf_hi,
                                          strategy = LBL_COMM)
   # old behaviour: sharpe < 0 everywhere -> verdict UNIVERSAL FAILURE
-  old <- (mean(.ret) - .mrf) / stats::sd(.ret) * sqrt(12)
+  old <- (mean(.ret) - ((1 + rf_hi)^(1 / 252) - 1)) / stats::sd(.ret) * sqrt(252)
   expect_lt(old, 0)
   expect_true(any(res$sharpe > 0))
 })
@@ -215,7 +221,7 @@ test_that("commodities_rolling_sharpe_plot: rolling Sharpe has no rf deducted", 
   d <- p$data[p$data$strategy == "baseline" & !is.na(p$data$rolling_sharpe_36m), ]
   expect_gt(nrow(d), 0L)
   last <- tail(bt$net_ret[bt$strategy == "baseline"], 36L)
-  expect_equal(tail(d$rolling_sharpe_36m, 1L), .excess_sharpe(last))
+  expect_equal(tail(d$rolling_sharpe_36m, 1L), .excess_sharpe_d(last))
 })
 
 test_that("rolling_sharpe_plot (momentum decomposition): no rf deducted", {
