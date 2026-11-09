@@ -346,6 +346,32 @@ STRAT_CODE_LABELS <- c(
   invisible(dropped_ym)
 }
 
+#' Report the months the 4-strategy family's complete-case filter removes (#657)
+#'
+#' `strat_returns_aligned` keeps only months where all four family strategies
+#' (`stk_max`, `stk_drif`, `fac_max`, `fac_drif`) have a return, so
+#' `strat_corr_matrix` is a common-month estimate. That is an argued choice
+#' (a correlation across strategies needs the same months), not an accident,
+#' but the count was never reported: on the 2026-11-09 build `stk_*` ran to
+#' 2026-04 while `fac_*` stopped at 2026-02, so 2026-03 and 2026-04 were
+#' removed for every pair, including the two stock strategies. Reporting
+#' only -- the estimand is unchanged.
+#'
+#' @param ym_all Character `ym` of every `port_returns` row.
+#' @param ym_kept Character `ym` of the rows that survive the filter.
+#' @return Invisibly, the character vector of removed `ym` (empty if none).
+#' @noRd
+.inform_family_na_drop <- function(ym_all, ym_kept) {
+  dropped_ym <- sort(setdiff(ym_all, ym_kept))
+  if (length(dropped_ym) > 0L) {
+    cli::cli_inform(c(
+      "!" = "strat_returns_aligned: {length(dropped_ym)} of {length(ym_all)} port_returns month{?s} removed because a 4-strategy-family return is NA (common-month correlation window).",
+      "i" = "Removed ym: {paste(dropped_ym, collapse = ', ')}."
+    ))
+  }
+  invisible(dropped_ym)
+}
+
 #' rf sources for the TOTAL- and BLEND-basis columns of strat_returns_wide (#937)
 #'
 #' Mirrors the rf series strat_deflated_sharpe (R/plan_leaderboard.R) uses
@@ -486,10 +512,14 @@ plan_strategy_correlation <- function() {
       # Joining on raw date produces an empty or near-empty result (#147/#215).
       # Fix: derive ym from both sides and join on ym; use port_returns\ as
       # the canonical date column.
-      base <- port_returns |>
-        select(ym, date, stk_max, stk_drif, fac_max, fac_drif) |>
+      base_all <- port_returns |>
+        select(ym, date, stk_max, stk_drif, fac_max, fac_drif)
+      base <- base_all |>
         filter(!is.na(stk_max), !is.na(stk_drif),
                !is.na(fac_max), !is.na(fac_drif))
+
+      # #657: report (not change) the months the complete-case filter removes.
+      .inform_family_na_drop(base_all$ym, base$ym)
 
       # LTR momentum: derive ym for stable join key
       ltr_col <- ltr_portfolio |>

@@ -2,6 +2,8 @@
 
 Status: READ-ONLY static audit. No file under `R/`, `scripts/` or `packages/` was changed. Every verdict below comes from reading code at commit `efd2dfb00931ca49f71f2bba3211c3f3d3d395de`. I had no access to the built `docs/_targets` store, so **no row count in this document is newly measured**. Where a number appears it is quoted from the earlier runtime audit, [`audits/inner_join_audit_2026-09-24.md`](https://github.com/JohnGavin/historical/blob/efd2dfb00931ca49f71f2bba3211c3f3d3d395de/audits/inner_join_audit_2026-09-24.md) (#899), and is tagged **[M]**. That audit read the store at `main@952bd45`, five weeks and several merged PRs before this commit, so an [M] tag means "was true then", not "is true now".
 
+**Update 2026-11-09:** the static census below was followed by runtime measurement of every remaining site (see "Measured 2026-11-04" and "Measured 2026-11-09" at the end). Current tally: 1 CONFIRMED (`ecb_yield_spread`, row B7, reclassified from SAFE), 4 LATENT, 50 BENIGN, 1 INDETERMINATE, 4 AUDITED (#1046). The "CONFIRMED: none" line in "Counts by verdict" is superseded.
+
 Issue: [#657](https://github.com/JohnGavin/historical/issues/657). Format follows `docs/ticker-join-audit-865.md` and `docs/unit-vocab-census-668.md`.
 
 ## What this adds to the 2026-09-24 audit
@@ -277,6 +279,69 @@ Not fixed, and why:
 - **A10 reporting.** `hd_factor_null_test()` still returns no `n_obs`. The trailing drops (29 rows for two daily strategies, 1 for `mom_prepeak`) are intended, and there is no caption on these targets to carry a count. Adding a column to a package export changes every `fals_ff_*` output and needs `regen_api_context.sh`; left for a separate decision.
 - **A16.** The target is dead until an annual FF3 source exists. Options: derive it from FF3 monthly by compounding, or remove the target. That is a product decision, not a join fix.
 - **A6/A7.** The windows are equal to the shortest series. They already report `n_overlap_months`; no change.
+
+## Measured 2026-11-09 (every remaining site; allow-list guard)
+
+Premise check against `main@13aa9be`: the census above and the 2026-11-04 measurements were already on main, so this pass did not start from zero. What was still open: the sites the census calls AT-RISK or INDETERMINATE that were never measured (C3, C4, C5, A5, A12 to A13 re-checks, B7, B11, B12, B14, B15 re-check), the lint-style guard, and a runtime check of the sites "carried" from the 2026-09-24 audit. Method as in #656: `tar_read_raw(..., store = "docs/_targets")` on the main-checkout store (1696 targets; read-only, no `tar_make()`), exact overlap window on the join key (`max` of the two minima to `min` of the two maxima), counts compared with the stored result where one exists. Store data end: factor, rf and `ltr` series 2026-02, stock series 2026-04.
+
+**Counts by classification** (60 live `inner_join(` sites: 55 in `R/`, 5 in `packages/historicaldata/R/`; one line each in `tests/testthat/inner_join_allowlist.tsv`; `plan_pit_max.R` and `pit_returns.R` were audited in #1046 and are listed `AUDITED`):
+
+| Class | Sites |
+|---|--:|
+| CONFIRMED (loses periods now) | 1 |
+| LATENT (can lose; 0 interior months now, or loss not reported) | 4 |
+| BENIGN | 50 |
+| INDETERMINATE | 1 |
+| AUDITED (#1046) | 4 |
+
+By consumer: 17 feed a published metric, 25 a published diagnostic, 16 nothing published, 2 are dead code.
+
+### Findings
+
+**F1. `ecb_yield_spread` (R/plan_ecb.R) is CONFIRMED, not "SAFE (orphan)" (row B7).** The census argued the intersection of a business-daily and a daily series is intended. Measured: the yield curve has 5,663 dates (2004-09-06 to 2026-10-29), `ecb_refi_rate` 6,770 (2000-01-01 to 2026-10-31) but **none between 2004-09-06 and 2008-10-14** (179 rows in 2000, 78 in 2008, then daily), so the join keeps 4,609 and silently drops **1,054 yield-curve dates (18.6%, 2004-09-06 to 2008-10-14)**; 0 yield-curve dates are lost after 2008-10-15. The 1,980 refi-only dates inside the window are 1,882 weekend days and 98 weekday dates, which is intended. Consumer: none (no `.qmd`, no other R file), so nothing published changes. Fixed by reporting: `.ecb_spread_join()` keeps the join and emits the count and range (tested). Estimand unchanged.
+
+**F2. `backtest_commodity_momentum()` pairs each signal with the return one period too late (row C5, was INDETERMINATE).** Reproduced on a 3-return series: with returns of +10% (Feb), -10% (Mar), +21.2% (Apr), the signal dated Jan-31 is paired with `next_ret = -10%` (the March return) instead of the February return that follows it. Row loss itself is small and edge-only: 74 of 146,124 signal rows, all dated 2026-02-01 to 2026-05-15. Not fixed: it changes `commodities_backtest`, whose only consumers are `plan_commodities_momentum.R` and `plan_commodities_mean_reversion.R` (no `.qmd`), and the owner should confirm whether `signals$date` is meant to be pre-shifted. Recommendation: pair on `lead(monthly_ret)` of the signal row only, as `hd_cmr_backtest()` does.
+
+**F3. `decay_metrics` has no per-month min-stocks gate (row B14/C4).** Measured: the delayed-return join loses 0 interior months (stk_max 254 of 255, stk_drif 193 to 194 of 195, all leading or trailing edge: stk_max is missing 2026-04 at every delay because its final signal month has no successor row; stk_drif is missing 2010-02 at every delay, and 2026-04 as well at delays 9 and 10, presumably because April 2026 is a partial month). But at delay 8 one month has only 36 stocks, below the 50 that `stk_max_portfolio` and `stk_drif_portfolio` enforce, so its deciles hold 3 to 4 names. No rows are lost; the estimate for that month is thinner than its peers. Left LATENT; fix would be to gate per month and report.
+
+**F4. The 4-strategy correlation window loses 2 trailing months before the join (rows A1, A5).** `port_returns` has 195 months (2010-02 to 2026-04); `fac_max` and `fac_drif` end 2026-02, so `strat_returns_aligned` keeps 193 months: **2026-03 and 2026-04 are removed for every pair, including the two stock strategies, which have data**. This is an argued common-month estimate, not an accident, but the count was never reported. The join itself (`ltr`) drops 0 of 193 family months and 61 `ltr` months before the family starts. Cross-checked in the 2026-09-24 audit: the pairwise-complete alternative gives an identical matrix on that build. Now reported by `.inform_family_na_drop()`; estimand unchanged. Whether the two stock strategies should use their own two extra months is a recommendation, not done here (it would change `k_eff_family` on `leaderboard.qmd`).
+
+### Rows measured on this build
+
+| Site | Target | Measured | Result |
+|---|---|---|---|
+| `plan_strategy_correlation.R` | `strat_returns_aligned` | base 193 (of 195 `port_returns`), `ltr` 254, joined 193 | 0 dropped by the join; 2 removed upstream (F4) |
+| `plan_wf_correlation.R` x2, `plan_mom_prepeak_gauntlet.R` | grids | IS = OOS = joined = 5 / 5 / 3 | 0 |
+| `plan_marginal_contribution.R`, `plan_multi_strategy.R`, `plan_causal_graph.R` | `mc_analysis`, `ms_portfolio`, `cg_test_data` | DRIF 691, Factor MAX 740, `ltr` 254; result 254 each | 0 inside the window 2005-01 to 2026-02; 437 DRIF and 486 Factor MAX months precede `ltr` (edge) |
+| `plan_add_crowding.R` | `add_crowding` (11 strategies) | joined 255 to 398 months per strategy | 0 inside the window for all 11; leading edge before SPY month-start data 1993-02 (e.g. 240 months of the Mom series), trailing 2026-03/04 for the factor series |
+| `plan_strategy_decay.R` | `decay_analysis` | 3 strategies vs 861 regime months | 0 strategy months dropped |
+| `plan_stock_backtest.R` x6, `plan_xgb_signal.R` x2 | `stk_max_portfolio`, `stk_drif_portfolio`, `xgb_drif_portfolio`, HRP variants | 0 of 24,401 / 18,999 / 18,999 signal pairs missing from `stk_monthly`; 255 / 195 / 195 months kept | 0; `portfolio_longshort` keeps every month (stk_max `n_short` min 8) |
+| `plan_stock_backtest.R:stk_max_vs_factor` | | 255 stock vs 740 factor months, 253 joined | 0 inside the window; 2026-03/04 trail the factor end |
+| `plan_xgb_signal.R:xgb_vs_enet` | | 195 vs 195, 195 joined | 0 in both directions |
+| `plan_alpha_decay.R` x3 | `decay_delayed_returns`, `decay_metrics` | 24,408 of 24,508 ticker-months have a successor, 0 are not the calendar-next month | see F3 |
+| `plan_qa_gates.R` (S39) | OLMAR x `daily_rf` | 4,063 OLMAR days, all in `daily_rf` | 0 |
+| `plan_ecb.R` | `ecb_yield_spread` | see F1 | CONFIRMED |
+| `plan_nyt_sentiment.R` x2 | `nyt_vs_spy` | `n_months` = each keyword's own month count (312, 312, 312, 312, 300) | 0 |
+| `commodities_momentum.R` | `commodities_backtest` | 74 of 146,124 signal rows | edge only; timing issue F2 |
+| `plan_momentum_decomposition.R` | `momentum_comparison` | 202,726 of 202,726 | 0 |
+| `plan_etf_replication.R` x3, `plan_drif.R`, `plan_jst_trend.R`, `plan_european_overlay.R:410` | | etf a/b 119 vs 153 (2 trailing, 36 leading); `drif_vs_max` 691 of 691; 16 countries both sides; `eur_results` 15 rows per strategy | 0 inside windows |
+
+Carried forward from the 2026-09-24 and 2026-11-04 audits, not re-measured: `plan_managed_futures.R`, `plan_rafi.R` (row counts consistent: `mf_data` 240, `rafi_data` 752), `plan_guardian.R`, `momentum_decomposition.R:258`, `plan_european_overlay.R:351` and the `hd_factor_null_test()` callers. INDETERMINATE: `plan_european_overlay.R:108` (`eur_daily`): its per-ticker side is a live Yahoo fetch inside the target, so only the gap structure can be checked.
+
+### The two inferred claims from #656
+
+1. `xgb_vs_enet` same-month-set claim: **proved on this build**, 0 months differ in either direction (195 = 195). Still not guaranteed structurally, since the two portfolios apply different month gates.
+2. `plan_stock_backtest.R:1014-1033` and the #603 figure (about 128 of 190 months): **not closed.** The nearest live joins (the `stk_max_portfolio` family, lines 922, 966, 1011) lose 0 of 24,401 pairs, but the exact join cited cannot be identified, and re-deriving the #603 figure needs an older build's store.
+
+### Guard
+
+`tests/testthat/test-inner-join-allowlist-657.R` scans `R/` and `packages/historicaldata/R/` for non-comment `inner_join(` and fails when a site is not in `tests/testthat/inner_join_allowlist.tsv`, when an entry is stale, or when a class, consumer or reason is missing or too thin. Entries match on (file, ordinal, code line), so inserting a join before another one in the same file forces a re-check. Controls that always run: a fake site is detected, comments and prose mentions are not sites, editing a listed line makes it stale, an empty reason is rejected, and the test refuses a scan or list with fewer than 20 rows. Falsified once on purpose: appending a fake `inner_join()` to `R/plan_rafi.R` turned the guard red (`R/plan_rafi.R | 2 | fake_site_657 <- ...`), then it was restored. Cost: a PR that adds a join must add one line with a measured reason. That is the intent; the census above worried about the opposite.
+
+Scope not covered by the guard: `scripts/`, `docs/*.qmd` (one site, `docs/european-overlay.qmd:98-99`, row A14) and non-`dplyr` joins.
+
+### Targets that need a rebuild
+
+Only `ecb_yield_spread` and `strat_returns_aligned` change definition (reporting only; output values are identical), which also invalidates `strat_corr_matrix` and everything downstream of it (`strat_keff_vertox`, the leaderboard family columns) with unchanged values. Nothing else changes.
 
 ## Related
 

@@ -9,6 +9,37 @@
 # Naming convention: ecb_*
 # Total targets: 5
 
+#' Join the 10Y yield curve to the ECB refi rate, reporting what is dropped (#657)
+#'
+#' `ecb_refi_rate` has no observation before 2008-10-15 (the fixed-rate main
+#' refinancing operation did not exist earlier), so an `inner_join()` on `date`
+#' silently removed 1054 of 5663 yield-curve dates (2004-09-06..2008-10-14,
+#' measured 2026-11-09, docs/inner-join-audit-657.md). The join is kept (a
+#' spread needs both legs), but the dropped yield-curve dates are now counted
+#' and named. Refi-only dates (weekends) are not counted: the yield curve is
+#' business-daily, the refi series is calendar-daily.
+#'
+#' @param yc Tibble with `date` and `yield_10y`.
+#' @param refi Tibble with `date` and `refi_rate`.
+#' @return The joined tibble with `spread_bps`, sorted by date, carrying the
+#'   attribute `n_dropped_yc_dates` (integer).
+#' @noRd
+.ecb_spread_join <- function(yc, refi) {
+  spread <- dplyr::inner_join(yc, refi, by = "date") |>
+    dplyr::mutate(spread_bps = round((yield_10y - refi_rate) * 100, 1)) |>
+    dplyr::arrange(date)
+
+  dropped <- sort(yc$date[!yc$date %in% spread$date])
+  if (length(dropped) > 0L) {
+    cli::cli_inform(c(
+      "!" = "ecb_yield_spread: dropped {length(dropped)} of {nrow(yc)} yield-curve date{?s} with no matching ecb_refi_rate observation.",
+      "i" = "Dropped range: {format(min(dropped))} to {format(max(dropped))}; the spread starts {format(min(spread$date))}."
+    ))
+  }
+  attr(spread, "n_dropped_yc_dates") <- length(dropped)
+  spread
+}
+
 plan_ecb <- function() {
   list(
 
@@ -97,12 +128,9 @@ plan_ecb <- function() {
         dplyr::filter(series_name == "ecb_refi_rate") |>
         dplyr::select(date, refi_rate = value)
 
-      # Join on date — both are daily(ish)
-      spread <- dplyr::inner_join(yc, refi, by = "date") |>
-        dplyr::mutate(spread_bps = round((yield_10y - refi_rate) * 100, 1)) |>
-        dplyr::arrange(date)
-
-      spread
+      # Join on date; reports the yield-curve dates dropped because the refi
+      # series starts 2008-10-15 (#657).
+      .ecb_spread_join(yc, refi)
     }),
 
     # ── Caption for vignette use ────────────────────────────────────────
