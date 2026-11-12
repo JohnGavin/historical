@@ -4,7 +4,7 @@ Status: READ-ONLY static audit. No file under `R/`, `scripts/` or `packages/` wa
 
 **Update 2026-11-09:** the static census below was followed by runtime measurement of every remaining site (see "Measured 2026-11-04" and "Measured 2026-11-09" at the end). Current tally: 1 CONFIRMED (`ecb_yield_spread`, row B7, reclassified from SAFE), 4 LATENT, 50 BENIGN, 1 INDETERMINATE, 4 AUDITED (#1046). The "CONFIRMED: none" line in "Counts by verdict" is superseded.
 
-Issue: [#657](https://github.com/JohnGavin/historical/issues/657). Format follows `docs/ticker-join-audit-865.md` and `docs/unit-vocab-census-668.md`.
+Issue: [#657](https://github.com/JohnGavin/historical/issues/657). Format follows `docs/ticker-join-audit-865.md` and `docs/notes/unit-vocab-census-668.md`.
 
 ## What this adds to the 2026-09-24 audit
 
@@ -345,4 +345,4 @@ Only `ecb_yield_spread` and `strat_returns_aligned` change definition (reporting
 
 ## Related
 
-#656 (verified findings), #641, #651 (the spine fix pattern), #603, #626/#635 (the correlation structure under the diversification claim), #865 (`docs/ticker-join-audit-865.md`), #668 (`docs/unit-vocab-census-668.md`), `.claude/rules/fail-loud-not-null.md`.
+#656 (verified findings), #641, #651 (the spine fix pattern), #603, #626/#635 (the correlation structure under the diversification claim), #865 (`docs/ticker-join-audit-865.md`), #668 (`docs/notes/unit-vocab-census-668.md`), `.claude/rules/fail-loud-not-null.md`.

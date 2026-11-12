@@ -1,3 +1,5 @@
+> Point-in-time note, written 2026-11-01; figures may be stale — re-verify against current targets.
+
 # Unit and vocabulary census (issue #668, Phase 1)
 
 Read-only groundwork for [#668](https://github.com/JohnGavin/historical/issues/668).
@@ -134,7 +136,7 @@ percent assertion for `mom_prepeak_units`, `test-registry-unit-map-coverage.R:42
 | 57 | `R/plan_ev_ebit.R:384`, `R/plan_managed_futures.R:576` (also `:251`, `:327`, `:411`) | registry writers and captions that filter the source target on the alias spelling | LEAVE. Coupled to why #12 and #13 must keep renaming at the leaderboard boundary: renaming at the source would break these filters |
 
 Verdict counts are not typed here. Reproduce them with
-`sed -n '/^## 1\./,/^## 2\./p' docs/unit-vocab-census-668.md` and then
+`sed -n '/^## 1\./,/^## 2\./p' docs/notes/unit-vocab-census-668.md` and then
 `grep -c "^| [0-9]* |.*| MIGRATE"` on that output (likewise ALREADY-CENTRAL,
 LEAVE, INDETERMINATE; a verdict is the first word of a row's last cell). The PR body records the numbers obtained at commit time.
 
