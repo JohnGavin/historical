@@ -1,6 +1,6 @@
 ---
 title: "Negative Results"
-subtitle: "Moved to Strategy Falsification"
+subtitle: "Moved to Failed and Watch Strategies"
 format:
   html:
     theme:
@@ -18,20 +18,16 @@ execute:
 
 > **This page has moved.**
 >
-> The failed-strategies scorecard, failure patterns, and portfolio implications
-> are now part of the [**Strategy Falsification**](falsification.html#failed-strategies)
-> vignette — select the **Failed Strategies** section.
->
-> Per-strategy failure cards and lessons learned remain in
-> [**Evidence & Context → Negative Results tab**](evidence.html#negative-results).
+> Every failed or watch-listed strategy, with the failing test, reason, date and issue,
+> is now on [**Failed and Watch Strategies**](failures.html).
 
 Redirecting automatically…
 
-<meta http-equiv="refresh" content="0; url=falsification.html#failed-strategies">
-<script>window.location.href = "falsification.html#failed-strategies";</script>
+<meta http-equiv="refresh" content="0; url=failures.html">
+<script>window.location.href = "failures.html";</script>
 
 ## Related vignettes
 
-- **[Strategy Falsification (Failed Strategies)](falsification.html#failed-strategies)** — the failed-strategies scorecard now lives here
-- **[Evidence & Context (Negative Results)](evidence.html#negative-results)** — per-strategy failure cards and lessons learned
+- **[Failed and Watch Strategies](failures.html)** — the single record of strategy failures
+- **[Strategy Falsification](falsification.html)** — the alpha test behind the "no alpha" verdicts
 - **[Strategy Leaderboard](leaderboard.html)** — performance rankings across all strategies, for contrast against what failed

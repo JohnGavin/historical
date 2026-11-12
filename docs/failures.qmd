@@ -1,0 +1,188 @@
+---
+title: "Failed and Watch Strategies"
+format:
+  dashboard:
+    orientation: rows
+    theme:
+      dark: darkly
+      light: cosmo
+    embed-resources: false
+    css: falsification-theme.css
+    include-in-header:
+      - _includes/color-scheme-meta.html
+      - text: |
+          <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
+          <style>/* All styles in falsification-theme.css */</style>
+          <script>
+          if (!localStorage.getItem('quarto-color-scheme')) {
+            document.documentElement.setAttribute('data-bs-theme', 'dark');
+          }
+          // ── UI Controls: font size + dark/light toggle ──
+          document.addEventListener('DOMContentLoaded', function() {
+            var toolbar = document.createElement('div');
+            toolbar.id = 'ui-controls';
+            toolbar.innerHTML = '<button id="font-down" title="Decrease font">A-</button>' +
+              '<button id="font-up" title="Increase font">A+</button>' +
+              '<button id="theme-toggle" title="Toggle dark/light"></button>';
+            document.body.appendChild(toolbar);
+
+            // Font size
+            var baseSize = parseFloat(localStorage.getItem('font-size-px') || '24');
+            document.documentElement.style.setProperty('--base-font-size', baseSize + 'px');
+            document.getElementById('font-up').addEventListener('click', function() {
+              baseSize = Math.min(baseSize + 1, 32);
+              document.documentElement.style.setProperty('--base-font-size', baseSize + 'px');
+              localStorage.setItem('font-size-px', baseSize);
+            });
+            document.getElementById('font-down').addEventListener('click', function() {
+              baseSize = Math.max(baseSize - 1, 12);
+              document.documentElement.style.setProperty('--base-font-size', baseSize + 'px');
+              localStorage.setItem('font-size-px', baseSize);
+            });
+
+            // Dark/light toggle
+            var themeBtn = document.getElementById('theme-toggle');
+            var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            themeBtn.textContent = isDark ? '☀️' : '🌙';
+            themeBtn.addEventListener('click', function() {
+              isDark = !isDark;
+              document.documentElement.setAttribute('data-bs-theme', isDark ? 'dark' : 'light');
+              themeBtn.textContent = isDark ? '☀️' : '🌙';
+              localStorage.setItem('quarto-color-scheme', isDark ? 'dark' : 'light');
+            });
+          });
+          </script>
+execute:
+  echo: false
+  warning: false
+  message: false
+---
+
+```{r}
+#| label: setup
+#| include: false
+library(targets)
+library(DT)
+library(dplyr)
+
+# Path-checked store + utils (cwd is docs/ under quarto render, project
+# root under tar_make). Same pattern as docs/falsification.qmd.
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+
+# Verdict rule text and counts come from the one home (R/strategy_verdict.R).
+sv_path <- if (file.exists("../R/strategy_verdict.R")) "../R/strategy_verdict.R" else
+  file.path(here::here(), "R/strategy_verdict.R")
+source(sv_path)
+
+gh_issues <- "https://github.com/JohnGavin/historical/issues/"
+```
+
+::: {.callout-note .small}
+**Where failures are recorded.** Every strategy's standing is computed once, by
+`compute_strategy_verdict()` in `R/strategy_verdict.R`, from the same numbers the
+[leaderboard](leaderboard.html) shows and the [falsification](falsification.html)
+scorecard. The reasons, dates and issue links come from `data/strategy_register.csv`,
+which holds only human judgement and no metric values. A strategy is listed here
+until it earns **Keep**.
+:::
+
+# Failed and Watch
+
+## Row
+
+### {.tabset}
+
+#### Strategies that are not Keep
+
+```{r}
+#| label: failures-table
+sv <- safe_tar_read("strategy_verdict")
+if (!is.null(sv)) {
+  esc <- function(x) ifelse(is.na(x), "", htmltools::htmlEscape(x))
+  not_keep <- sv |>
+    dplyr::filter(verdict != "Keep") |>
+    dplyr::mutate(.vrank = match(verdict, rev(STRATEGY_VERDICT_LEVELS))) |>
+    dplyr::arrange(.vrank, strategy_id)
+
+  has_revisit <- "revisit_if" %in% names(not_keep) && any(!is.na(not_keep$revisit_if))
+  pct <- function(x) ifelse(is.na(x), "not computed", paste0(round(x * 100, 1), "%"))
+
+  tbl <- tibble::tibble(
+    Strategy = esc(not_keep$short_name),
+    Verdict = sprintf("<strong>%s</strong>", esc(not_keep$verdict)),
+    `Failing test(s)` = esc(not_keep$verdict_reason),
+    `Net CAGR` = pct(not_keep$net_cagr),
+    `DSR p` = ifelse(is.na(not_keep$dsr_pvalue_klogged), "not computed",
+                     format(round(not_keep$dsr_pvalue_klogged, 3), nsmall = 3)),
+    Detection = dplyr::case_when(
+      is.na(not_keep$detection_underpowered) ~ "not assessed",
+      not_keep$detection_underpowered ~ "underpowered",
+      TRUE ~ "powered"
+    ),
+    Falsification = ifelse(is.na(not_keep$fals_verdict), "not run", esc(not_keep$fals_verdict)),
+    Reason = ifelse(is.na(not_keep$reason), "<em>none recorded</em>", esc(not_keep$reason)),
+    `Decided on` = ifelse(is.na(not_keep$decided_on), "", esc(not_keep$decided_on)),
+    Issue = ifelse(is.na(not_keep$issue), "",
+                   sprintf("<a href='%s%s' target='_blank' rel='noopener noreferrer'>#%s</a>",
+                           gh_issues, not_keep$issue, not_keep$issue))
+  )
+  if (has_revisit) {
+    tbl[["Revisit if"]] <- esc(not_keep$revisit_if)
+  }
+
+  n_failed <- sum(sv$verdict == "Failed")
+  n_watch <- sum(sv$verdict == "Watch")
+  n_noreason <- sum(not_keep$verdict == "Failed" & is.na(not_keep$reason))
+  caption_text <- paste0(
+    n_failed, " Failed and ", n_watch, " Watch of ", nrow(sv), " strategies. ",
+    strategy_verdict_rule_text(),
+    if (n_noreason > 0) paste0(" ", n_noreason, " Failed with no recorded reason (a defect).") else ""
+  )
+
+  DT::datatable(
+    tbl,
+    caption = hd_caption(caption_text),
+    escape = FALSE,
+    rownames = FALSE,
+    filter = "top",
+    options = list(
+      pageLength = 20, scrollX = TRUE, autoWidth = FALSE,
+      dom = "frtip",
+      search = list(regex = TRUE, caseInsensitive = TRUE),
+      initComplete = DT::JS(
+        "function(settings, json) {",
+        "  var isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark'",
+        "    || document.body.classList.contains('dark-mode');",
+        "  if (isDark) {",
+        "    $(this.api().table().container()).css({'color': '#ddd', 'background-color': '#1a1a1a'});",
+        "    $(this.api().table().header()).css({'color': '#ddd', 'background-color': '#222'});",
+        "    $('input', this.api().table().container()).css({'color': '#ddd', 'background-color': '#333', 'border-color': '#555'});",
+        "  }",
+        "}"
+      )
+    )
+  )
+} else {
+  cat("*`strategy_verdict` target not available. Run `tar_make()`.*")
+}
+```
+
+#### How to Read This
+
+Each row is a strategy whose computed verdict is **Failed** or **Watch**. **Failing
+test(s)** names the rule branch that decided the verdict, or, for Watch, each Keep
+criterion that is not met or could not be assessed (a missing input is reported, never
+treated as a pass). **Reason** is the written judgement from the register, with its
+evidence. **Detection** says whether the sample is long enough to tell the strategy's
+Sharpe ratio from zero. **DSR p** is the deflated Sharpe ratio p-value, which corrects
+for the number of strategies tried.
+
+See the [leaderboard](leaderboard.html) for the full ranking and the
+[falsification dashboard](falsification.html) for the alpha test.
