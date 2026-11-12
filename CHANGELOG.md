@@ -4,6 +4,22 @@
 
 - docs: add docs/DATA_SOURCES.md with an Econvitals entry (known, not ingested) (Refs #1055)
 
+## 2026-11-12 (commodity momentum on the tradeable era; CMR caption/verdict on one Sharpe basis; refs #1057, #1058)
+
+This changes the commodity momentum numbers (baseline Sharpe, backtest dates) and the CMR head-to-head table's momentum row.
+
+- #1057: `commodities_signals` and `commodities_backtest` read `cmr_tradeable_returns` (the #751
+  truncation, cutoff derived from the data) instead of `commodities_returns`, so momentum and CMR
+  start on the same date and the monthly-only pre-cutoff era is no longer annualised at 252 bars.
+  The post-cutoff daily/monthly mix stays open on #751 (finding 3). `commodities_cumret_plot`
+  caption span is computed from the data.
+- #1058: `cmr_vs_mom_compare` momentum row is now the geometric `sharpe_ratio_rf()` at 252 on the
+  baseline net returns (`.cmr_momentum_geometric_sharpe()`), the same estimator as CMR;
+  `commodities_perf_summary` is unchanged. `fals_vig_cmr_head_to_head_caption` quotes best MR
+  Sharpe and the verdict from that table's own column and names the estimator;
+  `fals_vig_cmr_caption` quotes its table's Naive Sharpe column (labelled naive HAC-test input)
+  and the head-to-head figures under a separate label.
+
 ## 2026-11-09 (leaderboard costs from measured turnover, subtractive cost; refs #567, #663)
 
 This changes published numbers: every Net CAGR, cumulative P&L and Credible flag on the leaderboard.
