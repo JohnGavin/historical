@@ -618,25 +618,10 @@ plan_falsification_vignette <- function() {
         )
     }),
 
+    # #1058: caption text built by helpers so every quoted Sharpe comes from
+    # the column of the table it captions (see the helpers at file end).
     targets::tar_target(fals_vig_cmr_caption, {
-      best_lb  <- fals_cmr_summary$lookback[which.max(fals_cmr_summary$hac_sharpe)]
-      best_sh  <- round(max(fals_cmr_summary$hac_sharpe, na.rm = TRUE), 3)
-      mom_sh   <- round(
-        cmr_vs_mom_compare$sharpe[cmr_vs_mom_compare$type == "momentum"][1],
-        3
-      )
-      paste0(
-        "Commodities Mean Reversion falsification scorecard (Issue #138). ",
-        "Three lookback windows (1m, 3m, 6m); long-losers / short-winners, ",
-        "0.2% transaction cost, daily observations (ann_factor = 252). ",
-        "Best lookback: ", best_lb, " (naive Sharpe ", best_sh, "). ",
-        "Commodity momentum baseline (12-bar lookback, annualised on 252) had Sharpe ", mom_sh, " (Issue #134). ",
-        "Columns: HAC t = Newey-West t-statistic; ",
-        "WN/RV/MA1/FN/GARCH/GJR = null-environment rejection rates ",
-        "(ideally <= 0.075); DSR = Deflated Sharpe Ratio (K=3 lookbacks). ",
-        "FF alpha omitted: Fama-French equity factors are not appropriate for ",
-        "the commodity universe."
-      )
+      .fals_vig_cmr_caption_text(fals_cmr_summary, cmr_vs_mom_compare)
     }),
 
     targets::tar_target(fals_vig_cmr_head_to_head, {
@@ -652,27 +637,104 @@ plan_falsification_vignette <- function() {
     }),
 
     targets::tar_target(fals_vig_cmr_head_to_head_caption, {
-      gh_base <- "https://github.com/JohnGavin/historical/blob/main"
-      mr_sharpes  <- fals_cmr_summary$hac_sharpe
-      mom_sharpe  <- round(
-        cmr_vs_mom_compare$sharpe[cmr_vs_mom_compare$type == "momentum"][1],
-        3
-      )
-      best_mr     <- round(max(mr_sharpes, na.rm = TRUE), 3)
-      verdict     <- if (best_mr > mom_sharpe) "outperforms" else "does not outperform"
-      paste0(
-        "Head-to-head: Commodities Mean Reversion (1m/3m/6m lookbacks) vs ",
-        "Commodity Momentum (12-bar baseline, Issue #134). ",
-        "Best MR Sharpe (naive): ", best_mr, "; ",
-        "Momentum baseline Sharpe: ", mom_sharpe, 
-        " (both annualised with 252 bars/year). ",
-        "Mean reversion ", verdict, " momentum in this commodity universe. ",
-        "Source: ",
-        gh_base,
-        "/R/plan_commodities_mean_reversion.R",
-        " | Transaction costs: 0.2% one-way for both strategies."
-      )
+      .fals_vig_cmr_head_to_head_caption_text(cmr_vs_mom_compare)
     })
 
+  )
+}
+
+
+#' Best-MR / momentum figures straight from the head-to-head table (#1058)
+#'
+#' Reads the SAME column the table \code{fals_vig_cmr_head_to_head} shows
+#' (\code{cmr_vs_mom_compare$sharpe}), so a caption built from it cannot
+#' disagree with that table, and the verdict compares two numbers on one
+#' estimator (geometric \code{sharpe_ratio_rf()}, 252 bars/year, for both).
+#'
+#' @param compare \code{cmr_vs_mom_compare}: columns lookback, type, sharpe.
+#' @return List: best_lookback (label without the " (MR)" suffix), best_mr,
+#'   mom, verdict ("outperforms" / "does not outperform").
+#' @noRd
+.fals_vig_cmr_compare_stats <- function(compare) {
+  need <- c("lookback", "type", "sharpe")
+  if (!is.data.frame(compare) || !all(need %in% names(compare))) {
+    cli::cli_abort(c(
+      "x" = "{.arg compare} must be a data frame with columns {.field {need}}.",
+      "i" = "Pass {.code cmr_vs_mom_compare} (#1058)."
+    ))
+  }
+  mr  <- compare[compare$type == "mean_reversion" & !is.na(compare$sharpe), ]
+  mom <- compare$sharpe[compare$type == "momentum"][1]
+  if (nrow(mr) == 0L || is.na(mom)) {
+    cli::cli_abort(c(
+      "x" = "{.arg compare} lacks a non-NA mean-reversion row or momentum row.",
+      "i" = "A verdict needs both Sharpe figures (#1058)."
+    ))
+  }
+  i <- which.max(mr$sharpe)
+  list(
+    best_lookback = sub(" \\(MR\\)$", "", mr$lookback[i]),
+    best_mr       = mr$sharpe[i],
+    mom           = mom,
+    verdict       = if (mr$sharpe[i] > mom) "outperforms" else "does not outperform"
+  )
+}
+
+#' Caption for the CMR falsification scorecard table (#1058)
+#'
+#' The table \code{fals_vig_cmr_table} has a "Naive Sharpe" column
+#' (\code{hac_sharpe}, rounded to 2 dp): the caption quotes that column only,
+#' labelled as the naive HAC-test Sharpe, and gives the head-to-head
+#' figures (geometric Sharpe) from \code{cmr_vs_mom_compare} under their own
+#' label so the two estimators are never mixed in one number.
+#'
+#' @param fals_cmr_summary Tibble with lookback, hac_sharpe.
+#' @param compare \code{cmr_vs_mom_compare}.
+#' @return Single string.
+#' @noRd
+.fals_vig_cmr_caption_text <- function(fals_cmr_summary, compare) {
+  naive_best_lb <- fals_cmr_summary$lookback[which.max(fals_cmr_summary$hac_sharpe)]
+  naive_best    <- round(max(fals_cmr_summary$hac_sharpe, na.rm = TRUE), 2)
+  st <- .fals_vig_cmr_compare_stats(compare)
+  paste0(
+    "Commodities Mean Reversion falsification scorecard (Issue #138). ",
+    "Three lookback windows (1m, 3m, 6m); long-losers / short-winners, ",
+    "0.2% transaction cost, daily observations (ann_factor = 252). ",
+    "Best lookback by the naive (HAC-test input) Sharpe in the table's ",
+    "Naive Sharpe column: ", naive_best_lb, " (", naive_best, "). ",
+    "On the head-to-head table's geometric Sharpe (same estimator for both ",
+    "strategies, 252 bars/year) the best MR lookback is ", st$best_lookback,
+    " (", st$best_mr, ") and the commodity momentum baseline (12-bar lookback) ",
+    "is ", st$mom, " (Issue #134). ",
+    "Columns: HAC t = Newey-West t-statistic; ",
+    "WN/RV/MA1/FN/GARCH/GJR = null-environment rejection rates ",
+    "(ideally <= 0.075); DSR = Deflated Sharpe Ratio (K=3 lookbacks). ",
+    "FF alpha omitted: Fama-French equity factors are not appropriate for ",
+    "the commodity universe."
+  )
+}
+
+#' Caption for the CMR-vs-momentum head-to-head table (#1058)
+#'
+#' Every Sharpe quoted, and the verdict, come from \code{compare}, the data
+#' behind the table \code{fals_vig_cmr_head_to_head}; the estimator is named.
+#'
+#' @param compare \code{cmr_vs_mom_compare}.
+#' @param gh_base Base URL for the source link.
+#' @return Single string.
+#' @noRd
+.fals_vig_cmr_head_to_head_caption_text <- function(
+    compare, gh_base = "https://github.com/JohnGavin/historical/blob/main") {
+  st <- .fals_vig_cmr_compare_stats(compare)
+  paste0(
+    "Head-to-head: Commodities Mean Reversion (1m/3m/6m lookbacks) vs ",
+    "Commodity Momentum (12-bar baseline, Issue #134). ",
+    "Best MR Sharpe (", st$best_lookback, "): ", st$best_mr, "; ",
+    "Momentum baseline Sharpe: ", st$mom,
+    " (both the geometric rf-adjusted Sharpe, sharpe_ratio_rf(), ",
+    "annualised with 252 bars/year, as shown in the table). ",
+    "Mean reversion ", st$verdict, " momentum in this commodity universe. ",
+    "Source: ", gh_base, "/R/plan_commodities_mean_reversion.R",
+    " | Transaction costs: 0.2% one-way for both strategies."
   )
 }

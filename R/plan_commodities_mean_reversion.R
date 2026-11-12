@@ -469,11 +469,16 @@ plan_commodities_mean_reversion <- function() {
     # ── Head-to-head: mean reversion vs momentum (Part C) ─────────────────
     # Joins commodity-momentum metrics (from plan_commodities_momentum.R)
     # with MR metrics. Lightweight: no new data fetch.
-    # Momentum baseline = 12-bar lookback (daily-dominated data, #1048). Sharpe basis:
-    # momentum uses arithmetic (mean - rf)/sd * sqrt(252) (periods_per_year = 252,
-    # #1048 follow-up; it was sqrt(12) on daily bars before), CMR uses the
-    # geometric sharpe_ratio_rf() at ann_factor 252. Both are annualised on 252.
-    # The -0.85 quoted for #134 was on the old sqrt(12) basis and is superseded.
+    # Momentum baseline = 12-bar lookback (daily-dominated data, #1048). Sharpe basis
+    # (#1058): ONE estimator for both strategies, so the outperform/does-not
+    # verdict compares like with like. CMR's Sharpe is the geometric
+    # sharpe_ratio_rf() at ann_factor 252 (cmr_summary$sharpe); the momentum
+    # figure here is recomputed from the baseline backtest's net_ret with the
+    # same estimator and the same rf handling (excess-basis label => rf 0), see
+    # .cmr_momentum_geometric_sharpe(). commodities_perf_summary itself still
+    # carries the arithmetic (mean - rf)/sd * sqrt(252) Sharpe (#1048 follow-up)
+    # and is unchanged; only max_dd is read from it. The -0.85 quoted for #134
+    # was on the old sqrt(12) basis and is superseded.
 
     targets::tar_target(cmr_vs_mom_compare, {
       library(dplyr)
@@ -482,7 +487,10 @@ plan_commodities_mean_reversion <- function() {
         dplyr::filter(strategy == "baseline") |>
         dplyr::transmute(
           lookback     = "12-bar (momentum)",
-          mom_sharpe   = round(sharpe, 3),
+          mom_sharpe   = round(
+            .cmr_momentum_geometric_sharpe(
+              commodities_backtest$net_ret[commodities_backtest$strategy == "baseline"]
+            ), 3),
           mom_mdd      = round(max_dd, 3)
         )
 
@@ -1681,4 +1689,38 @@ CMR_PERIODICITY_MIN_OUT_OF_BAND_ALLOWANCE <- 2L
   }
 
   tibble::tibble(partition = partitions, run_uuid = uuids)
+}
+
+
+#' Momentum Sharpe on CMR's estimator (#1058)
+#'
+#' CMR's Sharpe is the geometric \code{sharpe_ratio_rf()} at
+#' \code{ann_factor} 252 with the rf handling of its registered return basis
+#' (\code{.compute_cmr_metrics()}). The head-to-head verdict in
+#' \code{cmr_vs_mom_compare} must compare momentum on that SAME estimator, so
+#' this mirrors it for the momentum baseline's per-bar net return. The
+#' long-short momentum spread is an excess return (registered basis
+#' \code{"excess"}, #937), so rf is 0 exactly as for CMR; any other basis
+#' aborts rather than silently using the wrong rf.
+#'
+#' @param net_ret Numeric vector of per-bar net returns.
+#' @param ann_factor Bars per year (default 252L, as CMR).
+#' @param basis_strategy Registered return-basis label.
+#' @return Single numeric: the geometric Sharpe.
+#' @noRd
+.cmr_momentum_geometric_sharpe <- function(net_ret, ann_factor = 252L,
+                                           basis_strategy = "Commodity Momentum L/S") {
+  if (!is.numeric(net_ret)) {
+    cli::cli_abort(c("x" = "{.arg net_ret} must be a numeric vector.",
+                     "i" = "Got {.cls {class(net_ret)}}."))
+  }
+  basis <- hd_return_basis_of(basis_strategy)
+  if (!identical(basis, "excess")) {
+    cli::cli_abort(c(
+      "x" = "{.arg basis_strategy} {.val {basis_strategy}} has basis {.val {basis}}, not {.val excess}.",
+      "i" = "This helper has no rf series; supply one before using a non-excess label (#1058)."
+    ))
+  }
+  rf <- hd_rf_for_basis(rep(0, length(net_ret)), basis_strategy)
+  sharpe_ratio_rf(net_ret, rf, periods_per_year = ann_factor)$sharpe
 }
