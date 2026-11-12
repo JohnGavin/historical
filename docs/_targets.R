@@ -143,6 +143,10 @@ source(here::here("R/cov_config.R"))
 
 # Source plans (strategy_names FIRST — may be referenced by any plan)
 source(here::here("R/plan_strategy_names.R"))
+# Keep/Watch/Failed verdict rule + register reader + S51 check (one home for
+# strategy status). Must precede plan_falsification_vignette.R, which uses
+# falsification_verdict() from here.
+source(here::here("R/strategy_verdict.R"))
 # Entity glossary + alias resolution (#668) — MUST precede plan_partitions.R:
 # PERIOD_LABELS_ALLOWED there is derived from load_glossary() at source time.
 source(here::here("R/glossary.R"))
@@ -262,6 +266,7 @@ source(here::here("R/plan_cov_diagnostic_vignette.R"))
 source(here::here("R/plan_weight_stability_vignette.R"))
 # #482 Slice 1: strategy digest (leaderboard deltas + blastula email-to-file)
 source(here::here("R/plan_strategy_digest.R"))
+source(here::here("R/plan_strategy_verdict.R"))
 
 # Combine: strategy_names FIRST, then partitions, strategies, portfolio, ETF replication, leaderboard, QA
 c(plan_strategy_names(),
@@ -291,6 +296,7 @@ c(plan_strategy_names(),
   plan_exposure(),
   plan_cost_convention(),
   plan_leaderboard(), plan_strategy_digest(), plan_qa_vignette(),
+  plan_strategy_verdict(),
   plan_leverage(),
   plan_falsification(),
   plan_falsification_vignette(),

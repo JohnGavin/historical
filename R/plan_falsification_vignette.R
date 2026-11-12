@@ -31,13 +31,12 @@ plan_falsification_vignette <- function() {
 
       summary |>
         dplyr::mutate(
+          # One home for this rule: falsification_verdict() /
+          # STRATEGY_VERDICT_RULE in R/strategy_verdict.R (also feeds the
+          # Keep/Watch/Failed strategy verdict).
           Verdict = factor(
-            dplyr::case_when(
-              ff_alpha_tstat > 2.0 & ff_r_squared < 0.15 ~ "Genuine alpha",
-              ff_alpha_tstat > 1.96 ~ "Borderline",
-              TRUE ~ "No alpha (beta)"
-            ),
-            levels = c("Genuine alpha", "Borderline", "No alpha (beta)"),
+            falsification_verdict(ff_alpha_tstat, ff_r_squared),
+            levels = STRATEGY_VERDICT_RULE$fals_levels,
             ordered = TRUE
           ),
           Strategy = nms$long_name,
@@ -56,11 +55,11 @@ plan_falsification_vignette <- function() {
       nms <- fals_vig_names
       summary <- fals_summary
 
-      alpha_mask <- summary$ff_alpha_tstat > 2.0 & summary$ff_r_squared < 0.15
-      alpha_names <- nms$long_name[alpha_mask]
-      border_mask <- summary$ff_alpha_tstat > 1.96 & !alpha_mask
-      border_names <- nms$long_name[border_mask]
-      beta_names <- nms$long_name[!alpha_mask & !border_mask]
+      fv <- falsification_verdict(summary$ff_alpha_tstat, summary$ff_r_squared)
+      lv <- STRATEGY_VERDICT_RULE$fals_levels
+      alpha_names <- nms$long_name[fv %in% lv[1]]
+      border_names <- nms$long_name[fv %in% lv[2]]
+      beta_names <- nms$long_name[fv %in% lv[3]]
 
       gh <- "https://github.com/JohnGavin/historical/blob/main"
       a_ <- function(text, url) paste0('<a href="', url, '" target="_blank" rel="noopener noreferrer">', text, '</a>')
@@ -68,7 +67,9 @@ plan_falsification_vignette <- function() {
       parts <- c(
         "Strategy falsification scorecard. ",
         paste0(paste(alpha_names, collapse = " and "),
-               " show genuine alpha (Alpha t > 2.0, R² < 15%). "),
+               " show genuine alpha (Alpha t > ",
+               STRATEGY_VERDICT_RULE$fals_genuine_alpha_t_above, ", R² < ",
+               STRATEGY_VERDICT_RULE$fals_genuine_r2_below * 100, "%). "),
         if (length(border_names) > 0) paste0(
           paste(border_names, collapse = " and "), " are borderline. "
         ) else NULL,
