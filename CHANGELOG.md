@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-12 (data sources doc; refs #1055)
+
+- docs: add docs/DATA_SOURCES.md with an Econvitals entry (known, not ingested) (Refs #1055)
+
 ## 2026-11-12 (commodity momentum on the tradeable era; CMR caption/verdict on one Sharpe basis; refs #1057, #1058)
 
 This changes the commodity momentum numbers (baseline Sharpe, backtest dates) and the CMR head-to-head table's momentum row.
