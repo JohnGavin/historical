@@ -145,9 +145,10 @@ plan_commodities_mean_reversion <- function() {
   list(
 
     # ── Tradeable universe (#751 item 1): truncate to the investable era ──
-    # commodities_returns (from plan_commodities_momentum.R) is NOT modified
-    # -- that target is shared with commodity momentum, which is out of
-    # scope for this decision. CMR gets its own truncated copy here. See the
+    # commodities_returns (from plan_commodities_momentum.R) is NOT modified.
+    # The truncated copy built here is ALSO the input of commodity momentum's
+    # commodities_signals / commodities_backtest (#1057), so both strategies
+    # start on the same date. See the
     # file header above and .cmr_truncate_to_tradeable_era()'s roxygen for
     # the full rationale; this target does date filtering ONLY -- it does
     # not remove any series from the universe.
