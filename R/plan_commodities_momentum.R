@@ -10,8 +10,10 @@
 # Question: Is failure universal, or equity-specific?
 #
 # Test plan:
-#   1. Load commodities data (37 series 1992-2026: 24 daily Yahoo, 13 monthly
-#      FRED/IMF; daily-dominated, so every lookback below is in BARS, #1048)
+#   1. Load commodities data (daily Yahoo + monthly FRED/IMF series;
+#      daily-dominated, so every lookback below is in BARS, #1048). Signals and
+#      backtest then use cmr_tradeable_returns, the data truncated to the
+#      tradeable era (monthly-only pre-cutoff era dropped, #1057/#751)
 #   2. Build 4 momentum variants:
 #      a. Baseline 12-bar (control)
 #      b. Short (3-bar) + Long (9-bar) decomposition
@@ -55,8 +57,19 @@ plan_commodities_momentum <- function() {
 
 
     # ── Build momentum signals ───────────────────────────────────────────
+    # #1057: reads cmr_tradeable_returns (plan_commodities_mean_reversion.R,
+    # built by .cmr_truncate_to_tradeable_era(), #751), NOT the untruncated
+    # commodities_returns, so momentum and CMR share one input and one start
+    # date. Before the fix the backtest included the monthly-only era (only
+    # the 13 FRED/IMF indexes exist), which is not investable and was
+    # annualised at 252 bars/year. The cutoff is derived from the data
+    # (earliest non-FRED/IMF date), never a pasted date.
+    # STILL OPEN (#751 finding 3): after the cutoff the 13 monthly indexes
+    # remain in the same cross-section as the daily series, so a "12-bar"
+    # lookback still means months for them and days for the rest. That is
+    # not resolved here (resample vs drop is a decision for #751).
     targets::tar_target(commodities_signals, {
-      build_commodity_signals(commodities_returns, lookback = 12)
+      build_commodity_signals(cmr_tradeable_returns, lookback = 12)
     }),
 
 
@@ -64,7 +77,7 @@ plan_commodities_momentum <- function() {
     targets::tar_target(commodities_backtest, {
       backtest_commodity_momentum(
         signals = commodities_signals,
-        returns = commodities_returns,
+        returns = cmr_tradeable_returns,  # #1057: same tradeable era as CMR
         cost_bps = 20,  # 0.2% per trade (commodities are liquid)
         n_long = 10,
         n_short = 10
@@ -142,6 +155,12 @@ plan_commodities_momentum <- function() {
         ungroup()
 
       # Strategy labels
+      # Span is computed from the data (one home per value), never typed.
+      span_txt <- paste(
+        format(min(cumret_data$date), "%Y"),
+        format(max(cumret_data$date), "%Y"), sep = "-"
+      )
+
       cumret_data <- cumret_data |>
         mutate(strategy_label = case_when(
           strategy == "baseline" ~ "Baseline (12-bar)",
@@ -162,7 +181,8 @@ plan_commodities_momentum <- function() {
           y = "Cumulative Return (log scale)",
           color = "Strategy",
           caption = paste0(
-            "Source: Yahoo futures/ETFs (daily) + FRED/IMF indexes (monthly), 1992-2026; lookbacks in bars\n",
+            "Source: Yahoo futures/ETFs (daily) + FRED/IMF indexes (monthly), tradeable era ",
+            span_txt, " (same input as CMR, #1057); lookbacks in bars\n",
             "Issue #134: Test if momentum decomposition works in commodities after equity failure"
           )
         ) +
