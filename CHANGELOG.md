@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-11-12 (data sources doc; refs #1055)
+
+- docs: add docs/DATA_SOURCES.md with an Econvitals entry (known, not ingested) (Refs #1055)
+
 ## 2026-11-09 (leaderboard costs from measured turnover, subtractive cost; refs #567, #663)
 
 This changes published numbers: every Net CAGR, cumulative P&L and Credible flag on the leaderboard.
