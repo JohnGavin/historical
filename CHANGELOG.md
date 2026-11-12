@@ -1,5 +1,29 @@
 # Changelog
 
+## 2026-11-12 (session summary: costs, commodity fixes, Econvitals review)
+
+### Completed
+- #1052: one cost per strategy on the leaderboard. #1053: commodity labels daily (Sharpe sqrt(252)).
+  #1054: six dashboard pages re-rendered. #1060: momentum on the tradeable era (baseline Sharpe
+  -0.120 -> -0.245) and CMR captions on one Sharpe basis (best MR 0.405 naive -> 0.25 geometric).
+  #1059: docs/DATA_SOURCES.md.
+- Econvitals review: no documented API; about 40 unsupported JSON files; its CC0 replication repo is
+  the stable route (#1055). Policy: figures from primary sources only; the replication repo is a
+  specification and a test source, never an input.
+
+### Failed Approaches
+- `isolation: "worktree"` agent dispatch fails here ("not in a git repository"). Workaround:
+  pre-create the worktree with `cc-worktree.sh` and dispatch without isolation.
+- Scanning a page for private data after stripping its base64 images exposed a second false
+  positive (a private-term entry matching inlined htmlwidgets.js), not a leak. Committing that page
+  is still blocked (llm#1733); `--no-verify` is not an option.
+
+### Known Limitations
+- #1061: momentum still ranks the 13 monthly IMF/FRED indexes after 2000 (apply CMR's #808 rule).
+- CMR and the stock family use hand-typed turnover; the Credible rule `abs(net_cagr) < 0.20` flags
+  strongly negative CAGRs.
+- The #873 Kraken DATA_SOURCES work is stranded on `feat/cc-20260920-192457`.
+
 ## 2026-11-12 (data sources doc; refs #1055)
 
 - docs: add docs/DATA_SOURCES.md with an Econvitals entry (known, not ingested) (Refs #1055)
