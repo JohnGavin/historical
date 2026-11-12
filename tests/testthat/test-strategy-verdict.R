@@ -37,6 +37,15 @@ test_that("Keep needs net CAGR > 0, DSR p < 0.05 and detection powered", {
   expect_identical(vd("a_keep")$verdict, "Keep")
 })
 
+test_that("good returns alone are not Keep: underpowered or unassessed detection is Watch", {
+  under <- compute_strategy_verdict(lb_row("A", 0.05, 0.01, TRUE), names_tbl[1, ])
+  expect_identical(under$verdict, "Watch")
+  expect_match(under$verdict_reason, "detection underpowered", fixed = TRUE)
+  unk <- compute_strategy_verdict(lb_row("A", 0.05, 0.01, NA), names_tbl[1, ])
+  expect_identical(unk$verdict, "Watch")
+  expect_match(unk$verdict_reason, "detection power not assessed", fixed = TRUE)
+})
+
 test_that("Watch names every unmet Keep criterion", {
   expect_identical(vd("b_watch")$verdict, "Watch")
   expect_match(vd("b_watch")$verdict_reason, "net CAGR not > 0", fixed = TRUE)

@@ -118,12 +118,12 @@ STRATEGY_REGISTER_COLS <- c(
   unmet <- character(0)
   if (is.na(net_cagr)) {
     unmet <- c(unmet, "net CAGR missing")
-  } else if (!(net_cagr > rule$keep_net_cagr_above)) {
+  } else if (net_cagr <= rule$keep_net_cagr_above) {
     unmet <- c(unmet, paste0("net CAGR not > ", fmt(rule$keep_net_cagr_above)))
   }
   if (is.na(dsr_p)) {
     unmet <- c(unmet, "DSR p missing")
-  } else if (!(dsr_p < rule$keep_dsr_p_below)) {
+  } else if (dsr_p >= rule$keep_dsr_p_below) {
     unmet <- c(unmet, paste0("DSR p not < ", fmt(rule$keep_dsr_p_below)))
   }
   if (is.na(underpowered)) {
