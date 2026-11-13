@@ -1,5 +1,10 @@
 # Historical Finance Data: Implementation Plan
 
+> **Superseded.** This file records the plan as written in 2026-04/05. The
+> T-language orchestrator and the `python/` companion described below were not
+> adopted as written. The current architecture is described in
+> [`README.md`](README.md). The text below is kept unchanged as history.
+
 ## Architecture Decisions (Settled)
 
 | Decision | Choice | Rationale |

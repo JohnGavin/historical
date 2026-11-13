@@ -1,3 +1,5 @@
+> Point-in-time note, written 2026-06-05; figures may be stale — re-verify against current targets.
+
 # Audit summary — #415 Alpha Architect factor strategies vs our 14
 
 **Date:** 2026-06-04
@@ -80,7 +82,7 @@ long-history trend backtest, and asset-class-vs-factor audit.)
 | `knowledge/raw/alphaarchitect-taxonomy-2026-06-04.md` | Structured taxonomy extract per AA's actual categories |
 | `knowledge/wiki/alphaarchitect-factor-strategies.md` | Wiki digest with Sources + Methodology + AI disclosure |
 | `knowledge/wiki/alphaarchitect-gap-analysis-2026-06-04.md` | GAP/COVERED matrix + 7 issue stubs (DO NOT FILE) |
-| `audits/415-summary.md` | This summary |
+| `docs/notes/415-summary.md` | This summary (moved from `audits/` on 2026-11-12) |
 
 ## Subtasks 5–7 — DEFERRED
 
