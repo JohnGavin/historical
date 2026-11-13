@@ -29,6 +29,30 @@ if (!localStorage.getItem('quarto-color-scheme')) {
   }
 })();
 
+// Quarto's own dark/light toggle swaps the Bootstrap stylesheet and sets
+// body.quarto-light / body.quarto-dark, but never touches data-bs-theme. The
+// default-to-dark line above leaves data-bs-theme="dark" behind, so after a
+// toggle to light the page kept Bootstrap's DARK colour variables (dark body
+// background and pale text under a light header) and every
+// [data-bs-theme="light"] rule in vignette-shared.css stayed inactive. Mirror
+// the body class onto data-bs-theme so the two signals agree.
+document.addEventListener('DOMContentLoaded', function () {
+  function hdSyncThemeFromBody() {
+    var cl = document.body.classList;
+    if (cl.contains('quarto-light')) {
+      document.documentElement.setAttribute('data-bs-theme', 'light');
+    } else if (cl.contains('quarto-dark')) {
+      document.documentElement.setAttribute('data-bs-theme', 'dark');
+    }
+  }
+  hdSyncThemeFromBody();
+  if (window.MutationObserver) {
+    new MutationObserver(hdSyncThemeFromBody).observe(document.body, {
+      attributes: true, attributeFilter: ['class']
+    });
+  }
+});
+
 // Font size +/- controls (historical#0b412a9c). Steps a CSS custom property
 // (see body { font-size: var(--base-font-size) } in vignette-shared.css)
 // rather than rewriting element styles directly, and persists the choice
@@ -116,24 +140,143 @@ document.addEventListener('click', function(e) {
   document.body.appendChild(div);
 });
 
-// Add home link to navbar (left of dark mode toggle)
-document.addEventListener('DOMContentLoaded', function() {
-  var navbar = document.querySelector('.navbar-nav, .navbar-collapse, .navbar');
-  if (navbar && !document.querySelector('.navbar-home-link')) {
-    // Find the right spot — before the light switch or at the start of nav
-    var navContainer = document.querySelector('.navbar-nav');
-    if (navContainer) {
-      var homeItem = document.createElement('li');
-      homeItem.className = 'nav-item navbar-home-link';
-      var homeLink = document.createElement('a');
-      homeLink.className = 'nav-link';
-      homeLink.href = 'index.html';
-      homeLink.title = 'Home';
-      homeLink.textContent = 'Home';
-      homeItem.appendChild(homeLink);
-      navContainer.insertBefore(homeItem, navContainer.firstChild);
-    }
+// Site-wide navigation, in pipeline order:
+//   Data -> Strategies -> Testing -> Verdict -> Failures, then an Appendix of
+// exploratory pages. This array is the ONE home of the site's page list: every
+// page loads this script, so adding or renaming a page is a one-line edit here.
+// The bar is built at runtime (not a Quarto navbar) because the site mixes
+// `format: dashboard` and `format: html` pages and renders them one at a time
+// (scripts/build.sh), so a project-level website navbar is not available.
+// `pages` lists the file names that mark an entry as the current page.
+var HD_SITE_NAV = [
+  { label: 'Overview', href: 'index.html', pages: ['index.html'] },
+  { label: 'Data', href: 'index.html#datasets', hash: '#datasets' },
+  { label: 'Strategies', items: [
+    { label: 'Stock backtests', href: 'stock-backtest.html' },
+    { label: 'Macro defense rotation', href: 'macro-defense-rotation.html' },
+    { label: 'Momentum pre-peak', href: 'momentum-prepeak.html' }
+  ] },
+  { label: 'Testing', items: [
+    { label: 'Falsification', href: 'falsification.html' },
+    { label: 'Evidence', href: 'evidence.html' }
+  ] },
+  { label: 'Verdict', href: 'leaderboard.html' },
+  { label: 'Failures', href: 'failures.html' },
+  { label: 'Appendix', items: [
+    { label: 'European overlay', href: 'european-overlay.html' },
+    { label: 'Avoid worst days', href: 'avoid-worst-days.html' },
+    { label: 'BDBB SOL', href: 'bdbb-sol.html' },
+    { label: 'Quiz: which is real?', href: 'quiz.html' },
+    { label: 'API reference', href: 'api-historicaldata.html' }
+  ] }
+];
+
+(function () {
+  function currentFile() {
+    var p = window.location.pathname.split('/').pop();
+    return p === '' ? 'index.html' : p;
   }
+  function fileOf(href) { return href.split('#')[0]; }
+
+  function isCurrent(entry, file, hash) {
+    if (!entry.href) return false;
+    var onIndex = file === 'index.html';
+    if (entry.hash) return onIndex && hash === entry.hash;
+    if (fileOf(entry.href) === 'index.html') return onIndex && hash !== '#datasets';
+    return fileOf(entry.href) === file;
+  }
+
+  function link(entry, file, hash) {
+    var a = document.createElement('a');
+    a.href = entry.href;
+    a.textContent = entry.label;
+    if (isCurrent(entry, file, hash)) {
+      a.className = 'hd-current';
+      a.setAttribute('aria-current', 'page');
+    }
+    return a;
+  }
+
+  function build() {
+    if (document.querySelector('.hd-sitenav')) return;
+    var file = currentFile();
+    var hash = window.location.hash;
+    var nav = document.createElement('nav');
+    nav.className = 'hd-sitenav';
+    nav.setAttribute('aria-label', 'Site');
+    var brand = document.createElement('span');
+    brand.className = 'hd-sitenav-brand';
+    brand.textContent = 'historicaldata';
+    nav.appendChild(brand);
+    var list = document.createElement('div');
+    list.className = 'hd-sitenav-list';
+    HD_SITE_NAV.forEach(function (entry, i) {
+      if (!entry.items) {
+        var single = link(entry, file, hash);
+        single.classList.add('hd-sitenav-top');
+        list.appendChild(single);
+        return;
+      }
+      var d = document.createElement('details');
+      d.className = 'hd-sitenav-group';
+      var s = document.createElement('summary');
+      s.textContent = entry.label;
+      var active = entry.items.some(function (it) { return isCurrent(it, file, hash); });
+      if (active) { s.className = 'hd-current'; }
+      d.appendChild(s);
+      var menu = document.createElement('div');
+      menu.className = 'hd-sitenav-menu';
+      entry.items.forEach(function (it) { menu.appendChild(link(it, file, hash)); });
+      d.appendChild(menu);
+      list.appendChild(d);
+    });
+    nav.appendChild(list);
+    document.body.insertBefore(nav, document.body.firstChild);
+    // The bar wraps to two rows on a phone; publish its height so fixed
+    // toolbars (#ui-controls) sit below it instead of covering its last row.
+    function setNavHeight() {
+      document.documentElement.style.setProperty('--hd-nav-h', nav.offsetHeight + 'px');
+    }
+    setNavHeight();
+    window.addEventListener('resize', setNavHeight);
+
+    // Only one dropdown open at a time; click elsewhere or Escape closes it.
+    nav.addEventListener('toggle', function (e) {
+      if (!e.target.open) return;
+      nav.querySelectorAll('details[open]').forEach(function (o) {
+        if (o !== e.target) o.open = false;
+      });
+    }, true);
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest('.hd-sitenav-group')) {
+        nav.querySelectorAll('details[open]').forEach(function (o) { o.open = false; });
+      }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        nav.querySelectorAll('details[open]').forEach(function (o) { o.open = false; });
+      }
+    });
+    window.addEventListener('hashchange', function () {
+      nav.querySelectorAll('a.hd-sitenav-top').forEach(function (a) {
+        var entry = HD_SITE_NAV.filter(function (x) { return x.href === a.getAttribute('href'); })[0];
+        var cur = entry && isCurrent(entry, currentFile(), window.location.hash);
+        a.classList.toggle('hd-current', !!cur);
+      });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', build);
+})();
+
+// Arriving at index.html#datasets (from the site nav) must open that dashboard
+// page; the browser alone does not, because inactive pages are hidden tab panes.
+document.addEventListener('DOMContentLoaded', function () {
+  var h = window.location.hash;
+  if (!h || h.length < 2 || typeof bootstrap === 'undefined') return;
+  var navLink = document.querySelector(
+    '.nav-link[data-bs-toggle="tab"][data-bs-target="' + h + '"]'
+  );
+  if (navLink) new bootstrap.Tab(navLink).show();
 });
 
 // Prevent tab clicks from jumping to page top

@@ -309,3 +309,99 @@ details summary { cursor: pointer; color: #6c9bd2; }
 .popover.hd-popover-wide {
   --bs-popover-max-width: min(32rem, 92vw);
 }
+
+/* Site-wide navigation bar, built by vignette-shared.js (HD_SITE_NAV).
+   Colours are custom properties switched by the page's actual theme: Quarto's
+   colour toggle swaps stylesheets and sets body.quarto-light / quarto-dark
+   (vignette-shared.js mirrors that onto data-bs-theme), so the bar follows
+   whichever signal a page uses. Font size is fixed (not em) so the page's
+   A-/A+ controls do not resize the navigation. */
+.hd-sitenav {
+  --hd-bg: #2b2f33; --hd-fg: #e6e6e6; --hd-border: #4a4f55;
+  --hd-hover: #3a3f45; --hd-accent: #6c9bd2;
+  position: sticky; top: 0; z-index: 1040; left: 0;
+  display: flex; align-items: center; flex-wrap: wrap; gap: 0.2rem 1rem;
+  padding: 0.35rem 1rem; font-size: 15px; line-height: 1.3;
+  background: var(--hd-bg); color: var(--hd-fg);
+  border-bottom: 1px solid var(--hd-border);
+}
+[data-bs-theme="light"] .hd-sitenav, body.quarto-light .hd-sitenav {
+  --hd-bg: #f1f3f5; --hd-fg: #1a1a1a; --hd-border: #b8bec4;
+  --hd-hover: #e2e6ea; --hd-accent: #1f5fa6;
+}
+.hd-sitenav a, .hd-sitenav summary {
+  color: inherit; text-decoration: none; cursor: pointer;
+  padding: 0.25rem 0.6rem; border-radius: 4px; display: inline-block;
+  border: 1px solid transparent; list-style: none;
+}
+.hd-sitenav summary::-webkit-details-marker { display: none; }
+.hd-sitenav summary::after { content: " \25BE"; opacity: 0.7; }
+.hd-sitenav a:hover, .hd-sitenav summary:hover,
+.hd-sitenav a:focus-visible, .hd-sitenav summary:focus-visible {
+  border-color: var(--hd-border);
+  background: var(--hd-hover);
+}
+.hd-sitenav .hd-current {
+  font-weight: 700; border-color: var(--hd-accent);
+  background: var(--hd-hover);
+}
+.hd-sitenav-brand { font-weight: 700; opacity: 0.8; }
+.hd-sitenav-list { display: flex; flex-wrap: wrap; align-items: center; gap: 0.15rem; }
+.hd-sitenav-group { position: relative; }
+.hd-sitenav-menu {
+  position: absolute; top: 100%; left: 0; min-width: 15rem; z-index: 1050;
+  display: flex; flex-direction: column; padding: 0.3rem; margin-top: 2px;
+  background: var(--hd-bg);
+  border: 1px solid var(--hd-border); border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+}
+/* Phone width: the menu opens inline inside the wrapping bar instead of
+   floating, so it can never run off the right edge of the screen. */
+@media (max-width: 700px) {
+  .hd-sitenav { padding: 0.3rem 0.5rem; }
+  .hd-sitenav-brand { display: none; }
+  .hd-sitenav-group { position: static; }
+  .hd-sitenav-menu { position: static; box-shadow: none; min-width: 0; margin: 0.2rem 0; }
+}
+/* Pages that carry their own fixed toolbar (A-/A+, theme toggle) keep it
+   below the bar instead of on top of it. */
+body:has(.hd-sitenav) #ui-controls { top: calc(var(--hd-nav-h, 46px) + 6px); }
+/* Plain markdown tables wider than a phone scroll inside themselves rather
+   than stretching the whole page sideways. */
+@media (max-width: 700px) {
+  table.caption-top { display: block; overflow-x: auto; max-width: 100%; }
+}
+/* The page's own #theme-toggle replaces Quarto's native toggle, which would
+   otherwise peek out from behind the toolbar once the toolbar moves down. */
+body:has(#theme-toggle) .quarto-color-scheme-toggle { display: none; }
+
+/* Black navbar strip, opt-in per page via
+   <html data-hd-navbar="black"> (set by a one-line inline script). Was
+   duplicated verbatim in macro-defense-rotation, avoid-worst-days and
+   momentum-prepeak. */
+html[data-hd-navbar="black"] .navbar,
+html[data-hd-navbar="black"] .quarto-dashboard-header,
+html[data-hd-navbar="black"] .navbar-dark,
+html[data-hd-navbar="black"] .bslib-page-dashboard > .navbar {
+  background-color: black !important;
+  color: white !important;
+}
+html[data-hd-navbar="black"] .navbar .navbar-brand,
+html[data-hd-navbar="black"] .navbar .nav-link,
+html[data-hd-navbar="black"] .navbar-text,
+html[data-hd-navbar="black"] .navbar .navbar-nav .nav-link {
+  color: white !important;
+}
+html[data-hd-navbar="black"] .navbar .nav-link.active,
+html[data-hd-navbar="black"] .navbar .nav-link:hover {
+  color: white !important;
+  background-color: black !important;
+  border: 1px solid white !important;
+  border-radius: 4px;
+}
+html[data-hd-navbar="black"] .navbar .nav-link { color: #aaa !important; }
+html[data-hd-navbar="black"] .navbar-nav { flex-wrap: wrap !important; }
+html[data-hd-navbar="black"] .navbar .nav-link {
+  font-size: 0.9em; padding: 0.3em 0.6em !important;
+}
+.hd-sitenav details { margin: 0; }
