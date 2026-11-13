@@ -9,28 +9,12 @@ format:
     embed-resources: false
     css: falsification-theme.css
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
           <script type="module" src="causal-diagrams.js"></script>
           <style>/* All styles in falsification-theme.css */</style>
           <script>
-          if (!localStorage.getItem('quarto-color-scheme')) {
-            document.documentElement.setAttribute('data-bs-theme', 'dark');
-          }
-          document.addEventListener('click', function(e) {
-            var overlay = e.target.closest('.fullscreen-overlay');
-            if (overlay) { overlay.remove(); return; }
-            var img = e.target.closest('.cell-output-display img');
-            if (!img) return;
-            var div = document.createElement('div');
-            div.className = 'fullscreen-overlay';
-            var clone = document.createElement('img');
-            clone.src = img.src;
-            div.appendChild(clone);
-            document.body.appendChild(div);
-          });
           // ── UI Controls: font size + dark/light toggle ──
           document.addEventListener('DOMContentLoaded', function() {
             var toolbar = document.createElement('div');

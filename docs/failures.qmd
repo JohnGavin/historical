@@ -9,15 +9,11 @@ format:
     embed-resources: false
     css: falsification-theme.css
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
           <style>/* All styles in falsification-theme.css */</style>
           <script>
-          if (!localStorage.getItem('quarto-color-scheme')) {
-            document.documentElement.setAttribute('data-bs-theme', 'dark');
-          }
           // ── UI Controls: font size + dark/light toggle ──
           document.addEventListener('DOMContentLoaded', function() {
             var toolbar = document.createElement('div');

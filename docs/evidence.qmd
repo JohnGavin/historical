@@ -15,13 +15,12 @@ format:
       light: cosmo
     code-fold: true
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
       - text: |
           <style>
-          body { font-size: 1.3em; line-height: 1.6; }
+          body { line-height: 1.6; }
           .cell-output-display { margin: 1.5em 0; }
           figure { margin: 2em 0; }
           figcaption { margin-top: 0.5em; }
@@ -45,8 +44,6 @@ format:
           #ui-controls button:hover { opacity: 0.8; }
           </style>
           <script>
-          if (!localStorage.getItem('quarto-color-scheme'))
-            document.documentElement.setAttribute('data-bs-theme', 'dark');
           document.addEventListener('DOMContentLoaded', function() {
             var toolbar = document.createElement('div');
             toolbar.id = 'ui-controls';
