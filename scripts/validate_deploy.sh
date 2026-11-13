@@ -15,7 +15,7 @@ URL_BASE="${1:-https://johngavin.github.io/historical}"
 LOCAL="${LOCAL:-0}"
 
 # Pages to check
-PAGES=(falsification leaderboard quiz negative-results)
+PAGES=(falsification leaderboard failures quiz negative-results)
 
 echo "=== Post-Deploy Validation ==="
 echo "Base: $URL_BASE"

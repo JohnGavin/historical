@@ -10,11 +10,29 @@
 **Current count: 12 standalone dashboards** (11 after the #514 consolidation, plus `failures.qmd`, which replaces three separate failure lists and so adds one page while removing three sections; see the consolidation decision at the end). The causal-DAG is an embedded surface inside
 `falsification.qmd`, not a standalone dashboard.
 
+## Site structure (pipeline order)
+
+The site explains the pipeline as its structure: **Data → Strategies → Costs → Testing → Verdict → Failures**, with exploratory pages in an Appendix. Every page carries the same navigation bar, built at runtime by `docs/vignette-shared.js` from one array (`HD_SITE_NAV`, the only home of the page list; a new page is a one-line edit there). The bar is not a Quarto website navbar, because the site mixes `format: dashboard` and `format: html` pages and `scripts/build.sh` renders them one at a time.
+
+| Nav group | Pages | Pipeline stage it answers |
+|---|---|---|
+| Overview | `index` (pipeline diagram + verdict table) | The whole pipeline in one screen |
+| Data | `index#datasets` | What data the strategies run on (table derived from `hd_datasets()`) |
+| Strategies | `stock-backtest`, `macro-defense-rotation`, `momentum-prepeak` | Each idea, backtested |
+| Testing | `falsification`, `evidence` | Is it alpha, or luck and factor exposure? |
+| Verdict | `leaderboard` | Net-of-cost ranking and each strategy's Keep / Watch / Failed |
+| Failures | `failures` | Why each Failed or Watch strategy is not Keep |
+| Appendix | `european-overlay`, `avoid-worst-days`, `bdbb-sol`, `quiz`, `api-historicaldata` | Exploratory, not part of the verdict |
+
+Costs has no page of its own: net-of-cost columns are on the leaderboard, so the Costs box on the front page links there.
+
+Shared CSS and JS live in `docs/vignette-shared.css` and `docs/vignette-shared.js`. Page headers keep only page-specific rules; the black navbar strip is opt-in via `<html data-hd-navbar="black">`. The color-scheme meta is injected once by `docs/_quarto.yml` for both `html` and `dashboard`, not per page.
+
 ## Inventory
 
 | Dashboard | Objective | Primary visible outputs | Data source |
 |---|---|---|---|
-| `index.qmd` | Portal + dataset catalogue | Headline stat block (tickers/rows/datasets/years/functions); 4 dataset cards; card grid → downstream dashboards | `hd_datasets()`, `hd_tickers()`, `hd_factors()` |
+| `index.qmd` | Front page: pipeline diagram, verdict table, dataset catalogue | Six linked pipeline stages; verdict table (Strategy / Verdict / Why, Keep then Watch then Failed, counts and rule computed); headline stat block (tickers/rows/datasets/years/functions); dataset table derived from the registry; card grid in pipeline order | `strategy_verdict`, `hd_datasets()`, `hd_tickers()`, `hd_factors()` |
 | `leaderboard.qmd` | Rank all strategies by risk-adjusted return; central output | Ranking table: default-visible columns are Strategy/**Verdict** (Keep / Watch / Failed, reason on hover)/Sharpe/**Detection**/Net CAGR/MaxDD/**Rigour**; CAGR/CVaR95/Vol/**Gross (now)**/**Gross (target)**/SSR/Top5%/Credible and the rest sit behind the Columns (colvis) button; with detection-power and rigour-coverage verdicts and vol-normalised leverage-allocator target inline (#726/#728, #626, badges + always-visible summary callout); partition table; equity-curve plotly (range slider); monthly-returns heatmap; bootstrap-CI table; alpha-decay; regime-adjusted Sharpe; Kelly table; structural-breaks dot plot; correlation matrix | `tar_read(leaderboard)`, `strategy_verdict` (Verdict column and caption counts), `strat_deflated_sharpe` (Rigour tooltip only), `leverage_allocator_gross` (Gross (target) badge only), `boot_ci_summary`, `structural_breaks_summary`, `strategy_correlation` |
 | `falsification.qmd` | Test causal integrity / robustness gauntlet (its Failed Strategies section now points to `failures.qmd`) | Scorecard (Verdict/HAC t/Sharpe/Alpha/R²); null-rejection heatmap (6 envs × strats); FF5+Mom alpha scatter; HAC t comparison; multiplicity K_eff table; WFC 2×2; **covariance regularisation table + conditioning/OOS dot plots (#498)**; causal DAG (Mermaid/D3, tabbed); implication tests; risk-architecture table; **Liquidity tab: ADV-cap on/off impact table (#625, discharges the standing `backtest-robustness.md` reporting requirement); dashboard-universe liquidity summary + volume stats, computed against `stk_universe` rather than the ingestion-side `consolidated_equity` (#625 Option A, wired but not yet `tar_make()`-verified)** | `fals_vig_*`, `wfc_all_summary`, `cov_diag_vig_table`, `cg_dag`, `cg_test_implications`, `fals_summary`, `fals_vig_names`, `stk_max_adv_cap_impact`, `equity_daily_liquidity_summary_tbl`, `equity_daily_volume_stats` |
 | `evidence.qmd` | Long-run pervasiveness evidence (its Negative Results tab now points to `failures.qmd`) | JST pervasiveness table (18 countries); equity-premium heatmap; crisis timeline; crisis-frequency table | `jst_equity_premium`, `jst_pervasiveness`, `jst_crises` |
@@ -142,3 +160,16 @@ navigation, and the table is the same shape for every strategy, so it does not f
 the tab structure of either `falsification.qmd` or `evidence.qmd`. Candidate to
 remove if the page proves redundant: the `Failed Strategies` heading in
 `falsification.qmd` (now a one-paragraph pointer).
+
+**Consolidation decision, pipeline-story navigation:** no change to dashboard
+count (12). One site-wide navigation bar (`HD_SITE_NAV` in `vignette-shared.js`)
+replaces the per-page "Home" link and the index "Links" page, which duplicated the
+"Articles" cards. On `index.qmd` the two cards that pointed at the same
+`stock-backtest#factor-level-deep-dive` anchor (Factor MAX, DRIF) became one card,
+`momentum-prepeak`, `bdbb-sol` and `quiz` (previously unlinked) gained cards, and
+the hand-typed dataset counts ("1,022 tickers", "949", "44 MB" and similar) were
+replaced by a table derived from `hd_datasets()` and the parquet files. Inline CSS
+that repeated `vignette-shared.css` was removed from the page headers; the color-scheme
+include was dropped from every page because `docs/_quarto.yml` already injects it.
+Candidate to remove if redundant: the `Pages` card grid on `index.qmd`, now that the
+navigation bar lists the same pages.
