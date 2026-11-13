@@ -1,0 +1,19 @@
+strategy_id,family,reason,decided_on,issue,hypothesis_uuid,revisit_if,notes
+avoid_worst,overlay,"Hindsight return series (worst-N days excluded ex post); the registry itself says NOT a tradeable strategy (R/plan_avoid_worst.R:5). Its leaderboard row was once wired to plain SPY buy-and-hold (#813).",2026-09-01,813,,,
+drif,factor,,,117,,,"Cakici et al. DRIF paper implementation (#117); signal quality differs by partition (#424)."
+fac_max,factor,,,,,,
+rsc,overlay,"Risk State Classification (3-signal VIX overlay, #51): recorded as a negative result, adds no alpha over buy-and-hold; its returns are market beta (CHANGELOG 2026-04-24).",2026-04-24,51,,,"Portfolio exclusion tracked in #52."
+ltr,equity,,,,,,"Cross-sectional momentum; regress-vs-rank research gap #593 open."
+tom,overlay,"Turn-of-the-Month overlay (#271): the falsification framework finds no alpha after factor adjustment (wired by #314).",,271,,,
+stk_max,stock,"Survivorship-biased universe: equity_daily has no delistings (#150); exit prices for S&P 500 members that left before 2016 need a paid source (#1050); point-in-time comparison is report-only (#1041).",,150,,"A point-in-time delisting source is available (#1050).",
+stk_drif,stock,"Survivorship-biased universe (#150, #1050); the research log records stock_drif_after_costs as refuted (2026-10-17).",2026-10-17,150,89243643-440e-4b77-b3f9-a1c560fd89e7,"A point-in-time delisting source is available (#1050).",
+xgb_drif,stock,"Same survivorship-biased stock universe as Stock DRIF (#150, #1050); XGB rank-before-filter fix in #449.",,150,,"A point-in-time delisting source is available (#1050).",
+pso_optimal,combined,,,,,,"Meta-portfolio blending Stock MAX, Stock DRIF, Factor MAX and Factor DRIF (R/plan_portfolio_opt.R); inherits their cost and survivorship status."
+cmr,commodities,,,138,d5fdd0b0-5c14-497a-8f60-8d1079ed169a,,"Commodities mean reversion (#138); daily-series fixes #717, #738, #751. Research log status is inconclusive-underpowered."
+mom_prepeak,momentum,,,365,,,"Pre-peak 12-2 momentum (Busing, Mohrschladt and Siedhoff 2022)."
+mom_postpeak,momentum,"Post-peak component of the 12-2 decomposition (#365); the research log records the equity/commodity momentum decomposition as refuted (2026-10-17, hypothesis 9762a9ec-5016-483a-af9c-5dd744466ee9).",2026-05-31,365,,,
+mom_combined,momentum,"Standard 12-2 baseline of the decomposition (#365); the research log records the equity/commodity momentum decomposition as refuted (2026-10-17, hypothesis 9762a9ec-5016-483a-af9c-5dd744466ee9).",2026-05-31,365,,,
+ev_ebit,value,,,426,,,"EV/EBIT value sleeve, HML proxy v0."
+mf_tsm,trend,,,427,,,"Cross-asset time-series momentum, ETF proxies, v0 (Moskowitz, Ooi and Pedersen 2012)."
+olmar,mean-reversion,,,200,e24952cb-d794-43f0-8b74-0ca99c6f1a33,,"OLMAR-1 (Li and Hoi 2012); latest research-log row (2026-10-18) is inconclusive-underpowered; universe issues #976 (open), #977."
+cmr_conditioned,commodities,,,751,,,"CMR with a regime-conditioning exposure overlay (#751), alongside the base cmr row."

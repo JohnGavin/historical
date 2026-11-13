@@ -14,13 +14,12 @@ format:
       dark: darkly
       light: cosmo
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
+          <script src="vignette-shared.js"></script>
           <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
           <script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.min.js"></script>
           <style>
-          body{font-size:1.3em}
           #quiz-app{max-width:900px;margin:0 auto;padding:20px}
           .quiz-intro h2{color:#6c9bd2;margin-bottom:.5em}
           .quiz-intro ul{font-size:1.05em;line-height:1.8}
@@ -68,9 +67,6 @@ format:
           .result-card .label{font-size:.9em;opacity:.8}
           @media(max-width:600px){.quiz-row{flex-direction:column}.quiz-vs{flex:0 0 30px}.quiz-btn{min-height:250px}}
           </style>
-          <script>
-          if(!localStorage.getItem('quarto-color-scheme'))document.documentElement.setAttribute('data-bs-theme','dark');
-          </script>
     include-after-body:
       - file: quiz-app.html
       - file: quiz-logic.js

@@ -8,79 +8,20 @@ format:
       light: cosmo
     embed-resources: false
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
+          <script>document.documentElement.setAttribute('data-hd-navbar', 'black');</script>
           <style>
-          body { font-size: 1.3em; }
-          .navbar .navbar-title, h1.title { font-size: 1.3em !important; }
-          .nav-link { font-size: 0.95em !important; }
-          .cell-output-display img { min-height: auto; max-height: 500px; object-fit: contain; }
-          .navbar, .quarto-dashboard-header, .navbar-dark,
-          .bslib-page-dashboard > .navbar {
-            background-color: black !important;
-            color: white !important;
-          }
-          .navbar .navbar-brand, .navbar .nav-link, .navbar-text,
-          .navbar .navbar-nav .nav-link {
-            color: white !important;
-          }
-          .navbar .nav-link.active, .navbar .nav-link:hover {
-            color: white !important;
-            background-color: black !important;
-            border: 1px solid white !important;
-            border-radius: 4px;
-          }
-          .navbar .nav-link { color: #aaa !important; }
-          .navbar-nav { flex-wrap: wrap !important; }
-          .navbar .nav-link { font-size: 0.9em; padding: 0.3em 0.6em !important; }
-          .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          /* Page-specific: this page also flattens the bslib grid (the shared
+             sheet deliberately leaves .bslib-grid heights alone). */
           .bslib-grid, .bslib-grid-item {
             height: auto !important; min-height: 0 !important;
             max-height: none !important; overflow: visible !important;
             flex: none !important;
           }
-          .cell-output-display { display: block !important; position: relative !important;
-            overflow: visible !important; margin-bottom: 1em; }
-          .cell-output-display img { display: block; width: 100%; height: auto; min-height: 400px; }
-          .fig-caption { display: block; position: relative; clear: both;
-            margin-top: 0.5em; margin-bottom: 1em; }
-          .datatables, .dataTables_wrapper { display: block !important;
-            position: relative !important; overflow-x: auto !important; margin-bottom: 1em; }
-          table.dataTable { white-space: nowrap; }
-          table caption { caption-side: top !important; }
-          details { margin-bottom: 0.5em; }
-          details summary { cursor: pointer; color: #6c9bd2; }
-          .fullscreen-overlay {
-            position: fixed !important; top: 0 !important; left: 0 !important;
-            width: 100vw !important; height: 100vh !important;
-            z-index: 9999 !important; background: black !important;
-            padding: 10px !important; cursor: zoom-out !important;
-          }
-          .fullscreen-overlay img { width: 100% !important; height: 100% !important;
-            object-fit: contain !important; }
-          .cell-output-display:has(img) { cursor: zoom-in; }
+          .cell-output-display img { min-height: 400px; max-height: 500px; object-fit: contain; }
           </style>
-          <script>
-          if (!localStorage.getItem('quarto-color-scheme')) {
-            document.documentElement.setAttribute('data-bs-theme', 'dark');
-          }
-          document.addEventListener('click', function(e) {
-            // Exit fullscreen: click anywhere on overlay or its img
-            var overlay = e.target.closest('.fullscreen-overlay');
-            if (overlay) { overlay.remove(); return; }
-            var img = e.target.closest('.cell-output-display img');
-            if (!img) return;
-            var div = document.createElement('div');
-            div.className = 'fullscreen-overlay';
-            var clone = document.createElement('img');
-            clone.src = img.src;
-            div.appendChild(clone);
-            document.body.appendChild(div);
-          });
-          </script>
 execute:
   echo: false
   warning: false

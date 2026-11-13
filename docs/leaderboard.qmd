@@ -8,7 +8,6 @@ format:
       light: cosmo
     embed-resources: false
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
@@ -73,6 +72,12 @@ source(col_popover_path)
 lb_caption_path <- if (file.exists("../R/leaderboard_caption.R")) "../R/leaderboard_caption.R" else
   file.path(here::here(), "R/leaderboard_caption.R")
 source(lb_caption_path)
+
+# Keep/Watch/Failed verdict: the counts and rule text in the caption come from
+# the same file that computes the verdict (never typed here).
+sv_path <- if (file.exists("../R/strategy_verdict.R")) "../R/strategy_verdict.R" else
+  file.path(here::here(), "R/strategy_verdict.R")
+source(sv_path)
 
 partitions_path <- if (file.exists("../R/plan_partitions.R")) "../R/plan_partitions.R" else
   file.path(here::here(), "R/plan_partitions.R")
@@ -201,6 +206,22 @@ if (!is.null(lb)) {
     if (!.col %in% names(full)) full[[.col]] <- NA
   }
   rm(.col)
+
+  # Keep / Watch / Failed verdict (R/strategy_verdict.R, target
+  # `strategy_verdict`), joined by display name; the hover shows the reason.
+  # NA when the target is unavailable, rendered "not computed", never a guess.
+  sv <- safe_tar_read("strategy_verdict")
+  if (!is.null(sv)) {
+    full <- full |> left_join(
+      sv |> select(strategy = short_name, verdict, verdict_reason),
+      by = "strategy"
+    )
+  }
+  for (.col in c("verdict", "verdict_reason")) {
+    if (!.col %in% names(full)) full[[.col]] <- NA_character_
+  }
+  rm(.col)
+  verdict_glyph <- c(Keep = "&#10003; ", Watch = "&#9684; ", Failed = "&#10007; ")
 
   detection_badge <- function(sr, under, dmin, under_mt, dmin_mt) {
     # 5-state verdict, symbol AND text on every state (never colour alone,
@@ -452,6 +473,17 @@ if (!is.null(lb)) {
       # sharpe is mapped to -Inf so an unranked strategy sorts to the
       # bottom on the default descending sort this table opens with.
       .sharpe_rank = ifelse(is.na(sharpe), -Inf, sharpe),
+      # Verdict: symbol AND text (never colour alone); the reason is the hover.
+      # Hidden rank column sorts Keep, Watch, Failed, then not computed.
+      Verdict = ifelse(
+        is.na(verdict), "not computed",
+        sprintf("<span class='verdict-badge %s' title='%s'>%s%s</span>",
+                tolower(verdict),
+                htmltools::htmlEscape(verdict_reason, attribute = TRUE),
+                unname(verdict_glyph[verdict]), verdict)
+      ),
+      .verdict_rank = ifelse(is.na(verdict), length(STRATEGY_VERDICT_LEVELS) + 1L,
+                             match(verdict, STRATEGY_VERDICT_LEVELS)),
       Detection  = vapply(det, function(x) x$html, character(1)),
       .det_rank  = vapply(det, function(x) x$rank, integer(1)),
       Rigour     = vapply(rig, function(x) x$html, character(1)),
@@ -585,9 +617,15 @@ if (!is.null(lb)) {
     # cost-plausibility and correlation-redundancy respectively. CAGR sits
     # immediately left of Net CAGR (gross, then net of cost) per item B of
     # the presentation-fix pass this column set belongs to.
-    select(Strategy = strategy, Credible, .credible_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
-           CAGR, `Net CAGR`, `Turnover basis`, `Max DD`, `CVaR 95%`, Vol, `Gross (now)`, `Gross (target)`, .grosstgt_rank,
-           `Cost (bps)`, SSR, Rigour, .rig_rank,
+    #
+    # Column order: the default-visible set comes first (Strategy, Verdict,
+    # Sharpe, Detection, Net CAGR, Max DD, Rigour); every other column stays in
+    # the table, hidden by default, and is toggled with the "Columns" button.
+    select(Strategy = strategy, Verdict, .verdict_rank, Sharpe, .sharpe_rank, Detection, .det_rank,
+           `Net CAGR`, `Max DD`, Rigour, .rig_rank,
+           Credible, .credible_rank,
+           CAGR, `Turnover basis`, `CVaR 95%`, Vol, `Gross (now)`, `Gross (target)`, .grosstgt_rank,
+           `Cost (bps)`, SSR,
            `Top5% Share`, Redundant, .redundant_rank, `Incremental Sharpe`,
            `Breach Risk (±20% DD)`)
 
@@ -609,7 +647,11 @@ if (!is.null(lb)) {
 
   lb_caption <- hd_leaderboard_caption(
     full, gh_base = gh_base, git_sha = git_sha, kraw = kraw, keff = keff,
-    has_sharpe_ci = has_sharpe_ci, n_ci_crosses_zero = n_ci_crosses_zero
+    has_sharpe_ci = has_sharpe_ci, n_ci_crosses_zero = n_ci_crosses_zero,
+    # Verdict counts and rule text derive from `strategy_verdict` / the rule
+    # list; NULL (no verdict line) when the target is unavailable.
+    verdict_text = if (!is.null(sv)) strategy_verdict_counts_text(sv$verdict) else NULL,
+    verdict_rule_text = if (!is.null(sv)) strategy_verdict_rule_text() else NULL
   )
   short_caption <- lb_caption$short
   full_notes <- lb_caption$details
@@ -642,11 +684,23 @@ if (!is.null(lb)) {
   sharpe_rank_col <- which(names(metrics_table) == ".sharpe_rank") - 1L
   grosstgt_col      <- which(names(metrics_table) == "Gross (target)") - 1L
   grosstgt_rank_col <- which(names(metrics_table) == ".grosstgt_rank") - 1L
+  verdict_rank_col <- which(names(metrics_table) == ".verdict_rank") - 1L
+  verdict_col      <- which(names(metrics_table) == "Verdict") - 1L
   numeric_cols <- which(sapply(metrics_table, function(x) is.numeric(x) ||
                                   grepl("^[0-9.%$,-]+$", as.character(x[1]))))
 
+  # Default-visible columns; everything else is hidden but NOT removed: the
+  # "Columns" (colvis) button toggles any of them back on. The dot-prefixed
+  # helper columns are sort keys only and are excluded from the button
+  # (className noVis).
+  core_cols <- c("Strategy", "Verdict", "Sharpe", "Detection", "Net CAGR", "Max DD", "Rigour")
+  is_helper <- startsWith(names(metrics_table), ".")
+  hidden_by_default <- which(!(names(metrics_table) %in% core_cols) & !is_helper) - 1L
+  helper_cols <- which(is_helper) - 1L
+
   DT::datatable(
     metrics_table,
+    extensions = "Buttons",
     # full_caption is already a complete htmltools::tags$caption() object
     # (built by hd_caption() above) -- do NOT re-wrap it in another
     # tags$caption() here. <caption> has no descendant table elements
@@ -660,11 +714,16 @@ if (!is.null(lb)) {
       pageLength = 15,
       scrollX = TRUE,
       autoWidth = FALSE,
-      dom = "frtip",
+      dom = "Bfrtip",
+      buttons = list(list(extend = "colvis", text = "Columns",
+                          columns = ":not(.noVis)")),
       search = list(regex = TRUE, caseInsensitive = TRUE),
       columnDefs = list(
         list(className = 'dt-right', targets = numeric_cols - 1),
-        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col, sharpe_rank_col, grosstgt_rank_col)),
+        list(visible = FALSE, targets = c(cred_rank_col, red_rank_col, det_rank_col, rig_rank_col, sharpe_rank_col, grosstgt_rank_col, verdict_rank_col)),
+        list(className = 'noVis', targets = helper_cols),
+        list(visible = FALSE, targets = hidden_by_default),
+        list(orderData = verdict_rank_col, targets = verdict_col),
         list(orderData = cred_rank_col, targets = credible_col),
         list(orderData = red_rank_col, targets = redundant_col),
         list(orderData = det_rank_col, targets = det_col),
@@ -696,6 +755,10 @@ if (!is.null(lb)) {
 .det-badge.underpowered { color: #9a5b00; }
 .det-badge.napp         { color: #6c757d; font-style: italic; font-weight: 400; }
 .det-badge.notcomputed  { color: #fff; background: #c0392b; }
+.verdict-badge { font-weight: 700; padding: 1px 6px; border-radius: 3px; white-space: nowrap; }
+.verdict-badge.keep   { color: #1a7f37; }
+.verdict-badge.watch  { color: #9a5b00; }
+.verdict-badge.failed { color: #fff; background: #c0392b; }
 .rig-badge.computed     { color: #1a7f37; }
 .rig-badge.partial      { color: #9a5b00; }
 .rig-badge.excluded     { color: #6c757d; font-style: italic; font-weight: 400; }
@@ -719,6 +782,8 @@ if (!is.null(lb)) {
 [data-bs-theme="dark"] .det-badge.mtfail,       body.dark-mode .det-badge.mtfail       { color: #c084fc; }
 [data-bs-theme="dark"] .det-badge.underpowered, body.dark-mode .det-badge.underpowered { color: #fbbf24; }
 [data-bs-theme="dark"] .det-badge.napp,         body.dark-mode .det-badge.napp         { color: #9ca3af; }
+[data-bs-theme="dark"] .verdict-badge.keep,     body.dark-mode .verdict-badge.keep     { color: #4ade80; }
+[data-bs-theme="dark"] .verdict-badge.watch,    body.dark-mode .verdict-badge.watch    { color: #fbbf24; }
 [data-bs-theme="dark"] .rig-badge.computed,     body.dark-mode .rig-badge.computed     { color: #4ade80; }
 [data-bs-theme="dark"] .rig-badge.partial,      body.dark-mode .rig-badge.partial      { color: #fbbf24; }
 [data-bs-theme="dark"] .rig-badge.excluded,     body.dark-mode .rig-badge.excluded     { color: #9ca3af; }
@@ -731,6 +796,8 @@ if (!is.null(lb)) {
   .det-badge.detectable   { color: #4ade80; }
   .det-badge.mtfail       { color: #c084fc; }
   .det-badge.underpowered { color: #fbbf24; }
+  .verdict-badge.keep     { color: #4ade80; }
+  .verdict-badge.watch    { color: #fbbf24; }
   .rig-badge.computed     { color: #4ade80; }
   .rig-badge.partial      { color: #fbbf24; }
   .fp-badge                { color: #9ca3af; }
@@ -1242,67 +1309,7 @@ if (!is.null(w)) {
 
 # Falsification
 
-## Row
-
-### {.tabset}
-
-#### Scorecard
-
-The falsification framework tests 5 strategies against multiple statistical hurdles: <abbr title="Newey-West heteroskedasticity-autocorrelation consistent estimator">HAC</abbr>-corrected t-statistics, 6 null environment rejection rates, and <abbr title="Fama-French 5-Factor model (MktRF, SMB, HML, RMW, CMA)">FF5</abbr> + Momentum alpha regression. Strategies that pass all tests show genuine alpha; those that fail are explained by known factor exposure (beta). Note: this covers 5 strategies from the falsification pipeline — partially overlapping with the leaderboard strategies above.
-
-```{r}
-#| label: fals-scorecard
-fals_sc <- safe_tar_read("fals_vig_scorecard")
-fals_sc_cap <- safe_tar_read("fals_vig_scorecard_caption")
-if (!is.null(fals_sc)) {
-  cap_text <- if (!is.null(fals_sc_cap)) fals_sc_cap else "Strategy falsification scorecard"
-  hd_dt(fals_sc, cap_text)
-}
-```
-
-#### Null Rejection
-
-Rejection rates across 6 null environments (M = 100 simulations each). A low rate means the strategy's performance is easily replicated under the null — no genuine signal. A high rate means the null cannot explain the observed returns.
-
-```{r}
-#| label: fals-heatmap
-#| fig-height: 5
-#| fig-width: 10
-safe_tar_read("fals_vig_null_heatmap")
-```
-
-::: {.fig-caption}
-```{r}
-#| label: fals-heatmap-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_null_heatmap_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
-:::
-
-#### Alpha vs Factor Exposure
-
-Scatter plot of annualised alpha (%) against R² (%) from the Fama-French 5-Factor + Momentum regression. Genuine alpha strategies cluster in the top-left (low factor exposure, positive alpha). Beta strategies cluster on the right (high R²).
-
-```{r}
-#| label: fals-alpha-plot
-#| fig-height: 5
-#| fig-width: 10
-safe_tar_read("fals_vig_ff_alpha_plot")
-```
-
-::: {.fig-caption}
-```{r}
-#| label: fals-alpha-caption
-#| results: asis
-cap <- safe_tar_read("fals_vig_ff_caption")
-if (!is.null(cap)) cat(paste0("\n*", cap, "*\n"))
-```
-:::
-
-#### See Also
-
-For detailed methodology, HAC analysis, factor regression betas, multiplicity correction (<abbr title="Effective number of independent strategies (spectral participation ratio)">K_eff</abbr>, delta-Z), and the full null environment heatmap, see the [Strategy Falsification dashboard](falsification.html).
+The falsification scorecard, null-rejection heatmap and alpha-versus-factor-exposure plot live on one page only: [Strategy Falsification](falsification.html). Its alpha verdict is one input to the **Verdict** column in the Full Period table above, and every failed or watch-listed strategy is recorded on [Failed and Watch Strategies](failures.html).
 
 # Performance
 

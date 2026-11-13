@@ -9,7 +9,7 @@ set -euo pipefail
 
 URL_BASE="${1:-https://johngavin.github.io/historical}"
 LOCAL="${LOCAL:-0}"
-PAGES=(falsification leaderboard quiz negative-results)
+PAGES=(falsification leaderboard failures quiz negative-results)
 
 echo "=== MANDATORY QA: Deployed URL Check ==="
 echo "Base: $URL_BASE"

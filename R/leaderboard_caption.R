@@ -66,10 +66,15 @@
 #' @param kraw,keff Raw / effective number of strategies tested (may be NA).
 #' @param has_sharpe_ci Logical: is the Sharpe CI column present.
 #' @param n_ci_crosses_zero Count of strategies whose Sharpe CI spans zero.
+#' @param verdict_text Optional one-line verdict summary (counts, rule); shown
+#'   as the first visible bullet. Built by `strategy_verdict_counts_text()`.
+#' @param verdict_rule_text Optional statement of the verdict rule, shown as the
+#'   first detail bullet. Built by `strategy_verdict_rule_text()`.
 #' @return list(short = <ul>, details = <ul>) of htmltools tags.
 #' @noRd
 hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
-                                   has_sharpe_ci, n_ci_crosses_zero) {
+                                   has_sharpe_ci, n_ci_crosses_zero,
+                                   verdict_text = NULL, verdict_rule_text = NULL) {
   N <- nrow(full)
   code_url <- function(path, anchor = "") sprintf("%s/blob/%s/%s%s", gh_base, git_sha, path, anchor)
   code_link <- function(label, path, anchor = "") {
@@ -124,7 +129,10 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
 
   # ---- visible part: <= 3 one-line bullets ---------------------------------
   short <- htmltools::tags$ul(
-    htmltools::tags$li("Strategies ranked by Sharpe, highest first; CAGR is gross, Net CAGR is net of cost."),
+    htmltools::tags$li(
+      if (!is.null(verdict_text)) paste0(verdict_text, " "),
+      "Strategies ranked by Sharpe, highest first; CAGR is gross, Net CAGR is net of cost."
+    ),
     htmltools::tags$li("Gross exposure and cost differ by row, so Vol, Net CAGR and Max DD are not comparable; Sharpe is leverage-invariant."),
     htmltools::tags$li("“not computed” means never assessed, not a pass.")
   )
@@ -133,6 +141,18 @@ hd_leaderboard_caption <- function(full, gh_base, git_sha, kraw, keff,
   lb <- code_link("plan_leaderboard.R", "R/plan_leaderboard.R")
   qa <- code_link("plan_qa_gates.R", "R/plan_qa_gates.R")
   li <- list()
+
+  if (!is.null(verdict_rule_text)) {
+    li$verdict <- .lc_li(
+      "Verdict", "Keep, Watch or Failed, derived for every strategy by one rule.",
+      .lc_html(
+        .lc_p(verdict_rule_text),
+        .lc_p("Hover a verdict for the reason it was given. Every Failed and Watch strategy is on the Failed and Watch Strategies page.")
+      ),
+      code_link("strategy_verdict.R", "R/strategy_verdict.R"),
+      .lc_a("Failed and Watch Strategies", "failures.html")
+    )
+  }
 
   li$cagr <- .lc_li(
     "CAGR / Net CAGR", "gross vs cost-adjusted compound annual growth.",
