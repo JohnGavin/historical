@@ -9,16 +9,12 @@ format:
     nav-buttons: [github]
     embed-resources: false
     include-in-header:
-      - _includes/color-scheme-meta.html
       - text: |
           <link rel="stylesheet" href="vignette-shared.css">
           <script src="vignette-shared.js"></script>
-      - text: |
           <style>
-          body { font-size: 1.2em; }
-          /* Kill dashboard fill layout */
-          .bslib-page-fill, .html-fill-container, .html-fill-item,
-          .bslib-card, .card, .tab-pane, .tab-content, .card-body,
+          /* Page-specific rules only; layout, titles and fill-killing are in
+             vignette-shared.css. This page also flattens the bslib grid. */
           .bslib-grid, .bslib-grid-item {
             height: auto !important; min-height: 0 !important;
             max-height: none !important; overflow: visible !important;
@@ -32,6 +28,7 @@ format:
           .info-card:hover { border-color: #6B8DAE; text-decoration: none; color: inherit; }
           .info-card h4 { margin: 0 0 0.4em; }
           .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
+          .card-group-title { margin: 1.2em 0 0.2em; font-size: 1.1em; opacity: 0.85; }
           .stats-row { display: flex !important; flex-direction: row !important;
                        flex-wrap: nowrap !important;
                        justify-content: space-evenly !important; align-items: center !important;
@@ -44,20 +41,40 @@ format:
           .badge-blue { background: #1a3a5c; color: #6B8DAE; }
           .badge-green { background: #1a3c1a; color: #7A9E7E; }
           .badge-gold { background: #3c3520; color: #C4A35A; }
-          /* Smaller page titles */
-          .navbar .navbar-title, h1.title { font-size: 1.4em !important; }
-          .nav-link { font-size: 0.95em !important; }
+          /* Pipeline diagram: six linked stages, left to right on a wide screen,
+             stacked on a phone. Colours come from Bootstrap theme variables. */
+          .pipeline { display: flex; flex-wrap: nowrap; gap: 0.9em; margin: 0.6em 0 1.2em;
+                      padding: 0; list-style: none; width: 100%; }
+          .pipeline li { flex: 1 1 0; position: relative; min-width: 0; }
+          .pipeline li:not(:last-child)::after {
+            content: "\2192"; position: absolute; right: -0.85em; top: 50%;
+            transform: translateY(-50%); opacity: 0.7; font-size: 1.1em; }
+          .pipeline a { display: block; height: 100%; padding: 0.7em 0.8em;
+                        border: 1px solid var(--bs-border-color, #444); border-radius: 8px;
+                        background: var(--bs-card-bg, var(--bs-tertiary-bg, #1a1a1a));
+                        color: inherit; text-decoration: none; }
+          .pipeline a:hover, .pipeline a:focus-visible { border-color: #6B8DAE; }
+          .pipeline .stage { display: block; font-weight: 700; margin-bottom: 0.2em; }
+          .pipeline .what { display: block; font-size: 0.8em; opacity: 0.8; line-height: 1.3; }
+          .vd { display: inline-block; padding: 0 0.55em; border-radius: 4px; font-weight: 700;
+                border: 1px solid currentColor; white-space: nowrap; }
+          .vd-keep { color: #5cd68a; } .vd-watch { color: #f0b43c; } .vd-failed { color: #ff7b72; }
+          [data-bs-theme="light"] .vd-keep { color: #1b7a43; }
+          [data-bs-theme="light"] .vd-watch { color: #8a5a00; }
+          [data-bs-theme="light"] .vd-failed { color: #b42318; }
+          @media (max-width: 800px) {
+            .pipeline { flex-direction: column; }
+            .pipeline li:not(:last-child)::after { content: "\2193"; right: auto; left: 50%;
+                         top: auto; bottom: -0.95em; transform: translateX(-50%); }
+          }
+          /* Wide DT tables (verdict, datasets) scroll sideways inside their card
+             instead of being clipped by it on a phone. */
+          .datatables, .dataTables_wrapper { overflow-x: auto !important; max-width: 100%; }
           @media (max-width: 600px) {
             .card-grid { grid-template-columns: 1fr !important; }
             .stats-row { flex-wrap: wrap !important; gap: 1em !important; }
           }
           </style>
-          <script>
-          // Default to dark mode
-          if (!localStorage.getItem('quarto-color-scheme')) {
-            document.documentElement.setAttribute('data-bs-theme', 'dark');
-          }
-          </script>
 execute:
   echo: false
 ---
@@ -139,6 +156,34 @@ local({
     sum(grepl("^kind: function", lines))
   }, error = function(e) NA_integer_)
 
+  # Dataset registry table (rendered in the Datasets page): one row per entry of
+  # hd_datasets(); coverage (distinct tickers / series / factors and first year)
+  # is read from the parquet files. "—" means the query failed, not zero.
+  ds_all <- tryCatch(hd_datasets(), error = function(e) NULL)
+  dataset_rows <- NULL
+  if (!is.null(ds_all)) {
+    dataset_rows <- do.call(rbind, lapply(names(ds_all), function(nm) {
+      ds <- ds_all[[nm]]
+      key <- intersect(c("ticker", "series_id", "factor_name"), ds$schema)[1]
+      coverage <- tryCatch({
+        if (is.na(ds$url) || is.na(key) || !"date" %in% ds$schema ||
+            !grepl("hf://", ds$url, fixed = TRUE)) stop("no coverage query")
+        r <- duckplyr::read_parquet_duckdb(ds$url) |>
+          dplyr::summarise(n = dplyr::n_distinct(!!rlang::sym(key)),
+                           first = min(date, na.rm = TRUE)) |>
+          dplyr::collect()
+        unit <- c(ticker = "tickers", series_id = "series", factor_name = "factors")[[key]]
+        paste0(format(r$n[[1]], big.mark = ","), " ", unit, ", from ",
+               substr(as.character(r$first[[1]]), 1L, 4L))
+      }, error = function(e) "\u2014")
+      what <- sub("\\. .*$", "", ds$description)
+      if (isTRUE(ds$survivorship_biased)) what <- paste0(what, " (survivorship-biased)")
+      data.frame(dataset = nm, frequency = ds$frequency, coverage = coverage,
+                 what = what, stringsAsFactors = FALSE)
+    }))
+  }
+  assign("dataset_rows", dataset_rows, envir = parent.env(environment()))
+
   # Format helpers
   fmt_tickers   <- if (is.na(n_tickers))   "—" else format(n_tickers, big.mark = ",")
   fmt_rows      <- if (is.na(n_rows))      "—" else paste0(round(n_rows / 1e6, 1), "M")
@@ -154,6 +199,95 @@ local({
   assign("stat_functions", fmt_functions, envir = parent.env(environment()))
 })
 ```
+
+```{r}
+#| label: verdict-setup
+#| include: false
+# The verdict table reads the one home of strategy status (the strategy_verdict
+# target, rule in R/strategy_verdict.R), the same way leaderboard.qmd and
+# failures.qmd read their targets: path-checked store, cwd is docs/ under
+# quarto render and the project root under tar_make.
+library(targets)
+store_path <- if (dir.exists("_targets")) "_targets" else
+  file.path(here::here(), "docs/_targets")
+tar_config_set(store = store_path)
+
+utils_path <- if (file.exists("vignette_utils.R")) "vignette_utils.R" else
+  file.path(here::here(), "docs/vignette_utils.R")
+source(utils_path)
+
+sv_path <- if (file.exists("../R/strategy_verdict.R")) "../R/strategy_verdict.R" else
+  file.path(here::here(), "R/strategy_verdict.R")
+source(sv_path)
+
+strategy_verdict_tbl <- safe_tar_read("strategy_verdict")
+
+# Emit hand-built HTML as a raw block so pandoc does not re-parse our <table>
+# into a native Table (Quarto's dashboard filter cannot traverse its body).
+raw_html <- function(...) {
+  cat("```{=html}\n", paste(c(...), collapse = "\n"), "\n```\n", sep = "")
+}
+```
+
+# Overview
+
+## Row
+
+Every strategy on this site goes through the same pipeline. Each stage links to its page.
+
+```{r}
+#| label: pipeline-diagram
+#| output: asis
+stages <- list(
+  list("Data", "index.html#datasets", "Prices, macro and factor series from public sources."),
+  list("Strategies", "stock-backtest.html", "Each idea is backtested on that data."),
+  list("Costs", "leaderboard.html", "Returns are taken net of trading costs and turnover."),
+  list("Testing", "falsification.html", "Is it alpha, or luck and factor exposure?"),
+  list("Verdict", "leaderboard.html", "One rule sorts each strategy into Keep, Watch or Failed."),
+  list("Failures", "failures.html", "Why each Failed or Watch strategy is not Keep.")
+)
+items <- vapply(seq_along(stages), function(i) {
+  s <- stages[[i]]
+  sprintf('<li><a href="%s"><span class="stage">%d. %s</span><span class="what">%s</span></a></li>',
+          s[[2]], i, s[[1]], s[[3]])
+}, character(1))
+raw_html("<ol class=\"pipeline\">", items, "</ol>")
+```
+
+## Row
+
+```{r}
+#| label: verdict-table
+sv <- strategy_verdict_tbl
+if (is.null(sv) || nrow(sv) == 0L) {
+  cat("*`strategy_verdict` target not available. Run `tar_make()`.*\n")
+} else {
+  esc <- function(x) ifelse(is.na(x), "", htmltools::htmlEscape(x))
+  # Keep first, then Watch, then Failed (the order of STRATEGY_VERDICT_LEVELS).
+  sv <- sv[order(match(sv$verdict, STRATEGY_VERDICT_LEVELS), sv$short_name), ]
+  tbl <- tibble::tibble(
+    Strategy = esc(sv$short_name),
+    Verdict = sprintf('<span class="vd vd-%s">%s</span>', tolower(sv$verdict), esc(sv$verdict)),
+    Why = esc(sv$verdict_reason)
+  )
+  DT::datatable(
+    tbl,
+    caption = hd_caption(strategy_verdict_counts_text(sv$verdict)),
+    escape = FALSE, rownames = FALSE,
+    options = list(dom = "t", paging = FALSE, ordering = FALSE, autoWidth = FALSE)
+  )
+}
+```
+
+## Row
+
+```{r}
+#| label: verdict-rule
+#| output: asis
+cat("**Rule.** ", strategy_verdict_rule_text(), "\n\n", sep = "")
+```
+
+Ranked results, equity curves and costs are on the [leaderboard](leaderboard.html). The test each Watch and Failed strategy did not pass, with the written reason, is on the [failures page](failures.html).
 
 # Datasets
 
@@ -175,114 +309,103 @@ Historical finance database for backtesting: equities, crypto, macro, and factor
 
 ## Row
 
-<details open>
-<summary><strong>Equity</strong> — 1,022 tickers · daily OHLCV from 1980 · 44 MB Parquet</summary>
-<ul>
-<li><strong>US equities</strong> (51 tickers) — large-cap S&P 500 sample from Yahoo Finance · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L31" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[["equity_daily"]]</code></a></li>
-<li><strong>LSE ETFs</strong> (949 tickers) — UK-listed UCITS ETFs from iShares, Vanguard, SPDR · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L31" target="_blank" rel="noopener noreferrer"><code>equity_daily</code></a></li>
-<li><strong>Macro ETFs</strong> (13 tickers) — TLT, GLD, DBC, UUP and extended macro hedge universe · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L55" target="_blank" rel="noopener noreferrer"><code>hd_group("Macro Hedge ETFs")</code></a></li>
-<li><strong>Factor ETFs</strong> (9 tickers) — US index ETFs (SPY, QQQ, IWM, DIA) plus sector ETFs · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L38" target="_blank" rel="noopener noreferrer"><code>hd_group("US Index ETFs")</code></a></li>
-</ul>
-</details>
+```{r}
+#| label: dataset-table
+if (is.null(dataset_rows) || nrow(dataset_rows) == 0L) {
+  cat("*Dataset registry not available at render time.*\n")
+} else {
+  tbl <- tibble::tibble(
+    Dataset = dataset_rows$dataset,
+    Frequency = dataset_rows$frequency,
+    Coverage = dataset_rows$coverage,
+    `What it holds` = dataset_rows$what
+  )
+  DT::datatable(
+    tbl,
+    caption = hd_caption("Datasets in the registry. Every figure is read from hd_datasets() and the parquet files at render time."),
+    rownames = FALSE,
+    options = list(dom = "t", paging = FALSE, ordering = FALSE, autoWidth = FALSE)
+  )
+}
+```
 
-<details>
-<summary><strong>Crypto</strong> — 14 tokens · daily OHLCV from 2014 · 1.1 MB Parquet</summary>
-<ul>
-<li><strong>Major crypto</strong> (4 tokens) — BTC, ETH, SOL, BNB · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L47" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[["crypto_daily"]]</code></a></li>
-<li><strong>Stablecoins</strong> (2 tokens) — USDC, USDT · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L45" target="_blank" rel="noopener noreferrer"><code>hd_group("Stablecoins")</code></a></li>
-<li><strong>Solana DeFi</strong> (5 tokens) — SOL, RAY, HNT, BONK, PYTH · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L48" target="_blank" rel="noopener noreferrer"><code>hd_group("Solana DeFi")</code></a></li>
-<li><strong>DeFi altcoins</strong> (3 tokens) — XRP, ADA, DOGE, DOT · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L50" target="_blank" rel="noopener noreferrer"><code>hd_group("DeFi Altcoins")</code></a></li>
-</ul>
-</details>
-
-<details>
-<summary><strong>Macro</strong> — 19 FRED series · mixed frequency · from 1947</summary>
-<ul>
-<li><strong>Equity &amp; volatility</strong> — SP500, <abbr title="CBOE Volatility Index — implied volatility of S&amp;P 500 options">VIX</abbr> · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L54" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[["macro_daily"]]</code></a></li>
-<li><strong>Interest rates</strong> — 2Y, 10Y, 30Y Treasury yields, Fed Funds rate · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R#L269" target="_blank" rel="noopener noreferrer"><code>hd_macro(c("DGS2","DGS10","DGS30"))</code></a></li>
-<li><strong>Credit spreads</strong> — ICE BofA High Yield OAS, BBB corporate spread · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a></li>
-<li><strong>Macro fundamentals</strong> — GDP (quarterly), CPI, PCE (monthly), unemployment · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a></li>
-<li><strong>Commodities &amp; currency</strong> — WTI crude oil spot, trade-weighted USD index · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a></li>
-</ul>
-</details>
-
-<details>
-<summary><strong>Factors</strong> — Fama-French FF3, FF5, Momentum · daily + monthly · from 1926</summary>
-<ul>
-<li><strong>FF3</strong> — MktRF, SMB, HML plus risk-free rate · <a href="https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html" target="_blank" rel="noopener noreferrer">Ken French Data Library</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L60" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[["factors"]]</code></a></li>
-<li><strong>FF5</strong> — adds <abbr title="Fama-French 5-Factor model adds Profitability (RMW) and Investment (CMA) to FF3">RMW, CMA</abbr> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R#L328" target="_blank" rel="noopener noreferrer"><code>hd_factors("FF5")</code></a></li>
-<li><strong>Momentum</strong> — prior-12-month return factor · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R#L328" target="_blank" rel="noopener noreferrer"><code>hd_factors("Mom")</code></a></li>
-<li><strong>JST Macrohistory</strong> — 155 years, 18 countries (1870–2020) · <a href="https://www.macrohistory.net/database/" target="_blank" rel="noopener noreferrer">macrohistory.net</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L92" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[["jst_macrohistory"]]</code></a></li>
-</ul>
-</details>
-
-# Articles
+# Pages
 
 ## Row
 
+Pages follow the pipeline, left to right. Exploratory pages are in the Appendix.
+
+<h4 class="card-group-title">Strategies</h4>
 <div class="card-grid">
-<a href="leaderboard.html" class="info-card">
-<h4>Strategy Leaderboard</h4>
-<p>Rankings, equity curves, and feature importance across all 6 strategies. Transposed metrics table, PSO optimal portfolio weights, XGBoost feature analysis.</p>
+<a href="stock-backtest.html" class="info-card">
+<h4>Stock-Level Backtests</h4>
+<p>MAX and DRIF signals applied to individual stocks (S&amp;P 500 + STOXX 600). Decile long-short portfolios. Stock vs factor, MAX vs DRIF.</p>
+</a>
+<a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
+<h4>Factor MAX and <abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr></h4>
+<p>Rotating among Fama-French factors with the MAX signal (maximum daily return predicts next-month factor returns) and the DRIF elastic-net on the daily-return distribution. Factor-Level Deep Dive tab of Stock-Level Backtests.</p>
 </a>
 <a href="macro-defense-rotation.html" class="info-card">
 <h4>Macro Defense Rotation</h4>
-<p>Backtesting vignette: rotating among TLT/GLD/DBC/UUP to hedge macro risk. Expanding window methodology, in-sample vs out-of-sample holdout.</p>
+<p>Rotating among TLT/GLD/DBC/UUP to hedge macro risk. Expanding-window methodology, in-sample vs out-of-sample holdout.</p>
 </a>
-<a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
-<h4>Factor MAX Rotation</h4>
-<p>Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025). Part of Stock-Level Backtests.</p>
+<a href="momentum-prepeak.html" class="info-card">
+<h4>Momentum Pre-Peak / Post-Peak</h4>
+<p>Decomposing 12-2 momentum into pre-peak and post-peak parts (Büsing, Mohrschladt &amp; Siedhoff, 2022), a methodology-demo replication.</p>
 </a>
-<a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
-<h4><abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>: Daily Return Information</h4>
-<p>Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals. Part of Stock-Level Backtests.</p>
-</a>
-<a href="stock-backtest.html" class="info-card">
-<h4>Stock-Level Backtests</h4>
-<p>MAX and DRIF signals applied to 660 individual stocks (S&P 500 + STOXX 600). Decile long-short portfolios. 4-strategy comparison: stock vs factor, MAX vs DRIF.</p>
-</a>
-<a href="avoid-worst-days.html" class="info-card">
-<h4>Avoid Worst Days</h4>
-<p>Thought experiment: removing the market's N worst days improves returns more than missing the N best days hurts. Demonstrates return asymmetry and why downside protection matters.</p>
-</a>
+</div>
+
+<h4 class="card-group-title">Testing</h4>
+<div class="card-grid">
 <a href="falsification.html" class="info-card">
 <h4>Falsification Tests</h4>
 <p>Causal integrity tests: Fama-French alpha, null-signal heatmaps, HAC-robust Sharpe ratios, implication chains. Evidence our strategies aren't luck or factor exposure.</p>
 </a>
-<a href="european-overlay.html" class="info-card">
-<h4>European Overlay</h4>
-<p>CISS vs VIX regime comparison: ECB's Composite Indicator of Systemic Stress as European-native vol proxy. 5 European ETFs, OOS performance, attribution.</p>
-</a>
 <a href="evidence.html" class="info-card">
 <h4>Evidence &amp; Context</h4>
-<p>Negative results (strategies that failed falsification) and 155 years of equity premium across 18 countries. Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.</p>
-</a>
-<a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
-<h4>Source Code</h4>
-<p>Browse R source files on GitHub: Data Access, Discovery, Performance Metrics, Kelly Sizing, Null Hypothesis Testing, and more.</p>
+<p>Long-run equity premium across countries, cross-geography pervasiveness test, crisis timeline, decade heatmaps. Context for the Swedroe evidence-based framework.</p>
 </a>
 </div>
 
-# Links
+<h4 class="card-group-title">Verdict and failures</h4>
+<div class="card-grid">
+<a href="leaderboard.html" class="info-card">
+<h4>Strategy Leaderboard</h4>
+<p>Rankings, equity curves, and feature importance across all `r if (is.null(strategy_verdict_tbl)) "the" else nrow(strategy_verdict_tbl)` strategies, with each strategy's Keep / Watch / Failed verdict.</p>
+</a>
+<a href="failures.html" class="info-card">
+<h4>Failed and Watch Strategies</h4>
+<p>Every strategy that is not Keep, the test it failed, the written reason, the date and the issue.</p>
+</a>
+</div>
+
+<h4 class="card-group-title">Appendix (exploratory)</h4>
+<div class="card-grid">
+<a href="european-overlay.html" class="info-card">
+<h4>European Overlay</h4>
+<p>CISS vs VIX regime comparison: ECB's Composite Indicator of Systemic Stress as a European-native volatility proxy.</p>
+</a>
+<a href="avoid-worst-days.html" class="info-card">
+<h4>Avoid Worst Days</h4>
+<p>Thought experiment: removing the market's N worst days improves returns more than missing the N best days hurts. A hindsight series, not a tradeable strategy.</p>
+</a>
+<a href="bdbb-sol.html" class="info-card">
+<h4>BDBB Queueing Diagnostics (SOL/USD)</h4>
+<p>M/G/infinity queueing diagnostics (after Varma 2026) on SOL/USD hourly data: rolling resilience half-life, and a test of whether the diagnostics predict the next bar's extreme moves. The test was corrected for look-ahead (#868), so its results are not a replication of Varma's BTC figures. Not a strategy.</p>
+</a>
+<a href="quiz.html" class="info-card">
+<h4>Quiz: Which is Real?</h4>
+<p>Two cumulative return series side by side: one real, one statistically simulated. Guess which, to calibrate intuition about noise.</p>
+</a>
+<a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
+<h4>Source Code</h4>
+<p>Browse the R source files on GitHub. The function list is in the <a href="api-historicaldata.html">API reference</a>.</p>
+</a>
+</div>
 
 ## Row
 
-- [GitHub](https://github.com/JohnGavin/historical) — source code, issues, CI
-- [Hugging Face Dataset](https://huggingface.co/datasets/JohnGavin/finance-data) — Parquet files, dataset card
-- [Strategy Leaderboard](leaderboard.html) — rankings, equity curves, cost-adjusted metrics
-- [API Reference](https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R) — function source code
-- [Macro Defense Rotation](macro-defense-rotation.html) — backtesting vignette
-- [Factor MAX](stock-backtest.html#factor-level-deep-dive) — factor rotation strategy (Factor-Level Deep Dive tab)
-- [DRIF](stock-backtest.html#factor-level-deep-dive) — daily return information factor (Factor-Level Deep Dive tab)
-- [Stock-Level Backtests](stock-backtest.html) — 660 stocks, 4-strategy comparison
-- [Avoid Worst Days](avoid-worst-days.html) — return asymmetry thought experiment
-- [Falsification Tests](falsification.html) — causal integrity, FF alpha, HAC-robust Sharpe
-- [European Overlay](european-overlay.html) — CISS vs VIX regime comparison
-- [Evidence & Context](evidence.html) — negative results + 155 years equity premium, 18 countries, pervasiveness test
-
-## Row
-
-Built with the [T language](https://github.com/b-rodrigues/tlang){target="_blank" rel="noopener noreferrer"} pipeline, [targets](https://docs.ropensci.org/targets/){target="_blank" rel="noopener noreferrer"}, [DuckDB](https://duckdb.org/){target="_blank" rel="noopener noreferrer"}, and [Quarto](https://quarto.org/){target="_blank" rel="noopener noreferrer"}. Data from Yahoo Finance, FRED, and Ken French Data Library.
+Built with the [T language](https://github.com/b-rodrigues/tlang){target="_blank" rel="noopener noreferrer"} pipeline, [targets](https://docs.ropensci.org/targets/){target="_blank" rel="noopener noreferrer"}, [DuckDB](https://duckdb.org/){target="_blank" rel="noopener noreferrer"}, and [Quarto](https://quarto.org/){target="_blank" rel="noopener noreferrer"}. Data from Yahoo Finance, FRED, and Ken French Data Library. Source, issues and CI: [GitHub](https://github.com/JohnGavin/historical).
 
 # Installation
 
@@ -407,9 +530,9 @@ if (length(md) > 0L && requireNamespace("jsonlite", quietly = TRUE)) {
 # Clone, enter Nix shell, fetch data, run pipeline
 git clone https://github.com/JohnGavin/historical.git && cd historical
 nix develop
-python scripts/fetch_equity.py     # 51 equity tickers
-Rscript scripts/fetch_crypto.R     # 14 crypto tokens
-Rscript scripts/fetch_macro.R      # 19 FRED series
+python scripts/fetch_equity.py     # equity tickers
+Rscript scripts/fetch_crypto.R     # crypto tokens
+Rscript scripts/fetch_macro.R      # FRED macro series
 Rscript scripts/fetch_factors.R    # Fama-French factors
 t run src/pipeline.t               # T pipeline
 ```
