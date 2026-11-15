@@ -45,11 +45,7 @@ suppressPackageStartupMessages({
 source(file.path(.hl_est_dir(), "fetch_hyperliquid.R"))
 
 # ── Constants (one home each) ───────────────────────────────────────
-HL_RATE_WEIGHT_PER_MIN <- 1200   # documented per-IP limit
-HL_PACE_FRACTION <- 0.75         # 900 of 1200 weight/min: under the limit with margin
-# Weight table (documented): every info request 20; candleSnapshot adds
-# 1 per 60 bars returned, fundingHistory 1 per 20 rows returned.
-HL_WEIGHT <- c(base = 20, candle_bars_per_unit = 60, funding_rows_per_unit = 20)
+# Rate limit, weight table and pacing live in fetch_hyperliquid.R (one home).
 HL_EST_START <- as.Date("2000-01-01")  # earlier than any market: clamp / API decide
 HL_EST_STATE_PER_DAY <- 1L              # state snapshots per day
 HL_EST_WEEK_BARS <- c(daily = 7, hourly = 168, funding = 168)
@@ -63,15 +59,6 @@ HL_SAMPLE_QUOTA <- data.frame(
 )
 
 # ── Pure helpers ────────────────────────────────────────────────────
-hl_weight <- function(type, rows = 0) {
-  rows <- ifelse(is.na(rows), 0, rows)
-  extra <- switch(type,
-    candleSnapshot = floor(rows / HL_WEIGHT[["candle_bars_per_unit"]]),
-    fundingHistory = floor(rows / HL_WEIGHT[["funding_rows_per_unit"]]),
-    0)
-  HL_WEIGHT[["base"]] + extra
-}
-
 # Evenly spaced ranks 1..n, k of them (first and last included when k >= 2).
 hl_sample_ranks <- function(n, k) {
   if (n <= 0L || k <= 0L) return(integer(0))
@@ -237,40 +224,25 @@ hl_md_table <- function(df) {
   c(hdr, sep, body)
 }
 
-# ── Recorder: wraps hl_post, logs every request, paces to the rate limit ──
+# ── Recorder: logs every request made through the paced post ─────────
+# Pacing, weight and 429 back-off are hl_make_post()'s (fetch_hyperliquid.R);
+# the recorder only turns its per-attempt observations into a request log.
 hl_make_recorder <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
                              post = hl_post) {
   env <- new.env()
   env$log <- list()
-  fn <- function(body) {
-    t0 <- proc.time()[["elapsed"]]
-    bytes <- NA_integer_
-    res <- tryCatch(
-      post(body, on_response = function(b, text) {
-        bytes <<- nchar(text, type = "bytes")
-        hl_save_raw(b, text, raw_dir)
-      }),
-      error = function(e) e
-    )
-    el <- proc.time()[["elapsed"]] - t0
-    ok <- !inherits(res, "error")
-    type <- body$type
-    rows <- if (ok && type %in% c("candleSnapshot", "fundingHistory") && is.list(res)) {
-      length(res)
-    } else NA_integer_
-    w <- hl_weight(type, rows)
+  observer <- function(e) {
+    b <- e$body
     env$log[[length(env$log) + 1L]] <- data.frame(
-      type = type,
-      target = as.character(body$coin %||% body$req$coin %||% body$dex %||% ""),
-      interval = as.character(body$req$interval %||% ""),
-      rows = rows, bytes = bytes, weight = w, elapsed = el, ok = ok,
-      error = if (ok) "" else conditionMessage(res),
-      stringsAsFactors = FALSE)
-    sleep_fn(max(0, w / (HL_RATE_WEIGHT_PER_MIN * pace / 60) - el))
-    if (!ok) rlang::cnd_signal(res)  # re-signal the original condition, class intact
-    res
+      type = b$type,
+      target = as.character(b$coin %||% b$req$coin %||% b$dex %||% ""),
+      interval = as.character(b$req$interval %||% ""),
+      rows = e$rows, bytes = e$bytes, weight = e$weight, elapsed = e$elapsed,
+      ok = e$ok, error = e$error, stringsAsFactors = FALSE)
   }
-  list(post = fn, log = function() bind_rows(env$log))
+  list(post = hl_make_post(raw_dir, pace = pace, sleep_fn = sleep_fn,
+                           post = post, observer = observer),
+       log = function() bind_rows(env$log))
 }
 
 # ── Measurement of one sampled market ───────────────────────────────
@@ -308,11 +280,10 @@ hl_measure_market <- function(m, rec, end_ms, tmp_dir) {
   fund <- NULL
   cap <- "none"; cap_end_ms <- NA_real_
   ctrl <- c(rows = NA_real_, weight = NA_real_, requests = 0)
-  no_sleep <- function(s) invisible(NULL)  # pacing is the recorder's job
   if (itype == "perp") {
     # Delisted: funding stops at the last traded daily bar (the cap under test).
     mf <- one(hl_fetch_market_funding(coin, delisted, res[["1d"]], start_ms, end_ms,
-                                      rec$post, sleep_fn = no_sleep, sleep = 0),
+                                      rec$post),
               "funding")
     raw <- if (is.null(mf)) NULL else mf$raw
     if (!is.null(mf)) { cap <- mf$cap; cap_end_ms <- mf$end_ms }
@@ -330,8 +301,8 @@ hl_measure_market <- function(m, rec, end_ms, tmp_dir) {
   if (itype == "perp" && delisted && cap != "none") {
     # CONTROL: the same market's funding fetched uncapped (to now), measured, so
     # the saving is observed on the sample and not assumed.
-    raw_u <- one(hl_fetch_funding(coin, start_ms, end_ms, rec$post,
-                                  sleep_fn = no_sleep, sleep = 0), "funding uncapped control")
+    raw_u <- one(hl_fetch_funding(coin, start_ms, end_ms, rec$post),
+                  "funding uncapped control")
     if (!is.null(raw_u)) {
       lg_u <- rec$log()[-seq_len(nrow(log_main)), ]
       lg_u <- lg_u[lg_u$ok, ]
