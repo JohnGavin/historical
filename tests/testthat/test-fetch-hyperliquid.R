@@ -432,6 +432,21 @@ test_that("a delisted market with no traded bar gets no funding request and is r
   expect_false("MATIC" %in% fr$coin)
 })
 
+test_that("snapshot: funding cap table (capped delisted markets)", {
+  res <- .run(.mock_post(), withr::local_tempdir())
+  expect_snapshot(print(res$funding_cap, row.names = FALSE))
+  expect_snapshot(print(res[c("n_funding_capped", "n_funding_no_traded_bar")]))
+})
+
+test_that("snapshot: funding cap table (delisted market with no traded bar)", {
+  zero <- lapply(.candles, function(r) { r$n <- 0; r$v <- "0.0"; r })
+  spy <- .funding_spy(candle_override = function(body) {
+    if (body$req$coin == "MATIC" && body$req$interval == "1d") zero else NULL
+  })
+  res <- .run(spy$post, withr::local_tempdir())
+  expect_snapshot(print(res$funding_cap, row.names = FALSE))
+})
+
 test_that("a delisted market's cap still works when 1d is not among the stored intervals", {
   spy <- .funding_spy()
   .run(spy$post, withr::local_tempdir(), intervals = "1h")

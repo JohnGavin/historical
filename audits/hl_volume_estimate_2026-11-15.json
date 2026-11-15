@@ -1,6 +1,6 @@
 {
   "date_utc": "2026-11-15",
-  "commit": "b51ddf2",
+  "commit": "83afc15",
   "headline": [
     {
       "metric": "Listed perps (all exchanges)",
@@ -16,19 +16,19 @@
     },
     {
       "metric": "Spot pairs in spotMeta.universe",
-      "value": 352
+      "value": 353
     },
     {
       "metric": "  of which traded in 24h (in scope)",
-      "value": 140
+      "value": 137
     },
     {
       "metric": "Out of scope: unlisted spot contexts",
-      "value": 297
+      "value": 291
     },
     {
       "metric": "Out of scope: outcome markets",
-      "value": 542
+      "value": 548
     },
     {
       "metric": "Sampled markets",
@@ -36,43 +36,79 @@
     },
     {
       "metric": "Requests made (this run)",
-      "value": 656
+      "value": 735
     },
     {
       "metric": "Weight used (this run)",
-      "value": 29599
+      "value": 33112
     },
     {
       "metric": "Seconds inside requests (this run, excl. pacing sleeps)",
-      "value": 261
+      "value": 374
     },
     {
       "metric": "Wall seconds (this run, incl. pacing sleeps)",
-      "value": 1986
+      "value": 2220
     },
     {
-      "metric": "Backfill weight, all in-scope markets",
-      "value": 802138
+      "metric": "Backfill weight, all in-scope markets (delisted funding capped)",
+      "value": 690560
     },
     {
-      "metric": "Backfill time at 1200 weight/min",
-      "value": 668.4
+      "metric": "Backfill time at 1200 weight/min (capped)",
+      "value": 575.5
+    },
+    {
+      "metric": "Delisted perps whose funding stops at the last traded bar",
+      "value": 214
+    },
+    {
+      "metric": "  sampled delisted perps: capped",
+      "value": 3
+    },
+    {
+      "metric": "  sampled delisted perps: no traded bar (no funding requested)",
+      "value": 2
+    },
+    {
+      "metric": "Backfill weight if uncapped (sample-measured control)",
+      "value": 801882
+    },
+    {
+      "metric": "Backfill weight saved by the cap",
+      "value": 111323
+    },
+    {
+      "metric": "Backfill time saved by the cap (min)",
+      "value": 92.8
+    },
+    {
+      "metric": "Funding rows saved by the cap",
+      "value": 1216462
+    },
+    {
+      "metric": "Uncapped control requests (in this run's totals above)",
+      "value": 138
+    },
+    {
+      "metric": "Uncapped control weight (in this run's totals above)",
+      "value": 6113
     },
     {
       "metric": "Backfill raw JSON (MB)",
-      "value": 1111.8
+      "value": 1019.3
     },
     {
       "metric": "Backfill parquet zstd (MB)",
-      "value": 407.8
+      "value": 376.2
     },
     {
       "metric": "Weekly incremental weight (live + daily state snapshot)",
-      "value": 32200
+      "value": 32074
     },
     {
       "metric": "Weekly incremental time at the limit",
-      "value": 26.83
+      "value": 26.73
     },
     {
       "metric": "Weekly share of the weekly rate budget (%)",
@@ -80,15 +116,15 @@
     },
     {
       "metric": "Yearly growth, parquet (MB)",
-      "value": 297.1
+      "value": 298.6
     },
     {
       "metric": "Yearly growth, raw JSON (MB)",
-      "value": 1131
+      "value": 1125
     },
     {
       "metric": "State snapshot JSON (bytes per snapshot)",
-      "value": 668402
+      "value": 668491
     },
     {
       "metric": "State snapshot weight per day",
@@ -221,10 +257,10 @@
       "instrument_type": "spot",
       "market_class": "spot_pair",
       "exchange": "spot",
-      "listed": 352,
-      "live": 352,
+      "listed": 353,
+      "live": 353,
       "delisted": 0,
-      "traded_24h": 140,
+      "traded_24h": 137,
       "zero_24h": 0,
       "no_volume_info": 0
     }
@@ -232,11 +268,11 @@
   "out_of_scope": [
     {
       "market_class": "spot_unlisted",
-      "n": 297
+      "n": 291
     },
     {
       "market_class": "outcome",
-      "n": 542
+      "n": 548
     }
   ],
   "sample": [
@@ -250,9 +286,9 @@
       "daily_weight": 58,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 30238,
+      "funding_rows": 30240,
       "funding_requests": 61,
-      "funding_weight": 2731
+      "funding_weight": 2732
     },
     {
       "coin": "GMX",
@@ -264,9 +300,9 @@
       "daily_weight": 42,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 30199,
+      "funding_rows": 30201,
       "funding_requests": 61,
-      "funding_weight": 2729
+      "funding_weight": 2730
     },
     {
       "coin": "BLUR",
@@ -276,9 +312,9 @@
       "first_traded_daily": "2023-10-18",
       "daily_rows": 1297,
       "daily_weight": 41,
-      "hourly_rows": 5000,
+      "hourly_rows": 4999,
       "hourly_weight": 103,
-      "funding_rows": 26973,
+      "funding_rows": 26975,
       "funding_requests": 54,
       "funding_weight": 2428
     },
@@ -292,7 +328,7 @@
       "daily_weight": 48,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 26037,
+      "funding_rows": 26039,
       "funding_requests": 53,
       "funding_weight": 2361
     },
@@ -306,7 +342,7 @@
       "daily_weight": 36,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 24285,
+      "funding_rows": 24287,
       "funding_requests": 49,
       "funding_weight": 2194
     },
@@ -320,7 +356,7 @@
       "daily_weight": 34,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 21267,
+      "funding_rows": 21269,
       "funding_requests": 43,
       "funding_weight": 1923
     },
@@ -332,9 +368,9 @@
       "first_traded_daily": "2024-12-18",
       "daily_rows": 697,
       "daily_weight": 31,
-      "hourly_rows": 5000,
+      "hourly_rows": 4999,
       "hourly_weight": 103,
-      "funding_rows": 16727,
+      "funding_rows": 16729,
       "funding_requests": 34,
       "funding_weight": 1516
     },
@@ -348,7 +384,7 @@
       "daily_weight": 29,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 13728,
+      "funding_rows": 13730,
       "funding_requests": 28,
       "funding_weight": 1246
     },
@@ -362,9 +398,9 @@
       "daily_weight": 43,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 9818,
+      "funding_rows": 9820,
       "funding_requests": 20,
-      "funding_weight": 890
+      "funding_weight": 891
     },
     {
       "coin": "XTEN",
@@ -374,9 +410,9 @@
       "first_traded_daily": "2026-10-27",
       "daily_rows": 19,
       "daily_weight": 20,
-      "hourly_rows": 465,
+      "hourly_rows": 467,
       "hourly_weight": 27,
-      "funding_rows": 465,
+      "funding_rows": 467,
       "funding_requests": 1,
       "funding_weight": 43
     },
@@ -390,9 +426,9 @@
       "daily_weight": 43,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 30238,
-      "funding_requests": 61,
-      "funding_weight": 2731
+      "funding_rows": 11118,
+      "funding_requests": 23,
+      "funding_weight": 1015
     },
     {
       "coin": "USTC",
@@ -404,9 +440,9 @@
       "daily_weight": 34,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 26015,
-      "funding_requests": 53,
-      "funding_weight": 2360
+      "funding_rows": 21367,
+      "funding_requests": 43,
+      "funding_weight": 1928
     },
     {
       "coin": "YZY",
@@ -418,9 +454,9 @@
       "daily_weight": 24,
       "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 10836,
-      "funding_requests": 22,
-      "funding_weight": 981
+      "funding_rows": 6188,
+      "funding_requests": 13,
+      "funding_weight": 569
     },
     {
       "coin": "xyz:XYZ100",
@@ -430,9 +466,9 @@
       "first_traded_daily": "2025-10-13",
       "daily_rows": 398,
       "daily_weight": 26,
-      "hourly_rows": 4999,
+      "hourly_rows": 5000,
       "hourly_weight": 103,
-      "funding_rows": 9555,
+      "funding_rows": 9557,
       "funding_requests": 20,
       "funding_weight": 877
     },
@@ -444,9 +480,9 @@
       "first_traded_daily": "2026-06-25",
       "daily_rows": 143,
       "daily_weight": 22,
-      "hourly_rows": 3447,
+      "hourly_rows": 3449,
       "hourly_weight": 77,
-      "funding_rows": 3447,
+      "funding_rows": 3449,
       "funding_requests": 7,
       "funding_weight": 312
     },
@@ -458,11 +494,11 @@
       "first_traded_daily": "2026-07-22",
       "daily_rows": 116,
       "daily_weight": 21,
-      "hourly_rows": 2798,
+      "hourly_rows": 2800,
       "hourly_weight": 66,
-      "funding_rows": 2798,
+      "funding_rows": 2800,
       "funding_requests": 6,
-      "funding_weight": 259
+      "funding_weight": 260
     },
     {
       "coin": "para:GLW",
@@ -474,7 +510,7 @@
       "daily_weight": 22,
       "hourly_rows": 2901,
       "hourly_weight": 68,
-      "funding_rows": 2907,
+      "funding_rows": 2909,
       "funding_requests": 6,
       "funding_weight": 265
     },
@@ -486,9 +522,9 @@
       "first_traded_daily": "2026-11-03",
       "daily_rows": 12,
       "daily_weight": 20,
-      "hourly_rows": 287,
+      "hourly_rows": 289,
       "hourly_weight": 24,
-      "funding_rows": 287,
+      "funding_rows": 289,
       "funding_requests": 1,
       "funding_weight": 34
     },
@@ -503,8 +539,8 @@
       "hourly_rows": 0,
       "hourly_weight": 20,
       "funding_rows": 0,
-      "funding_requests": 1,
-      "funding_weight": 20
+      "funding_requests": 0,
+      "funding_weight": 0
     },
     {
       "coin": "io:AMD",
@@ -517,8 +553,8 @@
       "hourly_rows": 0,
       "hourly_weight": 20,
       "funding_rows": 0,
-      "funding_requests": 1,
-      "funding_weight": 20
+      "funding_requests": 0,
+      "funding_weight": 0
     },
     {
       "coin": "PURR/USDC",
@@ -528,49 +564,49 @@
       "first_traded_daily": "2024-04-16",
       "daily_rows": 943,
       "daily_weight": 35,
-      "hourly_rows": 4999,
+      "hourly_rows": 5000,
       "hourly_weight": 103,
       "funding_rows": null,
       "funding_requests": null,
       "funding_weight": null
     },
     {
-      "coin": "@50",
+      "coin": "@56",
       "class": "spot_pair",
       "delisted": false,
-      "first_bar": "2024-08-07",
-      "first_traded_daily": "2024-08-07",
-      "daily_rows": 830,
+      "first_bar": "2024-08-15",
+      "first_traded_daily": "2024-08-15",
+      "daily_rows": 822,
       "daily_weight": 33,
-      "hourly_rows": 4980,
+      "hourly_rows": 4986,
       "hourly_weight": 103,
       "funding_rows": null,
       "funding_requests": null,
       "funding_weight": null
     },
     {
-      "coin": "@101",
+      "coin": "@112",
       "class": "spot_pair",
       "delisted": false,
-      "first_bar": "2024-11-19",
-      "first_traded_daily": "2024-11-19",
-      "daily_rows": 726,
-      "daily_weight": 32,
-      "hourly_rows": 4996,
+      "first_bar": "2024-12-01",
+      "first_traded_daily": "2024-12-01",
+      "daily_rows": 714,
+      "daily_weight": 31,
+      "hourly_rows": 5000,
       "hourly_weight": 103,
       "funding_rows": null,
       "funding_requests": null,
       "funding_weight": null
     },
     {
-      "coin": "@160",
+      "coin": "@162",
       "class": "spot_pair",
       "delisted": false,
-      "first_bar": "2025-04-17",
-      "first_traded_daily": "2025-04-17",
-      "daily_rows": 577,
+      "first_bar": "2025-05-10",
+      "first_traded_daily": "2025-05-10",
+      "daily_rows": 554,
       "daily_weight": 29,
-      "hourly_rows": 4995,
+      "hourly_rows": 4999,
       "hourly_weight": 103,
       "funding_rows": null,
       "funding_requests": null,
@@ -584,20 +620,6 @@
       "first_traded_daily": "2025-09-25",
       "daily_rows": 416,
       "daily_weight": 26,
-      "hourly_rows": 4999,
-      "hourly_weight": 103,
-      "funding_rows": null,
-      "funding_requests": null,
-      "funding_weight": null
-    },
-    {
-      "coin": "@256",
-      "class": "spot_pair",
-      "delisted": false,
-      "first_bar": "2025-12-02",
-      "first_traded_daily": "2025-12-02",
-      "daily_rows": 348,
-      "daily_weight": 25,
       "hourly_rows": 5000,
       "hourly_weight": 103,
       "funding_rows": null,
@@ -605,29 +627,43 @@
       "funding_weight": null
     },
     {
-      "coin": "@296",
+      "coin": "@260",
       "class": "spot_pair",
       "delisted": false,
-      "first_bar": "2026-03-02",
-      "first_traded_daily": "2026-03-02",
-      "daily_rows": 258,
-      "daily_weight": 24,
-      "hourly_rows": 4995,
+      "first_bar": "2025-12-18",
+      "first_traded_daily": "2025-12-18",
+      "daily_rows": 332,
+      "daily_weight": 25,
+      "hourly_rows": 4999,
       "hourly_weight": 103,
       "funding_rows": null,
       "funding_requests": null,
       "funding_weight": null
     },
     {
-      "coin": "@497",
+      "coin": "@299",
       "class": "spot_pair",
       "delisted": false,
-      "first_bar": "2026-06-10",
-      "first_traded_daily": "2026-06-10",
-      "daily_rows": 158,
+      "first_bar": "2026-03-08",
+      "first_traded_daily": "2026-03-08",
+      "daily_rows": 252,
+      "daily_weight": 24,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@590",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2026-06-15",
+      "first_traded_daily": "2026-06-15",
+      "daily_rows": 153,
       "daily_weight": 22,
-      "hourly_rows": 3790,
-      "hourly_weight": 83,
+      "hourly_rows": 3656,
+      "hourly_weight": 80,
       "funding_rows": null,
       "funding_requests": null,
       "funding_weight": null
@@ -640,7 +676,7 @@
       "first_traded_daily": "2026-10-14",
       "daily_rows": 32,
       "daily_weight": 20,
-      "hourly_rows": 775,
+      "hourly_rows": 777,
       "hourly_weight": 32,
       "funding_rows": null,
       "funding_requests": null,
@@ -654,7 +690,7 @@
       "first_traded_daily": "2026-11-10",
       "daily_rows": 5,
       "daily_weight": 20,
-      "hourly_rows": 124,
+      "hourly_rows": 126,
       "hourly_weight": 22,
       "funding_rows": null,
       "funding_requests": null,
@@ -669,52 +705,52 @@
       "rows": 0,
       "json_bytes": 88424,
       "weight": 20,
-      "seconds": 0.814
+      "seconds": 0.781
     },
     {
       "type": "candleSnapshot",
       "requests": 60,
       "failed": 0,
-      "rows": 133488,
-      "json_bytes": 18259763,
-      "weight": 3399,
-      "seconds": 35.727999999999
+      "rows": 133318,
+      "json_bytes": 18154563,
+      "weight": 3395,
+      "seconds": 41.7270000000018
     },
     {
       "type": "fundingHistory",
-      "requests": 582,
+      "requests": 661,
       "failed": 0,
-      "rows": 285820,
-      "json_bytes": 25162552,
-      "weight": 25920,
-      "seconds": 219.608
+      "rows": 324529,
+      "json_bytes": 28631747,
+      "weight": 29437,
+      "seconds": 326.627
     },
     {
       "type": "metaAndAssetCtxs",
       "requests": 11,
       "failed": 0,
       "rows": 0,
-      "json_bytes": 213859,
+      "json_bytes": 213666,
       "weight": 220,
-      "seconds": 3.56500000000001
+      "seconds": 3.115
     },
     {
       "type": "spotMeta",
       "requests": 1,
       "failed": 0,
       "rows": 0,
-      "json_bytes": 142774,
+      "json_bytes": 142921,
       "weight": 20,
-      "seconds": 0.248
+      "seconds": 0.97
     },
     {
       "type": "spotMetaAndAssetCtxs",
       "requests": 1,
       "failed": 0,
       "rows": 0,
-      "json_bytes": 366119,
+      "json_bytes": 366401,
       "weight": 20,
-      "seconds": 0.877
+      "seconds": 0.561
     }
   ],
   "parquet_bytes_per_row": [
@@ -728,30 +764,30 @@
     {
       "instrument": "perp",
       "dataset": "funding",
-      "rows": 285820,
-      "parquet_bytes": 9777360,
-      "bytes_per_row": 34.2081030018893
+      "rows": 257434,
+      "parquet_bytes": 9264692,
+      "bytes_per_row": 35.9886106730269
     },
     {
       "instrument": "perp",
       "dataset": "hourly",
-      "rows": 74897,
-      "parquet_bytes": 3365881,
-      "bytes_per_row": 44.9401311133957
+      "rows": 74904,
+      "parquet_bytes": 3366211,
+      "bytes_per_row": 44.9403369646481
     },
     {
       "instrument": "spot",
       "dataset": "daily",
-      "rows": 4293,
-      "parquet_bytes": 235127,
-      "bytes_per_row": 54.7698579082227
+      "rows": 4223,
+      "parquet_bytes": 213359,
+      "bytes_per_row": 50.5230878522377
     },
     {
       "instrument": "spot",
       "dataset": "hourly",
-      "rows": 39653,
-      "parquet_bytes": 1462269,
-      "bytes_per_row": 36.8766297631957
+      "rows": 39543,
+      "parquet_bytes": 1371136,
+      "bytes_per_row": 34.6745568115722
     }
   ],
   "scaled": [
@@ -761,41 +797,41 @@
       "markets": 350,
       "rows_per_market": 802.2,
       "weight_per_market": 32.8666666666667,
-      "json_bytes_per_market": 109469.8,
+      "json_bytes_per_market": 109469.533333333,
       "instrument": "perp",
       "bytes_per_row": 49.9463735360592,
       "backfill_weight": 11503.3333333333,
       "backfill_rows": 280770,
-      "backfill_json_mb": 38.31443,
+      "backfill_json_mb": 38.3143366666667,
       "backfill_parquet_mb": 14.0234432977193
     },
     {
       "group": "perp_live",
       "dataset": "hourly",
       "markets": 350,
-      "rows_per_market": 3993.13333333333,
+      "rows_per_market": 3993.6,
       "weight_per_market": 86.1333333333333,
-      "json_bytes_per_market": 547594.8,
+      "json_bytes_per_market": 547661.133333333,
       "instrument": "perp",
-      "bytes_per_row": 44.9401311133957,
+      "bytes_per_row": 44.9403369646481,
       "backfill_weight": 30146.6666666667,
-      "backfill_rows": 1397596.66666667,
-      "backfill_json_mb": 191.65818,
-      "backfill_parquet_mb": 62.8081774436448
+      "backfill_rows": 1397760,
+      "backfill_json_mb": 191.681396666667,
+      "backfill_parquet_mb": 62.8158053957065
     },
     {
       "group": "perp_live",
       "dataset": "funding",
       "markets": 350,
-      "rows_per_market": 14582.0666666667,
-      "weight_per_market": 1320.53333333333,
-      "json_bytes_per_market": 1307176.8,
+      "rows_per_market": 14584.0666666667,
+      "weight_per_market": 1320.8,
+      "json_bytes_per_market": 1307360.66666667,
       "instrument": "perp",
-      "bytes_per_row": 34.2081030018893,
-      "backfill_weight": 462186.666666667,
-      "backfill_rows": 5103723.33333333,
-      "backfill_json_mb": 457.51188,
-      "backfill_parquet_mb": 174.588693479812
+      "bytes_per_row": 35.9886106730269,
+      "backfill_weight": 462280,
+      "backfill_rows": 5104423.33333333,
+      "backfill_json_mb": 457.576233333333,
+      "backfill_parquet_mb": 183.701104053647
     },
     {
       "group": "perp_delisted",
@@ -819,66 +855,72 @@
       "weight_per_market": 69.8,
       "json_bytes_per_market": 408320.4,
       "instrument": "perp",
-      "bytes_per_row": 44.9401311133957,
+      "bytes_per_row": 44.9403369646481,
       "backfill_weight": 14937.2,
       "backfill_rows": 642000,
       "backfill_json_mb": 87.3805656,
-      "backfill_parquet_mb": 28.8515641748001
+      "backfill_parquet_mb": 28.8516963313041
     },
     {
       "group": "perp_delisted",
       "dataset": "funding",
       "markets": 214,
-      "rows_per_market": 13417.8,
-      "weight_per_market": 1222.4,
-      "json_bytes_per_market": 1110980,
+      "rows_per_market": 7734.6,
+      "weight_per_market": 702.4,
+      "json_bytes_per_market": 693199.8,
       "instrument": "perp",
-      "bytes_per_row": 34.2081030018893,
-      "backfill_weight": 261593.6,
-      "backfill_rows": 2871409.2,
-      "backfill_json_mb": 237.74972,
-      "backfill_parquet_mb": 98.2254616741725
+      "bytes_per_row": 35.9886106730269,
+      "backfill_weight": 150313.6,
+      "backfill_rows": 1655204.4,
+      "backfill_json_mb": 148.3447572,
+      "backfill_parquet_mb": 59.5685067358811
     },
     {
       "group": "spot_live",
       "dataset": "daily",
-      "markets": 140,
-      "rows_per_market": 429.3,
-      "weight_per_market": 26.6,
-      "json_bytes_per_market": 60603.8,
+      "markets": 137,
+      "rows_per_market": 422.3,
+      "weight_per_market": 26.5,
+      "json_bytes_per_market": 59109.1,
       "instrument": "spot",
-      "bytes_per_row": 54.7698579082227,
-      "backfill_weight": 3724,
-      "backfill_rows": 60102,
-      "backfill_json_mb": 8.484532,
-      "backfill_parquet_mb": 3.291778
+      "bytes_per_row": 50.5230878522377,
+      "backfill_weight": 3630.5,
+      "backfill_rows": 57855.1,
+      "backfill_json_mb": 8.0979467,
+      "backfill_parquet_mb": 2.9230183
     },
     {
       "group": "spot_live",
       "dataset": "hourly",
-      "markets": 140,
-      "rows_per_market": 3965.3,
-      "weight_per_market": 85.8,
-      "json_bytes_per_market": 540385.4,
+      "markets": 137,
+      "rows_per_market": 3954.3,
+      "weight_per_market": 85.5,
+      "json_bytes_per_market": 531261,
       "instrument": "spot",
-      "bytes_per_row": 36.8766297631957,
-      "backfill_weight": 12012,
-      "backfill_rows": 555142,
-      "backfill_json_mb": 75.653956,
-      "backfill_parquet_mb": 20.471766
+      "bytes_per_row": 34.6745568115722,
+      "backfill_weight": 11713.5,
+      "backfill_rows": 541739.1,
+      "backfill_json_mb": 72.782757,
+      "backfill_parquet_mb": 18.7845632
     }
   ],
   "totals": {
-    "backfill_weight": 802138.266666667,
-    "backfill_minutes_at_limit": 668.448555555556,
-    "backfill_json_mb": 1111.8317036,
-    "backfill_parquet_mb": 407.750509964047,
-    "weekly_weight": 32200,
-    "weekly_minutes_at_limit": 26.8333333333333,
-    "weekly_share_of_limit_pct": 0.266203703703704,
-    "yearly_parquet_mb": 297.073373497389,
-    "yearly_json_mb": 1131.04342650891,
-    "state_snapshot_json_bytes": 668402,
+    "backfill_weight": 690559.6,
+    "backfill_minutes_at_limit": 575.466333333333,
+    "cap_sampled_delisted": 5,
+    "cap_weight_saved": 111322.8,
+    "cap_rows_saved": 1216461.6,
+    "cap_minutes_saved": 92.769,
+    "backfill_weight_uncapped": 801882.4,
+    "backfill_minutes_uncapped": 668.235333333333,
+    "backfill_json_mb": 1019.25643316667,
+    "backfill_parquet_mb": 376.157763208156,
+    "weekly_weight": 32074,
+    "weekly_minutes_at_limit": 26.7283333333333,
+    "weekly_share_of_limit_pct": 0.265162037037037,
+    "yearly_parquet_mb": 298.648838805098,
+    "yearly_json_mb": 1124.96839862634,
+    "state_snapshot_json_bytes": 668491,
     "state_snapshot_weight_per_day": 260
   },
   "funding": [
@@ -887,198 +929,270 @@
       "delisted": false,
       "funding_start": "2023-05-12 00:00",
       "switch_8h_to_1h": "2023-06-08 01:00",
-      "funding_rows": 30238,
+      "funding_rows": 30240,
       "funding_requests": 61,
       "offset_outliers": 2,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 2732,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "GMX",
       "delisted": false,
       "funding_start": "2023-05-25 00:00",
       "switch_8h_to_1h": "2023-06-08 01:00",
-      "funding_rows": 30199,
+      "funding_rows": 30201,
       "funding_requests": 61,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 2730,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "BLUR",
       "delisted": false,
       "funding_start": "2023-10-18 18:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 26973,
+      "funding_rows": 26975,
       "funding_requests": 54,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 2428,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "GMT",
       "delisted": false,
       "funding_start": "2023-11-26 18:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 26037,
+      "funding_rows": 26039,
       "funding_requests": 53,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 2361,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "W",
       "delisted": false,
       "funding_start": "2024-02-07 18:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 24285,
+      "funding_rows": 24287,
       "funding_requests": 49,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 2194,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "ZK",
       "delisted": false,
       "funding_start": "2024-06-12 12:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 21267,
+      "funding_rows": 21269,
       "funding_requests": 43,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 1923,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "USUAL",
       "delisted": false,
       "funding_start": "2024-12-18 17:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 16727,
+      "funding_rows": 16729,
       "funding_requests": 34,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 1516,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "HYPER",
       "delisted": false,
       "funding_start": "2025-04-22 16:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 13728,
+      "funding_rows": 13730,
       "funding_requests": 28,
       "offset_outliers": 1,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 1246,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "ZEC",
       "delisted": false,
       "funding_start": "2025-10-02 14:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 9818,
+      "funding_rows": 9820,
       "funding_requests": 20,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 891,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "XTEN",
       "delisted": false,
       "funding_start": "2026-10-27 07:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 465,
+      "funding_rows": 467,
       "funding_requests": 1,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 43,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "MATIC",
       "delisted": true,
       "funding_start": "2023-05-12 00:00",
       "switch_8h_to_1h": "2023-06-08 01:00",
-      "funding_rows": 30238,
-      "funding_requests": 61,
-      "offset_outliers": 2,
-      "rows_after_last_bar": 19120,
-      "zero_rows_after_last_bar": 19120
+      "funding_rows": 11118,
+      "funding_requests": 23,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 0,
+      "zero_rows_after_last_bar": 0,
+      "cap": "capped",
+      "funding_weight": 1015,
+      "rows_uncapped": 30240,
+      "weight_uncapped": 2732
     },
     {
       "coin": "USTC",
       "delisted": true,
       "funding_start": "2023-11-27 16:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 26015,
-      "funding_requests": 53,
+      "funding_rows": 21367,
+      "funding_requests": 43,
       "offset_outliers": 1,
-      "rows_after_last_bar": 4648,
-      "zero_rows_after_last_bar": 4648
+      "rows_after_last_bar": 0,
+      "zero_rows_after_last_bar": 0,
+      "cap": "capped",
+      "funding_weight": 1928,
+      "rows_uncapped": 26017,
+      "weight_uncapped": 2360
     },
     {
       "coin": "YZY",
       "delisted": true,
       "funding_start": "2025-08-21 04:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 10836,
-      "funding_requests": 22,
+      "funding_rows": 6188,
+      "funding_requests": 13,
       "offset_outliers": 0,
-      "rows_after_last_bar": 4648,
-      "zero_rows_after_last_bar": 4648
+      "rows_after_last_bar": 0,
+      "zero_rows_after_last_bar": 0,
+      "cap": "capped",
+      "funding_weight": 569,
+      "rows_uncapped": 10838,
+      "weight_uncapped": 981
     },
     {
       "coin": "xyz:XYZ100",
       "delisted": false,
       "funding_start": "2025-10-13 13:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 9555,
+      "funding_rows": 9557,
       "funding_requests": 20,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 877,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "xyz:KIOXIA",
       "delisted": false,
       "funding_start": "2026-06-25 01:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 3447,
+      "funding_rows": 3449,
       "funding_requests": 7,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 312,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "xyz:GIGADEV",
       "delisted": false,
       "funding_start": "2026-07-22 02:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 2798,
+      "funding_rows": 2800,
       "funding_requests": 6,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 260,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "para:GLW",
       "delisted": false,
       "funding_start": "2026-07-17 13:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 2907,
+      "funding_rows": 2909,
       "funding_requests": 6,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 265,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "io:CRCL",
       "delisted": false,
       "funding_start": "2026-11-03 17:00",
       "switch_8h_to_1h": null,
-      "funding_rows": 287,
+      "funding_rows": 289,
       "funding_requests": 1,
       "offset_outliers": 0,
-      "rows_after_last_bar": 16,
-      "zero_rows_after_last_bar": 0
+      "rows_after_last_bar": 18,
+      "zero_rows_after_last_bar": 0,
+      "cap": "none",
+      "funding_weight": 34,
+      "rows_uncapped": null,
+      "weight_uncapped": null
     },
     {
       "coin": "xyz:URANIUM",
@@ -1086,10 +1200,14 @@
       "funding_start": null,
       "switch_8h_to_1h": null,
       "funding_rows": 0,
-      "funding_requests": 1,
+      "funding_requests": 0,
       "offset_outliers": null,
       "rows_after_last_bar": null,
-      "zero_rows_after_last_bar": null
+      "zero_rows_after_last_bar": null,
+      "cap": "no_traded_bar",
+      "funding_weight": 0,
+      "rows_uncapped": 0,
+      "weight_uncapped": 20
     },
     {
       "coin": "io:AMD",
@@ -1097,10 +1215,14 @@
       "funding_start": null,
       "switch_8h_to_1h": null,
       "funding_rows": 0,
-      "funding_requests": 1,
+      "funding_requests": 0,
       "offset_outliers": null,
       "rows_after_last_bar": null,
-      "zero_rows_after_last_bar": null
+      "zero_rows_after_last_bar": null,
+      "cap": "no_traded_bar",
+      "funding_weight": 0,
+      "rows_uncapped": 0,
+      "weight_uncapped": 20
     }
   ],
   "offset_outliers": [
@@ -1153,11 +1275,6 @@
       "coin": "MATIC",
       "time": "2023-05-23 08:23:53",
       "offset_min": 23.884
-    },
-    {
-      "coin": "MATIC",
-      "time": "2025-07-19 10:14:47",
-      "offset_min": 14.7940833333333
     },
     {
       "coin": "USTC",

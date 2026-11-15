@@ -34,6 +34,36 @@
       x BTC: empty candle reply for a listed, live market
       i INDETERMINATE: cannot tell 'no data' from 'window outside retention'
 
+# snapshot: funding cap table (capped delisted markets)
+
+    Code
+      print(res$funding_cap, row.names = FALSE)
+    Output
+               item    cap funding_end_ms
+             :MATIC capped   1.762387e+12
+       flx:flx:TSLA capped   1.762387e+12
+
+---
+
+    Code
+      print(res[c("n_funding_capped", "n_funding_no_traded_bar")])
+    Output
+      $n_funding_capped
+      [1] 2
+      
+      $n_funding_no_traded_bar
+      [1] 0
+      
+
+# snapshot: funding cap table (delisted market with no traded bar)
+
+    Code
+      print(res$funding_cap, row.names = FALSE)
+    Output
+               item           cap funding_end_ms
+             :MATIC no_traded_bar             NA
+       flx:flx:TSLA        capped   1.762387e+12
+
 # a `null` reply (unknown coin) is an error, not an empty window (snapshot)
 
     Code
