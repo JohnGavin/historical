@@ -187,11 +187,23 @@ hl_scale <- function(sample, counts, bpr, state_bytes, n_state_requests) {
            year_rows = HL_EST_YEAR_ROWS[dataset],
            year_parquet_mb = markets * year_rows * bytes_per_row / 1e6,
            year_json_mb = markets * year_rows * (json_bytes_per_market / rows_per_market) / 1e6)
+  # Saving of the delisted-funding cap, measured on the sampled delisted perps
+  # (each has an uncapped control fetch) and scaled by their market count.
+  ctl <- sample[sample$group == "perp_delisted" & !is.na(sample$funding_weight_uncapped), ]
+  per <- function(unc, cap) if (nrow(ctl) == 0L) 0 else mean(ctl[[unc]] - ctl[[cap]])
+  saved_weight <- n("perp_delisted") * per("funding_weight_uncapped", "funding_weight")
+  saved_rows <- n("perp_delisted") * per("funding_rows_uncapped", "funding_rows")
   state_weight_day <- n_state_requests * hl_weight("info") * HL_EST_STATE_PER_DAY
   budget_week <- HL_RATE_WEIGHT_PER_MIN * 60 * 24 * 7
   totals <- list(
     backfill_weight = sum(b$backfill_weight),
     backfill_minutes_at_limit = sum(b$backfill_weight) / HL_RATE_WEIGHT_PER_MIN,
+    cap_sampled_delisted = nrow(ctl),
+    cap_weight_saved = saved_weight,
+    cap_rows_saved = saved_rows,
+    cap_minutes_saved = saved_weight / HL_RATE_WEIGHT_PER_MIN,
+    backfill_weight_uncapped = sum(b$backfill_weight) + saved_weight,
+    backfill_minutes_uncapped = (sum(b$backfill_weight) + saved_weight) / HL_RATE_WEIGHT_PER_MIN,
     backfill_json_mb = sum(b$backfill_json_mb),
     backfill_parquet_mb = sum(b$backfill_parquet_mb, na.rm = TRUE),
     weekly_weight = sum(wk$week_weight) + state_weight_day * 7,
@@ -294,11 +306,16 @@ hl_measure_market <- function(m, rec, end_ms, tmp_dir) {
     res[[paste0(itv, "_dropped")]] <- dp$n_dropped
   }
   fund <- NULL
+  cap <- "none"; cap_end_ms <- NA_real_
+  ctrl <- c(rows = NA_real_, weight = NA_real_, requests = 0)
+  no_sleep <- function(s) invisible(NULL)  # pacing is the recorder's job
   if (itype == "perp") {
-    # pacing is the recorder's job, so the pager itself does not sleep
-    raw <- one(hl_fetch_funding(coin, start_ms, end_ms, rec$post,
-                                sleep_fn = function(s) invisible(NULL), sleep = 0),
-               "funding")
+    # Delisted: funding stops at the last traded daily bar (the cap under test).
+    mf <- one(hl_fetch_market_funding(coin, delisted, res[["1d"]], start_ms, end_ms,
+                                      rec$post, sleep_fn = no_sleep, sleep = 0),
+              "funding")
+    raw <- if (is.null(mf)) NULL else mf$raw
+    if (!is.null(mf)) { cap <- mf$cap; cap_end_ms <- mf$end_ms }
     if (!is.null(raw)) {
       if (length(raw) == 0L && !delisted) {
         problems <- c(problems, sprintf("%s: empty funding reply for a live market (INDETERMINATE)", coin))
@@ -306,7 +323,21 @@ hl_measure_market <- function(m, rec, end_ms, tmp_dir) {
       fund <- one(hl_parse_funding_raw(raw, m$dex, coin), "funding parse")
     }
   }
-  lg <- rec$log() |> filter(target == coin)
+  # Everything the capped run asked for is in the log NOW; the control below is
+  # logged after this point and kept out of the per-market (scaled) figures.
+  log_main <- rec$log()
+  lg <- log_main |> filter(target == coin)
+  if (itype == "perp" && delisted && cap != "none") {
+    # CONTROL: the same market's funding fetched uncapped (to now), measured, so
+    # the saving is observed on the sample and not assumed.
+    raw_u <- one(hl_fetch_funding(coin, start_ms, end_ms, rec$post,
+                                  sleep_fn = no_sleep, sleep = 0), "funding uncapped control")
+    if (!is.null(raw_u)) {
+      lg_u <- rec$log()[-seq_len(nrow(log_main)), ]
+      lg_u <- lg_u[lg_u$ok, ]
+      ctrl <- c(rows = length(raw_u), weight = sum(lg_u$weight), requests = nrow(lg_u))
+    }
+  }
   agg <- function(type, itv = NULL) {
     x <- lg[lg$type == type & lg$ok, ]
     if (!is.null(itv)) x <- x[x$interval == itv, ]
@@ -355,6 +386,9 @@ hl_measure_market <- function(m, rec, end_ms, tmp_dir) {
       offset_outliers = n_out,
       funding_rows_after_last_bar = n_after,
       funding_zero_rows_after_last_bar = n_zero_after,
+      funding_cap = cap, funding_cap_end = cap_end_ms,
+      funding_rows_uncapped = ctrl[["rows"]], funding_weight_uncapped = ctrl[["weight"]],
+      control_requests = ctrl[["requests"]], control_weight = if (is.na(ctrl[["weight"]])) 0 else ctrl[["weight"]],
       stringsAsFactors = FALSE),
     daily = daily, hourly = hourly, funding = fund, problems = problems,
     parquet = c(daily = hl_parquet_bytes(daily %||% data.frame(), tmp_dir),
@@ -463,7 +497,15 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
                "Sampled markets", "Requests made (this run)", "Weight used (this run)",
                "Seconds inside requests (this run, excl. pacing sleeps)",
                "Wall seconds (this run, incl. pacing sleeps)",
-               "Backfill weight, all in-scope markets", "Backfill time at 1200 weight/min",
+               "Backfill weight, all in-scope markets (delisted funding capped)",
+               "Backfill time at 1200 weight/min (capped)",
+               "Delisted perps whose funding stops at the last traded bar",
+               "  sampled delisted perps: capped", "  sampled delisted perps: no traded bar (no funding requested)",
+               "Backfill weight if uncapped (sample-measured control)",
+               "Backfill weight saved by the cap", "Backfill time saved by the cap (min)",
+               "Funding rows saved by the cap",
+               "Uncapped control requests (in this run's totals above)",
+               "Uncapped control weight (in this run's totals above)",
                "Backfill raw JSON (MB)", "Backfill parquet zstd (MB)",
                "Weekly incremental weight (live + daily state snapshot)",
                "Weekly incremental time at the limit",
@@ -476,6 +518,12 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
               oos$n[oos$market_class == "spot_unlisted"], oos$n[oos$market_class == "outcome"],
               nrow(S), tot_req, tot_w, round(tot_s), round(est$wall_s),
               round(tot$backfill_weight), round(tot$backfill_minutes_at_limit, 1),
+              A$counts$perp_delisted,
+              sum(S$funding_cap == "capped", na.rm = TRUE),
+              sum(S$funding_cap == "no_traded_bar", na.rm = TRUE),
+              round(tot$backfill_weight_uncapped), round(tot$cap_weight_saved),
+              round(tot$cap_minutes_saved, 1), round(tot$cap_rows_saved),
+              sum(S$control_requests), sum(S$control_weight),
               round(tot$backfill_json_mb, 1), round(tot$backfill_parquet_mb, 1),
               round(tot$weekly_weight), round(tot$weekly_minutes_at_limit, 2),
               round(tot$weekly_share_of_limit_pct, 2),
@@ -497,7 +545,10 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
               switch_8h_to_1h = format(funding_switch_8h_to_1h, "%Y-%m-%d %H:%M", tz = "UTC"),
               funding_rows, funding_requests, offset_outliers,
               rows_after_last_bar = funding_rows_after_last_bar,
-              zero_rows_after_last_bar = funding_zero_rows_after_last_bar)
+              zero_rows_after_last_bar = funding_zero_rows_after_last_bar,
+              cap = funding_cap, funding_weight,
+              rows_uncapped = funding_rows_uncapped,
+              weight_uncapped = funding_weight_uncapped)
   outlier_rows <- bind_rows(lapply(est$results, function(r) {
     f <- r$funding
     if (is.null(f) || nrow(f) == 0L) return(NULL)
@@ -568,6 +619,13 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
     "",
     hl_md_table(as.data.frame(scale_tbl)),
     "",
+    sprintf("Delisted funding cap: backfill %s weight (%s) capped vs %s weight (%s) uncapped; the cap saves %s weight, %s funding rows and %s min at the limit, extrapolated from %d sampled delisted perps (each with an uncapped control) to %d delisted perps.",
+            format(round(tot$backfill_weight), big.mark = ","), fmt_min(tot$backfill_minutes_at_limit),
+            format(round(tot$backfill_weight_uncapped), big.mark = ","), fmt_min(tot$backfill_minutes_uncapped),
+            format(round(tot$cap_weight_saved), big.mark = ","), format(round(tot$cap_rows_saved), big.mark = ","),
+            format(round(tot$cap_minutes_saved), big.mark = ","),
+            as.integer(tot$cap_sampled_delisted), as.integer(A$counts$perp_delisted)),
+    "",
     sprintf("Backfill: %s weight, %s at 1200 weight/min. Weekly incremental: %s weight, %s at the limit, %.2f%% of the weekly rate budget.",
             format(round(tot$backfill_weight), big.mark = ","), fmt_min(tot$backfill_minutes_at_limit),
             format(round(tot$weekly_weight), big.mark = ","), fmt_min(tot$weekly_minutes_at_limit),
@@ -585,7 +643,9 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
             btc$funding_rows, format(btc$funding_switch_8h_to_1h, "%Y-%m-%d %H:%M", tz = "UTC"))
     else "BTC was not in the sample.",
     "",
-    "`rows_after_last_bar` counts funding rows later than the market's last daily bar; `zero_rows_after_last_bar` those with a rate of exactly 0. For a delisted market these accrue hourly to the present, so they inflate the funding backfill without adding information.",
+    "Owner decision on #1075: a delisted market's funding stops at the close time of its last traded daily bar (`cap = capped`); a delisted market with no traded bar gets no funding request (`cap = no_traded_bar`, counted, not a failure). Live markets run to now (`cap = none`). Without the cap a delisted market keeps returning hourly funding rows of exactly 0 to the present (observed on MATIC: 19,120 zero rows after its last candle).",
+    "",
+    "`rows_after_last_bar` counts funding rows later than the market's last daily bar (about 0 under the cap); `zero_rows_after_last_bar` those with a rate of exactly 0. `rows_uncapped` and `weight_uncapped` are a CONTROL: the same market's funding fetched to now, measured in this run on each sampled delisted perp, so the saving is observed and not assumed. `funding_weight` and `funding_rows` are the capped fetch.",
     "",
     "Funding rows more than 5 minutes past the hour (flagged, not floored):",
     "",
@@ -603,6 +663,7 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
     "",
     "- The sample is about 30 of the in-scope markets; every scaled figure is an extrapolation from it, not a measurement of all markets.",
     "- Funding history is paged by the last row time plus one; `(coin, time)` is asserted unique.",
+    "- The delisted-funding cap saving is measured on the sampled delisted perps only (each has an uncapped control fetch, whose requests are included in this run's request and weight totals) and scaled by their count; the cap itself applies to every delisted perp.",
     "- Delisted markets are fetched without the end-minus-5000-bars start: a window clamped to now returns `[]` for them (observed on MATIC hourly).",
     "- Bars whose close time is after the fetch time are dropped (the in-progress bar).",
     "- Exit 3 (and no file written here) if any sampled request failed or a live listed market returned `[]`."

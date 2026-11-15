@@ -29,7 +29,11 @@
 #                               fundingRate + n_hours (partial days visible)
 #   perp_funding.parquet        RAW funding rows keyed (dex, coin, time_ms):
 #                               interval_hours (8 then 1, read from the gaps),
-#                               rate_per_hour, offset_outlier
+#                               rate_per_hour, offset_outlier. A DELISTED
+#                               market's funding stops at the close time of its
+#                               last traded daily bar (it keeps emitting zero
+#                               rows afterwards); a delisted market that never
+#                               traded gets no funding request.
 # Raw JSON responses are kept append-only under --raw-dir (default
 # data/raw/hyperliquid/<UTC date>/, gitignored, NEVER uploaded or redistributed);
 # the parquet files are derived from them.
@@ -498,6 +502,37 @@ hl_parse_funding_daily <- function(x, dex = "", coin) {
     arrange(date)
 }
 
+# Close time (ms) of the LAST bar with n > 0, from parsed daily bars; NA when
+# the market has no traded bar (or no bar at all). Rounded: T arrives as an
+# integer ms and the seconds round trip must not leave float dust.
+hl_last_traded_close_ms <- function(daily) {
+  if (is.null(daily) || nrow(daily) == 0L || !any(daily$traded)) return(NA_real_)
+  round(as.numeric(max(daily$close_time[daily$traded])) * 1000)
+}
+
+# Funding for ONE market (owner decision on #1075): a delisted market keeps
+# emitting hourly funding rows of exactly 0 after its last trade (observed on
+# MATIC: 19,120 zero rows after the last candle), so its funding history stops
+# at the close time of its last traded daily bar. A live market runs to `end_ms`.
+# `cap`: "none" (live), "capped" (delisted, endTime = last traded bar close), or
+# "no_traded_bar" (delisted, nothing ever traded: NO funding request is made).
+# "no_traded_bar" is a known, counted state and neither a failure nor
+# INDETERMINATE: the market's own bars say nothing traded, so there is nothing
+# to fund; the caller reports the count.
+hl_fetch_market_funding <- function(coin, delisted, daily, start_ms, end_ms,
+                                    post_fn = hl_post, ...) {
+  cap <- "none"; f_end <- end_ms
+  if (isTRUE(delisted)) {
+    last_ms <- hl_last_traded_close_ms(daily)
+    if (is.na(last_ms)) {
+      return(list(raw = list(), cap = "no_traded_bar", end_ms = NA_real_))
+    }
+    cap <- "capped"; f_end <- min(end_ms, last_ms)
+  }
+  list(raw = hl_fetch_funding(coin, start_ms, f_end, post_fn, ...),
+       cap = cap, end_ms = f_end)
+}
+
 hl_empty_funding <- function() {
   data.frame(dex = character(), coin = character(), time_ms = numeric(),
              time = as.POSIXct(character(), tz = "UTC"),
@@ -637,15 +672,16 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   failed <- list()
 
   bars <- list(); funding_raw <- list(); funding_daily <- list()
-  n_ok <- 0L; n_dropped <- 0L
+  n_ok <- 0L; n_dropped <- 0L; cap_rows <- list()
   for (i in seq_len(nrow(markets))) {
     dex <- markets$dex[i]; coin <- markets$coin[i]
     itype <- markets$instrument_type[i]; delisted <- markets$is_delisted[i]
     cls <- markets$market_class[i]
     key <- paste0(dex, ":", coin)
     r <- tryCatch({
-      out <- list(bars = list(), n_dropped = 0L)
-      for (itv in intervals) {
+      out <- list(bars = list(), n_dropped = 0L, cap = "none")
+      # Daily bars FIRST: a delisted market's funding end time comes from them.
+      for (itv in intervals[order(intervals != "1d")]) {
         c_raw <- hl_fetch_candles(coin, start_ms, end_ms, post_fn,
                                   interval = itv, clamp = !delisted)
         sleep_fn(sleep)
@@ -656,9 +692,21 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
           mutate(market_class = cls, is_delisted = delisted)
       }
       if (funding && itype == "perp") {
-        f_raw <- hl_fetch_funding(coin, start_ms, end_ms, post_fn,
-                                  sleep_fn = sleep_fn, sleep = sleep)
-        sleep_fn(sleep)
+        daily <- out$bars[["1d"]]
+        if (is.null(daily) && delisted) {
+          # `--intervals` without 1d: the cap still needs the daily bars (not stored)
+          d_raw <- hl_fetch_candles(coin, start_ms, end_ms, post_fn,
+                                    interval = "1d", clamp = FALSE)
+          sleep_fn(sleep)
+          daily <- hl_parse_candles(hl_drop_in_progress(d_raw, end_ms)$kept,
+                                    dex, coin, "1d", itype)
+        }
+        mf <- hl_fetch_market_funding(coin, delisted, daily, start_ms, end_ms,
+                                      post_fn, sleep_fn = sleep_fn, sleep = sleep)
+        out$cap <- mf$cap
+        out$cap_end_ms <- mf$end_ms
+        if (mf$cap != "no_traded_bar") sleep_fn(sleep)
+        f_raw <- mf$raw
         if (length(f_raw) == 0L && !delisted) hl_empty_reply("funding", coin)
         out$f_raw <- hl_parse_funding_raw(f_raw, dex, coin)
         out$f_daily <- hl_parse_funding_daily(f_raw, dex, coin)
@@ -678,10 +726,29 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
         funding_raw[[key]] <- r$f_raw; funding_daily[[key]] <- r$f_daily
       }
       n_dropped <- n_dropped + r$n_dropped
+      if (r$cap != "none") {
+        cap_rows[[key]] <- data.frame(item = key, cap = r$cap,
+                                      funding_end_ms = r$cap_end_ms,
+                                      stringsAsFactors = FALSE)
+      }
       n_ok <- n_ok + 1L
     }
   }
   cli::cli_inform("Dropped {n_dropped} in-progress bar{?s} (close time after fetch time)")
+  funding_cap <- if (length(cap_rows) > 0L) {
+    bind_rows(cap_rows)
+  } else {
+    data.frame(item = character(), cap = character(),
+               funding_end_ms = numeric(), stringsAsFactors = FALSE)
+  }
+  n_capped <- sum(funding_cap$cap == "capped")
+  n_no_traded <- sum(funding_cap$cap == "no_traded_bar")
+  if (funding) {
+    cli::cli_inform(c(
+      "Funding capped at the last traded bar for {n_capped} delisted market{?s}",
+      "i" = "{n_no_traded} delisted market{?s} with no traded bar: no funding requested (not a failure)"
+    ))
+  }
 
   # Open-interest snapshot: one call per perp exchange, current values only.
   oi <- list()
@@ -725,7 +792,9 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
 
   list(status = if (any_indeterminate) 3L else if (nrow(failed_df) > 0L) 1L else 0L,
        failed = failed_df, n_markets = nrow(markets),
-       n_in_progress_dropped = n_dropped, out_of_scope = enum$out_of_scope)
+       n_in_progress_dropped = n_dropped, out_of_scope = enum$out_of_scope,
+       n_funding_capped = n_capped, n_funding_no_traded_bar = n_no_traded,
+       funding_cap = funding_cap)
 }
 
 .fetch_hyperliquid_main <- function() {

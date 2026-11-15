@@ -149,6 +149,38 @@ test_that("end to end on fixtures: report, json and request log are written", {
   expect_true(any(grepl("BTC: first daily bar", md)))
 })
 
+test_that("the delisted funding cap is measured against an uncapped control and reported", {
+  cap_ms <- hl_last_traded_close_ms(hl_parse_candles(.d1, "", "MATIC"))
+  # A server that keeps emitting zero-rate hourly rows after the last trade,
+  # and honours startTime AND endTime.
+  zeros <- lapply(seq_len(400), function(i)
+    list(coin = "X", fundingRate = "0.0", premium = "0.0", time = cap_ms + i * 3600000))
+  server <- c(.f_switch, zeros)
+  post <- .fake_post(list(fundingHistory = function(body) {
+    Filter(function(r) r$time >= body$startTime && r$time <= body$endTime, server)
+  }))
+  est <- hl_estimate(.rec(post), end = .end, tmp_dir = withr::local_tempdir())
+  expect_length(est$problems, 0L)
+  A <- hl_assemble(est)
+  mat <- A$S[A$S$coin == "MATIC", ]
+  expect_equal(mat$funding_cap, "capped")
+  expect_equal(mat$funding_cap_end, cap_ms)
+  expect_equal(mat$funding_rows, length(.f_switch))              # stops at the cap
+  expect_equal(mat$funding_rows_uncapped, length(.f_switch) + 400)  # control: to now
+  expect_gt(mat$funding_weight_uncapped, mat$funding_weight)
+  expect_gt(A$scale$totals$cap_rows_saved, 0)
+  expect_gt(A$scale$totals$cap_weight_saved, 0)
+  expect_gt(A$scale$totals$backfill_weight_uncapped, A$scale$totals$backfill_weight)
+  # live markets are never capped and have no control
+  expect_true(all(A$S$funding_cap[A$S$coin == "BTC"] == "none"))
+  expect_true(is.na(A$S$funding_rows_uncapped[A$S$coin == "BTC"]))
+  d <- withr::local_tempdir()
+  stem <- hl_write_report(est, A, d, "2026-11-15", "abc1234")
+  md <- readLines(paste0(stem, ".md"))
+  expect_true(any(grepl("Backfill weight saved by the cap", md)))
+  expect_true(any(grepl("sampled delisted perps: capped \\| 2 \\|", md)))
+})
+
 test_that("snapshot: scaled totals on fixtures", {
   rec <- .rec()
   est <- hl_estimate(rec, end = .end, tmp_dir = withr::local_tempdir())

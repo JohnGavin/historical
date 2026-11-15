@@ -349,6 +349,97 @@ test_that("a delisted market is fetched with its own start, a live one is clampe
   expect_gt(starts[["BTC"]], start_ms)
 })
 
+# ── delisted funding cap (owner decision on #1075) ─────────────────
+
+# Records every fundingHistory request body, keyed by coin.
+.funding_spy <- function(base = .mock_post(), candle_override = NULL) {
+  env <- new.env()
+  env$bodies <- list()
+  post <- function(body) {
+    if (body$type == "fundingHistory") {
+      env$bodies[[body$coin]] <- c(env$bodies[[body$coin]], list(body))
+    }
+    if (body$type == "candleSnapshot" && !is.null(candle_override)) {
+      r <- candle_override(body)
+      if (!is.null(r)) return(r)
+    }
+    base(body)
+  }
+  list(post = post, env = env)
+}
+
+test_that("last traded close is the close time of the last bar with n > 0", {
+  d <- hl_parse_candles(.candles, "", "SOL")
+  expect_equal(hl_last_traded_close_ms(d), as.numeric(.candles[[length(.candles)]]$T))
+  d$traded[nrow(d)] <- FALSE   # a trailing zero-trade bar is not the last traded one
+  expect_equal(hl_last_traded_close_ms(d), as.numeric(.candles[[length(.candles) - 1L]]$T))
+  d$traded <- FALSE
+  expect_true(is.na(hl_last_traded_close_ms(d)))
+  expect_true(is.na(hl_last_traded_close_ms(hl_empty_daily())))
+})
+
+test_that("a delisted market's funding endTime is its last traded bar close; a live one's is now", {
+  spy <- .funding_spy()
+  res <- .run(spy$post, withr::local_tempdir())
+  daily <- hl_parse_candles(.candles, "", "MATIC")
+  daily <- daily[as.numeric(daily$close_time) * 1000 <= .fetch_ms, ]
+  expected <- hl_last_traded_close_ms(daily)
+  expect_false(is.na(expected))
+  expect_lt(expected, floor(as.numeric(.end) * 1000))   # the cap is below "now"
+  for (cn in c("MATIC", "flx:TSLA")) {
+    b <- spy$env$bodies[[cn]]
+    expect_length(b, 1L)
+    expect_equal(b[[1]]$endTime, expected, info = cn)
+  }
+  # live markets are unchanged: endTime = the run's end time
+  for (cn in c("BTC", "SOL", "xyz:TSLA")) {
+    expect_equal(spy$env$bodies[[cn]][[1]]$endTime, floor(as.numeric(.end) * 1000),
+                 info = cn)
+  }
+  expect_equal(res$n_funding_capped, 2L)
+  expect_equal(res$n_funding_no_traded_bar, 0L)
+  expect_setequal(res$funding_cap$item[res$funding_cap$cap == "capped"],
+                  c(":MATIC", "flx:flx:TSLA"))
+})
+
+test_that("daily bars are requested before funding for a delisted market", {
+  order_seen <- character()
+  base <- .mock_post()
+  post <- function(body) {
+    who <- body$coin %||% body$req$coin
+    if (identical(who, "MATIC")) order_seen <<- c(order_seen, body$req$interval %||% body$type)
+    base(body)
+  }
+  .run(post, withr::local_tempdir())
+  expect_equal(order_seen, c("1d", "1h", "fundingHistory"))
+})
+
+test_that("a delisted market with no traded bar gets no funding request and is reported", {
+  zero <- lapply(.candles, function(r) { r$n <- 0; r$v <- "0.0"; r })
+  spy <- .funding_spy(candle_override = function(body) {
+    if (body$req$coin == "MATIC" && body$req$interval == "1d") zero else NULL
+  })
+  out <- withr::local_tempdir()
+  expect_message(res <- hl_run(spy$post, out_dir = out, sleep_fn = .no_sleep, end = .end),
+                 "1 delisted market with no traded bar")
+  expect_null(spy$env$bodies[["MATIC"]])            # no funding request at all
+  expect_length(spy$env$bodies[["flx:TSLA"]], 1L)    # the other delisted one still capped
+  expect_equal(res$n_funding_no_traded_bar, 1L)
+  expect_equal(res$n_funding_capped, 1L)
+  expect_equal(res$status, 0L)                       # not a failure, not INDETERMINATE
+  expect_equal(res$funding_cap$cap[res$funding_cap$item == ":MATIC"], "no_traded_bar")
+  fr <- arrow::read_parquet(file.path(out, "perp_funding.parquet"))
+  expect_false("MATIC" %in% fr$coin)
+})
+
+test_that("a delisted market's cap still works when 1d is not among the stored intervals", {
+  spy <- .funding_spy()
+  .run(spy$post, withr::local_tempdir(), intervals = "1h")
+  daily <- hl_parse_candles(.candles, "", "MATIC")
+  daily <- daily[as.numeric(daily$close_time) * 1000 <= .fetch_ms, ]
+  expect_equal(spy$env$bodies[["MATIC"]][[1]]$endTime, hl_last_traded_close_ms(daily))
+})
+
 test_that("a `null` reply (unknown coin) is an error, not an empty window (snapshot)", {
   expect_snapshot(error = TRUE, hl_fetch_candles("NOSUCH", 0, 1e12, function(b) NULL))
   expect_error(hl_fetch_candles("NOSUCH", 0, 1e12, function(b) NULL),
