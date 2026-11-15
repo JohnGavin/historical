@@ -255,7 +255,7 @@ hl_make_recorder <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sl
       error = if (ok) "" else conditionMessage(res),
       stringsAsFactors = FALSE)
     sleep_fn(max(0, w / (HL_RATE_WEIGHT_PER_MIN * pace / 60) - el))
-    if (!ok) stop(res)
+    if (!ok) rlang::cnd_signal(res)  # re-signal the original condition, class intact
     res
   }
   list(post = fn, log = function() bind_rows(env$log))
@@ -648,7 +648,9 @@ hl_write_report <- function(est, A, audits_dir, date_utc, git_sha) {
     quit(save = "no", status = 3L)
   }
   A <- hl_assemble(est)
-  sha <- tryCatch(system2("git", c("rev-parse", "--short", "HEAD"), stdout = TRUE), error = function(e) "unknown")
+  # the commit of THIS script's repository, not of the caller's working directory
+  sha <- tryCatch(system2("git", c("-C", .hl_est_dir(), "rev-parse", "--short", "HEAD"), stdout = TRUE),
+                  error = function(e) "unknown")
   stem <- hl_write_report(est, A, audits_dir, format(Sys.time(), "%Y-%m-%d", tz = "UTC"), sha[1])
   cli_alert_success("wrote {stem}.md / .json / _requests.csv")
   invisible(TRUE)

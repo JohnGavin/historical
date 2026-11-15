@@ -1,0 +1,1168 @@
+{
+  "date_utc": "2026-11-15",
+  "commit": "93dca03",
+  "headline": [
+    {
+      "metric": "Listed perps (all exchanges)",
+      "value": 564
+    },
+    {
+      "metric": "  of which live",
+      "value": 350
+    },
+    {
+      "metric": "  of which delisted",
+      "value": 214
+    },
+    {
+      "metric": "Spot pairs in spotMeta.universe",
+      "value": 352
+    },
+    {
+      "metric": "  of which traded in 24h (in scope)",
+      "value": 140
+    },
+    {
+      "metric": "Out of scope: unlisted spot contexts",
+      "value": 297
+    },
+    {
+      "metric": "Out of scope: outcome markets",
+      "value": 542
+    },
+    {
+      "metric": "Sampled markets",
+      "value": 30
+    },
+    {
+      "metric": "Requests made (this run)",
+      "value": 656
+    },
+    {
+      "metric": "Weight used (this run)",
+      "value": 29599
+    },
+    {
+      "metric": "Seconds inside requests (this run, excl. pacing sleeps)",
+      "value": 261
+    },
+    {
+      "metric": "Wall seconds (this run, incl. pacing sleeps)",
+      "value": 1986
+    },
+    {
+      "metric": "Backfill weight, all in-scope markets",
+      "value": 802138
+    },
+    {
+      "metric": "Backfill time at 1200 weight/min",
+      "value": 668.4
+    },
+    {
+      "metric": "Backfill raw JSON (MB)",
+      "value": 1111.8
+    },
+    {
+      "metric": "Backfill parquet zstd (MB)",
+      "value": 407.8
+    },
+    {
+      "metric": "Weekly incremental weight (live + daily state snapshot)",
+      "value": 32200
+    },
+    {
+      "metric": "Weekly incremental time at the limit",
+      "value": 26.83
+    },
+    {
+      "metric": "Weekly share of the weekly rate budget (%)",
+      "value": 0.27
+    },
+    {
+      "metric": "Yearly growth, parquet (MB)",
+      "value": 297.1
+    },
+    {
+      "metric": "Yearly growth, raw JSON (MB)",
+      "value": 1131
+    },
+    {
+      "metric": "State snapshot JSON (bytes per snapshot)",
+      "value": 668402
+    },
+    {
+      "metric": "State snapshot weight per day",
+      "value": 260
+    }
+  ],
+  "enumeration": [
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "abcd",
+      "listed": 1,
+      "live": 0,
+      "delisted": 1,
+      "traded_24h": 0,
+      "zero_24h": 1,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "cash",
+      "listed": 17,
+      "live": 0,
+      "delisted": 17,
+      "traded_24h": 0,
+      "zero_24h": 1,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "flx",
+      "listed": 16,
+      "live": 0,
+      "delisted": 16,
+      "traded_24h": 0,
+      "zero_24h": 1,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "hyna",
+      "listed": 25,
+      "live": 0,
+      "delisted": 25,
+      "traded_24h": 0,
+      "zero_24h": 1,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "io",
+      "listed": 24,
+      "live": 15,
+      "delisted": 9,
+      "traded_24h": 15,
+      "zero_24h": 0,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "km",
+      "listed": 23,
+      "live": 0,
+      "delisted": 23,
+      "traded_24h": 0,
+      "zero_24h": 1,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "mkts",
+      "listed": 24,
+      "live": 1,
+      "delisted": 23,
+      "traded_24h": 1,
+      "zero_24h": 0,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "para",
+      "listed": 40,
+      "live": 33,
+      "delisted": 7,
+      "traded_24h": 33,
+      "zero_24h": 0,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "vntl",
+      "listed": 15,
+      "live": 0,
+      "delisted": 15,
+      "traded_24h": 0,
+      "zero_24h": 1,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "builder_perp",
+      "exchange": "xyz",
+      "listed": 144,
+      "live": 122,
+      "delisted": 22,
+      "traded_24h": 122,
+      "zero_24h": 0,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "perp",
+      "market_class": "main_perp",
+      "exchange": "core",
+      "listed": 235,
+      "live": 179,
+      "delisted": 56,
+      "traded_24h": 179,
+      "zero_24h": 0,
+      "no_volume_info": 0
+    },
+    {
+      "instrument_type": "spot",
+      "market_class": "spot_pair",
+      "exchange": "spot",
+      "listed": 352,
+      "live": 352,
+      "delisted": 0,
+      "traded_24h": 140,
+      "zero_24h": 0,
+      "no_volume_info": 0
+    }
+  ],
+  "out_of_scope": [
+    {
+      "market_class": "spot_unlisted",
+      "n": 297
+    },
+    {
+      "market_class": "outcome",
+      "n": 542
+    }
+  ],
+  "sample": [
+    {
+      "coin": "BTC",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2020-08-19",
+      "first_traded_daily": "2023-02-26",
+      "daily_rows": 2279,
+      "daily_weight": 58,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 30238,
+      "funding_requests": 61,
+      "funding_weight": 2731
+    },
+    {
+      "coin": "GMX",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2023-02-17",
+      "first_traded_daily": "2023-05-24",
+      "daily_rows": 1367,
+      "daily_weight": 42,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 30199,
+      "funding_requests": 61,
+      "funding_weight": 2729
+    },
+    {
+      "coin": "BLUR",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2023-04-28",
+      "first_traded_daily": "2023-10-18",
+      "daily_rows": 1297,
+      "daily_weight": 41,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 26973,
+      "funding_requests": 54,
+      "funding_weight": 2428
+    },
+    {
+      "coin": "GMT",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2022-03-15",
+      "first_traded_daily": "2023-11-26",
+      "daily_rows": 1706,
+      "daily_weight": 48,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 26037,
+      "funding_requests": 53,
+      "funding_weight": 2361
+    },
+    {
+      "coin": "W",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2024-02-07",
+      "first_traded_daily": "2024-02-07",
+      "daily_rows": 1012,
+      "daily_weight": 36,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 24285,
+      "funding_requests": 49,
+      "funding_weight": 2194
+    },
+    {
+      "coin": "ZK",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2024-06-12",
+      "first_traded_daily": "2024-06-12",
+      "daily_rows": 886,
+      "daily_weight": 34,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 21267,
+      "funding_requests": 43,
+      "funding_weight": 1923
+    },
+    {
+      "coin": "USUAL",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2024-12-18",
+      "first_traded_daily": "2024-12-18",
+      "daily_rows": 697,
+      "daily_weight": 31,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 16727,
+      "funding_requests": 34,
+      "funding_weight": 1516
+    },
+    {
+      "coin": "HYPER",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2025-04-22",
+      "first_traded_daily": "2025-04-22",
+      "daily_rows": 572,
+      "daily_weight": 29,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 13728,
+      "funding_requests": 28,
+      "funding_weight": 1246
+    },
+    {
+      "coin": "ZEC",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2023-01-07",
+      "first_traded_daily": "2025-10-02",
+      "daily_rows": 1408,
+      "daily_weight": 43,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 9818,
+      "funding_requests": 20,
+      "funding_weight": 890
+    },
+    {
+      "coin": "XTEN",
+      "class": "main_perp",
+      "delisted": false,
+      "first_bar": "2026-10-27",
+      "first_traded_daily": "2026-10-27",
+      "daily_rows": 19,
+      "daily_weight": 20,
+      "hourly_rows": 465,
+      "hourly_weight": 27,
+      "funding_rows": 465,
+      "funding_requests": 1,
+      "funding_weight": 43
+    },
+    {
+      "coin": "MATIC",
+      "class": "main_perp",
+      "delisted": true,
+      "first_bar": "2020-10-22",
+      "first_traded_daily": "2023-02-26",
+      "daily_rows": 1419,
+      "daily_weight": 43,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 30238,
+      "funding_requests": 61,
+      "funding_weight": 2731
+    },
+    {
+      "coin": "USTC",
+      "class": "main_perp",
+      "delisted": true,
+      "first_bar": "2023-11-27",
+      "first_traded_daily": "2023-11-27",
+      "daily_rows": 891,
+      "daily_weight": 34,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 26015,
+      "funding_requests": 53,
+      "funding_weight": 2360
+    },
+    {
+      "coin": "YZY",
+      "class": "main_perp",
+      "delisted": true,
+      "first_bar": "2025-08-21",
+      "first_traded_daily": "2025-08-21",
+      "daily_rows": 258,
+      "daily_weight": 24,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": 10836,
+      "funding_requests": 22,
+      "funding_weight": 981
+    },
+    {
+      "coin": "xyz:XYZ100",
+      "class": "builder_perp",
+      "delisted": false,
+      "first_bar": "2025-10-13",
+      "first_traded_daily": "2025-10-13",
+      "daily_rows": 398,
+      "daily_weight": 26,
+      "hourly_rows": 4999,
+      "hourly_weight": 103,
+      "funding_rows": 9555,
+      "funding_requests": 20,
+      "funding_weight": 877
+    },
+    {
+      "coin": "xyz:KIOXIA",
+      "class": "builder_perp",
+      "delisted": false,
+      "first_bar": "2026-06-25",
+      "first_traded_daily": "2026-06-25",
+      "daily_rows": 143,
+      "daily_weight": 22,
+      "hourly_rows": 3447,
+      "hourly_weight": 77,
+      "funding_rows": 3447,
+      "funding_requests": 7,
+      "funding_weight": 312
+    },
+    {
+      "coin": "xyz:GIGADEV",
+      "class": "builder_perp",
+      "delisted": false,
+      "first_bar": "2026-07-22",
+      "first_traded_daily": "2026-07-22",
+      "daily_rows": 116,
+      "daily_weight": 21,
+      "hourly_rows": 2798,
+      "hourly_weight": 66,
+      "funding_rows": 2798,
+      "funding_requests": 6,
+      "funding_weight": 259
+    },
+    {
+      "coin": "para:GLW",
+      "class": "builder_perp",
+      "delisted": false,
+      "first_bar": "2026-07-17",
+      "first_traded_daily": "2026-07-17",
+      "daily_rows": 121,
+      "daily_weight": 22,
+      "hourly_rows": 2901,
+      "hourly_weight": 68,
+      "funding_rows": 2907,
+      "funding_requests": 6,
+      "funding_weight": 265
+    },
+    {
+      "coin": "io:CRCL",
+      "class": "builder_perp",
+      "delisted": false,
+      "first_bar": "2026-11-03",
+      "first_traded_daily": "2026-11-03",
+      "daily_rows": 12,
+      "daily_weight": 20,
+      "hourly_rows": 287,
+      "hourly_weight": 24,
+      "funding_rows": 287,
+      "funding_requests": 1,
+      "funding_weight": 34
+    },
+    {
+      "coin": "xyz:URANIUM",
+      "class": "builder_perp",
+      "delisted": true,
+      "first_bar": null,
+      "first_traded_daily": null,
+      "daily_rows": 0,
+      "daily_weight": 20,
+      "hourly_rows": 0,
+      "hourly_weight": 20,
+      "funding_rows": 0,
+      "funding_requests": 1,
+      "funding_weight": 20
+    },
+    {
+      "coin": "io:AMD",
+      "class": "builder_perp",
+      "delisted": true,
+      "first_bar": null,
+      "first_traded_daily": null,
+      "daily_rows": 0,
+      "daily_weight": 20,
+      "hourly_rows": 0,
+      "hourly_weight": 20,
+      "funding_rows": 0,
+      "funding_requests": 1,
+      "funding_weight": 20
+    },
+    {
+      "coin": "PURR/USDC",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2024-04-16",
+      "first_traded_daily": "2024-04-16",
+      "daily_rows": 943,
+      "daily_weight": 35,
+      "hourly_rows": 4999,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@50",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2024-08-07",
+      "first_traded_daily": "2024-08-07",
+      "daily_rows": 830,
+      "daily_weight": 33,
+      "hourly_rows": 4980,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@101",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2024-11-19",
+      "first_traded_daily": "2024-11-19",
+      "daily_rows": 726,
+      "daily_weight": 32,
+      "hourly_rows": 4996,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@160",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2025-04-17",
+      "first_traded_daily": "2025-04-17",
+      "daily_rows": 577,
+      "daily_weight": 29,
+      "hourly_rows": 4995,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@210",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2025-09-25",
+      "first_traded_daily": "2025-09-25",
+      "daily_rows": 416,
+      "daily_weight": 26,
+      "hourly_rows": 4999,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@256",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2025-12-02",
+      "first_traded_daily": "2025-12-02",
+      "daily_rows": 348,
+      "daily_weight": 25,
+      "hourly_rows": 5000,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@296",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2026-03-02",
+      "first_traded_daily": "2026-03-02",
+      "daily_rows": 258,
+      "daily_weight": 24,
+      "hourly_rows": 4995,
+      "hourly_weight": 103,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@497",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2026-06-10",
+      "first_traded_daily": "2026-06-10",
+      "daily_rows": 158,
+      "daily_weight": 22,
+      "hourly_rows": 3790,
+      "hourly_weight": 83,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@1059",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2026-10-14",
+      "first_traded_daily": "2026-10-14",
+      "daily_rows": 32,
+      "daily_weight": 20,
+      "hourly_rows": 775,
+      "hourly_weight": 32,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    },
+    {
+      "coin": "@1189",
+      "class": "spot_pair",
+      "delisted": false,
+      "first_bar": "2026-11-10",
+      "first_traded_daily": "2026-11-10",
+      "daily_rows": 5,
+      "daily_weight": 20,
+      "hourly_rows": 124,
+      "hourly_weight": 22,
+      "funding_rows": null,
+      "funding_requests": null,
+      "funding_weight": null
+    }
+  ],
+  "requests": [
+    {
+      "type": "allPerpMetas",
+      "requests": 1,
+      "failed": 0,
+      "rows": 0,
+      "json_bytes": 88424,
+      "weight": 20,
+      "seconds": 0.814
+    },
+    {
+      "type": "candleSnapshot",
+      "requests": 60,
+      "failed": 0,
+      "rows": 133488,
+      "json_bytes": 18259763,
+      "weight": 3399,
+      "seconds": 35.727999999999
+    },
+    {
+      "type": "fundingHistory",
+      "requests": 582,
+      "failed": 0,
+      "rows": 285820,
+      "json_bytes": 25162552,
+      "weight": 25920,
+      "seconds": 219.608
+    },
+    {
+      "type": "metaAndAssetCtxs",
+      "requests": 11,
+      "failed": 0,
+      "rows": 0,
+      "json_bytes": 213859,
+      "weight": 220,
+      "seconds": 3.56500000000001
+    },
+    {
+      "type": "spotMeta",
+      "requests": 1,
+      "failed": 0,
+      "rows": 0,
+      "json_bytes": 142774,
+      "weight": 20,
+      "seconds": 0.248
+    },
+    {
+      "type": "spotMetaAndAssetCtxs",
+      "requests": 1,
+      "failed": 0,
+      "rows": 0,
+      "json_bytes": 366119,
+      "weight": 20,
+      "seconds": 0.877
+    }
+  ],
+  "parquet_bytes_per_row": [
+    {
+      "instrument": "perp",
+      "dataset": "daily",
+      "rows": 14601,
+      "parquet_bytes": 729267,
+      "bytes_per_row": 49.9463735360592
+    },
+    {
+      "instrument": "perp",
+      "dataset": "funding",
+      "rows": 285820,
+      "parquet_bytes": 9777360,
+      "bytes_per_row": 34.2081030018893
+    },
+    {
+      "instrument": "perp",
+      "dataset": "hourly",
+      "rows": 74897,
+      "parquet_bytes": 3365881,
+      "bytes_per_row": 44.9401311133957
+    },
+    {
+      "instrument": "spot",
+      "dataset": "daily",
+      "rows": 4293,
+      "parquet_bytes": 235127,
+      "bytes_per_row": 54.7698579082227
+    },
+    {
+      "instrument": "spot",
+      "dataset": "hourly",
+      "rows": 39653,
+      "parquet_bytes": 1462269,
+      "bytes_per_row": 36.8766297631957
+    }
+  ],
+  "scaled": [
+    {
+      "group": "perp_live",
+      "dataset": "daily",
+      "markets": 350,
+      "rows_per_market": 802.2,
+      "weight_per_market": 32.8666666666667,
+      "json_bytes_per_market": 109469.8,
+      "instrument": "perp",
+      "bytes_per_row": 49.9463735360592,
+      "backfill_weight": 11503.3333333333,
+      "backfill_rows": 280770,
+      "backfill_json_mb": 38.31443,
+      "backfill_parquet_mb": 14.0234432977193
+    },
+    {
+      "group": "perp_live",
+      "dataset": "hourly",
+      "markets": 350,
+      "rows_per_market": 3993.13333333333,
+      "weight_per_market": 86.1333333333333,
+      "json_bytes_per_market": 547594.8,
+      "instrument": "perp",
+      "bytes_per_row": 44.9401311133957,
+      "backfill_weight": 30146.6666666667,
+      "backfill_rows": 1397596.66666667,
+      "backfill_json_mb": 191.65818,
+      "backfill_parquet_mb": 62.8081774436448
+    },
+    {
+      "group": "perp_live",
+      "dataset": "funding",
+      "markets": 350,
+      "rows_per_market": 14582.0666666667,
+      "weight_per_market": 1320.53333333333,
+      "json_bytes_per_market": 1307176.8,
+      "instrument": "perp",
+      "bytes_per_row": 34.2081030018893,
+      "backfill_weight": 462186.666666667,
+      "backfill_rows": 5103723.33333333,
+      "backfill_json_mb": 457.51188,
+      "backfill_parquet_mb": 174.588693479812
+    },
+    {
+      "group": "perp_delisted",
+      "dataset": "daily",
+      "markets": 214,
+      "rows_per_market": 513.6,
+      "weight_per_market": 28.2,
+      "json_bytes_per_market": 70460,
+      "instrument": "perp",
+      "bytes_per_row": 49.9463735360592,
+      "backfill_weight": 6034.8,
+      "backfill_rows": 109910.4,
+      "backfill_json_mb": 15.07844,
+      "backfill_parquet_mb": 5.48962589389768
+    },
+    {
+      "group": "perp_delisted",
+      "dataset": "hourly",
+      "markets": 214,
+      "rows_per_market": 3000,
+      "weight_per_market": 69.8,
+      "json_bytes_per_market": 408320.4,
+      "instrument": "perp",
+      "bytes_per_row": 44.9401311133957,
+      "backfill_weight": 14937.2,
+      "backfill_rows": 642000,
+      "backfill_json_mb": 87.3805656,
+      "backfill_parquet_mb": 28.8515641748001
+    },
+    {
+      "group": "perp_delisted",
+      "dataset": "funding",
+      "markets": 214,
+      "rows_per_market": 13417.8,
+      "weight_per_market": 1222.4,
+      "json_bytes_per_market": 1110980,
+      "instrument": "perp",
+      "bytes_per_row": 34.2081030018893,
+      "backfill_weight": 261593.6,
+      "backfill_rows": 2871409.2,
+      "backfill_json_mb": 237.74972,
+      "backfill_parquet_mb": 98.2254616741725
+    },
+    {
+      "group": "spot_live",
+      "dataset": "daily",
+      "markets": 140,
+      "rows_per_market": 429.3,
+      "weight_per_market": 26.6,
+      "json_bytes_per_market": 60603.8,
+      "instrument": "spot",
+      "bytes_per_row": 54.7698579082227,
+      "backfill_weight": 3724,
+      "backfill_rows": 60102,
+      "backfill_json_mb": 8.484532,
+      "backfill_parquet_mb": 3.291778
+    },
+    {
+      "group": "spot_live",
+      "dataset": "hourly",
+      "markets": 140,
+      "rows_per_market": 3965.3,
+      "weight_per_market": 85.8,
+      "json_bytes_per_market": 540385.4,
+      "instrument": "spot",
+      "bytes_per_row": 36.8766297631957,
+      "backfill_weight": 12012,
+      "backfill_rows": 555142,
+      "backfill_json_mb": 75.653956,
+      "backfill_parquet_mb": 20.471766
+    }
+  ],
+  "totals": {
+    "backfill_weight": 802138.266666667,
+    "backfill_minutes_at_limit": 668.448555555556,
+    "backfill_json_mb": 1111.8317036,
+    "backfill_parquet_mb": 407.750509964047,
+    "weekly_weight": 32200,
+    "weekly_minutes_at_limit": 26.8333333333333,
+    "weekly_share_of_limit_pct": 0.266203703703704,
+    "yearly_parquet_mb": 297.073373497389,
+    "yearly_json_mb": 1131.04342650891,
+    "state_snapshot_json_bytes": 668402,
+    "state_snapshot_weight_per_day": 260
+  },
+  "funding": [
+    {
+      "coin": "BTC",
+      "delisted": false,
+      "funding_start": "2023-05-12 00:00",
+      "switch_8h_to_1h": "2023-06-08 01:00",
+      "funding_rows": 30238,
+      "funding_requests": 61,
+      "offset_outliers": 2,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "GMX",
+      "delisted": false,
+      "funding_start": "2023-05-25 00:00",
+      "switch_8h_to_1h": "2023-06-08 01:00",
+      "funding_rows": 30199,
+      "funding_requests": 61,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "BLUR",
+      "delisted": false,
+      "funding_start": "2023-10-18 18:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 26973,
+      "funding_requests": 54,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "GMT",
+      "delisted": false,
+      "funding_start": "2023-11-26 18:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 26037,
+      "funding_requests": 53,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "W",
+      "delisted": false,
+      "funding_start": "2024-02-07 18:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 24285,
+      "funding_requests": 49,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "ZK",
+      "delisted": false,
+      "funding_start": "2024-06-12 12:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 21267,
+      "funding_requests": 43,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "USUAL",
+      "delisted": false,
+      "funding_start": "2024-12-18 17:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 16727,
+      "funding_requests": 34,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "HYPER",
+      "delisted": false,
+      "funding_start": "2025-04-22 16:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 13728,
+      "funding_requests": 28,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "ZEC",
+      "delisted": false,
+      "funding_start": "2025-10-02 14:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 9818,
+      "funding_requests": 20,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "XTEN",
+      "delisted": false,
+      "funding_start": "2026-10-27 07:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 465,
+      "funding_requests": 1,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "MATIC",
+      "delisted": true,
+      "funding_start": "2023-05-12 00:00",
+      "switch_8h_to_1h": "2023-06-08 01:00",
+      "funding_rows": 30238,
+      "funding_requests": 61,
+      "offset_outliers": 2,
+      "rows_after_last_bar": 19120,
+      "zero_rows_after_last_bar": 19120
+    },
+    {
+      "coin": "USTC",
+      "delisted": true,
+      "funding_start": "2023-11-27 16:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 26015,
+      "funding_requests": 53,
+      "offset_outliers": 1,
+      "rows_after_last_bar": 4648,
+      "zero_rows_after_last_bar": 4648
+    },
+    {
+      "coin": "YZY",
+      "delisted": true,
+      "funding_start": "2025-08-21 04:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 10836,
+      "funding_requests": 22,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 4648,
+      "zero_rows_after_last_bar": 4648
+    },
+    {
+      "coin": "xyz:XYZ100",
+      "delisted": false,
+      "funding_start": "2025-10-13 13:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 9555,
+      "funding_requests": 20,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "xyz:KIOXIA",
+      "delisted": false,
+      "funding_start": "2026-06-25 01:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 3447,
+      "funding_requests": 7,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "xyz:GIGADEV",
+      "delisted": false,
+      "funding_start": "2026-07-22 02:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 2798,
+      "funding_requests": 6,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "para:GLW",
+      "delisted": false,
+      "funding_start": "2026-07-17 13:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 2907,
+      "funding_requests": 6,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "io:CRCL",
+      "delisted": false,
+      "funding_start": "2026-11-03 17:00",
+      "switch_8h_to_1h": null,
+      "funding_rows": 287,
+      "funding_requests": 1,
+      "offset_outliers": 0,
+      "rows_after_last_bar": 16,
+      "zero_rows_after_last_bar": 0
+    },
+    {
+      "coin": "xyz:URANIUM",
+      "delisted": true,
+      "funding_start": null,
+      "switch_8h_to_1h": null,
+      "funding_rows": 0,
+      "funding_requests": 1,
+      "offset_outliers": null,
+      "rows_after_last_bar": null,
+      "zero_rows_after_last_bar": null
+    },
+    {
+      "coin": "io:AMD",
+      "delisted": true,
+      "funding_start": null,
+      "switch_8h_to_1h": null,
+      "funding_rows": 0,
+      "funding_requests": 1,
+      "offset_outliers": null,
+      "rows_after_last_bar": null,
+      "zero_rows_after_last_bar": null
+    }
+  ],
+  "offset_outliers": [
+    {
+      "coin": "BTC",
+      "time": "2023-05-23 08:23:53",
+      "offset_min": 23.884
+    },
+    {
+      "coin": "BTC",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "GMX",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "BLUR",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "GMT",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "W",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "ZK",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "USUAL",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "HYPER",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "MATIC",
+      "time": "2023-05-23 08:23:53",
+      "offset_min": 23.884
+    },
+    {
+      "coin": "MATIC",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    },
+    {
+      "coin": "USTC",
+      "time": "2025-07-19 10:14:47",
+      "offset_min": 14.7940833333333
+    }
+  ]
+}
