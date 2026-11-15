@@ -245,11 +245,15 @@ hl_bare_symbol <- function(coin) sub("^[^:]+:", "", coin)
 # error, never a silent NA.
 hl_num <- function(x, what) {
   x <- unlist(x, use.names = FALSE)
-  out <- suppressWarnings(as.numeric(x))
-  if (any(is.na(out) & !is.na(x))) {
+  if (is.numeric(x)) return(as.numeric(x))
+  # Validate the text BEFORE converting, so as.numeric() never warns and a bad
+  # value is an explicit error rather than a hidden coercion.
+  num_re <- "^[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)([eE][-+]?[0-9]+)?$"
+  x <- as.character(x)
+  if (any(!is.na(x) & !grepl(num_re, x))) {
     cli::cli_abort("Non-numeric value in {.field {what}}")
   }
-  out
+  as.numeric(x)
 }
 
 hl_require_fields <- function(recs, fields, what) {
