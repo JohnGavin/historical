@@ -56,8 +56,7 @@ source(here::here("scripts", "fetch_hyperliquid.R"))
 }
 .no_sleep <- function(s) invisible(NULL)
 .run <- function(post, out, ...) {
-  suppressMessages(hl_run(post, out_dir = out, sleep_fn = .no_sleep,
-                          end = .end, ...))
+  suppressMessages(hl_run(post, out_dir = out, end = .end, ...))
 }
 
 # ── existing behaviour (#870) ──────────────────────────────────────
@@ -139,14 +138,14 @@ test_that("OI snapshot carries fetched_at and rejects length mismatch", {
 test_that("funding paging stops on a non-advancing page (no infinite loop)", {
   stuck <- function(body) .funding[1:3]  # always returns the same full page
   expect_error(
-    hl_fetch_funding("SOL", 0, 4e12, stuck, page_max = 3L, sleep_fn = .no_sleep),
+    hl_fetch_funding("SOL", 0, 4e12, stuck, page_max = 3L),
     class = "hl_paging_stalled"
   )
 })
 
 test_that("funding paging advances across pages and collects every record", {
   post <- function(body) Filter(function(r) r$time >= body$startTime, .funding)
-  out <- hl_fetch_funding("SOL", 0, 4e12, post, page_max = 2L, sleep_fn = .no_sleep)
+  out <- hl_fetch_funding("SOL", 0, 4e12, post, page_max = 2L)
   expect_equal(length(unique(vapply(out, function(r) r$time, numeric(1)))),
                length(.funding))
 })
@@ -182,7 +181,7 @@ test_that("hl_run happy path writes every table, status 0", {
 test_that("source unreachable is INDETERMINATE (3), writes nothing", {
   out <- withr::local_tempdir()
   down <- function(body) hl_unavailable("connection refused")
-  res <- suppressMessages(hl_run(down, out_dir = out, sleep_fn = .no_sleep))
+  res <- suppressMessages(hl_run(down, out_dir = out))
   expect_equal(res$status, 3L)
   expect_length(list.files(out), 0L)
 })
@@ -190,7 +189,7 @@ test_that("source unreachable is INDETERMINATE (3), writes nothing", {
 test_that("empty market list is INDETERMINATE (3), not 'no data'", {
   out <- withr::local_tempdir()
   post <- .mock_post(list(allPerpMetas = function(body) list()))
-  res <- suppressMessages(hl_run(post, out_dir = out, sleep_fn = .no_sleep))
+  res <- suppressMessages(hl_run(post, out_dir = out))
   expect_equal(res$status, 3L)
   expect_length(list.files(out), 0L)
 })
@@ -201,7 +200,7 @@ test_that("every market failing as unavailable after listing is status 3", {
     candleSnapshot = function(body) hl_unavailable("HTTP 429"),
     metaAndAssetCtxs = function(body) hl_unavailable("HTTP 429")
   ))
-  res <- suppressMessages(hl_run(post, out_dir = out, sleep_fn = .no_sleep))
+  res <- suppressMessages(hl_run(post, out_dir = out))
   expect_equal(res$status, 3L)
 })
 
@@ -420,7 +419,7 @@ test_that("a delisted market with no traded bar gets no funding request and is r
     if (body$req$coin == "MATIC" && body$req$interval == "1d") zero else NULL
   })
   out <- withr::local_tempdir()
-  expect_message(res <- hl_run(spy$post, out_dir = out, sleep_fn = .no_sleep, end = .end),
+  expect_message(res <- hl_run(spy$post, out_dir = out, end = .end),
                  "1 delisted market with no traded bar")
   expect_null(spy$env$bodies[["MATIC"]])            # no funding request at all
   expect_length(spy$env$bodies[["flx:TSLA"]], 1L)    # the other delisted one still capped
@@ -595,11 +594,10 @@ test_that("paging that repeats a boundary row aborts (snapshot)", {
     switch(k, .funding[1:2], .funding[2:3], list())  # row 2 repeats
   }
   expect_snapshot(error = TRUE,
-                  hl_fetch_funding("SOL", 0, 4e12, post, page_max = 2L,
-                                   sleep_fn = .no_sleep))
+                  hl_fetch_funding("SOL", 0, 4e12, post, page_max = 2L))
   # Green: a clean pager (start = last time + 1) yields no duplicates
   clean <- function(body) Filter(function(r) r$time >= body$startTime, .funding)
-  out <- hl_fetch_funding("SOL", 0, 4e12, clean, page_max = 2L, sleep_fn = .no_sleep)
+  out <- hl_fetch_funding("SOL", 0, 4e12, clean, page_max = 2L)
   expect_false(anyDuplicated(vapply(out, function(r) r$time, 1)) > 0)
 })
 
@@ -638,7 +636,7 @@ test_that("coin tags are filesystem safe", {
 
 test_that("hl_make_post records the raw text of every real response", {
   d <- withr::local_tempdir()
-  post <- hl_make_post(d)
+  post <- hl_make_post(d, sleep_fn = .no_sleep)
   got <- httr2::with_mocked_responses(
     function(req) httr2::response(status_code = 200,
                                   headers = list(`Content-Type` = "application/json"),

@@ -11,8 +11,19 @@
 #   on every row for that reason.
 #
 # Source: POST https://api.hyperliquid.xyz/info (JSON body, no auth).
-# Rate limits are UNVERIFIED; requests are strictly sequential with a polite
-# sleep between calls and bounded retries.
+# Rate limit: documented 1200 weight/min per IP (HL_RATE_WEIGHT_PER_MIN). Requests
+# are strictly sequential and PACED BY WEIGHT (hl_make_post): after each request
+# the script sleeps so the running rate stays at or under pace x 1200/min
+# (default pace 0.75). HTTP 429 is handled explicitly: back off (60 s, 3 attempts,
+# logged); still limited -> that market is reported failed and the run is
+# INDETERMINATE (exit 3), never silently skipped.
+#
+# Long runs are INCREMENTAL and RESUMABLE: parsed rows are upserted every
+# --batch completed markets (default 10) and the completed markets are recorded
+# in <out-dir>/hl_progress.txt only AFTER their rows are on disk. `--resume`
+# skips markets recorded there (same --start/--intervals/--spot/--funding);
+# failed markets are never recorded, so a resume retries them. A run that ends
+# with status 0 deletes the progress file (the next run starts fresh).
 #
 # Outputs (under --out-dir, default data/dist; gitignored, never committed):
 #   perp_daily.parquet          upsert on (dex, coin, date); volume_base is BASE
@@ -45,15 +56,18 @@
 # Publication of these files is a documented follow-up, not done here.
 #
 # Usage: Rscript scripts/fetch_hyperliquid.R [--out-dir=data/dist]
-#                                            [--start=2023-01-01] [--sleep=0.3]
+#                                            [--start=2023-01-01] [--pace=0.75]
 #                                            [--raw-dir=data/raw/hyperliquid]
 #                                            [--intervals=1d,1h] [--spot=true]
-#                                            [--funding=true]
+#                                            [--funding=true] [--resume]
+#                                            [--batch=10] [--max-markets=N]
+# (`--sleep` was removed: a fixed sleep cannot respect a weight-based limit.
+# `--max-markets` fetches only the first N markets: a bounded smoke test.)
 #
 # Exit status: 0 ok | 1 partial (some markets failed; successes still written)
-#              | 3 INDETERMINATE (source unreachable / HTTP error / empty market
-#              list / an empty reply for a listed live market). 3 is never "no
-#              data" and never 0.
+#              | 3 INDETERMINATE (source unreachable / HTTP error / rate-limited /
+#              empty market list / an empty reply for a listed live market). 3 is
+#              never "no data" and never 0.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -70,6 +84,17 @@ HL_URL <- "https://api.hyperliquid.xyz/info"
 HL_CANDLE_PAGE_MAX <- 5000L
 HL_FUNDING_PAGE_MAX <- 500L  # documented API cap on funding rows per response
 .ms_day <- 86400000
+
+# Rate limiting (one home; hl_volume_estimate.R uses these, it defines none).
+HL_RATE_WEIGHT_PER_MIN <- 1200   # documented per-IP limit
+HL_PACE_FRACTION <- 0.75         # 900 of 1200 weight/min: under the limit with margin
+# Weight table (documented): every info request 20; candleSnapshot adds
+# 1 per 60 bars returned, fundingHistory 1 per 20 rows returned.
+HL_WEIGHT <- c(base = 20, candle_bars_per_unit = 60, funding_rows_per_unit = 20)
+HL_429_BACKOFF_S <- 60           # wait after an HTTP 429
+HL_429_MAX_ATTEMPTS <- 3L        # attempts per request (first try + retries)
+HL_FLUSH_BATCH <- 10L            # completed markets per parquet flush
+HL_PROGRESS_FILE <- "hl_progress.txt"
 
 # Candle intervals ingested in Phase 1 (#1072): bar length in ms, one home.
 # 15m / 5m / 1m are later phases, deliberately not allowed yet.
@@ -100,14 +125,28 @@ hl_unavailable <- function(msg) {
 # keep raw JSON append-only (see hl_make_post / hl_save_raw).
 hl_post <- function(body, url = HL_URL, timeout = 30, max_tries = 3,
                     on_response = NULL) {
+  # 429 is NOT retried here (httr2 would retry it after 1-2 s, far too soon):
+  # hl_make_post backs off explicitly. Only 5xx is retried; every HTTP status is
+  # inspected below instead of raised by httr2.
   resp <- tryCatch(
     httr2::request(url) |>
       httr2::req_body_json(body, auto_unbox = TRUE, null = "null") |>
       httr2::req_timeout(timeout) |>
-      httr2::req_retry(max_tries = max_tries, backoff = ~ 2^.x) |>
+      httr2::req_retry(max_tries = max_tries,
+                       is_transient = function(r) httr2::resp_status(r) %in%
+                         c(500L, 502L, 503L, 504L),
+                       backoff = ~ 2^.x) |>
+      httr2::req_error(is_error = function(r) FALSE) |>
       httr2::req_perform(),
     error = function(e) hl_unavailable(conditionMessage(e))
   )
+  status <- httr2::resp_status(resp)
+  if (status == 429L) {
+    cli::cli_abort(c("x" = "Hyperliquid rate limit (HTTP 429)",
+                     "i" = "the request was refused for exceeding the per-IP weight limit"),
+                   class = c("hl_rate_limited", "hl_source_unavailable"))
+  }
+  if (status >= 400L) hl_unavailable(sprintf("HTTP %d", status))
   text <- httr2::resp_body_string(resp)
   if (!is.null(on_response)) on_response(body, text)
   jsonlite::fromJSON(text, simplifyVector = FALSE)
@@ -145,14 +184,97 @@ hl_save_raw <- function(body, text, raw_dir, now = Sys.time()) {
 
 `%||%` <- function(a, b) if (is.null(a)) b else a
 
-# Real network post_fn that records every response under `raw_dir`.
-hl_make_post <- function(raw_dir, ...) {
+hl_bad_arg <- function(what, why) {
+  cli::cli_abort(c("x" = "Invalid {.arg {what}}", "i" = why),
+                 class = "hl_bad_arg")
+}
+
+# Documented weight of one request (`rows` = rows returned, for the two paged
+# types; NA counts as 0).
+hl_weight <- function(type, rows = 0) {
+  rows <- ifelse(is.na(rows), 0, rows)
+  extra <- switch(type,
+    candleSnapshot = floor(rows / HL_WEIGHT[["candle_bars_per_unit"]]),
+    fundingHistory = floor(rows / HL_WEIGHT[["funding_rows_per_unit"]]),
+    0)
+  HL_WEIGHT[["base"]] + extra
+}
+
+# Seconds to sleep after a request of `weight` that took `elapsed` s, so the
+# rate stays at or under pace x HL_RATE_WEIGHT_PER_MIN.
+hl_pace_seconds <- function(weight, elapsed, pace = HL_PACE_FRACTION) {
+  max(0, weight / (HL_RATE_WEIGHT_PER_MIN * pace / 60) - elapsed)
+}
+
+# Real network post_fn: records every response under `raw_dir`, PACES by weight
+# and BACKS OFF on HTTP 429. `post`, `sleep_fn` and `clock` are injectable so
+# tests never wait. `observer(entry)` (optional) sees every attempt (the volume
+# estimate builds its request log from it). The returned function carries its
+# running weight total in attr "hl_state" (see hl_weight_rate()).
+hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
+                         clock = function() proc.time()[["elapsed"]],
+                         backoff_s = HL_429_BACKOFF_S,
+                         max_attempts = HL_429_MAX_ATTEMPTS,
+                         post = hl_post, observer = NULL, ...) {
   force(raw_dir)
-  function(body) {
-    hl_post(body, ..., on_response = function(b, text) {
-      hl_save_raw(b, text, raw_dir)
-    })
+  if (!is.numeric(pace) || length(pace) != 1L || is.na(pace) || pace <= 0 || pace > 1) {
+    hl_bad_arg("pace", "must be a number in (0, 1]")
   }
+  state <- new.env()
+  state$weight <- 0; state$t0 <- NA_real_; state$requests <- 0L
+  state$n_429 <- 0L; state$clock <- clock
+  fn <- function(body) {
+    attempt <- 0L
+    repeat {
+      attempt <- attempt + 1L
+      t0 <- clock()
+      if (is.na(state$t0)) state$t0 <- t0
+      bytes <- NA_integer_
+      res <- tryCatch(
+        post(body, ..., on_response = function(b, text) {
+          bytes <<- nchar(text, type = "bytes")
+          hl_save_raw(b, text, raw_dir)
+        }),
+        error = function(e) e
+      )
+      el <- clock() - t0
+      ok <- !inherits(res, "error")
+      rows <- if (ok && body$type %in% c("candleSnapshot", "fundingHistory") &&
+                    is.list(res)) length(res) else NA_integer_
+      w <- hl_weight(body$type, rows)
+      state$weight <- state$weight + w
+      state$requests <- state$requests + 1L
+      if (!is.null(observer)) {
+        observer(list(body = body, rows = rows, bytes = bytes, weight = w,
+                      elapsed = el, ok = ok,
+                      error = if (ok) "" else conditionMessage(res)))
+      }
+      sleep_fn(hl_pace_seconds(w, el, pace))
+      if (ok) return(res)
+      if (!inherits(res, "hl_rate_limited")) rlang::cnd_signal(res)
+      state$n_429 <- state$n_429 + 1L
+      if (attempt >= max_attempts) {
+        cli::cli_abort(c("x" = "Hyperliquid still rate-limited after {attempt} attempt{?s}",
+                         "i" = "backed off {backoff_s} s between attempts; the market is reported failed, never skipped"),
+                       class = c("hl_rate_limited", "hl_source_unavailable"))
+      }
+      message(sprintf("HTTP 429 on %s: backing off %s s (attempt %d of %d)",
+                      body$type, format(backoff_s), attempt, max_attempts))
+      sleep_fn(backoff_s)
+    }
+  }
+  attr(fn, "hl_state") <- state
+  fn
+}
+
+# Observed weight per minute since the first request of a post_fn made by
+# hl_make_post(); NA for any other post_fn or before the first request.
+hl_weight_rate <- function(post_fn) {
+  st <- attr(post_fn, "hl_state")
+  if (is.null(st) || is.na(st$t0)) return(NA_real_)
+  el <- st$clock() - st$t0
+  if (el <= 0) return(NA_real_)
+  st$weight / el * 60
 }
 
 # Generic start-time pager with a no-progress guard. `fetch_page(start_ms)`
@@ -160,7 +282,7 @@ hl_make_post <- function(raw_dir, ...) {
 # is full (>= page_max) is followed by another request starting after its last
 # record; if that start does not advance, abort rather than loop forever.
 hl_page <- function(fetch_page, time_of, start_ms, end_ms, page_max,
-                    sleep_fn = Sys.sleep, sleep = 0.3, max_pages = 1000L) {
+                    max_pages = 1000L) {
   out <- list()
   cur <- start_ms
   for (i in seq_len(max_pages)) {
@@ -176,7 +298,6 @@ hl_page <- function(fetch_page, time_of, start_ms, end_ms, page_max,
     }
     if (length(page) < page_max || nxt > end_ms) break
     cur <- nxt
-    sleep_fn(sleep)
   }
   out
 }
@@ -640,20 +761,74 @@ hl_empty_reply <- function(what, coin) {
                  class = "hl_empty_reply")
 }
 
-# Returns list(status, failed, n_markets, n_in_progress_dropped, out_of_scope).
+# ── Progress file (resume) ──────────────────────────────────────────
+# Line 1: "# config: <fingerprint>"; then one done market key per line. A key is
+# appended only AFTER that market's rows were upserted to parquet.
+hl_run_fingerprint <- function(start, intervals, spot, funding) {
+  paste(as.character(start), paste(sort(intervals), collapse = ","),
+        spot, funding, sep = "|")
+}
+
+# Done keys recorded for the SAME configuration; a file of another configuration
+# is stale and is removed (its markets were fetched with different settings).
+hl_read_progress <- function(path, fp) {
+  if (!file.exists(path)) return(character())
+  lines <- readLines(path, warn = FALSE)
+  if (length(lines) == 0L || !identical(lines[1], paste0("# config: ", fp))) {
+    message("Resume: progress file is from a different configuration; starting fresh")
+    file.remove(path)
+    return(character())
+  }
+  lines[-1]
+}
+
+hl_append_progress <- function(path, fp, keys) {
+  if (length(keys) == 0L) return(invisible(path))
+  dir.create(dirname(path), recursive = TRUE, showWarnings = FALSE)
+  if (!file.exists(path)) writeLines(paste0("# config: ", fp), path)
+  cat(paste0(keys, "\n"), file = path, sep = "", append = TRUE)
+  invisible(path)
+}
+
+hl_fmt_hms <- function(s) {
+  s <- round(s)
+  sprintf("%d:%02d:%02d", s %/% 3600, (s %% 3600) %/% 60, s %% 60)
+}
+
+# Returns list(status, failed, n_markets, n_done, n_skipped, n_failed,
+# n_not_attempted, n_in_progress_dropped, out_of_scope, ...).
 # Status 3 (INDETERMINATE) is raised for: an unreachable / empty market list,
-# EVERY request failing as unavailable, or any live market with an empty reply
-# (successes are still written). Other per-market failures are isolated and
-# give status 1.
+# EVERY request failing as unavailable, any live market with an empty reply, a
+# market still rate-limited (HTTP 429) after its back-off attempts, or
+# `max_rate_limited` consecutive rate-limited markets (the run stops; the rest
+# is counted in n_not_attempted). Successes are still written. Other per-market
+# failures are isolated and give status 1.
+#
+# Writes are INCREMENTAL: every `batch` completed markets (and on exit, also on
+# an interrupt) the buffered rows are upserted and the markets are recorded in
+# the progress file. A batch, not each market, because every upsert rewrites
+# the whole parquet file (the hourly file reaches millions of rows); at ~35 s
+# per market the worst case loss of a hard kill is `batch` markets, minutes.
+# `resume = TRUE` skips markets recorded as done; `max_markets` keeps only the
+# first N markets (smoke test).
 hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
                    start = as.Date("2023-01-01"), end = Sys.time(),
-                   sleep_fn = Sys.sleep, sleep = 0.3,
                    now = format(Sys.time(), tz = "UTC", usetz = TRUE),
                    intervals = names(HL_INTERVALS), spot = TRUE,
-                   funding = TRUE) {
+                   funding = TRUE, resume = FALSE, batch = HL_FLUSH_BATCH,
+                   max_markets = NULL, max_rate_limited = 3L) {
   invisible(lapply(intervals, hl_check_interval))
+  if (!is.numeric(batch) || length(batch) != 1L || is.na(batch) || batch < 1) {
+    hl_bad_arg("batch", "must be a whole number >= 1")
+  }
+  if (!is.null(max_markets) &&
+      (!is.numeric(max_markets) || length(max_markets) != 1L ||
+         is.na(max_markets) || max_markets < 1)) {
+    hl_bad_arg("max_markets", "must be NULL or a whole number >= 1")
+  }
   start_ms <- as.numeric(as.POSIXct(start, tz = "UTC")) * 1000
   end_ms <- floor(as.numeric(end) * 1000)
+  t_run <- Sys.time()
 
   indeterminate <- function(why) {
     cli::cli_alert_danger("INDETERMINATE: {why}")
@@ -668,23 +843,66 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   # Spot: only pairs with non-zero 24h volume are fetched (issue #1072, Phase 1).
   markets <- markets[markets$instrument_type == "perp" |
                        (!is.na(markets$traded_24h) & markets$traded_24h), ]
+  if (!is.null(max_markets)) markets <- utils::head(markets, max_markets)
   if (nrow(markets) == 0L) return(indeterminate("empty market list"))
   failed <- list()
 
-  bars <- list(); funding_raw <- list(); funding_daily <- list()
+  fp <- hl_run_fingerprint(start, intervals, spot, funding)
+  prog_path <- file.path(out_dir, HL_PROGRESS_FILE)
+  if (resume) {
+    done_keys <- hl_read_progress(prog_path, fp)
+  } else {
+    done_keys <- character()
+    if (file.exists(prog_path)) file.remove(prog_path)
+  }
+  mk_keys <- paste0(markets$dex, ":", markets$coin)
+  todo <- which(!mk_keys %in% done_keys)
+  n_skipped <- nrow(markets) - length(todo)
+  if (n_skipped > 0L) {
+    message(sprintf("Resume: skipping %d market(s) already done; %d to fetch",
+                    n_skipped, length(todo)))
+  }
+
+  # Buffer of completed markets, flushed to parquet + progress file.
+  new_buf <- function() list(bars = list(), funding_raw = list(),
+                             funding_daily = list(), done = character())
+  buf <- new_buf()
+  flush <- function() {
+    if (length(buf$done) == 0L) return(invisible(NULL))
+    b <- buf
+    # Parsed parquet is DERIVED from the raw JSON kept under data/raw/ (see
+    # hl_make_post); nothing here is ever uploaded.
+    for (nm in names(b$bars)) {
+      parts <- strsplit(nm, " ", fixed = TRUE)[[1]]
+      keyc <- if (parts[2] == "1d") "date" else "time"
+      hl_upsert(bind_rows(b$bars[[nm]]), hl_bars_path(out_dir, parts[1], parts[2]),
+                c("dex", "coin", keyc))
+    }
+    hl_upsert(bind_rows(b$funding_daily), file.path(out_dir, "perp_funding_daily.parquet"),
+              c("dex", "coin", "date"))
+    hl_upsert(bind_rows(b$funding_raw), file.path(out_dir, "perp_funding.parquet"),
+              c("dex", "coin", "time_ms"))
+    # Only now are these markets complete.
+    hl_append_progress(prog_path, fp, b$done)
+    buf <<- new_buf()
+    invisible(NULL)
+  }
+  on.exit(flush(), add = TRUE)
+
   n_ok <- 0L; n_dropped <- 0L; cap_rows <- list()
-  for (i in seq_len(nrow(markets))) {
+  n_rl_streak <- 0L; aborted_rl <- FALSE
+  for (j in seq_along(todo)) {
+    i <- todo[j]
     dex <- markets$dex[i]; coin <- markets$coin[i]
     itype <- markets$instrument_type[i]; delisted <- markets$is_delisted[i]
     cls <- markets$market_class[i]
-    key <- paste0(dex, ":", coin)
+    key <- mk_keys[i]
     r <- tryCatch({
       out <- list(bars = list(), n_dropped = 0L, cap = "none")
       # Daily bars FIRST: a delisted market's funding end time comes from them.
       for (itv in intervals[order(intervals != "1d")]) {
         c_raw <- hl_fetch_candles(coin, start_ms, end_ms, post_fn,
                                   interval = itv, clamp = !delisted)
-        sleep_fn(sleep)
         if (length(c_raw) == 0L && !delisted) hl_empty_reply("candle", coin)
         dp <- hl_drop_in_progress(c_raw, end_ms)
         out$n_dropped <- out$n_dropped + dp$n_dropped
@@ -697,15 +915,13 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
           # `--intervals` without 1d: the cap still needs the daily bars (not stored)
           d_raw <- hl_fetch_candles(coin, start_ms, end_ms, post_fn,
                                     interval = "1d", clamp = FALSE)
-          sleep_fn(sleep)
           daily <- hl_parse_candles(hl_drop_in_progress(d_raw, end_ms)$kept,
                                     dex, coin, "1d", itype)
         }
         mf <- hl_fetch_market_funding(coin, delisted, daily, start_ms, end_ms,
-                                      post_fn, sleep_fn = sleep_fn, sleep = sleep)
+                                      post_fn)
         out$cap <- mf$cap
         out$cap_end_ms <- mf$end_ms
-        if (mf$cap != "no_traded_bar") sleep_fn(sleep)
         f_raw <- mf$raw
         if (length(f_raw) == 0L && !delisted) hl_empty_reply("funding", coin)
         out$f_raw <- hl_parse_funding_raw(f_raw, dex, coin)
@@ -714,16 +930,20 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
       out
     }, error = function(e) e)
     if (inherits(r, "error")) {
+      rl <- inherits(r, "hl_rate_limited")
       failed[[key]] <- list(reason = conditionMessage(r),
                             unavailable = inherits(r, "hl_source_unavailable"),
-                            indeterminate = inherits(r, "hl_empty_reply"))
+                            indeterminate = inherits(r, "hl_empty_reply") || rl)
+      n_rl_streak <- if (rl) n_rl_streak + 1L else 0L
+      outcome <- "FAILED"
       cli::cli_alert_danger("{key}: FAILED ({conditionMessage(r)})")
     } else {
+      n_rl_streak <- 0L
       for (itv in names(r$bars)) {
-        bars[[paste(itype, itv)]][[key]] <- r$bars[[itv]]
+        buf$bars[[paste(itype, itv)]][[key]] <- r$bars[[itv]]
       }
       if (!is.null(r$f_raw)) {
-        funding_raw[[key]] <- r$f_raw; funding_daily[[key]] <- r$f_daily
+        buf$funding_raw[[key]] <- r$f_raw; buf$funding_daily[[key]] <- r$f_daily
       }
       n_dropped <- n_dropped + r$n_dropped
       if (r$cap != "none") {
@@ -731,9 +951,25 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
                                       funding_end_ms = r$cap_end_ms,
                                       stringsAsFactors = FALSE)
       }
+      buf$done <- c(buf$done, key)
       n_ok <- n_ok + 1L
+      outcome <- "done"
+      if (length(buf$done) >= batch) flush()
+    }
+    rate <- hl_weight_rate(post_fn)
+    message(sprintf("[%d/%d] %s %s | elapsed %s | %s weight/min", j, length(todo), key,
+                    outcome, hl_fmt_hms(as.numeric(difftime(Sys.time(), t_run, units = "secs"))),
+                    if (is.na(rate)) "n/a" else format(round(rate))))
+    if (n_rl_streak >= max_rate_limited) {
+      aborted_rl <- TRUE
+      break
     }
   }
+  flush()
+  n_failed <- length(failed)
+  n_not_attempted <- length(todo) - n_ok - n_failed
+  message(sprintf("Markets: %d done, %d skipped as already done, %d failed, %d not attempted",
+                  n_ok, n_skipped, n_failed, n_not_attempted))
   cli::cli_inform("Dropped {n_dropped} in-progress bar{?s} (close time after fetch time)")
   funding_cap <- if (length(cap_rows) > 0L) {
     bind_rows(cap_rows)
@@ -750,19 +986,23 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
     ))
   }
 
-  # Open-interest snapshot: one call per perp exchange, current values only.
+  # Open-interest snapshot: one call per perp exchange, current values only
+  # (skipped when the run stopped on repeated rate limiting).
   oi <- list()
-  for (d in unique(markets$dex[markets$instrument_type == "perp"])) {
-    body <- if (nzchar(d)) list(type = "metaAndAssetCtxs", dex = d) else list(type = "metaAndAssetCtxs")
-    s <- tryCatch(hl_parse_oi_snapshot(post_fn(body), d, now), error = function(e) e)
-    if (inherits(s, "error")) {
-      failed[[paste0("oi:", d)]] <- list(reason = conditionMessage(s),
-                                         unavailable = inherits(s, "hl_source_unavailable"),
-                                         indeterminate = FALSE)
-    } else {
-      oi[[d]] <- s
+  if (!aborted_rl) {
+    for (d in unique(markets$dex[markets$instrument_type == "perp"])) {
+      body <- if (nzchar(d)) list(type = "metaAndAssetCtxs", dex = d) else list(type = "metaAndAssetCtxs")
+      s <- tryCatch(hl_parse_oi_snapshot(post_fn(body), d, now), error = function(e) e)
+      if (inherits(s, "error")) {
+        failed[[paste0("oi:", d)]] <- list(reason = conditionMessage(s),
+                                           unavailable = inherits(s, "hl_source_unavailable"),
+                                           indeterminate = inherits(s, "hl_rate_limited"))
+      } else {
+        oi[[d]] <- s
+      }
     }
-    sleep_fn(sleep)
+    hl_upsert(bind_rows(oi), file.path(out_dir, "perp_oi_snapshot.parquet"),
+              c("dex", "coin", "fetched_at"))
   }
 
   failed_df <- data.frame(
@@ -772,26 +1012,25 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   )
   all_unavailable <- n_ok == 0L && length(failed) > 0L &&
     all(vapply(failed, `[[`, logical(1), "unavailable"))
-  if (all_unavailable) return(indeterminate("every request failed: source unavailable"))
-  any_indeterminate <- any(vapply(failed, `[[`, logical(1), "indeterminate"))
-
-  # Parsed parquet is DERIVED from the raw JSON kept under data/raw/ (see
-  # hl_make_post); nothing here is ever uploaded.
-  for (nm in names(bars)) {
-    parts <- strsplit(nm, " ", fixed = TRUE)[[1]]
-    keyc <- if (parts[2] == "1d") "date" else "time"
-    hl_upsert(bind_rows(bars[[nm]]), hl_bars_path(out_dir, parts[1], parts[2]),
-              c("dex", "coin", keyc))
+  if (all_unavailable) {
+    ind <- indeterminate("every request failed: source unavailable")
+    ind[c("failed", "n_markets", "n_done", "n_skipped", "n_failed", "n_not_attempted")] <-
+      list(failed_df, nrow(markets), n_ok, n_skipped, n_failed, n_not_attempted)
+    return(ind)
   }
-  hl_upsert(bind_rows(funding_daily), file.path(out_dir, "perp_funding_daily.parquet"),
-            c("dex", "coin", "date"))
-  hl_upsert(bind_rows(funding_raw), file.path(out_dir, "perp_funding.parquet"),
-            c("dex", "coin", "time_ms"))
-  hl_upsert(bind_rows(oi), file.path(out_dir, "perp_oi_snapshot.parquet"),
-            c("dex", "coin", "fetched_at"))
+  any_indeterminate <- aborted_rl ||
+    any(vapply(failed, `[[`, logical(1), "indeterminate"))
+  status <- if (any_indeterminate) 3L else if (nrow(failed_df) > 0L) 1L else 0L
+  if (aborted_rl) {
+    cli::cli_alert_danger("INDETERMINATE: stopped after {max_rate_limited} consecutive rate-limited markets; {n_not_attempted} not attempted")
+  }
+  # A run that finished clean is complete: the next run starts fresh.
+  if (status == 0L && file.exists(prog_path)) file.remove(prog_path)
 
-  list(status = if (any_indeterminate) 3L else if (nrow(failed_df) > 0L) 1L else 0L,
+  list(status = status,
        failed = failed_df, n_markets = nrow(markets),
+       n_done = n_ok, n_skipped = n_skipped, n_failed = n_failed,
+       n_not_attempted = n_not_attempted,
        n_in_progress_dropped = n_dropped, out_of_scope = enum$out_of_scope,
        n_funding_capped = n_capped, n_funding_no_traded_bar = n_no_traded,
        funding_cap = funding_cap)
@@ -803,14 +1042,21 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
     hit <- grep(paste0("^--", name, "="), args, value = TRUE)
     if (length(hit) == 0L) default else sub(paste0("^--", name, "="), "", hit[1])
   }
+  if (any(grepl("^--sleep", args))) {
+    cli_alert_warning("--sleep was removed and is ignored: requests are paced by weight (--pace)")
+  }
+  mm <- opt("max-markets", NA_character_)
   cli_h1("Hyperliquid fetch (perpetual futures and spot pairs, NOT tokenised shares)")
-  res <- hl_run(post_fn = hl_make_post(opt("raw-dir", "data/raw/hyperliquid")),
+  res <- hl_run(post_fn = hl_make_post(opt("raw-dir", "data/raw/hyperliquid"),
+                                       pace = as.numeric(opt("pace", HL_PACE_FRACTION))),
                 out_dir = opt("out-dir", "data/dist"),
                 start = as.Date(opt("start", "2023-01-01")),
-                sleep = as.numeric(opt("sleep", "0.3")),
                 intervals = strsplit(opt("intervals", "1d,1h"), ",", fixed = TRUE)[[1]],
                 spot = !identical(opt("spot", "true"), "false"),
-                funding = !identical(opt("funding", "true"), "false"))
+                funding = !identical(opt("funding", "true"), "false"),
+                resume = "--resume" %in% args,
+                batch = as.integer(opt("batch", HL_FLUSH_BATCH)),
+                max_markets = if (is.na(mm)) NULL else as.integer(mm))
   if (res$status == 3L) {
     if (nrow(res$failed) > 0L) print(res$failed, row.names = FALSE)
     quit(save = "no", status = 3L)
@@ -820,7 +1066,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
     print(res$failed, row.names = FALSE)
     quit(save = "no", status = 1L)
   }
-  cli_alert_success("{res$n_markets} markets written")
+  cli_alert_success("{res$n_done} markets written, {res$n_skipped} skipped as already done")
   invisible(TRUE)
 }
 

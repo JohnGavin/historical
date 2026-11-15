@@ -142,7 +142,7 @@
 # paging that repeats a boundary row aborts (snapshot)
 
     Code
-      hl_fetch_funding("SOL", 0, 4e+12, post, page_max = 2L, sleep_fn = .no_sleep)
+      hl_fetch_funding("SOL", 0, 4e+12, post, page_max = 2L)
     Condition
       Error in `hl_fetch_funding()`:
       x SOL: duplicate funding timestamps after paging
