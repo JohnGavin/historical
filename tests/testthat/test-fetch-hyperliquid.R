@@ -601,6 +601,62 @@ test_that("paging that repeats a boundary row aborts (snapshot)", {
   expect_false(anyDuplicated(vapply(out, function(r) r$time, 1)) > 0)
 })
 
+# ── "NaN" premium (#1072): the API sends the literal string "NaN" ───
+# Only `premium`, only the exact spelling "NaN" (the 34 raw occurrences are all
+# `"premium":"NaN"`); every other bad value still aborts.
+.nan_prem <- function(value) {
+  x <- .f_switch[1:3]
+  x[[2]]$premium <- value
+  x
+}
+
+test_that("a \"NaN\" premium parses to NA and the row is kept", {
+  f <- hl_parse_funding_raw(.nan_prem("NaN"), "", "BTC")
+  expect_equal(nrow(f), 3L)
+  expect_equal(is.na(f$premium), c(FALSE, TRUE, FALSE))
+  expect_true(all(is.finite(f$funding_rate)))
+  # the daily sums do not read premium and are unaffected
+  d <- hl_parse_funding_daily(.nan_prem("NaN"), "", "BTC")
+  expect_true(all(is.finite(d$funding_sum)))
+})
+
+test_that("any other non-numeric premium still aborts (falsifiable)", {
+  for (bad in c("abc", "nan ", "nan", "NAN", "", "Inf")) {
+    expect_error(hl_parse_funding_raw(.nan_prem(bad), "", "BTC"),
+                 "Non-numeric value in", info = sprintf("[%s]", bad))
+  }
+})
+
+test_that("\"NaN\" is accepted ONLY for premium, not fundingRate or candles", {
+  x <- .f_switch[1:3]
+  x[[2]]$fundingRate <- "NaN"
+  expect_error(hl_parse_funding_raw(x, "", "BTC"), "Non-numeric value in")
+  expect_error(hl_parse_funding_daily(x, "", "BTC"), "Non-numeric value in")
+  expect_error(hl_num("NaN", "x"), "Non-numeric value in")
+  expect_equal(hl_num(c("1.5", "NaN"), "x", nan_ok = TRUE), c(1.5, NA))
+})
+
+test_that("hl_run counts NaN-premium rows and stores them as NA", {
+  base <- .mock_post()
+  post <- function(body) {
+    if (body$type == "fundingHistory") {
+      r <- base(body)
+      r[[2]]$premium <- "NaN"
+      return(r)
+    }
+    base(body)
+  }
+  out <- withr::local_tempdir()
+  res <- .run(post, out)
+  expect_equal(res$status, 0L)
+  raw <- arrow::read_parquet(file.path(out, "perp_funding.parquet"))
+  expect_gt(res$n_premium_nan, 0L)
+  expect_equal(res$n_premium_nan, sum(is.na(raw$premium)))
+  # clean data: the count is exactly zero (red reachable both ways)
+  clean <- .run(.mock_post(), withr::local_tempdir())
+  expect_equal(clean$n_premium_nan, 0L)
+})
+
 test_that("hl_run writes the raw funding table beside the daily sums", {
   out <- withr::local_tempdir()
   .run(.mock_post(), out)

@@ -40,7 +40,9 @@
 #                               fundingRate + n_hours (partial days visible)
 #   perp_funding.parquet        RAW funding rows keyed (dex, coin, time_ms):
 #                               interval_hours (8 then 1, read from the gaps),
-#                               rate_per_hour, offset_outlier. A DELISTED
+#                               rate_per_hour, offset_outlier. `premium` is NA
+#                               when the API sends the string "NaN" (row kept
+#                               and counted as n_premium_nan). A DELISTED
 #                               market's funding stops at the close time of its
 #                               last traded daily bar (it keeps emitting zero
 #                               rows afterwards); a delisted market that never
@@ -368,13 +370,18 @@ hl_bare_symbol <- function(coin) sub("^[^:]+:", "", coin)
 
 # Strict numeric conversion: a non-missing input that fails to parse is an
 # error, never a silent NA.
-hl_num <- function(x, what) {
+# `nan_ok = TRUE` is an explicit opt-in for ONE field family: the exact string
+# "NaN" (case-sensitive; the API's only spelling in the raw replies, #1072)
+# becomes NA. Every other non-numeric text ("nan", "NaN ", "Inf", "") still
+# aborts. Only `premium` opts in.
+hl_num <- function(x, what, nan_ok = FALSE) {
   x <- unlist(x, use.names = FALSE)
   if (is.numeric(x)) return(as.numeric(x))
   # Validate the text BEFORE converting, so as.numeric() never warns and a bad
   # value is an explicit error rather than a hidden coercion.
   num_re <- "^[-+]?([0-9]+\\.?[0-9]*|\\.[0-9]+)([eE][-+]?[0-9]+)?$"
   x <- as.character(x)
+  if (nan_ok) x[!is.na(x) & x == "NaN"] <- NA_character_
   if (any(!is.na(x) & !grepl(num_re, x))) {
     cli::cli_abort("Non-numeric value in {.field {what}}")
   }
@@ -670,6 +677,9 @@ hl_empty_funding <- function() {
 # has no gap, so its interval and per-hour rate are NA (never guessed).
 # `offset_min` is minutes past the hour; rows above HL_FUNDING_OFFSET_MAX_MIN
 # are FLAGGED in `offset_outlier`, not floored and not dropped.
+# `premium` may be the string "NaN" in the reply (#1072): stored as NA, row kept.
+# `fundingRate` stays strict (no NaN seen in the data): a NaN rate aborts rather
+# than silently entering `funding_sum`.
 hl_parse_funding_raw <- function(x, dex = "", coin) {
   if (length(x) == 0L) return(hl_empty_funding())
   hl_require_fields(x, c("fundingRate", "premium", "time"), "funding")
@@ -680,7 +690,7 @@ hl_parse_funding_raw <- function(x, dex = "", coin) {
   }
   o <- order(time_ms)
   rate <- hl_num(lapply(x, `[[`, "fundingRate"), "fundingRate")[o]
-  prem <- hl_num(lapply(x, `[[`, "premium"), "premium")[o]
+  prem <- hl_num(lapply(x, `[[`, "premium"), "premium", nan_ok = TRUE)[o]
   time_ms <- time_ms[o]
   gap_h <- c(NA_real_, diff(time_ms)) / 3600000
   nearest <- function(g) {
@@ -890,7 +900,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   on.exit(flush(), add = TRUE)
 
   n_ok <- 0L; n_dropped <- 0L; cap_rows <- list()
-  n_rl_streak <- 0L; aborted_rl <- FALSE
+  n_rl_streak <- 0L; aborted_rl <- FALSE; n_premium_nan <- 0L
   for (j in seq_along(todo)) {
     i <- todo[j]
     dex <- markets$dex[i]; coin <- markets$coin[i]
@@ -925,6 +935,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
         f_raw <- mf$raw
         if (length(f_raw) == 0L && !delisted) hl_empty_reply("funding", coin)
         out$f_raw <- hl_parse_funding_raw(f_raw, dex, coin)
+        out$n_premium_nan <- sum(is.na(out$f_raw$premium))
         out$f_daily <- hl_parse_funding_daily(f_raw, dex, coin)
       }
       out
@@ -944,6 +955,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
       }
       if (!is.null(r$f_raw)) {
         buf$funding_raw[[key]] <- r$f_raw; buf$funding_daily[[key]] <- r$f_daily
+        n_premium_nan <- n_premium_nan + r$n_premium_nan
       }
       n_dropped <- n_dropped + r$n_dropped
       if (r$cap != "none") {
@@ -984,6 +996,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
       "Funding capped at the last traded bar for {n_capped} delisted market{?s}",
       "i" = "{n_no_traded} delisted market{?s} with no traded bar: no funding requested (not a failure)"
     ))
+    cli::cli_inform("{n_premium_nan} funding row{?s} with premium \"NaN\" stored as NA (rows kept)")
   }
 
   # Open-interest snapshot: one call per perp exchange, current values only
@@ -1032,7 +1045,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
        n_done = n_ok, n_skipped = n_skipped, n_failed = n_failed,
        n_not_attempted = n_not_attempted,
        n_in_progress_dropped = n_dropped, out_of_scope = enum$out_of_scope,
-       n_funding_capped = n_capped, n_funding_no_traded_bar = n_no_traded,
+       n_premium_nan = n_premium_nan, n_funding_capped = n_capped, n_funding_no_traded_bar = n_no_traded,
        funding_cap = funding_cap)
 }
 
