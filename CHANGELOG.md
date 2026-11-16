@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-11-16 (commodity momentum trades CMR's position pool; refs #1061, #808)
+
+This changes the commodity momentum numbers (every strategy's Sharpe) once `scripts/build.sh` re-runs the chain.
+
+- #1061: `commodities_signals` and `commodities_backtest` read `cmr_deduplicated_returns` (the
+  `keep = TRUE` rows of `.HD_CMR_EXPOSURE_MAP`, the #808 rule) instead of `cmr_tradeable_returns`, so
+  momentum and CMR rank and hold one universe. Universe 37 -> 17 series (all Yahoo futures; no
+  monthly IMF/FRED index left). Baseline Sharpe -0.245 -> -0.488 (measured from the store, not built).
+  Stale "#751 finding 3 / still open" comments corrected to cite #808 and #1061.
+- Follow-up (not fixed here): with a 17-series pool `n_long = n_short = 10` overlaps on every date.
+
 ## 2026-11-12 (session summary: costs, commodity fixes, Econvitals review)
 
 ### Completed
