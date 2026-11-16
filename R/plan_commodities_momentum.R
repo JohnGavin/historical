@@ -84,9 +84,10 @@ plan_commodities_momentum <- function() {
       backtest_commodity_momentum(
         signals = commodities_signals,
         returns = cmr_deduplicated_returns,  # #1061: CMR's position pool (#808 rule)
-        cost_bps = 20,  # 0.2% per trade (commodities are liquid)
-        n_long = 10,
-        n_short = 10
+        cost_bps = 20  # 0.2% per trade (commodities are liquid)
+        # #1061: leg size is CMR's rule (frac = .HD_CMR_DEFAULT_FRAC, flat
+        # below its minimum breadth), the function default; the fixed
+        # n_long = n_short = 10 headcount overlapped the legs on <= 17 names.
       )
     }),
 
@@ -182,7 +183,10 @@ plan_commodities_momentum <- function() {
         scale_color_brewer(palette = "Dark2") +
         labs(
           title = "Commodities Momentum: Cumulative Returns",
-          subtitle = "Long-short (10/10), 0.2% transaction costs",
+          subtitle = sprintf(
+            "Long-short (top/bottom %s of ranked names, CMR rule), 0.2%% transaction costs",
+            scales::percent(.HD_CMR_DEFAULT_FRAC, accuracy = 1)
+          ),
           x = NULL,
           y = "Cumulative Return (log scale)",
           color = "Strategy",
