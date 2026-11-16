@@ -1,5 +1,23 @@
 # Changelog
 
+## 2026-11-16 (commodity momentum trades CMR's position pool; refs #1061, #808)
+
+This changes the commodity momentum numbers (every strategy's Sharpe) once `scripts/build.sh` re-runs the chain.
+
+- #1061: `commodities_signals` and `commodities_backtest` read `cmr_deduplicated_returns` (the
+  `keep = TRUE` rows of `.HD_CMR_EXPOSURE_MAP`, the #808 rule) instead of `cmr_tradeable_returns`, so
+  momentum and CMR rank and hold one universe. Universe 37 -> 17 series (all Yahoo futures; no
+  monthly IMF/FRED index left). Baseline Sharpe -0.245 -> -0.488 (measured from the store, not built).
+  Stale "#751 finding 3 / still open" comments corrected to cite #808 and #1061.
+- #1061: `backtest_commodity_momentum()` takes CMR's leg-sizing rule (#751 items C/D) instead of the
+  fixed `n_long = n_short = 10` headcount, which overlapped the legs on every date of the 17-series
+  pool (overlapping names were long-only, so the book was net long). Per date each leg holds
+  `floor(n * .HD_CMR_DEFAULT_FRAC)` names at weight `1 / n_leg` (CMR's weighting, each leg sums to 1,
+  so gross exposure is 2, not 1 as before: returns, turnover and cost scale 2x, Sharpe does not),
+  flat below `ceiling(.HD_CMR_MIN_LEG_NAMES / frac)` names. `n_long`/`n_short` arguments removed;
+  `frac` added. Baseline Sharpe on the 17-series pool: -0.488 (headcount) -> -0.637 (tercile).
+  Mean net exposure 0.179 -> 0.000 (dollar-neutral), 0.9% of dates flat. Measured from the store.
+
 ## 2026-11-12 (session summary: costs, commodity fixes, Econvitals review)
 
 ### Completed

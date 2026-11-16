@@ -126,12 +126,16 @@ build_commodity_signals <- function(returns, lookback = 12) {
 #'   mom_9d, volatility_roll, trend_strength
 #' @param returns Tibble with columns: date, series_id, monthly_ret
 #' @param cost_bps Numeric. Transaction cost in basis points (default 20 = 0.2%)
-#' @param n_long Integer. Number of commodities to long (default 10)
-#' @param n_short Integer. Number of commodities to short (default 10)
+#' @param frac Numeric fraction in (0, 0.5). Share of the ranked cross-section
+#'   held on EACH leg. Default \code{.HD_CMR_DEFAULT_FRAC} (terciles), the
+#'   same single home CMR uses (#751 items C/D); the previous fixed
+#'   \code{n_long = n_short = 10} headcount is removed (#1061).
 #'
 #' @return Tibble with columns:
 #'   - date, strategy
 #'   - portfolio_ret, turnover, cost, net_ret
+#'   - n_positions, n_long, n_short, n_avail (names held / ranked that date)
+#'   - net_weight: sum of weights (0 when held, dollar-neutral; 0 when flat)
 #'
 #' @details
 #' Strategies tested:
@@ -141,17 +145,41 @@ build_commodity_signals <- function(returns, lookback = 12) {
 #'   4. trend_filtered: mom_12d * trend_strength (only smooth trends)
 #'
 #' Transaction costs: 20 bps per trade (commodities are liquid).
-#' Portfolio: Long top N, short bottom N by signal, equal-weight within leg.
+#'
+#' Leg sizing (#1061) is CMR's rule, hd_commodity_mr_portfolio()
+#' (packages/historicaldata/R/commodities_mean_reversion.R), applied to the
+#' momentum signal (highest signal = long, as before): per date each leg holds
+#' \code{floor(n_avail * frac)} names, equal weight \code{1 / n_leg} per name
+#' (each leg sums to 1, so the book is dollar-neutral), and the date is flat
+#' (zero return, still returned as a row) when \code{n_avail} is below
+#' \code{ceiling(.HD_CMR_MIN_LEG_NAMES / frac)}. Legs are disjoint by
+#' construction (\code{frac < 0.5}) and checked at runtime. The leg
+#' assignment is inline in the CMR function and keyed to its \code{mr_signal}
+#' column, so it is re-implemented here rather than called; the constants are
+#' referenced, not copied. The fixed headcount made the legs overlap on every
+#' date once the pool shrank to <= 17 series, leaving overlapping names
+#' long-only (a net-long book).
+#'
+#' Turnover follows CMR exactly: lagged over each series' held rows only, so a
+#' held-to-flat transition is not charged.
 #'
 #' @export
 backtest_commodity_momentum <- function(signals,
                                        returns,
                                        cost_bps = 20,
-                                       n_long = 10,
-                                       n_short = 10) {
+                                       frac = .HD_CMR_DEFAULT_FRAC) {
   library(dplyr)
 
+  if (!is.numeric(frac) || length(frac) != 1L || is.na(frac) ||
+      frac <= 0 || frac >= 0.5) {
+    cli::cli_abort(c(
+      "x" = "{.arg frac} must be a single fraction in (0, 0.5), got {frac}.",
+      "i" = "It is the share of the ranked cross-section held on EACH leg (CMR rule, #751 items C/D)."
+    ))
+  }
+
   cost_per_trade <- cost_bps / 10000
+  min_total_names <- ceiling(.HD_CMR_MIN_LEG_NAMES / frac)
 
   # Join signals with the next bar's return (#1048). monthly_ret on the row
   # dated t is the return over bar t, and the signal at t uses data through
@@ -201,35 +229,66 @@ backtest_commodity_momentum <- function(signals,
       strategies[[strat_name]]
     }
 
-    # Rank by signal, select top/bottom
-    portfolio <- combined |>
+    ranked_all <- combined |>
       select(date, series_id, signal = !!rlang::sym(signal_col), next_ret) |>
       filter(!is.na(signal)) |>
       group_by(date) |>
       mutate(
-        rank = rank(-signal, na.last = "keep", ties.method = "first"),
-        n_commodities = n()
-      ) |>
-      filter(rank <= n_long | rank > (n_commodities - n_short)) |>
-      mutate(
-        weight = case_when(
-          rank <= n_long ~ 1 / (2 * n_long),
-          TRUE ~ -1 / (2 * n_short)
-        ),
-        position = ifelse(rank <= n_long, "long", "short")
+        rank = row_number(desc(signal)),  # 1 = highest signal = most long
+        n_avail = n(),
+        # CMR rule: fraction of that date's breadth; flat below the floor
+        n_leg = if_else(n_avail >= min_total_names,
+                        as.integer(floor(n_avail * frac)), 0L)
       ) |>
       ungroup()
 
-    # Compute returns
-    period_returns <- portfolio |>
-      group_by(date) |>
-      summarise(
-        portfolio_ret = sum(weight * next_ret, na.rm = TRUE),
-        n_positions = n(),
-        .groups = "drop"
+    breadth <- ranked_all |> distinct(date, n_avail)
+
+    portfolio <- ranked_all |>
+      filter(n_leg > 0L, rank <= n_leg | rank > (n_avail - n_leg)) |>
+      mutate(
+        position = if_else(rank <= n_leg, "long", "short"),
+        weight = if_else(position == "long", 1 / n_leg, -1 / n_leg)
       )
 
-    # Compute turnover
+    overlap <- portfolio |> distinct(date, n_avail, n_leg) |>
+      filter(2L * n_leg > n_avail)
+    if (nrow(overlap) > 0L) {
+      cli::cli_abort(c(
+        "x" = "Momentum legs would OVERLAP on {nrow(overlap)} date{?s}.",
+        "i" = "2 * n_leg > n_avail is impossible when {.arg frac} < 0.5; investigate the rank arithmetic."
+      ))
+    }
+
+    # Compute returns; every date with signals is kept, flat dates = 0
+    period_returns <- breadth |>
+      left_join(
+        portfolio |>
+          group_by(date) |>
+          summarise(
+            portfolio_ret = sum(weight * next_ret, na.rm = TRUE),
+            n_long = sum(position == "long"),
+            n_short = sum(position == "short"),
+            net_weight = sum(weight),
+            .groups = "drop"
+          ),
+        by = "date"
+      ) |>
+      mutate(
+        portfolio_ret = coalesce(portfolio_ret, 0),
+        n_long = coalesce(n_long, 0L),
+        n_short = coalesce(n_short, 0L),
+        net_weight = coalesce(net_weight, 0),
+        n_positions = n_long + n_short
+      )
+
+    # Compute turnover EXACTLY as hd_commodity_mr_portfolio() does: the lag
+    # is taken over a series' HELD rows only (default 0 for its first held
+    # row), and flat dates contribute no rows. So a held -> flat transition
+    # is NOT charged (closing the book costs nothing), and a re-entry after a
+    # flat spell is compared with the weight last held, not with zero. One
+    # rule shared with CMR (#1061); changing it here alone would reopen the
+    # cmr_vs_mom_compare basis gap.
     turnover <- portfolio |>
       arrange(series_id, date) |>
       group_by(series_id) |>
@@ -252,7 +311,9 @@ backtest_commodity_momentum <- function(signals,
         cost = turnover * cost_per_trade,
         net_ret = portfolio_ret - cost
       ) |>
-      select(date, strategy, portfolio_ret, turnover, cost, net_ret, n_positions)
+      arrange(date) |>
+      select(date, strategy, portfolio_ret, turnover, cost, net_ret,
+             n_positions, n_long, n_short, n_avail, net_weight)
 
     results_list[[strat_name]] <- result
   }
