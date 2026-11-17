@@ -80,25 +80,23 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <script src="index_files/libs/quarto-dashboard/web-components.js" type="module"></script>
 <script src="index_files/libs/quarto-dashboard/components.js"></script>
 
-<!-- Shared color-scheme signal (accessibility rule Part 2 Clause 0, historical#0b412a9c).
-     Static value is always "dark" -- that is what
-     ~/.claude/scripts/check_dashboard_color_scheme.sh greps for in the
-     docs/_quarto.yml post-render gate. Pages with a light theme keep this
-     in sync with the ACTUAL active theme at runtime via a MutationObserver
-     in vignette-shared.js; ANY color-scheme declaration suppresses
-     Chrome's Auto Dark Mode heuristic regardless of its value, so this
-     static default never causes Chrome to invert the page. -->
-<meta name="color-scheme" content="dark">
-<style>:root, html, body { color-scheme: dark; }</style>
+<link href="index_files/libs/htmltools-fill-0.5.9/fill.css" rel="stylesheet">
+<script src="index_files/libs/htmlwidgets-1.6.4/htmlwidgets.js"></script>
+<link href="index_files/libs/datatables-css-0.0.0/datatables-crosstalk.css" rel="stylesheet">
+<script src="index_files/libs/datatables-binding-0.34.0/datatables.js"></script>
+<script src="index_files/libs/jquery-3.6.0/jquery-3.6.0.min.js"></script>
+<link href="index_files/libs/dt-core-1.13.6/css/jquery.dataTables.min.css" rel="stylesheet">
+<link href="index_files/libs/dt-core-1.13.6/css/jquery.dataTables.extra.css" rel="stylesheet">
+<script src="index_files/libs/dt-core-1.13.6/js/jquery.dataTables.min.js"></script>
+<link href="index_files/libs/crosstalk-1.2.2/css/crosstalk.min.css" rel="stylesheet">
+<script src="index_files/libs/crosstalk-1.2.2/js/crosstalk.min.js"></script>
 <meta name="color-scheme" content="dark">
 <style>:root, html, body { color-scheme: dark; }</style>
 <link rel="stylesheet" href="vignette-shared.css">
 <script src="vignette-shared.js"></script>
 <style>
-body { font-size: 1.2em; }
-/* Kill dashboard fill layout */
-.bslib-page-fill, .html-fill-container, .html-fill-item,
-.bslib-card, .card, .tab-pane, .tab-content, .card-body,
+/* Page-specific rules only; layout, titles and fill-killing are in
+   vignette-shared.css. This page also flattens the bslib grid. */
 .bslib-grid, .bslib-grid-item {
   height: auto !important; min-height: 0 !important;
   max-height: none !important; overflow: visible !important;
@@ -112,6 +110,7 @@ body { font-size: 1.2em; }
 .info-card:hover { border-color: #6B8DAE; text-decoration: none; color: inherit; }
 .info-card h4 { margin: 0 0 0.4em; }
 .info-card p { opacity: 0.75; font-size: 0.9em; margin: 0; }
+.card-group-title { margin: 1.2em 0 0.2em; font-size: 1.1em; opacity: 0.85; }
 .stats-row { display: flex !important; flex-direction: row !important;
              flex-wrap: nowrap !important;
              justify-content: space-evenly !important; align-items: center !important;
@@ -124,20 +123,40 @@ body { font-size: 1.2em; }
 .badge-blue { background: #1a3a5c; color: #6B8DAE; }
 .badge-green { background: #1a3c1a; color: #7A9E7E; }
 .badge-gold { background: #3c3520; color: #C4A35A; }
-/* Smaller page titles */
-.navbar .navbar-title, h1.title { font-size: 1.4em !important; }
-.nav-link { font-size: 0.95em !important; }
+/* Pipeline diagram: six linked stages, left to right on a wide screen,
+   stacked on a phone. Colours come from Bootstrap theme variables. */
+.pipeline { display: flex; flex-wrap: nowrap; gap: 0.9em; margin: 0.6em 0 1.2em;
+            padding: 0; list-style: none; width: 100%; }
+.pipeline li { flex: 1 1 0; position: relative; min-width: 0; }
+.pipeline li:not(:last-child)::after {
+  content: "\2192"; position: absolute; right: -0.85em; top: 50%;
+  transform: translateY(-50%); opacity: 0.7; font-size: 1.1em; }
+.pipeline a { display: block; height: 100%; padding: 0.7em 0.8em;
+              border: 1px solid var(--bs-border-color, #444); border-radius: 8px;
+              background: var(--bs-card-bg, var(--bs-tertiary-bg, #1a1a1a));
+              color: inherit; text-decoration: none; }
+.pipeline a:hover, .pipeline a:focus-visible { border-color: #6B8DAE; }
+.pipeline .stage { display: block; font-weight: 700; margin-bottom: 0.2em; }
+.pipeline .what { display: block; font-size: 0.8em; opacity: 0.8; line-height: 1.3; }
+.vd { display: inline-block; padding: 0 0.55em; border-radius: 4px; font-weight: 700;
+      border: 1px solid currentColor; white-space: nowrap; }
+.vd-keep { color: #5cd68a; } .vd-watch { color: #f0b43c; } .vd-failed { color: #ff7b72; }
+[data-bs-theme="light"] .vd-keep { color: #1b7a43; }
+[data-bs-theme="light"] .vd-watch { color: #8a5a00; }
+[data-bs-theme="light"] .vd-failed { color: #b42318; }
+@media (max-width: 800px) {
+  .pipeline { flex-direction: column; }
+  .pipeline li:not(:last-child)::after { content: "\2193"; right: auto; left: 50%;
+               top: auto; bottom: -0.95em; transform: translateX(-50%); }
+}
+/* Wide DT tables (verdict, datasets) scroll sideways inside their card
+   instead of being clipped by it on a phone. */
+.datatables, .dataTables_wrapper { overflow-x: auto !important; max-width: 100%; }
 @media (max-width: 600px) {
   .card-grid { grid-template-columns: 1fr !important; }
   .stats-row { flex-wrap: wrap !important; gap: 1em !important; }
 }
 </style>
-<script>
-// Default to dark mode
-if (!localStorage.getItem('quarto-color-scheme')) {
-  document.documentElement.setAttribute('data-bs-theme', 'dark');
-}
-</script>
 
 
 </head>
@@ -321,15 +340,70 @@ if (!localStorage.getItem('quarto-color-scheme')) {
         
       </div>
     </div>
-<a class="quarto-color-scheme-toggle" href="" onclick="window.quartoToggleColorScheme(); return false;"><i class="bi"></i></a><div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-datasets" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#datasets" data-scrolling="false" href="#datasets" aria-controls="datasets" aria-selected="true"><span class="nav-link-text">Datasets</span></a></li><li class="nav-item" role="presentation"><a id="tab-articles" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#articles" data-scrolling="false" href="#articles" aria-controls="articles" aria-selected="false"><span class="nav-link-text">Articles</span></a></li><li class="nav-item" role="presentation"><a id="tab-links" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#links" data-scrolling="false" href="#links" aria-controls="links" aria-selected="false"><span class="nav-link-text">Links</span></a></li><li class="nav-item" role="presentation"><a id="tab-installation" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#installation" data-scrolling="false" href="#installation" aria-controls="installation" aria-selected="false"><span class="nav-link-text">Installation</span></a></li><li class="nav-item" role="presentation"><a id="tab-build-info" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#build-info" data-scrolling="false" href="#build-info" aria-controls="build-info" aria-selected="false"><span class="nav-link-text">Build Info</span></a></li></ul><div class="quarto-dashboard-links"><a class="quarto-dashboard-link" href="https://github.com/JohnGavin/historical/" title="GitHub"><i class="bi bi-github"></i></a></div></div></div>
+<a class="quarto-color-scheme-toggle" href="" onclick="window.quartoToggleColorScheme(); return false;"><i class="bi"></i></a><div id="dashboard-collapse" class="navbar-collapse collapse"><ul class="navbar-nav navbar-nav-scroll me-auto" role="tablist"><li class="nav-item" role="presentation"><a id="tab-overview" class="nav-link active" data-bs-toggle="tab" role="tab" data-bs-target="#overview" data-scrolling="false" href="#overview" aria-controls="overview" aria-selected="true"><span class="nav-link-text">Overview</span></a></li><li class="nav-item" role="presentation"><a id="tab-datasets" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#datasets" data-scrolling="false" href="#datasets" aria-controls="datasets" aria-selected="false"><span class="nav-link-text">Datasets</span></a></li><li class="nav-item" role="presentation"><a id="tab-pages" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#pages" data-scrolling="false" href="#pages" aria-controls="pages" aria-selected="false"><span class="nav-link-text">Pages</span></a></li><li class="nav-item" role="presentation"><a id="tab-installation" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#installation" data-scrolling="false" href="#installation" aria-controls="installation" aria-selected="false"><span class="nav-link-text">Installation</span></a></li><li class="nav-item" role="presentation"><a id="tab-build-info" class="nav-link" data-bs-toggle="tab" role="tab" data-bs-target="#build-info" data-scrolling="false" href="#build-info" aria-controls="build-info" aria-selected="false"><span class="nav-link-text">Build Info</span></a></li></ul><div class="quarto-dashboard-links"><a class="quarto-dashboard-link" href="https://github.com/JohnGavin/historical/" title="GitHub"><i class="bi bi-github"></i></a></div></div></div>
 </nav>
 </header>
 <div class="page-layout-custom quarto-dashboard-content bslib-gap-spacing html-fill-container bslib-page-fill quarto-dashboard-pages">  
 
 
 <div class="bslib-grid-item html-fill-item tab-content bslib-grid" data-layout="fill" style="display: grid; grid-template-rows: minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
-<div id="datasets" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-datasets">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div id="overview" class="dashboard-page tab-pane show active html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-overview">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p>Every strategy on this site goes through the same pipeline. Each stage links to its page.</p>
+<ol class="pipeline">
+<li><a href="index.html#datasets"><span class="stage">1. Data</span><span class="what">Prices, macro and factor series from public sources.</span></a></li>
+<li><a href="stock-backtest.html"><span class="stage">2. Strategies</span><span class="what">Each idea is backtested on that data.</span></a></li>
+<li><a href="leaderboard.html"><span class="stage">3. Costs</span><span class="what">Returns are taken net of trading costs and turnover.</span></a></li>
+<li><a href="falsification.html"><span class="stage">4. Testing</span><span class="what">Is it alpha, or luck and factor exposure?</span></a></li>
+<li><a href="leaderboard.html"><span class="stage">5. Verdict</span><span class="what">One rule sorts each strategy into Keep, Watch or Failed.</span></a></li>
+<li><a href="failures.html"><span class="stage">6. Failures</span><span class="what">Why each Failed or Watch strategy is not Keep.</span></a></li>
+</ol>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-fe9dc40ab6bc856c7f61" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-fe9dc40ab6bc856c7f61">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold;\" class=\"dt-caption\">Verdict: 0 Keep, 10 Watch, 8 Failed of 18.<\/caption>","data":[["CMR","CMR Conditioned","Factor DRIF","Factor MAX","LTR","Managed Futures","Mom Pre-Peak","OLMAR-1","PSO Optimal","Value (HML)","Avoid Worst","Mom 12-2","Mom Post-Peak","Risk State","Stock DRIF","Stock MAX","TOM","XGB DRIF"],["<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-watch\">Watch<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>","<span class=\"vd vd-failed\">Failed<\/span>"],["net CAGR not &gt; 0; DSR p not &lt; 0.05; detection underpowered","net CAGR not &gt; 0; DSR p not &lt; 0.05; detection underpowered","net CAGR not &gt; 0","net CAGR not &gt; 0","DSR p not &lt; 0.05; detection underpowered","DSR p not &lt; 0.05; detection underpowered","net CAGR not &gt; 0","DSR p not &lt; 0.05","DSR p missing; detection underpowered","DSR p not &lt; 0.05; detection underpowered","series is not tradeable (hindsight: no weight vector to trade)","net CAGR &lt; 0 and DSR p &gt; 0.5","net CAGR &lt; 0 and DSR p &gt; 0.5","falsification verdict: No alpha (beta)","net CAGR &lt; 0 and DSR p &gt; 0.5","net CAGR &lt; 0 and DSR p &gt; 0.5","falsification verdict: No alpha (beta)","net CAGR &lt; 0 and DSR p &gt; 0.5"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Strategy<\/th>\n      <th>Verdict<\/th>\n      <th>Why<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"paging":false,"ordering":false,"autoWidth":false,"columnDefs":[{"name":"Strategy","targets":0},{"name":"Verdict","targets":1},{"name":"Why","targets":2}],"order":[],"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
+grid-auto-rows: minmax(0, 1fr);">
+<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card-body html-fill-item html-fill-container">
+<p><strong>Rule.</strong> Keep = net CAGR &gt; 0, DSR p &lt; 0.05 and detection powered. Failed = hindsight (not tradeable) series, a no-alpha falsification verdict, or net CAGR &lt; 0 with DSR p &gt; 0.5. Otherwise Watch.</p>
+<p>Ranked results, equity curves and costs are on the <a href="leaderboard.html">leaderboard</a>. The test each Watch and Failed strategy did not pass, with the written reason, is on the <a href="failures.html">failures page</a>.</p>
+</div>
+<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
+    <template>Expand</template>
+    <span class="bslib-full-screen-enter badge rounded-pill">
+        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
+    </span>
+</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
+</div>
+</div>
+</div>
+<div id="datasets" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-datasets">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
@@ -337,7 +411,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <p>Historical finance database for backtesting: equities, crypto, macro, and factors. Code-only R package — data hosted on <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">Hugging Face</a>, queried via DuckDB <code>hf://</code> protocol with predicate pushdown.</p>
 <p><a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata" target="_blank" rel="noopener noreferrer"><span class="badge badge-blue">R package</span></a> <a href="https://duckdb.org/docs/data/parquet/overview.html" target="_blank" rel="noopener noreferrer"><span class="badge badge-green">DuckDB + Parquet</span></a> <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer"><span class="badge badge-gold">Hugging Face</span></a></p>
 <div class="stats-row html-fill-item html-fill-container">
-<p><a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">1,636</span><span class="label">tickers</span></span></a> <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">8.8M</span><span class="label">rows</span></span></a> <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">11</span><span class="label">datasets</span></span></a> <a href="evidence.html" class="stat-link"><span class="stat"><span class="num">100yr</span><span class="label">history</span></span></a> <a href="https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">196</span><span class="label">functions</span></span></a></p>
+<p><a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">1,636</span><span class="label">tickers</span></span></a> <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">8.8M</span><span class="label">rows</span></span></a> <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">11</span><span class="label">datasets</span></span></a> <a href="evidence.html" class="stat-link"><span class="stat"><span class="num">100yr</span><span class="label">history</span></span></a> <a href="https://github.com/JohnGavin/historical/blob/main/docs/api-historicaldata.md" target="_blank" rel="noopener noreferrer" class="stat-link"><span class="stat"><span class="num">225</span><span class="label">functions</span></span></a></p>
 </div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
@@ -349,87 +423,12 @@ grid-auto-rows: minmax(0, 1fr);">
 </div>
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
-<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
+<div class="card cell html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<details open="">
-<summary>
-<strong>Equity</strong> — 1,022 tickers · daily OHLCV from 1980 · 44 MB Parquet
-</summary>
-<ul>
-<li>
-<strong>US equities</strong> (51 tickers) — large-cap S&amp;P 500 sample from Yahoo Finance · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L31" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[[“equity_daily”]]</code></a>
-</li>
-<li>
-<strong>LSE ETFs</strong> (949 tickers) — UK-listed UCITS ETFs from iShares, Vanguard, SPDR · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L31" target="_blank" rel="noopener noreferrer"><code>equity_daily</code></a>
-</li>
-<li>
-<strong>Macro ETFs</strong> (13 tickers) — TLT, GLD, DBC, UUP and extended macro hedge universe · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L55" target="_blank" rel="noopener noreferrer"><code>hd_group(“Macro Hedge ETFs”)</code></a>
-</li>
-<li>
-<strong>Factor ETFs</strong> (9 tickers) — US index ETFs (SPY, QQQ, IWM, DIA) plus sector ETFs · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L38" target="_blank" rel="noopener noreferrer"><code>hd_group(“US Index ETFs”)</code></a>
-</li>
-</ul>
-</details>
-<details>
-<summary>
-<strong>Crypto</strong> — 14 tokens · daily OHLCV from 2014 · 1.1 MB Parquet
-</summary>
-<ul>
-<li>
-<strong>Major crypto</strong> (4 tokens) — BTC, ETH, SOL, BNB · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L47" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[[“crypto_daily”]]</code></a>
-</li>
-<li>
-<strong>Stablecoins</strong> (2 tokens) — USDC, USDT · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L45" target="_blank" rel="noopener noreferrer"><code>hd_group(“Stablecoins”)</code></a>
-</li>
-<li>
-<strong>Solana DeFi</strong> (5 tokens) — SOL, RAY, HNT, BONK, PYTH · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L48" target="_blank" rel="noopener noreferrer"><code>hd_group(“Solana DeFi”)</code></a>
-</li>
-<li>
-<strong>DeFi altcoins</strong> (3 tokens) — XRP, ADA, DOGE, DOT · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/groups.R#L50" target="_blank" rel="noopener noreferrer"><code>hd_group(“DeFi Altcoins”)</code></a>
-</li>
-</ul>
-</details>
-<details>
-<summary>
-<strong>Macro</strong> — 19 FRED series · mixed frequency · from 1947
-</summary>
-<ul>
-<li>
-<strong>Equity &amp; volatility</strong> — SP500, <abbr title="CBOE Volatility Index — implied volatility of S&amp;P 500 options">VIX</abbr> · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L54" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[[“macro_daily”]]</code></a>
-</li>
-<li>
-<strong>Interest rates</strong> — 2Y, 10Y, 30Y Treasury yields, Fed Funds rate · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R#L269" target="_blank" rel="noopener noreferrer"><code>hd_macro(c(“DGS2”,“DGS10”,“DGS30”))</code></a>
-</li>
-<li>
-<strong>Credit spreads</strong> — ICE BofA High Yield OAS, BBB corporate spread · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a>
-</li>
-<li>
-<strong>Macro fundamentals</strong> — GDP (quarterly), CPI, PCE (monthly), unemployment · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a>
-</li>
-<li>
-<strong>Commodities &amp; currency</strong> — WTI crude oil spot, trade-weighted USD index · <a href="https://huggingface.co/datasets/JohnGavin/finance-data" target="_blank" rel="noopener noreferrer">HF dataset</a>
-</li>
-</ul>
-</details>
-<details>
-<summary>
-<strong>Factors</strong> — Fama-French FF3, FF5, Momentum · daily + monthly · from 1926
-</summary>
-<ul>
-<li>
-<strong>FF3</strong> — MktRF, SMB, HML plus risk-free rate · <a href="https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html" target="_blank" rel="noopener noreferrer">Ken French Data Library</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L60" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[[“factors”]]</code></a>
-</li>
-<li>
-<strong>FF5</strong> — adds <abbr title="Fama-French 5-Factor model adds Profitability (RMW) and Investment (CMA) to FF3">RMW, CMA</abbr> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R#L328" target="_blank" rel="noopener noreferrer"><code>hd_factors(“FF5”)</code></a>
-</li>
-<li>
-<strong>Momentum</strong> — prior-12-month return factor · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/query.R#L328" target="_blank" rel="noopener noreferrer"><code>hd_factors(“Mom”)</code></a>
-</li>
-<li>
-<strong>JST Macrohistory</strong> — 155 years, 18 countries (1870–2020) · <a href="https://www.macrohistory.net/database/" target="_blank" rel="noopener noreferrer">macrohistory.net</a> · <a href="https://github.com/JohnGavin/historical/blob/main/packages/historicaldata/R/registry.R#L92" target="_blank" rel="noopener noreferrer"><code>hd_datasets()[[“jst_macrohistory”]]</code></a>
-</li>
-</ul>
-</details>
+<div class="cell-output-display html-fill-item html-fill-container">
+<div class="datatables html-widget html-fill-item html-fill-container" id="htmlwidget-bb4ea47a11d526606742" style="width:100%;height:auto;"></div>
+<script type="application/json" data-for="htmlwidget-bb4ea47a11d526606742">{"x":{"filter":"none","vertical":false,"caption":"<caption style=\"caption-side: top; text-align: left; font-weight: bold;\" class=\"dt-caption\">Datasets in the registry. Every figure is read from hd_datasets() and the parquet files at render time.<\/caption>","data":[["equity_daily","crypto_daily","macro_daily","factors","metadata","macro_vintages","metadata_amendments","jst_macrohistory","alphavantage_daily","fundamentals","kraken_ohlcvt"],["daily","daily","mixed","daily+monthly","static","vintage","append-only","annual","daily","filing","60min+1440min"],["1,622 tickers, from 1962","14 tickers, from 2014","78 series, from 1947","7 factors, from 1926","—","3 series, from 2020","—","—","—","—","—"],["US equities daily OHLCV (Yahoo Finance) (survivorship-biased)","Cryptocurrency daily OHLCV (Yahoo Finance)","FRED macro series (SP500, VIX, rates, GDP, CPI, etc.)","Fama-French factors (FF3, FF5, Momentum, 1926+)","Per-ticker metadata: exchange, sector, market cap, ETF fees/yield/returns, coverage stats","FRED macro revision history: value as known at each publication date (ALFRED API)","PIT log of all metadata changes: computed fields, enrichments, corrections","Jorda-Schularick-Taylor Macrohistory Database (Release 6): 18 countries, 1870-2020, annual returns for equity, bonds, housing, bills; plus macro, credit, FX, and financial crisis indicators","US equities daily adjusted OHLCV via AlphaVantage API (not a parquet snapshot)","SEC EDGAR XBRL company-fundamentals revision triangle: one row per (ticker, xbrl_tag, fiscal_period), carrying both the as-first-reported value (original_value) and the post-restatement value (latest_value), keyed by first_filed -- the date the filing became public","Kraken exchange OHLCVT bars (hourly + daily) for 19 pairs: 6 crypto majors (BTC, ETH, SOL, XRP, ADA, LINK vs USD), 12 spot FX pairs (EUR/USD, GBP/USD, USD/JPY, USD/CHF, USD/CAD, AUD/USD, AUD/JPY, EUR/GBP, EUR/JPY, EUR/CHF, EUR/CAD, EUR/AUD), and PAXG/USD tokenised gold"]],"container":"<table class=\"display\">\n  <thead>\n    <tr>\n      <th>Dataset<\/th>\n      <th>Frequency<\/th>\n      <th>Coverage<\/th>\n      <th>What it holds<\/th>\n    <\/tr>\n  <\/thead>\n<\/table>","options":{"bPaginate":false,"dom":"t","language":{"info":"Showing _TOTAL_ entries"},"paging":false,"ordering":false,"autoWidth":false,"columnDefs":[{"name":"Dataset","targets":0},{"name":"Frequency","targets":1},{"name":"Coverage","targets":2},{"name":"What it holds","targets":3}],"order":[],"orderClasses":false}},"evals":[],"jsHooks":[]}</script>
+</div>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -440,115 +439,128 @@ grid-auto-rows: minmax(0, 1fr);">
 </div>
 </div>
 </div>
-<div id="articles" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-articles">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
+<div id="pages" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-pages">
+<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
+<p>Pages follow the pipeline, left to right. Exploratory pages are in the Appendix.</p>
+<h4 class="card-group-title">
+Strategies
+</h4>
 <div class="card-grid html-fill-item html-fill-container">
-<a href="leaderboard.html" class="info-card">
+<a href="stock-backtest.html" class="info-card">
 <h4>
-Strategy Leaderboard
+Stock-Level Backtests
 </h4>
 <p>
-Rankings, equity curves, and feature importance across all 6 strategies. Transposed metrics table, PSO optimal portfolio weights, XGBoost feature analysis.
+MAX and DRIF signals applied to individual stocks (S&amp;P 500 + STOXX 600). Decile long-short portfolios. Stock vs factor, MAX vs DRIF.
+</p>
+</a> <a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
+<h4>
+Factor MAX and <abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>
+</h4>
+<p>
+Rotating among Fama-French factors with the MAX signal (maximum daily return predicts next-month factor returns) and the DRIF elastic-net on the daily-return distribution. Factor-Level Deep Dive tab of Stock-Level Backtests.
 </p>
 </a> <a href="macro-defense-rotation.html" class="info-card">
 <h4>
 Macro Defense Rotation
 </h4>
 <p>
-Backtesting vignette: rotating among TLT/GLD/DBC/UUP to hedge macro risk. Expanding window methodology, in-sample vs out-of-sample holdout.
+Rotating among TLT/GLD/DBC/UUP to hedge macro risk. Expanding-window methodology, in-sample vs out-of-sample holdout.
 </p>
-</a> <a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
+</a> <a href="momentum-prepeak.html" class="info-card">
 <h4>
-Factor MAX Rotation
+Momentum Pre-Peak / Post-Peak
 </h4>
 <p>
-Rotating among Fama-French factors using the MAX signal — maximum daily return predicts next-month factor returns. Based on Alpha Architect research (Dec 2025). Part of Stock-Level Backtests.
+Decomposing 12-2 momentum into pre-peak and post-peak parts (Büsing, Mohrschladt &amp; Siedhoff, 2022), a methodology-demo replication.
 </p>
-</a> <a href="stock-backtest.html#factor-level-deep-dive" class="info-card">
-<h4>
-<abbr title="Dynamic Rotation Into Factors — selects best-performing FF factor each month">DRIF</abbr>: Daily Return Information
+</a>
+</div>
+<h4 class="card-group-title">
+Testing
 </h4>
-<p>
-Elastic net on the full distribution of past 21 daily factor returns (chronological + rank) predicts next-month returns. Subsumes MAX and momentum signals. Part of Stock-Level Backtests.
-</p>
-</a> <a href="stock-backtest.html" class="info-card">
-<h4>
-Stock-Level Backtests
-</h4>
-<p>
-MAX and DRIF signals applied to 660 individual stocks (S&amp;P 500 + STOXX 600). Decile long-short portfolios. 4-strategy comparison: stock vs factor, MAX vs DRIF.
-</p>
-</a> <a href="avoid-worst-days.html" class="info-card">
-<h4>
-Avoid Worst Days
-</h4>
-<p>
-Thought experiment: removing the market’s N worst days improves returns more than missing the N best days hurts. Demonstrates return asymmetry and why downside protection matters.
-</p>
-</a> <a href="falsification.html" class="info-card">
+<div class="card-grid html-fill-item html-fill-container">
+<a href="falsification.html" class="info-card">
 <h4>
 Falsification Tests
 </h4>
 <p>
 Causal integrity tests: Fama-French alpha, null-signal heatmaps, HAC-robust Sharpe ratios, implication chains. Evidence our strategies aren’t luck or factor exposure.
 </p>
-</a> <a href="european-overlay.html" class="info-card">
-<h4>
-European Overlay
-</h4>
-<p>
-CISS vs VIX regime comparison: ECB’s Composite Indicator of Systemic Stress as European-native vol proxy. 5 European ETFs, OOS performance, attribution.
-</p>
 </a> <a href="evidence.html" class="info-card">
 <h4>
 Evidence &amp; Context
 </h4>
 <p>
-Negative results (strategies that failed falsification) and 155 years of equity premium across 18 countries. Cross-geography pervasiveness test, crisis timeline, decade heatmaps. Validates Swedroe evidence-based framework.
+Long-run equity premium across countries, cross-geography pervasiveness test, crisis timeline, decade heatmaps. Context for the Swedroe evidence-based framework.
+</p>
+</a>
+</div>
+<h4 class="card-group-title">
+Verdict and failures
+</h4>
+<div class="card-grid html-fill-item html-fill-container">
+<a href="leaderboard.html" class="info-card">
+<h4>
+Strategy Leaderboard
+</h4>
+<p>
+Rankings, equity curves, and feature importance across all 18 strategies, with each strategy’s Keep / Watch / Failed verdict.
+</p>
+</a> <a href="failures.html" class="info-card">
+<h4>
+Failed and Watch Strategies
+</h4>
+<p>
+Every strategy that is not Keep, the test it failed, the written reason, the date and the issue.
+</p>
+</a>
+</div>
+<h4 class="card-group-title">
+Appendix (exploratory)
+</h4>
+<div class="card-grid html-fill-item html-fill-container">
+<a href="european-overlay.html" class="info-card">
+<h4>
+European Overlay
+</h4>
+<p>
+CISS vs VIX regime comparison: ECB’s Composite Indicator of Systemic Stress as a European-native volatility proxy.
+</p>
+</a> <a href="avoid-worst-days.html" class="info-card">
+<h4>
+Avoid Worst Days
+</h4>
+<p>
+Thought experiment: removing the market’s N worst days improves returns more than missing the N best days hurts. A hindsight series, not a tradeable strategy.
+</p>
+</a> <a href="bdbb-sol.html" class="info-card">
+<h4>
+BDBB Queueing Diagnostics (SOL/USD)
+</h4>
+<p>
+M/G/infinity queueing diagnostics (after Varma 2026) on SOL/USD hourly data: rolling resilience half-life, and a test of whether the diagnostics predict the next bar’s extreme moves. The test was corrected for look-ahead (#868), so its results are not a replication of Varma’s BTC figures. Not a strategy.
+</p>
+</a> <a href="quiz.html" class="info-card">
+<h4>
+Quiz: Which is Real?
+</h4>
+<p>
+Two cumulative return series side by side: one real, one statistically simulated. Guess which, to calibrate intuition about noise.
 </p>
 </a> <a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
 <h4>
 Source Code
 </h4>
-<p>
-Browse R source files on GitHub: Data Access, Discovery, Performance Metrics, Kelly Sizing, Null Hypothesis Testing, and more.
+</a><p><a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R" class="info-card">
+Browse the R source files on GitHub. The function list is in the </a><a href="api-historicaldata.html">API reference</a>.
 </p>
-</a>
+
 </div>
-</div>
-<bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
-    <template>Expand</template>
-    <span class="bslib-full-screen-enter badge rounded-pill">
-        <svg xmlns="http://www.w3.org/2000/svg" viewbox="0 0 24 24" style="height:1em;width:1em;" aria-hidden="true" role="img"><path d="M20 5C20 4.4 19.6 4 19 4H13C12.4 4 12 3.6 12 3C12 2.4 12.4 2 13 2H21C21.6 2 22 2.4 22 3V11C22 11.6 21.6 12 21 12C20.4 12 20 11.6 20 11V5ZM4 19C4 19.6 4.4 20 5 20H11C11.6 20 12 20.4 12 21C12 21.6 11.6 22 11 22H3C2.4 22 2 21.6 2 21V13C2 12.4 2.4 12 3 12C3.6 12 4 12.4 4 13V19Z"></path></svg>
-    </span>
-</bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
-</div>
-</div>
-</div>
-<div id="links" class="dashboard-page tab-pane grid-skip html-fill-item html-fill-container" data-orientation="rows" aria-labelledby="tab-links">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
-<div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-columns: minmax(3em, 1fr);
-grid-auto-rows: minmax(0, 1fr);">
-<div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
-<div class="card-body html-fill-item html-fill-container">
-<ul>
-<li><a href="https://github.com/JohnGavin/historical">GitHub</a> — source code, issues, CI</li>
-<li><a href="https://huggingface.co/datasets/JohnGavin/finance-data">Hugging Face Dataset</a> — Parquet files, dataset card</li>
-<li><a href="leaderboard.html">Strategy Leaderboard</a> — rankings, equity curves, cost-adjusted metrics</li>
-<li><a href="https://github.com/JohnGavin/historical/tree/main/packages/historicaldata/R">API Reference</a> — function source code</li>
-<li><a href="macro-defense-rotation.html">Macro Defense Rotation</a> — backtesting vignette</li>
-<li><a href="stock-backtest.html#factor-level-deep-dive">Factor MAX</a> — factor rotation strategy (Factor-Level Deep Dive tab)</li>
-<li><a href="stock-backtest.html#factor-level-deep-dive">DRIF</a> — daily return information factor (Factor-Level Deep Dive tab)</li>
-<li><a href="stock-backtest.html">Stock-Level Backtests</a> — 660 stocks, 4-strategy comparison</li>
-<li><a href="avoid-worst-days.html">Avoid Worst Days</a> — return asymmetry thought experiment</li>
-<li><a href="falsification.html">Falsification Tests</a> — causal integrity, FF alpha, HAC-robust Sharpe</li>
-<li><a href="european-overlay.html">European Overlay</a> — CISS vs VIX regime comparison</li>
-<li><a href="evidence.html">Evidence &amp; Context</a> — negative results + 155 years equity premium, 18 countries, pervasiveness test</li>
-</ul>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -561,7 +573,7 @@ grid-auto-rows: minmax(0, 1fr);">
 grid-auto-rows: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
-<p>Built with the <a href="https://github.com/b-rodrigues/tlang" target="_blank" rel="noopener noreferrer">T language</a> pipeline, <a href="https://docs.ropensci.org/targets/" target="_blank" rel="noopener noreferrer">targets</a>, <a href="https://duckdb.org/" target="_blank" rel="noopener noreferrer">DuckDB</a>, and <a href="https://quarto.org/" target="_blank" rel="noopener noreferrer">Quarto</a>. Data from Yahoo Finance, FRED, and Ken French Data Library.</p>
+<p>Built with the <a href="https://github.com/b-rodrigues/tlang" target="_blank" rel="noopener noreferrer">T language</a> pipeline, <a href="https://docs.ropensci.org/targets/" target="_blank" rel="noopener noreferrer">targets</a>, <a href="https://duckdb.org/" target="_blank" rel="noopener noreferrer">DuckDB</a>, and <a href="https://quarto.org/" target="_blank" rel="noopener noreferrer">Quarto</a>. Data from Yahoo Finance, FRED, and Ken French Data Library. Source, issues and CI: <a href="https://github.com/JohnGavin/historical">GitHub</a>.</p>
 </div>
 <bslib-tooltip placement="auto" bsoptions="[]" data-require-bs-version="5" data-require-bs-caller="tooltip()">
     <template>Expand</template>
@@ -579,12 +591,12 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="card tabset html-fill-item html-fill-container bslib-card" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-header dashboard-card-no-title bslib-navs-card-title">
 
-<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-6"><li class="nav-item" role="presentation"><a href="#card-tabset-6-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="R (pak)" aria-selected="true" class="nav-link active">R (pak)</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-6-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Python (DuckDB)" aria-selected="false" class="nav-link">Python (DuckDB)</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-6-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Nix" aria-selected="false" class="nav-link">Nix</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-6-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="T language" aria-selected="false" class="nav-link">T language</a></li></ul></div>
+<ul class="nav nav-tabs card-header-tabs" role="tablist" data-tabsetid="card-tabset-8"><li class="nav-item" role="presentation"><a href="#card-tabset-8-1" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="R (pak)" aria-selected="true" class="nav-link active">R (pak)</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-8-2" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Python (DuckDB)" aria-selected="false" class="nav-link">Python (DuckDB)</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-8-3" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="Nix" aria-selected="false" class="nav-link">Nix</a></li><li class="nav-item" role="presentation"><a href="#card-tabset-8-4" role="tab" data-toggle="tab" data-bs-toggle="tab" data-value="T language" aria-selected="false" class="nav-link">T language</a></li></ul></div>
 
 
 
 
-<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-6"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-6-1"><div class="card-body html-fill-item html-fill-container" data-title="R (pak)">
+<div class="tab-content html-fill-item html-fill-container" data-tabset-id="card-tabset-8"><div class="tab-pane active show html-fill-item html-fill-container" role="tabpanel" id="card-tabset-8-1"><div class="card-body html-fill-item html-fill-container" data-title="R (pak)">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -669,7 +681,7 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-6-2"><div class="card-body html-fill-item html-fill-container" data-title="Python (DuckDB)">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-8-2"><div class="card-body html-fill-item html-fill-container" data-title="Python (DuckDB)">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -691,7 +703,7 @@ grid-auto-rows: minmax(0, 1fr);">
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-6-3"><div class="card-body html-fill-item html-fill-container" data-title="Nix">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-8-3"><div class="card-body html-fill-item html-fill-container" data-title="Nix">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
@@ -710,7 +722,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
 <pre><code># &gt; nix flake metadata
 description:    historical_data — a T data analysis project
-last_modified:  2026-10-24 11:15 BST
+last_modified:  2026-11-16 22:29 GMT
 locked_rev:     
 inputs (7):  flake-utils, flake-utils_2, nixpkgs, nixpkgs_2, systems, systems_2, t-lang</code></pre>
 </div>
@@ -722,16 +734,16 @@ inputs (7):  flake-utils, flake-utils_2, nixpkgs, nixpkgs_2, systems, systems_2,
     </span>
 </bslib-tooltip><script data-bslib-card-init="">bslib.Card.initializeAllCards();</script></div>
 </div>
-</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-6-4"><div class="card-body html-fill-item html-fill-container" data-title="T language">
+</div></div><div class="tab-pane html-fill-item html-fill-container" role="tabpanel" id="card-tabset-8-4"><div class="card-body html-fill-item html-fill-container" data-title="T language">
 <div class="html-fill-item html-fill-container bslib-grid" style="display: grid; grid-template-rows: minmax(3em, max-content) minmax(3em, 1fr); grid-auto-columns: minmax(0, 1fr);">
 <div class="card html-fill-item html-fill-container bslib-card" data-fill="false" data-bslib-card-init="" data-require-bs-caller="card()" data-full-screen="false">
 <div class="card-body html-fill-item html-fill-container">
 <div class="code-copy-outer-scaffold html-fill-item html-fill-container"><div class="sourceCode html-fill-item html-fill-container" id="cb10"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Clone, enter Nix shell, fetch data, run pipeline</span></span>
 <span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">git</span> clone https://github.com/JohnGavin/historical.git <span class="kw">&amp;&amp;</span> <span class="bu">cd</span> historical</span>
 <span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a><span class="ex">nix</span> develop</span>
-<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/fetch_equity.py     <span class="co"># 51 equity tickers</span></span>
-<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_crypto.R     <span class="co"># 14 crypto tokens</span></span>
-<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_macro.R      <span class="co"># 19 FRED series</span></span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a><span class="ex">python</span> scripts/fetch_equity.py     <span class="co"># equity tickers</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_crypto.R     <span class="co"># crypto tokens</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_macro.R      <span class="co"># FRED macro series</span></span>
 <span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="ex">Rscript</span> scripts/fetch_factors.R    <span class="co"># Fama-French factors</span></span>
 <span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="ex">t</span> run src/pipeline.t               <span class="co"># T pipeline</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </div>
@@ -752,7 +764,7 @@ In normalizePath(path) :
 <pre><code># &gt; scripts/fetch_*.{R,py}  (not run at render time — too expensive)</code></pre>
 </div>
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
-<pre><code>16 R fetchers + 3 Python fetchers = 19 total</code></pre>
+<pre><code>21 R fetchers + 3 Python fetchers = 24 total</code></pre>
 </div>
 <div class="cell-output cell-output-stdout html-fill-item html-fill-container">
 <pre><code># &gt; src/pipeline.t  (T-language pipeline)</code></pre>
@@ -804,7 +816,7 @@ grid-auto-rows: minmax(0, 1fr);">
 <tbody>
 <tr class="odd">
 <td><span title="git rev-parse HEAD, resolved at render time">Commit</span></td>
-<td><a href="https://github.com/JohnGavin/historical/commit/84da1e5ebd7ce3a4d7a55d836e0d0a02a680d338"><code>84da1e5</code></a></td>
+<td><a href="https://github.com/JohnGavin/historical/commit/62ce912711e9d371ff4a3b765a3778d1b5e270a0"><code>62ce912</code></a></td>
 </tr>
 <tr class="even">
 <td><span title="git rev-parse --abbrev-ref HEAD (detached HEAD resolves to the commit SHA instead)">Branch</span></td>
@@ -812,7 +824,7 @@ grid-auto-rows: minmax(0, 1fr);">
 </tr>
 <tr class="odd">
 <td><span title="git status --porcelain --untracked-files=no at render time -- reports the COMMITTED source only. Excludes this render's own output (docs/*.html, docs/*_files/**, docs/_targets_meta_snapshot.csv), since our publish flow is render then commit the rendered output, and excludes ALL untracked files/directories, since those were never part of the committed source this page was built from. 'clean' means no tracked source file differs from HEAD -- it says nothing about untracked local clutter on the machine that rendered it">Source tree</span></td>
-<td>dirty (1 source file modified: .claude/CURRENT_WORK.md)</td>
+<td>dirty (2 source files modified: .claude/CURRENT_WORK.md, docs/failures.qmd)</td>
 </tr>
 <tr class="even">
 <td><span title="scanned from R/ and packages/historicaldata/R/ at render time">Data sources referenced</span></td>
@@ -820,11 +832,11 @@ grid-auto-rows: minmax(0, 1fr);">
 </tr>
 <tr class="odd">
 <td><span title="nrow(targets::tar_meta(store = ...))">Targets in store</span></td>
-<td>1545</td>
+<td>1761</td>
 </tr>
 <tr class="even">
 <td><span title="max(targets::tar_meta()$time)">Store last built</span></td>
-<td>2026-10-27 21:02 GMT</td>
+<td>2026-11-17 12:58 GMT</td>
 </tr>
 <tr class="odd">
 <td><span title="GitHub issue tracker for this repo">Open issues</span></td>
@@ -884,7 +896,7 @@ grid-auto-rows: minmax(0, 1fr);">
 </tr>
 <tr class="even">
 <td><span title="this page's own source, scanned for DT::datatable()/hd_dt() vs knitr::kable() at render time">Table engine</span></td>
-<td>no tables detected on this page</td>
+<td>DT <code>0.34.0</code></td>
 </tr>
 </tbody>
 </table>
