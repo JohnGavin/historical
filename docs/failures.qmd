@@ -180,5 +180,7 @@ evidence. **Detection** says whether the sample is long enough to tell the strat
 Sharpe ratio from zero. **DSR p** is the deflated Sharpe ratio p-value, which corrects
 for the number of strategies tried.
 
-See the [leaderboard](leaderboard.html) for the full ranking and the
-[falsification dashboard](falsification.html) for the alpha test.
+#### Related Vignettes
+
+- **[Strategy Leaderboard](leaderboard.html)** — the full ranking, with each strategy's Keep / Watch / Failed verdict
+- **[Strategy Falsification](falsification.html)** — the alpha test (HAC t-stat, FF5 alpha) that feeds the verdict
