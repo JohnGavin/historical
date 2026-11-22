@@ -63,6 +63,12 @@ immediately. Neither sets `KeepAlive`.
   minute, so a poll in the same minute still totals 1140, under 1200. The run takes
   a few seconds against the 200 s budget; the poller starts no request without
   25 s of budget left.
+  This job is a **temporary parallel collector** (#1088): the primary collector is
+  a Cloudflare Worker (`cloudflare/hl-ctx-collector/`) whose daily drain publishes to
+  Hugging Face (`.github/workflows/hl-ctx-drain.yml`). The laptop is not relied on;
+  this job stays only until the gap report shows the Worker covering 7 full days with
+  at least 99% of slots, and is then unloaded by the owner. In the overlap the reader
+  keeps one collector per slot, preferring `cf-1` (`hl_ctx_read`).
 - **Weekly market reference step.** After the candle fetch,
   `scripts/fetch_hl_market_reference.R` writes `data/dist/perp_markets.parquet`
   (long names, categories, definitions and source pages; see
