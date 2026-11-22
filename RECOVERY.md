@@ -21,6 +21,14 @@ off-site copy; see [Residual risks](#residual-risks).
 `scripts/check_backup.sh` says whether the newest Time Machine snapshot is newer than
 the newest data file. The weekly Hyperliquid job runs it and logs the result.
 
+**5-minute Hyperliquid snapshots (#1088).** These no longer depend on this Mac. A
+Cloudflare Worker collects them every 5 minutes into Workers KV, which holds each
+value for 10 days. A daily GitHub Actions job (`.github/workflows/hl-ctx-drain.yml`)
+copies them to the public Hugging Face dataset under `hyperliquid/`, which is the
+**primary store**. The laptop's own 5-minute job is a temporary parallel collector
+and is unloaded once the gap report shows 7 full days at 99% or better. Section
+[5-minute snapshots](#5-minute-snapshots-primary-copy-on-hugging-face) has the details.
+
 ## What Needs Backing Up
 
 Classification of every file under `data/dist/` and `data/raw/`, by what produces it
@@ -57,7 +65,7 @@ keeps only the most recent 5000 bars per interval (`HL_CANDLE_PAGE_MAX` in
 | `perp_15m.parquet`, `spot_15m.parquet` | 15-minute bars | Refetch the last window only | about 52 days. **Older rows are backup only** |
 | `perp_funding.parquet`, `perp_funding_daily.parquet` | funding rows and their daily sums | Refetch: `fetch_hyperliquid.R --funding=true` | the API serves the full funding history |
 | `perp_oi_snapshot.parquet` | open interest, one snapshot per run | **Backup only** | the API has no open-interest history: only the current value exists |
-| `perp_ctx_5m/date=YYYY-MM-DD/<collector>.parquet` (before PR #1086: one file `perp_ctx_5m.parquet`) | 5-minute mid, oracle and mark prices, funding, open interest, volume per market | **Backup only** | `metaAndAssetCtxs` has no history. Can be rebuilt from its raw files (below), not from the API |
+| `perp_ctx_5m/date=YYYY-MM-DD/<collector>.parquet` (before PR #1086: one file `perp_ctx_5m.parquet`) | 5-minute mid, oracle and mark prices, funding, open interest, volume per market | **Backup only** for the laptop's `laptop-1` files; the Worker's `cf-1` files are on HF (restore from there) | `metaAndAssetCtxs` has no history. Can be rebuilt from its raw files (below), not from the API |
 | `perp_dexs.parquet` | exchange reference table | Refetch: `fetch_hyperliquid.R` | current list only |
 | `perp_markets.parquet` | market long names, categories, definitions | Refetch the current page: `scripts/fetch_hl_market_reference.R` | a market that drops off the exchange's page keeps its last text only here. **Names of delisted markets are backup only** |
 | `hl_progress.txt` | resume marker of a running fetch | not data | delete freely when no fetch is running |
@@ -68,6 +76,31 @@ keeps only the most recent 5000 bars per interval (`HL_CANDLE_PAGE_MAX` in
 |---|---|---|
 | `<UTC date>/*.json` and `*.md` | the weekly fetch's raw replies (candles, funding, `allPerpMetas`, current contexts, the saved specification page) | The candle and funding replies can be fetched again within the windows above. The saved page and the contexts of that day are **backup only**. The parquet files above are derived from these and survive without them; losing them loses the audit trail |
 | `ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz` | one gzipped file per 5-minute run, every reply and its `fetched_at` | **Backup only.** It is the source for rebuilding a day of `perp_ctx_5m` (see Restore Steps). Never uploaded: raw Hyperliquid replies are not redistributed |
+
+### 5-minute snapshots: primary copy on Hugging Face
+
+Prefix `hyperliquid/` of the public dataset `finance-data` (the dataset id is the
+default of `hd_base_url()`):
+
+| Path | What |
+|---|---|
+| `hyperliquid/perp_ctx_5m/date=YYYY-MM-DD/cf-1.parquet` | the Worker's rows for that UTC day (same columns as the laptop's daily file; collector `cf-1`) |
+| `hyperliquid/raw/ctx_poll/date=YYYY-MM-DD/cf-1.jsonl.gz` | the raw replies of that day, one document per 5-minute slot per line (`scripts/poll_hyperliquid_ctx.R`, `hl_ctx_replay_day_jsonl()` rebuilds the parquet from it) |
+
+The chain and what each link holds:
+
+| Link | Holds | For how long | If it is lost |
+|---|---|---|---|
+| Cloudflare Worker (free plan, cron every 5 minutes) | nothing; it fetches and writes to KV | n/a | nothing is collected until it is redeployed from `cloudflare/hl-ctx-collector/worker.js`; the gap report shows the hole |
+| Workers KV (`ctx/<date>/<HHMM>`) | the raw bytes of every reply of a slot | 10 days, then each value expires by itself | a day not yet drained is lost after 10 days |
+| Daily drain, `hl-ctx-drain.yml` | an artifact copy of what it published, 14 days | 14 days | the next run re-checks every day still in KV and publishes whatever HF lacks |
+| Hugging Face `hyperliquid/` | the data, with the dataset's git history | indefinitely | restore from the artifact copy within 14 days, else from KV within 10 |
+
+Nothing in this chain needs the Mac to be on. Two checks say whether it works:
+`scripts/hl_ctx_gap_report.R` (run by the workflow after each drain; a slot in KV that is
+not on HF always fails, never-collected slots fail above 2% of a day) and the workflow run
+itself, which fails (never green) when a secret is missing, a KV key cannot be read or
+the upload cannot be read back.
 
 ### Other files in `data/dist/`
 
@@ -111,10 +144,11 @@ keeps only the most recent 5000 bars per interval (`HL_CANDLE_PAGE_MAX` in
 | The eight datasets in the HF row above | Public Hugging Face dataset `finance-data` | Different provider | Hugging Face's, with git history of the dataset |
 | Fetcher and pipeline code | `git` remote | Different provider | full history |
 
-Not backed up anywhere else: the 5-minute snapshots, the open-interest snapshots, the
-Hyperliquid raw replies and the older hourly and 15-minute bars. They cannot go on
-Hugging Face as things stand (`fetch_hyperliquid.R`: raw "NEVER uploaded or
-redistributed"; publication of the derived files is an open follow-up).
+Not backed up anywhere else: the laptop's own 5-minute snapshots and raw replies (the
+Worker's `cf-1` ones are on Hugging Face, above), the open-interest snapshots and the
+older hourly and 15-minute bars. Whether Hyperliquid's terms allow redistributing the
+data is still an open owner question; the owner decided on 2026-11-22 to publish the 5-minute data,
+raw replies included, to the public dataset and to tidy up later if size is a problem.
 
 **Failure-domain check (done):** an external Time Machine drive is a different volume
 from the Mac's disk, so it passes the "not the same volume" test. It does not survive
@@ -128,7 +162,8 @@ Maximum data loss on a full disaster of this Mac:
 | Asset | RPO | Basis |
 |---|---|---|
 | Refetchable files | none for the source's retained window | fetch again |
-| Unrecoverable files (5-minute, open interest, market names, old bars) | the age of the newest snapshot at the time of the loss | Time Machine runs hourly **while a backup drive is connected**. A drive is not always connected, so in practice the RPO is the time since the last connection: days, sometimes more. `scripts/check_backup.sh` measures exactly this gap |
+| 5-minute snapshots collected by the Worker (`cf-1`) | up to 1 day plus the drain's lateness; none for what KV still holds (10 days) | the daily drain publishes to HF; KV is the buffer |
+| Unrecoverable files (laptop 5-minute, open interest, market names, old bars) | the age of the newest snapshot at the time of the loss | Time Machine runs hourly **while a backup drive is connected**. A drive is not always connected, so in practice the RPO is the time since the last connection: days, sometimes more. `scripts/check_backup.sh` measures exactly this gap |
 | The eight HF datasets | the last upload to Hugging Face | uploads are manual (`scripts/upload_hf.sh`) |
 
 The 5-minute poller adds a row set every 5 minutes, so every hour without a snapshot
@@ -173,6 +208,14 @@ Run from the repository root. Check out the repository with `git` first, then:
    HF_REPO="<dataset id from hd_base_url()>"
    hf download "$HF_REPO" crypto_daily.parquet equity_daily.parquet factors.parquet macro_daily.parquet macro_vintages.parquet metadata.parquet metadata_amendments.parquet --repo-type dataset --local-dir data/dist
    hf download "$HF_REPO" kraken_ohlcvt.parquet --repo-type dataset --local-dir data/raw
+   ```
+
+   The Worker's 5-minute snapshots (parquet and raw) come back the same way; the
+   folders keep their layout, so the reader finds them under the output folder:
+
+   ```sh
+   hf download "$HF_REPO" --include "hyperliquid/perp_ctx_5m/*" --repo-type dataset --local-dir data/hf
+   hf download "$HF_REPO" --include "hyperliquid/raw/*" --repo-type dataset --local-dir data/hf
    ```
 
 4. **Refetch what the source still serves**, after steps 1 to 3 so the fetch only has
@@ -246,9 +289,13 @@ Cadence: quarterly (next due: 2027-02-22).
 
 Stated so they are decided, not discovered:
 
-- **No off-site copy of the unrecoverable data.** Time Machine drives sit in one
-  place. Whether to add an encrypted off-site copy is the owner's decision; Hugging
-  Face is excluded for the raw replies by the project's own rule.
+- **No off-site copy of the rest of the unrecoverable data.** Time Machine drives sit in
+  one place. Whether to add an encrypted off-site copy is the owner's decision. The
+  Worker's 5-minute data is the exception: it is on Hugging Face.
+- **The 5-minute chain has three accounts to lose:** Cloudflare (free plan, used for
+  nothing else), GitHub (the drain) and Hugging Face. Losing Cloudflare stops
+  collection; the data already on HF stays. A drain that does not run for 10 days loses
+  the oldest undrained days.
 - **Time Machine is only as current as the last connection.** `scripts/check_backup.sh`
   makes that visible weekly; it does not make a backup happen.
 - **The check reads recorded dates, not a restore.** A PASS means a snapshot newer than
