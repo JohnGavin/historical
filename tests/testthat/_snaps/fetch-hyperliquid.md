@@ -295,10 +295,10 @@
     Code
       print(sort(list.files(out)))
     Output
-      [1] "perp_daily.parquet"         "perp_funding.parquet"      
-      [3] "perp_funding_daily.parquet" "perp_hourly.parquet"       
-      [5] "perp_oi_snapshot.parquet"   "spot_daily.parquet"        
-      [7] "spot_hourly.parquet"       
+      [1] "perp_daily.parquet"         "perp_dexs.parquet"         
+      [3] "perp_funding.parquet"       "perp_funding_daily.parquet"
+      [5] "perp_hourly.parquet"        "perp_oi_snapshot.parquet"  
+      [7] "spot_daily.parquet"         "spot_hourly.parquet"       
 
 ---
 

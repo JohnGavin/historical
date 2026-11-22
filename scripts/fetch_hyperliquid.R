@@ -58,6 +58,11 @@
 #                               interest has NO history on this API: only the
 #                               current snapshot exists, so it is never
 #                               back-filled into the daily table.
+#   perp_dexs.parquet           exchange reference table (#1084), upsert on dex:
+#                               dex ("" = core), full_name (the API's `fullName`;
+#                               NA for the core exchange, whose entry is `null`),
+#                               fetched_at. Market long names and definitions are
+#                               a separate table (scripts/fetch_hl_market_reference.R).
 # The deployer-wallet fields of perpDexs are neither read nor persisted.
 # Publication of these files is a documented follow-up, not done here.
 #
@@ -178,20 +183,24 @@ hl_file_tag <- function(x) {
 
 # Append-only raw store: <raw_dir>/<UTC date>/<type>_<coin-or-dex>_<interval>.json.
 # An existing file is NEVER overwritten: a time suffix (then a counter) is added.
-hl_save_raw <- function(body, text, raw_dir, now = Sys.time()) {
+#   `stem` / `ext` (optional) name a non-API file, e.g. a saved web page (#1084).
+hl_save_raw <- function(body, text, raw_dir, now = Sys.time(), stem = NULL,
+                        ext = "json") {
   now <- as.POSIXct(now, tz = "UTC")
   day_dir <- file.path(raw_dir, format(now, "%Y-%m-%d", tz = "UTC"))
   dir.create(day_dir, recursive = TRUE, showWarnings = FALSE)
-  tag <- body$coin %||% body$req$coin %||% body$dex %||% "all"
-  itv <- body$req$interval %||% "na"
-  stem <- sprintf("%s_%s_%s", body$type, hl_file_tag(tag), itv)
-  path <- file.path(day_dir, paste0(stem, ".json"))
+  if (is.null(stem)) {
+    tag <- body$coin %||% body$req$coin %||% body$dex %||% "all"
+    itv <- body$req$interval %||% "na"
+    stem <- sprintf("%s_%s_%s", body$type, hl_file_tag(tag), itv)
+  }
+  path <- file.path(day_dir, paste0(stem, ".", ext))
   if (file.exists(path)) {
     hms <- format(now, "%H%M%S", tz = "UTC")
-    path <- file.path(day_dir, sprintf("%s_%s.json", stem, hms))
+    path <- file.path(day_dir, sprintf("%s_%s.%s", stem, hms, ext))
     k <- 1L
     while (file.exists(path)) {
-      path <- file.path(day_dir, sprintf("%s_%s_%d.json", stem, hms, k))
+      path <- file.path(day_dir, sprintf("%s_%s_%d.%s", stem, hms, k, ext))
       k <- k + 1L
     }
   }
@@ -420,6 +429,41 @@ hl_parse_dexs <- function(x) {
     cli::cli_abort("perpDexs payload is empty or not a list")
   }
   vapply(x, function(d) if (is.null(d)) "" else as.character(d$name), character(1))
+}
+
+# perpDexs -> exchange reference table (#1084): dex ("" = core), full_name,
+# fetched_at. Only `name` and `fullName` are read; the deployer / wallet /
+# fee-recipient fields and the OI-cap list are never touched. The core exchange
+# is the `null` first entry: the reply gives it neither a name nor a full name,
+# so its full_name is NA (never typed in). A missing or empty `fullName` is NA.
+# A duplicate exchange name aborts rather than silently keeping one.
+hl_parse_perp_dexs <- function(x, fetched_at) {
+  if (!is.list(x) || length(x) == 0L) {
+    cli::cli_abort("perpDexs payload is empty or not a list")
+  }
+  rows <- lapply(x, function(d) {
+    if (is.null(d)) return(list(dex = "", full_name = NA_character_))
+    if (is.null(d$name) || !nzchar(as.character(d$name))) {
+      cli::cli_abort("perpDexs entry has no {.field name}")
+    }
+    fn <- d$fullName
+    list(dex = as.character(d$name),
+         full_name = if (is.null(fn) || !nzchar(as.character(fn))) {
+           NA_character_
+         } else {
+           as.character(fn)
+         })
+  })
+  out <- data.frame(dex = vapply(rows, `[[`, character(1), "dex"),
+                    full_name = vapply(rows, `[[`, character(1), "full_name"),
+                    fetched_at = as.POSIXct(fetched_at, tz = "UTC"),
+                    stringsAsFactors = FALSE)
+  if (anyDuplicated(out$dex) > 0L) {
+    cli::cli_abort(c("x" = "perpDexs lists an exchange twice",
+                     "i" = "{.val {unique(out$dex[duplicated(out$dex)])}}"),
+                   class = "hl_duplicate_keys")
+  }
+  out
 }
 
 # meta -> data.frame of markets for one dex. Empty universe is an error.
@@ -1045,6 +1089,18 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
     }
     hl_upsert(bind_rows(oi), file.path(out_dir, "perp_oi_snapshot.parquet"),
               c("dex", "coin", "fetched_at"))
+
+    # Exchange reference table (#1084): one request, upsert on dex. A failure is
+    # reported like an OI failure (never silently skipped).
+    dx <- tryCatch(hl_parse_perp_dexs(post_fn(list(type = "perpDexs")), Sys.time()),
+                   error = function(e) e)
+    if (inherits(dx, "error")) {
+      failed[["perpDexs"]] <- list(reason = conditionMessage(dx),
+                                   unavailable = inherits(dx, "hl_source_unavailable"),
+                                   indeterminate = inherits(dx, "hl_rate_limited"))
+    } else {
+      hl_upsert(dx, file.path(out_dir, "perp_dexs.parquet"), "dex")
+    }
   }
 
   failed_df <- data.frame(

@@ -28,6 +28,7 @@ source(here::here("scripts", "fetch_hyperliquid.R"))
   function(body) {
     switch(body$type,
       allPerpMetas = .apm,
+      perpDexs = .fx("perpdexs.json"),
       spotMeta = .spot_meta,
       spotMetaAndAssetCtxs = .spot_ctx,
       metaAndAssetCtxs = if (is.null(body$dex)) .mac_core else {
