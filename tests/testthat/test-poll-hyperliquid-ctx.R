@@ -82,13 +82,13 @@ test_that("polling twice with the same fetched_at gives one row per market", {
   out <- withr::local_tempdir()
   expect_equal(.poll(.ok_post, out)$status, 0L)
   expect_equal(.poll(.ok_post, out)$status, 0L)
-  x <- arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))
+  x <- hl_ctx_read(out)
   expect_equal(nrow(x), 3L)
   expect_equal(anyDuplicated(x[c("dex", "coin", "fetched_at")]), 0L)
   # Red: a later fetched_at is a NEW row (the key includes the time)
   later <- function() .t0 + 300
   suppressMessages(hl_ctx_poll(.ok_post, out_dir = out, dexes = "xyz", now = later))
-  x2 <- arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))
+  x2 <- hl_ctx_read(out)
   expect_equal(nrow(x2), 6L)
   expect_equal(length(unique(x2$slot)), 2L)
 })
@@ -98,7 +98,7 @@ test_that("a failed request is status 3 and writes nothing, never 0", {
   down <- function(body) hl_unavailable("connection refused")
   r <- .poll(down, out)
   expect_equal(r$status, 3L)
-  expect_false(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  expect_length(hl_ctx_files(out), 0L)
   limited <- function(body) {
     cli::cli_abort("HTTP 429", class = c("hl_rate_limited", "hl_source_unavailable"))
   }
@@ -107,7 +107,7 @@ test_that("a failed request is status 3 and writes nothing, never 0", {
   expect_equal(.poll(empty, out)$status, 3L)
   garbage <- function(body) list("x")
   expect_equal(.poll(garbage, out)$status, 3L)
-  expect_false(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  expect_length(hl_ctx_files(out), 0L)
 })
 
 test_that("main returns the exit status: 0 ok, 3 when the dependency is broken, 2 usage", {
@@ -122,13 +122,19 @@ test_that("main returns the exit status: 0 ok, 3 when the dependency is broken, 
   expect_equal(suppressMessages(.poll_hyperliquid_ctx_main("--pace=7")), 2L)
 })
 
-test_that("collector is the host name by default and can be set", {
-  expect_equal(unique(hl_parse_ctx(.mac, "xyz", .t0)$collector), Sys.info()[["nodename"]])
+test_that("collector is a configured label, never the host name, and can be set", {
+  withr::local_envvar(HL_POLL_COLLECTOR = NA)
+  expect_equal(unique(hl_parse_ctx(.mac, "xyz", .t0)$collector), "laptop-1")
+  withr::local_envvar(HL_POLL_COLLECTOR = "lab-7")
+  expect_equal(unique(hl_parse_ctx(.mac, "xyz", .t0)$collector), "lab-7")
+  withr::local_envvar(HL_POLL_COLLECTOR = "")          # empty = unset
+  expect_equal(hl_ctx_collector(), "laptop-1")
+  expect_false(Sys.info()[["nodename"]] %in% hl_parse_ctx(.mac, "xyz", .t0)$collector)
   expect_equal(unique(hl_parse_ctx(.mac, "xyz", .t0, collector = "pi-1")$collector), "pi-1")
   out <- withr::local_tempdir()
   suppressMessages(hl_ctx_poll(.ok_post, out_dir = out, dexes = "xyz", now = .now,
                                collector = "pi-1"))
-  expect_equal(unique(arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))$collector), "pi-1")
+  expect_equal(unique(hl_ctx_read(out)$collector), "pi-1")
 })
 
 test_that("fetched_at is taken AFTER the reply is received", {
@@ -171,7 +177,7 @@ test_that("non-429 errors are retried up to 3 times; 429 is not retried", {
   r2 <- suppressMessages(hl_ctx_poll(flaky, out_dir = out, dexes = "xyz", now = .now,
                                      sleep_fn = sleep))
   expect_equal(c(r2$status, calls), c(0L, 3L))
-  expect_true(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  expect_length(hl_ctx_files(out), 1L)
   # Red: a rate limit is NOT retried (one call, no wait)
   calls <- 0L; waits <- numeric()
   limited <- function(body) {
@@ -193,7 +199,7 @@ test_that("a run over its time limit exits 3, never 0", {
             "--dexes=xyz")
   st <- suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = slow, budget_s = 1))
   expect_equal(st, 3L)
-  expect_false(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  expect_length(hl_ctx_files(out), 0L)
   # Red: the same dependency inside the budget is fine
   fast <- function(body) .mac
   expect_equal(suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = fast, budget_s = 30)), 0L)

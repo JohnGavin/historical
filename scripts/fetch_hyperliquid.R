@@ -237,11 +237,15 @@ hl_pace_seconds <- function(weight, elapsed, pace = HL_PACE_FRACTION) {
 # tests never wait. `observer(entry)` (optional) sees every attempt (the volume
 # estimate builds its request log from it). The returned function carries its
 # running weight total in attr "hl_state" (see hl_weight_rate()).
+# `capture_raw = TRUE` (the 5-minute poller, #1082) writes NO per-reply file: the
+# reply's exact text is returned in attr "raw_text" of the parsed reply, and the
+# caller writes one file per run. The default FALSE is the weekly fetch exactly as
+# it was: one plain .json per reply under raw_dir, no attribute.
 hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
                          clock = function() proc.time()[["elapsed"]],
                          backoff_s = HL_429_BACKOFF_S,
                          max_attempts = HL_429_MAX_ATTEMPTS,
-                         post = hl_post, observer = NULL, ...) {
+                         post = hl_post, observer = NULL, capture_raw = FALSE, ...) {
   force(raw_dir)
   if (!is.numeric(pace) || length(pace) != 1L || is.na(pace) || pace <= 0 || pace > 1) {
     hl_bad_arg("pace", "must be a number in (0, 1]")
@@ -256,10 +260,11 @@ hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
       t0 <- clock()
       if (is.na(state$t0)) state$t0 <- t0
       bytes <- NA_integer_
+      raw_text <- NULL
       res <- tryCatch(
         post(body, ..., on_response = function(b, text) {
           bytes <<- nchar(text, type = "bytes")
-          hl_save_raw(b, text, raw_dir)
+          if (capture_raw) raw_text <<- text else hl_save_raw(b, text, raw_dir)
         }),
         error = function(e) e
       )
@@ -276,7 +281,10 @@ hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
                       error = if (ok) "" else conditionMessage(res)))
       }
       sleep_fn(hl_pace_seconds(w, el, pace))
-      if (ok) return(res)
+      if (ok) {
+        if (capture_raw && !is.null(raw_text)) attr(res, "raw_text") <- raw_text
+        return(res)
+      }
       if (!inherits(res, "hl_rate_limited")) rlang::cnd_signal(res)
       state$n_429 <- state$n_429 + 1L
       if (attempt >= max_attempts) {
