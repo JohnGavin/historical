@@ -188,10 +188,35 @@ hl_ctx_open <- function(out_dir) {
   arrow::open_dataset(files, format = "parquet", unify_schemas = TRUE)
 }
 
-# The whole table in memory, ordered by the key. (Filter first for big ranges:
-# dplyr::filter(hl_ctx_open(out_dir), ...) |> dplyr::collect().)
-hl_ctx_read <- function(out_dir) {
+# Collector preference when two collectors recorded the same (dex, coin, slot), as
+# during the week the laptop and the Cloudflare Worker ran side by side (#1088): the
+# Worker `cf-1` (it does not sleep) first, then the laptop. A collector not named here
+# ranks after these, in alphabetical order.
+HL_CTX_COLLECTOR_PREFERENCE <- c("cf-1", "laptop-1")
+
+# One COLLECTOR per (dex, coin, slot): where several collectors have rows in the same
+# 5-minute slot, only the most preferred collector's rows are kept. A single
+# collector's own rows are never thinned (two polls of one collector in one slot both
+# stay: they differ in fetched_at, which is the key). Pure; `df` needs dex, coin,
+# slot, collector.
+hl_ctx_prefer_collector <- function(df, prefer = HL_CTX_COLLECTOR_PREFERENCE) {
+  if (nrow(df) == 0L) return(df)
+  known <- unique(df$collector)
+  order_of <- c(prefer, sort(setdiff(known[!is.na(known)], prefer)))
+  rank <- match(df$collector, order_of)
+  rank[is.na(rank)] <- length(order_of) + 1L            # an NA collector ranks last
+  group <- paste(df$dex, df$coin, as.numeric(df$slot), sep = "\r")
+  best <- tapply(rank, group, min)
+  df[rank == best[group], , drop = FALSE]
+}
+
+# The whole table in memory, ordered by the key, one collector per (dex, coin, slot)
+# (hl_ctx_prefer_collector; `one_collector_per_slot = FALSE` returns every row).
+# hl_ctx_open() is the raw union of every file and applies no preference. (Filter
+# first for big ranges: dplyr::filter(hl_ctx_open(out_dir), ...) |> dplyr::collect().)
+hl_ctx_read <- function(out_dir, one_collector_per_slot = TRUE) {
   x <- as.data.frame(dplyr::collect(hl_ctx_open(out_dir)))
+  if (isTRUE(one_collector_per_slot)) x <- hl_ctx_prefer_collector(x)
   x[do.call(order, unname(as.list(x[HL_CTX_KEYS]))), , drop = FALSE] |>
     `rownames<-`(NULL)
 }
@@ -282,6 +307,55 @@ hl_ctx_replay_day <- function(date, raw_dir, out_dir) {
   df <- bind_rows(frames)
   list(paths = hl_ctx_write(df, out_dir), n_rows = nrow(df),
        n_files = length(files), n_failed_replies = failed)
+}
+
+# ── Raw replies from the Cloudflare collector: JSON lines (#1088) ───
+# The Worker's values are turned (scripts/drain_hl_ctx_kv.R) into ONE gzipped file per
+# UTC day, `<raw-dir>/ctx_poll/date=YYYY-MM-DD/<collector>.jsonl.gz`, one raw document
+# per line: the document shape of the run files above, plus `slot` (the 5-minute slot
+# the collector ran for), `perp_dexs_ok` and `truncated`, and a `status` on each reply:
+#   {"collector","slot","perp_dexs_ok","truncated","replies":[{"dex","fetched_at_us",
+#    "status","ok","reply"}, ...]}
+# A reply that is not ok has "reply": null (or the 200 text as a JSON string).
+HL_CTX_RAW_JSONL_PATTERN <- "\\.jsonl\\.gz$"
+
+# The documents of one JSON-lines gzip file (empty list if the file does not exist).
+hl_ctx_raw_docs <- function(path) {
+  if (!file.exists(path)) return(list())
+  lines <- hl_ctx_raw_text(path)
+  lines <- strsplit(lines, "\n", fixed = TRUE)[[1]]
+  lapply(lines[nzchar(lines)], jsonlite::fromJSON, simplifyVector = FALSE)
+}
+
+# Parsed rows of documents' replies (the replay's own step), optionally only those whose
+# fetched_at is on `date`. Replies with ok = false are counted, not parsed.
+# Returns list(df, n_failed).
+hl_ctx_docs_frames <- function(docs, date = NULL) {
+  frames <- list()
+  failed <- 0L
+  for (doc in docs) {
+    for (r in doc$replies) {
+      fetched_at <- as.POSIXct(as.numeric(r$fetched_at_us) / 1e6, origin = "1970-01-01", tz = "UTC")
+      if (!is.null(date) && as.Date(format(fetched_at, "%Y-%m-%d", tz = "UTC")) != date) next
+      if (!isTRUE(r$ok)) { failed <- failed + 1L; next }
+      frames[[length(frames) + 1L]] <- hl_parse_ctx(r$reply, r$dex, fetched_at, doc$collector)
+    }
+  }
+  list(df = bind_rows(frames), n_failed = failed)
+}
+
+# Like hl_ctx_replay_day, for the JSON-lines files: rebuild the daily file(s) of one
+# UTC date from <raw_dir>/ctx_poll/date=*/ (the day's folder and its two neighbours;
+# a slot that ran just before midnight can hold replies fetched just after it).
+# Returns list(paths, n_rows, n_files, n_failed_replies).
+hl_ctx_replay_day_jsonl <- function(date, raw_dir, out_dir) {
+  date <- as.Date(date)
+  dirs <- file.path(raw_dir, HL_CTX_RAW_SUBDIR, paste0("date=", format(date + (-1:1), "%Y-%m-%d")))
+  files <- list.files(dirs[dir.exists(dirs)], pattern = HL_CTX_RAW_JSONL_PATTERN, full.names = TRUE)
+  docs <- unlist(lapply(files, hl_ctx_raw_docs), recursive = FALSE) %||% list()
+  res <- hl_ctx_docs_frames(docs, date)
+  list(paths = hl_ctx_write(res$df, out_dir), n_rows = nrow(res$df),
+       n_files = length(files), n_failed_replies = res$n_failed)
 }
 
 # One field of every asset context as numeric. A MISSING key or JSON null becomes
