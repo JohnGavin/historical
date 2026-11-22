@@ -47,7 +47,7 @@ test_that("the default polls EVERY exchange, the core one included, in 1 + 11 re
   expect_equal(dex_asked, .all_names)
   # the core exchange is asked WITHOUT a dex field (as fetch_hyperliquid.R does)
   expect_null(log$bodies[[2]]$dex)
-  x <- arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))
+  x <- hl_ctx_read(out)
   expect_equal(sort(unique(x$dex)), sort(.all_names))
   expect_equal(sum(x$dex == ""), length(.core[[1]]$universe))   # every core market kept
   expect_equal(sum(x$dex == "xyz"), 3L)
@@ -79,13 +79,13 @@ test_that("a partial run writes the exchanges that worked and is 3, never 0", {
   r <- .poll(.all_post(fail = list(d_flx = down)), out)
   expect_equal(r$status, 3L)
   expect_match(r$reason, "dex 'flx'", fixed = TRUE)
-  x <- arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))
+  x <- hl_ctx_read(out)
   expect_false("flx" %in% x$dex)
   expect_equal(length(unique(x$dex)), 10L)         # the other ten are in
   # Red -> green: the same run without the fault is 0 and has all eleven
   out2 <- withr::local_tempdir()
   expect_equal(.poll(.all_post(), out2)$status, 0L)
-  expect_equal(length(unique(arrow::read_parquet(file.path(out2, "perp_ctx_5m.parquet"))$dex)), 11L)
+  expect_equal(length(unique(hl_ctx_read(out2)$dex)), 11L)
 })
 
 test_that("a rate limit is not retried and stops the run; what came before is kept", {
@@ -98,7 +98,7 @@ test_that("a rate limit is not retried and stops the run; what came before is ke
   r <- .poll(.all_post(fail = list(d_xyz = limited)), out)
   expect_equal(c(r$status, calls), c(3L, 1L))
   expect_equal(r$not_attempted, .all_names[-(1:2)])   # everything after xyz
-  x <- arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))
+  x <- hl_ctx_read(out)
   expect_equal(unique(x$dex), "")                    # the core exchange was written
 })
 
@@ -111,14 +111,14 @@ test_that("perpDexs failing: poll the last known exchanges (else the core one), 
   r <- .poll(nolist, out)
   expect_equal(r$status, 3L)
   expect_match(r$reason, "perpDexs", fixed = TRUE)
-  expect_equal(unique(arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))$dex), "")
+  expect_equal(unique(hl_ctx_read(out)$dex), "")
   # with a previous exchange table, those exchanges are polled
   out2 <- withr::local_tempdir()
   arrow::write_parquet(data.frame(dex = c("", "xyz"), full_name = c(NA, "XYZ")),
                        file.path(out2, "perp_dexs.parquet"))
   r2 <- .poll(nolist, out2)
   expect_equal(r2$status, 3L)
-  expect_equal(sort(unique(arrow::read_parquet(file.path(out2, "perp_ctx_5m.parquet"))$dex)),
+  expect_equal(sort(unique(hl_ctx_read(out2)$dex)),
                c("", "xyz"))
 })
 
@@ -128,7 +128,7 @@ test_that("no request starts without budget left; the run is 3 and says what it 
   post <- function(body) { calls <<- calls + 1L; .all_post()(body) }
   r <- .poll(post, out, deadline = Sys.time() - 1)
   expect_equal(c(r$status, calls), c(3L, 0L))
-  expect_false(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  expect_length(hl_ctx_files(out), 0L)
   # Red -> green: a deadline well ahead is a normal run
   expect_equal(.poll(.all_post(), withr::local_tempdir(), deadline = Sys.time() + 3600)$status, 0L)
   # a retry that the budget cannot afford is not started
@@ -154,7 +154,8 @@ test_that("is_delisted comes from the universe; absent means FALSE", {
 test_that("rows written before #1084 stay readable; the new column is NA for them", {
   out <- withr::local_tempdir()
   .poll(.all_post(), out, dexes = "xyz")
-  f <- file.path(out, "perp_ctx_5m.parquet")
+  f <- hl_ctx_files(out)                                    # today's daily file
+  expect_length(f, 1L)
   old <- arrow::read_parquet(f)
   old$is_delisted <- NULL                                   # the pre-#1084 schema
   old$fetched_at <- old$fetched_at - 3600

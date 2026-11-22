@@ -12,14 +12,25 @@
 #   API allows per IP). launchd runs it every 5 minutes (scripts/launchd/).
 #   These are PERPETUAL FUTURES, not tokenised shares.
 #
-# Output (under --out-dir, default data/dist; gitignored, never committed):
-#   perp_ctx_5m.parquet  upsert on (dex, coin, fetched_at)
-#     fetched_at   UTC time the reply was received (the TRUE time, never snapped)
+# Output (under --out-dir, default data/dist; gitignored, never committed), one
+# file per UTC day and collector (#1082):
+#   perp_ctx_5m/date=YYYY-MM-DD/<collector>.parquet  upsert on (dex, coin, fetched_at)
+#   The date is the UTC date of fetched_at; a run that straddles midnight writes two
+#   files. A poll rewrites only TODAY's file (at most ~164 thousand rows), so its cost
+#   stays flat instead of growing with the whole history, and yesterday's file is
+#   never touched again. Read the whole table with hl_ctx_read(out_dir) /
+#   hl_ctx_open(out_dir) below (arrow, with the schemas of old and new files unified).
+#   The pre-#1082 single file perp_ctx_5m.parquet is no longer written or read; the
+#   reader ignores it. scripts/migrate_hl_ctx_to_daily.R splits it into this layout.
+#   Columns:
+#     fetched_at   UTC time the reply was received (the TRUE time, never snapped;
+#                  held to whole microseconds, which is all parquet stores)
 #     slot         fetched_at floored to 5 minutes, for joining. Gaps (Mac
 #                  asleep, run skipped) are expected and are NEVER imputed: a
 #                  later study finds them as missing slots.
-#     collector    host name (Sys.info()[["nodename"]]) of the machine that
-#                  polled, so a second collector can be merged by slot later
+#     collector    a configured, non-identifying label of the machine that polled
+#                  (env var HL_POLL_COLLECTOR, default "laptop-1"; never the host
+#                  name), so a second collector can be merged by slot later
 #     server_time  the API's own time if the reply carries one, else NA
 #                  (metaAndAssetCtxs replies with a bare [meta, ctxs] array)
 #     mid_px, oracle_px, mark_px, impact_bid_px, impact_ask_px, premium,
@@ -31,8 +42,23 @@
 #   run differ by a fraction of a second; they share a `slot`.
 #   A null or "NaN" field is stored as NA, the row is kept, and the count is
 #   reported; nothing is silently dropped.
-# Raw JSON is kept append-only under --raw-dir (default data/raw/hyperliquid/
-#   <UTC date>/), exactly like fetch_hyperliquid.R; never uploaded.
+# Raw JSON is kept append-only under --raw-dir (default data/raw/hyperliquid/),
+#   never uploaded, in a folder of its own so no other script's files mix in (#1082):
+#     <raw-dir>/ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz
+#   ONE gzipped file per run (288 a day) holding every reply of that run:
+#     {"collector": ..., "replies": [{"dex", "fetched_at_us", "ok", "reply": <the exact
+#     reply text>}, ...]}
+#   The reply itself carries no time, so each entry records the fetched_at the poller
+#   stored (whole microseconds since the epoch, as text). The file is written to a
+#   .tmp name and renamed, before the parquet write. Its date folder and HHMMSS are
+#   those of the run's FIRST reply's fetched_at (one clock read, no other), and the
+#   parquet partition of each row is the date of that row's own fetched_at, so a run
+#   that crosses 00:00 UTC has one raw file and two daily parquet files.
+#   hl_ctx_replay_day() rebuilds one day's daily file(s) from these files only (it
+#   reads the day's folder and its two neighbours, keeps the replies whose
+#   fetched_at is on that day) and the result equals what the poller wrote.
+#   fetch_hyperliquid.R and hl_volume_estimate.R save their own metaAndAssetCtxs
+#   replies in <raw-dir>/<UTC date>/, which the replay never reads.
 #
 # Usage: Rscript scripts/poll_hyperliquid_ctx.R [--out-dir=data/dist]
 #          [--raw-dir=data/raw/hyperliquid] [--dexes=all] [--pace=0.75]
@@ -81,7 +107,8 @@ suppressPackageStartupMessages({
 source(.poll_find_fetcher())
 
 HL_CTX_SLOT_SECONDS <- 300L        # slot width: 5 minutes, one home
-HL_CTX_FILE <- "perp_ctx_5m.parquet"
+HL_CTX_DIR <- "perp_ctx_5m"        # daily files live in <out-dir>/<this>/date=.../
+HL_CTX_LEGACY_FILE <- "perp_ctx_5m.parquet"  # pre-#1082 single file: migrated, never read
 HL_CTX_KEYS <- c("dex", "coin", "fetched_at")
 HL_CTX_TRIES <- 3L                 # attempts per run on non-429 errors
 HL_CTX_RETRY_DELAY_S <- c(5, 10)   # waits between attempts
@@ -101,6 +128,162 @@ hl_ctx_slot <- function(t) {
              origin = "1970-01-01", tz = "UTC")
 }
 
+# A time held to whole microseconds (parquet's resolution), so the value the poller
+# stores and the value a replay rebuilds from the sidecar are the same double.
+hl_ctx_us <- function(t) {
+  as.POSIXct(round(as.numeric(t) * 1e6) / 1e6, origin = "1970-01-01", tz = "UTC")
+}
+
+# ── Daily files (#1082) ─────────────────────────────────────────────
+# File-name part for a collector: filesystem-safe, never empty.
+hl_ctx_collector_tag <- function(collector) {
+  tag <- hl_file_tag(as.character(collector))
+  tag[is.na(collector) | !nzchar(tag)] <- "unknown"
+  tag
+}
+
+# Path of one daily file.
+hl_ctx_day_path <- function(out_dir, date, collector) {
+  file.path(out_dir, HL_CTX_DIR, paste0("date=", date),
+            paste0(hl_ctx_collector_tag(collector), ".parquet"))
+}
+
+# Upsert rows into their daily files: split by the UTC date of fetched_at and by
+# collector, then hl_upsert (unchanged: new rows win, atomic tmp + rename) on each
+# daily file. Returns the paths written.
+hl_ctx_write <- function(df, out_dir) {
+  if (nrow(df) == 0L) return(character())
+  date <- format(df$fetched_at, "%Y-%m-%d", tz = "UTC")
+  tag <- hl_ctx_collector_tag(df$collector)
+  paths <- character()
+  for (g in unique(paste(date, tag, sep = "\r"))) {
+    pick <- paste(date, tag, sep = "\r") == g
+    path <- hl_ctx_day_path(out_dir, date[pick][1], df$collector[pick][1])
+    hl_upsert(df[pick, , drop = FALSE], path, HL_CTX_KEYS)
+    paths <- c(paths, path)
+  }
+  paths
+}
+
+# Every daily file under out_dir (character(0) if none). Only complete
+# `date=YYYY-MM-DD/<collector>.parquet` files: a leftover `.parquet.tmp` of a killed
+# write and the pre-#1082 single file are not matched.
+hl_ctx_files <- function(out_dir) {
+  files <- list.files(file.path(out_dir, HL_CTX_DIR), pattern = "\\.parquet$",
+                      recursive = TRUE, full.names = TRUE)
+  sort(files[grepl("/date=[0-9]{4}-[0-9]{2}-[0-9]{2}/[^/]+\\.parquet$", files)])
+}
+
+# The whole table as an arrow Dataset. Verified against arrow 23 (2026-11-22):
+# WITHOUT unify_schemas = TRUE the dataset takes the schema of the FIRST file only,
+# so when the first (oldest) file lacks `is_delisted` the column is silently dropped
+# from every later file; with it the columns are united and old files read as NA.
+# The files are listed here, not the folder scanned, so a stray .tmp is never opened.
+hl_ctx_open <- function(out_dir) {
+  files <- hl_ctx_files(out_dir)
+  if (length(files) == 0L) {
+    cli::cli_abort(c("x" = "No daily files under {.file {file.path(out_dir, HL_CTX_DIR)}}"),
+                   class = "hl_ctx_empty")
+  }
+  arrow::open_dataset(files, format = "parquet", unify_schemas = TRUE)
+}
+
+# The whole table in memory, ordered by the key. (Filter first for big ranges:
+# dplyr::filter(hl_ctx_open(out_dir), ...) |> dplyr::collect().)
+hl_ctx_read <- function(out_dir) {
+  x <- as.data.frame(dplyr::collect(hl_ctx_open(out_dir)))
+  x[do.call(order, unname(as.list(x[HL_CTX_KEYS]))), , drop = FALSE] |>
+    `rownames<-`(NULL)
+}
+
+# ── Raw replies: one gzipped file per run (#1082) ───────────────────
+HL_CTX_RAW_SUBDIR <- "ctx_poll"   # <raw-dir>/ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz
+
+# The collector label: a configured, non-identifying name (never the host name).
+# HL_POLL_COLLECTOR, default "laptop-1"; an unset or empty variable gives the default.
+hl_ctx_collector <- function() {
+  v <- Sys.getenv("HL_POLL_COLLECTOR", unset = "")
+  if (nzchar(v)) v else "laptop-1"
+}
+
+# JSON string literal for a character scalar.
+.ctx_json_str <- function(x) as.character(jsonlite::toJSON(x, auto_unbox = TRUE))
+
+# Write ONE gzipped file holding every reply of a run. `replies` is a list of
+# list(dex, fetched_at, ok, text) (text = the reply's exact response text). The date
+# folder and the HHMMSS come from the FIRST reply's fetched_at: no other clock is
+# read. Written to a .tmp name, then renamed; an existing file is never overwritten
+# (a counter is added). Returns the path.
+hl_ctx_write_raw <- function(replies, collector, raw_dir) {
+  stopifnot(length(replies) > 0L)
+  t1 <- replies[[1]]$fetched_at
+  day_dir <- file.path(raw_dir, HL_CTX_RAW_SUBDIR, format(t1, "%Y-%m-%d", tz = "UTC"))
+  dir.create(day_dir, recursive = TRUE, showWarnings = FALSE)
+  stem <- sprintf("%s_%s", hl_ctx_collector_tag(collector), format(t1, "%H%M%S", tz = "UTC"))
+  path <- file.path(day_dir, paste0(stem, ".json.gz"))
+  k <- 1L
+  while (file.exists(path)) {
+    path <- file.path(day_dir, sprintf("%s_%d.json.gz", stem, k))
+    k <- k + 1L
+  }
+  entries <- vapply(replies, function(r) {
+    sprintf('{"dex":%s,"fetched_at_us":"%.0f","ok":%s,"reply":%s}',
+            .ctx_json_str(r$dex), round(as.numeric(r$fetched_at) * 1e6),
+            if (isTRUE(r$ok)) "true" else "false", r$text)
+  }, character(1))
+  doc <- sprintf('{"collector":%s,"replies":[%s]}', .ctx_json_str(as.character(collector)),
+                 paste(entries, collapse = ","))
+  tmp <- paste0(path, ".tmp")
+  con <- gzfile(tmp, "wb")
+  tryCatch(writeBin(charToRaw(doc), con), finally = close(con))
+  file.rename(tmp, path)
+  invisible(path)
+}
+
+# The exact text of a gzipped run file.
+hl_ctx_raw_text <- function(path) {
+  con <- gzfile(path, "rb")
+  on.exit(close(con), add = TRUE)
+  chunks <- list()
+  repeat {
+    chunk <- readBin(con, "raw", 1048576L)
+    if (length(chunk) == 0L) break
+    chunks[[length(chunks) + 1L]] <- chunk
+  }
+  if (length(chunks) == 0L) return("")
+  rawToChar(do.call(c, chunks))
+}
+
+# Rebuild the daily file(s) of ONE UTC date from the run files under
+# <raw_dir>/ctx_poll/ (the day's folder and its two neighbours: a run that crosses
+# midnight sits in the earlier day's folder). Only those files are read: other
+# scripts' metaAndAssetCtxs replies in <raw_dir>/<date>/ never are. Replies with
+# ok = false (they failed to parse when polled) are counted, not replayed. Parses with
+# hl_parse_ctx and writes with hl_ctx_write, the poller's own steps, so the rows equal
+# what the poller wrote. Writes under `out_dir` (give an empty folder to compare with
+# the live files; into the live folder it only upserts the same keys).
+# Returns list(paths, n_rows, n_files, n_failed_replies).
+hl_ctx_replay_day <- function(date, raw_dir, out_dir) {
+  date <- as.Date(date)
+  dirs <- file.path(raw_dir, HL_CTX_RAW_SUBDIR, format(date + (-1:1), "%Y-%m-%d"))
+  files <- list.files(dirs[dir.exists(dirs)], pattern = "_[0-9]{6}(_[0-9]+)?\\.json\\.gz$",
+                      full.names = TRUE)
+  frames <- list()
+  failed <- 0L
+  for (f in files) {
+    doc <- jsonlite::fromJSON(hl_ctx_raw_text(f), simplifyVector = FALSE)
+    for (r in doc$replies) {
+      fetched_at <- as.POSIXct(as.numeric(r$fetched_at_us) / 1e6, origin = "1970-01-01", tz = "UTC")
+      if (as.Date(format(fetched_at, "%Y-%m-%d", tz = "UTC")) != date) next
+      if (!isTRUE(r$ok)) { failed <- failed + 1L; next }
+      frames[[length(frames) + 1L]] <- hl_parse_ctx(r$reply, r$dex, fetched_at, doc$collector)
+    }
+  }
+  df <- bind_rows(frames)
+  list(paths = hl_ctx_write(df, out_dir), n_rows = nrow(df),
+       n_files = length(files), n_failed_replies = failed)
+}
+
 # One field of every asset context as numeric. A MISSING key or JSON null becomes
 # NA (counted by the caller); "NaN" becomes NA; any other non-numeric text aborts
 # (hl_num), so a malformed value never turns into a silent NA.
@@ -116,7 +299,7 @@ hl_ctx_slot <- function(t) {
 # metaAndAssetCtxs -> one row per market. Contexts are joined to the universe BY
 # POSITION, which the API defines for this call (same length, same order); a
 # length mismatch aborts. `server_time_ms` is read only if the reply carries one.
-hl_parse_ctx <- function(mac, dex, fetched_at, collector = Sys.info()[["nodename"]]) {
+hl_parse_ctx <- function(mac, dex, fetched_at, collector = hl_ctx_collector()) {
   if (!is.list(mac) || length(mac) != 2L) {
     cli::cli_abort("metaAndAssetCtxs payload must be [meta, ctxs]")
   }
@@ -207,7 +390,8 @@ hl_ctx_body <- function(dex) {
 # vector of exchange names, "" = the core exchange. `deadline` (POSIXct, optional)
 # is the end of the run budget: no request starts without HL_CTX_MIN_REMAINING_S
 # left, and the exchanges not reached are reported, not hidden.
-# The rows of all exchanges that succeeded are upserted in ONE write.
+# The rows of all exchanges that succeeded are upserted in ONE write (per daily
+# file). `raw_dir` (optional) is where the run's one raw file goes (hl_ctx_write_raw).
 # Returns list(status, n_rows, n_na, reason, attempts, by_dex, not_attempted).
 # Status 3 for ANY failure or omission: a request errored on every attempt, was
 # rate-limited, a reply did not parse, a universe was empty, the budget ran out,
@@ -215,9 +399,9 @@ hl_ctx_body <- function(dex) {
 # 3; never 0 unless every exchange was polled.
 hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL,
                         now = function() Sys.time(),
-                        collector = Sys.info()[["nodename"]],
+                        collector = hl_ctx_collector(),
                         tries = HL_CTX_TRIES, retry_delay_s = HL_CTX_RETRY_DELAY_S,
-                        sleep_fn = Sys.sleep, deadline = NULL) {
+                        sleep_fn = Sys.sleep, deadline = NULL, raw_dir = NULL) {
   if (!is.character(dexes) || length(dexes) == 0L || anyNA(dexes)) {
     hl_bad_arg("dexes", "must be \"all\" or a character vector of exchange names")
   }
@@ -258,6 +442,7 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL
   }
 
   frames <- list()
+  raw_replies <- list()
   not_attempted <- character()
   stopped <- FALSE
   for (d in dexes) {
@@ -271,8 +456,15 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL
       if (r$rate_limited) stopped <- TRUE
       next
     }
-    fetched_at <- now()
+    fetched_at <- hl_ctx_us(now())
     df <- tryCatch(hl_parse_ctx(r$value, d, fetched_at, collector), error = function(e) e)
+    # Only a post function made with hl_make_post(capture_raw = TRUE) carries the
+    # reply's text; every reply that came back is kept, parsed or not.
+    text <- attr(r$value, "raw_text")
+    if (!is.null(text)) {
+      raw_replies[[length(raw_replies) + 1L]] <- list(dex = d, fetched_at = fetched_at,
+                                                      ok = !inherits(df, "error"), text = text)
+    }
     if (inherits(df, "error")) {
       note_problem(sprintf("dex '%s': %s", d, conditionMessage(df)))
       next
@@ -282,6 +474,14 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL
   if (length(not_attempted) > 0L) {
     note_problem(sprintf("not attempted (run budget or rate limit): %s",
                          paste0("'", not_attempted, "'", collapse = ", ")))
+  }
+
+  # The run's raw replies: ONE gzipped file, written BEFORE the parquet so a crash
+  # between the two loses no data (a replay then yields rows the parquet lacks). A
+  # failure makes the run 3; the rows are still written, but not replayable.
+  if (!is.null(raw_dir) && length(raw_replies) > 0L) {
+    wr <- tryCatch(hl_ctx_write_raw(raw_replies, collector, raw_dir), error = function(e) e)
+    if (inherits(wr, "error")) note_problem(sprintf("raw file not written: %s", conditionMessage(wr)))
   }
 
   df <- bind_rows(frames)
@@ -295,9 +495,9 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL
   }
   na <- integer()
   if (nrow(df) > 0L) {
-    hl_upsert(df, file.path(out_dir, HL_CTX_FILE), HL_CTX_KEYS)
+    paths <- hl_ctx_write(df, out_dir)
     na <- hl_ctx_na_counts(df)
-    cli::cli_alert_success("{nrow(df)} market{?s} over {nrow(by_dex)} exchange{?s}, slot {format(df$slot[1], tz = 'UTC', usetz = TRUE)}; {sum(df$is_delisted)} delisted")
+    cli::cli_alert_success("{nrow(df)} market{?s} over {nrow(by_dex)} exchange{?s}, slot {format(df$slot[1], tz = 'UTC', usetz = TRUE)}; {sum(df$is_delisted)} delisted; {length(paths)} daily file{?s}")
     if (any(na > 0L)) {
       cli::cli_alert_info("NA cells kept (null or \"NaN\"): {paste(names(na)[na > 0L], na[na > 0L], sep = '=', collapse = ', ')}")
     }
@@ -348,8 +548,11 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL
     # pacing, and a pace sleep would delay the reply that fetched_at is taken
     # from. `timeout`/`max_tries` go to hl_post: a request is cut at 15 s and 5xx
     # retries are done here, not there.
+    # capture_raw: no per-reply file; each reply carries its text, and hl_ctx_poll
+    # writes ONE gzipped file per run (#1082).
     post_fn <- hl_make_post(opt("raw-dir", "data/raw/hyperliquid"), pace = pace,
                             max_attempts = 1L, sleep_fn = function(s) invisible(NULL),
+                            capture_raw = TRUE,
                             timeout = HL_CTX_REQUEST_TIMEOUT_S, max_tries = 1)
   }
   # Whole-run time limit: the deadline stops new requests early and keeps what was
@@ -359,7 +562,8 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL
   on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
   res <- tryCatch(
     hl_ctx_poll(post_fn, out_dir = opt("out-dir", "data/dist"), dexes = dexes,
-                sleep_fn = sleep_fn, deadline = Sys.time() + budget_s),
+                sleep_fn = sleep_fn, deadline = Sys.time() + budget_s,
+                raw_dir = opt("raw-dir", "data/raw/hyperliquid")),
     error = function(e) {
       message("INDETERMINATE: ", conditionMessage(e))
       list(status = 3L)

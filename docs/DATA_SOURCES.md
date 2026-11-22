@@ -18,6 +18,15 @@ Two small tables describe the exchanges and markets that every other Hyperliquid
 - **Why not `metadata.parquet`.** That file is keyed by ticker, rewritten whole by `scripts/fetch_metadata.py` and holds no Hyperliquid rows; a second writer would race it and would store a long name in two places.
 - These are PERPETUAL FUTURES markets that reference securities; the long name says what the market references, not that the market is the security.
 
+## Ingested: Hyperliquid 5-minute context snapshots (#1080, #1082)
+
+`scripts/poll_hyperliquid_ctx.R` (launchd, every 5 minutes) records, for every market of every exchange, the mid, oracle, mark and impact prices, premium, funding, open interest and 24-hour notional volume. The info API (`metaAndAssetCtxs`) has no history, so a snapshot not recorded now is lost.
+
+- **Layout.** `data/dist/perp_ctx_5m/date=YYYY-MM-DD/<collector>.parquet`, one file per UTC day (the date of `fetched_at`) and collector, key `(dex, coin, fetched_at)`. A run that crosses 00:00 UTC writes two files. A poll rewrites only today's file; earlier days are never touched. Read the whole table with `hl_ctx_read()` / `hl_ctx_open()` (arrow). The reader must unite the files' schemas (`unify_schemas = TRUE`, measured with arrow 23): otherwise the first file's columns win and `is_delisted`, absent from the oldest files, is silently dropped.
+- **Collector.** A configured label (env var `HL_POLL_COLLECTOR`, default `laptop-1`), never the host name.
+- **The old single file** `data/dist/perp_ctx_5m.parquet` is no longer written and the reader ignores it. `Rscript scripts/migrate_hl_ctx_to_daily.R` (dry run by default, `--apply` to write) splits it into the daily layout, replaces its host-name collector values by the label, verifies the key sets and values, and leaves the file in place; delete it yourself once checked. Rows are matched on the key, so running it twice, or after the poller has started writing daily files, never doubles a row.
+- **Raw replies and replay.** `data/raw/hyperliquid/ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz`: one gzipped file per run holding every reply (exact text) with its `fetched_at`. `hl_ctx_replay_day(date, raw_dir, out_dir)` rebuilds that day's daily file(s) from them and the result equals what the poller wrote. The folder `data/raw/hyperliquid/<UTC date>/` holds the weekly fetch's and the volume estimate's own `metaAndAssetCtxs` replies, which the replay never reads. Raw files are gitignored and never uploaded.
+
 ## Known, not ingested
 
 ### Econvitals (econvitals.org)

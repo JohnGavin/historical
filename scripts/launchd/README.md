@@ -82,8 +82,23 @@ paths were collected, the wrapper falls back to plain `nix develop`. Old cache
 files from earlier flake contents are not removed automatically. In R the poller
 retries a non-429 error (3 attempts, about 60 s at most), never retries HTTP
 429, stamps `fetched_at` after each reply arrives, and records a `collector`
-column (the host name) so a second collector can be merged by slot later. It also
-stores each market's `is_delisted` flag (rows from before #1084 have NA there).
+column so a second collector can be merged by slot later. The collector is a
+configured label, not the host name: the environment variable `HL_POLL_COLLECTOR`,
+default `laptop-1` (a launchd job does not need it set, so the plist is unchanged).
+It also stores each market's `is_delisted` flag (rows from before #1084 have NA
+there).
+
+**Where the poller writes (#1082).** One parquet file per UTC day and collector,
+`data/dist/perp_ctx_5m/date=YYYY-MM-DD/<collector>.parquet`, so a run rewrites only
+today's file and its cost does not grow with the history (the single file it
+replaces was rewritten whole every 5 minutes). Read it with `hl_ctx_read(out_dir)`
+or `hl_ctx_open(out_dir)` (`scripts/poll_hyperliquid_ctx.R`). The raw replies go to
+`data/raw/hyperliquid/ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz`: one
+gzipped file per run (288 a day) with every reply and its `fetched_at`, which
+`hl_ctx_replay_day()` can rebuild a day's parquet from. The weekly fetch's own raw
+files (`data/raw/hyperliquid/<UTC date>/*.json`) are unchanged. After pulling this
+change run `Rscript scripts/migrate_hl_ctx_to_daily.R` (a dry run; `--apply` to
+write) once to split the old single file; no job needs reinstalling.
 
 A **partial run** (some exchanges polled, some failed, not reached or
 rate-limited) writes the rows of the exchanges that worked and exits 3, never 0:
