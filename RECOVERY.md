@@ -29,6 +29,13 @@ copies them to the public Hugging Face dataset under `hyperliquid/`, which is th
 and is unloaded once the gap report shows 7 full days at 99% or better. Section
 [5-minute snapshots](#5-minute-snapshots-primary-copy-on-hugging-face) has the details.
 
+**Weekly Hyperliquid history (#1088).** The bar, funding and open-interest tables are
+also primary on Hugging Face (`hyperliquid/<table>.parquet`), extended every week by
+`.github/workflows/hl-weekly.yml`, and the raw replies are published packed, one tar per
+UTC day. The laptop's weekly job stops once that workflow has run green twice. Section
+[Weekly history tables and packed raw](#weekly-history-tables-and-packed-raw-on-hugging-face)
+has the details.
+
 ## What Needs Backing Up
 
 Classification of every file under `data/dist/` and `data/raw/`, by what produces it
@@ -75,7 +82,11 @@ keeps only the most recent 5000 bars per interval (`HL_CANDLE_PAGE_MAX` in
 | Folder | What | Refetch? |
 |---|---|---|
 | `<UTC date>/*.json` and `*.md` | the weekly fetch's raw replies (candles, funding, `allPerpMetas`, current contexts, the saved specification page) | The candle and funding replies can be fetched again within the windows above. The saved page and the contexts of that day are **backup only**. The parquet files above are derived from these and survive without them; losing them loses the audit trail |
-| `ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz` | one gzipped file per 5-minute run, every reply and its `fetched_at` | **Backup only.** It is the source for rebuilding a day of `perp_ctx_5m` (see Restore Steps). Never uploaded: raw Hyperliquid replies are not redistributed |
+| `ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz` | one gzipped file per 5-minute run, every reply and its `fetched_at` | **Backup only.** It is the source for rebuilding a day of `perp_ctx_5m` (see Restore Steps). Not uploaded yet: converting it to the Worker's daily `jsonl.gz` layout is a later step |
+
+The weekly fetch's raw day folders (`<UTC date>/`) are published since the seed
+(`scripts/seed_hl_to_hf.R`) and every weekly run: packed, one tar per day, on Hugging Face
+(next section), so they are no longer backup-only once the seed has been applied.
 
 ### 5-minute snapshots: primary copy on Hugging Face
 
@@ -101,6 +112,23 @@ Nothing in this chain needs the Mac to be on. Two checks say whether it works:
 not on HF always fails, never-collected slots fail above 2% of a day) and the workflow run
 itself, which fails (never green) when a secret is missing, a KV key cannot be read or
 the upload cannot be read back.
+
+### Weekly history tables and packed raw on Hugging Face
+
+Also prefix `hyperliquid/` of the public dataset `finance-data`, written by the one-off
+seed and then every week by `.github/workflows/hl-weekly.yml`:
+
+| Path | What |
+|---|---|
+| `hyperliquid/<table>.parquet` | one file per table: `perp_daily`, `perp_hourly`, `perp_15m`, `spot_daily`, `spot_hourly`, `perp_funding`, `perp_funding_daily`, `perp_oi_snapshot`, and `perp_dexs`, `perp_markets` (the list is `HL_HIST_TABLES` in `scripts/hl_history_guard.R`) |
+| `hyperliquid/_seeded.json` | the seed marker: tables with row counts and date ranges at seed time. The weekly job refuses to run without it |
+| `hyperliquid/raw/weekly/date=YYYY-MM-DD/<run id>.tar` (`seed.tar` for the seed) | that UTC day's raw replies, each gzipped on its own inside one tar. Packed because a day holds about 10,000 files and Hugging Face allows under 10,000 per folder |
+
+The weekly job downloads every table first and stops unless all of them came down whole,
+so a missing table can never be republished as a short one. It fetches only what is newer
+than the tables, checks that no table lost rows, an earlier date or a key, and publishes
+the tables and that run's tar in one commit; a failed or partial run publishes nothing.
+Nothing in it needs the Mac. Its recovery copy is an artifact of the run (14 days).
 
 ### Other files in `data/dist/`
 
@@ -146,9 +174,10 @@ the upload cannot be read back.
 
 Not backed up anywhere else: the laptop's own 5-minute snapshots and raw replies (the
 Worker's `cf-1` ones are on Hugging Face, above), the open-interest snapshots and the
-older hourly and 15-minute bars. Whether Hyperliquid's terms allow redistributing the
-data is still an open owner question; the owner decided on 2026-11-22 to publish the 5-minute data,
-raw replies included, to the public dataset and to tidy up later if size is a problem.
+older hourly and 15-minute bars (the open-interest snapshots and the older bars are also on
+Hugging Face once the seed has been applied). Terms on redistribution of Hyperliquid's data: not located by the owner
+(2026-11-22); the owner decided on 2026-11-22 to publish the data, raw replies included, to
+the public dataset and to tidy up later if size is a problem.
 
 **Failure-domain check (done):** an external Time Machine drive is a different volume
 from the Mac's disk, so it passes the "not the same volume" test. It does not survive
@@ -217,6 +246,17 @@ Run from the repository root. Check out the repository with `git` first, then:
    hf download "$HF_REPO" --include "hyperliquid/perp_ctx_5m/*" --repo-type dataset --local-dir data/hf
    hf download "$HF_REPO" --include "hyperliquid/raw/*" --repo-type dataset --local-dir data/hf
    ```
+
+   The weekly tables (bars, funding, open interest) and their packed raw replies:
+
+   ```sh
+   hf download "$HF_REPO" --include "hyperliquid/*.parquet" --repo-type dataset --local-dir data/hf
+   hf download "$HF_REPO" --include "hyperliquid/raw/weekly/*" --repo-type dataset --local-dir data/hf
+   ```
+
+   Copy `data/hf/hyperliquid/*.parquet` to `data/dist/`. A day's raw replies are
+   `data/hf/hyperliquid/raw/weekly/date=<day>/*.tar`; `tar -xf` it, each member is one
+   reply, gzipped (`gunzip`).
 
 4. **Refetch what the source still serves**, after steps 1 to 3 so the fetch only has
    to fill the gap (it upserts and resumes):
