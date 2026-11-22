@@ -52,7 +52,10 @@ suppressPackageStartupMessages({
     cands <- c(cands, here::here("scripts", "fetch_hyperliquid.R"))
   }
   hit <- cands[file.exists(cands)]
-  if (length(hit) == 0L) stop("cannot locate scripts/fetch_hyperliquid.R", call. = FALSE)
+  if (length(hit) == 0L) {
+    cli::cli_abort(c("x" = "Cannot locate {.file scripts/fetch_hyperliquid.R}",
+                     "i" = "tried: {.file {cands}}"))
+  }
   hit[1]
 }
 source(.poll_find_fetcher())
@@ -162,7 +165,8 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dex = "xyz",
     hit <- grep(paste0("^--", name, "="), args, value = TRUE)
     if (length(hit) == 0L) default else sub(paste0("^--", name, "="), "", hit[1])
   }
-  pace <- suppressWarnings(as.numeric(opt("pace", HL_PACE_FRACTION)))
+  pace_txt <- as.character(opt("pace", HL_PACE_FRACTION))
+  pace <- if (grepl("^([0-9]+\\.?[0-9]*|\\.[0-9]+)$", pace_txt)) as.numeric(pace_txt) else NA_real_
   if (is.na(pace) || pace <= 0 || pace > 1) {
     message("usage: --pace must be a number in (0, 1]")
     return(2L)
