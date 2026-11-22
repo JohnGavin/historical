@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- TEMPLATE (#1080). Not installed or loaded by the repo; see scripts/launchd/README.md.
+     Replace __REPO__ with the absolute path of the main checkout before installing. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.johngavin.historical.hyperliquid-weekly</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/run_hyperliquid_weekly.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Weekday</key>
+    <integer>0</integer>
+    <key>Hour</key>
+    <integer>3</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/tmp/io.github.johngavin.historical.hyperliquid-weekly.out</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/io.github.johngavin.historical.hyperliquid-weekly.err</string>
+</dict>
+</plist>
