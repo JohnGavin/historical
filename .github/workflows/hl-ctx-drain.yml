@@ -1,0 +1,160 @@
+name: Hyperliquid ctx drain
+
+# Daily: copy the 5-minute Hyperliquid snapshots that the Cloudflare Worker keeps in KV
+# (10 days) into the public Hugging Face dataset, then report gaps (#1088).
+#   cloudflare/hl-ctx-collector/  the Worker (cron */5, runs on Cloudflare, not here)
+#   scripts/drain_hl_ctx_kv.R     KV -> staging folder (idempotent; re-checks every day
+#                                 still in KV against what HF holds; no progress marker)
+#   scripts/hf_upload_commit.sh   staging folder -> ONE HF commit, fail-closed, read back
+#   scripts/hl_ctx_gap_report.R   slots due vs on HF vs in KV; kv_not_hf always fails
+# A late start loses nothing (KV keeps 10 days); a missed day is caught up by the next run.
+# Not configured (a secret missing) is exit 3 and the job FAILS: silence is never green.
+#
+# Secrets: HF_TOKEN (write access to the dataset; only the upload step sees it),
+# CF_ACCOUNT_ID, CF_KV_NAMESPACE_ID, CF_API_TOKEN (Workers KV read; drain and gap steps).
+# Every action is pinned by full commit SHA (external-code rule); the tag is in the comment.
+
+on:
+  schedule:
+    - cron: '17 5 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two drains must never run at once (they would stage and publish the same days twice).
+concurrency:
+  group: hl-ctx-drain
+  cancel-in-progress: false
+
+jobs:
+  drain:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      HD_HF_REPO: JohnGavin/finance-data
+      HD_HF_REPO_VISIBILITY: public
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Presence only. The comparison with '' yields true/false, so no secret value
+      # enters this step's environment.
+      - name: Preflight, secrets configured
+        env:
+          HAS_HF_TOKEN: ${{ secrets.HF_TOKEN != '' }}
+          HAS_CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID != '' }}
+          HAS_CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID != '' }}
+          HAS_CF_API_TOKEN: ${{ secrets.CF_API_TOKEN != '' }}
+        run: |
+          missing=""
+          [ "$HAS_HF_TOKEN" = "true" ] || missing="$missing HF_TOKEN"
+          [ "$HAS_CF_ACCOUNT_ID" = "true" ] || missing="$missing CF_ACCOUNT_ID"
+          [ "$HAS_CF_KV_NAMESPACE_ID" = "true" ] || missing="$missing CF_KV_NAMESPACE_ID"
+          [ "$HAS_CF_API_TOKEN" = "true" ] || missing="$missing CF_API_TOKEN"
+          if [ -n "$missing" ]; then
+            echo "::error::not configured (exit 3): repository secret(s) missing:$missing. See cloudflare/hl-ctx-collector/README.md for the owner steps."
+            exit 3
+          fi
+          echo "All four secrets are configured."
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.4'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libuv1-dev
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          # setup-r exports RSPM: binary packages for this runner (source builds of arrow
+          # take about an hour; see data-poll.yml).
+          repos <- Sys.getenv("RSPM", unset = "")
+          if (!nzchar(repos)) repos <- "https://cloud.r-project.org"
+          need <- c("arrow", "dplyr", "cli", "httr2", "jsonlite", "rlang", "here")
+          install.packages(need, repos = repos)
+          missing <- need[!need %in% rownames(installed.packages())]
+          if (length(missing) > 0L) stop("Failed to install: ", paste(missing, collapse = ", "))
+
+      - name: Install the Hugging Face CLI (pinned)
+        run: |
+          pip install --quiet 'huggingface_hub==2.4.0'
+          hf upload --help > /dev/null
+
+      # Each step records its exit code and exits 0, so every later step runs and the
+      # last step can fail the job with the worst code (1 FAIL outranks 3 INDETERMINATE).
+      - name: Drain KV into the staging folder
+        id: drain
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          set +e
+          Rscript scripts/drain_hl_ctx_kv.R --out-dir=hf_stage
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "drain exit code: $code"
+          exit 0
+
+      # The only step that sees HF_TOKEN.
+      - name: Publish the staged days to Hugging Face (one commit)
+        id: upload
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          set +e
+          if [ -z "$(find hf_stage -type f 2>/dev/null)" ]; then
+            echo "Nothing staged: every day in KV is already on Hugging Face (or the drain staged nothing)."
+            echo "code=0" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          bash scripts/hf_upload_commit.sh hf_stage "data: hyperliquid 5-minute snapshots, drain $(date -u +%Y-%m-%d) (Refs #1088)"
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "upload exit code: $code"
+          exit 0
+
+      - name: Gap report
+        id: gap
+        env:
+          CF_ACCOUNT_ID: ${{ secrets.CF_ACCOUNT_ID }}
+          CF_KV_NAMESPACE_ID: ${{ secrets.CF_KV_NAMESPACE_ID }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+        run: |
+          set +e
+          Rscript scripts/hl_ctx_gap_report.R --days=10
+          code=$?
+          echo "code=$code" >> "$GITHUB_OUTPUT"
+          echo "gap report exit code: $code"
+          exit 0
+
+      # A recovery copy of what was staged (public data only), kept 14 days, whatever happened.
+      - name: Keep the staged days as an artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hl-ctx-stage-${{ github.run_id }}
+          path: hf_stage
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Verdict
+        if: always()
+        env:
+          DRAIN: ${{ steps.drain.outputs.code }}
+          UPLOAD: ${{ steps.upload.outputs.code }}
+          GAP: ${{ steps.gap.outputs.code }}
+        run: |
+          echo "drain=${DRAIN:-unknown} upload=${UPLOAD:-unknown} gap=${GAP:-unknown}"
+          worst=0
+          for c in "${DRAIN:-3}" "${UPLOAD:-3}" "${GAP:-3}"; do
+            if [ "$c" = "1" ]; then worst=1; fi
+            if [ "$c" != "0" ] && [ "$c" != "1" ] && [ "$worst" -eq 0 ]; then worst=3; fi
+          done
+          if [ "$worst" -ne 0 ]; then
+            echo "::error::hl-ctx-drain did not pass (worst exit code $worst: 1 = FAIL, 3 = INDETERMINATE). See the steps above."
+          fi
+          exit "$worst"
