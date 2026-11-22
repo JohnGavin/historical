@@ -1,11 +1,13 @@
 #!/bin/bash
-# 5-minute Hyperliquid metaAndAssetCtxs poll (#1080). Run by launchd
-# (see scripts/launchd/). One request per run; the data has no history, so a run
-# that does not happen is a gap that is never filled.
+# 5-minute Hyperliquid metaAndAssetCtxs poll (#1080, #1084). Run by launchd
+# (see scripts/launchd/). One request per exchange per run (all exchanges by
+# default: the poller's own `--dexes=all`, so the installed plist, which passes no
+# arguments, needs no change); the data has no history, so a run that does not
+# happen is a gap that is never filled.
 #
 # Exit status: 0 ok | 2 usage / could not start | 3 INDETERMINATE (the poller's
-# own 3, DNS never resolved, or the run hit its deadline). 3 is never turned
-# into 0.
+# own 3, which includes a partial run where some exchanges failed; DNS never
+# resolved; or the run hit its deadline). 3 is never turned into 0.
 #
 # What this wrapper adds around the poller:
 #  - waits (up to 45 s) for the API host to resolve before the first request

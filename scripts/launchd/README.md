@@ -4,8 +4,14 @@ These are templates. Nothing in the repo installs or loads them; the owner does.
 
 | Template | Runs | Log |
 |---|---|---|
-| `io.github.johngavin.historical.hyperliquid-weekly.plist` | `scripts/run_hyperliquid_weekly.sh`, Sunday 03:00 local, and at load | `~/Library/Logs/historical/hyperliquid_weekly.log` |
-| `io.github.johngavin.historical.hyperliquid-ctx-poll.plist` | `scripts/run_hyperliquid_ctx_poll.sh`, every 300 s, and at load | `~/Library/Logs/historical/hyperliquid_ctx_poll.log` |
+| `io.github.johngavin.historical.hyperliquid-weekly.plist` | `scripts/run_hyperliquid_weekly.sh` (the candle fetch, then the market reference step), Sunday 03:00 local, and at load | `~/Library/Logs/historical/hyperliquid_weekly.log` |
+| `io.github.johngavin.historical.hyperliquid-ctx-poll.plist` | `scripts/run_hyperliquid_ctx_poll.sh` (every exchange, one run), every 300 s, and at load | `~/Library/Logs/historical/hyperliquid_ctx_poll.log` |
+
+The plists call the wrappers with no arguments. Changing what a wrapper runs
+(#1084: the poller covers all exchanges by default, the weekly wrapper adds the
+market reference step) therefore needs no reinstall: launchd starts the wrapper
+file in the checkout, so the new behaviour applies from the next run. Only a change
+to a plist (schedule, arguments, paths) needs `install_jobs.sh --apply`.
 
 ## Install (owner)
 
@@ -49,7 +55,19 @@ immediately. Neither sets `KeepAlive`.
   The wrapper passes `--resume`, so an interrupted run continues where it stopped.
 - **5-minute context poll.** `metaAndAssetCtxs` has no history; only the current
   snapshot exists, so the only way to have mid and oracle prices later is to
-  record them now.
+  record them now. Each run polls every exchange (the core one and every add-on
+  exchange): one `perpDexs` request lists them, then one `metaAndAssetCtxs`
+  request each, 12 requests today. The API allows 1200 weight per minute per IP
+  and each of these requests weighs 20 ([rate limits](https://hyperliquid.gitbook.io/hyperliquid-docs/for-developers/api/rate-limits-and-user-limits)),
+  so a run costs 240, once every 5 minutes. The weekly fetch is paced at 900 per
+  minute, so a poll in the same minute still totals 1140, under 1200. The run takes
+  a few seconds against the 200 s budget; the poller starts no request without
+  25 s of budget left.
+- **Weekly market reference step.** After the candle fetch,
+  `scripts/fetch_hl_market_reference.R` writes `data/dist/perp_markets.parquet`
+  (long names, categories, definitions and source pages; see
+  `docs/DATA_SOURCES.md`). The exchange table `perp_dexs.parquet` comes from the
+  candle fetch itself.
 
 ## How the poller wrapper protects a run
 
@@ -63,8 +81,16 @@ for a warm `nix develop`). If that cache is missing, unbuildable or its store
 paths were collected, the wrapper falls back to plain `nix develop`. Old cache
 files from earlier flake contents are not removed automatically. In R the poller
 retries a non-429 error (3 attempts, about 60 s at most), never retries HTTP
-429, stamps `fetched_at` after the reply arrives, and records a `collector`
-column (the host name) so a second collector can be merged by slot later.
+429, stamps `fetched_at` after each reply arrives, and records a `collector`
+column (the host name) so a second collector can be merged by slot later. It also
+stores each market's `is_delisted` flag (rows from before #1084 have NA there).
+
+A **partial run** (some exchanges polled, some failed, not reached or
+rate-limited) writes the rows of the exchanges that worked and exits 3, never 0:
+the failed exchanges are named in the log and the next run is the retry. If the
+exchange list itself cannot be read, the exchanges of the last
+`perp_dexs.parquet` (else the core exchange alone) are polled and the run is
+still 3. A rate limit stops the run: the remaining exchanges are not attempted.
 
 ## Gaps are expected
 

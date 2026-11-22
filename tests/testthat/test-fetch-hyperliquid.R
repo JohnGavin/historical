@@ -39,6 +39,7 @@ source(here::here("scripts", "fetch_hyperliquid.R"))
     if (!is.null(overrides[[body$type]])) return(overrides[[body$type]](body))
     switch(body$type,
       allPerpMetas = .apm,
+      perpDexs = .dexs,
       spotMeta = .spot_meta,
       spotMetaAndAssetCtxs = .spot_ctx,
       metaAndAssetCtxs = if (is.null(body$dex)) .mac_core else {
@@ -876,4 +877,49 @@ test_that("a dex run requests no core or spot candles; an unknown dex is INDETER
   res <- suppressMessages(hl_run(base, out_dir = withr::local_tempdir(), end = .end,
                                  dexes = "nosuchdex"))
   expect_equal(res$status, 3L)
+})
+
+# ── exchange reference table (#1084) ───────────────────────────────
+
+test_that("perpDexs parses to dex / full_name / fetched_at; core has no name", {
+  t0 <- as.POSIXct("2026-11-22 12:00:00", tz = "UTC")
+  d <- hl_parse_perp_dexs(.dexs, t0)
+  expect_equal(names(d), c("dex", "full_name", "fetched_at"))
+  expect_equal(d$dex[1:3], c("", "xyz", "flx"))
+  expect_equal(d$full_name[2:3], c("XYZ", "Felix Exchange"))
+  expect_true(is.na(d$full_name[1]))              # the null entry gives no name: NA
+  expect_equal(nrow(d), 11L)
+  expect_equal(unique(d$fetched_at), t0)
+  # wallet / deployer / fee-recipient / OI-cap fields are never read or stored
+  expect_false(any(grepl("deployer|wallet|fee|cap|oi", names(d), ignore.case = TRUE)))
+})
+
+test_that("perpDexs guards: empty payload, nameless entry, duplicate exchange", {
+  t0 <- Sys.time()
+  expect_error(hl_parse_perp_dexs(list(), t0), "empty")
+  expect_error(hl_parse_perp_dexs(list(NULL, list(fullName = "X")), t0), "no")
+  expect_error(hl_parse_perp_dexs(list(NULL, list(name = "a"), list(name = "a")), t0),
+               class = "hl_duplicate_keys")
+  # a missing or empty fullName is NA, not an error
+  d <- hl_parse_perp_dexs(list(NULL, list(name = "a"), list(name = "b", fullName = "")), t0)
+  expect_true(all(is.na(d$full_name[2:3])))
+})
+
+test_that("hl_run writes perp_dexs.parquet, idempotently, and reports a failed request", {
+  out <- withr::local_tempdir()
+  expect_equal(.run(.mock_post(), out)$status, 0L)
+  f <- file.path(out, "perp_dexs.parquet")
+  x <- arrow::read_parquet(f)
+  expect_equal(nrow(x), 11L)
+  expect_equal(x$full_name[x$dex == "flx"], "Felix Exchange")
+  .run(.mock_post(), out)
+  expect_equal(nrow(arrow::read_parquet(f)), 11L)          # upsert on dex: no duplicates
+  # Red: a failing perpDexs request is reported (status 1), never silently skipped
+  out2 <- withr::local_tempdir()
+  post <- .mock_post(list(perpDexs = function(body) cli::cli_abort("boom")))
+  res <- .run(post, out2)
+  expect_equal(res$status, 1L)
+  expect_true("perpDexs" %in% res$failed$item)
+  expect_false(file.exists(file.path(out2, "perp_dexs.parquet")))
+  expect_true(file.exists(file.path(out2, "perp_daily.parquet")))   # the rest is written
 })

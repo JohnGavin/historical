@@ -1,13 +1,16 @@
 #!/usr/bin/env Rscript
-# Forward poller: Hyperliquid mid / oracle / impact prices, one request per run (#1080)
+# Forward poller: Hyperliquid mid / oracle / impact prices, every exchange per run (#1080, #1084)
 #
 # WHAT THIS IS
-#   `metaAndAssetCtxs` returns, for every market on ONE exchange (default the
-#   builder exchange "xyz", trade.xyz), the current mid price, oracle price, mark
-#   price, impact prices, premium, funding, open interest and 24h notional
-#   volume. It has NO history: if it is not recorded now it is lost. This script
-#   records one snapshot per run; launchd runs it every 5 minutes
-#   (scripts/launchd/). These are PERPETUAL FUTURES, not tokenised shares.
+#   `metaAndAssetCtxs` returns, for every market on ONE exchange, the current mid
+#   price, oracle price, mark price, impact prices, premium, funding, open
+#   interest and 24h notional volume. It has NO history: if it is not recorded
+#   now it is lost. This script records one snapshot of EVERY exchange per run
+#   (the core exchange, dex "", and every add-on exchange): one `perpDexs`
+#   request lists the exchanges, then one `metaAndAssetCtxs` request each
+#   (1 + 11 = 12 requests today, weight 20 each = 240 of the 1200 per minute the
+#   API allows per IP). launchd runs it every 5 minutes (scripts/launchd/).
+#   These are PERPETUAL FUTURES, not tokenised shares.
 #
 # Output (under --out-dir, default data/dist; gitignored, never committed):
 #   perp_ctx_5m.parquet  upsert on (dex, coin, fetched_at)
@@ -21,18 +24,32 @@
 #                  (metaAndAssetCtxs replies with a bare [meta, ctxs] array)
 #     mid_px, oracle_px, mark_px, impact_bid_px, impact_ask_px, premium,
 #     funding, open_interest, day_ntl_vlm
+#     is_delisted  the universe's `isDelisted` flag (absent on live markets =
+#                  FALSE). Rows written before #1084 have NA here: the column
+#                  is added on the next upsert, old rows are never rewritten.
+#   fetched_at is taken from EACH exchange's own reply, so the exchanges of one
+#   run differ by a fraction of a second; they share a `slot`.
 #   A null or "NaN" field is stored as NA, the row is kept, and the count is
 #   reported; nothing is silently dropped.
 # Raw JSON is kept append-only under --raw-dir (default data/raw/hyperliquid/
 #   <UTC date>/), exactly like fetch_hyperliquid.R; never uploaded.
 #
 # Usage: Rscript scripts/poll_hyperliquid_ctx.R [--out-dir=data/dist]
-#          [--raw-dir=data/raw/hyperliquid] [--dex=xyz] [--pace=0.75]
+#          [--raw-dir=data/raw/hyperliquid] [--dexes=all] [--pace=0.75]
+#   --dexes=all (the default) polls every exchange `perpDexs` lists, the core
+#   exchange included. --dexes=main,xyz polls the named ones ("main" = the core
+#   exchange, whose API name is the empty string).
 #
-# Exit status: 0 ok | 2 usage | 3 INDETERMINATE (request failed, rate-limited,
-#   unparseable reply, an empty market list, or the 200 s run limit). 3 is never 0.
-#   A non-429 error is retried (3 attempts in all, ~60 s at most); rate limiting
-#   is NOT (no 60 s back-off): the next run is the retry.
+# Exit status: 0 ok | 2 usage | 3 INDETERMINATE (a request failed, was
+#   rate-limited, an unparseable reply, an empty market list, or the 200 s run
+#   limit). 3 is never 0. A PARTIAL run (some exchanges polled, some not) is 3:
+#   the rows of the exchanges that did succeed ARE written, the failed ones are
+#   named in the log, and the next run is the retry. If `perpDexs` itself fails the
+#   exchanges of the last perp_dexs.parquet (else the core exchange alone) are
+#   polled, and the run is still 3. A non-429 error is retried (3 attempts in
+#   all, 15 s request timeout, ~60 s at most, only while the run budget allows);
+#   rate limiting is NOT retried (no 60 s back-off) and stops the run: the
+#   remaining exchanges are not attempted.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -70,6 +87,13 @@ HL_CTX_TRIES <- 3L                 # attempts per run on non-429 errors
 HL_CTX_RETRY_DELAY_S <- c(5, 10)   # waits between attempts
 HL_CTX_REQUEST_TIMEOUT_S <- 15     # per request: 3 x 15 + 15 s of waits ~ 60 s
 HL_CTX_BUDGET_S <- 200             # whole-run limit in R; the wrapper's is 240
+# A new request (or a retry) starts only if at least this many seconds of the
+# budget remain: a full request timeout plus margin, so a started request always
+# ends inside the budget and the rows collected so far are written.
+HL_CTX_MIN_REMAINING_S <- HL_CTX_REQUEST_TIMEOUT_S + 10
+HL_CTX_DEXES_ALL <- "all"
+HL_CTX_MAIN_TOKEN <- "main"        # command-line spelling of the core exchange
+HL_DEXS_FILE <- "perp_dexs.parquet"  # written by fetch_hyperliquid.R (#1084)
 
 # Floor a time to the slot width (UTC, POSIXct in and out).
 hl_ctx_slot <- function(t) {
@@ -124,6 +148,7 @@ hl_parse_ctx <- function(mac, dex, fetched_at, collector = Sys.info()[["nodename
     funding = .ctx_field(ctx, "funding"),
     open_interest = .ctx_field(ctx, "openInterest"),
     day_ntl_vlm = .ctx_field(ctx, "dayNtlVlm"),
+    is_delisted = vapply(u, function(m) isTRUE(m$isDelisted), logical(1)),
     stringsAsFactors = FALSE
   )
 }
@@ -134,59 +159,170 @@ hl_ctx_na_counts <- function(df) {
   vapply(df[num], function(x) sum(is.na(x)), integer(1))
 }
 
-# One poll. `post_fn(body)` returns parsed JSON (injectable). `now` is a clock
-# function (injectable); it is read AFTER the reply is received, so fetched_at is
-# the time the data was in hand, not the time the request started.
-# A non-429 request error is retried up to `tries` times in total, waiting
-# `retry_delay_s` between attempts (default 5 s then 10 s; with the 15 s request
-# timeout the worst case is about 60 s). Never retried: HTTP 429 (the next run is
-# the retry) and the run-wide time limit. Returns
-# list(status, n_rows, n_na, reason, attempts).
-# Status 3 for ANY failure: the request errored on every attempt, was
-# rate-limited, the reply did not parse, or the universe was empty. Never 0 on a
-# failed request.
-hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dex = "xyz",
+# Body of the request for one exchange. The core exchange ("") is asked WITHOUT a
+# `dex` field, exactly as fetch_hyperliquid.R does.
+hl_ctx_body <- function(dex) {
+  if (nzchar(dex)) list(type = "metaAndAssetCtxs", dex = dex) else list(type = "metaAndAssetCtxs")
+}
+
+# One request with retries. A non-429 error is retried up to `tries` times in
+# total, waiting `retry_delay_s` between attempts (default 5 s then 10 s; with the
+# 15 s request timeout the worst case is about 60 s). Never retried: HTTP 429 (the
+# next run is the retry), the R time limit, and anything the run budget does not
+# allow (`time_left()` seconds remain; a retry needs its delay plus a full request
+# timeout). Returns list(value, error, attempts, rate_limited).
+.ctx_request <- function(post_fn, body, tries, retry_delay_s, sleep_fn, time_left) {
+  attempts <- 0L
+  repeat {
+    attempts <- attempts + 1L
+    res <- tryCatch(post_fn(body), error = function(e) e)
+    if (!inherits(res, "error")) {
+      return(list(value = res, error = NULL, attempts = attempts, rate_limited = FALSE))
+    }
+    rl <- inherits(res, "hl_rate_limited")
+    delay <- retry_delay_s[min(attempts, length(retry_delay_s))]
+    retryable <- !rl && !grepl("time limit", conditionMessage(res), fixed = TRUE) &&
+      attempts < tries && time_left() >= delay + HL_CTX_MIN_REMAINING_S
+    if (!retryable) {
+      return(list(value = NULL, error = conditionMessage(res), attempts = attempts,
+                  rate_limited = rl))
+    }
+    cli::cli_alert_warning("attempt {attempts} of {tries} failed ({conditionMessage(res)}); retrying in {delay} s")
+    sleep_fn(delay)
+  }
+}
+
+# Exchanges of the last perp_dexs.parquet (fetch_hyperliquid.R), else just the
+# core exchange: the fallback when `perpDexs` cannot be read.
+.ctx_known_dexes <- function(out_dir) {
+  path <- file.path(out_dir, HL_DEXS_FILE)
+  known <- if (file.exists(path)) arrow::read_parquet(path)$dex else character()
+  unique(c("", as.character(known[!is.na(known)])))
+}
+
+# One poll of every requested exchange. `post_fn(body)` returns parsed JSON
+# (injectable). `now` is a clock function (injectable); it is read AFTER each reply
+# is received, so fetched_at is the time the data was in hand, not the time the
+# request started. `dexes` is "all" (the exchanges `perpDexs` lists) or a character
+# vector of exchange names, "" = the core exchange. `deadline` (POSIXct, optional)
+# is the end of the run budget: no request starts without HL_CTX_MIN_REMAINING_S
+# left, and the exchanges not reached are reported, not hidden.
+# The rows of all exchanges that succeeded are upserted in ONE write.
+# Returns list(status, n_rows, n_na, reason, attempts, by_dex, not_attempted).
+# Status 3 for ANY failure or omission: a request errored on every attempt, was
+# rate-limited, a reply did not parse, a universe was empty, the budget ran out,
+# or `perpDexs` could not be read. A partial run writes what it has and is still
+# 3; never 0 unless every exchange was polled.
+hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dexes = HL_CTX_DEXES_ALL,
                         now = function() Sys.time(),
                         collector = Sys.info()[["nodename"]],
                         tries = HL_CTX_TRIES, retry_delay_s = HL_CTX_RETRY_DELAY_S,
-                        sleep_fn = Sys.sleep) {
+                        sleep_fn = Sys.sleep, deadline = NULL) {
+  if (!is.character(dexes) || length(dexes) == 0L || anyNA(dexes)) {
+    hl_bad_arg("dexes", "must be \"all\" or a character vector of exchange names")
+  }
+  time_left <- function() {
+    if (is.null(deadline)) Inf else as.numeric(difftime(deadline, Sys.time(), units = "secs"))
+  }
   attempts <- 0L
-  fail <- function(why) {
-    cli::cli_alert_danger("INDETERMINATE: {why}")
-    list(status = 3L, n_rows = 0L, n_na = integer(), reason = why, attempts = attempts)
+  problems <- character()
+  note_problem <- function(msg) {
+    problems <<- c(problems, msg)
+    cli::cli_alert_danger("INDETERMINATE: {msg}")
   }
-  repeat {
-    attempts <- attempts + 1L
-    mac <- tryCatch(post_fn(list(type = "metaAndAssetCtxs", dex = dex)),
-                    error = function(e) e)
-    if (!inherits(mac, "error")) break
-    retryable <- !inherits(mac, "hl_rate_limited") &&
-      !grepl("time limit", conditionMessage(mac), fixed = TRUE)
-    if (!retryable || attempts >= tries) return(fail(conditionMessage(mac)))
-    delay <- retry_delay_s[min(attempts, length(retry_delay_s))]
-    cli::cli_alert_warning("attempt {attempts} of {tries} failed ({conditionMessage(mac)}); retrying in {delay} s")
-    sleep_fn(delay)
+  req <- function(body) {
+    r <- .ctx_request(post_fn, body, tries, retry_delay_s, sleep_fn, time_left)
+    attempts <<- attempts + r$attempts
+    r
   }
-  fetched_at <- now()
-  df <- tryCatch(hl_parse_ctx(mac, dex, fetched_at, collector), error = function(e) e)
-  if (inherits(df, "error")) return(fail(conditionMessage(df)))
-  hl_upsert(df, file.path(out_dir, HL_CTX_FILE), HL_CTX_KEYS)
-  na <- hl_ctx_na_counts(df)
-  cli::cli_alert_success("{nrow(df)} market{?s} for dex {.val {dex}}, slot {format(df$slot[1], tz = 'UTC', usetz = TRUE)}")
-  if (any(na > 0L)) {
-    cli::cli_alert_info("NA cells kept (null or \"NaN\"): {paste(names(na)[na > 0L], na[na > 0L], sep = '=', collapse = ', ')}")
+
+  if (identical(dexes, HL_CTX_DEXES_ALL)) {
+    r <- if (time_left() >= HL_CTX_MIN_REMAINING_S) {
+      req(list(type = "perpDexs"))
+    } else {
+      list(error = "run budget exhausted before the exchange list was read")
+    }
+    listed <- if (is.null(r$error)) {
+      tryCatch(hl_parse_dexs(r$value), error = function(e) e)
+    } else {
+      simpleError(r$error)
+    }
+    if (inherits(listed, "error")) {
+      dexes <- .ctx_known_dexes(out_dir)
+      note_problem(sprintf("perpDexs: %s (polling the last known exchanges: %s)",
+                           conditionMessage(listed),
+                           paste0("'", dexes, "'", collapse = ", ")))
+    } else {
+      dexes <- unique(listed)
+    }
   }
-  list(status = 0L, n_rows = nrow(df), n_na = na, reason = "", attempts = attempts)
+
+  frames <- list()
+  not_attempted <- character()
+  stopped <- FALSE
+  for (d in dexes) {
+    if (stopped || time_left() < HL_CTX_MIN_REMAINING_S) {
+      not_attempted <- c(not_attempted, d)
+      next
+    }
+    r <- req(hl_ctx_body(d))
+    if (!is.null(r$error)) {
+      note_problem(sprintf("dex '%s': %s", d, r$error))
+      if (r$rate_limited) stopped <- TRUE
+      next
+    }
+    fetched_at <- now()
+    df <- tryCatch(hl_parse_ctx(r$value, d, fetched_at, collector), error = function(e) e)
+    if (inherits(df, "error")) {
+      note_problem(sprintf("dex '%s': %s", d, conditionMessage(df)))
+      next
+    }
+    frames[[paste0("dex:", d)]] <- df
+  }
+  if (length(not_attempted) > 0L) {
+    note_problem(sprintf("not attempted (run budget or rate limit): %s",
+                         paste0("'", not_attempted, "'", collapse = ", ")))
+  }
+
+  df <- bind_rows(frames)
+  by_dex <- if (nrow(df) > 0L) {
+    df |>
+      group_by(dex) |>
+      summarise(n_rows = dplyr::n(), n_delisted = sum(is_delisted), .groups = "drop") |>
+      as.data.frame()
+  } else {
+    data.frame(dex = character(), n_rows = integer(), n_delisted = integer())
+  }
+  na <- integer()
+  if (nrow(df) > 0L) {
+    hl_upsert(df, file.path(out_dir, HL_CTX_FILE), HL_CTX_KEYS)
+    na <- hl_ctx_na_counts(df)
+    cli::cli_alert_success("{nrow(df)} market{?s} over {nrow(by_dex)} exchange{?s}, slot {format(df$slot[1], tz = 'UTC', usetz = TRUE)}; {sum(df$is_delisted)} delisted")
+    if (any(na > 0L)) {
+      cli::cli_alert_info("NA cells kept (null or \"NaN\"): {paste(names(na)[na > 0L], na[na > 0L], sep = '=', collapse = ', ')}")
+    }
+  }
+  list(status = if (length(problems) == 0L) 0L else 3L,
+       n_rows = nrow(df), n_na = na, reason = paste(problems, collapse = "; "),
+       attempts = attempts, by_dex = by_dex, not_attempted = not_attempted)
+}
+
+# Command-line exchange list -> hl_ctx_poll's `dexes`; NULL when malformed.
+.ctx_parse_dexes <- function(txt) {
+  if (identical(txt, HL_CTX_DEXES_ALL)) return(HL_CTX_DEXES_ALL)
+  parts <- strsplit(txt, ",", fixed = TRUE)[[1]]
+  if (length(parts) == 0L || !all(grepl("^[A-Za-z0-9_.-]+$", parts))) return(NULL)
+  unique(ifelse(parts == HL_CTX_MAIN_TOKEN, "", parts))
 }
 
 # Returns the exit status (the guard below quits with it); testable.
 .poll_hyperliquid_ctx_main <- function(args = commandArgs(trailingOnly = TRUE),
                                        post_fn = NULL, budget_s = HL_CTX_BUDGET_S,
                                        sleep_fn = Sys.sleep) {
-  known <- c("out-dir", "raw-dir", "dex", "pace")
+  known <- c("out-dir", "raw-dir", "dexes", "pace")
   bad <- args[!grepl(paste0("^--(", paste(known, collapse = "|"), ")=.+$"), args)]
   if (length(bad) > 0L) {
-    message("usage: poll_hyperliquid_ctx.R [--out-dir=D] [--raw-dir=D] [--dex=NAME] [--pace=P]\n",
+    message("usage: poll_hyperliquid_ctx.R [--out-dir=D] [--raw-dir=D] [--dexes=all|main,xyz,...] [--pace=P]\n",
             "unknown or malformed argument(s): ", paste(bad, collapse = " "))
     return(2L)
   }
@@ -200,22 +336,30 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dex = "xyz",
     message("usage: --pace must be a number in (0, 1]")
     return(2L)
   }
+  dexes <- .ctx_parse_dexes(opt("dexes", HL_CTX_DEXES_ALL))
+  if (is.null(dexes)) {
+    message("usage: --dexes must be \"all\" or a comma-separated list of exchange names ",
+            "(\"main\" = the core exchange)")
+    return(2L)
+  }
   if (is.null(post_fn)) {
     # max_attempts = 1: a 429 is not backed off for 60 s inside a 5-minute job.
-    # sleep_fn no-op: one request per run needs no pacing, and a pace sleep would
-    # delay the reply that fetched_at is taken from. `timeout`/`max_tries` go to
-    # hl_post: a request is cut at 15 s and 5xx retries are done here, not there.
+    # sleep_fn no-op: 12 requests of weight 20 (240 of the 1200/min limit) need no
+    # pacing, and a pace sleep would delay the reply that fetched_at is taken
+    # from. `timeout`/`max_tries` go to hl_post: a request is cut at 15 s and 5xx
+    # retries are done here, not there.
     post_fn <- hl_make_post(opt("raw-dir", "data/raw/hyperliquid"), pace = pace,
                             max_attempts = 1L, sleep_fn = function(s) invisible(NULL),
                             timeout = HL_CTX_REQUEST_TIMEOUT_S, max_tries = 1)
   }
-  # Whole-run time limit: R signals an error at the limit, which hl_ctx_poll turns
-  # into status 3 (never 0). The wrapper has a harder, outer deadline.
+  # Whole-run time limit: the deadline stops new requests early and keeps what was
+  # collected; R's own limit is the backstop (an error, turned into status 3,
+  # never 0). The wrapper has a harder, outer deadline.
   setTimeLimit(elapsed = budget_s, transient = TRUE)
   on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
   res <- tryCatch(
-    hl_ctx_poll(post_fn, out_dir = opt("out-dir", "data/dist"), dex = opt("dex", "xyz"),
-                sleep_fn = sleep_fn),
+    hl_ctx_poll(post_fn, out_dir = opt("out-dir", "data/dist"), dexes = dexes,
+                sleep_fn = sleep_fn, deadline = Sys.time() + budget_s),
     error = function(e) {
       message("INDETERMINATE: ", conditionMessage(e))
       list(status = 3L)
