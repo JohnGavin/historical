@@ -12,7 +12,7 @@
     <string>__REPO__/scripts/run_hyperliquid_weekly.sh</string>
   </array>
   <key>RunAtLoad</key>
-  <false/>
+  <true/>
   <key>StartCalendarInterval</key>
   <dict>
     <key>Weekday</key>

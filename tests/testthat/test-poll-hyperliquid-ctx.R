@@ -16,13 +16,15 @@ source(here::here("scripts", "poll_hyperliquid_ctx.R"))
   .mac
 }
 .poll <- function(post, out, ...) {
-  suppressMessages(hl_ctx_poll(post, out_dir = out, now = .now, ...))
+  suppressMessages(hl_ctx_poll(post, out_dir = out, now = .now,
+                               sleep_fn = function(s) invisible(NULL), ...))
 }
+.nosleep <- function(s) invisible(NULL)
 
 test_that("parse keeps every market and the documented columns", {
   d <- hl_parse_ctx(.mac, "xyz", .t0)
   expect_equal(d$coin, c("xyz:XYZ100", "xyz:NVDA", "xyz:URANIUM"))
-  expect_equal(names(d), c("dex", "coin", "fetched_at", "slot", "server_time",
+  expect_equal(names(d), c("dex", "coin", "fetched_at", "slot", "collector", "server_time",
                            "mid_px", "oracle_px", "mark_px", "impact_bid_px",
                            "impact_ask_px", "premium", "funding", "open_interest",
                            "day_ntl_vlm"))
@@ -114,9 +116,82 @@ test_that("main returns the exit status: 0 ok, 3 when the dependency is broken, 
   ok <- suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = .ok_post))
   expect_equal(ok, 0L)
   broken <- function(body) stop("simulated broken dependency")
-  expect_equal(suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = broken)), 3L)
+  expect_equal(suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = broken, sleep_fn = .nosleep)), 3L)
   expect_equal(suppressMessages(.poll_hyperliquid_ctx_main("--bogus=1")), 2L)
   expect_equal(suppressMessages(.poll_hyperliquid_ctx_main("--pace=7")), 2L)
+})
+
+test_that("collector is the host name by default and can be set", {
+  expect_equal(unique(hl_parse_ctx(.mac, "xyz", .t0)$collector), Sys.info()[["nodename"]])
+  expect_equal(unique(hl_parse_ctx(.mac, "xyz", .t0, collector = "pi-1")$collector), "pi-1")
+  out <- withr::local_tempdir()
+  suppressMessages(hl_ctx_poll(.ok_post, out_dir = out, now = .now, collector = "pi-1"))
+  expect_equal(unique(arrow::read_parquet(file.path(out, "perp_ctx_5m.parquet"))$collector), "pi-1")
+})
+
+test_that("fetched_at is taken AFTER the reply is received", {
+  st <- new.env(); st$replied <- FALSE
+  post <- function(body) { st$replied <- TRUE; .mac }
+  clock <- function() {
+    if (!st$replied) stop("clock read before the reply arrived")   # red if taken before
+    .t0
+  }
+  out <- withr::local_tempdir()
+  expect_equal(suppressMessages(hl_ctx_poll(post, out_dir = out, now = clock))$status, 0L)
+  # and with a retry: the clock is read once, after the SUCCESSFUL attempt
+  reads <- 0L
+  n <- 0L
+  flaky <- function(body) { n <<- n + 1L; if (n < 2L) hl_unavailable("blip"); .mac }
+  counting <- function() { reads <<- reads + 1L; .t0 }
+  r <- suppressMessages(hl_ctx_poll(flaky, out_dir = withr::local_tempdir(), now = counting,
+                                    sleep_fn = function(s) invisible(NULL)))
+  expect_equal(c(r$status, r$attempts, reads), c(0L, 2L, 1L))
+})
+
+test_that("non-429 errors are retried up to 3 times; 429 is not retried", {
+  waits <- numeric()
+  sleep <- function(s) waits <<- c(waits, s)
+  calls <- 0L
+  down <- function(body) { calls <<- calls + 1L; hl_unavailable("connection refused") }
+  r <- suppressMessages(hl_ctx_poll(down, out_dir = withr::local_tempdir(), now = .now,
+                                    sleep_fn = sleep))
+  expect_equal(c(r$status, calls, r$attempts), c(3L, 3L, 3L))
+  expect_equal(waits, c(5, 10))                  # total wait 15 s: well inside ~60 s
+  # fails twice, then succeeds: status 0 on the third attempt
+  calls <- 0L
+  flaky <- function(body) {
+    calls <<- calls + 1L
+    if (calls < 3L) hl_unavailable("blip")
+    .mac
+  }
+  out <- withr::local_tempdir()
+  r2 <- suppressMessages(hl_ctx_poll(flaky, out_dir = out, now = .now, sleep_fn = sleep))
+  expect_equal(c(r2$status, calls), c(0L, 3L))
+  expect_true(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  # Red: a rate limit is NOT retried (one call, no wait)
+  calls <- 0L; waits <- numeric()
+  limited <- function(body) {
+    calls <<- calls + 1L
+    cli::cli_abort("HTTP 429", class = c("hl_rate_limited", "hl_source_unavailable"))
+  }
+  r3 <- suppressMessages(hl_ctx_poll(limited, out_dir = withr::local_tempdir(), now = .now,
+                                     sleep_fn = sleep))
+  expect_equal(c(r3$status, calls, length(waits)), c(3L, 1L, 0L))
+})
+
+test_that("a run over its time limit exits 3, never 0", {
+  # R checks its limit at interrupt points (a blocking socket read is not one;
+  # the wrapper's hard kill and the 15 s request timeout cover that), so the
+  # sleep returns first and the run is then over budget.
+  slow <- function(body) { Sys.sleep(2); .mac }
+  out <- withr::local_tempdir()
+  args <- c(paste0("--out-dir=", out), paste0("--raw-dir=", file.path(out, "raw")))
+  st <- suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = slow, budget_s = 1))
+  expect_equal(st, 3L)
+  expect_false(file.exists(file.path(out, "perp_ctx_5m.parquet")))
+  # Red: the same dependency inside the budget is fine
+  fast <- function(body) .mac
+  expect_equal(suppressMessages(.poll_hyperliquid_ctx_main(args, post_fn = fast, budget_s = 30)), 0L)
 })
 
 test_that("raw replies are kept append-only, one file per poll", {

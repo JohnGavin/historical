@@ -11,10 +11,12 @@
 #
 # Output (under --out-dir, default data/dist; gitignored, never committed):
 #   perp_ctx_5m.parquet  upsert on (dex, coin, fetched_at)
-#     fetched_at   UTC time the request was made (the TRUE time, never snapped)
+#     fetched_at   UTC time the reply was received (the TRUE time, never snapped)
 #     slot         fetched_at floored to 5 minutes, for joining. Gaps (Mac
 #                  asleep, run skipped) are expected and are NEVER imputed: a
 #                  later study finds them as missing slots.
+#     collector    host name (Sys.info()[["nodename"]]) of the machine that
+#                  polled, so a second collector can be merged by slot later
 #     server_time  the API's own time if the reply carries one, else NA
 #                  (metaAndAssetCtxs replies with a bare [meta, ctxs] array)
 #     mid_px, oracle_px, mark_px, impact_bid_px, impact_ask_px, premium,
@@ -28,8 +30,9 @@
 #          [--raw-dir=data/raw/hyperliquid] [--dex=xyz] [--pace=0.75]
 #
 # Exit status: 0 ok | 2 usage | 3 INDETERMINATE (request failed, rate-limited,
-#   unparseable reply, or an empty market list). 3 is never 0.
-#   Rate limiting is NOT retried here (no 60 s back-off): the next run is the retry.
+#   unparseable reply, an empty market list, or the 200 s run limit). 3 is never 0.
+#   A non-429 error is retried (3 attempts in all, ~60 s at most); rate limiting
+#   is NOT (no 60 s back-off): the next run is the retry.
 
 suppressPackageStartupMessages({
   library(dplyr)
@@ -63,6 +66,10 @@ source(.poll_find_fetcher())
 HL_CTX_SLOT_SECONDS <- 300L        # slot width: 5 minutes, one home
 HL_CTX_FILE <- "perp_ctx_5m.parquet"
 HL_CTX_KEYS <- c("dex", "coin", "fetched_at")
+HL_CTX_TRIES <- 3L                 # attempts per run on non-429 errors
+HL_CTX_RETRY_DELAY_S <- c(5, 10)   # waits between attempts
+HL_CTX_REQUEST_TIMEOUT_S <- 15     # per request: 3 x 15 + 15 s of waits ~ 60 s
+HL_CTX_BUDGET_S <- 200             # whole-run limit in R; the wrapper's is 240
 
 # Floor a time to the slot width (UTC, POSIXct in and out).
 hl_ctx_slot <- function(t) {
@@ -85,7 +92,7 @@ hl_ctx_slot <- function(t) {
 # metaAndAssetCtxs -> one row per market. Contexts are joined to the universe BY
 # POSITION, which the API defines for this call (same length, same order); a
 # length mismatch aborts. `server_time_ms` is read only if the reply carries one.
-hl_parse_ctx <- function(mac, dex, fetched_at) {
+hl_parse_ctx <- function(mac, dex, fetched_at, collector = Sys.info()[["nodename"]]) {
   if (!is.list(mac) || length(mac) != 2L) {
     cli::cli_abort("metaAndAssetCtxs payload must be [meta, ctxs]")
   }
@@ -105,6 +112,7 @@ hl_parse_ctx <- function(mac, dex, fetched_at) {
     coin = vapply(u, function(m) as.character(m$name), character(1)),
     fetched_at = fetched_at,
     slot = hl_ctx_slot(fetched_at),
+    collector = as.character(collector),
     server_time = if (is.null(srv)) as.POSIXct(NA, tz = "UTC") else
       as.POSIXct(as.numeric(srv) / 1000, origin = "1970-01-01", tz = "UTC"),
     mid_px = .ctx_field(ctx, "midPx"),
@@ -126,21 +134,41 @@ hl_ctx_na_counts <- function(df) {
   vapply(df[num], function(x) sum(is.na(x)), integer(1))
 }
 
-# One poll. `post_fn(body)` returns parsed JSON (injectable). `now` is the request
-# time (a function so tests can fix it). Returns list(status, n_rows, n_na, reason).
-# Status 3 for ANY failure: the request errored, was rate-limited, the reply did
-# not parse, or the universe was empty. Never 0 on a failed request.
+# One poll. `post_fn(body)` returns parsed JSON (injectable). `now` is a clock
+# function (injectable); it is read AFTER the reply is received, so fetched_at is
+# the time the data was in hand, not the time the request started.
+# A non-429 request error is retried up to `tries` times in total, waiting
+# `retry_delay_s` between attempts (default 5 s then 10 s; with the 15 s request
+# timeout the worst case is about 60 s). Never retried: HTTP 429 (the next run is
+# the retry) and the run-wide time limit. Returns
+# list(status, n_rows, n_na, reason, attempts).
+# Status 3 for ANY failure: the request errored on every attempt, was
+# rate-limited, the reply did not parse, or the universe was empty. Never 0 on a
+# failed request.
 hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dex = "xyz",
-                        now = function() Sys.time()) {
+                        now = function() Sys.time(),
+                        collector = Sys.info()[["nodename"]],
+                        tries = HL_CTX_TRIES, retry_delay_s = HL_CTX_RETRY_DELAY_S,
+                        sleep_fn = Sys.sleep) {
+  attempts <- 0L
   fail <- function(why) {
     cli::cli_alert_danger("INDETERMINATE: {why}")
-    list(status = 3L, n_rows = 0L, n_na = integer(), reason = why)
+    list(status = 3L, n_rows = 0L, n_na = integer(), reason = why, attempts = attempts)
+  }
+  repeat {
+    attempts <- attempts + 1L
+    mac <- tryCatch(post_fn(list(type = "metaAndAssetCtxs", dex = dex)),
+                    error = function(e) e)
+    if (!inherits(mac, "error")) break
+    retryable <- !inherits(mac, "hl_rate_limited") &&
+      !grepl("time limit", conditionMessage(mac), fixed = TRUE)
+    if (!retryable || attempts >= tries) return(fail(conditionMessage(mac)))
+    delay <- retry_delay_s[min(attempts, length(retry_delay_s))]
+    cli::cli_alert_warning("attempt {attempts} of {tries} failed ({conditionMessage(mac)}); retrying in {delay} s")
+    sleep_fn(delay)
   }
   fetched_at <- now()
-  mac <- tryCatch(post_fn(list(type = "metaAndAssetCtxs", dex = dex)),
-                  error = function(e) e)
-  if (inherits(mac, "error")) return(fail(conditionMessage(mac)))
-  df <- tryCatch(hl_parse_ctx(mac, dex, fetched_at), error = function(e) e)
+  df <- tryCatch(hl_parse_ctx(mac, dex, fetched_at, collector), error = function(e) e)
   if (inherits(df, "error")) return(fail(conditionMessage(df)))
   hl_upsert(df, file.path(out_dir, HL_CTX_FILE), HL_CTX_KEYS)
   na <- hl_ctx_na_counts(df)
@@ -148,12 +176,13 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dex = "xyz",
   if (any(na > 0L)) {
     cli::cli_alert_info("NA cells kept (null or \"NaN\"): {paste(names(na)[na > 0L], na[na > 0L], sep = '=', collapse = ', ')}")
   }
-  list(status = 0L, n_rows = nrow(df), n_na = na, reason = "")
+  list(status = 0L, n_rows = nrow(df), n_na = na, reason = "", attempts = attempts)
 }
 
 # Returns the exit status (the guard below quits with it); testable.
 .poll_hyperliquid_ctx_main <- function(args = commandArgs(trailingOnly = TRUE),
-                                       post_fn = NULL) {
+                                       post_fn = NULL, budget_s = HL_CTX_BUDGET_S,
+                                       sleep_fn = Sys.sleep) {
   known <- c("out-dir", "raw-dir", "dex", "pace")
   bad <- args[!grepl(paste0("^--(", paste(known, collapse = "|"), ")=.+$"), args)]
   if (length(bad) > 0L) {
@@ -173,10 +202,24 @@ hl_ctx_poll <- function(post_fn, out_dir = "data/dist", dex = "xyz",
   }
   if (is.null(post_fn)) {
     # max_attempts = 1: a 429 is not backed off for 60 s inside a 5-minute job.
+    # sleep_fn no-op: one request per run needs no pacing, and a pace sleep would
+    # delay the reply that fetched_at is taken from. `timeout`/`max_tries` go to
+    # hl_post: a request is cut at 15 s and 5xx retries are done here, not there.
     post_fn <- hl_make_post(opt("raw-dir", "data/raw/hyperliquid"), pace = pace,
-                            max_attempts = 1L)
+                            max_attempts = 1L, sleep_fn = function(s) invisible(NULL),
+                            timeout = HL_CTX_REQUEST_TIMEOUT_S, max_tries = 1)
   }
-  res <- hl_ctx_poll(post_fn, out_dir = opt("out-dir", "data/dist"), dex = opt("dex", "xyz"))
+  # Whole-run time limit: R signals an error at the limit, which hl_ctx_poll turns
+  # into status 3 (never 0). The wrapper has a harder, outer deadline.
+  setTimeLimit(elapsed = budget_s, transient = TRUE)
+  on.exit(setTimeLimit(elapsed = Inf), add = TRUE)
+  res <- tryCatch(
+    hl_ctx_poll(post_fn, out_dir = opt("out-dir", "data/dist"), dex = opt("dex", "xyz"),
+                sleep_fn = sleep_fn),
+    error = function(e) {
+      message("INDETERMINATE: ", conditionMessage(e))
+      list(status = 3L)
+    })
   res$status
 }
 
