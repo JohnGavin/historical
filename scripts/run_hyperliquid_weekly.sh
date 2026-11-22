@@ -7,7 +7,9 @@
 # Exit status: the fetcher's own (0 ok | 1 partial | 3 INDETERMINATE), with the
 # market reference step (#1084, fetch_hl_market_reference.R: 0 ok | 3 INDETERMINATE)
 # folded in: 3 from either step is 3. 3 is never turned into 0. 2 = this wrapper
-# could not start a step.
+# could not start a step. The backup freshness check (scripts/check_backup.sh,
+# RECOVERY.md) runs last: a stale backup turns a clean 0 into 1; a check that could
+# not decide turns any status into 3 (see the comment at the call).
 #
 # The repo path is derived from this script's location, never hard-coded.
 
@@ -42,6 +44,23 @@ if [ "$ref_status" -eq 3 ] || [ "$status" -eq 3 ]; then
   status=3
 elif [ "$status" -eq 0 ]; then
   status=$ref_status
+fi
+
+# Backup freshness (RECOVERY.md): is there a Time Machine snapshot at least as new
+# as the newest file in data/dist? Read-only, needs no nix. Its result is printed in
+# this log, and it can RAISE the exit status but never lower it: a stale backup
+# (check exit 1) makes an otherwise clean run exit 1, and a check that could not
+# decide (anything else) makes it exit 3, so launchd's last exit status shows it.
+# The fetch itself is not redone or hidden: the log keeps the fetch's own status in
+# the "exit status" lines above, and this one is labelled "backup check". Exit 1 from
+# this wrapper therefore means "partial fetch OR stale backup": read the two lines.
+bash "$REPO/scripts/check_backup.sh" >> "$LOG" 2>&1
+backup_status=$?
+echo "=== backup check exit status $backup_status ===" >> "$LOG"
+if [ "$backup_status" -eq 1 ] && [ "$status" -eq 0 ]; then
+  status=1
+elif [ "$backup_status" -ne 0 ] && [ "$backup_status" -ne 1 ] && [ "$status" -ne 2 ]; then
+  status=3
 fi
 
 echo "=== exit status $status ===" >> "$LOG"
