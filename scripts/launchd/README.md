@@ -4,7 +4,7 @@ These are templates. Nothing in the repo installs or loads them; the owner does.
 
 | Template | Runs | Log |
 |---|---|---|
-| `io.github.johngavin.historical.hyperliquid-weekly.plist` | `scripts/run_hyperliquid_weekly.sh` (the candle fetch, then the market reference step), Sunday 03:00 local, and at load | `~/Library/Logs/historical/hyperliquid_weekly.log` |
+| `io.github.johngavin.historical.hyperliquid-weekly.plist` | `scripts/run_hyperliquid_weekly.sh` (the candle fetch, the market reference step, then the backup freshness check, below), Sunday 03:00 local, and at load | `~/Library/Logs/historical/hyperliquid_weekly.log` |
 | `io.github.johngavin.historical.hyperliquid-ctx-poll.plist` | `scripts/run_hyperliquid_ctx_poll.sh` (every exchange, one run), every 300 s, and at load | `~/Library/Logs/historical/hyperliquid_ctx_poll.log` |
 
 The plists call the wrappers with no arguments. Changing what a wrapper runs
@@ -128,9 +128,30 @@ later study finds the gaps as missing slots.
   `install_jobs.sh --apply` (it boots the job out first). `check_jobs.sh` reports
   a "stale install" when they differ.
 
+## Backup freshness check (RECOVERY.md)
+
+Most of what these jobs write (the 5-minute snapshots, open interest, the 15-minute
+and hourly bars past the API window) cannot be fetched again, and `data/` is
+gitignored, so the only copy is on this Mac. `RECOVERY.md` at the repo root
+classifies every file and says how to restore it. The weekly wrapper ends by running
+`scripts/check_backup.sh`, which compares the newest Time Machine snapshot date
+(read from the preferences with `defaults read`; read-only, no drive needs to be
+mounted) with the newest file under `data/dist`: exit 0 PASS, 1 FAIL (snapshot more
+than 24 h older than the data, both times and the gap printed), 3 INDETERMINATE
+(preferences unreadable or without dates, no data folder). Run it by hand any time:
+`scripts/check_backup.sh [--tolerance-hours=N]`.
+
+It does not change a plist. Its effect on the weekly job's status is a choice, made
+visible: a FAIL turns an otherwise clean run into exit 1 (the fetch succeeded but the
+backup is stale, and launchd's last exit status should not say all is well), and a
+check that could not decide turns the run into exit 3. It never lowers a status.
+Exit 1 from the weekly wrapper therefore means "partial fetch OR stale backup": the
+log has a `backup check exit status` line that tells them apart.
+
 ## Exit codes
 
-Both wrappers pass the script's exit code through unchanged: 0 ok, 1 partial
-(weekly fetch only), 2 usage or could not start, 3 INDETERMINATE (source
-unreachable, rate-limited, DNS never resolved, deadline hit, or an empty result).
-3 is never reported as 0.
+The poller wrapper passes the script's exit code through unchanged: 0 ok, 1 partial,
+2 usage or could not start, 3 INDETERMINATE (source unreachable, rate-limited, DNS
+never resolved, deadline hit, or an empty result). The weekly wrapper does the same
+for its two fetch steps, then folds in the backup check as described above. 3 is
+never reported as 0.
