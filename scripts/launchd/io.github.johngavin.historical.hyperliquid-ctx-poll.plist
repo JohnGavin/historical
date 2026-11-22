@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- TEMPLATE (#1080). Not installed or loaded by the repo; see scripts/launchd/README.md.
+     Replace __REPO__ with the absolute path of the main checkout before installing. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>io.github.johngavin.historical.hyperliquid-ctx-poll</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>__REPO__/scripts/run_hyperliquid_ctx_poll.sh</string>
+  </array>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StartInterval</key>
+  <integer>300</integer>
+  <key>StandardOutPath</key>
+  <string>/tmp/io.github.johngavin.historical.hyperliquid-ctx-poll.out</string>
+  <key>StandardErrorPath</key>
+  <string>/tmp/io.github.johngavin.historical.hyperliquid-ctx-poll.err</string>
+</dict>
+</plist>
