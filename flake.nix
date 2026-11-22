@@ -77,6 +77,7 @@
           quarto
           poppler-utils
           lychee
+          nodejs  # runs the Cloudflare Worker's tests (cloudflare/hl-ctx-collector, #1088)
         ];
       in
       {
