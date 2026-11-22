@@ -39,6 +39,7 @@
             reviser
             roxygen2
             scales
+            timeDate  # NYSE holiday calendar: holidayNYSE() (#1080)
             targets
             crew
             DT
