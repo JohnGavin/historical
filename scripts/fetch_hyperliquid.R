@@ -33,6 +33,10 @@
 #   perp_hourly.parquet         same columns, keyed (dex, coin, time) (UTC open).
 #                               Separate files per interval because the keys
 #                               differ (date vs time).
+#   perp_15m.parquet / spot_15m.parquet
+#                               same columns, 15-minute bars keyed (dex, coin,
+#                               time) (UTC open). The API keeps ~5000 bars
+#                               (~52 days), so run regularly (#1080).
 #   spot_daily.parquet / spot_hourly.parquet
 #                               spot pairs with non-zero 24h volume; same shape,
 #                               instrument_type = "spot"
@@ -63,8 +67,11 @@
 #                                            [--intervals=1d,1h] [--spot=true]
 #                                            [--funding=true] [--resume]
 #                                            [--batch=10] [--max-markets=N]
+#                                            [--dexes=xyz]
 # (`--sleep` was removed: a fixed sleep cannot respect a weight-based limit.
-# `--max-markets` fetches only the first N markets: a bounded smoke test.)
+# `--max-markets` fetches only the first N markets: a bounded smoke test.
+# `--dexes=xyz,flx` limits the run to those exchanges (default: all). "" is the
+# core exchange and spot pairs, so a run with --dexes skips them.)
 #
 # Exit status: 0 ok | 1 partial (some markets failed; successes still written)
 #              | 3 INDETERMINATE (source unreachable / HTTP error / rate-limited /
@@ -98,9 +105,17 @@ HL_429_MAX_ATTEMPTS <- 3L        # attempts per request (first try + retries)
 HL_FLUSH_BATCH <- 10L            # completed markets per parquet flush
 HL_PROGRESS_FILE <- "hl_progress.txt"
 
-# Candle intervals ingested in Phase 1 (#1072): bar length in ms, one home.
-# 15m / 5m / 1m are later phases, deliberately not allowed yet.
-HL_INTERVALS <- c("1d" = 86400000, "1h" = 3600000)
+# Candle intervals ingested (#1072, #1080): bar length in ms, one home.
+# The API keeps the last HL_CANDLE_PAGE_MAX bars per interval, so 15m reaches
+# back only ~52 days: it must be fetched regularly or that history is lost.
+# 5m / 1m are later phases, deliberately not allowed yet.
+HL_INTERVALS <- c("1d" = 86400000, "1h" = 3600000, "15m" = 900000)
+# Intervals fetched when --intervals is absent: 15m is opt-in (behaviour of a
+# plain run is unchanged).
+HL_DEFAULT_INTERVALS <- c("1d", "1h")
+# Output-file suffix per interval (hl_bars_path). The historical "daily" and
+# "hourly" names are kept so existing files and consumers do not move.
+HL_BAR_FILE_SUFFIX <- c("1d" = "daily", "1h" = "hourly", "15m" = "15m")
 
 # Market classes (one vocabulary). Only the first three are in scope.
 HL_MARKET_CLASSES <- c("main_perp", "builder_perp", "spot_pair",
@@ -759,8 +774,21 @@ hl_upsert <- function(new, path, keys) {
 # because the source was unavailable. Per-market failures are isolated; what
 # succeeded is written; status 1 reports them.
 hl_bars_path <- function(out_dir, instrument_type, interval) {
+  hl_check_interval(interval)
   file.path(out_dir, sprintf("%s_%s.parquet", instrument_type,
-                             if (interval == "1d") "daily" else "hourly"))
+                             HL_BAR_FILE_SUFFIX[[interval]]))
+}
+
+# Keep only markets whose exchange is in `dexes` (NULL = all, behaviour
+# unchanged). "" is the core exchange; spot pairs also have dex "", so a
+# `dexes` without "" drops them. An unknown exchange name selects nothing and
+# the caller's empty-market-list check turns that into INDETERMINATE.
+hl_filter_dexes <- function(markets, dexes = NULL) {
+  if (is.null(dexes)) return(markets)
+  if (!is.character(dexes) || length(dexes) == 0L || anyNA(dexes)) {
+    hl_bad_arg("dexes", "must be NULL or a character vector of exchange names")
+  }
+  markets[markets$dex %in% dexes, , drop = FALSE]
 }
 
 # An EMPTY reply for a listed, non-delisted market inside its retained window is
@@ -824,9 +852,9 @@ hl_fmt_hms <- function(s) {
 hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
                    start = as.Date("2023-01-01"), end = Sys.time(),
                    now = format(Sys.time(), tz = "UTC", usetz = TRUE),
-                   intervals = names(HL_INTERVALS), spot = TRUE,
+                   intervals = HL_DEFAULT_INTERVALS, spot = TRUE,
                    funding = TRUE, resume = FALSE, batch = HL_FLUSH_BATCH,
-                   max_markets = NULL, max_rate_limited = 3L) {
+                   max_markets = NULL, max_rate_limited = 3L, dexes = NULL) {
   invisible(lapply(intervals, hl_check_interval))
   if (!is.numeric(batch) || length(batch) != 1L || is.na(batch) || batch < 1) {
     hl_bad_arg("batch", "must be a whole number >= 1")
@@ -850,6 +878,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   if (inherits(enum, "error")) return(indeterminate(conditionMessage(enum)))
   markets <- enum$markets
   if (!spot) markets <- markets[markets$instrument_type == "perp", ]
+  markets <- hl_filter_dexes(markets, dexes)
   # Spot: only pairs with non-zero 24h volume are fetched (issue #1072, Phase 1).
   markets <- markets[markets$instrument_type == "perp" |
                        (!is.na(markets$traded_24h) & markets$traded_24h), ]
@@ -1059,14 +1088,16 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
     cli_alert_warning("--sleep was removed and is ignored: requests are paced by weight (--pace)")
   }
   mm <- opt("max-markets", NA_character_)
+  dx <- opt("dexes", NA_character_)
   cli_h1("Hyperliquid fetch (perpetual futures and spot pairs, NOT tokenised shares)")
   res <- hl_run(post_fn = hl_make_post(opt("raw-dir", "data/raw/hyperliquid"),
                                        pace = as.numeric(opt("pace", HL_PACE_FRACTION))),
                 out_dir = opt("out-dir", "data/dist"),
                 start = as.Date(opt("start", "2023-01-01")),
-                intervals = strsplit(opt("intervals", "1d,1h"), ",", fixed = TRUE)[[1]],
+                intervals = strsplit(opt("intervals", paste(HL_DEFAULT_INTERVALS, collapse = ",")), ",", fixed = TRUE)[[1]],
                 spot = !identical(opt("spot", "true"), "false"),
                 funding = !identical(opt("funding", "true"), "false"),
+                dexes = if (is.na(dx)) NULL else strsplit(dx, ",", fixed = TRUE)[[1]],
                 resume = "--resume" %in% args,
                 batch = as.integer(opt("batch", HL_FLUSH_BATCH)),
                 max_markets = if (is.na(mm)) NULL else as.integer(mm))

@@ -5,16 +5,16 @@
     Condition
       Error in `hl_check_interval()`:
       x Unsupported candle interval "5m"
-      i Allowed: "1d" and "1h"
+      i Allowed: "1d", "1h", and "15m"
 
 ---
 
     Code
-      hl_parse_candles(.candles, "", "SOL", interval = "15m")
+      hl_parse_candles(.candles, "", "SOL", interval = "1m")
     Condition
       Error in `hl_check_interval()`:
-      x Unsupported candle interval "15m"
-      i Allowed: "1d" and "1h"
+      x Unsupported candle interval "1m"
+      i Allowed: "1d", "1h", and "15m"
 
 # an unknown instrument type aborts (snapshot)
 

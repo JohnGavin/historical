@@ -225,11 +225,12 @@ test_that("per-market failure is isolated: others written, status 1", {
 
 test_that("an unknown interval aborts (snapshot)", {
   expect_snapshot(error = TRUE, hl_fetch_candles("BTC", 0, 1e12, interval = "5m"))
-  expect_snapshot(error = TRUE, hl_parse_candles(.candles, "", "SOL", interval = "15m"))
+  expect_snapshot(error = TRUE, hl_parse_candles(.candles, "", "SOL", interval = "1m"))
   expect_error(hl_fetch_candles("BTC", 0, 1e12, interval = "5m"),
                class = "hl_bad_interval")
-  # Red/green: the two allowed intervals do not abort.
+  # Red/green: the allowed intervals do not abort.
   post <- function(body) list()
+  expect_no_error(hl_fetch_candles("BTC", 0, 1e12, post, interval = "15m"))
   expect_no_error(hl_fetch_candles("BTC", 0, 1e12, post, interval = "1h"))
   expect_no_error(hl_fetch_candles("BTC", 0, 1e12, post, interval = "1d"))
 })
@@ -788,4 +789,91 @@ test_that("snapshot: raw store layout (dated dir, never overwritten)", {
   hl_save_raw(body, "[]", d, t0)
   hl_save_raw(list(type = "allPerpMetas"), "[]", d, t0)
   expect_snapshot(print(sort(list.files(d, recursive = TRUE))))
+})
+
+# ── 15-minute bars and the exchange filter (#1080) ────────────────
+
+# Three 15-minute bars (fixture-free: same shape as the real reply).
+.m15 <- lapply(0:2, function(i) {
+  t0 <- 1763000100000 + i * 900000   # 15-minute aligned
+  list(t = t0, T = t0 + 899999, s = "xyz:NVDA", i = "15m",
+       o = "100.0", h = "101.0", l = "99.5", c = "100.5", v = "12.5", n = 40 + i)
+})
+
+test_that("15m candles parse to UTC `time` keys 15 minutes apart", {
+  b <- hl_parse_candles(.m15, "xyz", "xyz:NVDA", "15m")
+  expect_s3_class(b$time, "POSIXct")
+  expect_false("date" %in% names(b))
+  expect_equal(as.numeric(diff(b$time), units = "mins"), c(15, 15))
+  expect_equal(as.numeric(b$close_time - b$time, units = "mins"), rep(15, 3),
+               tolerance = 1e-4)
+  expect_equal(b$n_trades, c(40, 41, 42))
+  # Falsifiable: an unlisted interval still aborts
+  expect_error(hl_parse_candles(.m15, "xyz", "xyz:NVDA", "5m"), class = "hl_bad_interval")
+})
+
+test_that("15m bars get their own file; daily and hourly names are unchanged", {
+  expect_equal(basename(hl_bars_path("o", "perp", "15m")), "perp_15m.parquet")
+  expect_equal(basename(hl_bars_path("o", "spot", "15m")), "spot_15m.parquet")
+  expect_equal(basename(hl_bars_path("o", "perp", "1h")), "perp_hourly.parquet")
+  expect_equal(basename(hl_bars_path("o", "perp", "1d")), "perp_daily.parquet")
+  expect_error(hl_bars_path("o", "perp", "5m"), class = "hl_bad_interval")
+})
+
+test_that("15m is ONE request starting 5000 bars back; plain runs stay 1d,1h", {
+  seen <- list()
+  post <- function(body) { seen[[length(seen) + 1L]] <<- body; list() }
+  end_ms <- 1.8e12
+  hl_fetch_candles("xyz:NVDA", 0, end_ms, post, interval = "15m")
+  expect_length(seen, 1L)
+  expect_equal(seen[[1]]$req$startTime, end_ms - HL_CANDLE_PAGE_MAX * 900000)
+  expect_equal(HL_DEFAULT_INTERVALS, c("1d", "1h"))
+})
+
+test_that("hl_run writes perp_15m.parquet keyed (dex, coin, time) and is idempotent", {
+  out <- withr::local_tempdir()
+  post <- .mock_post(list(candleSnapshot = function(body) {
+    if (body$req$interval == "15m") .m15 else .candles
+  }))
+  end <- as.POSIXct(1763100000, tz = "UTC")
+  run <- function() suppressMessages(
+    hl_run(post, out_dir = out, end = end, intervals = c("1d", "15m"),
+           spot = FALSE, funding = FALSE, dexes = "xyz", max_markets = 2L))
+  expect_equal(run()$status, 0L)
+  f <- file.path(out, "perp_15m.parquet")
+  expect_true(file.exists(f))
+  x <- arrow::read_parquet(f)
+  expect_true(all(c("time", "dex", "coin") %in% names(x)))
+  expect_equal(nrow(x), 3L * 2L)               # 3 bars x 2 markets
+  expect_false(file.exists(file.path(out, "perp_hourly.parquet")))
+  run()
+  expect_equal(nrow(arrow::read_parquet(f)), 6L)  # no duplicates
+})
+
+test_that("--dexes selects only that exchange's markets; NULL keeps all", {
+  mk <- hl_parse_perp_markets(.apm)
+  only <- hl_filter_dexes(mk, "xyz")
+  expect_gt(nrow(only), 0L)
+  expect_true(all(only$dex == "xyz"))
+  expect_true(all(startsWith(only$coin, "xyz:")))
+  expect_equal(nrow(hl_filter_dexes(mk, NULL)), nrow(mk))   # unchanged when absent
+  expect_lt(nrow(only), nrow(mk))                           # red: the filter does drop rows
+  expect_error(hl_filter_dexes(mk, character()), class = "hl_bad_arg")
+})
+
+test_that("a dex run requests no core or spot candles; an unknown dex is INDETERMINATE", {
+  out <- withr::local_tempdir()
+  coins <- character()
+  base <- .mock_post()
+  post <- function(body) {
+    if (body$type == "candleSnapshot") coins <<- c(coins, body$req$coin)
+    base(body)
+  }
+  suppressMessages(hl_run(post, out_dir = out, end = .end, intervals = "1d",
+                          funding = FALSE, dexes = "xyz"))
+  expect_gt(length(coins), 0L)
+  expect_true(all(startsWith(coins, "xyz:")))
+  res <- suppressMessages(hl_run(base, out_dir = withr::local_tempdir(), end = .end,
+                                 dexes = "nosuchdex"))
+  expect_equal(res$status, 3L)
 })
