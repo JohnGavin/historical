@@ -81,7 +81,7 @@ keeps only the most recent 5000 bars per interval (`HL_CANDLE_PAGE_MAX` in
 
 | Folder | What | Refetch? |
 |---|---|---|
-| `<UTC date>/*.json` and `*.md` | the weekly fetch's raw replies (candles, funding, `allPerpMetas`, current contexts, the saved specification page) | The candle and funding replies can be fetched again within the windows above. The saved page and the contexts of that day are **backup only**. The parquet files above are derived from these and survive without them; losing them loses the audit trail |
+| `<UTC date>/*.json` and `*.md` | the weekly fetch's raw replies (candles, funding, `allPerpMetas`, current contexts, the saved specification page) | The candle and funding replies can be fetched again within the windows above. The saved page and the contexts of that day are **backup only**. The saved page is also kept out of the public Hugging Face tars (a third-party document), so this laptop holds its only copy. The parquet files above are derived from these and survive without them; losing them loses the audit trail |
 | `ctx_poll/<UTC date>/<collector>_<HHMMSS>.json.gz` | one gzipped file per 5-minute run, every reply and its `fetched_at` | **Backup only.** It is the source for rebuilding a day of `perp_ctx_5m` (see Restore Steps). Not uploaded yet: converting it to the Worker's daily `jsonl.gz` layout is a later step |
 
 The weekly fetch's raw day folders (`<UTC date>/`) are published since the seed

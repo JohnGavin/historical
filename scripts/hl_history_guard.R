@@ -186,6 +186,19 @@ hl_hist_start_date <- function(dir, margin_days = HL_HIST_START_MARGIN_DAYS,
   sort(d[grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", d)])
 }
 
+# Raw files that are NOT packed into the public dataset: a basename matching this regex stays
+# on the laptop only. The saved copy of the trade.xyz specification page (spec_ prefix) is a
+# third-party document; its parsed columns stay public in perp_markets.parquet. Owner
+# decision 2026-11-23, Refs #1088. Excluded files are never touched on disk.
+HL_HIST_RAW_EXCLUDE <- "^spec_"
+
+# The raw files of one day folder, split into those to pack and those excluded (relative paths).
+.hist_raw_split <- function(src) {
+  files <- sort(list.files(src, recursive = TRUE))
+  excl <- grepl(HL_HIST_RAW_EXCLUDE, basename(files))
+  list(pack = files[!excl], excluded = files[excl])
+}
+
 # Gzip one file on its own (a gzip member, readable with gunzip or R's gzfile).
 .hist_gzip_file <- function(src, dest) {
   dir.create(dirname(dest), recursive = TRUE, showWarnings = FALSE)
@@ -197,8 +210,9 @@ hl_hist_start_date <- function(dir, margin_days = HL_HIST_START_MARGIN_DAYS,
 # One tar per UTC day folder of `raw_dir` (ctx_poll/ and anything else that is not a
 # YYYY-MM-DD folder is left alone), at <out_dir>/date=<day>/<name>.tar. Each member is a
 # gzipped copy of one raw file, named <file>.gz. `skip_days` are not packed. The tar is
-# listed back and its member count must equal the file count, else it aborts.
-# Returns data.frame(day, files, bytes_in, bytes_out, path).
+# listed back and its member count must equal the packed file count, else it aborts. Files
+# matching HL_HIST_RAW_EXCLUDE are not packed and are counted in `excluded`.
+# Returns data.frame(day, files, excluded, bytes_in, bytes_out, path).
 hl_hist_pack_days <- function(raw_dir, out_dir, name, skip_days = character()) {
   if (!grepl("^[A-Za-z0-9._-]+$", name)) {
     cli::cli_abort(c("x" = "Invalid archive name {.val {name}}"), class = "hl_hist_bad_arg")
@@ -206,7 +220,8 @@ hl_hist_pack_days <- function(raw_dir, out_dir, name, skip_days = character()) {
   days <- setdiff(.hist_day_dirs(raw_dir), skip_days)
   out <- lapply(days, function(day) {
     src <- file.path(raw_dir, day)
-    files <- sort(list.files(src, recursive = TRUE))
+    sp <- .hist_raw_split(src)
+    files <- sp$pack
     if (length(files) == 0L) return(NULL)
     gz_dir <- tempfile("hl_pack_")
     on.exit(unlink(gz_dir, recursive = TRUE), add = TRUE)
@@ -224,13 +239,13 @@ hl_hist_pack_days <- function(raw_dir, out_dir, name, skip_days = character()) {
                      class = "hl_hist_pack_mismatch")
     }
     file.rename(tmp, dest)
-    data.frame(day = day, files = length(files),
+    data.frame(day = day, files = length(files), excluded = length(sp$excluded),
                bytes_in = sum(file.size(file.path(src, files))),
                bytes_out = file.size(dest), path = dest, stringsAsFactors = FALSE)
   })
   out <- dplyr::bind_rows(out)
   if (nrow(out) == 0L) {
-    return(data.frame(day = character(), files = integer(), bytes_in = numeric(),
+    return(data.frame(day = character(), files = integer(), excluded = integer(), bytes_in = numeric(),
                       bytes_out = numeric(), path = character(), stringsAsFactors = FALSE))
   }
   out

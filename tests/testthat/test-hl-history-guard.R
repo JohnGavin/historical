@@ -116,6 +116,24 @@ test_that("each day folder becomes one tar of gzipped members; ctx_poll is left 
   expect_error(hl_hist_pack_days(raw, out, "../evil"), class = "hl_hist_bad_arg")
 })
 
+test_that("the saved third-party specification page is left out of the tar and stays on disk (#1088)", {
+  raw <- .mk_raw(); out <- withr::local_tempdir()
+  spec <- file.path(raw, "2026-11-15", "spec_trade_xyz_specification-index.md")
+  writeLines("# third-party page", spec)
+  p <- hl_hist_pack_days(raw, out, "run42")
+  members <- sub("^\\./", "", utils::untar(file.path(out, "date=2026-11-15", "run42.tar"), list = TRUE))
+  expect_false(any(grepl("^spec_", members)))
+  expect_equal(sort(members), sprintf("candle_%d.json.gz", 1:3))
+  expect_equal(p$files, c(3L, 3L))
+  expect_equal(p$excluded, c(1L, 0L))
+  expect_true(file.exists(spec))
+  expect_equal(readLines(spec), "# third-party page")
+  # a day holding only the page packs nothing
+  raw2 <- withr::local_tempdir(); dir.create(file.path(raw2, "2026-11-17"))
+  writeLines("x", file.path(raw2, "2026-11-17", "spec_trade_xyz_specification-index.md"))
+  expect_equal(nrow(hl_hist_pack_days(raw2, withr::local_tempdir(), "r")), 0L)
+})
+
 test_that("nothing to pack is exit 3 from the command line, never 0", {
   empty <- withr::local_tempdir(); out <- withr::local_tempdir()
   dir.create(file.path(empty, "ctx_poll"))
