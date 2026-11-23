@@ -69,6 +69,14 @@ immediately. Neither sets `KeepAlive`.
   this job stays only until the gap report shows the Worker covering 7 full days with
   at least 99% of slots, and is then unloaded by the owner. In the overlap the reader
   keeps one collector per slot, preferring `cf-1` (`hl_ctx_read`).
+- **The weekly fetch is also temporary (#1088).** Its replacement is the GitHub Actions
+  workflow `.github/workflows/hl-weekly.yml`, which extends the tables on Hugging Face
+  every week and publishes the raw replies packed (it needs the one-off seed first,
+  `scripts/seed_hl_to_hf.R`, dry run by default). This job **stops after `hl-weekly` has
+  run green twice**: the owner then unloads it with
+  `launchctl bootout gui/$(id -u)/io.github.johngavin.historical.hyperliquid-weekly`
+  and deletes the copy in `~/Library/LaunchAgents/`. Until then it keeps running
+  unchanged (nothing in this folder or in the wrapper was changed for this).
 - **Weekly market reference step.** After the candle fetch,
   `scripts/fetch_hl_market_reference.R` writes `data/dist/perp_markets.parquet`
   (long names, categories, definitions and source pages; see

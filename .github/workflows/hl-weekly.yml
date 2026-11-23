@@ -1,0 +1,141 @@
+name: Hyperliquid weekly history
+
+# Weekly: extend the Hyperliquid history tables on the public Hugging Face dataset and
+# publish the run's raw replies, packed (#1088). This replaces the laptop's weekly job
+# (scripts/run_hyperliquid_weekly.sh), which is unloaded by the owner once this job has run
+# green twice.
+#   scripts/hl_history_guard.R download    HF -> hl_dist: every expected table AND the seed
+#                                          marker, else exit 3 (the job refuses to run
+#                                          before the owner's seed: scripts/seed_hl_to_hf.R)
+#   scripts/hl_history_guard.R start-date  the --start for the fetcher, derived from the
+#                                          tables, so the run asks the API only for what is new
+#   scripts/fetch_hyperliquid.R            incremental upsert onto the downloaded tables
+#   scripts/fetch_hl_market_reference.R    market names / definitions
+#   scripts/hl_history_guard.R guard       new rows >= old, earliest date <= old, old keys
+#                                          within new keys, per table; any violation = exit 1
+#   scripts/hl_history_guard.R pack        raw replies -> one tar per UTC day, gzipped members
+#   scripts/hf_upload_commit.sh            tables + the tar in ONE commit, read back
+# A step that fails stops the job and NOTHING is published: a partial fetch (a market that
+# failed) is never published, because the next run's start date would then skip its gap.
+# Not configured (HF_TOKEN missing) is exit 3 and the job FAILS: silence is never green.
+#
+# Runtime. Measured: a FULL fetch (--start=2023-01-01, every market's whole funding history)
+# had run 9 h 10 min on the laptop and was still going (2026-11-22), which is why the start
+# date is derived: only what is newer than the oldest latest bar (less 3 days) is requested.
+# Estimated for that incremental run: about 600 markets x 3 candle requests and one funding
+# page, each weighing about 20 to 25, paced at 900 of the documented 1,200 weight a minute:
+# about 6 s a market, so about 60 to 75 minutes, plus parquet rewrites every 10 markets
+# (about 10 minutes), plus setup (about 10 minutes). About 1.5 hours; the job is capped at
+# 300 minutes, well inside the 6 hours GitHub allows, and a cancelled run publishes nothing.
+# No --resume: a fresh runner has no progress file, and a run that does not finish is simply
+# started again next week from the unchanged tables on Hugging Face.
+#
+# Secret: HF_TOKEN (write access to the dataset; only the publish step sees it).
+# Every action is pinned by full commit SHA (external-code rule); the tag is in the comment.
+
+on:
+  schedule:
+    - cron: '23 3 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# Two weekly runs must never overlap (both would publish from the same starting tables).
+concurrency:
+  group: hl-weekly
+  cancel-in-progress: false
+
+jobs:
+  weekly:
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    env:
+      HD_HF_REPO: JohnGavin/finance-data
+      HD_HF_REPO_VISIBILITY: public
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # Presence only. The comparison with '' yields true/false, so no secret value
+      # enters this step's environment.
+      - name: Preflight, secrets configured
+        env:
+          HAS_HF_TOKEN: ${{ secrets.HF_TOKEN != '' }}
+        run: |
+          if [ "$HAS_HF_TOKEN" != "true" ]; then
+            echo "::error::not configured (exit 3): repository secret HF_TOKEN is missing."
+            exit 3
+          fi
+          echo "HF_TOKEN is configured."
+
+      - uses: r-lib/actions/setup-r@f9a764fea8d5c63df6ef9a5c7795bf7deb5d7e05 # v2
+        with:
+          r-version: '4.4'
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libuv1-dev
+
+      - name: Install R dependencies
+        shell: Rscript {0}
+        run: |
+          # setup-r exports RSPM: binary packages for this runner (source builds of arrow
+          # take about an hour; see data-poll.yml).
+          repos <- Sys.getenv("RSPM", unset = "")
+          if (!nzchar(repos)) repos <- "https://cloud.r-project.org"
+          need <- c("arrow", "dplyr", "cli", "httr2", "jsonlite", "rlang", "here")
+          install.packages(need, repos = repos)
+          missing <- need[!need %in% rownames(installed.packages())]
+          if (length(missing) > 0L) stop("Failed to install: ", paste(missing, collapse = ", "))
+
+      - name: Install the Hugging Face CLI (pinned)
+        run: |
+          pip install --quiet 'huggingface_hub==2.4.0'
+          hf upload --help > /dev/null
+
+      # Public read: no token. Exit 3 unless the seed marker and EVERY expected table came
+      # down whole (readable, and not fewer rows than the marker recorded at seed).
+      - name: Download the tables from Hugging Face
+        run: |
+          Rscript scripts/hl_history_guard.R download --dir=hl_dist
+          cp -R hl_dist hl_old
+
+      - name: Fetch what is new
+        run: |
+          start="$(Rscript scripts/hl_history_guard.R start-date --dir=hl_dist)"
+          case "$start" in
+            [0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]) ;;
+            *) echo "::error::no usable start date (got '$start')"; exit 3 ;;
+          esac
+          echo "Fetching from $start"
+          Rscript scripts/fetch_hyperliquid.R --out-dir=hl_dist --raw-dir=hl_raw --intervals=1d,1h,15m --start="$start"
+          Rscript scripts/fetch_hl_market_reference.R --out-dir=hl_dist --raw-dir=hl_raw
+
+      - name: Guard, nothing may be lost
+        run: Rscript scripts/hl_history_guard.R guard --old-dir=hl_old --new-dir=hl_dist
+
+      # Stage exactly what is published: the tables and this run's packed raw replies.
+      - name: Stage the tables and pack the raw replies
+        run: |
+          mkdir -p hf_stage/hyperliquid
+          cp hl_dist/*.parquet hf_stage/hyperliquid/
+          Rscript scripts/hl_history_guard.R pack --raw-dir=hl_raw --out-dir=hf_stage/hyperliquid/raw/weekly --name="${GITHUB_RUN_ID}"
+          find hf_stage -type f | sort
+
+      # The only step that sees HF_TOKEN.
+      - name: Publish to Hugging Face (one commit)
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          bash scripts/hf_upload_commit.sh hf_stage "data: hyperliquid weekly history $(date -u +%Y-%m-%d) (Refs #1088)"
+
+      # A recovery copy of what was staged (public data only), kept 14 days, whatever happened.
+      - name: Keep the staged files as an artifact
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: hl-weekly-stage-${{ github.run_id }}
+          path: hf_stage
+          retention-days: 14
+          if-no-files-found: ignore

@@ -52,8 +52,12 @@
 #                               rows afterwards); a delisted market that never
 #                               traded gets no funding request.
 # Raw JSON responses are kept append-only under --raw-dir (default
-# data/raw/hyperliquid/<UTC date>/, gitignored, NEVER uploaded or redistributed);
-# the parquet files are derived from them.
+# data/raw/hyperliquid/<UTC date>/, gitignored, never committed to git). They ARE
+# published, by owner decision (2026-11-22): packed one tar per UTC day, gzipped members,
+# to the public Hugging Face dataset under hyperliquid/raw/weekly/ (never file by file:
+# a day holds ~10,000 files; scripts/hl_history_guard.R pack). Whether Hyperliquid's
+# terms allow redistribution is not located (docs/DATA_SOURCES.md). The parquet files
+# are derived from them.
 #   perp_oi_snapshot.parquet    append, key (dex, coin, fetched_at). Open
 #                               interest has NO history on this API: only the
 #                               current snapshot exists, so it is never
@@ -64,7 +68,12 @@
 #                               fetched_at. Market long names and definitions are
 #                               a separate table (scripts/fetch_hl_market_reference.R).
 # The deployer-wallet fields of perpDexs are neither read nor persisted.
-# Publication of these files is a documented follow-up, not done here.
+# This script publishes nothing. The tables are published to the public Hugging Face
+# dataset (hyperliquid/<table>.parquet) by .github/workflows/hl-weekly.yml, which runs
+# this script on top of the downloaded tables with --start derived from them
+# (scripts/hl_history_guard.R start-date), because every run re-requests each market's
+# funding history from --start: from the default 2023-01-01 that takes more than 9 hours.
+# The one-off seed of the laptop's history is scripts/seed_hl_to_hf.R.
 #
 # Usage: Rscript scripts/fetch_hyperliquid.R [--out-dir=data/dist]
 #                                            [--start=2023-01-01] [--pace=0.75]
