@@ -116,6 +116,19 @@ test_that("each day folder becomes one tar of gzipped members; ctx_poll is left 
   expect_error(hl_hist_pack_days(raw, out, "../evil"), class = "hl_hist_bad_arg")
 })
 
+test_that("a RELATIVE out_dir is resolved before the tar is written (#1088, run 45220868995)", {
+  raw <- .mk_raw()
+  wd <- withr::local_tempdir()
+  withr::local_dir(wd)
+  p <- hl_hist_pack_days(raw, file.path("stage", "raw", "weekly"), "run42")
+  expect_equal(p$day, c("2026-11-15", "2026-11-16"))
+  tar_path <- file.path(wd, "stage", "raw", "weekly", "date=2026-11-15", "run42.tar")
+  expect_true(file.exists(tar_path))
+  expect_false(file.exists(paste0(tar_path, ".tmp")))
+  members <- utils::untar(tar_path, list = TRUE)
+  expect_equal(sort(sub("^\\./", "", members)), sprintf("candle_%d.json.gz", 1:3))
+})
+
 test_that("the saved third-party specification page is left out of the tar and stays on disk (#1088)", {
   raw <- .mk_raw(); out <- withr::local_tempdir()
   spec <- file.path(raw, "2026-11-15", "spec_trade_xyz_specification-index.md")
