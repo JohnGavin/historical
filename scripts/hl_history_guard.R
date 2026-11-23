@@ -217,6 +217,10 @@ hl_hist_pack_days <- function(raw_dir, out_dir, name, skip_days = character()) {
   if (!grepl("^[A-Za-z0-9._-]+$", name)) {
     cli::cli_abort(c("x" = "Invalid archive name {.val {name}}"), class = "hl_hist_bad_arg")
   }
+  # The loop changes directory to build each tar, so every path must be absolute first.
+  raw_dir <- normalizePath(raw_dir, mustWork = TRUE)
+  dir.create(out_dir, recursive = TRUE, showWarnings = FALSE)
+  out_dir <- normalizePath(out_dir, mustWork = TRUE)
   days <- setdiff(.hist_day_dirs(raw_dir), skip_days)
   out <- lapply(days, function(day) {
     src <- file.path(raw_dir, day)
