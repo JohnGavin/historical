@@ -923,3 +923,213 @@ test_that("hl_run writes perp_dexs.parquet, idempotently, and reports a failed r
   expect_false(file.exists(file.path(out2, "perp_dexs.parquet")))
   expect_true(file.exists(file.path(out2, "perp_daily.parquet")))   # the rest is written
 })
+
+# ── Offline waiting and resume (#1088) ─────────────────────────────
+# A laptop sleeps and loses the network. A request with NO HTTP response is
+# "offline": wait and retry the same request. Nothing here touches the network:
+# the request performer (`post`), the sleep and the wall clock are all injected.
+
+.fake_net <- function(jump_on_first_wait = 0) {
+  e <- new.env()
+  e$t <- 1.7e9; e$sleeps <- numeric(); e$jumped <- FALSE
+  e$sleep_fn <- function(s) {
+    e$sleeps <- c(e$sleeps, s)
+    extra <- if (s >= 15 && !e$jumped) jump_on_first_wait else 0
+    if (extra > 0) e$jumped <- TRUE
+    e$t <- e$t + s + extra
+    invisible(NULL)
+  }
+  e$wall <- function() e$t
+  e
+}
+# Offline waits only (the 15 / 30 / 60 / 300 s waits; pace sleeps are ~1 s).
+.offline_waits <- function(net) net$sleeps[net$sleeps >= 15]
+.transport_down <- function() hl_transport_failure("Could not resolve host")
+
+.flaky_post <- function(n_fail, reply = list(a = 1)) {
+  e <- new.env(); e$calls <- 0L
+  fn <- function(body, ..., on_response = NULL) {
+    e$calls <- e$calls + 1L
+    if (e$calls <= n_fail) .transport_down()
+    reply
+  }
+  list(fn = fn, state = e)
+}
+
+test_that("transport errors then success: the same request returns, nothing fails", {
+  net <- .fake_net(); fl <- .flaky_post(4)
+  post <- hl_make_post(withr::local_tempdir(), post = fl$fn, sleep_fn = net$sleep_fn,
+                       wall = net$wall, max_offline_min = 180)
+  msgs <- testthat::capture_messages(got <- post(list(type = "spotMeta")))
+  expect_equal(got, list(a = 1))
+  expect_equal(fl$state$calls, 5L)                       # 4 failures + the success
+  expect_equal(.offline_waits(net), c(15, 30, 60, 300))  # growing waits
+  expect_equal(sum(grepl("network down since .*waiting; next try in", msgs)), 4L)
+})
+
+test_that("an outage past the cap stops with hl_offline_exhausted", {
+  net <- .fake_net(); fl <- .flaky_post(Inf)
+  post <- hl_make_post(withr::local_tempdir(), post = fl$fn, sleep_fn = net$sleep_fn,
+                       wall = net$wall, max_offline_min = 1)
+  expect_error(suppressMessages(post(list(type = "spotMeta"))),
+               class = "hl_offline_exhausted")
+  expect_equal(.offline_waits(net), c(15, 30, 60))  # 105 s awake >= 60 s cap
+})
+
+test_that("an outage past the cap in hl_run: exit-3 path, progress kept, none failed, resume continues", {
+  out <- withr::local_tempdir()
+  base <- .mock_post(); net <- .fake_net(); calls <- 0L
+  down_after <- 5L  # candle requests served before the network goes away
+  flaky <- function(body, ..., on_response = NULL) {
+    if (body$type == "candleSnapshot") {
+      calls <<- calls + 1L
+      if (calls > down_after) .transport_down()
+    }
+    base(body)
+  }
+  post <- hl_make_post(withr::local_tempdir(), post = flaky, sleep_fn = net$sleep_fn,
+                       wall = net$wall, max_offline_min = 1)
+  res <- suppressMessages(hl_run(post, out_dir = out, end = .end, batch = 1))
+  expect_equal(res$status, 3L)
+  expect_equal(res$n_failed, 0L)                 # the rest are NOT marked failed
+  expect_equal(nrow(res$failed), 0L)
+  expect_gt(res$n_not_attempted, 0L)
+  expect_gt(res$n_done, 0L)
+  prog <- readLines(file.path(out, "hl_progress.txt"))
+  expect_equal(length(prog) - 1L, res$n_done)    # progress written for what finished
+  # --resume with a healthy network fetches only the rest and finishes clean
+  res2 <- .run(.mock_post(), out, resume = TRUE)
+  expect_equal(res2$status, 0L)
+  expect_equal(res2$n_skipped, res$n_done)
+  expect_false(file.exists(file.path(out, "hl_progress.txt")))
+})
+
+test_that("suspended time (a clock jump) is not counted toward the cap", {
+  # awake waiting is 15 + 30 = 45 s < the 60 s cap; the jump is 1 h.
+  net <- .fake_net(jump_on_first_wait = 3600); fl <- .flaky_post(2)
+  post <- hl_make_post(withr::local_tempdir(), post = fl$fn, sleep_fn = net$sleep_fn,
+                       wall = net$wall, max_offline_min = 1)
+  msgs <- testthat::capture_messages(got <- post(list(type = "spotMeta")))
+  expect_equal(got, list(a = 1))
+  expect_true(any(grepl("clock jumped 60 min: the machine was asleep", msgs)))
+})
+
+test_that("an HTTP 404 still fails the request at once: no offline wait", {
+  net <- .fake_net()
+  not_found <- function(body, ..., on_response = NULL) hl_unavailable("HTTP 404")
+  post <- hl_make_post(withr::local_tempdir(), post = not_found, sleep_fn = net$sleep_fn,
+                       wall = net$wall, max_offline_min = 180)
+  err <- tryCatch(post(list(type = "spotMeta")), error = function(e) e)
+  expect_s3_class(err, "hl_source_unavailable")
+  expect_false(inherits(err, "hl_transport_error"))
+  expect_length(.offline_waits(net), 0L)
+  # and in hl_run the market is failed (status 1), the run goes on
+  out <- withr::local_tempdir(); base <- .mock_post()
+  p2 <- function(body) {
+    if (body$type == "candleSnapshot" && body$req$coin == "xyz:TSLA") hl_unavailable("HTTP 404")
+    base(body)
+  }
+  res <- .run(p2, out)
+  expect_equal(res$status, 1L)
+  expect_equal(res$failed$item, "xyz:xyz:TSLA")
+})
+
+test_that("hl_post: no HTTP response is a transport error; an HTTP 404 is not", {
+  err <- tryCatch(
+    httr2::with_mocked_responses(function(req) stop("Could not resolve host"),
+                                 hl_post(list(type = "spotMeta"))),
+    error = function(e) e)
+  expect_s3_class(err, "hl_transport_error")
+  expect_s3_class(err, "hl_source_unavailable")
+  err404 <- tryCatch(
+    httr2::with_mocked_responses(function(req) httr2::response(status_code = 404),
+                                 hl_post(list(type = "spotMeta"))),
+    error = function(e) e)
+  expect_s3_class(err404, "hl_source_unavailable")
+  expect_false(inherits(err404, "hl_transport_error"))
+})
+
+test_that("with max_offline_min = 0 (the default) a transport error is not waited out", {
+  net <- .fake_net(); fl <- .flaky_post(Inf)
+  post <- hl_make_post(withr::local_tempdir(), post = fl$fn, sleep_fn = net$sleep_fn)
+  expect_error(post(list(type = "spotMeta")), class = "hl_transport_error")
+  expect_equal(fl$state$calls, 1L)
+  expect_error(hl_make_post(tempdir(), max_offline_min = -1), class = "hl_bad_arg")
+})
+
+test_that("progress never lists a market whose rows are not yet on disk", {
+  out <- withr::local_tempdir(); base <- .mock_post(); bad <- character()
+  on_disk_keys <- function() {
+    keys <- character()
+    for (f in c("perp_daily", "spot_daily")) {
+      p <- file.path(out, paste0(f, ".parquet"))
+      if (file.exists(p)) {
+        d <- arrow::read_parquet(p); keys <- c(keys, paste0(d$dex, ":", d$coin))
+      }
+    }
+    keys
+  }
+  # Look at the progress file at the instant of every write: a kill there is the
+  # worst case. It may only list markets that are already on disk.
+  orig_upsert <- hl_upsert; n_checks <- 0L
+  assign("hl_upsert", function(new, path, keys) {
+    pf <- file.path(out, "hl_progress.txt")
+    if (file.exists(pf)) bad <<- c(bad, setdiff(readLines(pf)[-1], on_disk_keys()))
+    n_checks <<- n_checks + 1L
+    orig_upsert(new, path, keys)
+  }, envir = globalenv())
+  withr::defer(assign("hl_upsert", orig_upsert, envir = globalenv()))
+  res <- .run(base, out, batch = 2)
+  expect_equal(res$status, 0L)
+  expect_gt(n_checks, 4L)
+  expect_length(bad, 0L)
+})
+
+test_that("a kill mid-run then --resume: no market skipped unfinished, none written twice", {
+  base <- .mock_post()
+  ref_out <- withr::local_tempdir(); .run(base, ref_out)   # a clean full run
+  ref <- arrow::read_parquet(file.path(ref_out, "perp_daily.parquet"))
+  out <- withr::local_tempdir(); n <- 0L
+  killer <- function(body) {
+    if (body$type == "candleSnapshot") {
+      n <<- n + 1L
+      # a signal that no per-market handler catches (as a real kill is not caught)
+      if (n == 7L) stop(structure(class = c("test_kill", "condition"),
+                                  list(message = "killed", call = NULL)))
+    }
+    base(body)
+  }
+  killed <- tryCatch({ .run(killer, out, batch = 2); FALSE },
+                     test_kill = function(c) TRUE)
+  expect_true(killed)
+  done <- readLines(file.path(out, "hl_progress.txt"))[-1]
+  expect_gt(length(done), 0L)
+  res <- .run(base, out, resume = TRUE)
+  expect_equal(res$status, 0L)
+  expect_equal(res$n_skipped, length(done))
+  got <- arrow::read_parquet(file.path(out, "perp_daily.parquet"))
+  expect_equal(nrow(got), nrow(ref))                              # nothing missing
+  expect_false(anyDuplicated(got[c("dex", "coin", "date")]) > 0)  # nothing doubled
+  expect_equal(sort(unique(paste0(got$dex, ":", got$coin))),
+               sort(unique(paste0(ref$dex, ":", ref$coin))))
+})
+
+test_that("a market that failed in a previous run is retried by --resume", {
+  out <- withr::local_tempdir(); base <- .mock_post()
+  p1 <- function(body) {
+    if (body$type == "candleSnapshot" && body$req$coin == "xyz:TSLA") hl_unavailable("HTTP 404")
+    base(body)
+  }
+  res1 <- .run(p1, out)
+  expect_equal(res1$status, 1L)
+  expect_false("xyz:xyz:TSLA" %in% readLines(file.path(out, "hl_progress.txt")))
+  asked <- character()
+  p2 <- function(body) {
+    if (body$type == "candleSnapshot") asked <<- c(asked, body$req$coin)
+    base(body)
+  }
+  res2 <- .run(p2, out, resume = TRUE)
+  expect_equal(res2$status, 0L)
+  expect_equal(unique(asked), "xyz:TSLA")   # only the failed market is requested again
+  expect_true("xyz:TSLA" %in% arrow::read_parquet(file.path(out, "perp_daily.parquet"))$coin)
+})

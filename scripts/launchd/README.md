@@ -136,6 +136,19 @@ later study finds the gaps as missing slots.
   missed while the Mac is powered off does not. That is why the weekly job also
   has `RunAtLoad` true: after a power-off it runs at the next login, and
   `--resume` makes a repeat harmless.
+- The weekly fetch rides through a closed lid or a lost network (#1088). A request
+  with no HTTP response at all (DNS, connect, timeout, reset) means "offline", not
+  "this market is bad": the fetcher waits (15 s, 30 s, 60 s, then every 5 min),
+  writes one `network down since <UTC>, waiting; next try in N s` line per wait and
+  retries the same request. If the clock jumps far past the wait, the machine was
+  asleep: it logs `clock jumped N min` and does not count that time. Only awake,
+  offline time counts toward the cap `--max-offline-min` (default 180). Past the cap
+  the run writes what it finished, does NOT mark the remaining markets failed, and
+  exits 3; the next `--resume` run (the weekly wrapper always passes it) continues
+  where it stopped. HTTP errors are not outages: 429 backs off, 5xx is retried, any
+  other 4xx fails that one market. The market reference step
+  (`fetch_hl_market_reference.R`) shares the request code but does not wait: it
+  makes one API request and exits 3 if that fails.
 - macOS may list the jobs under System Settings > General > Login Items &
   Extensions > "Allow in the Background", where they can be switched off.
 - An installed copy does not update when the repo copy changes: re-run
