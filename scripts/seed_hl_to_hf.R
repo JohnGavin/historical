@@ -202,14 +202,16 @@ hl_seed_run <- function(data_dir, raw_dir, client, stage_dir = tempfile("hl_seed
     sprintf("%s/%s/date=%s/%s.tar", HL_HIST_ROOT, HL_HIST_RAW_SUBDIR, d, HL_SEED_ARCHIVE_NAME) %in%
       client$hf_list(sprintf("%s/%s/date=%s", HL_HIST_ROOT, HL_HIST_RAW_SUBDIR, d))
   }, logical(1))
-  n_files <- vapply(days, function(d) length(list.files(file.path(raw_dir, d), recursive = TRUE)), integer(1))
+  splits <- lapply(days, function(d) .hist_raw_split(file.path(raw_dir, d)))
+  n_files <- vapply(splits, function(x) length(x$pack), integer(1))
+  n_excluded <- vapply(splits, function(x) length(x$excluded), integer(1))
   raw_fail <- NULL
   packed <- tryCatch(
     hl_hist_pack_days(raw_dir, file.path(stage_root, HL_HIST_RAW_SUBDIR), HL_SEED_ARCHIVE_NAME,
                       skip_days = days[on_hf_day]),
     hl_hist_pack_mismatch = function(e) { raw_fail <<- list(status = "FAIL", why = conditionMessage(e)); NULL },
     error = function(e) { raw_fail <<- list(status = "UNDECIDED", why = conditionMessage(e)); NULL })
-  day_tbl <- data.frame(day = days, files = unname(n_files), on_hf = unname(on_hf_day),
+  day_tbl <- data.frame(day = days, files = unname(n_files), excluded = unname(n_excluded), on_hf = unname(on_hf_day),
                         stringsAsFactors = FALSE)
   day_tbl$packed_mb <- NA_real_
   day_tbl$action <- ifelse(day_tbl$files == 0L, "empty, skipped",
@@ -290,7 +292,7 @@ hl_seed_run <- function(data_dir, raw_dir, client, stage_dir = tempfile("hl_seed
     print(res$tables[c("table", "local_rows", "hf_rows", "merged_rows", "earliest", "latest", "verdict", "why")],
           row.names = FALSE)
     cat("\nRaw day folders (one seed.tar per day, gzipped members):\n")
-    print(res$days[c("day", "files", "packed_mb", "action")], row.names = FALSE)
+    print(res$days[c("day", "files", "excluded", "packed_mb", "action")], row.names = FALSE)
     cat(sprintf("\nUpload: %d file(s), %.1f MB, %d commit(s)\n", length(res$files), res$bytes / 1e6, res$commits))
   }
   if (res$status == 0L && !apply) cat("DRY RUN: nothing was uploaded. Re-run with --apply to publish.\n")
