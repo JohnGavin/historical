@@ -1246,11 +1246,12 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   mm <- opt("max-markets", NA_character_)
   dx <- opt("dexes", NA_character_)
   cli_h1("Hyperliquid fetch (perpetual futures and spot pairs, NOT tokenised shares)")
-  max_off <- suppressWarnings(as.numeric(opt("max-offline-min", HL_MAX_OFFLINE_MIN)))
-  if (is.na(max_off) || max_off < 0) {
+  max_off_raw <- as.character(opt("max-offline-min", HL_MAX_OFFLINE_MIN))
+  if (!grepl("^[0-9]+([.][0-9]+)?$", max_off_raw)) {
     cli_alert_danger("--max-offline-min must be a number >= 0 (minutes)")
     quit(save = "no", status = 2L)
   }
+  max_off <- as.numeric(max_off_raw)
   res <- hl_run(post_fn = hl_make_post(opt("raw-dir", "data/raw/hyperliquid"),
                                        pace = as.numeric(opt("pace", HL_PACE_FRACTION)),
                                        max_offline_min = max_off),
