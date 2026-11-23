@@ -18,6 +18,17 @@
 # logged); still limited -> that market is reported failed and the run is
 # INDETERMINATE (exit 3), never silently skipped.
 #
+# Laptop runs: sleep and outages (#1088). A request that gets NO HTTP response (DNS,
+# connect, timeout, reset) means the machine is offline, not that the market is bad.
+# The fetcher then waits (15 s, 30 s, 60 s, then every 5 min), logs one line per
+# wait, and retries the SAME request; a closed lid for an hour or two is ridden
+# through. Time the process was suspended (the clock jumps) is logged and not
+# counted; only AWAKE offline time counts toward the cap --max-offline-min
+# (default 180 = 3 h). Past the cap the run stops cleanly: finished markets are
+# written, the unfinished ones are NOT marked failed, exit 3, and the next
+# `--resume` run continues. HTTP errors are different: 429 backs off as above, 5xx
+# is retried 3 times, any other 4xx fails that market at once.
+#
 # Long runs are INCREMENTAL and RESUMABLE: parsed rows are upserted every
 # --batch completed markets (default 10) and the completed markets are recorded
 # in <out-dir>/hl_progress.txt only AFTER their rows are on disk. `--resume`
@@ -81,14 +92,15 @@
 #                                            [--intervals=1d,1h] [--spot=true]
 #                                            [--funding=true] [--resume]
 #                                            [--batch=10] [--max-markets=N]
-#                                            [--dexes=xyz]
+#                                            [--dexes=xyz] [--max-offline-min=180]
 # (`--sleep` was removed: a fixed sleep cannot respect a weight-based limit.
 # `--max-markets` fetches only the first N markets: a bounded smoke test.
 # `--dexes=xyz,flx` limits the run to those exchanges (default: all). "" is the
 # core exchange and spot pairs, so a run with --dexes skips them.)
 #
 # Exit status: 0 ok | 1 partial (some markets failed; successes still written)
-#              | 3 INDETERMINATE (source unreachable / HTTP error / rate-limited /
+#              | 3 INDETERMINATE (source unreachable, also past --max-offline-min /
+#              HTTP error / rate-limited /
 #              empty market list / an empty reply for a listed live market). 3 is
 #              never "no data" and never 0.
 
@@ -117,6 +129,16 @@ HL_WEIGHT <- c(base = 20, candle_bars_per_unit = 60, funding_rows_per_unit = 20)
 HL_429_BACKOFF_S <- 60           # wait after an HTTP 429
 HL_429_MAX_ATTEMPTS <- 3L        # attempts per request (first try + retries)
 HL_FLUSH_BATCH <- 10L            # completed markets per parquet flush
+# Offline waiting (#1088): a request with no HTTP response is "offline", not "this
+# market is bad". The fetcher waits and retries the SAME request: these waits in
+# seconds, then every HL_OFFLINE_WAIT_MAX_S, until HL_MAX_OFFLINE_MIN minutes of
+# AWAKE offline time have passed (override: --max-offline-min=).
+HL_OFFLINE_WAITS_S <- c(15, 30, 60)
+HL_OFFLINE_WAIT_MAX_S <- 300
+HL_MAX_OFFLINE_MIN <- 180
+# A wait that took this many seconds longer than asked means the process was
+# suspended (laptop asleep); the suspended time is not offline time.
+HL_CLOCK_JUMP_SLACK_S <- 60
 HL_PROGRESS_FILE <- "hl_progress.txt"
 
 # Candle intervals ingested (#1072, #1080): bar length in ms, one home.
@@ -152,6 +174,14 @@ hl_unavailable <- function(msg) {
                  class = "hl_source_unavailable")
 }
 
+# No HTTP response at all (DNS, connect, timeout, reset). It IS a
+# hl_source_unavailable (callers that do not wait see no change), but
+# hl_make_post can tell it from an HTTP error and wait the outage out (#1088).
+hl_transport_failure <- function(msg) {
+  cli::cli_abort(c("x" = "Hyperliquid source unavailable", "i" = msg),
+                 class = c("hl_transport_error", "hl_source_unavailable"))
+}
+
 # `on_response(body, text)` (optional) receives the raw response text, used to
 # keep raw JSON append-only (see hl_make_post / hl_save_raw).
 hl_post <- function(body, url = HL_URL, timeout = 30, max_tries = 3,
@@ -169,7 +199,9 @@ hl_post <- function(body, url = HL_URL, timeout = 30, max_tries = 3,
                        backoff = ~ 2^.x) |>
       httr2::req_error(is_error = function(r) FALSE) |>
       httr2::req_perform(),
-    error = function(e) hl_unavailable(conditionMessage(e))
+    # req_error(is_error = FALSE) means every error that reaches here has NO HTTP
+    # response at all (DNS, connect, timeout, reset): the network, not the market.
+    error = function(e) hl_transport_failure(conditionMessage(e))
   )
   status <- httr2::resp_status(resp)
   if (status == 429L) {
@@ -254,8 +286,14 @@ hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
                          clock = function() proc.time()[["elapsed"]],
                          backoff_s = HL_429_BACKOFF_S,
                          max_attempts = HL_429_MAX_ATTEMPTS,
-                         post = hl_post, observer = NULL, capture_raw = FALSE, ...) {
+                         post = hl_post, observer = NULL, capture_raw = FALSE,
+                         max_offline_min = 0,
+                         wall = function() as.numeric(Sys.time()), ...) {
   force(raw_dir)
+  if (!is.numeric(max_offline_min) || length(max_offline_min) != 1L ||
+      is.na(max_offline_min) || max_offline_min < 0) {
+    hl_bad_arg("max_offline_min", "must be a number >= 0 (0 = do not wait)")
+  }
   if (!is.numeric(pace) || length(pace) != 1L || is.na(pace) || pace <= 0 || pace > 1) {
     hl_bad_arg("pace", "must be a number in (0, 1]")
   }
@@ -264,6 +302,7 @@ hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
   state$n_429 <- 0L; state$clock <- clock
   fn <- function(body) {
     attempt <- 0L
+    off <- NULL  # the current outage: since (wall secs), awake (secs waited), n
     repeat {
       attempt <- attempt + 1L
       t0 <- clock()
@@ -278,6 +317,35 @@ hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
         error = function(e) e
       )
       el <- clock() - t0
+      if (inherits(res, "hl_transport_error") && max_offline_min > 0) {
+        if (!is.null(observer)) {
+          observer(list(body = body, rows = NA_integer_, bytes = bytes, weight = 0,
+                        elapsed = el, ok = FALSE, error = conditionMessage(res)))
+        }
+        if (is.null(off)) off <- list(since = wall(), awake = 0, n = 0L)
+        if (off$awake >= max_offline_min * 60) {
+          cli::cli_abort(c("x" = "Hyperliquid unreachable for {round(off$awake / 60)} min of awake time",
+                           "i" = "the cap is {max_offline_min} min (--max-offline-min); no market is marked failed, progress is kept: run again with --resume"),
+                         class = c("hl_offline_exhausted", "hl_source_unavailable"))
+        }
+        w <- if (off$n < length(HL_OFFLINE_WAITS_S)) HL_OFFLINE_WAITS_S[off$n + 1L] else
+          HL_OFFLINE_WAIT_MAX_S
+        message(sprintf("network down since %s, waiting; next try in %d s (%s)",
+                        format(as.POSIXct(off$since, origin = "1970-01-01", tz = "UTC"),
+                               "%Y-%m-%d %H:%M:%S UTC"),
+                        as.integer(w), conditionMessage(res)))
+        w0 <- wall()
+        sleep_fn(w)
+        took <- wall() - w0
+        if (took > w + HL_CLOCK_JUMP_SLACK_S) {
+          message(sprintf("clock jumped %d min: the machine was asleep (not counted as offline time)",
+                          as.integer(round((took - w) / 60))))
+          took <- w
+        }
+        off$awake <- off$awake + max(took, 0)
+        off$n <- off$n + 1L
+        next
+      }
       ok <- !inherits(res, "error")
       rows <- if (ok && body$type %in% c("candleSnapshot", "fundingHistory") &&
                     is.list(res)) length(res) else NA_integer_
@@ -291,6 +359,9 @@ hl_make_post <- function(raw_dir, pace = HL_PACE_FRACTION, sleep_fn = Sys.sleep,
       }
       sleep_fn(hl_pace_seconds(w, el, pace))
       if (ok) {
+        if (!is.null(off)) {
+          message(sprintf("network back after %d min awake offline", as.integer(round(off$awake / 60))))
+        }
         if (capture_raw && !is.null(raw_text)) attr(res, "raw_text") <- raw_text
         return(res)
       }
@@ -991,6 +1062,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
 
   n_ok <- 0L; n_dropped <- 0L; cap_rows <- list()
   n_rl_streak <- 0L; aborted_rl <- FALSE; n_premium_nan <- 0L
+  aborted_offline <- FALSE
   for (j in seq_along(todo)) {
     i <- todo[j]
     dex <- markets$dex[i]; coin <- markets$coin[i]
@@ -1030,6 +1102,14 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
       }
       out
     }, error = function(e) e)
+    if (inherits(r, "hl_offline_exhausted")) {
+      # The network stayed down past the cap (#1088): this market is NOT bad and
+      # neither are the rest. Stop; flush() below records what is done; a
+      # --resume run continues from here.
+      aborted_offline <- TRUE
+      cli::cli_alert_danger("{key}: not fetched, network unreachable ({conditionMessage(r)})")
+      break
+    }
     if (inherits(r, "error")) {
       rl <- inherits(r, "hl_rate_limited")
       failed[[key]] <- list(reason = conditionMessage(r),
@@ -1092,7 +1172,7 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   # Open-interest snapshot: one call per perp exchange, current values only
   # (skipped when the run stopped on repeated rate limiting).
   oi <- list()
-  if (!aborted_rl) {
+  if (!aborted_rl && !aborted_offline) {
     for (d in unique(markets$dex[markets$instrument_type == "perp"])) {
       body <- if (nzchar(d)) list(type = "metaAndAssetCtxs", dex = d) else list(type = "metaAndAssetCtxs")
       s <- tryCatch(hl_parse_oi_snapshot(post_fn(body), d, now), error = function(e) e)
@@ -1133,11 +1213,14 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
       list(failed_df, nrow(markets), n_ok, n_skipped, n_failed, n_not_attempted)
     return(ind)
   }
-  any_indeterminate <- aborted_rl ||
+  any_indeterminate <- aborted_rl || aborted_offline ||
     any(vapply(failed, `[[`, logical(1), "indeterminate"))
   status <- if (any_indeterminate) 3L else if (nrow(failed_df) > 0L) 1L else 0L
   if (aborted_rl) {
     cli::cli_alert_danger("INDETERMINATE: stopped after {max_rate_limited} consecutive rate-limited markets; {n_not_attempted} not attempted")
+  }
+  if (aborted_offline) {
+    cli::cli_alert_danger("INDETERMINATE: network unreachable past the offline cap; {n_not_attempted} not attempted; run again with --resume")
   }
   # A run that finished clean is complete: the next run starts fresh.
   if (status == 0L && file.exists(prog_path)) file.remove(prog_path)
@@ -1163,8 +1246,14 @@ hl_run <- function(post_fn = hl_post, out_dir = "data/dist",
   mm <- opt("max-markets", NA_character_)
   dx <- opt("dexes", NA_character_)
   cli_h1("Hyperliquid fetch (perpetual futures and spot pairs, NOT tokenised shares)")
+  max_off <- suppressWarnings(as.numeric(opt("max-offline-min", HL_MAX_OFFLINE_MIN)))
+  if (is.na(max_off) || max_off < 0) {
+    cli_alert_danger("--max-offline-min must be a number >= 0 (minutes)")
+    quit(save = "no", status = 2L)
+  }
   res <- hl_run(post_fn = hl_make_post(opt("raw-dir", "data/raw/hyperliquid"),
-                                       pace = as.numeric(opt("pace", HL_PACE_FRACTION))),
+                                       pace = as.numeric(opt("pace", HL_PACE_FRACTION)),
+                                       max_offline_min = max_off),
                 out_dir = opt("out-dir", "data/dist"),
                 start = as.Date(opt("start", "2023-01-01")),
                 intervals = strsplit(opt("intervals", paste(HL_DEFAULT_INTERVALS, collapse = ",")), ",", fixed = TRUE)[[1]],
