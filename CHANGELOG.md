@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-11-18 (session summary: Hyperliquid backfill, commodity momentum closed out, full re-render)
+
+### Completed
+- Hyperliquid backfill (#1072): #1076 and #1077 merged; full run then `--resume` (exit 0). Perp and
+  spot candles, funding (5,344,251 rows, 499 coins) and open-interest snapshot in `data/dist/`
+  (local only, not uploaded). Premium "NaN" from the API is stored as NA, row kept (56 rows).
+- Commodity momentum group closed: #1078 merged (CMR's position pool, tercile legs). Rebuilt store
+  reproduces the PR's Sharpe exactly: baseline -0.6366, short_long -0.6576, vol_filtered -0.6158,
+  trend_filtered -0.7456. Closed #1048, #1057, #1058, #1061.
+- `docs/failures.qmd` gets a Related Vignettes section (the one errored target,
+  `qa_vignette_cross_refs`); `scripts/build.sh --render-all`: 0 errored targets, 20 pages clean.
+
+### Failed Approaches
+- A dispatch TTL set from an assumed clock (17:30Z when it was 20:14Z) stopped the agent before it
+  committed. Check `date -u` before setting a TTL.
+- Push rejected (GH007) because commits used the private email; rewritten with the noreply address.
+
+### Known Limitations
+- Next group (tooling and freshness): #1070, #1074, #976, #863, #877.
+- Spot-universe churn in the Hyperliquid fetch (pairs chosen by non-zero 24h volume) is undecided;
+  weekly launchd update job not built.
+- `docs/MERMAID_LESSONS.html` has an error-pattern hit from an older render.
+
 ## 2026-11-16 (commodity momentum trades CMR's position pool; refs #1061, #808)
 
 This changes the commodity momentum numbers (every strategy's Sharpe) once `scripts/build.sh` re-runs the chain.
