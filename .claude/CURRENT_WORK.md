@@ -1,4 +1,61 @@
-# Current Work — session 30 (2026-09-11 → 2026-09-12)
+# Current Work — latest: session 2026-11-09 → 11-12 (ended)
+
+- Merged #1051 (commodity momentum timing), #1052 (one cost per strategy on
+  the leaderboard), #1053 (commodity labels daily, Sharpe sqrt(252)), #1054
+  (re-render 6 pages), #1060 (momentum on the tradeable era #1057; CMR
+  captions on one Sharpe basis #1058), #1059 (docs/DATA_SOURCES.md with an
+  Econvitals entry). Main at faab923; session worktrees removed.
+- Session CHANGELOG entry merged (#1062, 68d460a); its worktree removed.
+- Next: #1061: apply CMR's #808 exposure-map rule to momentum (drop the 13
+  monthly IMF/FRED indexes from its position pool). Needs no new decision; the
+  owner has not yet said "fix #1061".
+- Uncommitted: `docs/macro-defense-rotation.html` (fresh render). Blocked by
+  private_data_scan false positives (base64 PNG = uk-postcode; a private-term
+  entry matching inlined htmlwidgets.js 1.6.4). Raised as llm#1733 (llm side,
+  leave alone). Never use --no-verify.
+- Private-term matches also already sit on main in public CHANGELOG.md (lines
+  1474, 1519, 2277) and in the live macro-defense-rotation.html. Owner to look;
+  term not revealed.
+- Issues opened: #1055 (Econvitals data review), #1056 (dashboard design
+  ideas), #1057, #1058, #1061; llm#1727 (design gaps), llm#1728 (auto-briefing;
+  owner chose "draft emailed, owner says publish"), llm#1733 (scanner).
+- Stranded work: the #873 Kraken DATA_SOURCES.md, inventory CSV and script are
+  only on `feat/cc-20260920-192457`, never merged. Ask before harvesting.
+- Known caveats, not fixed: CMR and the stock family still use hand-typed
+  turnover; the Credible rule `abs(net_cagr) < 0.20` flags strongly negative
+  CAGRs.
+
+---
+
+# Earlier: session 2026-11-07 (ended)
+
+- Merged #1040 (PIT S&P 500 membership universe, 63439e3) and #1042 (OLMAR
+  survivorship critique row, 3a47dcb). Closed #816, #977, #691, #668;
+  #862 closed as duplicate of #863. Opened #1041 (delisting returns).
+- Main checkout on `main` at 3a47dcb; session worktrees removed.
+- Pending owner decision: #972 step 2 (switch deflated Sharpe to the logged
+  K=13?). Recommendation: hold until the log covers the leaderboard
+  strategies (k_eff 14.4, k_raw 17).
+- No CHANGELOG entry yet for #1042 and the closes (main is PR-only).
+- Parked: bdbb-sol DT migration (blocked on llm#1653).
+
+---
+
+# Earlier: session 2026-11-03 → 11-04 (ended)
+
+- Merged #1019-#1025 (QA gates S47-S50, OLMAR universe + critique rows, SPY
+  frequency alignment, 8-dashboard re-render). Session worktrees removed.
+- Open: changelog PR #1016 (now holds both 2026-11-03 entries); #937 P3.2;
+  #771 bdbb-sol/`fals_dt()`; #977 survivorship magnitude; #976 closed by
+  accident (reopen?); privacy scanner should skip base64 `data:` URIs.
+- Main checkout is on merged branch `chore/render-dashboards-20261103`:
+  switch to `main` next session.
+- Inbox alerts not looked at: private-data-history-audit job failing 3x;
+  6 high roborev findings (llm-wide); 1 failed cron.
+
+---
+
+# Previous: session 30 (2026-09-11 → 2026-09-12)
 
 **Ended 2026-09-12.** Branch `feat/cc-20260912-osap-verification` (fresh from
 `origin/main`; the previous branch was squash-merged as `0c68bf4`).
@@ -78,3 +135,31 @@ live `ltr_*` leaderboard strategy. Still deserves its own issue.
   1998 peak, contradicting the US listing decline) even though its P1 verdict
   was right. Withdrawn in `FINDINGS.md`. A correct conclusion can rest on a
   bad argument, and the argument is what gets quoted onward.
+
+roborev-inbox: 58 new finding(s) (jobs 12637,12646,12652,12655,12656,12659,12661,12668,12672,12679,12681,12682,12691,12692,12693,12705,12708,12709,12711,12714,12716,12724,12726,12727,12728,12732,12734,12738,12749,12761,12763,12767,12770,12772,12773,12781,12785,12786,12787,12789,12791,12792,12797,12800,12811,12810,12816,12821,12825,12826,12830,12835,12867,12868,12870,12872,12873,12874) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
+
+roborev-inbox: 42 new finding(s) (jobs 12885,12890,12949,12951,12950,12953,12954,12955,12982,12991,12985,12992,12994,12993,12998,13001,13012,13013,13017,13020,13034,13035,13037,13040,13038,13039,13041,13046,13051,13053,13054,13052,13056,13057,13058,13059,13060,13062,13091,13233,13234,13268) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
+
+roborev-inbox: 8 new finding(s) (jobs 13395,13396,13397,13404,13426,13427,13428,13440) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
+
+roborev-inbox: 2 new finding(s) (jobs 13443,13459) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
+
+roborev-inbox: 21 new finding(s) (jobs 13564,13565,13583,13602,13603,13605,13607,13615,13619,13620,13623,13622,13626,13627,13628,13629,13630,13652,13665,13666,13667) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
+
+roborev-inbox: 20 new finding(s) (jobs 13684,13685,13700,13707,13719,13717,13718,13721,13723,13750,13755,13756,13759,13773,13781,13793,13797,13808,13821,13841) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
+
+## Session 2026-11-03 (end state)
+
+- **Merged:** #1008-#1015 (census, S45, Hyperliquid, CIK, rule fix, rf-basis item 4, S46 gate, inner-join audit). Closed #959, #554, #555.
+- **Open PR:** [#1016](https://github.com/JohnGavin/historical/pull/1016) CHANGELOG entry (needs "merge").
+- **Open PRs, both agents finished and re-verified by tests:**
+  - [#1019](https://github.com/JohnGavin/historical/pull/1019) SPY benchmark-correlation join (issue [#1017](https://github.com/JohnGavin/historical/issues/1017)). Build in progress at /bye time.
+  - [#1020](https://github.com/JohnGavin/historical/pull/1020) builds stop writing the research log, seed script + S47 gate (issue [#1018](https://github.com/JohnGavin/historical/issues/1018)). Build NOT yet run; touches `.claude/rules/` so needs "merge".
+  - [#1016](https://github.com/JohnGavin/historical/pull/1016) CHANGELOG entry.
+- **Main checkout is on a DETACHED HEAD at `origin/fix/spy-benchmark-join-657` (4bf53c6)** with `fals_results_db` invalidated and `scripts/build.sh` running in background (log: scratchpad `build_spy.log`). Before anything else: `pgrep -fl build.sh`; if a build is running, wait for it (never start a second); then read the log for `build.sh: PASS`, run `git checkout main`, then do the same for #1020 (detached checkout of `origin/fix/rlog-readonly-builds-968c`, then `scripts/build.sh`).
+- A rebuild on a later day adds a new `inst/extdata/results/results_<date>.parquet`; old files keep the old wrong `correlation_benchmark` values (owner decision: keep as record or add a basis marker).
+- **Uncommitted in main checkout:** re-rendered dashboards and `docs/_targets_meta_snapshot.csv` (publication = separate PR, needs "merge").
+- **Owner decisions still open:** none queued; S46 allow-list entry (uuid d2ccd873) kept as merged.
+- **Telemetry export:** skipped, another export was running; rerun `~/.claude/scripts/export_and_deploy_data.sh`.
+
+roborev-inbox: 10 new finding(s) (jobs 13903,13912,13916,13918,13917,13945,13947,13958,13957,13959) -- see `~/.roborev/findings/<job>.md` or `roborev show <job>`
